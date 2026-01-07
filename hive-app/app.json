@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "The Hive",
+    "slug": "the-hive",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/The Hive Logo_Low Res (1).png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "thehive",
+    "splash": {
+      "image": "./assets/The Hive Total transparent background (1).png",
+      "resizeMode": "contain",
+      "backgroundColor": "#bd9348"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.thehive.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "The Hive needs microphone access to record meetings."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/Bee ( Hive) .png",
+        "backgroundColor": "#bd9348"
+      },
+      "package": "com.thehive.app",
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/Bee ( Hive) .png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow The Hive to access your microphone for recording meetings."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
