@@ -1,13 +1,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { createRemoteJWKSet, jwtVerify } from 'https://deno.land/x/jose@v4.15.4/index.ts';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import { buildContext } from './context/index.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
+import { corsHeaders, handleCors, errorResponse } from '../_shared/cors.ts';
 
 const SYSTEM_PROMPT = `You are the Hive Assistant, an AI helper for a close-knit community of 12 people practicing "high-definition wishing."
 
@@ -216,45 +212,26 @@ const tools: Anthropic.Tool[] = [
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-const JWKS = supabaseUrl ? createRemoteJWKSet(new URL(`${supabaseUrl}/auth/v1/keys`)) : null;
-
-const verifySupabaseJwt = async (authHeader: string | null) => {
-  if (!supabaseUrl || !JWKS) {
-    throw new Error('Missing SUPABASE_URL for JWT verification');
-  }
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new Error('Missing Authorization header');
-  }
-  const token = authHeader.slice('Bearer '.length).trim();
-  const { payload } = await jwtVerify(token, JWKS, {
-    issuer: `${supabaseUrl}/auth/v1`,
-    audience: 'authenticated',
-  });
-  return { token, payload };
-};
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  // Handle CORS preflight
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   try {
     if (!supabaseUrl || !supabaseAnonKey) {
-      return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return errorResponse('Server misconfigured', 500);
     }
 
+    // Verify JWT manually (don't rely on gateway verification)
     const authHeader = req.headers.get('Authorization') ?? req.headers.get('authorization');
-    const { token, payload } = await verifySupabaseJwt(authHeader);
-    const userId = payload.sub;
-    if (!userId) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    const auth = await verifySupabaseJwt(authHeader);
+
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
     }
+
+    const { userId, token } = auth;
 
     const supabaseClient = createClient(
       supabaseUrl,

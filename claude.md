@@ -1018,6 +1018,118 @@ vercel deploy web-build
 
 ---
 
+## Edge Functions: Authentication & Deployment
+
+### Why We Handle JWT Verification Ourselves
+
+Supabase Edge Functions traditionally relied on gateway-level JWT verification, but this approach has issues:
+- Gateway caching can cause stale JWT verification
+- Less control over error handling and specific error messages
+- Auth logic hidden in infrastructure rather than owned in code
+
+**Our approach**: We deploy all functions with `--no-verify-jwt` and handle JWT verification inside the function code using the `jose` library. This gives us full control and avoids gateway caching issues.
+
+### Shared Auth Module
+
+All authentication logic lives in `supabase/functions/_shared/auth.ts`:
+
+```typescript
+import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
+
+// In your function:
+const authHeader = req.headers.get('Authorization');
+const auth = await verifySupabaseJwt(authHeader);
+
+if (isAuthError(auth)) {
+  return errorResponse(auth.error, auth.status);
+}
+
+const { userId, token } = auth;
+// Now use userId and token for authenticated operations
+```
+
+### Function Types
+
+We have two types of Edge Functions:
+
+1. **User-authenticated functions** (`chat`, `invite`):
+   - Require a valid user JWT
+   - Use `verifySupabaseJwt()` from `_shared/auth.ts`
+   - Create a Supabase client with the user's token for RLS
+
+2. **Service functions** (`notify`, `transcribe`):
+   - Use `SUPABASE_SERVICE_ROLE_KEY` for admin access
+   - No user auth needed (internal/webhook endpoints)
+   - Still deployed with `verify_jwt = false` for consistency
+
+### Deployment
+
+All functions are configured in `supabase/config.toml` with `verify_jwt = false`:
+
+```bash
+# Deploy all functions
+supabase functions deploy
+
+# Deploy a specific function
+supabase functions deploy chat
+
+# The config.toml handles --no-verify-jwt automatically
+```
+
+### Creating New Functions
+
+When creating a new Edge Function that requires user authentication:
+
+1. Create the function directory: `supabase/functions/my-function/index.ts`
+
+2. Import and use the shared auth:
+```typescript
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
+import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+
+serve(async (req) => {
+  // Handle CORS preflight
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+
+  // Verify JWT manually
+  const authHeader = req.headers.get('Authorization');
+  const auth = await verifySupabaseJwt(authHeader);
+
+  if (isAuthError(auth)) {
+    return errorResponse(auth.error, auth.status);
+  }
+
+  const { userId, token } = auth;
+
+  // Create authenticated Supabase client
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    { global: { headers: { Authorization: `Bearer ${token}`, apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '' } } }
+  );
+
+  // Your function logic here...
+
+  return jsonResponse({ success: true });
+});
+```
+
+3. Add to `supabase/config.toml`:
+```toml
+[functions.my-function]
+verify_jwt = false
+```
+
+### Shared Modules
+
+- `_shared/auth.ts` - JWT verification using jose library against Supabase JWKS endpoint
+- `_shared/cors.ts` - CORS headers and response helpers (`handleCors`, `jsonResponse`, `errorResponse`)
+
+---
+
 ## Testing Checklist
 
 Before launch, verify:

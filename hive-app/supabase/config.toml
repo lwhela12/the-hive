@@ -1,0 +1,43 @@
+# =============================================================================
+# EDGE FUNCTIONS CONFIGURATION
+# =============================================================================
+#
+# We disable gateway-level JWT verification and handle it in our function code.
+# This gives us:
+#
+# 1. More control over auth logic
+# 2. Better error handling and specific error messages
+# 3. Avoids gateway caching issues with JWTs
+# 4. Follows Supabase's recommended pattern
+#
+# See: supabase/functions/_shared/auth.ts for the JWT verification implementation
+#
+# IMPORTANT: All functions that require user authentication should:
+# 1. Import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts'
+# 2. Call verifySupabaseJwt(req.headers.get('Authorization'))
+# 3. Handle the auth error if present
+#
+# Functions that use service_role (like notify, transcribe) don't need user auth
+# but should still be deployed with verify_jwt = false for consistency.
+#
+# =============================================================================
+
+# Main chat endpoint - requires user authentication
+# Auth handled via _shared/auth.ts using jose library
+[functions.chat]
+verify_jwt = false
+
+# Send community invites - requires admin authentication
+# Auth handled via _shared/auth.ts using jose library
+[functions.invite]
+verify_jwt = false
+
+# Internal notification system - uses service_role key
+# No user auth required (called server-to-server)
+[functions.notify]
+verify_jwt = false
+
+# AssemblyAI webhook handler - uses service_role key
+# No user auth required (called from AssemblyAI webhook)
+[functions.transcribe]
+verify_jwt = false

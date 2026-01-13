@@ -1,19 +1,16 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY')!;
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  // Handle CORS preflight
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
+  // This function uses service_role - no user auth needed (webhook endpoint)
   const supabaseAdmin = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -46,10 +43,7 @@ serve(async (req) => {
 
       if (findError || !meeting) {
         console.error('Meeting not found');
-        return new Response(JSON.stringify({ error: 'Meeting not found' }), {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        return errorResponse('Meeting not found', 404);
       }
 
       // Format transcript with speaker labels
@@ -157,9 +151,7 @@ Format your response as JSON:
         }
       }
 
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return jsonResponse({ success: true });
 
     } else if (body.meeting_id) {
       // This is a request to start transcription
@@ -173,10 +165,7 @@ Format your response as JSON:
         .single();
 
       if (error || !meeting) {
-        return new Response(JSON.stringify({ error: 'Meeting not found' }), {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        return errorResponse('Meeting not found', 404);
       }
 
       // Get signed URL for audio file
@@ -210,21 +199,13 @@ Format your response as JSON:
 
       const transcriptData = await transcriptResponse.json();
 
-      return new Response(JSON.stringify({ transcript_id: transcriptData.id }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return jsonResponse({ transcript_id: transcriptData.id });
     }
 
-    return new Response(JSON.stringify({ error: 'Invalid request' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return errorResponse('Invalid request', 400);
 
   } catch (error) {
     console.error('Transcription error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return errorResponse('Internal server error', 500);
   }
 });

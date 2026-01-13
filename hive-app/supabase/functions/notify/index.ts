@@ -1,10 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'The Hive <hive@yourdomain.com>';
@@ -17,10 +13,11 @@ interface NotificationPayload {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  // Handle CORS preflight
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
+  // This function uses service_role - no user auth needed
   const supabaseAdmin = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -62,10 +59,7 @@ serve(async (req) => {
     }
 
     if (!users?.length) {
-      return new Response(JSON.stringify({ error: 'No users to notify' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return errorResponse('No users to notify', 400);
     }
 
     const notifications = [];
@@ -204,19 +198,13 @@ serve(async (req) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        notifications_created: notifications.length,
-        emails_sent: emailResults.filter(r => r.sent).length
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({
+      notifications_created: notifications.length,
+      emails_sent: emailResults.filter(r => r.sent).length
+    });
 
   } catch (error) {
     console.error('Notification error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return errorResponse('Internal server error', 500);
   }
 });
