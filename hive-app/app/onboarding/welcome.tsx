@@ -46,7 +46,7 @@ export default function WelcomeScreen() {
         </View>
 
         <Pressable
-          onPress={() => router.push('/onboarding/info')}
+          onPress={() => router.push('/onboarding/chat')}
           className="bg-gold py-4 rounded-xl items-center active:opacity-80"
         >
           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-lg">Get Started</Text>

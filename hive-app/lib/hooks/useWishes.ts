@@ -4,13 +4,16 @@ import { useAuth } from './useAuth';
 import type { Wish, Profile } from '../../types';
 
 export function useWishes() {
-  const { profile } = useAuth();
+  const { profile, communityId } = useAuth();
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [publicWishes, setPublicWishes] = useState<(Wish & { user: Profile })[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchWishes = useCallback(async () => {
-    if (!profile) return;
+    if (!profile || !communityId) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
 
@@ -19,6 +22,7 @@ export function useWishes() {
       .from('wishes')
       .select('*')
       .eq('user_id', profile.id)
+      .eq('community_id', communityId)
       .order('created_at', { ascending: false });
 
     if (userWishes) setWishes(userWishes);
@@ -29,13 +33,14 @@ export function useWishes() {
       .select('*, user:profiles(*)')
       .eq('status', 'public')
       .eq('is_active', true)
+      .eq('community_id', communityId)
       .neq('user_id', profile.id)
       .order('created_at', { ascending: false });
 
     if (othersWishes) setPublicWishes(othersWishes as (Wish & { user: Profile })[]);
 
     setLoading(false);
-  }, [profile?.id]);
+  }, [profile?.id, communityId]);
 
   useEffect(() => {
     fetchWishes();
@@ -46,7 +51,8 @@ export function useWishes() {
       .from('wishes')
       .update({ status: 'public', is_active: true })
       .eq('id', wishId)
-      .eq('user_id', profile?.id);
+      .eq('user_id', profile?.id)
+      .eq('community_id', communityId);
 
     if (!error) {
       await fetchWishes();
@@ -65,7 +71,8 @@ export function useWishes() {
         fulfilled_by: fulfilledBy,
       })
       .eq('id', wishId)
-      .eq('user_id', profile?.id);
+      .eq('user_id', profile?.id)
+      .eq('community_id', communityId);
 
     if (!error) {
       await fetchWishes();

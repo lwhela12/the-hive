@@ -13,12 +13,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../../components/ui/Avatar';
+import { formatDateMedium, parseAmericanDate, isoToAmerican } from '../../lib/dateUtils';
 import type { Profile, QueenBee, Event, UserRole } from '../../types';
 
+type MemberRow = {
+  id: string;
+  role: UserRole;
+  profiles: Profile;
+};
+
 export default function AdminScreen() {
-  const { profile } = useAuth();
+  const { profile, communityId, communityRole } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
-  const [members, setMembers] = useState<Profile[]>([]);
+  const [members, setMembers] = useState<MemberRow[]>([]);
   const [queenBees, setQueenBees] = useState<QueenBee[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
 
@@ -35,19 +42,24 @@ export default function AdminScreen() {
   const [eventTitle, setEventTitle] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<UserRole>('member');
 
   const fetchData = useCallback(async () => {
+    if (!communityId) return;
     // Fetch members
     const { data: membersData } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('name');
-    if (membersData) setMembers(membersData);
+      .from('community_memberships')
+      .select('id, role, profiles(*)')
+      .eq('community_id', communityId)
+      .order('created_at', { ascending: true });
+    if (membersData) setMembers(membersData as MemberRow[]);
 
     // Fetch queen bees
     const { data: qbData } = await supabase
       .from('queen_bees')
       .select('*')
+      .eq('community_id', communityId)
       .order('month', { ascending: false })
       .limit(12);
     if (qbData) setQueenBees(qbData);
@@ -56,10 +68,11 @@ export default function AdminScreen() {
     const { data: eventsData } = await supabase
       .from('events')
       .select('*')
+      .eq('community_id', communityId)
       .order('event_date', { ascending: true })
       .limit(20);
     if (eventsData) setEvents(eventsData);
-  }, []);
+  }, [communityId]);
 
   useEffect(() => {
     fetchData();
@@ -71,11 +84,11 @@ export default function AdminScreen() {
     setRefreshing(false);
   };
 
-  const updateMemberRole = async (memberId: string, role: UserRole) => {
+  const updateMemberRole = async (membershipId: string, role: UserRole) => {
     const { error } = await supabase
-      .from('profiles')
+      .from('community_memberships')
       .update({ role })
-      .eq('id', memberId);
+      .eq('id', membershipId);
 
     if (error) {
       Alert.alert('Error', 'Failed to update role');
@@ -85,13 +98,14 @@ export default function AdminScreen() {
   };
 
   const createQueenBee = async () => {
-    if (!selectedMember || !qbMonth || !qbTitle) {
+    if (!selectedMember || !qbMonth || !qbTitle || !communityId) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
     const { error } = await supabase.from('queen_bees').insert({
       user_id: selectedMember.id,
+      community_id: communityId,
       month: qbMonth,
       project_title: qbTitle,
       project_description: qbDescription,
@@ -111,17 +125,25 @@ export default function AdminScreen() {
   };
 
   const createEvent = async () => {
-    if (!eventTitle || !eventDate) {
+    if (!eventTitle || !eventDate || !communityId) {
       Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    // Convert American date format to ISO for storage
+    const eventDateIso = parseAmericanDate(eventDate);
+    if (!eventDateIso) {
+      Alert.alert('Error', 'Please enter date in MM-DD-YYYY format');
       return;
     }
 
     const { error } = await supabase.from('events').insert({
       title: eventTitle,
-      event_date: eventDate,
+      event_date: eventDateIso,
       description: eventDescription,
       event_type: 'custom',
       created_by: profile?.id,
+      community_id: communityId,
     });
 
     if (error) {
@@ -135,7 +157,30 @@ export default function AdminScreen() {
     }
   };
 
-  if (profile?.role !== 'admin') {
+  const sendInvite = async () => {
+    if (!inviteEmail || !communityId) {
+      Alert.alert('Error', 'Please enter an email');
+      return;
+    }
+
+    const { error } = await supabase.functions.invoke('invite', {
+      body: {
+        email: inviteEmail.trim(),
+        role: inviteRole,
+        community_id: communityId,
+      },
+    });
+
+    if (error) {
+      Alert.alert('Error', 'Failed to send invite');
+    } else {
+      Alert.alert('Invite sent', `${inviteEmail} will receive an invite to join.`);
+      setInviteEmail('');
+      setInviteRole('member');
+    }
+  };
+
+  if (communityRole !== 'admin') {
     return (
       <SafeAreaView className="flex-1 bg-honey-50 justify-center items-center">
         <Text className="text-gray-600">Admin access required</Text>
@@ -214,7 +259,7 @@ export default function AdminScreen() {
                   {event.title}
                 </Text>
                 <Text className="text-sm text-gray-500 mt-1">
-                  {new Date(event.event_date).toLocaleDateString()}
+                  {formatDateMedium(event.event_date)}
                 </Text>
               </View>
             ))}
@@ -237,12 +282,12 @@ export default function AdminScreen() {
                 key={member.id}
                 className="flex-row items-center p-4 border-b border-gray-100 last:border-b-0"
               >
-                <Avatar name={member.name} url={member.avatar_url} size={40} />
+                <Avatar name={member.profiles.name} url={member.profiles.avatar_url} size={40} />
                 <View className="flex-1 ml-3">
                   <Text className="font-medium text-gray-800">
-                    {member.name}
+                    {member.profiles.name}
                   </Text>
-                  <Text className="text-sm text-gray-500">{member.email}</Text>
+                  <Text className="text-sm text-gray-500">{member.profiles.email}</Text>
                 </View>
                 <View className="flex-row">
                   {(['member', 'treasurer', 'admin'] as UserRole[]).map(
@@ -273,6 +318,44 @@ export default function AdminScreen() {
             ))}
           </View>
         </View>
+
+        {/* Invite Section */}
+        <View className="mb-6">
+          <Text className="text-lg font-semibold text-gray-700 mb-2">
+            Invite Member
+          </Text>
+          <View className="bg-white rounded-xl shadow-sm p-4">
+            <TextInput
+              placeholder="Email address"
+              value={inviteEmail}
+              onChangeText={setInviteEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              className="border border-gray-300 rounded-lg p-3 mb-3"
+            />
+            <View className="flex-row mb-4">
+              {(['member', 'treasurer', 'admin'] as UserRole[]).map((role) => (
+                <Pressable
+                  key={role}
+                  onPress={() => setInviteRole(role)}
+                  className={`px-3 py-2 rounded mr-2 ${
+                    inviteRole === role ? 'bg-honey-500' : 'bg-gray-100'
+                  }`}
+                >
+                  <Text className={`${inviteRole === role ? 'text-white' : 'text-gray-600'} capitalize`}>
+                    {role}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable
+              onPress={sendInvite}
+              className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
+            >
+              <Text className="text-center font-semibold text-white">Send Invite</Text>
+            </Pressable>
+          </View>
+        </View>
       </ScrollView>
 
       {/* Queen Bee Modal */}
@@ -288,14 +371,14 @@ export default function AdminScreen() {
               {members.map((member) => (
                 <Pressable
                   key={member.id}
-                  onPress={() => setSelectedMember(member)}
+                  onPress={() => setSelectedMember(member.profiles)}
                   className={`mr-2 p-2 rounded-lg ${
-                    selectedMember?.id === member.id
+                    selectedMember?.id === member.profiles.id
                       ? 'bg-honey-100 border-2 border-honey-500'
                       : 'bg-gray-100'
                   }`}
                 >
-                  <Text className="font-medium">{member.name}</Text>
+                  <Text className="font-medium">{member.profiles.name}</Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -356,7 +439,7 @@ export default function AdminScreen() {
               className="border border-gray-300 rounded-lg p-3 mb-3"
             />
             <TextInput
-              placeholder="Date (YYYY-MM-DD)"
+              placeholder="Date (MM-DD-YYYY)"
               value={eventDate}
               onChangeText={setEventDate}
               className="border border-gray-300 rounded-lg p-3 mb-3"

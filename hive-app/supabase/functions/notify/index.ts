@@ -12,6 +12,7 @@ const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'The Hive <hive@yourdomain.com>
 interface NotificationPayload {
   type: 'wish_match' | 'meeting_summary' | 'queen_bee_update' | 'action_item' | 'general';
   user_ids?: string[];
+  community_id?: string;
   data: Record<string, unknown>;
 }
 
@@ -27,7 +28,7 @@ serve(async (req) => {
 
   try {
     const payload: NotificationPayload = await req.json();
-    const { type, user_ids, data } = payload;
+    const { type, user_ids, community_id, data } = payload;
 
     // Get users to notify
     let users;
@@ -37,6 +38,21 @@ serve(async (req) => {
         .select('*')
         .in('id', user_ids);
       users = usersData;
+    } else if (community_id) {
+      const { data: memberRows } = await supabaseAdmin
+        .from('community_memberships')
+        .select('user_id')
+        .eq('community_id', community_id);
+      const memberIds = memberRows?.map((row) => row.user_id) || [];
+      if (memberIds.length) {
+        const { data: usersData } = await supabaseAdmin
+          .from('profiles')
+          .select('*')
+          .in('id', memberIds);
+        users = usersData;
+      } else {
+        users = [];
+      }
     } else {
       // Notify all users
       const { data: usersData } = await supabaseAdmin
@@ -126,8 +142,14 @@ serve(async (req) => {
       }
 
       // Create in-app notification
+      const notificationCommunityId = community_id || user.current_community_id;
+      if (!notificationCommunityId) {
+        continue;
+      }
+
       notifications.push({
         user_id: user.id,
+        community_id: notificationCommunityId,
         notification_type: type,
         title,
         content,

@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
+import { buildContext } from './context/index.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,6 +32,33 @@ Your primary role is to help users articulate what they actually want. People of
 
 8. **Consolidation over accumulation.** Help users refine and combine wishes rather than accumulating a long list.
 
+## New User Setup Flow
+
+When a user says "I am ready" or indicates they want to begin setting up their goals/skills:
+
+1. Say: "Great! I have a few questions for you."
+
+2. Ask about time-sensitive objectives:
+   "Do you have any clear time-sensitive objectives right now? Something you're working toward with a deadline or timeframe?"
+
+3. If they have time-sensitive objectives:
+   - Ask: "What's the timeframe you're working with?"
+   - This helps determine their ideal Queen Bee month (when the community focuses on supporting them)
+   - Use the update_profile tool with queen_bee_preference to save this information
+
+4. Then transition to goals/skills:
+   "Thanks! Now, which would you like to talk about first - your goals or your skills?"
+
+5. Guide the conversation based on their choice, capturing skills and wishes as they emerge.
+
+## Ongoing Setup Tracking
+
+Check if user has stored skills or wishes in the context.
+- If they have NO skills AND NO wishes, they haven't completed their initial setup
+- When this is the case, periodically (not every message) remind them:
+  "By the way, whenever you're ready, I'd love to chat about your goals and skills!"
+- Don't remind every message - space it out naturally, maybe every 3-4 interactions
+
 ## What NOT to Do
 
 - Don't be sycophantic or overly enthusiastic
@@ -54,6 +82,26 @@ These wishes will stay PRIVATE unless they choose to share. Help them feel comfo
 When a wish emerges clearly, use the store_wish tool to save it. Transform vague wishes into HD ones.
 
 Remind them these stay private and they can refine them later.`;
+
+const UNIFIED_ONBOARDING_PROMPT = `You are welcoming a new member to The Hive. Guide them through getting to know each other in a single flowing conversation.
+
+## Your Goals (in this order):
+1. **Get to know them** - They've already been greeted with a birthday question. When they share their birthday, save it immediately with update_profile. If they share their phone number or preferred contact method, save those too.
+
+2. **Discover their skills** - What are they good at? What do they enjoy doing? Aim for 2-3 skills. Use store_skill when a skill is clearly articulated. Transform vague skills into high-definition ones.
+
+3. **Surface their first wish** - What would they like help with? These stay PRIVATE. Aim for at least 1 wish. Use store_wish when a wish emerges. Transform vague wishes into HD ones.
+
+4. **Complete onboarding** - When you've captured their birthday (or they declined), 2+ skills, and 1+ wish, call complete_onboarding to signal we're done.
+
+## Guidelines:
+- Be warm and conversational, not robotic or form-like
+- Use update_profile IMMEDIATELY when you learn birthday, phone, or name correction
+- Use store_skill when a skill is clearly articulated (don't wait to batch them)
+- Use store_wish when a wish emerges (even if vague, you can refine it)
+- Let the conversation flow naturally between topics
+- Don't announce tool usage - just use them and continue naturally
+- After completing all goals, call complete_onboarding and give a warm wrap-up message`;
 
 const tools: Anthropic.Tool[] = [
   {
@@ -132,6 +180,36 @@ const tools: Anthropic.Tool[] = [
       },
       required: ["wish_id"]
     }
+  },
+  {
+    name: "update_profile",
+    description: "Update user profile information collected during conversation (birthday, phone, name correction, preferred contact method, Queen Bee month preference)",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        name: { type: "string", description: "User's name (only if they want to correct it)" },
+        birthday: { type: "string", description: "User's birthday in YYYY-MM-DD format" },
+        phone: { type: "string", description: "User's phone number" },
+        preferred_contact: { type: "string", description: "Preferred contact method: 'email' or 'phone'" },
+        queen_bee_preference: {
+          type: "object",
+          description: "User's Queen Bee month preference with reason and timeframe for time-sensitive objectives",
+          properties: {
+            preferred_month: { type: "string", description: "Preferred month in YYYY-MM format (e.g., '2025-03')" },
+            reason: { type: "string", description: "The time-sensitive objective or reason for this preference" },
+            timeframe: { type: "string", description: "The timeframe they're working with (e.g., 'Q1 2025', 'by March')" }
+          }
+        }
+      }
+    }
+  },
+  {
+    name: "complete_onboarding",
+    description: "Signal that onboarding conversation is complete. Call this when the user has shared their birthday (or declined), at least 2 skills, and at least 1 wish.",
+    input_schema: {
+      type: "object" as const,
+      properties: {}
+    }
   }
 ];
 
@@ -149,13 +227,19 @@ serve(async (req) => {
 
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      console.error('Auth error:', authError);
+      console.error('Authorization header:', req.headers.get('Authorization')?.substring(0, 50));
+      return new Response(JSON.stringify({
+        error: 'Unauthorized',
+        details: authError?.message || 'No user found',
+        hint: 'Check that the access token is a valid Supabase JWT'
+      }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    const { message, mode, context } = await req.json();
+    const { message, mode, context, conversation_id } = await req.json();
 
     // Get user profile
     const { data: profile } = await supabaseClient
@@ -164,62 +248,43 @@ serve(async (req) => {
       .eq('id', user.id)
       .single();
 
-    // Get recent messages for context
-    const { data: recentMessages } = await supabaseClient
-      .from('chat_messages')
-      .select('role, content')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
+    const communityId = profile?.current_community_id;
+    if (!communityId) {
+      return new Response(JSON.stringify({ error: 'No active community' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
-    // Get user's skills and wishes for context
-    const { data: userSkills } = await supabaseClient
-      .from('skills')
-      .select('description')
-      .eq('user_id', user.id);
+    // Build comprehensive context using the smart context builder
+    const contextResult = await buildContext({
+      supabase: supabaseClient,
+      userId: user.id,
+      communityId,
+      conversationId: conversation_id,
+      mode: mode || 'default',
+    });
 
-    const { data: userWishes } = await supabaseClient
-      .from('wishes')
-      .select('id, description, status, is_active')
-      .eq('user_id', user.id);
-
-    // Get current Queen Bee
-    const currentMonth = new Date().toISOString().slice(0, 7);
-    const { data: queenBee } = await supabaseClient
-      .from('queen_bees')
-      .select('*, user:profiles(name)')
-      .eq('month', currentMonth)
-      .single();
-
-    // Build context
+    // Select the appropriate system prompt based on mode
     let systemPrompt = SYSTEM_PROMPT;
     if (mode === 'onboarding' && context === 'skills') {
       systemPrompt = ONBOARDING_SKILLS_PROMPT;
     } else if (mode === 'onboarding' && context === 'wishes') {
       systemPrompt = ONBOARDING_WISHES_PROMPT;
+    } else if (mode === 'onboarding' && !context) {
+      // Unified onboarding flow
+      systemPrompt = UNIFIED_ONBOARDING_PROMPT;
     }
 
-    const contextInfo = `
-## Current User Context
-Name: ${profile?.name || 'Unknown'}
+    // The context builder already assembled all the context we need
+    const contextInfo = contextResult.assembledContext;
 
-## Your Skills
-${userSkills?.map(s => `- ${s.description}`).join('\n') || 'None recorded yet'}
-
-## Your Wishes
-${userWishes?.map(w => `- [${w.status}${w.is_active ? ', active' : ''}] ${w.description}`).join('\n') || 'None recorded yet'}
-
-${queenBee ? `## Current Queen Bee
-${queenBee.user?.name} - ${queenBee.project_title}
-${queenBee.project_description || ''}` : ''}
-`;
-
-    // Build messages array
+    // Build messages array from context result + current message
     const messages: Anthropic.MessageParam[] = [
-      ...(recentMessages?.reverse().map(m => ({
+      ...contextResult.recentMessages.map(m => ({
         role: m.role as 'user' | 'assistant',
         content: m.content
-      })) || []),
+      })),
       { role: 'user' as const, content: message }
     ];
 
@@ -234,6 +299,7 @@ ${queenBee.project_description || ''}` : ''}
     });
 
     let skillsAdded = 0;
+    let onboardingComplete = false;
 
     // Handle tool use
     while (response.stop_reason === 'tool_use') {
@@ -251,6 +317,7 @@ ${queenBee.project_description || ''}` : ''}
             const { description, raw_input } = toolUse.input as { description: string; raw_input: string };
             const { error } = await supabaseClient.from('skills').insert({
               user_id: user.id,
+              community_id: communityId,
               description,
               raw_input,
               extracted_from: mode === 'onboarding' ? 'onboarding' : 'chat'
@@ -264,6 +331,7 @@ ${queenBee.project_description || ''}` : ''}
             const { description, raw_input } = toolUse.input as { description: string; raw_input: string };
             const { error } = await supabaseClient.from('wishes').insert({
               user_id: user.id,
+              community_id: communityId,
               description,
               raw_input,
               status: 'private',
@@ -279,7 +347,8 @@ ${queenBee.project_description || ''}` : ''}
               .from('wishes')
               .update({ status: 'public', is_active: true })
               .eq('id', wish_id)
-              .eq('user_id', user.id);
+              .eq('user_id', user.id)
+              .eq('community_id', communityId);
             result = error ? `Error: ${error.message}` : 'Wish published to the Hive';
             break;
           }
@@ -289,6 +358,7 @@ ${queenBee.project_description || ''}` : ''}
               .from('wishes')
               .select('*')
               .eq('user_id', user.id)
+              .eq('community_id', communityId)
               .order('created_at', { ascending: false });
             result = JSON.stringify(data || []);
             break;
@@ -298,7 +368,8 @@ ${queenBee.project_description || ''}` : ''}
             const { data } = await supabaseClient
               .from('skills')
               .select('*')
-              .eq('user_id', user.id);
+              .eq('user_id', user.id)
+              .eq('community_id', communityId);
             result = JSON.stringify(data || []);
             break;
           }
@@ -309,6 +380,7 @@ ${queenBee.project_description || ''}` : ''}
               .select('*, user:profiles(name)')
               .eq('status', 'public')
               .eq('is_active', true)
+              .eq('community_id', communityId)
               .neq('user_id', user.id);
             result = JSON.stringify(data || []);
             break;
@@ -317,7 +389,8 @@ ${queenBee.project_description || ''}` : ''}
           case 'get_all_skills': {
             const { data } = await supabaseClient
               .from('skills')
-              .select('*, user:profiles(name)');
+              .select('*, user:profiles(name)')
+              .eq('community_id', communityId);
             result = JSON.stringify(data || []);
             break;
           }
@@ -328,9 +401,19 @@ ${queenBee.project_description || ''}` : ''}
           }
 
           case 'get_hive_members': {
+            const { data: memberRows } = await supabaseClient
+              .from('community_memberships')
+              .select('user_id')
+              .eq('community_id', communityId);
+            const memberIds = memberRows?.map((row) => row.user_id) || [];
+            if (memberIds.length === 0) {
+              result = JSON.stringify([]);
+              break;
+            }
             const { data } = await supabaseClient
               .from('profiles')
               .select('id, name, avatar_url')
+              .in('id', memberIds)
               .order('name');
             result = JSON.stringify(data || []);
             break;
@@ -347,8 +430,46 @@ ${queenBee.project_description || ''}` : ''}
                 fulfilled_by
               })
               .eq('id', wish_id)
-              .eq('user_id', user.id);
+              .eq('user_id', user.id)
+              .eq('community_id', communityId);
             result = error ? `Error: ${error.message}` : 'Wish marked as fulfilled!';
+            break;
+          }
+
+          case 'update_profile': {
+            const { name, birthday, phone, preferred_contact, queen_bee_preference } = toolUse.input as {
+              name?: string;
+              birthday?: string;
+              phone?: string;
+              preferred_contact?: string;
+              queen_bee_preference?: {
+                preferred_month?: string;
+                reason?: string;
+                timeframe?: string;
+              };
+            };
+            const updates: Record<string, unknown> = {};
+            if (name) updates.name = name;
+            if (birthday) updates.birthday = birthday;
+            if (phone) updates.phone = phone;
+            if (preferred_contact) updates.preferred_contact = preferred_contact;
+            if (queen_bee_preference) updates.queen_bee_preference = queen_bee_preference;
+
+            if (Object.keys(updates).length > 0) {
+              const { error } = await supabaseClient
+                .from('profiles')
+                .update(updates)
+                .eq('id', user.id);
+              result = error ? `Error: ${error.message}` : 'Profile updated successfully';
+            } else {
+              result = 'No updates provided';
+            }
+            break;
+          }
+
+          case 'complete_onboarding': {
+            onboardingComplete = true;
+            result = 'Onboarding marked as complete. The user can now enter The Hive!';
             break;
           }
 
@@ -384,7 +505,15 @@ ${queenBee.project_description || ''}` : ''}
     return new Response(
       JSON.stringify({
         response: textBlock?.text || "I'm not sure how to respond to that.",
-        skillsAdded
+        skillsAdded,
+        onboardingComplete,
+        // Include context metadata for debugging/monitoring
+        contextMetadata: {
+          tokensUsed: contextResult.metadata.tokensUsed,
+          messageCount: contextResult.metadata.conversationMessageCount,
+          summariesUsed: contextResult.metadata.summariesUsed,
+          cacheHits: contextResult.metadata.cacheHits,
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

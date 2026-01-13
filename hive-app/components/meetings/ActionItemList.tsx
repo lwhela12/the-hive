@@ -1,4 +1,5 @@
 import { View, Text, Pressable } from 'react-native';
+import { formatDateShort } from '../../lib/dateUtils';
 import type { ActionItem, Profile } from '../../types';
 
 interface ActionItemListProps {
@@ -50,10 +51,7 @@ export function ActionItemList({ items, onToggle }: ActionItemListProps) {
               )}
               {item.due_date && (
                 <Text className="text-sm text-gray-400">
-                  Due {new Date(item.due_date).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  })}
+                  Due {formatDateShort(item.due_date)}
                 </Text>
               )}
             </View>

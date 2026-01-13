@@ -1,27 +1,44 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { useNotifications } from '../../lib/hooks/useNotifications';
 import { Avatar } from '../../components/ui/Avatar';
+import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import type { Skill, Wish, ActionItem } from '../../types';
 
+const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
+
 export default function ProfileScreen() {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, communityId, communityRole, refreshProfile } = useAuth();
+  const { permissionStatus, requestPermissions } = useNotifications();
   const [refreshing, setRefreshing] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
 
+  // Editable profile fields
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editBirthday, setEditBirthday] = useState('');
+  const [editOccupation, setEditOccupation] = useState('');
+  const [editPreferredContact, setEditPreferredContact] = useState('email');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
   const fetchData = useCallback(async () => {
-    if (!profile) return;
+    if (!profile || !communityId) return;
 
     // Fetch skills
     const { data: skillsData } = await supabase
       .from('skills')
       .select('*')
       .eq('user_id', profile.id)
+      .eq('community_id', communityId)
       .order('created_at', { ascending: false });
     if (skillsData) setSkills(skillsData);
 
@@ -30,6 +47,7 @@ export default function ProfileScreen() {
       .from('wishes')
       .select('*')
       .eq('user_id', profile.id)
+      .eq('community_id', communityId)
       .order('created_at', { ascending: false });
     if (wishesData) setWishes(wishesData);
 
@@ -38,14 +56,168 @@ export default function ProfileScreen() {
       .from('action_items')
       .select('*')
       .eq('assigned_to', profile.id)
+      .eq('community_id', communityId)
       .eq('completed', false)
       .order('due_date', { ascending: true });
     if (actionItemsData) setActionItems(actionItemsData);
-  }, [profile?.id]);
+  }, [profile?.id, communityId]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Initialize edit fields when profile loads or changes
+  useEffect(() => {
+    if (profile) {
+      setEditName(profile.name || '');
+      setEditPhone(profile.phone || '');
+      // Convert ISO date to American format for editing
+      setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
+      setEditOccupation(profile.occupation || '');
+      setEditPreferredContact(profile.preferred_contact || 'email');
+    }
+  }, [profile]);
+
+  const startEditing = () => {
+    if (profile) {
+      setEditName(profile.name || '');
+      setEditPhone(profile.phone || '');
+      // Convert ISO date to American format for editing
+      setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
+      setEditOccupation(profile.occupation || '');
+      setEditPreferredContact(profile.preferred_contact || 'email');
+    }
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    // Reset to original values
+    if (profile) {
+      setEditName(profile.name || '');
+      setEditPhone(profile.phone || '');
+      // Convert ISO date to American format for editing
+      setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
+      setEditOccupation(profile.occupation || '');
+      setEditPreferredContact(profile.preferred_contact || 'email');
+    }
+  };
+
+  const saveProfile = async () => {
+    if (!profile) return;
+
+    // Convert American date format to ISO for storage
+    const birthdayIso = editBirthday ? parseAmericanDate(editBirthday) : null;
+
+    setIsSaving(true);
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        name: editName.trim(),
+        phone: editPhone.trim() || null,
+        birthday: birthdayIso,
+        occupation: editOccupation.trim() || null,
+        preferred_contact: editPreferredContact,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', profile.id);
+
+    setIsSaving(false);
+
+    if (error) {
+      Alert.alert('Error', 'Failed to save profile. Please try again.');
+    } else {
+      await refreshProfile();
+      setIsEditing(false);
+    }
+  };
+
+  const formatBirthdayForDisplay = (dateStr?: string) => {
+    if (!dateStr) return '';
+    return formatDateLong(dateStr);
+  };
+
+  const pickImage = async () => {
+    // Request permission
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Required',
+        'Please allow access to your photo library to change your profile photo.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+
+    // Pick an image
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      await uploadAvatar(result.assets[0].uri);
+    }
+  };
+
+  const uploadAvatar = async (uri: string) => {
+    if (!profile) return;
+
+    setIsUploadingPhoto(true);
+
+    try {
+      // Get the file extension
+      const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${profile.id}/avatar.${ext}`;
+
+      // Fetch the image and convert to blob
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, blob, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get the public URL
+      const { data: urlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      // Add cache-busting parameter
+      const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      // Update profile with new avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', profile.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      await refreshProfile();
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -54,16 +226,28 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
+  const performSignOut = async () => {
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) {
+      console.error('Sign out error:', error);
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+      return;
+    }
+    router.replace('/(auth)/login');
+  };
+
   const handleSignOut = async () => {
+    if (Platform.OS === 'web') {
+      await performSignOut();
+      return;
+    }
+
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign Out',
         style: 'destructive',
-        onPress: async () => {
-          await supabase.auth.signOut();
-          router.replace('/(auth)/login');
-        },
+        onPress: performSignOut,
       },
     ]);
   };
@@ -75,11 +259,39 @@ export default function ProfileScreen() {
         completed: true,
         completed_at: new Date().toISOString(),
       })
-      .eq('id', item.id);
+      .eq('id', item.id)
+      .eq('community_id', communityId);
 
     if (!error) {
       setActionItems((prev) => prev.filter((i) => i.id !== item.id));
     }
+  };
+
+  const handlePublishWish = (wish: Wish) => {
+    Alert.alert(
+      'Share with the Hive?',
+      `This will make your wish visible to all Hive members:\n\n"${wish.description}"`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Share',
+          onPress: async () => {
+            const { error } = await supabase
+              .from('wishes')
+              .update({ status: 'public', is_active: true })
+              .eq('id', wish.id)
+              .eq('user_id', profile?.id)
+              .eq('community_id', communityId);
+
+            if (!error) {
+              await fetchData();
+            } else {
+              Alert.alert('Error', 'Failed to share wish. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (!profile) return null;
@@ -95,18 +307,194 @@ export default function ProfileScreen() {
       >
         {/* Profile Header */}
         <View className="items-center mb-6">
-          <Avatar name={profile.name} url={profile.avatar_url} size={80} />
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-charcoal mt-3">
+          <Pressable onPress={pickImage} disabled={isUploadingPhoto} className="relative active:opacity-80">
+            <Avatar name={profile.name} url={profile.avatar_url} size={80} />
+            {isUploadingPhoto ? (
+              <View className="absolute inset-0 bg-black/40 rounded-full items-center justify-center">
+                <ActivityIndicator color="#fff" size="small" />
+              </View>
+            ) : (
+              <View className="absolute bottom-0 right-0 bg-gold w-6 h-6 rounded-full items-center justify-center border-2 border-cream">
+                <Text className="text-white text-xs">+</Text>
+              </View>
+            )}
+          </Pressable>
+          <Pressable onPress={pickImage} disabled={isUploadingPhoto}>
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-gold text-sm mt-2">
+              Change Photo
+            </Text>
+          </Pressable>
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-charcoal mt-2">
             {profile.name}
           </Text>
           <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60">{profile.email}</Text>
-          {profile.role !== 'member' && (
+          {profile.occupation && (
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 mt-1">
+              {profile.occupation}
+            </Text>
+          )}
+          {communityRole && communityRole !== 'member' && (
             <View className="bg-gold-light px-3 py-1 rounded-full mt-2">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold capitalize">
-                {profile.role}
+                {communityRole}
               </Text>
             </View>
           )}
+        </View>
+
+        {/* Profile Information */}
+        <View className="mb-6">
+          <View className="flex-row items-center justify-between mb-2">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
+              Profile Information
+            </Text>
+            {!isEditing ? (
+              <Pressable onPress={startEditing} className="px-3 py-1 active:opacity-70">
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">Edit</Text>
+              </Pressable>
+            ) : (
+              <View className="flex-row">
+                <Pressable onPress={cancelEditing} className="px-3 py-1 mr-2 active:opacity-70">
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60">Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={saveProfile}
+                  disabled={isSaving}
+                  className="px-3 py-1 active:opacity-70"
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">
+                    {isSaving ? 'Saving...' : 'Save'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+
+          <View className="bg-white rounded-xl shadow-sm overflow-hidden">
+            {/* Name */}
+            <View className="p-4 border-b border-cream">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Name</Text>
+              {isEditing ? (
+                <TextInput
+                  value={editName}
+                  onChangeText={setEditName}
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className="text-charcoal text-base p-0"
+                  placeholder="Your name"
+                  placeholderTextColor="#9CA3AF"
+                />
+              ) : (
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                  {profile.name}
+                </Text>
+              )}
+            </View>
+
+            {/* Email (read-only) */}
+            <View className="p-4 border-b border-cream">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Email</Text>
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{profile.email}</Text>
+            </View>
+
+            {/* Phone */}
+            <View className="p-4 border-b border-cream">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Phone</Text>
+              {isEditing ? (
+                <TextInput
+                  value={editPhone}
+                  onChangeText={setEditPhone}
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className="text-charcoal text-base p-0"
+                  placeholder="Your phone number"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="phone-pad"
+                />
+              ) : (
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                  {profile.phone || 'Not set'}
+                </Text>
+              )}
+            </View>
+
+            {/* Birthday */}
+            <View className="p-4 border-b border-cream">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Birthday</Text>
+              {isEditing ? (
+                <TextInput
+                  value={editBirthday}
+                  onChangeText={setEditBirthday}
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className="text-charcoal text-base p-0"
+                  placeholder="MM-DD-YYYY"
+                  placeholderTextColor="#9CA3AF"
+                />
+              ) : (
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                  {formatBirthdayForDisplay(profile.birthday) || 'Not set'}
+                </Text>
+              )}
+            </View>
+
+            {/* Occupation */}
+            <View className="p-4 border-b border-cream">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Occupation</Text>
+              {isEditing ? (
+                <TextInput
+                  value={editOccupation}
+                  onChangeText={setEditOccupation}
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className="text-charcoal text-base p-0"
+                  placeholder="Your occupation"
+                  placeholderTextColor="#9CA3AF"
+                />
+              ) : (
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                  {profile.occupation || 'Not set'}
+                </Text>
+              )}
+            </View>
+
+            {/* Preferred Contact Method */}
+            <View className="p-4">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-2">
+                Preferred Contact Method
+              </Text>
+              {isEditing ? (
+                <View className="flex-row flex-wrap gap-2">
+                  {CONTACT_OPTIONS.map((option) => (
+                    <Pressable
+                      key={option}
+                      onPress={() => setEditPreferredContact(option)}
+                      className={`px-4 py-2 rounded-full ${
+                        editPreferredContact === option
+                          ? 'bg-gold'
+                          : 'bg-cream'
+                      }`}
+                    >
+                      <Text
+                        style={{ fontFamily: 'Lato_700Bold' }}
+                        className={`capitalize ${
+                          editPreferredContact === option
+                            ? 'text-white'
+                            : 'text-charcoal'
+                        }`}
+                      >
+                        {option}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <View className="flex-row">
+                  <View className="bg-gold-light px-3 py-1 rounded-full">
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold capitalize">
+                      {profile.preferred_contact || 'email'}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
         </View>
 
         {/* Action Items */}
@@ -127,11 +515,7 @@ export default function ProfileScreen() {
                     <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{item.description}</Text>
                     {item.due_date && (
                       <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
-                        Due:{' '}
-                        {new Date(item.due_date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
+                        Due: {formatDateShort(item.due_date)}
                       </Text>
                     )}
                   </View>
@@ -184,19 +568,31 @@ export default function ProfileScreen() {
                   key={wish.id}
                   className="p-4 border-b border-cream last:border-b-0"
                 >
-                  <View className="flex-row items-center mb-1">
-                    <View
-                      className={`w-2 h-2 rounded-full mr-2 ${
-                        wish.status === 'public'
-                          ? 'bg-green-500'
-                          : wish.status === 'fulfilled'
-                          ? 'bg-blue-500'
-                          : 'bg-charcoal/40'
-                      }`}
-                    />
-                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60 capitalize">
-                      {wish.status}
-                    </Text>
+                  <View className="flex-row items-center justify-between mb-1">
+                    <View className="flex-row items-center">
+                      <View
+                        className={`w-2 h-2 rounded-full mr-2 ${
+                          wish.status === 'public'
+                            ? 'bg-green-500'
+                            : wish.status === 'fulfilled'
+                            ? 'bg-blue-500'
+                            : 'bg-charcoal/40'
+                        }`}
+                      />
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60 capitalize">
+                        {wish.status}
+                      </Text>
+                    </View>
+                    {wish.status === 'private' && (
+                      <Pressable
+                        onPress={() => handlePublishWish(wish)}
+                        className="bg-gold-light px-3 py-1 rounded-full active:bg-gold/30"
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
+                          Share with Hive
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{wish.description}</Text>
                 </View>
@@ -204,6 +600,55 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+
+        {/* Notification Settings */}
+        {Platform.OS !== 'web' && (
+          <View className="mb-6">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
+              Notifications
+            </Text>
+            <View className="bg-white rounded-xl shadow-sm p-4">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1">
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                    Push Notifications
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
+                    {permissionStatus === 'granted'
+                      ? 'Enabled - you will receive notifications'
+                      : permissionStatus === 'denied'
+                      ? 'Disabled - enable in Settings'
+                      : 'Not yet enabled'}
+                  </Text>
+                </View>
+                {permissionStatus !== 'granted' && (
+                  <Pressable
+                    onPress={async () => {
+                      if (permissionStatus === 'denied') {
+                        // Open settings if permission was denied
+                        Linking.openSettings();
+                      } else {
+                        await requestPermissions();
+                      }
+                    }}
+                    className="bg-gold px-4 py-2 rounded-full active:opacity-80"
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">
+                      {permissionStatus === 'denied' ? 'Open Settings' : 'Enable'}
+                    </Text>
+                  </Pressable>
+                )}
+                {permissionStatus === 'granted' && (
+                  <View className="bg-green-100 px-3 py-1 rounded-full">
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-green-700 text-sm">
+                      Enabled
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Sign Out Button */}
         <Pressable

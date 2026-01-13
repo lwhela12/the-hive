@@ -5,26 +5,29 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { AudioRecorder } from '../../components/meetings/AudioRecorder';
 import { MeetingSummary } from '../../components/meetings/MeetingSummary';
+import { formatDateLong } from '../../lib/dateUtils';
 import type { Meeting } from '../../types';
 
 export default function MeetingsScreen() {
-  const { profile } = useAuth();
+  const { profile, communityId } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [showRecorder, setShowRecorder] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
 
   const fetchMeetings = useCallback(async () => {
+    if (!communityId) return;
     const { data, error } = await supabase
       .from('meetings')
       .select('*')
+      .eq('community_id', communityId)
       .order('date', { ascending: false })
       .limit(20);
 
     if (!error && data) {
       setMeetings(data);
     }
-  }, []);
+  }, [communityId]);
 
   useEffect(() => {
     fetchMeetings();
@@ -37,6 +40,10 @@ export default function MeetingsScreen() {
   };
 
   const handleRecordingComplete = async (audioPath: string) => {
+    if (!communityId) {
+      Alert.alert('Error', 'No active community selected.');
+      return;
+    }
     try {
       // Create meeting record
       const { data: meeting, error } = await supabase
@@ -46,17 +53,27 @@ export default function MeetingsScreen() {
           audio_url: audioPath,
           recorded_by: profile?.id,
           processing_status: 'pending',
+          community_id: communityId,
         })
         .select()
         .single();
 
       if (error) throw error;
 
+      // Trigger transcription automatically
+      const { error: transcribeError } = await supabase.functions.invoke('transcribe', {
+        body: { meeting_id: meeting.id }
+      });
+
+      if (transcribeError) {
+        console.error('Failed to start transcription:', transcribeError);
+      }
+
       setShowRecorder(false);
       await fetchMeetings();
       Alert.alert(
         'Meeting Recorded',
-        'Your meeting has been saved and will be transcribed shortly.'
+        'Your meeting has been saved and transcription has started. This may take a few minutes.'
       );
     } catch (error) {
       console.error('Error saving meeting:', error);
@@ -125,12 +142,7 @@ export default function MeetingsScreen() {
               <View className="flex-row items-center justify-between">
                 <View className="flex-1">
                   <Text className="font-semibold text-gray-800">
-                    Meeting on{' '}
-                    {new Date(meeting.date).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
+                    Meeting on {formatDateLong(meeting.date)}
                   </Text>
                   <Text className="text-sm text-gray-500 mt-1">
                     Status:{' '}

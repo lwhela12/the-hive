@@ -1,10 +1,9 @@
-import { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useAuth } from '../lib/hooks/useAuth';
 
 export default function Index() {
-  const { session, profile, loading } = useAuth();
+  const { session, loading } = useAuth();
 
   if (loading) {
     return (
@@ -19,11 +18,7 @@ export default function Index() {
     return <Redirect href="/(auth)/login" />;
   }
 
-  // Logged in but not onboarded -> go to onboarding
-  if (!profile?.onboarded_at) {
-    return <Redirect href="/onboarding/welcome" />;
-  }
-
-  // Logged in and onboarded -> go to main app
+  // All authenticated users go to main app
+  // New users get a special welcome message in chat
   return <Redirect href="/(app)" />;
 }

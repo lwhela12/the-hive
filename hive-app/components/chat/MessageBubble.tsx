@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { View, Text } from 'react-native';
 import type { ChatMessage } from '../../types';
 
@@ -5,7 +6,7 @@ interface MessageBubbleProps {
   message: ChatMessage;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user';
 
   return (
@@ -43,4 +44,4 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       </Text>
     </View>
   );
-}
+});

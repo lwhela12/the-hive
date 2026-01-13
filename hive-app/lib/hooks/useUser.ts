@@ -4,13 +4,16 @@ import { useAuth } from './useAuth';
 import type { Skill, ActionItem } from '../../types';
 
 export function useUser() {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, communityId, refreshProfile } = useAuth();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchUserData = useCallback(async () => {
-    if (!profile) return;
+    if (!profile || !communityId) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
 
@@ -19,6 +22,7 @@ export function useUser() {
       .from('skills')
       .select('*')
       .eq('user_id', profile.id)
+      .eq('community_id', communityId)
       .order('created_at', { ascending: false });
 
     if (skillsData) setSkills(skillsData);
@@ -28,13 +32,14 @@ export function useUser() {
       .from('action_items')
       .select('*')
       .eq('assigned_to', profile.id)
+      .eq('community_id', communityId)
       .eq('completed', false)
       .order('due_date', { ascending: true });
 
     if (actionsData) setActionItems(actionsData);
 
     setLoading(false);
-  }, [profile?.id]);
+  }, [profile?.id, communityId]);
 
   useEffect(() => {
     fetchUserData();
@@ -76,7 +81,8 @@ export function useUser() {
       .from('skills')
       .delete()
       .eq('id', skillId)
-      .eq('user_id', profile?.id);
+      .eq('user_id', profile?.id)
+      .eq('community_id', communityId);
 
     if (!error) {
       setSkills((prev) => prev.filter((s) => s.id !== skillId));

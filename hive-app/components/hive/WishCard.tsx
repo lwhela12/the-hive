@@ -1,5 +1,6 @@
 import { View, Text, Pressable } from 'react-native';
 import { Avatar } from '../ui/Avatar';
+import { formatDateShort } from '../../lib/dateUtils';
 import type { Wish, Profile } from '../../types';
 
 interface WishCardProps {
@@ -18,10 +19,7 @@ export function WishCard({ wish, onHelp }: WishCardProps) {
 
           <View className="flex-row items-center mt-3">
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40">
-              {new Date(wish.created_at).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              })}
+              {formatDateShort(wish.created_at)}
             </Text>
 
             {onHelp && (

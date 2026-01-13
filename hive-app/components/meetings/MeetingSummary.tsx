@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { supabase } from '../../lib/supabase';
+import { formatDateLong, formatDateShort } from '../../lib/dateUtils';
 import type { Meeting, ActionItem, Profile } from '../../types';
 
 interface MeetingSummaryProps {
@@ -60,12 +61,7 @@ export function MeetingSummary({ meeting, onBack }: MeetingSummaryProps) {
             Meeting Summary
           </Text>
           <Text className="text-gray-500">
-            {new Date(meeting.date).toLocaleDateString('en-US', {
-              weekday: 'long',
-              month: 'long',
-              day: 'numeric',
-              year: 'numeric',
-            })}
+            {formatDateLong(meeting.date)}
           </Text>
         </View>
       </View>
@@ -151,11 +147,7 @@ export function MeetingSummary({ meeting, onBack }: MeetingSummaryProps) {
                     )}
                     {item.due_date && (
                       <Text className="text-sm text-gray-500">
-                        Due:{' '}
-                        {new Date(item.due_date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
+                        Due: {formatDateShort(item.due_date)}
                       </Text>
                     )}
                   </View>

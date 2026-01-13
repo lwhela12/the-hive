@@ -20,6 +20,10 @@
         "NSMicrophoneUsageDescription": "The Hive needs microphone access to record meetings."
       }
     },
+    "notification": {
+      "icon": "./assets/Bee ( Hive) .png",
+      "color": "#bd9348"
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/Bee ( Hive) .png",
@@ -28,7 +32,9 @@
       "package": "com.thehive.app",
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "web": {
@@ -43,10 +49,23 @@
         {
           "microphonePermission": "Allow The Hive to access your microphone for recording meetings."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/Bee ( Hive) .png",
+          "color": "#bd9348"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "20097652-8224-4286-aa03-5d7f4f3c0991"
+      }
     }
   }
 }

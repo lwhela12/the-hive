@@ -33,8 +33,9 @@ const ExpoSecureStoreAdapter = {
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: ExpoSecureStoreAdapter,
+    storageKey: 'the-hive-auth',
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: true,
   },
 });

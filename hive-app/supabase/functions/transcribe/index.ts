@@ -75,9 +75,17 @@ serve(async (req) => {
       const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
 
       // Get all members for speaker attribution
-      const { data: members } = await supabaseAdmin
-        .from('profiles')
-        .select('id, name');
+      const { data: memberRows } = await supabaseAdmin
+        .from('community_memberships')
+        .select('user_id')
+        .eq('community_id', meeting.community_id);
+      const memberIds = memberRows?.map((row) => row.user_id) || [];
+      const { data: members } = memberIds.length
+        ? await supabaseAdmin
+          .from('profiles')
+          .select('id, name')
+          .in('id', memberIds)
+        : { data: [] as { id: string; name: string }[] };
 
       const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-20250514',
@@ -141,6 +149,7 @@ Format your response as JSON:
 
           await supabaseAdmin.from('action_items').insert({
             meeting_id: meeting.id,
+            community_id: meeting.community_id,
             description: item.description,
             assigned_to: assignedTo,
             due_date: item.due_date
