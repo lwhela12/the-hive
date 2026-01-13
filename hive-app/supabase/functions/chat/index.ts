@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createRemoteJWKSet, jwtVerify } from 'https://deno.land/x/jose@v4.15.4/index.ts';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import { buildContext } from './context/index.ts';
 
@@ -213,31 +214,53 @@ const tools: Anthropic.Tool[] = [
   }
 ];
 
+const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+const JWKS = supabaseUrl ? createRemoteJWKSet(new URL(`${supabaseUrl}/auth/v1/keys`)) : null;
+
+const verifySupabaseJwt = async (authHeader: string | null) => {
+  if (!supabaseUrl || !JWKS) {
+    throw new Error('Missing SUPABASE_URL for JWT verification');
+  }
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    throw new Error('Missing Authorization header');
+  }
+  const token = authHeader.slice('Bearer '.length).trim();
+  const { payload } = await jwtVerify(token, JWKS, {
+    issuer: `${supabaseUrl}/auth/v1`,
+    audience: 'authenticated',
+  });
+  return { token, payload };
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    );
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !user) {
-      console.error('Auth error:', authError);
-      console.error('Authorization header:', req.headers.get('Authorization')?.substring(0, 50));
-      return new Response(JSON.stringify({
-        error: 'Unauthorized',
-        details: authError?.message || 'No user found',
-        hint: 'Check that the access token is a valid Supabase JWT'
-      }), {
+    const authHeader = req.headers.get('Authorization') ?? req.headers.get('authorization');
+    const { token, payload } = await verifySupabaseJwt(authHeader);
+    const userId = payload.sub;
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+
+    const supabaseClient = createClient(
+      supabaseUrl,
+      supabaseAnonKey,
+      { global: { headers: { Authorization: `Bearer ${token}`, apikey: supabaseAnonKey } } }
+    );
 
     const { message, mode, context, conversation_id } = await req.json();
 
@@ -245,7 +268,7 @@ serve(async (req) => {
     const { data: profile } = await supabaseClient
       .from('profiles')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single();
 
     const communityId = profile?.current_community_id;
@@ -259,7 +282,7 @@ serve(async (req) => {
     // Build comprehensive context using the smart context builder
     const contextResult = await buildContext({
       supabase: supabaseClient,
-      userId: user.id,
+      userId,
       communityId,
       conversationId: conversation_id,
       mode: mode || 'default',
@@ -316,7 +339,7 @@ serve(async (req) => {
           case 'store_skill': {
             const { description, raw_input } = toolUse.input as { description: string; raw_input: string };
             const { error } = await supabaseClient.from('skills').insert({
-              user_id: user.id,
+              user_id: userId,
               community_id: communityId,
               description,
               raw_input,
@@ -330,7 +353,7 @@ serve(async (req) => {
           case 'store_wish': {
             const { description, raw_input } = toolUse.input as { description: string; raw_input: string };
             const { error } = await supabaseClient.from('wishes').insert({
-              user_id: user.id,
+              user_id: userId,
               community_id: communityId,
               description,
               raw_input,
@@ -347,7 +370,7 @@ serve(async (req) => {
               .from('wishes')
               .update({ status: 'public', is_active: true })
               .eq('id', wish_id)
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .eq('community_id', communityId);
             result = error ? `Error: ${error.message}` : 'Wish published to the Hive';
             break;
@@ -357,7 +380,7 @@ serve(async (req) => {
             const { data } = await supabaseClient
               .from('wishes')
               .select('*')
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .eq('community_id', communityId)
               .order('created_at', { ascending: false });
             result = JSON.stringify(data || []);
@@ -368,7 +391,7 @@ serve(async (req) => {
             const { data } = await supabaseClient
               .from('skills')
               .select('*')
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .eq('community_id', communityId);
             result = JSON.stringify(data || []);
             break;
@@ -381,7 +404,7 @@ serve(async (req) => {
               .eq('status', 'public')
               .eq('is_active', true)
               .eq('community_id', communityId)
-              .neq('user_id', user.id);
+              .neq('user_id', userId);
             result = JSON.stringify(data || []);
             break;
           }
@@ -430,7 +453,7 @@ serve(async (req) => {
                 fulfilled_by
               })
               .eq('id', wish_id)
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .eq('community_id', communityId);
             result = error ? `Error: ${error.message}` : 'Wish marked as fulfilled!';
             break;
@@ -459,7 +482,7 @@ serve(async (req) => {
               const { error } = await supabaseClient
                 .from('profiles')
                 .update(updates)
-                .eq('id', user.id);
+                .eq('id', userId);
               result = error ? `Error: ${error.message}` : 'Profile updated successfully';
             } else {
               result = 'No updates provided';
