@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { View, Text, Pressable, Image, ActivityIndicator, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
+import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
 
   const handleGoogleSignIn = async () => {
     try {
@@ -16,10 +17,15 @@ export default function LoginScreen() {
 
       if (Platform.OS === 'web') {
         // For web, use simple redirect
+        // Include returnTo in the redirect URL so we can handle it after OAuth
+        const redirectUrl = returnTo
+          ? `${window.location.origin}${returnTo}`
+          : window.location.origin;
+
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: window.location.origin,
+            redirectTo: redirectUrl,
           },
         });
         if (error) throw error;
@@ -84,7 +90,7 @@ export default function LoginScreen() {
         {/* Logo/Header */}
         <View className="items-center mb-12">
           <Image
-            source={require('../../assets/The Hive Total transparent background (1).png')}
+            source={require('../../assets/HIVE Logo Transparent  BG.png')}
             style={{ width: 160, height: 160, marginBottom: 16 }}
             resizeMode="contain"
           />

@@ -39,7 +39,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/Bee ( Hive) .png",
+      "favicon": "./assets/BEE ONLY IN GOLD BG.png",
       "bundler": "metro"
     },
     "plugins": [

@@ -196,29 +196,42 @@ export default function AdminScreen() {
   };
 
   const revokeInvite = async (inviteId: string, email: string) => {
-    Alert.alert(
-      'Revoke Invite',
-      `Are you sure you want to revoke the invite for ${email}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Revoke',
-          style: 'destructive',
-          onPress: async () => {
-            const { error } = await supabase
-              .from('community_invites')
-              .delete()
-              .eq('id', inviteId);
+    // Use window.confirm on web, Alert.alert on native
+    const confirmed = typeof window !== 'undefined' && window.confirm
+      ? window.confirm(`Are you sure you want to revoke the invite for ${email}?`)
+      : await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            'Revoke Invite',
+            `Are you sure you want to revoke the invite for ${email}?`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Revoke', style: 'destructive', onPress: () => resolve(true) },
+            ]
+          );
+        });
 
-            if (error) {
-              Alert.alert('Error', 'Failed to revoke invite');
-            } else {
-              await fetchData();
-            }
-          },
-        },
-      ]
-    );
+    if (!confirmed) return;
+
+    if (!communityId) {
+      Alert.alert('Error', 'No community context. Please refresh and try again.');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('community_invites')
+      .delete()
+      .eq('id', inviteId)
+      .eq('community_id', communityId)
+      .select();
+
+    if (error) {
+      console.error('Revoke invite error:', error);
+      alert(`Failed to revoke invite: ${error.message}`);
+    } else if (!data || data.length === 0) {
+      alert('No invite was deleted. You may not have permission or the invite no longer exists.');
+    } else {
+      await fetchData();
+    }
   };
 
   if (communityRole !== 'admin') {

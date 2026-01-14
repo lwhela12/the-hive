@@ -12,7 +12,7 @@ type InviteWithDetails = CommunityInvite & {
 };
 
 export default function JoinScreen() {
-  const { session, profile, refreshProfile } = useAuth();
+  const { session, profile, refreshProfile, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [invite, setInvite] = useState<InviteWithDetails | null>(null);
   const [showWaitlist, setShowWaitlist] = useState(false);
@@ -24,10 +24,20 @@ export default function JoinScreen() {
   const userEmail = session?.user?.email || profile?.email;
 
   useEffect(() => {
+    // If auth is still loading, wait
+    if (authLoading) return;
+
+    // If no session, redirect to login with return URL
+    if (!session) {
+      router.replace('/(auth)/login?returnTo=/join');
+      return;
+    }
+
+    // If we have a user email, check for invite
     if (userEmail) {
       checkForInvite();
     }
-  }, [userEmail]);
+  }, [session, authLoading, userEmail]);
 
   const checkForInvite = async () => {
     if (!userEmail) return;
