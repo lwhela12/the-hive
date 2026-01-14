@@ -37,10 +37,11 @@ export const NavigationDrawer = memo(function NavigationDrawer({
 }: NavigationDrawerProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { profile, communityId } = useAuth();
+  const { profile, communityId, communityRole } = useAuth();
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
 
   // Navigation items for the app
+  const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
   const navItems = [
     { icon: null, imageSource: cliveIcon, label: 'Clive', route: '/' },
     { icon: null, imageSource: beeIcon, label: 'HIVE', route: '/hive' },
@@ -48,6 +49,7 @@ export const NavigationDrawer = memo(function NavigationDrawer({
     { icon: '💬', label: 'Chat', route: '/messages', badge: totalUnreadDMs },
     { icon: null, customIcon: 'honeycomb', label: 'Meetings', route: '/meetings' },
     { icon: '👤', imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined, label: 'Profile', route: '/profile', isCircular: true },
+    ...(isAdmin ? [{ icon: '⚙️', label: 'Admin', route: '/admin' }] : []),
   ];
   const { width: screenWidth } = useWindowDimensions();
   const drawerWidth = screenWidth * DRAWER_WIDTH_PERCENT;

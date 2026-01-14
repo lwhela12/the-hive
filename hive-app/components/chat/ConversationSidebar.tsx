@@ -85,7 +85,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   onToggleCollapse,
 }: ConversationSidebarProps) {
   const router = useRouter();
-  const { profile, communityId } = useAuth();
+  const { profile, communityId, communityRole } = useAuth();
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width: screenWidth } = useWindowDimensions();
   const drawerWidth = screenWidth * DRAWER_WIDTH_PERCENT;
@@ -131,12 +131,14 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   }));
 
   // Navigation items for mobile sidebar
+  const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
   const navItems = [
     { icon: null, imageSource: beeIcon, label: 'Hive', route: '/hive' as const },
     { icon: '📋', label: 'Board', route: '/board' as const },
     { icon: '💬', label: 'Chat', route: '/messages' as const, badge: totalUnreadDMs },
     { icon: null, customIcon: 'honeycomb', label: 'Meetings', route: '/meetings' as const },
     { icon: '👤', imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined, label: 'Profile', route: '/profile' as const, isCircular: true },
+    ...(isAdmin ? [{ icon: '⚙️', label: 'Admin', route: '/admin' as const }] : []),
   ];
 
   // Close with animation, then perform action
