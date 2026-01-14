@@ -83,6 +83,9 @@ export async function buildContext(params: BuildContextParams): Promise<ContextR
   }
 
   // 5. Assemble the final context string
+  console.log('[Context] Community context public wishes count:', communityContext.publicWishes.length);
+  console.log('[Context] Community context public wishes:', JSON.stringify(communityContext.publicWishes));
+
   const assembledContext = assembleContext({
     userContext,
     communityContext,
@@ -92,6 +95,18 @@ export async function buildContext(params: BuildContextParams): Promise<ContextR
     meetingsSummary,
     mode,
   });
+
+  // Log the public wishes section of assembled context
+  if (assembledContext.includes('Active Public Wishes')) {
+    const startIdx = assembledContext.indexOf('## Active Public Wishes');
+    const endIdx = assembledContext.indexOf('##', startIdx + 5);
+    const wishesSection = endIdx > startIdx
+      ? assembledContext.slice(startIdx, endIdx)
+      : assembledContext.slice(startIdx, startIdx + 500);
+    console.log('[Context] Public wishes section in context:', wishesSection);
+  } else {
+    console.log('[Context] WARNING: No public wishes section in assembled context');
+  }
 
   metadata.tokensUsed = estimateTokens(assembledContext);
 
@@ -166,11 +181,10 @@ async function fetchCommunityContext(
       .limit(5),
     supabase
       .from('wishes')
-      .select('description, user:profiles(name)')
+      .select('description, user_id, user:profiles!wishes_user_id_fkey(name)')
       .eq('community_id', communityId)
       .eq('status', 'public')
       .eq('is_active', true)
-      .neq('user_id', userId)
       .limit(10),
     supabase
       .from('skills')
@@ -179,6 +193,13 @@ async function fetchCommunityContext(
       .neq('user_id', userId)
       .limit(20),
   ]);
+
+  // Debug logging for public wishes
+  console.log('[Context] Community ID:', communityId);
+  console.log('[Context] Public wishes query result:', JSON.stringify(publicWishesResult));
+  if (publicWishesResult.error) {
+    console.error('[Context] Public wishes error:', publicWishesResult.error);
+  }
 
   return {
     queenBee: queenBeeResult.data
@@ -195,6 +216,7 @@ async function fetchCommunityContext(
     publicWishes: (publicWishesResult.data || []).map((w: any) => ({
       userName: w.user?.name || 'Unknown',
       description: w.description,
+      isCurrentUser: w.user_id === userId,
     })),
     communitySkills: (skillsResult.data || []).map((s: any) => ({
       userName: s.user?.name || 'Unknown',
@@ -471,12 +493,15 @@ ${qb.projectDescription || ''}
 Status: ${qb.status}`);
     }
 
-    // Public wishes from others
+    // Public wishes (including user's own)
     if (data.communityContext.publicWishes.length > 0) {
       const wishes = data.communityContext.publicWishes
-        .map((w) => `- ${w.userName}: ${w.description}`)
+        .map((w) => {
+          const marker = w.isCurrentUser ? ' (YOUR WISH)' : '';
+          return `- ${w.userName}${marker}: ${w.description}`;
+        })
         .join('\n');
-      sections.push(`## Active Wishes from The Hive
+      sections.push(`## Active Public Wishes in The Hive
 ${wishes}`);
     }
 

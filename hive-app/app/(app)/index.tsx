@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Pressable, Text, Platform } from 'react-native';
+import { View, Pressable, Text, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChatInterface } from '../../components/chat/ChatInterface';
 import { ConversationSidebar } from '../../components/chat/ConversationSidebar';
@@ -45,13 +45,15 @@ export default function ChatScreen() {
     await deleteConversation(id);
   }, [deleteConversation]);
 
-  const isWeb = Platform.OS === 'web';
+  const { width } = useWindowDimensions();
+  // Use mobile layout for narrow screens (< 768px) regardless of platform
+  const useMobileLayout = width < 768;
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       <View className="flex-1 flex-row">
-        {/* Sidebar - always visible on web (collapsible), drawer on mobile */}
-        {isWeb && (
+        {/* Sidebar - always visible on wide screens (collapsible), drawer on narrow screens */}
+        {!useMobileLayout && (
           <ConversationSidebar
             conversations={conversations}
             currentConversationId={currentConversation?.id || null}
@@ -64,8 +66,8 @@ export default function ChatScreen() {
           />
         )}
 
-        {/* Mobile sidebar (drawer) */}
-        {!isWeb && sidebarOpen && (
+        {/* Mobile/narrow screen sidebar (animated drawer) */}
+        {useMobileLayout && (
           <ConversationSidebar
             conversations={conversations}
             currentConversationId={currentConversation?.id || null}
@@ -79,27 +81,38 @@ export default function ChatScreen() {
 
         {/* Main chat area */}
         <View className="flex-1">
-          {/* Mobile header with menu button */}
-          {!isWeb && (
-            <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100">
+          {/* Mobile header - Claude.ai style */}
+          {useMobileLayout && (
+            <View className="flex-row items-center justify-between px-4 py-3">
               <Pressable
                 onPress={() => setSidebarOpen(true)}
                 className="p-2 -ml-2"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text className="text-2xl text-charcoal">☰</Text>
+                {/* Hamburger icon - three lines */}
+                <View className="w-6 h-5 justify-between">
+                  <View className="h-0.5 w-6 bg-charcoal rounded-full" />
+                  <View className="h-0.5 w-5 bg-charcoal rounded-full" />
+                  <View className="h-0.5 w-6 bg-charcoal rounded-full" />
+                </View>
               </Pressable>
-              <Text
-                style={{ fontFamily: 'LibreBaskerville_700Bold' }}
-                className="text-lg text-charcoal"
-                numberOfLines={1}
-              >
-                {currentConversation?.title || 'New Chat'}
-              </Text>
+              <View className="flex-row items-center">
+                <Text
+                  style={{ fontFamily: 'LibreBaskerville_700Bold' }}
+                  className="text-base text-charcoal"
+                >
+                  HIVE
+                </Text>
+              </View>
               <Pressable
                 onPress={handleNewConversation}
                 className="p-2 -mr-2"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text className="text-2xl text-gold">+</Text>
+                {/* New chat icon - square with plus */}
+                <View className="w-6 h-6 border-2 border-charcoal rounded-md items-center justify-center">
+                  <Text className="text-charcoal text-sm font-bold">+</Text>
+                </View>
               </Pressable>
             </View>
           )}

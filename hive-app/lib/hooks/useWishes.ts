@@ -81,6 +81,53 @@ export function useWishes() {
     return { error };
   };
 
+  const grantWish = async (
+    wishId: string,
+    granterIds: string[],
+    thankYouMessage?: string
+  ) => {
+    if (!profile || !communityId) {
+      return { error: new Error('Not authenticated') };
+    }
+
+    // 1. Update wish status and thank you message
+    const { error: wishError } = await supabase
+      .from('wishes')
+      .update({
+        status: 'fulfilled',
+        is_active: false,
+        fulfilled_at: new Date().toISOString(),
+        thank_you_message: thankYouMessage || null,
+      })
+      .eq('id', wishId)
+      .eq('user_id', profile.id)
+      .eq('community_id', communityId);
+
+    if (wishError) {
+      return { error: wishError };
+    }
+
+    // 2. Insert granters into junction table
+    if (granterIds.length > 0) {
+      const granterInserts = granterIds.map((granterId) => ({
+        wish_id: wishId,
+        granter_id: granterId,
+        community_id: communityId,
+      }));
+
+      const { error: granterError } = await supabase
+        .from('wish_granters')
+        .insert(granterInserts);
+
+      if (granterError) {
+        return { error: granterError };
+      }
+    }
+
+    await fetchWishes();
+    return { error: null };
+  };
+
   return {
     wishes,
     publicWishes,
@@ -88,5 +135,6 @@ export function useWishes() {
     refresh: fetchWishes,
     publishWish,
     fulfillWish,
+    grantWish,
   };
 }

@@ -93,6 +93,7 @@ export interface EventData {
 export interface PublicWishData {
   userName: string;
   description: string;
+  isCurrentUser?: boolean;
 }
 
 export interface CommunitySkillData {

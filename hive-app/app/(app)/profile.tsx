@@ -1,24 +1,33 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
+import { useWishes } from '../../lib/hooks/useWishes';
 import { Avatar } from '../../components/ui/Avatar';
+import { NavigationDrawer, AppHeader } from '../../components/navigation';
+import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
-import type { Skill, Wish, ActionItem } from '../../types';
+import type { Skill, Wish, ActionItem, UserInsights, Profile } from '../../types';
 
 const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
 
 export default function ProfileScreen() {
   const { profile, communityId, communityRole, refreshProfile } = useAuth();
   const { permissionStatus, requestPermissions } = useNotifications();
+  const { grantWish } = useWishes();
+  const { width } = useWindowDimensions();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const useMobileLayout = width < 768;
   const [refreshing, setRefreshing] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
+  const [wishToGrant, setWishToGrant] = useState<(Wish & { user: Profile }) | null>(null);
+  const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
 
   // Editable profile fields
   const [isEditing, setIsEditing] = useState(false);
@@ -60,6 +69,15 @@ export default function ProfileScreen() {
       .eq('completed', false)
       .order('due_date', { ascending: true });
     if (actionItemsData) setActionItems(actionItemsData);
+
+    // Fetch user insights (personality notes)
+    const { data: insightsData } = await supabase
+      .from('user_insights')
+      .select('*')
+      .eq('user_id', profile.id)
+      .eq('community_id', communityId)
+      .single();
+    setUserInsights(insightsData);
   }, [profile?.id, communityId]);
 
   useEffect(() => {
@@ -294,10 +312,46 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleGrantWish = async (data: {
+    wishId: string;
+    granterIds: string[];
+    thankYouMessage?: string;
+  }) => {
+    const result = await grantWish(data.wishId, data.granterIds, data.thankYouMessage);
+    if (!result.error) {
+      await fetchData();
+      setWishToGrant(null);
+    }
+    return result;
+  };
+
+  const openGrantModal = (wish: Wish) => {
+    if (!profile) return;
+    // Create wish with user profile for the modal
+    setWishToGrant({ ...wish, user: profile });
+  };
+
   if (!profile) return null;
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+      {/* Mobile Header */}
+      {useMobileLayout && (
+        <AppHeader
+          title="Profile"
+          onMenuPress={() => setDrawerOpen(true)}
+        />
+      )}
+
+      {/* Navigation Drawer */}
+      {useMobileLayout && (
+        <NavigationDrawer
+          isOpen={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          mode="navigation"
+        />
+      )}
+
       <ScrollView
         className="flex-1"
         contentContainerClassName="p-4"
@@ -497,6 +551,23 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Personality Notes - How the Hive Sees You */}
+        {userInsights?.personality_notes && (
+          <View className="mb-6">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
+              How the Hive Sees You
+            </Text>
+            <View className="bg-white rounded-xl shadow-sm p-4">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
+                {userInsights.personality_notes}
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/40 mt-3">
+                These notes are maintained by the Hive assistant based on your conversations. Only you can see them.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Action Items */}
         {actionItems.length > 0 && (
           <View className="mb-6">
@@ -575,12 +646,12 @@ export default function ProfileScreen() {
                           wish.status === 'public'
                             ? 'bg-green-500'
                             : wish.status === 'fulfilled'
-                            ? 'bg-blue-500'
+                            ? 'bg-gold'
                             : 'bg-charcoal/40'
                         }`}
                       />
                       <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60 capitalize">
-                        {wish.status}
+                        {wish.status === 'fulfilled' ? 'Granted' : wish.status}
                       </Text>
                     </View>
                     {wish.status === 'private' && (
@@ -593,8 +664,23 @@ export default function ProfileScreen() {
                         </Text>
                       </Pressable>
                     )}
+                    {wish.status === 'public' && (
+                      <Pressable
+                        onPress={() => openGrantModal(wish)}
+                        className="bg-gold px-3 py-1 rounded-full active:bg-gold/80"
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-xs">
+                          Mark as Granted
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{wish.description}</Text>
+                  {wish.status === 'fulfilled' && wish.thank_you_message && (
+                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-sm mt-1 italic">
+                      "{wish.thank_you_message}"
+                    </Text>
+                  )}
                 </View>
               ))}
             </View>
@@ -658,6 +744,17 @@ export default function ProfileScreen() {
           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-600">Sign Out</Text>
         </Pressable>
       </ScrollView>
+
+      {/* Grant Wish Modal */}
+      {wishToGrant && (
+        <GrantWishModal
+          visible={!!wishToGrant}
+          onClose={() => setWishToGrant(null)}
+          wish={wishToGrant}
+          communityId={communityId}
+          onGrant={handleGrantWish}
+        />
+      )}
     </SafeAreaView>
   );
 }

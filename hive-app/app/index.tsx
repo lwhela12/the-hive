@@ -3,12 +3,12 @@ import { Redirect } from 'expo-router';
 import { useAuth } from '../lib/hooks/useAuth';
 
 export default function Index() {
-  const { session, loading } = useAuth();
+  const { session, communityId, loading } = useAuth();
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-honey-50">
-        <ActivityIndicator size="large" color="#F59E0B" />
+      <View className="flex-1 items-center justify-center bg-cream">
+        <ActivityIndicator size="large" color="#bd9348" />
       </View>
     );
   }
@@ -18,7 +18,11 @@ export default function Index() {
     return <Redirect href="/(auth)/login" />;
   }
 
-  // All authenticated users go to main app
-  // New users get a special welcome message in chat
+  // Logged in but no community -> go to join screen
+  if (!communityId) {
+    return <Redirect href="/join" />;
+  }
+
+  // Has community -> go to main app (chat handles welcome/onboarding)
   return <Redirect href="/(app)" />;
 }

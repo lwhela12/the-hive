@@ -1,9 +1,13 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import { buildContext } from './context/index.ts';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { corsHeaders, handleCors, errorResponse } from '../_shared/cors.ts';
+import {
+  getSSEHeaders,
+  SSEWriter,
+} from '../_shared/streaming.ts';
 
 const SYSTEM_PROMPT = `You are the Hive Assistant, an AI helper for a close-knit community of 12 people practicing "high-definition wishing."
 
@@ -55,6 +59,30 @@ Check if user has stored skills or wishes in the context.
 - When this is the case, periodically (not every message) remind them:
   "By the way, whenever you're ready, I'd love to chat about your goals and skills!"
 - Don't remind every message - space it out naturally, maybe every 3-4 interactions
+
+## Personality Profile Tracking
+
+You maintain a private personality profile for each user. These notes help you understand them better over time and make more relevant suggestions. The user CAN see these notes on their profile page, so write them as if you're describing the person to themselves - observational, helpful, not judgmental.
+
+**When to update personality notes:**
+- After meaningful conversations that reveal something about who they are
+- When you notice patterns in their interests, communication style, or relationships
+- When they mention projects, hobbies, or goals they care about
+- NOT after every message - only when you learn something genuinely new
+
+**What to include:**
+- Communication style (brief vs detailed, formal vs casual, humor style)
+- Interests and passions that come up repeatedly
+- Projects they're working on or care about
+- People they mention frequently or seem close to
+- How they prefer to receive help (direct advice vs guided discovery)
+- Patterns in the kinds of wishes they express
+
+**What NOT to include:**
+- Judgments about their character
+- Private information they asked you to keep confidential
+- Speculation about things they haven't shared
+- Negative observations framed negatively
 
 ## What NOT to Do
 
@@ -207,6 +235,28 @@ const tools: Anthropic.Tool[] = [
       type: "object" as const,
       properties: {}
     }
+  },
+  {
+    name: "update_personality_notes",
+    description: "Update your observational notes about this user. Use this to track patterns you notice: their communication style, interests, recurring themes in conversations, who they interact with, projects they care about. These notes are PRIVATE to the user (only they can see them). Update periodically when you learn something meaningful - not every message. Be observational and helpful, not judgmental.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        notes: {
+          type: "string",
+          description: "Your updated personality notes. This REPLACES the previous notes, so include all relevant observations. Keep it concise but comprehensive. Format as natural prose, not a list."
+        }
+      },
+      required: ["notes"]
+    }
+  },
+  {
+    name: "get_personality_notes",
+    description: "Retrieve your current personality notes about this user to inform your understanding of them.",
+    input_schema: {
+      type: "object" as const,
+      properties: {}
+    }
   }
 ];
 
@@ -239,7 +289,7 @@ serve(async (req) => {
       { global: { headers: { Authorization: `Bearer ${token}`, apikey: supabaseAnonKey } } }
     );
 
-    const { message, mode, context, conversation_id } = await req.json();
+    const { message, mode, context, conversation_id, attachments, stream = false } = await req.json();
 
     // Get user profile
     const { data: profile } = await supabaseClient
@@ -285,8 +335,36 @@ serve(async (req) => {
         role: m.role as 'user' | 'assistant',
         content: m.content
       })),
-      { role: 'user' as const, content: message }
     ];
+
+    // Build the current user message, potentially with images (multimodal)
+    if (attachments && attachments.length > 0) {
+      // Create content blocks with images first, then text
+      const contentBlocks: Array<Anthropic.ImageBlockParam | Anthropic.TextBlockParam> = [];
+
+      // Add image blocks
+      for (const attachment of attachments) {
+        if (attachment.mime_type?.startsWith('image/')) {
+          contentBlocks.push({
+            type: 'image' as const,
+            source: {
+              type: 'url' as const,
+              url: attachment.url,
+            },
+          });
+        }
+      }
+
+      // Add text block (even if empty, Claude needs at least the text block)
+      contentBlocks.push({
+        type: 'text' as const,
+        text: message || 'What do you see in this image?',
+      });
+
+      messages.push({ role: 'user' as const, content: contentBlocks });
+    } else {
+      messages.push({ role: 'user' as const, content: message });
+    }
 
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
 
@@ -377,11 +455,10 @@ serve(async (req) => {
           case 'get_public_wishes': {
             const { data } = await supabaseClient
               .from('wishes')
-              .select('*, user:profiles(name)')
+              .select('*, user:profiles!wishes_user_id_fkey(name)')
               .eq('status', 'public')
               .eq('is_active', true)
-              .eq('community_id', communityId)
-              .neq('user_id', userId);
+              .eq('community_id', communityId);
             result = JSON.stringify(data || []);
             break;
           }
@@ -396,7 +473,14 @@ serve(async (req) => {
           }
 
           case 'get_current_queen_bee': {
-            result = JSON.stringify(queenBee || null);
+            const currentMonth = new Date().toISOString().slice(0, 7);
+            const { data: qbData } = await supabaseClient
+              .from('queen_bees')
+              .select('*, user:profiles(name)')
+              .eq('month', currentMonth)
+              .eq('community_id', communityId)
+              .single();
+            result = JSON.stringify(qbData || null);
             break;
           }
 
@@ -473,6 +557,49 @@ serve(async (req) => {
             break;
           }
 
+          case 'update_personality_notes': {
+            const { notes } = toolUse.input as { notes: string };
+
+            // Try to update existing record, if none exists, insert
+            const { data: existing } = await supabaseClient
+              .from('user_insights')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('community_id', communityId)
+              .single();
+
+            if (existing) {
+              const { error } = await supabaseClient
+                .from('user_insights')
+                .update({ personality_notes: notes })
+                .eq('user_id', userId)
+                .eq('community_id', communityId);
+              result = error ? `Error: ${error.message}` : 'Personality notes updated';
+            } else {
+              const { error } = await supabaseClient
+                .from('user_insights')
+                .insert({
+                  user_id: userId,
+                  community_id: communityId,
+                  personality_notes: notes,
+                  shared_with: []
+                });
+              result = error ? `Error: ${error.message}` : 'Personality notes saved';
+            }
+            break;
+          }
+
+          case 'get_personality_notes': {
+            const { data } = await supabaseClient
+              .from('user_insights')
+              .select('personality_notes')
+              .eq('user_id', userId)
+              .eq('community_id', communityId)
+              .single();
+            result = data?.personality_notes || 'No personality notes recorded yet.';
+            break;
+          }
+
           default:
             result = 'Unknown tool';
         }
@@ -502,21 +629,85 @@ serve(async (req) => {
       (block): block is Anthropic.TextBlock => block.type === 'text'
     );
 
-    return new Response(
-      JSON.stringify({
-        response: textBlock?.text || "I'm not sure how to respond to that.",
-        skillsAdded,
-        onboardingComplete,
-        // Include context metadata for debugging/monitoring
-        contextMetadata: {
-          tokensUsed: contextResult.metadata.tokensUsed,
-          messageCount: contextResult.metadata.conversationMessageCount,
-          summariesUsed: contextResult.metadata.summariesUsed,
-          cacheHits: contextResult.metadata.cacheHits,
+    const finalText = textBlock?.text || "I'm not sure how to respond to that.";
+
+    // If streaming is not requested, return JSON response (backward compatible)
+    if (!stream) {
+      return new Response(
+        JSON.stringify({
+          response: finalText,
+          skillsAdded,
+          onboardingComplete,
+          // Include context metadata for debugging/monitoring
+          contextMetadata: {
+            tokensUsed: contextResult.metadata.tokensUsed,
+            messageCount: contextResult.metadata.conversationMessageCount,
+            summariesUsed: contextResult.metadata.summariesUsed,
+            cacheHits: contextResult.metadata.cacheHits,
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Streaming response using SSE
+    const { readable, writable } = new TransformStream();
+    const sseWriter = new SSEWriter(writable);
+
+    // Process streaming in the background
+    (async () => {
+      try {
+        // Send start event
+        await sseWriter.write({ type: 'start' });
+
+        // Send content start
+        await sseWriter.write({ type: 'content_start' });
+
+        // Stream the final text in chunks - use smaller chunks and longer delays
+        // for a more visible streaming effect
+        const chunkSize = 12; // Small chunks for smooth streaming
+        const delayMs = 25; // Delay between chunks
+
+        for (let i = 0; i < finalText.length; i += chunkSize) {
+          const chunk = finalText.slice(i, i + chunkSize);
+          // Use 'chunk' as data type so frontend knows to parse it specially
+          await sseWriter.write({ type: 'content_delta', data: { text: chunk } });
+          // Add delay between chunks (except for the last one)
+          if (i + chunkSize < finalText.length) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
         }
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+
+        // Send content done with full text
+        await sseWriter.write({ type: 'content_done', data: finalText });
+
+        // Send metadata
+        await sseWriter.write({
+          type: 'metadata',
+          data: {
+            skillsAdded,
+            onboardingComplete,
+            contextMetadata: {
+              tokensUsed: contextResult.metadata.tokensUsed,
+              messageCount: contextResult.metadata.conversationMessageCount,
+              summariesUsed: contextResult.metadata.summariesUsed,
+              cacheHits: contextResult.metadata.cacheHits,
+            },
+          },
+        });
+
+        // Send done
+        await sseWriter.write({ type: 'done' });
+      } catch (err) {
+        console.error('Streaming error:', err);
+        await sseWriter.write({ type: 'error', data: { error: 'Streaming failed' } });
+        await sseWriter.write({ type: 'done' });
+      } finally {
+        await sseWriter.close();
+      }
+    })();
+
+    return new Response(readable, { headers: getSSEHeaders() });
 
   } catch (error) {
     console.error('Chat error:', error);

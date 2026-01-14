@@ -41,3 +41,18 @@ verify_jwt = false
 # No user auth required (called from AssemblyAI webhook)
 [functions.transcribe]
 verify_jwt = false
+
+# Schedule meetings with Google Meet links - requires user authentication
+# Auth handled via _shared/auth.ts using jose library
+[functions.schedule-meeting]
+verify_jwt = false
+
+# Delete meetings from Google Calendar and database - requires admin authentication
+# Auth handled via _shared/auth.ts using jose library
+[functions.delete-meeting]
+verify_jwt = false
+
+# DM notification system - uses service_role key
+# Sends push notifications for new DM messages
+[functions.notify-dm]
+verify_jwt = false

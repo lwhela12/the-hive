@@ -1,0 +1,2 @@
+-- Placeholder migration (original content was moved to 031)
+-- This file exists to maintain migration history consistency

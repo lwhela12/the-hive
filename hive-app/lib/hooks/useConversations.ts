@@ -4,20 +4,21 @@ import { useAuth } from './useAuth';
 import type { Conversation, ConversationMode } from '../../types';
 
 export function useConversations() {
-  const { session } = useAuth();
+  const { session, communityId } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadConversations = useCallback(async () => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || !communityId) return;
 
     setLoading(true);
     const { data, error } = await supabase
       .from('conversations')
       .select('*')
       .eq('user_id', session.user.id)
+      .eq('community_id', communityId)
       .eq('is_active', true)
       .order('updated_at', { ascending: false });
 
@@ -27,13 +28,13 @@ export function useConversations() {
       setError('Failed to load conversations');
     }
     setLoading(false);
-  }, [session?.user?.id]);
+  }, [session?.user?.id, communityId]);
 
   const createConversation = useCallback(async (
     mode: ConversationMode = 'default',
     title?: string
   ): Promise<Conversation | null> => {
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !communityId) {
       setError('Not authenticated');
       return null;
     }
@@ -42,6 +43,7 @@ export function useConversations() {
       .from('conversations')
       .insert({
         user_id: session.user.id,
+        community_id: communityId,
         mode,
         title: title || null,
         is_active: true,
@@ -61,18 +63,19 @@ export function useConversations() {
     }
 
     return data;
-  }, [session?.user?.id]);
+  }, [session?.user?.id, communityId]);
 
   const getOrCreateConversation = useCallback(async (
     mode: ConversationMode = 'default'
   ): Promise<Conversation | null> => {
-    if (!session?.user?.id) return null;
+    if (!session?.user?.id || !communityId) return null;
 
     // Check if there's a recent active conversation (within last 30 minutes)
     const { data: existing } = await supabase
       .from('conversations')
       .select('*')
       .eq('user_id', session.user.id)
+      .eq('community_id', communityId)
       .eq('mode', mode)
       .eq('is_active', true)
       .order('updated_at', { ascending: false })
@@ -93,7 +96,7 @@ export function useConversations() {
 
     // Create new conversation
     return createConversation(mode);
-  }, [session?.user?.id, createConversation]);
+  }, [session?.user?.id, communityId, createConversation]);
 
   const selectConversation = useCallback(async (conversationId: string) => {
     const { data, error } = await supabase

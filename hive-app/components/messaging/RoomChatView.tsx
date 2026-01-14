@@ -2,19 +2,24 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   TextInput,
   Pressable,
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { RoomMessageItem } from './RoomMessageItem';
 import { RoomTypingIndicator } from './RoomTypingIndicator';
-import type { ChatRoom, RoomMessage, Profile, MessageReaction, TypingIndicator } from '../../types';
+import { SelectedImage, pickMultipleImages } from '../../lib/imagePicker';
+import { uploadMultipleImages } from '../../lib/attachmentUpload';
+import type { ChatRoom, RoomMessage, Profile, MessageReaction, TypingIndicator, Attachment } from '../../types';
 
 interface RoomChatViewProps {
   room: ChatRoom & { members?: Array<{ user?: Profile }> };
@@ -31,9 +36,13 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
   const [typingUsers, setTypingUsers] = useState<Array<TypingIndicator & { user?: Profile }>>([]);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const [uploading, setUploading] = useState(false);
 
-  const scrollViewRef = useRef<ScrollView>(null);
+  const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitialLoadRef = useRef(true);
+  const previousMessageCountRef = useRef(0);
 
   // Get room display name
   const getRoomName = () => {
@@ -124,20 +133,39 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    const currentCount = messages.length;
+    const previousCount = previousMessageCountRef.current;
+
+    if (currentCount > 0) {
+      if (isInitialLoadRef.current) {
+        // Initial load: scroll immediately without animation
+        requestAnimationFrame(() => {
+          flatListRef.current?.scrollToEnd({ animated: false });
+        });
+        isInitialLoadRef.current = false;
+      } else if (currentCount > previousCount) {
+        // New message added: animate scroll
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    }
+
+    previousMessageCountRef.current = currentCount;
   }, [messages.length]);
 
   const sendTypingIndicator = async () => {
     if (!profile) return;
 
     try {
-      await supabase.from('typing_indicators').upsert({
-        room_id: room.id,
-        user_id: profile.id,
-        updated_at: new Date().toISOString(),
-      });
+      await supabase.from('typing_indicators').upsert(
+        {
+          room_id: room.id,
+          user_id: profile.id,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'room_id,user_id' }
+      );
     } catch (error) {
       // Ignore errors
     }
@@ -176,28 +204,74 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
     }
   };
 
+  const handlePickImages = async () => {
+    const remainingSlots = 5 - selectedImages.length;
+    if (remainingSlots <= 0) return;
+
+    const images = await pickMultipleImages({ maxImages: remainingSlots });
+    if (images.length > 0) {
+      setSelectedImages((prev) => [...prev, ...images]);
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSend = async () => {
-    if (!newMessage.trim() || !profile || !communityId) return;
+    if ((!newMessage.trim() && selectedImages.length === 0) || !profile || !communityId) return;
 
     setSending(true);
     try {
       clearTypingIndicator();
 
+      // Upload images if any
+      let attachments: Attachment[] | undefined;
+      if (selectedImages.length > 0) {
+        setUploading(true);
+        const result = await uploadMultipleImages(profile.id, selectedImages);
+        if (result.attachments.length > 0) {
+          attachments = result.attachments;
+        }
+        setUploading(false);
+      }
+
+      const messageContent = newMessage.trim() || (attachments ? '' : '');
       const { error } = await supabase.from('room_messages').insert({
         community_id: communityId,
         room_id: room.id,
         sender_id: profile.id,
-        content: newMessage.trim(),
+        content: messageContent,
+        attachments: attachments && attachments.length > 0 ? attachments : null,
       });
 
       if (error) throw error;
 
+      // Send push notification for DM messages
+      if (room.room_type === 'dm') {
+        const otherMember = room.members?.find((m) => m.user?.id !== profile.id);
+        if (otherMember?.user?.id) {
+          // Fire and forget - don't block on notification
+          supabase.functions.invoke('notify-dm', {
+            body: {
+              room_id: room.id,
+              sender_id: profile.id,
+              recipient_id: otherMember.user.id,
+              message_preview: messageContent || (attachments ? 'Sent an image' : ''),
+              community_id: communityId,
+            },
+          }).catch((err) => console.log('Notification error (non-blocking):', err));
+        }
+      }
+
       setNewMessage('');
+      setSelectedImages([]);
     } catch (error) {
       console.error('Error sending message:', error);
       Alert.alert('Error', 'Failed to send message.');
     } finally {
       setSending(false);
+      setUploading(false);
     }
   };
 
@@ -307,39 +381,42 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
         </View>
 
         {/* Messages */}
-        <ScrollView
-          ref={scrollViewRef}
-          className="flex-1"
-          contentContainerClassName="py-4"
-        >
-          {messages.length === 0 ? (
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <RoomMessageItem
+              message={item}
+              currentUserId={profile?.id}
+              onReact={(emoji) => handleReact(item.id, emoji)}
+              onRemoveReaction={(emoji) => handleRemoveReaction(item.id, emoji)}
+              onEdit={() => handleEdit(item.id)}
+              onDelete={() => handleDelete(item.id)}
+            />
+          )}
+          contentContainerClassName="p-4 pb-2"
+          ListEmptyComponent={
             <View className="items-center py-8">
               <Text className="text-4xl mb-2">💬</Text>
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
                 No messages yet. Start the conversation!
               </Text>
             </View>
-          ) : (
-            messages.map((message) => (
-              <RoomMessageItem
-                key={message.id}
-                message={message}
-                currentUserId={profile?.id}
-                onReact={(emoji) => handleReact(message.id, emoji)}
-                onRemoveReaction={(emoji) => handleRemoveReaction(message.id, emoji)}
-                onEdit={() => handleEdit(message.id)}
-                onDelete={() => handleDelete(message.id)}
-              />
-            ))
-          )}
-        </ScrollView>
+          }
+          removeClippedSubviews={Platform.OS !== 'web'}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={20}
+          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+        />
 
         {/* Typing indicator */}
         <RoomTypingIndicator typingUsers={typingUsers} currentUserId={profile?.id} />
 
         {/* Edit mode input */}
         {editingMessageId ? (
-          <View className="bg-white border-t border-cream p-4">
+          <View className="px-4 py-3 bg-white">
             <View className="flex-row items-center mb-2">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm flex-1">
                 Editing message
@@ -350,55 +427,95 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
                 </Text>
               </Pressable>
             </View>
-            <View className="flex-row items-center">
+            <View className="flex-row items-end bg-cream rounded-2xl px-3 py-2">
               <TextInput
                 value={editContent}
                 onChangeText={setEditContent}
-                className="flex-1 bg-cream rounded-xl px-4 py-3 mr-2"
-                style={{ fontFamily: 'Lato_400Regular' }}
+                multiline
+                className="flex-1 max-h-32 text-base text-charcoal py-1 px-1"
+                style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none' } as any}
               />
               <Pressable
                 onPress={handleSaveEdit}
                 disabled={!editContent.trim()}
-                className={`px-4 py-3 rounded-xl ${
-                  editContent.trim() ? 'bg-gold' : 'bg-cream'
+                className={`w-7 h-7 rounded-full items-center justify-center ml-2 ${
+                  editContent.trim() ? 'bg-gold active:opacity-80' : 'bg-gray-300'
                 }`}
               >
-                <Text
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  className={editContent.trim() ? 'text-white' : 'text-charcoal/30'}
-                >
-                  Save
-                </Text>
+                <Ionicons name="checkmark" size={16} color="white" />
               </Pressable>
             </View>
           </View>
         ) : (
-          /* Message input */
-          <View className="bg-white border-t border-cream p-4">
-            <View className="flex-row items-center">
+          /* Message input - matching ChatInput styling */
+          <View className="px-4 py-3 bg-white">
+            {/* Image previews */}
+            {selectedImages.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="mb-2"
+                contentContainerStyle={{ gap: 8 }}
+              >
+                {selectedImages.map((image, index) => (
+                  <View key={image.uri} className="relative">
+                    <Image
+                      source={{ uri: image.uri }}
+                      className="w-14 h-14 rounded-lg bg-gray-100"
+                      resizeMode="cover"
+                    />
+                    <Pressable
+                      onPress={() => handleRemoveImage(index)}
+                      className="absolute -top-1 -right-1 bg-charcoal rounded-full w-5 h-5 items-center justify-center"
+                    >
+                      <Ionicons name="close" size={12} color="white" />
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            <View className="flex-row items-end bg-cream rounded-2xl px-3 py-2">
+              {/* Photo button */}
+              <Pressable
+                onPress={handlePickImages}
+                disabled={selectedImages.length >= 5 || sending}
+                className="p-1 mr-1"
+              >
+                <Ionicons
+                  name="image-outline"
+                  size={22}
+                  color={selectedImages.length >= 5 || sending ? '#ccc' : '#666'}
+                />
+                {selectedImages.length > 0 && (
+                  <View className="absolute -top-1 -right-1 bg-gold rounded-full w-4 h-4 items-center justify-center">
+                    <Text className="text-white text-xs font-bold">{selectedImages.length}</Text>
+                  </View>
+                )}
+              </Pressable>
+
               <TextInput
                 value={newMessage}
                 onChangeText={handleTextChange}
-                placeholder="Type a message..."
-                placeholderTextColor="#9ca3af"
+                placeholder="Message..."
+                placeholderTextColor="#9CA3AF"
+                selectionColor="#313130"
                 multiline
-                className="flex-1 bg-cream rounded-xl px-4 py-3 mr-2 max-h-24"
-                style={{ fontFamily: 'Lato_400Regular' }}
+                maxLength={2000}
+                className="flex-1 max-h-32 text-base text-charcoal py-1 px-1"
+                style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none', caretColor: '#313130' } as any}
+                editable={!sending}
               />
               <Pressable
                 onPress={handleSend}
-                disabled={!newMessage.trim() || sending}
-                className={`px-4 py-3 rounded-xl ${
-                  newMessage.trim() && !sending ? 'bg-gold' : 'bg-cream'
+                disabled={(!newMessage.trim() && selectedImages.length === 0) || sending || uploading}
+                className={`w-7 h-7 rounded-full items-center justify-center ml-2 ${
+                  (newMessage.trim() || selectedImages.length > 0) && !sending && !uploading
+                    ? 'bg-gold active:opacity-80'
+                    : 'bg-gray-300'
                 }`}
               >
-                <Text
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  className={newMessage.trim() && !sending ? 'text-white' : 'text-charcoal/30'}
-                >
-                  Send
-                </Text>
+                <Text className="text-sm text-white" style={{ marginTop: -1 }}>↑</Text>
               </Pressable>
             </View>
           </View>

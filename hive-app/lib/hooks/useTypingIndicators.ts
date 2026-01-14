@@ -50,11 +50,14 @@ export function useTypingIndicators(roomId: string, currentUserId?: string) {
     if (!currentUserId) return;
 
     try {
-      await supabase.from('typing_indicators').upsert({
-        room_id: roomId,
-        user_id: currentUserId,
-        updated_at: new Date().toISOString(),
-      });
+      await supabase.from('typing_indicators').upsert(
+        {
+          room_id: roomId,
+          user_id: currentUserId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'room_id,user_id' }
+      );
     } catch (error) {
       // Ignore errors
     }

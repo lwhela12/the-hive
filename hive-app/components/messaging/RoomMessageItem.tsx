@@ -1,6 +1,12 @@
-import { useState } from 'react';
-import { View, Text, Pressable, Modal } from 'react-native';
+import { useState, memo } from 'react';
+import { View, Text, Pressable, Modal, Dimensions } from 'react-native';
+import { Avatar } from '../ui/Avatar';
+import { AttachmentGallery } from '../ui/AttachmentGallery';
 import type { RoomMessage, Profile, MessageReaction } from '../../types';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+// Constrain image width for chat - max 250px or 60% of screen, whichever is smaller
+const MAX_IMAGE_WIDTH = Math.min(250, SCREEN_WIDTH * 0.6);
 
 interface RoomMessageItemProps {
   message: RoomMessage & { sender?: Profile; reactions?: MessageReaction[] };
@@ -13,7 +19,7 @@ interface RoomMessageItemProps {
 
 const REACTIONS = ['👍', '❤️', '😂', '🐝', '🎉', '👀'];
 
-export function RoomMessageItem({
+export const RoomMessageItem = memo(function RoomMessageItem({
   message,
   currentUserId,
   onReact,
@@ -22,10 +28,11 @@ export function RoomMessageItem({
   onDelete,
 }: RoomMessageItemProps) {
   const [showActions, setShowActions] = useState(false);
-  const [showReactions, setShowReactions] = useState(false);
 
   const isOwnMessage = message.sender_id === currentUserId;
   const isDeleted = !!message.deleted_at;
+  const hasContent = message.content && message.content.trim().length > 0;
+  const hasAttachments = !isDeleted && message.attachments && message.attachments.length > 0;
 
   // Group reactions by emoji
   const reactionGroups = new Map<string, { count: number; hasReacted: boolean }>();
@@ -57,67 +64,82 @@ export function RoomMessageItem({
   };
 
   return (
-    <View className={`px-4 py-1 ${isOwnMessage ? 'items-end' : 'items-start'}`}>
-      <Pressable onLongPress={handleLongPress} delayLongPress={300}>
-        <View
-          className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-            isOwnMessage
-              ? 'bg-gold rounded-br-sm'
-              : 'bg-white rounded-bl-sm'
-          }`}
-        >
-          {/* Sender name for non-own messages */}
-          {!isOwnMessage && message.sender && (
-            <Text
-              style={{ fontFamily: 'Lato_700Bold' }}
-              className="text-gold text-xs mb-1"
-            >
-              {message.sender.name}
-            </Text>
-          )}
-
-          {/* Message content */}
-          <Text
-            style={{ fontFamily: 'Lato_400Regular' }}
-            className={`${isDeleted ? 'italic' : ''} ${
-              isOwnMessage ? 'text-white' : 'text-charcoal'
-            }`}
-          >
-            {isDeleted ? 'This message was deleted' : message.content}
-          </Text>
-
-          {/* Time and edited indicator */}
-          <View className="flex-row items-center justify-end mt-1">
-            {message.edited_at && !isDeleted && (
-              <Text
-                style={{ fontFamily: 'Lato_400Regular' }}
-                className={`text-xs mr-1 ${isOwnMessage ? 'text-white/60' : 'text-charcoal/40'}`}
-              >
-                edited
-              </Text>
-            )}
-            <Text
-              style={{ fontFamily: 'Lato_400Regular' }}
-              className={`text-xs ${isOwnMessage ? 'text-white/60' : 'text-charcoal/40'}`}
-            >
-              {new Date(message.created_at).toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-              })}
-            </Text>
+    <View className={`max-w-[85%] mb-3 ${isOwnMessage ? 'self-end items-end' : 'self-start items-start'}`}>
+      <View className={`flex-row items-end ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
+        {/* Avatar */}
+        {message.sender && (
+          <View className={isOwnMessage ? 'ml-2' : 'mr-2'}>
+            <Avatar
+              name={message.sender.name}
+              url={message.sender.avatar_url}
+              size={28}
+            />
           </View>
+        )}
+
+        <Pressable onLongPress={handleLongPress} delayLongPress={300} className="flex-shrink">
+          {/* Text bubble - only show if there's content or deleted */}
+          {(hasContent || isDeleted) && (
+            <View
+              className={`px-4 py-3 rounded-2xl ${
+                isOwnMessage
+                  ? 'bg-gold rounded-br-md'
+                  : 'bg-white rounded-bl-md'
+              }`}
+            >
+              {/* Message content */}
+              {(!isDeleted && hasContent) && (
+                <Text
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className={`text-base leading-6 ${isOwnMessage ? 'text-white' : 'text-charcoal'}`}
+                >
+                  {message.content}
+                </Text>
+              )}
+              {isDeleted && (
+                <Text
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className={`text-base leading-6 italic ${isOwnMessage ? 'text-white/70' : 'text-charcoal/70'}`}
+                >
+                  This message was deleted
+                </Text>
+              )}
+            </View>
+          )}
+        </Pressable>
+      </View>
+
+      {/* Attachments - floating outside bubble */}
+      {hasAttachments && (
+        <View className={(hasContent || isDeleted) ? 'mt-2' : ''}>
+          <AttachmentGallery
+            attachments={message.attachments!}
+            maxWidth={MAX_IMAGE_WIDTH}
+          />
         </View>
-      </Pressable>
+      )}
+
+      {/* Time and edited indicator - outside bubble */}
+      <Text
+        style={{ fontFamily: 'Lato_400Regular' }}
+        className={`text-xs text-charcoal/40 mt-1 ${isOwnMessage ? 'text-right' : 'text-left'}`}
+      >
+        {message.edited_at && !isDeleted && 'edited · '}
+        {new Date(message.created_at).toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+        })}
+      </Text>
 
       {/* Reactions display */}
       {reactionGroups.size > 0 && (
-        <View className="flex-row flex-wrap gap-1 mt-1">
+        <View className={`flex-row flex-wrap gap-1 mt-1 ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
           {Array.from(reactionGroups.entries()).map(([emoji, { count, hasReacted }]) => (
             <Pressable
               key={emoji}
               onPress={() => handleReactionPress(emoji, hasReacted)}
               className={`flex-row items-center px-2 py-0.5 rounded-full ${
-                hasReacted ? 'bg-gold/20' : 'bg-cream'
+                hasReacted ? 'bg-gold/20' : 'bg-white'
               }`}
             >
               <Text className="text-xs">{emoji}</Text>
@@ -196,4 +218,4 @@ export function RoomMessageItem({
       </Modal>
     </View>
   );
-}
+});

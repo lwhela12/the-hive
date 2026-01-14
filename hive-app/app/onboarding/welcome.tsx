@@ -16,7 +16,7 @@ export default function WelcomeScreen() {
             resizeMode="contain"
           />
           <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-3xl text-charcoal text-center">
-            Welcome to The Hive!
+            Welcome to HIVE!
           </Text>
           <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-lg text-charcoal mt-4 text-center leading-7">
             We're excited to have you join our community of 12 people

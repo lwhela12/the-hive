@@ -1,14 +1,27 @@
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { formatDateShort } from '../../lib/dateUtils';
-import type { BoardPost, Profile } from '../../types';
+import type { BoardPost, BoardReaction, Profile } from '../../types';
 
 interface BoardPostCardProps {
-  post: BoardPost & { author?: Profile };
+  post: BoardPost & { author?: Profile; reactions?: BoardReaction[] };
   onPress: () => void;
+}
+
+// Group reactions by emoji and count them
+function getReactionCounts(reactions: BoardReaction[]): { emoji: string; count: number }[] {
+  const counts = new Map<string, number>();
+  reactions.forEach((r) => {
+    counts.set(r.emoji, (counts.get(r.emoji) || 0) + 1);
+  });
+  return Array.from(counts.entries()).map(([emoji, count]) => ({ emoji, count }));
 }
 
 export function BoardPostCard({ post, onPress }: BoardPostCardProps) {
   const timeAgo = getTimeAgo(new Date(post.created_at));
+  const hasAttachments = post.attachments && post.attachments.length > 0;
+  const firstAttachment = hasAttachments ? post.attachments![0] : null;
+  const reactionCounts = getReactionCounts(post.reactions || []);
 
   return (
     <Pressable
@@ -40,14 +53,39 @@ export function BoardPostCard({ post, onPress }: BoardPostCardProps) {
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs">
               {post.author?.name || 'Unknown'} · {timeAgo}
             </Text>
+            {hasAttachments && (
+              <View className="flex-row items-center ml-2">
+                <Ionicons name="image-outline" size={12} color="#9ca3af" />
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs ml-1">
+                  {post.attachments!.length}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
-        <View className="items-end">
-          <View className="flex-row items-center bg-cream px-2 py-1 rounded-full">
-            <Text className="text-xs mr-1">💬</Text>
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-xs">
-              {post.reply_count}
-            </Text>
+        <View className="items-end gap-2">
+          {firstAttachment && (
+            <Image
+              source={{ uri: firstAttachment.url }}
+              className="w-16 h-16 rounded-lg bg-gray-100"
+              resizeMode="cover"
+            />
+          )}
+          <View className="flex-row items-center flex-wrap gap-1 justify-end">
+            {reactionCounts.map(({ emoji, count }) => (
+              <View key={emoji} className="flex-row items-center bg-cream px-2 py-1 rounded-full">
+                <Text className="text-xs">{emoji}</Text>
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-xs ml-1">
+                  {count}
+                </Text>
+              </View>
+            ))}
+            <View className="flex-row items-center bg-cream px-2 py-1 rounded-full">
+              <Text className="text-xs mr-1">💬</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-xs">
+                {post.reply_count}
+              </Text>
+            </View>
           </View>
         </View>
       </View>

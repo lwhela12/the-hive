@@ -14,12 +14,16 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../../components/ui/Avatar';
 import { formatDateMedium, parseAmericanDate, isoToAmerican } from '../../lib/dateUtils';
-import type { Profile, QueenBee, Event, UserRole } from '../../types';
+import type { Profile, QueenBee, Event, UserRole, CommunityInvite } from '../../types';
 
 type MemberRow = {
   id: string;
   role: UserRole;
   profiles: Profile;
+};
+
+type InviteRow = CommunityInvite & {
+  inviter: Pick<Profile, 'name'> | null;
 };
 
 export default function AdminScreen() {
@@ -28,6 +32,7 @@ export default function AdminScreen() {
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [queenBees, setQueenBees] = useState<QueenBee[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<InviteRow[]>([]);
 
   // Modal states
   const [showQueenBeeModal, setShowQueenBeeModal] = useState(false);
@@ -72,6 +77,15 @@ export default function AdminScreen() {
       .order('event_date', { ascending: true })
       .limit(20);
     if (eventsData) setEvents(eventsData);
+
+    // Fetch pending invites
+    const { data: invitesData } = await supabase
+      .from('community_invites')
+      .select('*, inviter:profiles!community_invites_invited_by_fkey(name)')
+      .eq('community_id', communityId)
+      .is('accepted_at', null)
+      .order('created_at', { ascending: false });
+    if (invitesData) setPendingInvites(invitesData as InviteRow[]);
   }, [communityId]);
 
   useEffect(() => {
@@ -177,7 +191,34 @@ export default function AdminScreen() {
       Alert.alert('Invite sent', `${inviteEmail} will receive an invite to join.`);
       setInviteEmail('');
       setInviteRole('member');
+      await fetchData();
     }
+  };
+
+  const revokeInvite = async (inviteId: string, email: string) => {
+    Alert.alert(
+      'Revoke Invite',
+      `Are you sure you want to revoke the invite for ${email}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Revoke',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await supabase
+              .from('community_invites')
+              .delete()
+              .eq('id', inviteId);
+
+            if (error) {
+              Alert.alert('Error', 'Failed to revoke invite');
+            } else {
+              await fetchData();
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (communityRole !== 'admin') {
@@ -356,6 +397,44 @@ export default function AdminScreen() {
             </Pressable>
           </View>
         </View>
+
+        {/* Pending Invites Section */}
+        {pendingInvites.length > 0 && (
+          <View className="mb-6">
+            <Text className="text-lg font-semibold text-gray-700 mb-2">
+              Pending Invites ({pendingInvites.length})
+            </Text>
+            <View className="bg-white rounded-xl shadow-sm overflow-hidden">
+              {pendingInvites.map((invite) => {
+                const isExpired = invite.expires_at && new Date(invite.expires_at) < new Date();
+                return (
+                  <View
+                    key={invite.id}
+                    className="flex-row items-center p-4 border-b border-gray-100 last:border-b-0"
+                  >
+                    <View className="flex-1">
+                      <Text className="font-medium text-gray-800">
+                        {invite.email}
+                      </Text>
+                      <Text className="text-sm text-gray-500">
+                        Role: {invite.role} • Invited by {invite.inviter?.name || 'Unknown'}
+                      </Text>
+                      {isExpired && (
+                        <Text className="text-sm text-red-500">Expired</Text>
+                      )}
+                    </View>
+                    <Pressable
+                      onPress={() => revokeInvite(invite.id, invite.email)}
+                      className="px-3 py-2 bg-red-100 rounded-lg active:bg-red-200"
+                    >
+                      <Text className="text-red-600 text-sm font-medium">Revoke</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       {/* Queen Bee Modal */}

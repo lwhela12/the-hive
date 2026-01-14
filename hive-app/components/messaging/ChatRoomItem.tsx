@@ -1,5 +1,8 @@
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, Image } from 'react-native';
+import { Avatar } from '../ui/Avatar';
 import { formatDateShort } from '../../lib/dateUtils';
+
+const hiveLogo = require('../../assets/The Hive Logo_Low Res (1).png');
 import type { ChatRoom, Profile, RoomMessage } from '../../types';
 
 interface ChatRoomItemProps {
@@ -12,19 +15,14 @@ interface ChatRoomItemProps {
 }
 
 export function ChatRoomItem({ room, currentUserId, onPress }: ChatRoomItemProps) {
-  // For DMs, show the other person's name
+  // For DMs, get the other person's info
+  const otherMember = room.members?.find((m) => m.user?.id !== currentUserId)?.user;
+
   const getRoomName = () => {
     if (room.room_type === 'community') {
       return room.name || 'General';
     }
-    // Find the other member in a DM
-    const otherMember = room.members?.find((m) => m.user?.id !== currentUserId);
-    return otherMember?.user?.name || 'Direct Message';
-  };
-
-  const getInitial = () => {
-    const name = getRoomName();
-    return name.charAt(0).toUpperCase();
+    return otherMember?.name || 'Direct Message';
   };
 
   const getTimeAgo = (date: Date): string => {
@@ -50,18 +48,19 @@ export function ChatRoomItem({ room, currentUserId, onPress }: ChatRoomItemProps
       className="flex-row items-center px-4 py-3 bg-white active:bg-cream"
     >
       {/* Avatar */}
-      <View
-        className={`w-12 h-12 rounded-full items-center justify-center mr-3 ${
-          room.room_type === 'community' ? 'bg-gold' : 'bg-gold/20'
-        }`}
-      >
-        <Text
-          style={{ fontFamily: 'Lato_700Bold' }}
-          className={`text-lg ${room.room_type === 'community' ? 'text-white' : 'text-gold'}`}
-        >
-          {room.room_type === 'community' ? '🐝' : getInitial()}
-        </Text>
-      </View>
+      {room.room_type === 'community' ? (
+        <View className="w-12 h-12 rounded-full mr-3 overflow-hidden">
+          <Image source={hiveLogo} style={{ width: 48, height: 48 }} resizeMode="cover" />
+        </View>
+      ) : (
+        <View className="mr-3">
+          <Avatar
+            name={otherMember?.name || 'DM'}
+            url={otherMember?.avatar_url}
+            size={48}
+          />
+        </View>
+      )}
 
       {/* Content */}
       <View className="flex-1">

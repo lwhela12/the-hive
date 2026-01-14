@@ -32,6 +32,17 @@ export type NotificationType =
   | 'chat_mention';
 export type ExtractionSource = 'chat' | 'onboarding' | 'meeting' | 'manual';
 
+// Attachment type for photos/files in messages and posts
+export interface Attachment {
+  id: string;
+  url: string;
+  filename: string;
+  size: number;
+  mime_type: string;
+  width?: number;
+  height?: number;
+}
+
 export interface Community {
   id: string;
   name: string;
@@ -59,6 +70,16 @@ export interface CommunityInvite {
   token: string;
   expires_at?: string;
   accepted_at?: string;
+  created_at: string;
+  community?: Community;
+  inviter?: Profile;
+}
+
+export interface Waitlist {
+  id: string;
+  email: string;
+  name?: string;
+  message?: string;
   created_at: string;
 }
 
@@ -104,10 +125,31 @@ export interface Wish {
   is_active: boolean;
   extracted_from: ExtractionSource;
   fulfilled_by?: string;
+  thank_you_message?: string;
   created_at: string;
   fulfilled_at?: string;
   replaced_at?: string;
   user?: Profile;
+  granters?: WishGranter[];
+}
+
+export interface WishComment {
+  id: string;
+  wish_id: string;
+  user_id: string;
+  community_id: string;
+  content: string;
+  created_at: string;
+  user?: Profile;
+}
+
+export interface WishGranter {
+  id: string;
+  wish_id: string;
+  granter_id: string;
+  community_id: string;
+  created_at: string;
+  granter?: Profile;
 }
 
 export interface QueenBee {
@@ -133,6 +175,16 @@ export interface QueenBeeUpdate {
   user?: Profile;
 }
 
+export interface MonthlyHighlight {
+  id: string;
+  queen_bee_id: string;
+  meeting_id: string;
+  community_id: string;
+  highlight: string;
+  display_order: number;
+  created_at: string;
+}
+
 export interface Meeting {
   id: string;
   community_id: string;
@@ -143,6 +195,7 @@ export interface Meeting {
   summary?: string;
   recorded_by?: string;
   processing_status: 'pending' | 'transcribing' | 'summarizing' | 'complete' | 'failed';
+  assemblyai_transcript_id?: string;
   created_at: string;
 }
 
@@ -186,6 +239,7 @@ export interface Event {
   event_time?: string;
   event_type: EventType;
   google_event_id?: string;
+  meet_link?: string;
   related_user_id?: string;
   related_queen_bee_id?: string;
   created_by?: string;
@@ -230,6 +284,7 @@ export interface ContextSummary {
 export interface Conversation {
   id: string;
   user_id: string;
+  community_id: string;
   title: string | null;
   mode: ConversationMode;
   is_active: boolean;
@@ -244,6 +299,7 @@ export interface ChatMessage {
   conversation_id?: string;
   role: 'user' | 'assistant';
   content: string;
+  attachments?: Attachment[];
   tool_calls?: Record<string, unknown>;
   created_at: string;
 }
@@ -276,6 +332,7 @@ export interface BoardPost {
   author_id: string;
   title: string;
   content: string;
+  attachments?: Attachment[];
   is_pinned: boolean;
   is_locked: boolean;
   edited_at?: string;
@@ -296,6 +353,7 @@ export interface BoardReply {
   parent_reply_id?: string;
   author_id: string;
   content: string;
+  attachments?: Attachment[];
   edited_at?: string;
   created_at: string;
   // Joined data
@@ -349,6 +407,7 @@ export interface RoomMessage {
   room_id: string;
   sender_id: string;
   content: string;
+  attachments?: Attachment[];
   edited_at?: string;
   deleted_at?: string;
   reply_to_id?: string;
@@ -374,6 +433,20 @@ export interface TypingIndicator {
   user_id: string;
   updated_at: string;
   user?: Profile;
+}
+
+// ============================================
+// USER INSIGHTS (AI-maintained personality profiles)
+// ============================================
+
+export interface UserInsights {
+  id: string;
+  user_id: string;
+  community_id: string;
+  personality_notes?: string;
+  shared_with: string[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Database {
@@ -408,6 +481,11 @@ export interface Database {
         Row: Wish;
         Insert: Omit<Wish, 'id' | 'created_at'>;
         Update: Partial<Omit<Wish, 'id' | 'created_at'>>;
+      };
+      wish_granters: {
+        Row: WishGranter;
+        Insert: Omit<WishGranter, 'id' | 'created_at'>;
+        Update: Partial<Omit<WishGranter, 'id' | 'created_at'>>;
       };
       queen_bees: {
         Row: QueenBee;
@@ -510,6 +588,11 @@ export interface Database {
         Row: TypingIndicator;
         Insert: Omit<TypingIndicator, 'id' | 'updated_at'>;
         Update: Partial<Omit<TypingIndicator, 'id'>>;
+      };
+      user_insights: {
+        Row: UserInsights;
+        Insert: Omit<UserInsights, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<UserInsights, 'id' | 'created_at'>>;
       };
     };
   };

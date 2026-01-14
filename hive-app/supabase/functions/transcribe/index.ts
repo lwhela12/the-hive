@@ -38,11 +38,11 @@ serve(async (req) => {
       const { data: meeting, error: findError } = await supabaseAdmin
         .from('meetings')
         .select('*')
-        .eq('processing_status', 'transcribing')
+        .eq('assemblyai_transcript_id', transcript_id)
         .single();
 
       if (findError || !meeting) {
-        console.error('Meeting not found');
+        console.error('Meeting not found for transcript_id:', transcript_id);
         return errorResponse('Meeting not found', 404);
       }
 
@@ -92,14 +92,14 @@ Analyze the transcript and provide:
 1. A concise summary (2-3 paragraphs)
 2. Action items extracted with assigned person if mentioned
 3. Any wishes that surfaced during the meeting
-4. Updates relevant to the current Queen Bee project
+4. Queen Bee highlights - specific progress updates, accomplishments, or blockers mentioned about the current Queen Bee's project. Each highlight should be a concise bullet point (1-2 sentences max).
 
 Format your response as JSON:
 {
   "summary": "string",
   "action_items": [{"description": "string", "assigned_to_name": "string or null", "due_date": "YYYY-MM-DD or null"}],
   "wishes_surfaced": [{"person_name": "string", "description": "string"}],
-  "queen_bee_updates": ["string"]
+  "queen_bee_highlights": ["string"]
 }`,
         messages: [
           {
@@ -115,16 +115,27 @@ Format your response as JSON:
 
       let analysis;
       try {
-        analysis = JSON.parse(textBlock?.text || '{}');
+        // Claude sometimes wraps JSON in markdown code blocks, so strip those
+        let jsonText = textBlock?.text || '{}';
+        jsonText = jsonText.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '');
+        jsonText = jsonText.replace(/^```\s*\n?/, '').replace(/\n?```\s*$/, '');
+        analysis = JSON.parse(jsonText);
       } catch {
-        analysis = { summary: textBlock?.text, action_items: [], wishes_surfaced: [], queen_bee_updates: [] };
+        analysis = { summary: textBlock?.text, action_items: [], wishes_surfaced: [], queen_bee_highlights: [] };
       }
+
+      // Store the full analysis as JSON so frontend can display all parts
+      const summaryData = {
+        summary: analysis.summary,
+        wishes_surfaced: analysis.wishes_surfaced || [],
+        queen_bee_highlights: analysis.queen_bee_highlights || []
+      };
 
       // Update meeting with summary
       await supabaseAdmin
         .from('meetings')
         .update({
-          summary: analysis.summary,
+          summary: JSON.stringify(summaryData),
           transcript_attributed: formattedTranscript, // TODO: Attribute speakers to names
           processing_status: 'complete'
         })
@@ -148,6 +159,37 @@ Format your response as JSON:
             assigned_to: assignedTo,
             due_date: item.due_date
           });
+        }
+      }
+
+      // Persist Queen Bee highlights
+      if (analysis.queen_bee_highlights?.length > 0) {
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const { data: currentQueenBee } = await supabaseAdmin
+          .from('queen_bees')
+          .select('id')
+          .eq('community_id', meeting.community_id)
+          .eq('month', currentMonth)
+          .single();
+
+        if (currentQueenBee) {
+          // Delete existing highlights from this meeting (allows reprocessing)
+          await supabaseAdmin
+            .from('monthly_highlights')
+            .delete()
+            .eq('meeting_id', meeting.id);
+
+          const highlightsToInsert = analysis.queen_bee_highlights.map(
+            (highlight: string, index: number) => ({
+              queen_bee_id: currentQueenBee.id,
+              meeting_id: meeting.id,
+              community_id: meeting.community_id,
+              highlight,
+              display_order: index
+            })
+          );
+
+          await supabaseAdmin.from('monthly_highlights').insert(highlightsToInsert);
         }
       }
 
@@ -177,12 +219,6 @@ Format your response as JSON:
         throw new Error('Could not get signed URL for audio');
       }
 
-      // Update status
-      await supabaseAdmin
-        .from('meetings')
-        .update({ processing_status: 'transcribing' })
-        .eq('id', meeting_id);
-
       // Submit to AssemblyAI
       const transcriptResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
         method: 'POST',
@@ -198,6 +234,15 @@ Format your response as JSON:
       });
 
       const transcriptData = await transcriptResponse.json();
+
+      // Update status and store the transcript_id so we can match on webhook callback
+      await supabaseAdmin
+        .from('meetings')
+        .update({
+          processing_status: 'transcribing',
+          assemblyai_transcript_id: transcriptData.id
+        })
+        .eq('id', meeting_id);
 
       return jsonResponse({ transcript_id: transcriptData.id });
     }

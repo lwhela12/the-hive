@@ -15,9 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.thehive.app",
+      "bundleIdentifier": "com.lucaswhelan.thehive",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "The Hive needs microphone access to record meetings."
+        "NSMicrophoneUsageDescription": "The Hive needs microphone access to record meetings.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "notification": {
@@ -29,7 +30,7 @@
         "foregroundImage": "./assets/Bee ( Hive) .png",
         "backgroundColor": "#bd9348"
       },
-      "package": "com.thehive.app",
+      "package": "com.lucaswhelan.thehive",
       "edgeToEdgeEnabled": true,
       "permissions": [
         "RECORD_AUDIO",

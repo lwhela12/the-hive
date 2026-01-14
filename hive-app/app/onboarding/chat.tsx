@@ -17,7 +17,7 @@ export default function OnboardingChatScreen() {
   // Create a dedicated onboarding conversation
   useEffect(() => {
     const initOnboardingConversation = async () => {
-      if (!session?.user?.id) return;
+      if (!session?.user?.id || !communityId) return;
 
       try {
         // Check for existing incomplete onboarding conversation
@@ -25,6 +25,7 @@ export default function OnboardingChatScreen() {
           .from('conversations')
           .select('*')
           .eq('user_id', session.user.id)
+          .eq('community_id', communityId)
           .eq('mode', 'onboarding')
           .eq('is_active', true)
           .order('created_at', { ascending: false })
@@ -43,8 +44,9 @@ export default function OnboardingChatScreen() {
           .from('conversations')
           .insert({
             user_id: session.user.id,
+            community_id: communityId,
             mode: 'onboarding',
-            title: 'Welcome to The Hive',
+            title: 'Welcome to HIVE',
             is_active: true,
           })
           .select()
@@ -66,7 +68,7 @@ export default function OnboardingChatScreen() {
     };
 
     initOnboardingConversation();
-  }, [session?.user?.id]);
+  }, [session?.user?.id, communityId]);
 
   const handleConversationCreated = useCallback((conversation: Conversation) => {
     setOnboardingConversation(conversation);
@@ -145,7 +147,7 @@ export default function OnboardingChatScreen() {
               }`}
             >
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-white">
-                {isFinishing ? 'Entering...' : 'Enter The Hive'}
+                {isFinishing ? 'Entering...' : 'Enter HIVE'}
               </Text>
             </Pressable>
           </View>

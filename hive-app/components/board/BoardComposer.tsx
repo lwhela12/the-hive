@@ -1,39 +1,67 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { BoardCategory } from '../../types';
+import type { BoardCategory, Attachment } from '../../types';
+import { SelectedImage } from '../../lib/imagePicker';
+import { uploadMultipleImages } from '../../lib/attachmentUpload';
+import { AttachmentPicker } from '../ui/AttachmentPicker';
 
 interface BoardComposerProps {
   visible: boolean;
   category: BoardCategory | null;
+  userId: string;
   onClose: () => void;
-  onSubmit: (title: string, content: string) => Promise<boolean>;
+  onSubmit: (title: string, content: string, attachments?: Attachment[]) => Promise<boolean>;
 }
 
-export function BoardComposer({ visible, category, onClose, onSubmit }: BoardComposerProps) {
+export function BoardComposer({ visible, category, userId, onClose, onSubmit }: BoardComposerProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
 
   const handleSubmit = async () => {
-    if (!title.trim() || !content.trim()) return;
+    console.log('BoardComposer handleSubmit called', { title: title.trim(), content: content.trim() });
+    if (!title.trim() || !content.trim()) {
+      console.log('Empty title or content, returning');
+      return;
+    }
 
     setSubmitting(true);
     try {
-      const didPost = await onSubmit(title.trim(), content.trim());
+      // Upload images first if any are selected
+      let attachments: Attachment[] | undefined;
+      if (selectedImages.length > 0) {
+        setUploadStatus('Uploading images...');
+        const result = await uploadMultipleImages(userId, selectedImages, (progress) => {
+          setUploadStatus(`Uploading ${progress.current}/${progress.total}...`);
+        });
+        if (result.attachments.length > 0) {
+          attachments = result.attachments;
+        }
+      }
+
+      setUploadStatus('');
+      console.log('Calling onSubmit...');
+      const didPost = await onSubmit(title.trim(), content.trim(), attachments);
+      console.log('onSubmit returned:', didPost);
       if (didPost) {
         setTitle('');
         setContent('');
+        setSelectedImages([]);
         onClose();
       }
     } finally {
       setSubmitting(false);
+      setUploadStatus('');
     }
   };
 
   const handleClose = () => {
     setTitle('');
     setContent('');
+    setSelectedImages([]);
     onClose();
   };
 
@@ -65,7 +93,7 @@ export function BoardComposer({ visible, category, onClose, onSubmit }: BoardCom
                 style={{ fontFamily: 'Lato_700Bold' }}
                 className={isValid && !submitting ? 'text-white' : 'text-charcoal/30'}
               >
-                {submitting ? 'Posting...' : 'Post'}
+                {uploadStatus || (submitting ? 'Posting...' : 'Post')}
               </Text>
             </Pressable>
           </View>
@@ -105,7 +133,7 @@ export function BoardComposer({ visible, category, onClose, onSubmit }: BoardCom
             </View>
 
             {/* Content input */}
-            <View className="flex-1">
+            <View className="mb-4">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
                 Content
               </Text>
@@ -118,6 +146,18 @@ export function BoardComposer({ visible, category, onClose, onSubmit }: BoardCom
                 textAlignVertical="top"
                 className="bg-white rounded-xl px-4 py-3 text-charcoal min-h-[200px]"
                 style={{ fontFamily: 'Lato_400Regular' }}
+              />
+            </View>
+
+            {/* Attachments */}
+            <View className="mb-4">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
+                Photos
+              </Text>
+              <AttachmentPicker
+                selectedImages={selectedImages}
+                onImagesChange={setSelectedImages}
+                disabled={submitting}
               />
             </View>
           </ScrollView>

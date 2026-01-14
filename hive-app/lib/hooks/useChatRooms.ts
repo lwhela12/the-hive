@@ -1,138 +1,29 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useChatRoomsQuery, RoomWithData } from './useChatRoomsQuery';
 import { supabase } from '../supabase';
-import type { ChatRoom, Profile, RoomMessage, ChatRoomMember } from '../../types';
+import { queryKeys } from '../queryClient';
+import type { Profile, ChatRoomMember } from '../../types';
 
-export type RoomWithData = ChatRoom & {
-  members?: Array<ChatRoomMember & { user?: Profile }>;
-  last_message?: RoomMessage & { sender?: Profile };
-  unread_count?: number;
-};
+// Re-export the type for backwards compatibility
+export type { RoomWithData };
 
+/**
+ * Hook for managing chat rooms.
+ * Uses React Query internally for caching and optimized updates.
+ *
+ * @param communityId - The community ID to fetch rooms for
+ * @param userId - The current user's ID
+ */
 export function useChatRooms(communityId?: string, userId?: string) {
-  const [rooms, setRooms] = useState<RoomWithData[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchRooms = useCallback(async () => {
-    if (!communityId || !userId) {
-      setLoading(false);
-      return;
-    }
-
-    // Fetch community rooms
-    const { data: communityRooms } = await supabase
-      .from('chat_rooms')
-      .select('*')
-      .eq('community_id', communityId)
-      .eq('room_type', 'community');
-
-    // Fetch DM rooms the user is a member of
-    const { data: memberRooms } = await supabase
-      .from('chat_room_members')
-      .select('room:chat_rooms(*)')
-      .eq('user_id', userId);
-
-    // Combine and deduplicate rooms
-    const allRooms: ChatRoom[] = [
-      ...(communityRooms || []),
-      ...((memberRooms || [])
-        .map((m) => m.room as ChatRoom)
-        .filter((r) => r && r.room_type === 'dm')),
-    ];
-
-    const uniqueRooms = Array.from(
-      new Map(allRooms.map((r) => [r.id, r])).values()
-    );
-
-    // Fetch additional data for each room
-    const roomsWithData: RoomWithData[] = await Promise.all(
-      uniqueRooms.map(async (room) => {
-        // Get members for DM rooms
-        let members: Array<ChatRoomMember & { user?: Profile }> = [];
-        if (room.room_type === 'dm') {
-          const { data: memberData } = await supabase
-            .from('chat_room_members')
-            .select('*, user:profiles(*)')
-            .eq('room_id', room.id);
-          members = (memberData || []) as Array<ChatRoomMember & { user?: Profile }>;
-        }
-
-        // Get last message
-        const { data: lastMsgData } = await supabase
-          .from('room_messages')
-          .select('*, sender:profiles(*)')
-          .eq('room_id', room.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        // Get unread count
-        const { data: membershipData } = await supabase
-          .from('chat_room_members')
-          .select('last_read_at')
-          .eq('room_id', room.id)
-          .eq('user_id', userId)
-          .single();
-
-        let unreadCount = 0;
-        if (membershipData?.last_read_at) {
-          const { count } = await supabase
-            .from('room_messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('room_id', room.id)
-            .gt('created_at', membershipData.last_read_at)
-            .neq('sender_id', userId);
-          unreadCount = count || 0;
-        }
-
-        return {
-          ...room,
-          members,
-          last_message: lastMsgData as (RoomMessage & { sender?: Profile }) | undefined,
-          unread_count: unreadCount,
-        };
-      })
-    );
-
-    // Sort: community rooms first, then by last message time
-    roomsWithData.sort((a, b) => {
-      if (a.room_type === 'community' && b.room_type !== 'community') return -1;
-      if (a.room_type !== 'community' && b.room_type === 'community') return 1;
-
-      const aTime = a.last_message?.created_at || a.created_at;
-      const bTime = b.last_message?.created_at || b.created_at;
-      return new Date(bTime).getTime() - new Date(aTime).getTime();
-    });
-
-    setRooms(roomsWithData);
-    setLoading(false);
-  }, [communityId, userId]);
-
-  useEffect(() => {
-    fetchRooms();
-
-    // Subscribe to room message changes
-    if (communityId) {
-      const channel = supabase
-        .channel('chat-rooms-updates')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'room_messages',
-            filter: `community_id=eq.${communityId}`,
-          },
-          () => {
-            fetchRooms();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [communityId, fetchRooms]);
+  const queryClient = useQueryClient();
+  const {
+    rooms,
+    loading,
+    refetch,
+    updateRoomLastMessage,
+    markRoomAsRead,
+  } = useChatRoomsQuery(communityId, userId);
 
   const getOrCreateDMRoom = useCallback(
     async (otherUserId: string): Promise<RoomWithData | null> => {
@@ -148,42 +39,51 @@ export function useChatRooms(communityId?: string, userId?: string) {
         if (error) throw error;
 
         // Fetch the room with full data
-        const { data: roomData } = await supabase
+        const { data: roomData, error: roomError } = await supabase
           .from('chat_rooms')
           .select('*')
           .eq('id', data)
           .single();
 
-        if (roomData) {
-          const { data: memberData } = await supabase
-            .from('chat_room_members')
-            .select('*, user:profiles(*)')
-            .eq('room_id', roomData.id);
+        if (roomError) throw roomError;
+        if (!roomData)
+          throw new Error('Room was created but could not be retrieved');
 
-          const roomWithData: RoomWithData = {
-            ...roomData,
-            members: (memberData || []) as Array<ChatRoomMember & { user?: Profile }>,
-          };
+        const { data: memberData, error: memberError } = await supabase
+          .from('chat_room_members')
+          .select('*, user:profiles(*)')
+          .eq('room_id', roomData.id);
 
-          // Refresh the room list
-          await fetchRooms();
+        if (memberError) throw memberError;
 
-          return roomWithData;
-        }
+        const roomWithData: RoomWithData = {
+          ...roomData,
+          members: (memberData || []) as Array<
+            ChatRoomMember & { user?: Profile }
+          >,
+        };
 
-        return null;
+        // Invalidate and refetch to update the cache
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.chatRooms(communityId),
+        });
+
+        return roomWithData;
       } catch (error) {
         console.error('Error creating DM room:', error);
         return null;
       }
     },
-    [communityId, userId, fetchRooms]
+    [communityId, userId, queryClient]
   );
 
   return {
     rooms,
     loading,
-    refetch: fetchRooms,
+    refetch,
     getOrCreateDMRoom,
+    // Additional methods from React Query hook
+    updateRoomLastMessage,
+    markRoomAsRead,
   };
 }

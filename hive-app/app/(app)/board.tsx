@@ -1,106 +1,94 @@
-import { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, Pressable, Alert } from 'react-native';
+import { useState } from 'react';
+import { View, Text, ScrollView, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { useBoardCategoriesQuery, useBoardPostsQuery, type PostWithAuthor } from '../../lib/hooks/useBoardQuery';
 import { BoardCategoryTabs } from '../../components/board/BoardCategoryTabs';
 import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
 import { BoardComposer } from '../../components/board/BoardComposer';
-import type { BoardCategory, BoardPost, Profile } from '../../types';
-
-type PostWithAuthor = BoardPost & { author?: Profile };
+import { NavigationDrawer, AppHeader } from '../../components/navigation';
+import type { BoardCategory, Attachment } from '../../types';
 
 export default function BoardScreen() {
   const { profile, communityId, communityRole } = useAuth();
+  const { width } = useWindowDimensions();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const useMobileLayout = width < 768;
   const [refreshing, setRefreshing] = useState(false);
-  const [categories, setCategories] = useState<BoardCategory[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<BoardCategory | null>(null);
-  const [posts, setPosts] = useState<PostWithAuthor[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [showComposer, setShowComposer] = useState(false);
 
   const isAdmin = communityRole === 'admin';
 
-  const fetchCategories = useCallback(async () => {
-    if (!communityId) return;
+  // Fetch categories with React Query (cached)
+  const {
+    data: categories = [],
+    refetch: refetchCategories,
+  } = useBoardCategoriesQuery(communityId);
 
-    const { data, error } = await supabase
-      .from('board_categories')
-      .select('*')
-      .eq('community_id', communityId)
-      .or('requires_approval.eq.false,approved_at.not.is.null')
-      .order('display_order', { ascending: true });
+  // Auto-select first category when categories load
+  const selectedCategory = selectedCategoryId
+    ? categories.find((c) => c.id === selectedCategoryId) || null
+    : categories[0] || null;
 
-    if (!error && data) {
-      setCategories(data);
-      if (!selectedCategory && data.length > 0) {
-        setSelectedCategory(data[0]);
-      }
-    }
-  }, [communityId, selectedCategory]);
-
-  const fetchPosts = useCallback(async () => {
-    if (!communityId || !selectedCategory) return;
-
-    let query = supabase
-      .from('board_posts')
-      .select('*, author:profiles(*)')
-      .eq('community_id', communityId)
-      .eq('category_id', selectedCategory.id)
-      .order('is_pinned', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    const { data, error } = await query;
-
-    if (!error && data) {
-      setPosts(data as PostWithAuthor[]);
-    }
-  }, [communityId, selectedCategory]);
-
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
-
-  useEffect(() => {
-    if (selectedCategory) {
-      fetchPosts();
-    }
-  }, [selectedCategory, fetchPosts]);
+  // Fetch posts for selected category with React Query (cached per category)
+  const {
+    posts,
+    refetch: refetchPosts,
+    invalidatePosts,
+  } = useBoardPostsQuery(communityId, selectedCategory?.id);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchCategories(), fetchPosts()]);
+    await Promise.all([refetchCategories(), refetchPosts()]);
     setRefreshing(false);
   };
 
   const handleCategorySelect = (category: BoardCategory) => {
-    setSelectedCategory(category);
+    setSelectedCategoryId(category.id);
   };
 
-  const handleCreatePost = async (title: string, content: string) => {
+  const handleCreatePost = async (title: string, content: string, attachments?: Attachment[]) => {
     if (!profile || !communityId || !selectedCategory) {
       Alert.alert('Not ready', 'Your profile is still loading. Please try again in a moment.');
       return false;
     }
 
+    console.log('Creating post:', { communityId, categoryId: selectedCategory.id, authorId: profile.id, title });
+
     try {
-      const { error } = await supabase.from('board_posts').insert({
+      const { data, error } = await supabase.from('board_posts').insert({
         community_id: communityId,
         category_id: selectedCategory.id,
         author_id: profile.id,
         title,
         content,
-      });
+        attachments: attachments && attachments.length > 0 ? attachments : null,
+      }).select().single();
 
-      if (error) throw error;
+      console.log('Insert result:', { data, error });
 
-      await fetchPosts();
+      if (error) {
+        console.error('Insert error:', error);
+        Alert.alert('Error', `Failed to create post: ${error.message}`);
+        return false;
+      }
+
+      if (!data) {
+        Alert.alert('Error', 'Post was not created. You may not have permission to post in this category.');
+        return false;
+      }
+
+      console.log('Post created successfully:', data.id);
+      invalidatePosts();
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error creating post:', error);
-      Alert.alert('Error', 'Failed to create post.');
+      Alert.alert('Error', `Failed to create post: ${message}`);
       return false;
     }
   };
@@ -116,19 +104,38 @@ export default function BoardScreen() {
     return (
       <BoardPostDetail
         postId={selectedPostId}
-        onBack={() => setSelectedPostId(null)}
+        onBack={() => {
+          setSelectedPostId(null);
+          invalidatePosts(); // Refresh to get updated reply counts
+        }}
       />
     );
   }
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
-      {/* Header */}
-      <View className="bg-white px-4 py-3 border-b border-cream">
-        <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-charcoal">
-          Message Board
-        </Text>
-      </View>
+      {/* Mobile Header */}
+      {useMobileLayout ? (
+        <AppHeader
+          title="Message Board"
+          onMenuPress={() => setDrawerOpen(true)}
+        />
+      ) : (
+        <View className="bg-white px-4 py-3 border-b border-cream">
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-charcoal">
+            Message Board
+          </Text>
+        </View>
+      )}
+
+      {/* Navigation Drawer */}
+      {useMobileLayout && (
+        <NavigationDrawer
+          isOpen={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          mode="navigation"
+        />
+      )}
 
       {/* Category tabs */}
       <BoardCategoryTabs
@@ -186,6 +193,7 @@ export default function BoardScreen() {
       <BoardComposer
         visible={showComposer}
         category={selectedCategory}
+        userId={profile?.id || ''}
         onClose={() => setShowComposer(false)}
         onSubmit={handleCreatePost}
       />

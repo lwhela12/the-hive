@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Alert, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, Alert, RefreshControl, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { formatDateMedium } from '../../lib/dateUtils';
 import { BoardReactionBar } from './BoardReactionBar';
 import { BoardReplyItem } from './BoardReplyItem';
-import type { BoardPost, BoardReply, BoardReaction, Profile } from '../../types';
+import { AttachmentGallery } from '../ui/AttachmentGallery';
+import { pickMultipleImages, SelectedImage } from '../../lib/imagePicker';
+import { uploadMultipleImages } from '../../lib/attachmentUpload';
+import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment } from '../../types';
 
 interface BoardPostDetailProps {
   postId: string;
@@ -21,13 +25,15 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const [post, setPost] = useState<PostWithAuthor | null>(null);
   const [replies, setReplies] = useState<ReplyWithAuthor[]>([]);
   const [newReply, setNewReply] = useState('');
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const fetchPost = useCallback(async () => {
     const { data, error } = await supabase
       .from('board_posts')
-      .select('*, author:profiles(*)')
+      .select('*, author:profiles!board_posts_author_id_fkey(*)')
       .eq('id', postId)
       .single();
 
@@ -46,7 +52,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     // Fetch all replies for this post
     const { data: allReplies, error } = await supabase
       .from('board_replies')
-      .select('*, author:profiles(*)')
+      .select('*, author:profiles!board_replies_author_id_fkey(*)')
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
 
@@ -100,22 +106,46 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     setRefreshing(false);
   };
 
+  const handlePickImages = async () => {
+    const images = await pickMultipleImages(5 - selectedImages.length);
+    if (images.length > 0) {
+      setSelectedImages((prev) => [...prev, ...images].slice(0, 5));
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmitReply = async () => {
-    if (!newReply.trim() || !profile || !communityId) return;
+    if ((!newReply.trim() && selectedImages.length === 0) || !profile || !communityId) return;
 
     setSubmitting(true);
     try {
+      // Upload images if any
+      let attachments: Attachment[] | undefined;
+      if (selectedImages.length > 0) {
+        const result = await uploadMultipleImages(profile.id, selectedImages);
+        if (result.attachments.length > 0) {
+          attachments = result.attachments;
+        }
+      }
+
       const { error } = await supabase.from('board_replies').insert({
         community_id: communityId,
         post_id: postId,
+        parent_reply_id: replyingTo?.id || null,
         author_id: profile.id,
         content: newReply.trim(),
+        attachments: attachments && attachments.length > 0 ? attachments : null,
       });
 
       if (error) throw error;
 
       setNewReply('');
-      await fetchReplies();
+      setSelectedImages([]);
+      setReplyingTo(null);
+      await Promise.all([fetchPost(), fetchReplies()]);
     } catch (error) {
       console.error('Error submitting reply:', error);
       Alert.alert('Error', 'Failed to post reply.');
@@ -124,24 +154,8 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     }
   };
 
-  const handleNestedReply = async (parentReplyId: string, content: string) => {
-    if (!profile || !communityId) return;
-
-    try {
-      const { error } = await supabase.from('board_replies').insert({
-        community_id: communityId,
-        post_id: postId,
-        parent_reply_id: parentReplyId,
-        author_id: profile.id,
-        content,
-      });
-
-      if (error) throw error;
-      await fetchReplies();
-    } catch (error) {
-      console.error('Error submitting nested reply:', error);
-      Alert.alert('Error', 'Failed to post reply.');
-    }
+  const handleSetReplyingTo = (replyId: string, authorName: string) => {
+    setReplyingTo({ id: replyId, authorName });
   };
 
   const handlePostReaction = async (emoji: string) => {
@@ -296,6 +310,12 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             {post.content}
           </Text>
 
+          {post.attachments && post.attachments.length > 0 && (
+            <View className="mb-4">
+              <AttachmentGallery attachments={post.attachments} />
+            </View>
+          )}
+
           <BoardReactionBar
             reactions={post.reactions || []}
             currentUserId={profile?.id}
@@ -322,7 +342,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
                   currentUserId={profile?.id}
                   onReact={handleReplyReaction}
                   onRemoveReaction={handleRemoveReplyReaction}
-                  onReply={handleNestedReply}
+                  onReply={handleSetReplyingTo}
                   onEdit={handleEditReply}
                   onDelete={handleDeleteReply}
                 />
@@ -334,8 +354,61 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
 
       {/* Reply input */}
       {!post.is_locked && (
-        <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-cream p-4">
+        <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-cream">
+          {/* Replying to context */}
+          {replyingTo && (
+            <View className="flex-row items-center bg-cream/50 px-4 py-2">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal">
+                Replying to{' '}
+              </Text>
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal">
+                {replyingTo.authorName}
+              </Text>
+              <Pressable onPress={() => setReplyingTo(null)} className="ml-auto p-1">
+                <Ionicons name="close" size={18} color="#4A4A4A" />
+              </Pressable>
+            </View>
+          )}
+
+          <View className="p-4">
+          {/* Image previews */}
+          {selectedImages.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              className="mb-3"
+              contentContainerStyle={{ gap: 8 }}
+            >
+              {selectedImages.map((image, index) => (
+                <View key={index} className="relative">
+                  <Image
+                    source={{ uri: image.uri }}
+                    className="w-16 h-16 rounded-lg"
+                    resizeMode="cover"
+                  />
+                  <Pressable
+                    onPress={() => handleRemoveImage(index)}
+                    className="absolute -top-2 -right-2 bg-charcoal rounded-full w-5 h-5 items-center justify-center"
+                  >
+                    <Ionicons name="close" size={12} color="white" />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+
           <View className="flex-row items-center">
+            <Pressable
+              onPress={handlePickImages}
+              disabled={selectedImages.length >= 5 || submitting}
+              className="mr-2 p-2"
+            >
+              <Ionicons
+                name="image-outline"
+                size={24}
+                color={selectedImages.length >= 5 ? '#9ca3af' : '#bd9348'}
+              />
+            </Pressable>
             <TextInput
               value={newReply}
               onChangeText={setNewReply}
@@ -347,18 +420,19 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             />
             <Pressable
               onPress={handleSubmitReply}
-              disabled={!newReply.trim() || submitting}
+              disabled={(!newReply.trim() && selectedImages.length === 0) || submitting}
               className={`px-4 py-3 rounded-xl ${
-                newReply.trim() && !submitting ? 'bg-gold' : 'bg-cream'
+                (newReply.trim() || selectedImages.length > 0) && !submitting ? 'bg-gold' : 'bg-cream'
               }`}
             >
               <Text
                 style={{ fontFamily: 'Lato_700Bold' }}
-                className={newReply.trim() && !submitting ? 'text-white' : 'text-charcoal/30'}
+                className={(newReply.trim() || selectedImages.length > 0) && !submitting ? 'text-white' : 'text-charcoal/30'}
               >
                 Send
               </Text>
             </Pressable>
+          </View>
           </View>
         </View>
       )}

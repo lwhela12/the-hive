@@ -10,7 +10,9 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { ChatInput } from './ChatInput';
-import type { ChatMessage, Conversation, ConversationMode } from '../../types';
+import { SelectedImage } from '../../lib/imagePicker';
+import { uploadMultipleImages } from '../../lib/attachmentUpload';
+import type { ChatMessage, Conversation, ConversationMode, Attachment } from '../../types';
 
 interface ChatInterfaceProps {
   mode?: ConversationMode;
@@ -25,10 +27,40 @@ interface ChatInterfaceProps {
 const SUPABASE_FUNCTIONS_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.functions.supabase.co');
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-// Memoized footer component
-const ListFooter = memo(function ListFooter({ isLoading }: { isLoading: boolean }) {
-  if (!isLoading) return null;
-  return <TypingIndicator />;
+// Check if streaming is supported on this platform
+const supportsStreaming = (): boolean => {
+  // Only web reliably supports ReadableStream for fetch response bodies
+  // React Native's fetch doesn't support response.body.getReader() properly
+  return Platform.OS === 'web';
+};
+
+// Memoized footer component that handles both loading and streaming states
+const ListFooter = memo(function ListFooter({
+  isLoading,
+  streamingContent,
+}: {
+  isLoading: boolean;
+  streamingContent: string | null;
+}) {
+  // Show streaming message bubble if we have streaming content
+  if (streamingContent !== null) {
+    return (
+      <MessageBubble
+        message={{
+          id: 'streaming',
+          user_id: '',
+          community_id: '',
+          role: 'assistant',
+          content: streamingContent,
+          created_at: new Date().toISOString(),
+        }}
+        isStreaming={true}
+      />
+    );
+  }
+  // Show typing indicator while loading
+  if (isLoading) return <TypingIndicator />;
+  return null;
 });
 
 export function ChatInterface({
@@ -45,6 +77,7 @@ export function ChatInterface({
   const [isLoading, setIsLoading] = useState(false);
   const [skillsCount, setSkillsCount] = useState(0);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(conversationId || null);
+  const [streamingContent, setStreamingContent] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const messageCountRef = useRef(0);
   const isInitialLoadRef = useRef(true);
@@ -72,12 +105,13 @@ export function ChatInterface({
   }, [skillsCount, mode, context, onSkillsCaptured]);
 
   const createConversation = async (): Promise<string | null> => {
-    if (!session?.user?.id) return null;
+    if (!session?.user?.id || !communityId) return null;
 
     const { data, error } = await supabase
       .from('conversations')
       .insert({
         user_id: session.user.id,
+        community_id: communityId,
         mode,
         is_active: true,
       })
@@ -112,8 +146,26 @@ export function ChatInterface({
       return;
     }
 
-    // If no conversation selected, show empty state
+    // If no conversation selected...
     if (!activeConversationId) {
+      // For first-time users, auto-create a conversation and show welcome
+      if (isFirstTimeUser) {
+        const newConvId = await createConversation();
+        if (newConvId) {
+          const greeting = getGreeting();
+          await addMessage('assistant', greeting);
+
+          // Set onboarded_at after showing welcome
+          await supabase
+            .from('profiles')
+            .update({ onboarded_at: new Date().toISOString() })
+            .eq('id', session.user.id);
+          await refreshProfile();
+        }
+        return;
+      }
+
+      // For existing users, just show empty state
       setMessages([]);
       return;
     }
@@ -134,15 +186,6 @@ export function ChatInterface({
       if (data.length === 0) {
         const greeting = getGreeting();
         await addMessage('assistant', greeting);
-
-        // Set onboarded_at for first-time users after showing welcome message
-        if (isFirstTimeUser) {
-          await supabase
-            .from('profiles')
-            .update({ onboarded_at: new Date().toISOString() })
-            .eq('id', session.user.id);
-          await refreshProfile();
-        }
       }
     }
   };
@@ -150,7 +193,7 @@ export function ChatInterface({
   const getGreeting = () => {
     // First-time user welcome message (only shown once)
     if (!profile?.onboarded_at && mode === 'default') {
-      return `Welcome to The Hive! Feel free to look around! You can see what's going on with the group on the Hive page, add topics for discussion on the Board, chat with other members in the messages, or fill out your profile. When you're ready I'd love to chat with you about your goals and the skills you bring to the group!`;
+      return `Welcome to HIVE! Feel free to look around! You can see what's going on with the group on the Hive page, add topics for discussion on the Board, chat with other members in the messages, or fill out your profile. When you're ready I'd love to chat with you about your goals and the skills you bring to the group!`;
     }
 
     if (mode === 'onboarding' && context === 'skills') {
@@ -167,7 +210,7 @@ What are you working on these days? Is there anything you've been meaning to do 
 
     // Unified onboarding (no context specified)
     if (mode === 'onboarding' && !context) {
-      return `Hey ${profile?.name || 'there'}! Welcome to The Hive! I'm so excited to get to know you.
+      return `Hey ${profile?.name || 'there'}! Welcome to HIVE! I'm so excited to get to know you.
 
 Before we dive in, when's your birthday? We love celebrating our members!`;
     }
@@ -199,10 +242,16 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     }
   };
 
-  const addMessage = async (role: 'user' | 'assistant', content: string) => {
+  const addMessage = async (
+    role: 'user' | 'assistant',
+    content: string,
+    attachments?: Attachment[],
+    explicitConversationId?: string | null
+  ) => {
     if (!session?.user?.id || !communityId) return;
 
-    let convId = activeConversationId;
+    // Use explicit ID if provided, otherwise fall back to state or create new
+    let convId = explicitConversationId ?? activeConversationId;
 
     // Create conversation if none exists
     if (!convId) {
@@ -218,6 +267,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
         conversation_id: convId,
         role,
         content,
+        attachments: attachments && attachments.length > 0 ? attachments : null,
       })
       .select()
       .single();
@@ -233,79 +283,244 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     return data;
   };
 
-  const handleSendMessage = useCallback(async (userMessage: string) => {
+  // Get a fresh access token
+  const getAccessToken = useCallback(async (): Promise<string | undefined> => {
+    let accessToken = session?.access_token;
+    if (!accessToken) {
+      const { data } = await supabase.auth.getSession();
+      accessToken = data.session?.access_token ?? undefined;
+    }
+    if (!accessToken) {
+      const { data } = await supabase.auth.refreshSession();
+      accessToken = data.session?.access_token ?? undefined;
+    }
+    return accessToken;
+  }, [session?.access_token]);
+
+  // Handle metadata from response (both streaming and non-streaming)
+  const handleResponseMetadata = useCallback((metadata: {
+    skillsAdded?: number;
+    onboardingComplete?: boolean;
+  }) => {
+    if (mode === 'onboarding' && context === 'skills' && metadata.skillsAdded) {
+      setSkillsCount((prev) => prev + metadata.skillsAdded!);
+    }
+    if (mode === 'onboarding' && metadata.onboardingComplete) {
+      onOnboardingComplete?.();
+    }
+  }, [mode, context, onOnboardingComplete]);
+
+  // Streaming message handler
+  const handleSendMessageStreaming = useCallback(async (
+    userMessage: string,
+    attachments: Attachment[] | undefined,
+    conversationIdToUse: string | null
+  ) => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      throw new Error('Missing access token for chat request');
+    }
+
+    const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY } : {}),
+      },
+      body: JSON.stringify({
+        message: userMessage,
+        mode,
+        context,
+        conversation_id: conversationIdToUse,
+        attachments: attachments,
+        stream: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.details || `Chat request failed: ${response.status}`);
+    }
+
+    // Handle SSE stream
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullContent = '';
+    let currentEventType = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE events from buffer
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEventType = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+
+            switch (currentEventType) {
+              case 'content_start':
+                setStreamingContent('');
+                break;
+              case 'content_delta':
+                try {
+                  // Data is JSON-encoded to handle special characters
+                  const parsed = JSON.parse(data);
+                  if (parsed.text) {
+                    fullContent += parsed.text;
+                    setStreamingContent(fullContent);
+                  }
+                } catch {
+                  // Fallback: use raw data if not JSON
+                  fullContent += data;
+                  setStreamingContent(fullContent);
+                }
+                break;
+              case 'content_done':
+                // Content is complete, fullContent already has the full text
+                break;
+              case 'metadata':
+                try {
+                  const metadata = JSON.parse(data);
+                  handleResponseMetadata(metadata);
+                } catch {
+                  // Ignore parse errors for metadata
+                }
+                break;
+              case 'error':
+                console.error('Stream error:', data);
+                break;
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    return fullContent;
+  }, [getAccessToken, mode, context, handleResponseMetadata]);
+
+  // Non-streaming message handler (fallback)
+  const handleSendMessageNonStreaming = useCallback(async (
+    userMessage: string,
+    attachments: Attachment[] | undefined,
+    conversationIdToUse: string | null
+  ) => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      throw new Error('Missing access token for chat request');
+    }
+
+    const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY } : {}),
+      },
+      body: JSON.stringify({
+        message: userMessage,
+        mode,
+        context,
+        conversation_id: conversationIdToUse,
+        attachments: attachments,
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.details || `Chat request failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    handleResponseMetadata(data);
+    return data.response as string;
+  }, [getAccessToken, mode, context, handleResponseMetadata]);
+
+  // Main send message handler
+  const handleSendMessage = useCallback(async (userMessage: string, images?: SelectedImage[]) => {
     if (!SUPABASE_FUNCTIONS_URL) {
       console.error('Missing Supabase functions URL');
       return;
     }
 
-    setIsLoading(true);
+    if (!session?.user?.id) {
+      console.error('No user session');
+      return;
+    }
 
-    // Add user message to chat
-    await addMessage('user', userMessage);
+    setIsLoading(true);
+    setStreamingContent(null);
+
+    // Upload images if any
+    let attachments: Attachment[] | undefined;
+    if (images && images.length > 0) {
+      const result = await uploadMultipleImages(session.user.id, images);
+      if (result.attachments.length > 0) {
+        attachments = result.attachments;
+      }
+    }
+
+    // Add user message to chat (with attachments if any)
+    const userMsg = await addMessage('user', userMessage, attachments);
+    const conversationIdToUse = userMsg?.conversation_id || activeConversationId;
 
     try {
-      let accessToken = session?.access_token;
-      if (!accessToken) {
-        const { data } = await supabase.auth.getSession();
-        accessToken = data.session?.access_token ?? undefined;
+      let responseText: string;
+
+      // Choose streaming or non-streaming based on platform support
+      if (supportsStreaming()) {
+        responseText = await handleSendMessageStreaming(
+          userMessage,
+          attachments,
+          conversationIdToUse
+        );
+      } else {
+        responseText = await handleSendMessageNonStreaming(
+          userMessage,
+          attachments,
+          conversationIdToUse
+        );
       }
 
-      if (!accessToken) {
-        const { data } = await supabase.auth.refreshSession();
-        accessToken = data.session?.access_token ?? undefined;
-      }
+      // Clear streaming state and save the final message
+      setStreamingContent(null);
+      await addMessage('assistant', responseText, undefined, conversationIdToUse);
 
-      if (!accessToken) {
-        throw new Error('Missing access token for chat request');
-      }
-
-      // Call Supabase Edge Function for chat
-      const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY } : {}),
-        },
-        body: JSON.stringify({
-          message: userMessage,
-          mode,
-          context,
-          conversation_id: activeConversationId,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Chat API error:', response.status, errorData);
-        throw new Error(errorData.details || `Chat request failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      // Add assistant response
-      await addMessage('assistant', data.response);
-
-      // Update skills count if we're in skills context
-      if (mode === 'onboarding' && context === 'skills' && data.skillsAdded) {
-        setSkillsCount((prev) => prev + data.skillsAdded);
-      }
-
-      // Check if onboarding is complete (unified onboarding flow)
-      if (mode === 'onboarding' && data.onboardingComplete) {
-        onOnboardingComplete?.();
-      }
     } catch (error) {
       console.error('Error sending message:', error);
+      setStreamingContent(null);
       await addMessage(
         'assistant',
-        "I'm having trouble connecting right now. Let me try again in a moment."
+        "I'm having trouble connecting right now. Let me try again in a moment.",
+        undefined,
+        conversationIdToUse
       );
     } finally {
       setIsLoading(false);
+      setStreamingContent(null);
     }
-  }, [session?.access_token, mode, context, activeConversationId, onOnboardingComplete]);
+  }, [
+    session?.user?.id,
+    activeConversationId,
+    handleSendMessageStreaming,
+    handleSendMessageNonStreaming,
+  ]);
 
   const scrollToBottom = useCallback((animated = true) => {
     if (flatListRef.current && messages.length > 0) {
@@ -337,13 +552,13 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     previousMessageCountRef.current = currentCount;
   }, [messages.length, scrollToBottom]);
 
-  // Scroll when typing indicator appears
+  // Scroll when typing indicator appears or streaming content updates
   useEffect(() => {
-    if (isLoading && !isInitialLoadRef.current) {
+    if ((isLoading || streamingContent !== null) && !isInitialLoadRef.current) {
       const timer = setTimeout(() => scrollToBottom(true), 100);
       return () => clearTimeout(timer);
     }
-  }, [isLoading, scrollToBottom]);
+  }, [isLoading, streamingContent, scrollToBottom]);
 
   // Memoized render function
   const renderMessage = useCallback(
@@ -363,11 +578,13 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
       <FlatList
         ref={flatListRef}
         data={messages}
-        extraData={isLoading}
+        extraData={[isLoading, streamingContent]}
         keyExtractor={keyExtractor}
         renderItem={renderMessage}
         contentContainerClassName="p-4 pb-2"
-        ListFooterComponent={<ListFooter isLoading={isLoading} />}
+        ListFooterComponent={
+          <ListFooter isLoading={isLoading} streamingContent={streamingContent} />
+        }
         // Performance optimizations
         removeClippedSubviews={Platform.OS !== 'web'}
         maxToRenderPerBatch={10}

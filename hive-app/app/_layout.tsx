@@ -4,7 +4,9 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import { Session } from '@supabase/supabase-js';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { queryClient } from '../lib/queryClient';
 import { AuthContext } from '../lib/hooks/useAuth';
 import type { Profile, Community, UserRole } from '../types';
 import { useFonts } from 'expo-font';
@@ -159,21 +161,24 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthContext.Provider value={{
-      session,
-      profile,
-      community,
-      communityId,
-      communityRole,
-      loading,
-      refreshProfile,
-    }}>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(app)" />
-        <Stack.Screen name="onboarding" />
-      </Stack>
-    </AuthContext.Provider>
+    <QueryClientProvider client={queryClient}>
+      <AuthContext.Provider value={{
+        session,
+        profile,
+        community,
+        communityId,
+        communityRole,
+        loading,
+        refreshProfile,
+      }}>
+        <StatusBar style="dark" />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(app)" />
+          <Stack.Screen name="onboarding" />
+          <Stack.Screen name="join" />
+        </Stack>
+      </AuthContext.Provider>
+    </QueryClientProvider>
   );
 }

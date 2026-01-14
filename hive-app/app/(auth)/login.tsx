@@ -88,7 +88,7 @@ export default function LoginScreen() {
             style={{ width: 160, height: 160, marginBottom: 16 }}
             resizeMode="contain"
           />
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-4xl text-charcoal">The Hive</Text>
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-4xl text-charcoal">HIVE</Text>
           <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-lg text-charcoal mt-2 text-center">
             Where wishes become reality
           </Text>

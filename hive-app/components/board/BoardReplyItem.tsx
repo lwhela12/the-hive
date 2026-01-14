@@ -3,6 +3,7 @@ import { View, Text, Pressable, TextInput } from 'react-native';
 import { formatDateShort } from '../../lib/dateUtils';
 import type { BoardReply, Profile } from '../../types';
 import { BoardReactionBar } from './BoardReactionBar';
+import { AttachmentGallery } from '../ui/AttachmentGallery';
 
 interface BoardReplyItemProps {
   reply: BoardReply & { author?: Profile };
@@ -10,7 +11,7 @@ interface BoardReplyItemProps {
   isNested?: boolean;
   onReact: (replyId: string, emoji: string) => void;
   onRemoveReaction: (replyId: string, emoji: string) => void;
-  onReply?: (parentReplyId: string, content: string) => void;
+  onReply?: (replyId: string, authorName: string) => void;
   onEdit?: (replyId: string, content: string) => void;
   onDelete?: (replyId: string) => void;
 }
@@ -25,21 +26,11 @@ export function BoardReplyItem({
   onEdit,
   onDelete,
 }: BoardReplyItemProps) {
-  const [showReplyInput, setShowReplyInput] = useState(false);
-  const [replyContent, setReplyContent] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(reply.content);
 
   const isAuthor = currentUserId === reply.author_id;
   const timeAgo = getTimeAgo(new Date(reply.created_at));
-
-  const handleSubmitReply = () => {
-    if (replyContent.trim() && onReply) {
-      onReply(reply.id, replyContent.trim());
-      setReplyContent('');
-      setShowReplyInput(false);
-    }
-  };
 
   const handleSaveEdit = () => {
     if (editContent.trim() && onEdit) {
@@ -108,6 +99,12 @@ export function BoardReplyItem({
             </Text>
           )}
 
+          {reply.attachments && reply.attachments.length > 0 && (
+            <View className="mb-2">
+              <AttachmentGallery attachments={reply.attachments} maxWidth={250} />
+            </View>
+          )}
+
           <View className="flex-row items-center gap-4 mb-2">
             <BoardReactionBar
               reactions={reply.reactions || []}
@@ -119,7 +116,7 @@ export function BoardReplyItem({
 
           <View className="flex-row items-center gap-4">
             {!isNested && onReply && (
-              <Pressable onPress={() => setShowReplyInput(!showReplyInput)}>
+              <Pressable onPress={() => onReply(reply.id, reply.author?.name || 'Unknown')}>
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-gold text-sm">
                   Reply
                 </Text>
@@ -140,32 +137,6 @@ export function BoardReplyItem({
               </>
             )}
           </View>
-
-          {showReplyInput && (
-            <View className="mt-3 flex-row items-center">
-              <TextInput
-                value={replyContent}
-                onChangeText={setReplyContent}
-                placeholder="Write a reply..."
-                className="flex-1 bg-cream rounded-lg px-3 py-2 mr-2"
-                style={{ fontFamily: 'Lato_400Regular' }}
-              />
-              <Pressable
-                onPress={handleSubmitReply}
-                disabled={!replyContent.trim()}
-                className={`px-4 py-2 rounded-lg ${
-                  replyContent.trim() ? 'bg-gold' : 'bg-cream'
-                }`}
-              >
-                <Text
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  className={replyContent.trim() ? 'text-white' : 'text-charcoal/30'}
-                >
-                  Send
-                </Text>
-              </Pressable>
-            </View>
-          )}
 
           {/* Nested replies */}
           {reply.nested_replies?.map((nestedReply) => (
