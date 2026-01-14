@@ -4,7 +4,7 @@ import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'The Hive <hive@yourdomain.com>';
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'The HIVE <hive@yourdomain.com>';
 const INVITE_URL_BASE = Deno.env.get('INVITE_URL_BASE') || 'https://yourdomain.com/invite';
 
 interface InvitePayload {
@@ -89,7 +89,7 @@ serve(async (req) => {
   }
 
   const inviteUrl = `${INVITE_URL_BASE}?token=${encodeURIComponent(token_invite)}`;
-  const communityName = community?.name || 'The Hive';
+  const communityName = community?.name || 'the HIVE';
 
   if (RESEND_API_KEY) {
     try {

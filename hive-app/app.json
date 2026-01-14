@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "The Hive",
+    "name": "The HIVE",
     "slug": "the-hive",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -17,7 +17,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.lucaswhelan.thehive",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "The Hive needs microphone access to record meetings.",
+        "NSMicrophoneUsageDescription": "The HIVE needs microphone access to record meetings.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -48,7 +48,7 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Allow The Hive to access your microphone for recording meetings."
+          "microphonePermission": "Allow the HIVE to access your microphone for recording meetings."
         }
       ],
       [

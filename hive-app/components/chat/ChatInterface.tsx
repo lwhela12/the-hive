@@ -72,7 +72,7 @@ export function ChatInterface({
   onConversationCreated,
   skipLoadHistory = false,
 }: ChatInterfaceProps) {
-  const { session, profile, communityId, refreshProfile } = useAuth();
+  const { session, profile, communityId } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [skillsCount, setSkillsCount] = useState(0);
@@ -82,10 +82,17 @@ export function ChatInterface({
   const messageCountRef = useRef(0);
   const isInitialLoadRef = useRef(true);
   const previousMessageCountRef = useRef(0);
+  const isLoadingMessagesRef = useRef(false);
+  const hasLoadedForConversationRef = useRef<string | null>(null);
 
   // Update activeConversationId when prop changes
   useEffect(() => {
     if (conversationId !== undefined) {
+      // Reset tracking when conversation changes from parent
+      if (conversationId !== activeConversationId) {
+        hasLoadedForConversationRef.current = null;
+        messageCountRef.current = 0;
+      }
       setActiveConversationId(conversationId);
       // Mark as initial load when conversation changes
       isInitialLoadRef.current = true;
@@ -125,6 +132,8 @@ export function ChatInterface({
 
     if (data) {
       setActiveConversationId(data.id);
+      messageCountRef.current = 0; // Reset for new conversation
+      hasLoadedForConversationRef.current = null;
       onConversationCreated?.(data);
       return data.id;
     }
@@ -135,67 +144,63 @@ export function ChatInterface({
   const loadMessages = async () => {
     if (!session?.user?.id || !communityId) return;
 
-    // Check if this is a first-time user (for welcome message tracking)
-    const isFirstTimeUser = !profile?.onboarded_at && mode === 'default';
+    // Prevent concurrent loads
+    if (isLoadingMessagesRef.current) return;
 
-    // Skip loading history for fresh onboarding
+    // Skip loading history for fresh onboarding - show greeting immediately
     if (skipLoadHistory) {
-      setMessages([]);
-      const greeting = getGreeting();
-      await addMessage('assistant', greeting);
-      return;
-    }
+      // Only show greeting once
+      if (hasLoadedForConversationRef.current === 'skipLoadHistory') return;
 
-    // If no conversation selected...
-    if (!activeConversationId) {
-      // For first-time users, auto-create a conversation and show welcome
-      if (isFirstTimeUser) {
-        const newConvId = await createConversation();
-        if (newConvId) {
-          const greeting = getGreeting();
-          await addMessage('assistant', greeting);
-
-          // Set onboarded_at after showing welcome
-          await supabase
-            .from('profiles')
-            .update({ onboarded_at: new Date().toISOString() })
-            .eq('id', session.user.id);
-          await refreshProfile();
-        }
-        return;
-      }
-
-      // For existing users, just show empty state
-      setMessages([]);
-      return;
-    }
-
-    const { data } = await supabase
-      .from('chat_messages')
-      .select('*')
-      .eq('conversation_id', activeConversationId)
-      .eq('community_id', communityId)
-      .order('created_at', { ascending: true })
-      .limit(100);
-
-    if (data) {
-      setMessages(data);
-      messageCountRef.current = data.length;
-
-      // Add initial greeting if no messages in this conversation
-      if (data.length === 0) {
+      isLoadingMessagesRef.current = true;
+      try {
+        setMessages([]);
         const greeting = getGreeting();
         await addMessage('assistant', greeting);
+        hasLoadedForConversationRef.current = 'skipLoadHistory';
+      } finally {
+        isLoadingMessagesRef.current = false;
       }
+      return;
+    }
+
+    // If no conversation selected, show empty state
+    if (!activeConversationId) {
+      setMessages([]);
+      return;
+    }
+
+    // Skip if we've already loaded this conversation
+    if (hasLoadedForConversationRef.current === activeConversationId) return;
+
+    isLoadingMessagesRef.current = true;
+    try {
+      const { data } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('conversation_id', activeConversationId)
+        .eq('community_id', communityId)
+        .order('created_at', { ascending: true })
+        .limit(100);
+
+      if (data) {
+        setMessages(data);
+        messageCountRef.current = data.length;
+
+        // Add initial greeting if no messages in this conversation
+        if (data.length === 0) {
+          const greeting = getGreeting();
+          await addMessage('assistant', greeting);
+        }
+
+        hasLoadedForConversationRef.current = activeConversationId;
+      }
+    } finally {
+      isLoadingMessagesRef.current = false;
     }
   };
 
   const getGreeting = () => {
-    // First-time user welcome message (only shown once)
-    if (!profile?.onboarded_at && mode === 'default') {
-      return `Welcome to HIVE! Feel free to look around! You can see what's going on with the group on the Hive page, add topics for discussion on the Board, chat with other members in the messages, or fill out your profile. When you're ready I'd love to chat with you about your goals and the skills you bring to the group!`;
-    }
-
     if (mode === 'onboarding' && context === 'skills') {
       return `Hey ${profile?.name || 'there'}! I'm excited to get to know you better.
 
@@ -205,39 +210,39 @@ What are some things you feel you're particularly good at? It could be professio
     if (mode === 'onboarding' && context === 'wishes') {
       return `Now let's talk about what you might need help with.
 
-What are you working on these days? Is there anything you've been meaning to do but haven't had the time or know-how? Remember, these stay private unless you choose to share them with the Hive.`;
+What are you working on these days? Is there anything you've been meaning to do but haven't had the time or know-how? Remember, these stay private unless you choose to share them with the HIVE.`;
     }
 
     // Unified onboarding (no context specified)
     if (mode === 'onboarding' && !context) {
-      return `Hey ${profile?.name || 'there'}! Welcome to HIVE! I'm so excited to get to know you.
+      return `Hey ${profile?.name || 'there'}! Welcome to the HIVE! I'm so excited to get to know you.
 
 Before we dive in, when's your birthday? We love celebrating our members!`;
     }
 
+    // Default greeting for new conversations
     return `Hey ${profile?.name || 'there'}! How can I help you today?`;
   };
 
   const generateTitleIfNeeded = async (convId: string) => {
-    // Generate title after 3 messages
+    // Generate title after 3 messages (greeting + user message + assistant response)
     if (messageCountRef.current === 3) {
-      const { data: firstMessage } = await supabase
-        .from('chat_messages')
-        .select('content')
-        .eq('conversation_id', convId)
-        .eq('role', 'user')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
+      try {
+        const accessToken = await getAccessToken();
+        if (!accessToken) return;
 
-      if (firstMessage) {
-        const title = firstMessage.content.slice(0, 50).trim();
-        const finalTitle = title.length === 50 ? `${title}...` : title;
-
-        await supabase
-          .from('conversations')
-          .update({ title: finalTitle })
-          .eq('id', convId);
+        // Call edge function to generate title with Claude Haiku
+        await fetch(`${SUPABASE_FUNCTIONS_URL}/generate-title`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+            ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY } : {}),
+          },
+          body: JSON.stringify({ conversation_id: convId }),
+        });
+      } catch (error) {
+        console.error('Failed to generate title:', error);
       }
     }
   };

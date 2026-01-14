@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'The Hive <hive@yourdomain.com>';
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'The HIVE <hive@yourdomain.com>';
 
 interface NotificationPayload {
   type: 'wish_match' | 'meeting_summary' | 'queen_bee_update' | 'action_item' | 'general';
@@ -81,7 +81,7 @@ serve(async (req) => {
             <h2>A wish you might be able to grant</h2>
             <p><strong>${wisher.name}</strong> is wishing for:</p>
             <blockquote>${wish.description}</blockquote>
-            <p>Think you can help? Open The Hive to connect.</p>
+            <p>Think you can help? Open the HIVE to connect.</p>
           `;
           break;
         }
@@ -94,7 +94,7 @@ serve(async (req) => {
           emailBody = `
             <h2>Meeting Summary - ${meeting.date}</h2>
             <p>${meeting.summary}</p>
-            <p>Open The Hive to see action items and full details.</p>
+            <p>Open the HIVE to see action items and full details.</p>
           `;
           break;
         }
@@ -120,7 +120,7 @@ serve(async (req) => {
             <h2>You've been assigned an action item</h2>
             <p>${description}</p>
             ${dueDate ? `<p><strong>Due:</strong> ${dueDate}</p>` : ''}
-            <p>Open The Hive to mark it complete when done.</p>
+            <p>Open the HIVE to mark it complete when done.</p>
           `;
           break;
         }

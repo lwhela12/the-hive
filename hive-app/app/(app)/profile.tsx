@@ -287,8 +287,8 @@ export default function ProfileScreen() {
 
   const handlePublishWish = (wish: Wish) => {
     Alert.alert(
-      'Share with the Hive?',
-      `This will make your wish visible to all Hive members:\n\n"${wish.description}"`,
+      'Share with the HIVE?',
+      `This will make your wish visible to all HIVE members:\n\n"${wish.description}"`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -555,14 +555,14 @@ export default function ProfileScreen() {
         {userInsights?.personality_notes && (
           <View className="mb-6">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
-              How the Hive Sees You
+              How the HIVE Sees You
             </Text>
             <View className="bg-white rounded-xl shadow-sm p-4">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
                 {userInsights.personality_notes}
               </Text>
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/40 mt-3">
-                These notes are maintained by the Hive assistant based on your conversations. Only you can see them.
+                These notes are maintained by the HIVE assistant based on your conversations. Only you can see them.
               </Text>
             </View>
           </View>
@@ -604,7 +604,7 @@ export default function ProfileScreen() {
           {skills.length === 0 ? (
             <View className="bg-white rounded-xl p-4 shadow-sm">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
-                No skills recorded yet. Chat with the Hive assistant to add some!
+                No skills recorded yet. Chat with the HIVE assistant to add some!
               </Text>
             </View>
           ) : (

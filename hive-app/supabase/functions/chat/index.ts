@@ -9,7 +9,9 @@ import {
   SSEWriter,
 } from '../_shared/streaming.ts';
 
-const SYSTEM_PROMPT = `You are the Hive Assistant, an AI helper for a close-knit community of 12 people practicing "high-definition wishing."
+const SYSTEM_PROMPT = `You are the HIVE Assistant, an AI helper for a close-knit community of 12 people practicing "high-definition wishing."
+
+**IMPORTANT: Always refer to the community as "the HIVE" (with HIVE in all caps). At the start of a sentence, use "The HIVE". Never write "the Hive" or "The Hive".**
 
 Your primary role is to help users articulate what they actually want. People often express vague desires ("I want to be healthier") or surface-level wants ("I want a new car"). Your job is to help them discover the underlying desire through curious, gentle questioning.
 
@@ -23,7 +25,7 @@ Your primary role is to help users articulate what they actually want. People of
    - Low definition: "I want to learn to cook"
    - High definition: "I want someone to teach me 3 easy weeknight dinners I can make in under 30 minutes, starting with pasta dishes"
 
-4. **Never push wishes public.** When a wish is well-articulated, ASK if they want to share it with the Hive. Respect if they say no.
+4. **Never push wishes public.** When a wish is well-articulated, ASK if they want to share it with the HIVE. Respect if they say no.
 
 5. **You have tools.** Use them naturally. Don't announce "I'm going to use my store_skill tool now." Just do it and confirm conversationally.
 
@@ -92,7 +94,9 @@ You maintain a private personality profile for each user. These notes help you u
 - Don't share private wishes with others
 - Don't make the user feel like they're being processed`;
 
-const ONBOARDING_SKILLS_PROMPT = `You are helping a new member of The Hive discover and articulate their skills.
+const ONBOARDING_SKILLS_PROMPT = `You are helping a new member of the HIVE discover and articulate their skills.
+
+**IMPORTANT: Always refer to the community as "the HIVE" (with HIVE in all caps). At the start of a sentence, use "The HIVE".**
 
 Your goal is to help them identify 2-3 skills they have that could benefit the community. Be curious and conversational.
 
@@ -100,7 +104,9 @@ When a skill is mentioned, use the store_skill tool to save it. Transform vague 
 
 After capturing 2-3 skills, suggest moving on to wishes.`;
 
-const ONBOARDING_WISHES_PROMPT = `You are helping a new member of The Hive discover their first wishes.
+const ONBOARDING_WISHES_PROMPT = `You are helping a new member of the HIVE discover their first wishes.
+
+**IMPORTANT: Always refer to the community as "the HIVE" (with HIVE in all caps). At the start of a sentence, use "The HIVE".**
 
 These wishes will stay PRIVATE unless they choose to share. Help them feel comfortable expressing needs.
 
@@ -108,7 +114,9 @@ When a wish emerges clearly, use the store_wish tool to save it. Transform vague
 
 Remind them these stay private and they can refine them later.`;
 
-const UNIFIED_ONBOARDING_PROMPT = `You are welcoming a new member to The Hive. Guide them through getting to know each other in a single flowing conversation.
+const UNIFIED_ONBOARDING_PROMPT = `You are welcoming a new member to the HIVE. Guide them through getting to know each other in a single flowing conversation.
+
+**IMPORTANT: Always refer to the community as "the HIVE" (with HIVE in all caps). At the start of a sentence, use "The HIVE".**
 
 ## Your Goals (in this order):
 1. **Get to know them** - They've already been greeted with a birthday question. When they share their birthday, save it immediately with update_profile. If they share their phone number or preferred contact method, save those too.
@@ -155,7 +163,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "publish_wish",
-    description: "Make a wish public to the Hive. Only call after explicit user confirmation.",
+    description: "Make a wish public to the HIVE. Only call after explicit user confirmation.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -176,12 +184,12 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "get_public_wishes",
-    description: "Get all public wishes from other Hive members.",
+    description: "Get all public wishes from other HIVE members.",
     input_schema: { type: "object" as const, properties: {} }
   },
   {
     name: "get_all_skills",
-    description: "Get all skills from all Hive members.",
+    description: "Get all skills from all HIVE members.",
     input_schema: { type: "object" as const, properties: {} }
   },
   {
@@ -191,7 +199,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "get_hive_members",
-    description: "Get list of all Hive members with basic info",
+    description: "Get list of all HIVE members with basic info",
     input_schema: { type: "object" as const, properties: {} }
   },
   {
@@ -427,7 +435,7 @@ serve(async (req) => {
               .eq('id', wish_id)
               .eq('user_id', userId)
               .eq('community_id', communityId);
-            result = error ? `Error: ${error.message}` : 'Wish published to the Hive';
+            result = error ? `Error: ${error.message}` : 'Wish published to the HIVE';
             break;
           }
 
@@ -553,7 +561,7 @@ serve(async (req) => {
 
           case 'complete_onboarding': {
             onboardingComplete = true;
-            result = 'Onboarding marked as complete. The user can now enter The Hive!';
+            result = 'Onboarding marked as complete. The user can now enter the HIVE!';
             break;
           }
 

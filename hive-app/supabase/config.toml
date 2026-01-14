@@ -56,3 +56,8 @@ verify_jwt = false
 # Sends push notifications for new DM messages
 [functions.notify-dm]
 verify_jwt = false
+
+# Generate conversation titles using Claude Haiku - requires user authentication
+# Auth handled via _shared/auth.ts using jose library
+[functions.generate-title]
+verify_jwt = false

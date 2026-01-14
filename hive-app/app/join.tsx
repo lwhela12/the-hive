@@ -112,10 +112,36 @@ export default function JoinScreen() {
         .update({ accepted_at: new Date().toISOString() })
         .eq('id', invite.id);
 
+      // Create the welcome conversation with initial greeting
+      const { data: welcomeConv } = await supabase
+        .from('conversations')
+        .insert({
+          user_id: profile.id,
+          community_id: invite.community_id,
+          title: 'Welcome to the HIVE!',
+          mode: 'default',
+          is_active: true,
+        } as any)
+        .select()
+        .single();
+
+      // Add the welcome message to the conversation
+      if (welcomeConv) {
+        const welcomeMessage = `Welcome to the HIVE! Feel free to look around! You can see what's going on with the group on the HIVE page, add topics for discussion on the Board, chat with other members in the messages, or fill out your profile. When you're ready I'd love to chat with you about your goals and the skills you bring to the group!`;
+
+        await supabase.from('chat_messages').insert({
+          user_id: profile.id,
+          community_id: invite.community_id,
+          conversation_id: (welcomeConv as any).id,
+          role: 'assistant',
+          content: welcomeMessage,
+        } as any);
+      }
+
       // Refresh profile to get new community context
       await refreshProfile();
 
-      // Navigate to main app - chat will show welcome message
+      // Navigate to main app
       router.replace('/(app)');
     } catch (err) {
       console.error('Error accepting invite:', err);
@@ -207,7 +233,7 @@ export default function JoinScreen() {
               You're invited to join
             </Text>
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-gold text-center mb-4">
-              {invite.community?.name || 'The Hive'}
+              {invite.community?.name || 'the HIVE'}
             </Text>
 
             {invite.inviter && (
@@ -268,7 +294,7 @@ export default function JoinScreen() {
               Already have an invite?
             </Text>
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-center text-sm">
-              Ask your Hive admin to send an invite to:{'\n'}
+              Ask your HIVE admin to send an invite to:{'\n'}
               <Text className="text-gold">{userEmail}</Text>
             </Text>
           </View>
@@ -286,11 +312,11 @@ export default function JoinScreen() {
         ) : (
           <View className="bg-white rounded-2xl p-6 shadow-sm mb-6">
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-lg text-charcoal mb-4">
-              Join the Waitlist
+              Join the waitlist
             </Text>
 
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 mb-4 text-sm">
-              Interested in starting or joining a Hive? Let us know and we'll be in touch.
+              Interested in starting or joining a HIVE? Let us know and we'll be in touch.
             </Text>
 
             <View className="mb-4">

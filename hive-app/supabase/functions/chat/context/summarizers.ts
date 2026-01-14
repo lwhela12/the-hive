@@ -27,9 +27,9 @@ export async function summarizeConversation(
     .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
     .join('\n\n');
 
-  const prompt = `Summarize this conversation between a user and an AI assistant in The Hive app.
+  const prompt = `Summarize this conversation between a user and an AI assistant in the HIVE app.
 
-The Hive helps a 12-person community practice "high-definition wishing" - refining vague desires into specific, actionable wishes, and matching them with community members' skills.
+The HIVE helps a 12-person community practice "high-definition wishing" - refining vague desires into specific, actionable wishes, and matching them with community members' skills.
 
 Summarize to preserve:
 1. Key topics discussed
@@ -107,7 +107,7 @@ export async function summarizeBoardActivity(
     })
     .join('\n');
 
-  const prompt = `Summarize this recent message board activity for The Hive community.
+  const prompt = `Summarize this recent message board activity for the HIVE community.
 
 Include:
 1. Hot topics being discussed
@@ -198,7 +198,7 @@ export async function summarizeRoomMessages(
     .map(([room, msgs]) => `[${room}]\n${msgs.slice(0, 5).join('\n')}`)
     .join('\n\n');
 
-  const prompt = `Summarize recent chat activity in The Hive community chat rooms.
+  const prompt = `Summarize recent chat activity in the HIVE community chat rooms.
 
 For community rooms: Summarize main discussion topics and any important info.
 For DMs: Just note who the user has been chatting with and general topics (no private details).
@@ -271,7 +271,7 @@ export async function summarizeMeetings(
     .map((a) => `- ${a.description}${a.due_date ? ` (due: ${a.due_date})` : ''}`)
     .join('\n');
 
-  const prompt = `Summarize recent meeting activity for The Hive community.
+  const prompt = `Summarize recent meeting activity for the HIVE community.
 
 Include:
 1. Key points from recent meetings
