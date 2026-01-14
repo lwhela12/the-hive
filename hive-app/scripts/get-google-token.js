@@ -12,9 +12,16 @@
 const http = require('http');
 const url = require('url');
 
-// ⚠️ FILL THESE IN from Google Cloud Console
-const CLIENT_ID = 'process.env.GOOGLE_CLIENT_ID';
-const CLIENT_SECRET = 'process.env.GOOGLE_CLIENT_SECRET';
+// ⚠️ Set these as environment variables before running
+// Example: GOOGLE_CLIENT_ID=xxx GOOGLE_CLIENT_SECRET=yyy node scripts/get-google-token.js
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+
+if (!CLIENT_ID || !CLIENT_SECRET) {
+  console.error('❌ Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variables');
+  console.error('Usage: GOOGLE_CLIENT_ID=xxx GOOGLE_CLIENT_SECRET=yyy node scripts/get-google-token.js');
+  process.exit(1);
+}
 
 const REDIRECT_URI = 'http://localhost:3000';
 const SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
