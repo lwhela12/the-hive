@@ -1,10 +1,12 @@
 import { useState, memo } from 'react';
-import { View, Text, Pressable, Modal, Dimensions } from 'react-native';
+import { View, Text, Pressable, Modal, Dimensions, Image } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../ui/Avatar';
-import { AttachmentGallery } from '../ui/AttachmentGallery';
-import type { RoomMessage, Profile, MessageReaction } from '../../types';
+import type { RoomMessage, Profile, MessageReaction, Attachment } from '../../types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 // Constrain image width for chat - max 250px or 60% of screen, whichever is smaller
 const MAX_IMAGE_WIDTH = Math.min(250, SCREEN_WIDTH * 0.6);
 
@@ -28,6 +30,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
   onDelete,
 }: RoomMessageItemProps) {
   const [showActions, setShowActions] = useState(false);
+  const [fullscreenImageIndex, setFullscreenImageIndex] = useState<number | null>(null);
 
   const isOwnMessage = message.sender_id === currentUserId;
   const isDeleted = !!message.deleted_at;
@@ -63,6 +66,104 @@ export const RoomMessageItem = memo(function RoomMessageItem({
     }
   };
 
+  const handleCopy = async () => {
+    if (message.content) {
+      await Clipboard.setStringAsync(message.content);
+    }
+    setShowActions(false);
+  };
+
+  // Render attachment - tap for fullscreen, long-press for actions
+  const renderAttachment = (attachment: Attachment, index: number, width: number, height: number) => {
+    return (
+      <Pressable
+        key={attachment.id}
+        onPress={() => setFullscreenImageIndex(index)}
+        onLongPress={handleLongPress}
+        delayLongPress={300}
+        style={{ width, height }}
+        className="overflow-hidden rounded-lg bg-gray-200"
+      >
+        <Image
+          source={{ uri: attachment.url }}
+          style={{ width, height }}
+          className="rounded-lg"
+          resizeMode="cover"
+        />
+      </Pressable>
+    );
+  };
+
+  // Render attachment grid
+  const renderAttachments = () => {
+    if (!hasAttachments || !message.attachments) return null;
+
+    const attachments = message.attachments;
+    const count = attachments.length;
+    const gap = 4;
+    const maxWidth = MAX_IMAGE_WIDTH;
+
+    if (count === 1) {
+      const itemWidth = maxWidth;
+      const itemHeight = maxWidth * 0.75;
+      return renderAttachment(attachments[0], 0, itemWidth, itemHeight);
+    }
+
+    if (count === 2) {
+      const itemWidth = (maxWidth - gap) / 2;
+      const itemHeight = itemWidth;
+      return (
+        <View style={{ width: maxWidth, flexDirection: 'row', gap }}>
+          {renderAttachment(attachments[0], 0, itemWidth, itemHeight)}
+          {renderAttachment(attachments[1], 1, itemWidth, itemHeight)}
+        </View>
+      );
+    }
+
+    if (count === 3) {
+      const itemWidth = (maxWidth - gap) / 2;
+      const itemHeight = itemWidth;
+      return (
+        <View style={{ width: maxWidth, gap }}>
+          {renderAttachment(attachments[0], 0, maxWidth, maxWidth * 0.5)}
+          <View style={{ flexDirection: 'row', gap }}>
+            {renderAttachment(attachments[1], 1, itemWidth, itemHeight)}
+            {renderAttachment(attachments[2], 2, itemWidth, itemHeight)}
+          </View>
+        </View>
+      );
+    }
+
+    if (count === 4) {
+      const itemWidth = (maxWidth - gap) / 2;
+      const itemHeight = itemWidth;
+      return (
+        <View style={{ width: maxWidth, flexDirection: 'row', flexWrap: 'wrap', gap }}>
+          {attachments.map((attachment, index) =>
+            renderAttachment(attachment, index, itemWidth, itemHeight)
+          )}
+        </View>
+      );
+    }
+
+    // 5 images
+    const topWidth = (maxWidth - gap) / 2;
+    const bottomWidth = (maxWidth - gap * 2) / 3;
+    return (
+      <View style={{ width: maxWidth, gap }}>
+        <View style={{ flexDirection: 'row', gap }}>
+          {renderAttachment(attachments[0], 0, topWidth, topWidth * 0.75)}
+          {renderAttachment(attachments[1], 1, topWidth, topWidth * 0.75)}
+        </View>
+        <View style={{ flexDirection: 'row', gap }}>
+          {renderAttachment(attachments[2], 2, bottomWidth, bottomWidth)}
+          {renderAttachment(attachments[3], 3, bottomWidth, bottomWidth)}
+          {renderAttachment(attachments[4], 4, bottomWidth, bottomWidth)}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View className={`max-w-[85%] mb-3 ${isOwnMessage ? 'self-end items-end' : 'self-start items-start'}`}>
       <View className={`flex-row items-end ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
@@ -90,6 +191,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
               {/* Message content */}
               {(!isDeleted && hasContent) && (
                 <Text
+                  selectable={false}
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className={`text-base leading-6 ${isOwnMessage ? 'text-white' : 'text-charcoal'}`}
                 >
@@ -112,10 +214,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
       {/* Attachments - floating outside bubble */}
       {hasAttachments && (
         <View className={(hasContent || isDeleted) ? 'mt-2' : ''}>
-          <AttachmentGallery
-            attachments={message.attachments!}
-            maxWidth={MAX_IMAGE_WIDTH}
-          />
+          {renderAttachments()}
         </View>
       )}
 
@@ -154,7 +253,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
         </View>
       )}
 
-      {/* Actions modal */}
+      {/* Actions modal (iMessage style) */}
       <Modal visible={showActions} transparent animationType="fade">
         <Pressable
           onPress={() => setShowActions(false)}
@@ -178,6 +277,14 @@ export const RoomMessageItem = memo(function RoomMessageItem({
             </View>
 
             {/* Actions */}
+            {hasContent && !isDeleted && (
+              <Pressable onPress={handleCopy} className="py-3">
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                  Copy
+                </Text>
+              </Pressable>
+            )}
+
             {isOwnMessage && !isDeleted && (
               <>
                 <Pressable
@@ -188,7 +295,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
                   className="py-3"
                 >
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
-                    Edit message
+                    Edit
                   </Text>
                 </Pressable>
                 <Pressable
@@ -199,7 +306,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
                   className="py-3"
                 >
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-red-500">
-                    Delete message
+                    Delete
                   </Text>
                 </Pressable>
               </>
@@ -216,6 +323,55 @@ export const RoomMessageItem = memo(function RoomMessageItem({
           </View>
         </Pressable>
       </Modal>
+
+      {/* Fullscreen image modal */}
+      {hasAttachments && message.attachments && (
+        <Modal
+          visible={fullscreenImageIndex !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setFullscreenImageIndex(null)}
+        >
+          <View className="flex-1 bg-black">
+            {/* Close button */}
+            <Pressable
+              onPress={() => setFullscreenImageIndex(null)}
+              className="absolute top-12 right-4 z-10 p-2 bg-black/50 rounded-full"
+            >
+              <Ionicons name="close" size={28} color="white" />
+            </Pressable>
+
+            {/* Image */}
+            {fullscreenImageIndex !== null && (
+              <View className="flex-1 items-center justify-center">
+                <Image
+                  source={{ uri: message.attachments[fullscreenImageIndex].url }}
+                  style={{
+                    width: SCREEN_WIDTH,
+                    height: SCREEN_HEIGHT * 0.8,
+                  }}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
+
+            {/* Navigation dots */}
+            {message.attachments.length > 1 && (
+              <View className="absolute bottom-12 left-0 right-0 flex-row justify-center gap-2">
+                {message.attachments.map((_, index) => (
+                  <Pressable
+                    key={index}
+                    onPress={() => setFullscreenImageIndex(index)}
+                    className={`w-2 h-2 rounded-full ${
+                      index === fullscreenImageIndex ? 'bg-white' : 'bg-white/50'
+                    }`}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        </Modal>
+      )}
     </View>
   );
 });

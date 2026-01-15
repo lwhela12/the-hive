@@ -11,27 +11,37 @@ import {
   Image,
   ScrollView,
   Modal,
+  ActivityIndicator,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { useRoomMessagesQuery } from '../../lib/hooks/useRoomMessagesQuery';
 import { RoomMessageItem } from './RoomMessageItem';
 import { RoomTypingIndicator } from './RoomTypingIndicator';
 import { SelectedImage, pickMultipleImages } from '../../lib/imagePicker';
 import { uploadMultipleImages } from '../../lib/attachmentUpload';
-import type { ChatRoom, RoomMessage, Profile, MessageReaction, TypingIndicator, Attachment } from '../../types';
+import type { ChatRoom, Profile, TypingIndicator, Attachment } from '../../types';
 
 interface RoomChatViewProps {
   room: ChatRoom & { members?: Array<{ user?: Profile }> };
   onBack: () => void;
 }
 
-type MessageWithData = RoomMessage & { sender?: Profile; reactions?: MessageReaction[] };
-
 export function RoomChatView({ room, onBack }: RoomChatViewProps) {
   const { profile, communityId } = useAuth();
-  const [messages, setMessages] = useState<MessageWithData[]>([]);
+  const {
+    messages,
+    loading: messagesLoading,
+    loadingOlder,
+    hasOlderMessages,
+    loadOlderMessages,
+    refetch: refetchMessages,
+  } = useRoomMessagesQuery(room.id);
+
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Array<TypingIndicator & { user?: Profile }>>([]);
@@ -47,6 +57,7 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isInitialLoadRef = useRef(true);
   const previousMessageCountRef = useRef(0);
+  const isLoadingOlderRef = useRef(false);
 
   // Get other members (for DMs and group DMs)
   const otherMembers = room.members
@@ -112,49 +123,10 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
     return null;
   };
 
-  const fetchMessages = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('room_messages')
-      .select('*, sender:profiles(*)')
-      .eq('room_id', room.id)
-      .order('created_at', { ascending: true })
-      .limit(100);
-
-    if (!error && data) {
-      // Fetch reactions for all messages
-      const messageIds = data.map((m) => m.id);
-      const { data: reactions } = await supabase
-        .from('message_reactions')
-        .select('*')
-        .in('message_id', messageIds);
-
-      const messagesWithReactions = data.map((msg) => ({
-        ...msg,
-        reactions: reactions?.filter((r) => r.message_id === msg.id) || [],
-      }));
-
-      setMessages(messagesWithReactions as MessageWithData[]);
-    }
-  }, [room.id]);
-
-  // Subscribe to new messages
+  // Subscribe to typing indicators and update last_read_at
   useEffect(() => {
-    fetchMessages();
-
     const channel = supabase
-      .channel(`room:${room.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'room_messages',
-          filter: `room_id=eq.${room.id}`,
-        },
-        () => {
-          fetchMessages();
-        }
-      )
+      .channel(`room-typing:${room.id}`)
       .on(
         'postgres_changes',
         {
@@ -188,7 +160,24 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [room.id, profile, fetchMessages]);
+  }, [room.id, profile]);
+
+  // Handle scroll to detect when user is near the top to load older messages
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset } = event.nativeEvent;
+      // If user scrolls near the top (within 100px), load older messages
+      if (contentOffset.y < 100 && hasOlderMessages && !loadingOlder && !isLoadingOlderRef.current) {
+        isLoadingOlderRef.current = true;
+        loadOlderMessages();
+        // Reset the flag after a short delay
+        setTimeout(() => {
+          isLoadingOlderRef.current = false;
+        }, 1000);
+      }
+    },
+    [hasOlderMessages, loadingOlder, loadOlderMessages]
+  );
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -345,7 +334,7 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
         user_id: profile.id,
         emoji,
       });
-      await fetchMessages();
+      await refetchMessages();
     } catch (error) {
       console.error('Error adding reaction:', error);
     }
@@ -361,7 +350,7 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
         .eq('message_id', messageId)
         .eq('user_id', profile.id)
         .eq('emoji', emoji);
-      await fetchMessages();
+      await refetchMessages();
     } catch (error) {
       console.error('Error removing reaction:', error);
     }
@@ -389,7 +378,7 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
 
       setEditingMessageId(null);
       setEditContent('');
-      await fetchMessages();
+      await refetchMessages();
     } catch (error) {
       console.error('Error editing message:', error);
       Alert.alert('Error', 'Failed to edit message.');
@@ -408,7 +397,7 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
               .from('room_messages')
               .update({ deleted_at: new Date().toISOString() })
               .eq('id', messageId);
-            await fetchMessages();
+            await refetchMessages();
           } catch (error) {
             console.error('Error deleting message:', error);
             Alert.alert('Error', 'Failed to delete message.');
@@ -507,14 +496,38 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
               onDelete={() => handleDelete(item.id)}
             />
           )}
+          onScroll={handleScroll}
+          scrollEventThrottle={100}
           contentContainerClassName="p-4 pb-2"
+          ListHeaderComponent={
+            loadingOlder ? (
+              <View className="items-center py-3">
+                <ActivityIndicator size="small" color="#bd9348" />
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs mt-1">
+                  Loading older messages...
+                </Text>
+              </View>
+            ) : hasOlderMessages ? (
+              <Pressable onPress={loadOlderMessages} className="items-center py-3">
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-gold text-sm">
+                  Load older messages
+                </Text>
+              </Pressable>
+            ) : null
+          }
           ListEmptyComponent={
-            <View className="items-center py-8">
-              <Text className="text-4xl mb-2">💬</Text>
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
-                No messages yet. Start the conversation!
-              </Text>
-            </View>
+            messagesLoading ? (
+              <View className="items-center py-8">
+                <ActivityIndicator size="large" color="#bd9348" />
+              </View>
+            ) : (
+              <View className="items-center py-8">
+                <Text className="text-4xl mb-2">💬</Text>
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
+                  No messages yet. Start the conversation!
+                </Text>
+              </View>
+            )
           }
           removeClippedSubviews={Platform.OS !== 'web'}
           maxToRenderPerBatch={10}

@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useChatRooms, RoomWithData } from '../../lib/hooks/useChatRooms';
+import { prefetchRoomMessages } from '../../lib/hooks/useRoomMessagesQuery';
 import { ChatRoomItem } from '../../components/messaging/ChatRoomItem';
 import { RoomChatView } from '../../components/messaging/RoomChatView';
 import { MemberPicker } from '../../components/messaging/MemberPicker';
@@ -12,17 +14,31 @@ import type { Profile } from '../../types';
 export default function MessagesScreen() {
   const { profile, communityId } = useAuth();
   const { width } = useWindowDimensions();
+  const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const useMobileLayout = width < 768;
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<RoomWithData | null>(null);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
+  const hasPrefetchedRef = useRef(false);
 
   // Use the optimized chat rooms hook (React Query with caching)
   const { rooms, loading, refetch, getOrCreateDMRoom, getOrCreateGroupDMRoom, markRoomAsRead } = useChatRooms(
     communityId ?? undefined,
     profile?.id
   );
+
+  // Prefetch messages for top 7 rooms when room list loads
+  useEffect(() => {
+    if (rooms.length > 0 && !hasPrefetchedRef.current) {
+      hasPrefetchedRef.current = true;
+      // Prefetch messages for top 7 rooms (sorted by most recent activity)
+      const topRooms = rooms.slice(0, 7);
+      topRooms.forEach((room) => {
+        prefetchRoomMessages(queryClient, room.id);
+      });
+    }
+  }, [rooms, queryClient]);
 
   const onRefresh = async () => {
     setRefreshing(true);

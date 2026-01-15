@@ -1,0 +1,248 @@
+import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
+import { useEffect, useCallback } from 'react';
+import { supabase } from '../supabase';
+import { queryKeys } from '../queryClient';
+import type { RoomMessage, Profile, MessageReaction } from '../../types';
+
+export type MessageWithData = RoomMessage & {
+  sender?: Profile;
+  reactions?: MessageReaction[];
+};
+
+const MESSAGES_PER_PAGE = 20;
+
+// Fetch messages with reactions
+async function fetchMessagesPage(
+  roomId: string,
+  cursor?: string, // created_at of oldest message for pagination
+  limit: number = MESSAGES_PER_PAGE
+): Promise<{ messages: MessageWithData[]; hasMore: boolean; oldestCursor?: string }> {
+  let query = supabase
+    .from('room_messages')
+    .select('*, sender:profiles(*)')
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: false }) // Fetch newest first for pagination
+    .limit(limit + 1); // Fetch one extra to check if there's more
+
+  if (cursor) {
+    query = query.lt('created_at', cursor);
+  }
+
+  const { data, error } = await query;
+
+  if (error || !data) {
+    console.error('Error fetching messages:', error);
+    return { messages: [], hasMore: false };
+  }
+
+  const hasMore = data.length > limit;
+  const messages = hasMore ? data.slice(0, limit) : data;
+
+  // Fetch reactions for all messages
+  if (messages.length > 0) {
+    const messageIds = messages.map((m) => m.id);
+    const { data: reactions } = await supabase
+      .from('message_reactions')
+      .select('*')
+      .in('message_id', messageIds);
+
+    const messagesWithReactions = messages.map((msg) => ({
+      ...msg,
+      reactions: reactions?.filter((r) => r.message_id === msg.id) || [],
+    }));
+
+    // Reverse to get chronological order (oldest first for display)
+    return {
+      messages: messagesWithReactions.reverse() as MessageWithData[],
+      hasMore,
+      oldestCursor: messages[messages.length - 1]?.created_at,
+    };
+  }
+
+  return { messages: [], hasMore: false };
+}
+
+// Add query key for room messages
+export const roomMessagesKey = (roomId: string) => ['roomMessages', roomId] as const;
+
+/**
+ * Hook to fetch room messages with React Query and pagination support.
+ * Initially loads recent messages, can load older messages on demand.
+ */
+export function useRoomMessagesQuery(roomId: string) {
+  const queryClient = useQueryClient();
+
+  // Use infinite query for pagination
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: roomMessagesKey(roomId),
+    queryFn: ({ pageParam }) => fetchMessagesPage(roomId, pageParam, MESSAGES_PER_PAGE),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.oldestCursor : undefined),
+    enabled: !!roomId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+
+  // Flatten all pages into a single messages array (chronological order)
+  const messages: MessageWithData[] = data?.pages
+    ? data.pages.flatMap((page) => page.messages).sort((a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+    : [];
+
+  // Subscribe to realtime changes
+  useEffect(() => {
+    if (!roomId) return;
+
+    const channel = supabase
+      .channel(`room-messages-query:${roomId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'room_messages',
+          filter: `room_id=eq.${roomId}`,
+        },
+        async (payload) => {
+          // Fetch the new message with sender info
+          const { data: newMsg } = await supabase
+            .from('room_messages')
+            .select('*, sender:profiles(*)')
+            .eq('id', payload.new.id)
+            .single();
+
+          if (newMsg) {
+            // Add to cache
+            queryClient.setQueryData(roomMessagesKey(roomId), (old: any) => {
+              if (!old?.pages?.length) return old;
+
+              const newMessage = { ...newMsg, reactions: [] } as MessageWithData;
+              const lastPageIndex = old.pages.length - 1;
+
+              return {
+                ...old,
+                pages: old.pages.map((page: any, index: number) => {
+                  if (index === lastPageIndex) {
+                    return {
+                      ...page,
+                      messages: [...page.messages, newMessage],
+                    };
+                  }
+                  return page;
+                }),
+              };
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'room_messages',
+          filter: `room_id=eq.${roomId}`,
+        },
+        async (payload) => {
+          // Refetch to get updated message
+          const { data: updatedMsg } = await supabase
+            .from('room_messages')
+            .select('*, sender:profiles(*)')
+            .eq('id', payload.new.id)
+            .single();
+
+          if (updatedMsg) {
+            queryClient.setQueryData(roomMessagesKey(roomId), (old: any) => {
+              if (!old?.pages) return old;
+
+              return {
+                ...old,
+                pages: old.pages.map((page: any) => ({
+                  ...page,
+                  messages: page.messages.map((msg: MessageWithData) =>
+                    msg.id === updatedMsg.id ? { ...updatedMsg, reactions: msg.reactions } : msg
+                  ),
+                })),
+              };
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'message_reactions',
+        },
+        async (payload) => {
+          // Refetch reactions for the affected message
+          const messageId = (payload.new as any)?.message_id || (payload.old as any)?.message_id;
+          if (!messageId) return;
+
+          const { data: reactions } = await supabase
+            .from('message_reactions')
+            .select('*')
+            .eq('message_id', messageId);
+
+          queryClient.setQueryData(roomMessagesKey(roomId), (old: any) => {
+            if (!old?.pages) return old;
+
+            return {
+              ...old,
+              pages: old.pages.map((page: any) => ({
+                ...page,
+                messages: page.messages.map((msg: MessageWithData) =>
+                  msg.id === messageId ? { ...msg, reactions: reactions || [] } : msg
+                ),
+              })),
+            };
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [roomId, queryClient]);
+
+  // Function to load older messages
+  const loadOlderMessages = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  return {
+    messages,
+    loading: isLoading,
+    loadingOlder: isFetchingNextPage,
+    hasOlderMessages: hasNextPage ?? false,
+    loadOlderMessages,
+    refetch,
+  };
+}
+
+/**
+ * Prefetch recent messages for a room.
+ * Used to preload messages for rooms the user is likely to click.
+ */
+export async function prefetchRoomMessages(
+  queryClient: ReturnType<typeof useQueryClient>,
+  roomId: string
+) {
+  await queryClient.prefetchInfiniteQuery({
+    queryKey: roomMessagesKey(roomId),
+    queryFn: () => fetchMessagesPage(roomId, undefined, MESSAGES_PER_PAGE),
+    initialPageParam: undefined,
+    staleTime: 2 * 60 * 1000,
+  });
+}
