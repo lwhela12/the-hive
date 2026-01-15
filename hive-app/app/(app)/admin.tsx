@@ -67,12 +67,13 @@ export default function AdminScreen() {
       .order('created_at', { ascending: true });
     if (membersData) setMembers(membersData as MemberRow[]);
 
-    // Fetch queen bees
+    // Fetch queen bees (ordered by display_order for queue)
     const { data: qbData } = await supabase
       .from('queen_bees')
       .select('*')
       .eq('community_id', communityId)
-      .order('month', { ascending: false })
+      .order('display_order', { ascending: true })
+      .order('month', { ascending: true })
       .limit(12);
     if (qbData) setQueenBees(qbData);
 
@@ -125,20 +126,46 @@ export default function AdminScreen() {
     }
 
     // Auto-generate month if not provided (next available month)
+    // Format: MM-YYYY
     let month = qbMonth;
     if (!month) {
-      const existingMonths = queenBees.map(qb => qb.month).sort();
-      const lastMonth = existingMonths[existingMonths.length - 1];
-      if (lastMonth) {
-        // Increment last month
-        const [year, monthNum] = lastMonth.split('-').map(Number);
-        const nextMonth = monthNum === 12 ? 1 : monthNum + 1;
-        const nextYear = monthNum === 12 ? year + 1 : year;
-        month = `${nextYear}-${String(nextMonth).padStart(2, '0')}`;
+      // Sort existing months to find the latest one
+      const existingMonths = queenBees.map(qb => qb.month);
+      // Parse MM-YYYY format and find the latest
+      const parsedMonths = existingMonths
+        .map(m => {
+          const parts = m.split('-');
+          if (parts.length === 2) {
+            // Could be MM-YYYY or YYYY-MM
+            const first = parseInt(parts[0], 10);
+            const second = parseInt(parts[1], 10);
+            if (first > 12) {
+              // YYYY-MM format
+              return { year: first, month: second };
+            } else {
+              // MM-YYYY format
+              return { year: second, month: first };
+            }
+          }
+          return null;
+        })
+        .filter(Boolean) as { year: number; month: number }[];
+
+      if (parsedMonths.length > 0) {
+        // Find the latest month
+        parsedMonths.sort((a, b) => {
+          if (a.year !== b.year) return b.year - a.year;
+          return b.month - a.month;
+        });
+        const latest = parsedMonths[0];
+        // Increment
+        const nextMonth = latest.month === 12 ? 1 : latest.month + 1;
+        const nextYear = latest.month === 12 ? latest.year + 1 : latest.year;
+        month = `${String(nextMonth).padStart(2, '0')}-${nextYear}`;
       } else {
         // Start with current month
         const now = new Date();
-        month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        month = `${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
       }
     }
 
@@ -203,18 +230,73 @@ export default function AdminScreen() {
     setQbStatus('upcoming');
   };
 
+  const moveQueenBee = async (qbId: string, direction: 'up' | 'down') => {
+    const currentIndex = queenBees.findIndex(qb => qb.id === qbId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= queenBees.length) return;
+
+    const currentQB = queenBees[currentIndex];
+    const targetQB = queenBees[targetIndex];
+
+    // Swap display_order values
+    const currentOrder = (currentQB as any).display_order ?? currentIndex + 1;
+    const targetOrder = (targetQB as any).display_order ?? targetIndex + 1;
+
+    try {
+      await Promise.all([
+        supabase
+          .from('queen_bees')
+          .update({ display_order: targetOrder })
+          .eq('id', currentQB.id),
+        supabase
+          .from('queen_bees')
+          .update({ display_order: currentOrder })
+          .eq('id', targetQB.id),
+      ]);
+
+      await fetchData();
+    } catch (err) {
+      console.error('Reorder error:', err);
+      Alert.alert('Error', 'Failed to reorder');
+    }
+  };
+
   const rotateQueenBee = async () => {
     // Find current active QB
     const activeQB = queenBees.find(qb => qb.status === 'active');
-    // Find next upcoming QB (earliest by month)
-    const upcomingQBs = queenBees
-      .filter(qb => qb.status === 'upcoming')
-      .sort((a, b) => a.month.localeCompare(b.month));
-    const nextQB = upcomingQBs[0];
 
+    // Find next upcoming QB (by display_order, fallback to month)
+    let upcomingQBs = queenBees
+      .filter(qb => qb.status === 'upcoming')
+      .sort((a, b) => {
+        const orderA = (a as any).display_order ?? 999;
+        const orderB = (b as any).display_order ?? 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.month.localeCompare(b.month);
+      });
+
+    let nextQB = upcomingQBs[0];
+    let isNewCycle = false;
+
+    // CIRCULAR: If no upcoming, reset all completed to upcoming
     if (!nextQB) {
-      Alert.alert('No Next Queen Bee', 'There are no upcoming Queen Bees to rotate to. Add one first.');
-      return;
+      const completedQBs = queenBees.filter(qb => qb.status === 'completed');
+      if (completedQBs.length === 0) {
+        Alert.alert('No Queen Bees', 'There are no Queen Bees in the queue. Add some first.');
+        return;
+      }
+
+      isNewCycle = true;
+      // Sort completed by display_order to find who's next in the new cycle
+      upcomingQBs = completedQBs.sort((a, b) => {
+        const orderA = (a as any).display_order ?? 999;
+        const orderB = (b as any).display_order ?? 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.month.localeCompare(b.month);
+      });
+      nextQB = upcomingQBs[0];
     }
 
     const activeQBName = activeQB
@@ -222,17 +304,39 @@ export default function AdminScreen() {
       : null;
     const nextQBName = members.find(m => m.profiles.id === nextQB.user_id)?.profiles.name;
 
-    const confirmMessage = activeQB
-      ? `This will:\n• Mark ${activeQBName}'s turn as completed\n• Make ${nextQBName} the active Queen Bee\n\nProceed?`
-      : `This will make ${nextQBName} the active Queen Bee. Proceed?`;
+    const confirmMessage = isNewCycle
+      ? `Starting a new cycle!\n\nAll Queen Bees will be reset to upcoming.\n${nextQBName} will be the first Queen Bee of the new cycle.\n\nProceed?`
+      : activeQB
+        ? `This will:\n• Mark ${activeQBName}'s turn as completed\n• Make ${nextQBName} the active Queen Bee\n\nProceed?`
+        : `This will make ${nextQBName} the active Queen Bee. Proceed?`;
 
     const doRotation = async () => {
       try {
-        // Mark current active as completed (if exists)
-        if (activeQB) {
+        if (isNewCycle) {
+          // Reset all completed to upcoming for new cycle
+          const completedIds = queenBees
+            .filter(qb => qb.status === 'completed')
+            .map(qb => qb.id);
+
+          if (completedIds.length > 0) {
+            await supabase
+              .from('queen_bees')
+              .update({ status: 'upcoming' })
+              .in('id', completedIds);
+          }
+        }
+
+        // Mark current active as completed (if exists and not already being reset)
+        if (activeQB && !isNewCycle) {
           await supabase
             .from('queen_bees')
             .update({ status: 'completed' })
+            .eq('id', activeQB.id);
+        } else if (activeQB && isNewCycle) {
+          // In new cycle, mark current active as upcoming too (it was the last one)
+          await supabase
+            .from('queen_bees')
+            .update({ status: 'upcoming' })
             .eq('id', activeQB.id);
         }
 
@@ -243,7 +347,10 @@ export default function AdminScreen() {
           .eq('id', nextQB.id);
 
         await fetchData();
-        Alert.alert('Success', `${nextQBName} is now the active Queen Bee!`);
+        const message = isNewCycle
+          ? `New cycle started! ${nextQBName} is now the active Queen Bee!`
+          : `${nextQBName} is now the active Queen Bee!`;
+        Alert.alert('Success', message);
       } catch (err) {
         console.error('Rotation error:', err);
         Alert.alert('Error', 'Failed to rotate Queen Bee');
@@ -419,34 +526,57 @@ export default function AdminScreen() {
             </View>
           </View>
           <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-            {queenBees.map((qb) => (
-              <Pressable
+            {queenBees.map((qb, index) => (
+              <View
                 key={qb.id}
-                onPress={() => openEditQueenBee(qb)}
-                className="p-4 border-b border-gray-100 last:border-b-0 active:bg-gray-50"
+                className="flex-row items-center border-b border-gray-100 last:border-b-0"
               >
-                <View className="flex-row justify-between items-center">
-                  <View className="flex-1">
-                    <Text className="font-semibold text-gray-800">
-                      {qb.month}: {qb.project_title}
-                    </Text>
-                    <Text className="text-sm text-gray-500 mt-1">
-                      {members.find(m => m.profiles.id === qb.user_id)?.profiles.name || 'Unknown'}
-                    </Text>
-                  </View>
-                  <View className={`px-2 py-1 rounded ${
-                    qb.status === 'active' ? 'bg-green-100' :
-                    qb.status === 'completed' ? 'bg-gray-100' : 'bg-honey-100'
-                  }`}>
-                    <Text className={`text-xs capitalize ${
-                      qb.status === 'active' ? 'text-green-700' :
-                      qb.status === 'completed' ? 'text-gray-600' : 'text-honey-700'
-                    }`}>
-                      {qb.status}
-                    </Text>
-                  </View>
+                {/* Reorder buttons */}
+                <View className="pl-2 py-2">
+                  <Pressable
+                    onPress={() => moveQueenBee(qb.id, 'up')}
+                    disabled={index === 0}
+                    className={`px-2 py-1 ${index === 0 ? 'opacity-30' : 'active:bg-gray-100'}`}
+                  >
+                    <Text className="text-gray-400 text-sm">▲</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => moveQueenBee(qb.id, 'down')}
+                    disabled={index === queenBees.length - 1}
+                    className={`px-2 py-1 ${index === queenBees.length - 1 ? 'opacity-30' : 'active:bg-gray-100'}`}
+                  >
+                    <Text className="text-gray-400 text-sm">▼</Text>
+                  </Pressable>
                 </View>
-              </Pressable>
+
+                {/* Main content - tappable to edit */}
+                <Pressable
+                  onPress={() => openEditQueenBee(qb)}
+                  className="flex-1 p-4 active:bg-gray-50"
+                >
+                  <View className="flex-row justify-between items-center">
+                    <View className="flex-1">
+                      <Text className="font-semibold text-gray-800">
+                        {members.find(m => m.profiles.id === qb.user_id)?.profiles.name || 'Unknown'}
+                      </Text>
+                      <Text className="text-sm text-gray-500 mt-1">
+                        {qb.project_title}
+                      </Text>
+                    </View>
+                    <View className={`px-2 py-1 rounded ${
+                      qb.status === 'active' ? 'bg-green-100' :
+                      qb.status === 'completed' ? 'bg-gray-100' : 'bg-honey-100'
+                    }`}>
+                      <Text className={`text-xs capitalize ${
+                        qb.status === 'active' ? 'text-green-700' :
+                        qb.status === 'completed' ? 'text-gray-600' : 'text-honey-700'
+                      }`}>
+                        {qb.status}
+                      </Text>
+                    </View>
+                  </View>
+                </Pressable>
+              </View>
             ))}
             {queenBees.length === 0 && (
               <View className="p-4">
@@ -644,7 +774,7 @@ export default function AdminScreen() {
                 </ScrollView>
 
                 <TextInput
-                  placeholder="Month (auto-fills next)"
+                  placeholder="Month MM-YYYY (auto-fills next)"
                   value={qbMonth}
                   onChangeText={setQbMonth}
                   className="border border-gray-200 rounded-lg p-3 mb-3 bg-gray-50"

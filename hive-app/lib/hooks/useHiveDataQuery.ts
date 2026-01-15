@@ -49,16 +49,24 @@ async function fetchQueenBeesWithHighlights(
   // Find by status
   const activeQB = allQBs.find((qb) => qb.status === 'active') || null;
 
-  // Most recent completed (last in the completed list by month)
+  // Most recent completed (highest display_order among completed)
   const completedQBs = allQBs
     .filter((qb) => qb.status === 'completed')
-    .sort((a, b) => b.month.localeCompare(a.month)); // Descending - most recent first
+    .sort((a, b) => {
+      const orderA = (a as any).display_order ?? 999;
+      const orderB = (b as any).display_order ?? 999;
+      return orderB - orderA; // Descending - highest order (most recent) first
+    });
   const lastCompletedQB = completedQBs[0] || null;
 
-  // First upcoming (earliest by month)
+  // First upcoming (lowest display_order among upcoming)
   const upcomingQBs = allQBs
     .filter((qb) => qb.status === 'upcoming')
-    .sort((a, b) => a.month.localeCompare(b.month)); // Ascending - earliest first
+    .sort((a, b) => {
+      const orderA = (a as any).display_order ?? 999;
+      const orderB = (b as any).display_order ?? 999;
+      return orderA - orderB; // Ascending - lowest order first
+    });
   const nextUpcomingQB = upcomingQBs[0] || null;
 
   // Fetch highlights for completed and active QBs
