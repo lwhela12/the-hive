@@ -91,12 +91,13 @@ export default function ProfileScreen() {
     if (actionItemsData) setActionItems(actionItemsData);
 
     // Fetch user insights (personality notes)
+    // Use maybeSingle() instead of single() to gracefully handle cases where no record exists yet
     const { data: insightsData } = await supabase
       .from('user_insights')
       .select('*')
       .eq('user_id', profile.id)
       .eq('community_id', communityId)
-      .single();
+      .maybeSingle();
     setUserInsights(insightsData);
   }, [profile?.id, communityId]);
 
