@@ -215,11 +215,20 @@ export default function JoinScreen() {
 
       if (profileError) throw profileError;
 
-      // Mark invite as accepted
-      await supabase
+      // Mark invite as accepted (try update first, then delete if that fails)
+      const { error: inviteError } = await supabase
         .from('community_invites')
         .update({ accepted_at: new Date().toISOString() })
         .eq('id', invite.id);
+
+      if (inviteError) {
+        console.error('Failed to mark invite as accepted:', inviteError);
+        // Try deleting the invite instead
+        await supabase
+          .from('community_invites')
+          .delete()
+          .eq('id', invite.id);
+      }
 
       // Create the welcome conversation with initial greeting
       const { data: welcomeConv } = await supabase
