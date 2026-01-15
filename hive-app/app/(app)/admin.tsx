@@ -48,6 +48,8 @@ export default function AdminScreen() {
   const [qbMonth, setQbMonth] = useState('');
   const [qbTitle, setQbTitle] = useState('');
   const [qbDescription, setQbDescription] = useState('');
+  const [qbStatus, setQbStatus] = useState<'upcoming' | 'active' | 'completed'>('upcoming');
+  const [editingQueenBee, setEditingQueenBee] = useState<QueenBee | null>(null);
 
   const [eventTitle, setEventTitle] = useState('');
   const [eventDate, setEventDate] = useState('');
@@ -128,19 +130,59 @@ export default function AdminScreen() {
       month: qbMonth,
       project_title: qbTitle,
       project_description: qbDescription,
-      status: 'upcoming',
+      status: qbStatus,
     });
 
     if (error) {
       Alert.alert('Error', 'Failed to create Queen Bee');
     } else {
-      setShowQueenBeeModal(false);
-      setSelectedMember(null);
-      setQbMonth('');
-      setQbTitle('');
-      setQbDescription('');
+      closeQueenBeeModal();
       await fetchData();
     }
+  };
+
+  const updateQueenBee = async () => {
+    if (!editingQueenBee || !qbTitle) {
+      Alert.alert('Error', 'Please fill in required fields');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('queen_bees')
+      .update({
+        project_title: qbTitle,
+        project_description: qbDescription,
+        status: qbStatus,
+      })
+      .eq('id', editingQueenBee.id);
+
+    if (error) {
+      Alert.alert('Error', 'Failed to update Queen Bee');
+    } else {
+      closeQueenBeeModal();
+      await fetchData();
+    }
+  };
+
+  const openEditQueenBee = (qb: QueenBee) => {
+    const member = members.find(m => m.profiles.id === qb.user_id);
+    setEditingQueenBee(qb);
+    setSelectedMember(member?.profiles || null);
+    setQbMonth(qb.month);
+    setQbTitle(qb.project_title);
+    setQbDescription(qb.project_description || '');
+    setQbStatus(qb.status);
+    setShowQueenBeeModal(true);
+  };
+
+  const closeQueenBeeModal = () => {
+    setShowQueenBeeModal(false);
+    setEditingQueenBee(null);
+    setSelectedMember(null);
+    setQbMonth('');
+    setQbTitle('');
+    setQbDescription('');
+    setQbStatus('upcoming');
   };
 
   const createEvent = async () => {
@@ -292,17 +334,33 @@ export default function AdminScreen() {
           </View>
           <View className="bg-white rounded-xl shadow-sm overflow-hidden">
             {queenBees.map((qb) => (
-              <View
+              <Pressable
                 key={qb.id}
-                className="p-4 border-b border-gray-100 last:border-b-0"
+                onPress={() => openEditQueenBee(qb)}
+                className="p-4 border-b border-gray-100 last:border-b-0 active:bg-gray-50"
               >
-                <Text className="font-semibold text-gray-800">
-                  {qb.month}: {qb.project_title}
-                </Text>
-                <Text className="text-sm text-gray-500 mt-1 capitalize">
-                  Status: {qb.status}
-                </Text>
-              </View>
+                <View className="flex-row justify-between items-center">
+                  <View className="flex-1">
+                    <Text className="font-semibold text-gray-800">
+                      {qb.month}: {qb.project_title}
+                    </Text>
+                    <Text className="text-sm text-gray-500 mt-1">
+                      {members.find(m => m.profiles.id === qb.user_id)?.profiles.name || 'Unknown'}
+                    </Text>
+                  </View>
+                  <View className={`px-2 py-1 rounded ${
+                    qb.status === 'active' ? 'bg-green-100' :
+                    qb.status === 'completed' ? 'bg-gray-100' : 'bg-honey-100'
+                  }`}>
+                    <Text className={`text-xs capitalize ${
+                      qb.status === 'active' ? 'text-green-700' :
+                      qb.status === 'completed' ? 'text-gray-600' : 'text-honey-700'
+                    }`}>
+                      {qb.status}
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
             ))}
             {queenBees.length === 0 && (
               <View className="p-4">
@@ -477,32 +535,45 @@ export default function AdminScreen() {
         <View className="flex-1 bg-black/50 justify-end">
           <View className="bg-white rounded-t-3xl p-6">
             <Text className="text-xl font-bold text-gray-800 mb-4">
-              Set Queen Bee
+              {editingQueenBee ? 'Edit Queen Bee' : 'Set Queen Bee'}
             </Text>
 
-            <Text className="text-gray-600 mb-2">Select Member</Text>
-            <ScrollView horizontal className="mb-4">
-              {members.map((member) => (
-                <Pressable
-                  key={member.id}
-                  onPress={() => setSelectedMember(member.profiles)}
-                  className={`mr-2 p-2 rounded-lg ${
-                    selectedMember?.id === member.profiles.id
-                      ? 'bg-honey-100 border-2 border-honey-500'
-                      : 'bg-gray-100'
-                  }`}
-                >
-                  <Text className="font-medium">{member.profiles.name}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+            {!editingQueenBee && (
+              <>
+                <Text className="text-gray-600 mb-2">Select Member</Text>
+                <ScrollView horizontal className="mb-4">
+                  {members.map((member) => (
+                    <Pressable
+                      key={member.id}
+                      onPress={() => setSelectedMember(member.profiles)}
+                      className={`mr-2 p-2 rounded-lg ${
+                        selectedMember?.id === member.profiles.id
+                          ? 'bg-honey-100 border-2 border-honey-500'
+                          : 'bg-gray-100'
+                      }`}
+                    >
+                      <Text className="font-medium">{member.profiles.name}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
 
-            <TextInput
-              placeholder="Month (YYYY-MM)"
-              value={qbMonth}
-              onChangeText={setQbMonth}
-              className="border border-gray-300 rounded-lg p-3 mb-3"
-            />
+                <TextInput
+                  placeholder="Month (YYYY-MM)"
+                  value={qbMonth}
+                  onChangeText={setQbMonth}
+                  className="border border-gray-300 rounded-lg p-3 mb-3"
+                />
+              </>
+            )}
+
+            {editingQueenBee && (
+              <View className="mb-3 p-3 bg-gray-50 rounded-lg">
+                <Text className="text-gray-600">
+                  {selectedMember?.name} • {qbMonth}
+                </Text>
+              </View>
+            )}
+
             <TextInput
               placeholder="Project Title"
               value={qbTitle}
@@ -515,22 +586,44 @@ export default function AdminScreen() {
               onChangeText={setQbDescription}
               multiline
               numberOfLines={3}
-              className="border border-gray-300 rounded-lg p-3 mb-4"
+              className="border border-gray-300 rounded-lg p-3 mb-3"
             />
+
+            <Text className="text-gray-600 mb-2">Status</Text>
+            <View className="flex-row mb-4">
+              {(['upcoming', 'active', 'completed'] as const).map((status) => (
+                <Pressable
+                  key={status}
+                  onPress={() => setQbStatus(status)}
+                  className={`px-4 py-2 rounded-lg mr-2 ${
+                    qbStatus === status
+                      ? status === 'active' ? 'bg-green-500' :
+                        status === 'completed' ? 'bg-gray-500' : 'bg-honey-500'
+                      : 'bg-gray-100'
+                  }`}
+                >
+                  <Text className={`capitalize ${
+                    qbStatus === status ? 'text-white' : 'text-gray-600'
+                  }`}>
+                    {status}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
 
             <View className="flex-row">
               <Pressable
-                onPress={() => setShowQueenBeeModal(false)}
+                onPress={closeQueenBeeModal}
                 className="flex-1 bg-gray-200 py-3 rounded-lg mr-2"
               >
                 <Text className="text-center font-semibold">Cancel</Text>
               </Pressable>
               <Pressable
-                onPress={createQueenBee}
+                onPress={editingQueenBee ? updateQueenBee : createQueenBee}
                 className="flex-1 bg-honey-500 py-3 rounded-lg"
               >
                 <Text className="text-center font-semibold text-white">
-                  Create
+                  {editingQueenBee ? 'Save' : 'Create'}
                 </Text>
               </Pressable>
             </View>

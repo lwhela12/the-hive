@@ -237,8 +237,14 @@ export function useRoomMessagesQuery(roomId: string) {
  */
 export async function prefetchRoomMessages(
   queryClient: ReturnType<typeof useQueryClient>,
-  roomId: string
+  roomId: string | undefined
 ) {
+  // Guard against undefined roomId to prevent API errors
+  if (!roomId) {
+    console.warn('prefetchRoomMessages called with undefined roomId, skipping');
+    return;
+  }
+
   await queryClient.prefetchInfiniteQuery({
     queryKey: roomMessagesKey(roomId),
     queryFn: () => fetchMessagesPage(roomId, undefined, MESSAGES_PER_PAGE),

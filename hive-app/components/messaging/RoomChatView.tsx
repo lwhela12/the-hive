@@ -133,6 +133,9 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
 
   // Subscribe to typing indicators and update last_read_at
   useEffect(() => {
+    // Guard against undefined room.id to prevent subscription errors
+    if (!room.id) return;
+
     const channel = supabase
       .channel(`room-typing:${room.id}`)
       .on(

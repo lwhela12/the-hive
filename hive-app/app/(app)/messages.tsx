@@ -31,12 +31,15 @@ export default function MessagesScreen() {
   // Prefetch messages for top 7 rooms when room list loads
   useEffect(() => {
     if (rooms.length > 0 && !hasPrefetchedRef.current) {
-      hasPrefetchedRef.current = true;
       // Prefetch messages for top 7 rooms (sorted by most recent activity)
-      const topRooms = rooms.slice(0, 7);
-      topRooms.forEach((room) => {
-        prefetchRoomMessages(queryClient, room.id);
-      });
+      // Only prefetch rooms that have valid IDs
+      const topRooms = rooms.slice(0, 7).filter((room) => room.id);
+      if (topRooms.length > 0) {
+        hasPrefetchedRef.current = true;
+        topRooms.forEach((room) => {
+          prefetchRoomMessages(queryClient, room.id);
+        });
+      }
     }
   }, [rooms, queryClient]);
 

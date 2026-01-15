@@ -40,13 +40,24 @@ export default function JoinScreen() {
   }, [session, authLoading, userEmail]);
 
   const checkForInvite = async () => {
-    if (!userEmail) return;
+    if (!userEmail || !profile) return;
 
     setLoading(true);
     try {
-      // Check for pending invite - use service role via edge function or direct query
-      // Since RLS blocks this, we need a different approach
-      // For now, let's query without RLS by checking the token-based flow
+      // GENESIS CHECK: Is this the very first user?
+      // Check if ANY community memberships exist in the system
+      const { count: membershipCount } = await supabase
+        .from('community_memberships')
+        .select('*', { count: 'exact', head: true });
+
+      if (membershipCount === 0) {
+        // GENESIS USER - First ever user becomes admin
+        console.log('Genesis user detected - bootstrapping community');
+        await bootstrapGenesisCommunity();
+        return;
+      }
+
+      // Not genesis - proceed with normal invite/waitlist flow
       const { data: invites, error } = await supabase
         .from('community_invites')
         .select('*, community:communities(*), inviter:profiles!community_invites_invited_by_fkey(*)')
@@ -78,6 +89,94 @@ export default function JoinScreen() {
       console.error('Error checking invite:', err);
       setShowWaitlist(true);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const bootstrapGenesisCommunity = async () => {
+    if (!profile) return;
+
+    try {
+      // Check if default community exists, otherwise create one
+      let communityId: string;
+
+      const { data: existingCommunity } = await supabase
+        .from('communities')
+        .select('id')
+        .eq('slug', 'default')
+        .single();
+
+      if (existingCommunity) {
+        communityId = existingCommunity.id;
+      } else {
+        // Create the genesis community
+        const { data: newCommunity, error: communityError } = await supabase
+          .from('communities')
+          .insert({
+            name: 'The Hive',
+            slug: 'default',
+            created_by: profile.id,
+          })
+          .select()
+          .single();
+
+        if (communityError) throw communityError;
+        communityId = (newCommunity as any).id;
+      }
+
+      // Add genesis user as admin
+      const { error: membershipError } = await supabase
+        .from('community_memberships')
+        .insert({
+          community_id: communityId,
+          user_id: profile.id,
+          role: 'admin',
+        });
+
+      if (membershipError) throw membershipError;
+
+      // Update profile with current community
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ current_community_id: communityId })
+        .eq('id', profile.id);
+
+      if (profileError) throw profileError;
+
+      // Create welcome conversation
+      const { data: welcomeConv } = await supabase
+        .from('conversations')
+        .insert({
+          user_id: profile.id,
+          community_id: communityId,
+          title: 'Welcome to the HIVE!',
+          mode: 'default',
+          is_active: true,
+        } as any)
+        .select()
+        .single();
+
+      if (welcomeConv) {
+        const welcomeMessage = `Welcome to the HIVE, founding member! 🐝\n\nYou're the first one here, which means you're the admin. You can invite others from the Admin panel.\n\nFeel free to look around! You can see what's going on with the group on the HIVE page, add topics for discussion on the Board, chat with other members in the messages, or fill out your profile.\n\nWhen you're ready, I'd love to chat with you about your goals and the skills you bring to the group!`;
+
+        await supabase.from('chat_messages').insert({
+          user_id: profile.id,
+          community_id: communityId,
+          conversation_id: (welcomeConv as any).id,
+          role: 'assistant',
+          content: welcomeMessage,
+        } as any);
+      }
+
+      // Refresh profile to get new community context
+      await refreshProfile();
+
+      // Navigate to main app
+      router.replace('/(app)');
+    } catch (err) {
+      console.error('Error bootstrapping genesis community:', err);
+      Alert.alert('Error', 'Failed to set up community. Please try again.');
+      setShowWaitlist(true);
       setLoading(false);
     }
   };
