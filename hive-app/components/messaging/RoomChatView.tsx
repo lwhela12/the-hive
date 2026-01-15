@@ -17,9 +17,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useRoomMessagesQuery } from '../../lib/hooks/useRoomMessagesQuery';
+import { queryKeys } from '../../lib/queryClient';
 import { RoomMessageItem } from './RoomMessageItem';
 import { RoomTypingIndicator } from './RoomTypingIndicator';
 import { SelectedImage, pickMultipleImages } from '../../lib/imagePicker';
@@ -33,6 +35,7 @@ interface RoomChatViewProps {
 
 export function RoomChatView({ room, onBack }: RoomChatViewProps) {
   const { profile, communityId } = useAuth();
+  const queryClient = useQueryClient();
   const {
     messages,
     loading: messagesLoading,
@@ -97,6 +100,11 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
 
       setCurrentRoomName(newName ?? undefined);
       setShowRenameModal(false);
+
+      // Invalidate chat rooms cache so the list updates when navigating back
+      if (communityId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.chatRooms(communityId) });
+      }
     } catch (error) {
       console.error('Error renaming group:', error);
       Alert.alert('Error', 'Failed to rename group.');
