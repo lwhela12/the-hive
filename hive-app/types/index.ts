@@ -10,7 +10,7 @@ export type BoardCategoryType =
   | 'custom';
 
 // Chat types
-export type ChatRoomType = 'community' | 'dm';
+export type ChatRoomType = 'community' | 'dm' | 'group_dm';
 export type WishStatus = 'private' | 'public' | 'fulfilled' | 'replaced';
 export type QueenBeeStatus = 'upcoming' | 'active' | 'completed';
 

@@ -13,7 +13,7 @@ export type RoomWithData = ChatRoom & {
 interface RpcChatRoomRow {
   room_id: string;
   room_community_id: string;
-  room_type: 'community' | 'dm';
+  room_type: 'community' | 'dm' | 'group_dm';
   room_name: string | null;
   room_description: string | null;
   room_created_by: string | null;
@@ -81,7 +81,7 @@ async function fetchChatRoomsFallback(
     ...(communityRooms || []),
     ...((memberRooms || [])
       .map((m) => m.room as ChatRoom)
-      .filter((r) => r && r.room_type === 'dm')),
+      .filter((r) => r && (r.room_type === 'dm' || r.room_type === 'group_dm'))),
   ];
 
   const uniqueRooms = Array.from(
@@ -91,9 +91,9 @@ async function fetchChatRoomsFallback(
   // Fetch additional data for each room (original N+1 pattern)
   const roomsWithData: RoomWithData[] = await Promise.all(
     uniqueRooms.map(async (room) => {
-      // Get members for DM rooms
+      // Get members for DM and group_dm rooms
       let members: Array<ChatRoomMember & { user?: Profile }> = [];
-      if (room.room_type === 'dm') {
+      if (room.room_type === 'dm' || room.room_type === 'group_dm') {
         const { data: memberData } = await supabase
           .from('chat_room_members')
           .select('*, user:profiles(*)')

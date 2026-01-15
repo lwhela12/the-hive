@@ -19,7 +19,7 @@ export default function MessagesScreen() {
   const [showMemberPicker, setShowMemberPicker] = useState(false);
 
   // Use the optimized chat rooms hook (React Query with caching)
-  const { rooms, loading, refetch, getOrCreateDMRoom, markRoomAsRead } = useChatRooms(
+  const { rooms, loading, refetch, getOrCreateDMRoom, getOrCreateGroupDMRoom, markRoomAsRead } = useChatRooms(
     communityId ?? undefined,
     profile?.id
   );
@@ -41,6 +41,20 @@ export default function MessagesScreen() {
     } catch (error) {
       console.error('Error creating DM:', error);
       Alert.alert('Error', 'Failed to start conversation.');
+    }
+  };
+
+  const handleStartGroupDM = async (members: Profile[]) => {
+    if (!profile || !communityId) return;
+
+    try {
+      const roomWithData = await getOrCreateGroupDMRoom(members.map((m) => m.id));
+      if (roomWithData) {
+        setSelectedRoom(roomWithData);
+      }
+    } catch (error) {
+      console.error('Error creating group DM:', error);
+      Alert.alert('Error', 'Failed to start group conversation.');
     }
   };
 
@@ -133,6 +147,8 @@ export default function MessagesScreen() {
         visible={showMemberPicker}
         onClose={() => setShowMemberPicker(false)}
         onSelect={handleStartDM}
+        onSelectMultiple={handleStartGroupDM}
+        multiSelect={true}
       />
     </SafeAreaView>
   );

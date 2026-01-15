@@ -44,13 +44,37 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
   const isInitialLoadRef = useRef(true);
   const previousMessageCountRef = useRef(0);
 
+  // Get other members (for DMs and group DMs)
+  const otherMembers = room.members
+    ?.filter((m) => m.user?.id !== profile?.id)
+    .map((m) => m.user)
+    .filter((u): u is Profile => !!u) || [];
+
   // Get room display name
   const getRoomName = () => {
     if (room.room_type === 'community') {
       return room.name || 'General';
     }
+    if (room.room_type === 'group_dm') {
+      // Use custom name if set, otherwise show member names
+      if (room.name) return room.name;
+      if (otherMembers.length === 0) return 'Group';
+      return otherMembers.map((m) => m.name.split(' ')[0]).join(', ');
+    }
     const otherMember = room.members?.find((m) => m.user?.id !== profile?.id);
     return otherMember?.user?.name || 'Direct Message';
+  };
+
+  // Get subtitle for header
+  const getHeaderSubtitle = () => {
+    if (room.room_type === 'community') {
+      return 'Community chat';
+    }
+    if (room.room_type === 'group_dm') {
+      const totalMembers = (room.members?.length || 0);
+      return `${totalMembers} members`;
+    }
+    return null;
   };
 
   const fetchMessages = useCallback(async () => {
@@ -247,21 +271,23 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
 
       if (error) throw error;
 
-      // Send push notification for DM messages
-      if (room.room_type === 'dm') {
-        const otherMember = room.members?.find((m) => m.user?.id !== profile.id);
-        if (otherMember?.user?.id) {
-          // Fire and forget - don't block on notification
+      // Send push notification for DM and group DM messages
+      if (room.room_type === 'dm' || room.room_type === 'group_dm') {
+        const recipientIds = otherMembers.map((m) => m.id).filter((id) => id !== profile.id);
+        const messagePreview = messageContent || (attachments ? 'Sent an image' : '');
+
+        // Fire and forget - don't block on notifications
+        recipientIds.forEach((recipientId) => {
           supabase.functions.invoke('notify-dm', {
             body: {
               room_id: room.id,
               sender_id: profile.id,
-              recipient_id: otherMember.user.id,
-              message_preview: messageContent || (attachments ? 'Sent an image' : ''),
+              recipient_id: recipientId,
+              message_preview: messagePreview,
               community_id: communityId,
             },
           }).catch((err) => console.log('Notification error (non-blocking):', err));
-        }
+        });
       }
 
       setNewMessage('');
@@ -369,12 +395,12 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
             <Text className="text-2xl">←</Text>
           </Pressable>
           <View className="flex-1">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg" numberOfLines={1}>
               {getRoomName()}
             </Text>
-            {room.room_type === 'community' && (
+            {getHeaderSubtitle() && (
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm">
-                Community chat
+                {getHeaderSubtitle()}
               </Text>
             )}
           </View>
