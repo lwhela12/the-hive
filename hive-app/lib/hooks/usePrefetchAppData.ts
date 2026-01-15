@@ -75,7 +75,19 @@ export function usePrefetchAppData(
           console.warn('Prefetch chat rooms RPC error:', error.message);
           return [];
         }
-        return data || [];
+        // Transform to match useChatRoomsQuery structure (room_id -> id, etc.)
+        return (data || []).map((row: any) => ({
+          id: row.room_id,
+          community_id: row.room_community_id,
+          room_type: row.room_type,
+          name: row.room_name ?? undefined,
+          description: row.room_description ?? undefined,
+          created_by: row.room_created_by ?? undefined,
+          created_at: row.room_created_at,
+          members: row.members || [],
+          last_message: row.last_message ?? undefined,
+          unread_count: Number(row.unread_count),
+        }));
       },
       staleTime: 2 * 60 * 1000,
     });
