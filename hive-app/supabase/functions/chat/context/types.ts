@@ -101,6 +101,17 @@ export interface CommunitySkillData {
   description: string;
 }
 
+// Board post index for quick reference
+export interface BoardPostIndexItem {
+  id: string;
+  title: string;
+  category: string;
+  author: string;
+  reply_count: number;
+  is_pinned: boolean;
+  created_at: string;
+}
+
 // Cached summary record
 export interface CachedSummary {
   id: string;
@@ -117,6 +128,7 @@ export interface TokenBudget {
   queenBee: number;
   publicWishesAndSkills: number;
   eventsAndHoneyPot: number;
+  boardPostIndex: number;
   boardSummary: number;
   messagesSummary: number;
   meetingsSummary: number;
@@ -131,6 +143,7 @@ export const DEFAULT_TOKEN_BUDGET: TokenBudget = {
   queenBee: 150,
   publicWishesAndSkills: 400,
   eventsAndHoneyPot: 150,
+  boardPostIndex: 300,
   boardSummary: 200,
   messagesSummary: 150,
   meetingsSummary: 150,

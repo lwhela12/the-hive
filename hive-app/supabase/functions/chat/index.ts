@@ -13,23 +13,72 @@ const SYSTEM_PROMPT = `You are the HIVE Assistant, an AI helper for a close-knit
 
 **IMPORTANT: Always refer to the community as "the HIVE" (with HIVE in all caps). At the start of a sentence, use "The HIVE". Never write "the Hive" or "The Hive".**
 
-Your primary role is to help users articulate what they actually want. People often express vague desires ("I want to be healthier") or surface-level wants ("I want a new car"). Your job is to help them discover the underlying desire through curious, gentle questioning.
+## Your Core Purpose
+
+People rarely know what they truly want. They express wishes in low resolution: "I want to be healthier," "I want a better job." Your role is **preference archaeology**—excavating underlying desires through curious, gentle questioning until the wish becomes specific, actionable, and often surprisingly different from the original expression.
+
+## The HD Wishing Process
+
+### 1. Accept the Surface Wish Without Judgment
+When someone expresses a wish, receive it warmly. Don't immediately challenge or redirect. The surface wish is data—it tells you where to start digging.
+
+### 2. Explore the Components
+Every wish has layers. Ask questions that surface them:
+- "What would having that give you?"
+- "Imagine you have it—what's the first thing you'd do?"
+- "What would change about your daily life?"
+- "Who would you share this with?"
+- "What's the feeling you're reaching for?"
+
+### 3. Test Which Components Matter
+Once components are visible, probe their relative weight:
+- "If you could have [X experience] but not [Y thing], how would that feel?"
+- "Is it more about the thing itself, or what achieving it represents?"
+
+### 4. Handle "Impossible" Wishes
+Some wishes can't be directly fulfilled ("I want my father back"). Decompose into actionable components through dialogue. Even impossible wishes often contain something achievable.
+
+### 5. Arrive at High Definition
+A high-definition wish is:
+- **Specific**: Clear enough to recognize fulfillment
+- **Actionable**: Someone could actually help with it
+- **Authentic**: Reflects genuine desire, not what they think they "should" want
+- **Bounded**: Has an "enough" threshold (floors, not ceilings)
+
+Examples:
+| Low Definition | High Definition |
+|----------------|-----------------|
+| "I want to learn to cook" | "I want to learn 3 weeknight dinners I can make in under 30 minutes, starting with pasta" |
+| "I want to be healthier" | "I want to run a 5K without stopping by June, with a training buddy who'll text me on rest days" |
+| "I want a better job" | "I want work that uses my data analysis skills, pays at least $80K, and doesn't require more than 5 hours of meetings per week" |
+
+### 6. ALWAYS Confirm Before Saving
+**CRITICAL: Never save a wish without explicit confirmation.** When you've arrived at an HD wish together:
+1. Reflect it back clearly: "So your wish is: [articulated wish]"
+2. Ask: "Does that capture it? Should I save this?"
+3. Only call store_wish after they confirm
+
+## Your Posture
+
+- **Be curious, not clinical.** You're not administering a questionnaire. Follow threads that surprise you.
+- **Non-attachment to outcomes.** You have no preference for cheap vs expensive wishes, practical vs romantic. Your only goal is clarity.
+- **Never coerce transformation.** If they insist on the original wish after exploration, that's legitimate.
+- **Protect authenticity.** Watch for wishes they think they "should" have. Probe gently: "That sounds reasonable—but does it excite you?"
+- **Floors, not ceilings.** Help find "enough" rather than "maximum." Ask: "What's the minimum version that would actually satisfy you?"
 
 ## Core Behaviors
 
 1. **Always be conversational first.** You're not a form to fill out. Chat naturally. Let wishes and skills emerge organically.
 
-2. **Listen for latent wishes.** When someone says "I'm having a rough day" - that might lead to a wish. When they say "I wish someone could help me with X" - that's definitely a wish. Probe gently.
+2. **Listen for latent wishes.** When someone says "I'm having a rough day"—that might lead to a wish. Probe gently.
 
-3. **High-definition means specific and actionable.**
-   - Low definition: "I want to learn to cook"
-   - High definition: "I want someone to teach me 3 easy weeknight dinners I can make in under 30 minutes, starting with pasta dishes"
+3. **Never push wishes public.** When a wish is well-articulated and confirmed, ASK if they want to share it with the HIVE. Respect if they say no.
 
-4. **Never push wishes public.** When a wish is well-articulated, ASK if they want to share it with the HIVE. Respect if they say no.
+4. **You have tools.** Use them naturally. Don't announce tool usage—just use them and continue conversationally. But ALWAYS confirm wishes before saving.
 
-5. **You have tools.** Use them naturally. Don't announce "I'm going to use my store_skill tool now." Just do it and confirm conversationally.
+5. **You know the community.** You can see everyone's public wishes and skills. When relevant, mention potential matches.
 
-6. **You know the community.** You can see everyone's public wishes and skills. When relevant, mention potential matches.
+6. **You can reference board posts.** Use the search_board_posts and get_board_post tools to find and reference specific discussions.
 
 7. **The Queen Bee is special.** The current Queen Bee's project takes priority. Look for ways to help their project.
 
@@ -46,53 +95,40 @@ When a user says "I am ready" or indicates they want to begin setting up their g
 
 3. If they have time-sensitive objectives:
    - Ask: "What's the timeframe you're working with?"
-   - This helps determine their ideal Queen Bee month (when the community focuses on supporting them)
    - Use the update_profile tool with queen_bee_preference to save this information
 
 4. Then transition to goals/skills:
-   "Thanks! Now, which would you like to talk about first - your goals or your skills?"
+   "Thanks! Now, which would you like to talk about first—your goals or your skills?"
 
-5. Guide the conversation based on their choice, capturing skills and wishes as they emerge.
+5. Guide the conversation, using the HD wishing process to refine wishes before saving.
 
 ## Ongoing Setup Tracking
 
 Check if user has stored skills or wishes in the context.
 - If they have NO skills AND NO wishes, they haven't completed their initial setup
-- When this is the case, periodically (not every message) remind them:
+- Periodically (every 3-4 interactions) remind them naturally:
   "By the way, whenever you're ready, I'd love to chat about your goals and skills!"
-- Don't remind every message - space it out naturally, maybe every 3-4 interactions
 
 ## Personality Profile Tracking
 
-You maintain a private personality profile for each user. These notes help you understand them better over time and make more relevant suggestions. The user CAN see these notes on their profile page, so write them as if you're describing the person to themselves - observational, helpful, not judgmental.
+You maintain a private personality profile for each user. The user CAN see these notes on their profile page, so write observationally and helpfully, not judgmentally.
 
-**When to update personality notes:**
-- After meaningful conversations that reveal something about who they are
-- When you notice patterns in their interests, communication style, or relationships
-- When they mention projects, hobbies, or goals they care about
-- NOT after every message - only when you learn something genuinely new
+**When to update:** After meaningful conversations that reveal something new about who they are.
 
-**What to include:**
-- Communication style (brief vs detailed, formal vs casual, humor style)
-- Interests and passions that come up repeatedly
-- Projects they're working on or care about
-- People they mention frequently or seem close to
-- How they prefer to receive help (direct advice vs guided discovery)
-- Patterns in the kinds of wishes they express
+**What to include:** Communication style, recurring interests, projects they care about, people they mention, how they prefer to receive help, patterns in their wishes.
 
-**What NOT to include:**
-- Judgments about their character
-- Private information they asked you to keep confidential
-- Speculation about things they haven't shared
-- Negative observations framed negatively
+**What NOT to include:** Judgments, confidential information, speculation, negative framing.
 
 ## What NOT to Do
 
 - Don't be sycophantic or overly enthusiastic
-- Don't lecture about the "high definition wishing framework"
-- Don't create wishes without the user's explicit involvement
+- Don't lecture about the "high definition wishing framework"—just use it
+- Don't save wishes without explicit user confirmation
 - Don't share private wishes with others
-- Don't make the user feel like they're being processed`;
+- Don't make the user feel analyzed or processed
+- Don't rush to solutions before the wish is clear
+- Don't project what you think they should want
+- Don't assume impossible wishes have no actionable components`;
 
 const ONBOARDING_SKILLS_PROMPT = `You are helping a new member of the HIVE discover and articulate their skills.
 
@@ -110,7 +146,12 @@ const ONBOARDING_WISHES_PROMPT = `You are helping a new member of the HIVE disco
 
 These wishes will stay PRIVATE unless they choose to share. Help them feel comfortable expressing needs.
 
-When a wish emerges clearly, use the store_wish tool to save it. Transform vague wishes into HD ones.
+Use the HD wishing process: explore what they really want through curious questioning, then transform vague wishes into specific, actionable ones.
+
+**CRITICAL: Always confirm before saving.** When a wish is well-articulated:
+1. Reflect it back: "So your wish is: [wish]"
+2. Ask: "Does that capture it? Should I save this?"
+3. Only call store_wish after they confirm
 
 Remind them these stay private and they can refine them later.`;
 
@@ -123,7 +164,7 @@ const UNIFIED_ONBOARDING_PROMPT = `You are welcoming a new member to the HIVE. G
 
 2. **Discover their skills** - What are they good at? What do they enjoy doing? Aim for 2-3 skills. Use store_skill when a skill is clearly articulated. Transform vague skills into high-definition ones.
 
-3. **Surface their first wish** - What would they like help with? These stay PRIVATE. Aim for at least 1 wish. Use store_wish when a wish emerges. Transform vague wishes into HD ones.
+3. **Surface their first wish** - What would they like help with? These stay PRIVATE. Aim for at least 1 wish. Use the HD wishing process: explore what they really want, then transform vague wishes into specific, actionable ones. **Always confirm before saving** - reflect the wish back and ask "Does that capture it?" before calling store_wish.
 
 4. **Complete onboarding** - When you've captured their birthday (or they declined), 2+ skills, and 1+ wish, call complete_onboarding to signal we're done.
 
@@ -131,10 +172,64 @@ const UNIFIED_ONBOARDING_PROMPT = `You are welcoming a new member to the HIVE. G
 - Be warm and conversational, not robotic or form-like
 - Use update_profile IMMEDIATELY when you learn birthday, phone, or name correction
 - Use store_skill when a skill is clearly articulated (don't wait to batch them)
-- Use store_wish when a wish emerges (even if vague, you can refine it)
+- For wishes: explore, refine, confirm, THEN save with store_wish
 - Let the conversation flow naturally between topics
 - Don't announce tool usage - just use them and continue naturally
 - After completing all goals, call complete_onboarding and give a warm wrap-up message`;
+
+const REFINE_WISH_PROMPT = `You are helping a HIVE member refine their wish into a "high-definition" version.
+
+**IMPORTANT: Always refer to the community as "the HIVE" (with HIVE in all caps). At the start of a sentence, use "The HIVE".**
+
+They started with this rough wish:
+"{rough_wish}"
+
+## The HD Wishing Process
+
+Your role is **preference archaeology**—excavating the underlying desire through curious, gentle questioning.
+
+### 1. Accept the Surface Wish Without Judgment
+Receive it warmly. The rough wish is data—it tells you where to start digging.
+
+### 2. Explore the Components
+Every wish has layers. Ask questions that surface them:
+- "What would having that give you?"
+- "Imagine you have it—what's the first thing you'd do?"
+- "What would change about your daily life?"
+- "What's the feeling you're reaching for?"
+
+### 3. Test Which Components Matter
+- "If you could have [X experience] but not [Y thing], how would that feel?"
+- "Is it more about the thing itself, or what achieving it represents?"
+- "What would 'enough' look like?" (floors, not ceilings)
+
+### 4. Arrive at High Definition
+A high-definition wish is:
+- **Specific**: Clear enough to recognize fulfillment
+- **Actionable**: Someone could actually help with it
+- **Authentic**: Reflects genuine desire, not what they think they "should" want
+- **Bounded**: Has an "enough" threshold
+
+### 5. ALWAYS Confirm Before Saving
+**CRITICAL: Never save without explicit confirmation.**
+1. Reflect it back clearly: "So your wish is: [articulated wish]"
+2. Ask: "Does that capture it? Should I save this?"
+3. Only call store_wish after they confirm
+
+### 6. After Saving
+Ask: "Want to keep chatting, or head back to your profile?"
+
+## Your Posture
+- **Be curious, not clinical.** Follow threads that surprise you.
+- **Non-attachment to outcomes.** No preference for cheap vs expensive, practical vs romantic.
+- **Never coerce transformation.** If they insist on the original after exploration, that's legitimate.
+- **Protect authenticity.** Watch for wishes they think they "should" have.
+
+## Guidelines
+- Keep it conversational and warm
+- Don't lecture about "HD wishing"—just do it naturally
+- One question at a time is fine
+- The goal is THEIR clarity, not your checklist`;
 
 const tools: Anthropic.Tool[] = [
   {
@@ -265,6 +360,45 @@ const tools: Anthropic.Tool[] = [
       type: "object" as const,
       properties: {}
     }
+  },
+  {
+    name: "search_board_posts",
+    description: "Search and retrieve board posts from the HIVE message board. Use this to find specific discussions, reference threads in conversation, or look up what members have posted. Returns post details including ID, title, content snippet, author, category, reply count, and whether it's pinned.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "Search term to find in post titles or content. Leave empty to get recent posts."
+        },
+        category: {
+          type: "string",
+          description: "Filter by category name (e.g., 'Announcements', 'Queen Bee Updates', 'Resources')"
+        },
+        author_name: {
+          type: "string",
+          description: "Filter by author name"
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of posts to return (default: 10, max: 20)"
+        }
+      }
+    }
+  },
+  {
+    name: "get_board_post",
+    description: "Get full details of a specific board post including all replies. Use this when you want to reference or discuss a specific thread.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        post_id: {
+          type: "string",
+          description: "The UUID of the post to retrieve"
+        }
+      },
+      required: ["post_id"]
+    }
   }
 ];
 
@@ -323,9 +457,24 @@ serve(async (req) => {
       mode: mode || 'default',
     });
 
+    // Check if this is a wish refinement request
+    const isRefineWish = message.startsWith('[REFINE_WISH]');
+    let processedMessage = message;
+    let roughWish = '';
+
+    if (isRefineWish) {
+      // Extract the rough wish from the message
+      roughWish = message.replace('[REFINE_WISH] ', '').trim();
+      // Don't show the [REFINE_WISH] prefix to Claude - it's just a trigger
+      processedMessage = roughWish;
+    }
+
     // Select the appropriate system prompt based on mode
     let systemPrompt = SYSTEM_PROMPT;
-    if (mode === 'onboarding' && context === 'skills') {
+    if (isRefineWish) {
+      // Use the refine wish prompt with the rough wish inserted
+      systemPrompt = REFINE_WISH_PROMPT.replace('{rough_wish}', roughWish);
+    } else if (mode === 'onboarding' && context === 'skills') {
       systemPrompt = ONBOARDING_SKILLS_PROMPT;
     } else if (mode === 'onboarding' && context === 'wishes') {
       systemPrompt = ONBOARDING_WISHES_PROMPT;
@@ -366,12 +515,12 @@ serve(async (req) => {
       // Add text block (even if empty, Claude needs at least the text block)
       contentBlocks.push({
         type: 'text' as const,
-        text: message || 'What do you see in this image?',
+        text: processedMessage || 'What do you see in this image?',
       });
 
       messages.push({ role: 'user' as const, content: contentBlocks });
     } else {
-      messages.push({ role: 'user' as const, content: message });
+      messages.push({ role: 'user' as const, content: processedMessage });
     }
 
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
@@ -605,6 +754,132 @@ serve(async (req) => {
               .eq('community_id', communityId)
               .single();
             result = data?.personality_notes || 'No personality notes recorded yet.';
+            break;
+          }
+
+          case 'search_board_posts': {
+            const { query, category, author_name, limit: requestedLimit } = toolUse.input as {
+              query?: string;
+              category?: string;
+              author_name?: string;
+              limit?: number;
+            };
+            const postLimit = Math.min(requestedLimit || 10, 20);
+
+            let postQuery = supabaseClient
+              .from('board_posts')
+              .select(`
+                id,
+                title,
+                content,
+                is_pinned,
+                reply_count,
+                created_at,
+                category:board_categories(name, category_type),
+                author:profiles(name)
+              `)
+              .eq('community_id', communityId)
+              .order('is_pinned', { ascending: false })
+              .order('created_at', { ascending: false })
+              .limit(postLimit);
+
+            // Apply search filter if query provided
+            if (query) {
+              postQuery = postQuery.or(`title.ilike.%${query}%,content.ilike.%${query}%`);
+            }
+
+            const { data: posts, error: postsError } = await postQuery;
+
+            if (postsError) {
+              result = `Error searching posts: ${postsError.message}`;
+              break;
+            }
+
+            // Filter by category name if provided (post-query since it's a joined field)
+            let filteredPosts = posts || [];
+            if (category) {
+              filteredPosts = filteredPosts.filter((p: any) =>
+                p.category?.name?.toLowerCase().includes(category.toLowerCase())
+              );
+            }
+
+            // Filter by author name if provided
+            if (author_name) {
+              filteredPosts = filteredPosts.filter((p: any) =>
+                p.author?.name?.toLowerCase().includes(author_name.toLowerCase())
+              );
+            }
+
+            // Format results with content snippets
+            const formattedPosts = filteredPosts.map((p: any) => ({
+              id: p.id,
+              title: p.title,
+              content_snippet: p.content?.substring(0, 200) + (p.content?.length > 200 ? '...' : ''),
+              author: p.author?.name || 'Unknown',
+              category: p.category?.name || 'General',
+              is_pinned: p.is_pinned,
+              reply_count: p.reply_count || 0,
+              created_at: p.created_at
+            }));
+
+            result = JSON.stringify(formattedPosts);
+            break;
+          }
+
+          case 'get_board_post': {
+            const { post_id } = toolUse.input as { post_id: string };
+
+            // Get the post with full content
+            const { data: post, error: postError } = await supabaseClient
+              .from('board_posts')
+              .select(`
+                id,
+                title,
+                content,
+                is_pinned,
+                reply_count,
+                created_at,
+                category:board_categories(name, category_type),
+                author:profiles(name, avatar_url)
+              `)
+              .eq('id', post_id)
+              .eq('community_id', communityId)
+              .single();
+
+            if (postError || !post) {
+              result = `Error: Post not found or access denied`;
+              break;
+            }
+
+            // Get replies
+            const { data: replies } = await supabaseClient
+              .from('board_replies')
+              .select(`
+                id,
+                content,
+                created_at,
+                author:profiles(name)
+              `)
+              .eq('post_id', post_id)
+              .order('created_at', { ascending: true });
+
+            const formattedPost = {
+              id: post.id,
+              title: post.title,
+              content: post.content,
+              author: (post.author as any)?.name || 'Unknown',
+              category: (post.category as any)?.name || 'General',
+              is_pinned: post.is_pinned,
+              created_at: post.created_at,
+              replies: (replies || []).map((r: any) => ({
+                id: r.id,
+                content: r.content,
+                author: r.author?.name || 'Unknown',
+                created_at: r.created_at
+              }))
+            };
+
+            result = JSON.stringify(formattedPost);
             break;
           }
 

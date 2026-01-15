@@ -11,6 +11,7 @@ import type {
   CommunityContextData,
   CachedSummary,
   ContextSummaryType,
+  BoardPostIndexItem,
 } from './types.ts';
 import {
   summarizeConversation,
@@ -68,18 +69,24 @@ export async function buildContext(params: BuildContextParams): Promise<ContextR
   );
   metadata.conversationMessageCount = messageCount;
 
-  // 4. Get cached summaries (hourly cache for board, messages, meetings)
-  // Only fetch these for default mode (not onboarding)
+  // 4. Get cached summaries and board post index (only for default mode)
   let boardSummary = '';
   let messagesSummary = '';
   let meetingsSummary = '';
+  let boardPostIndex: BoardPostIndexItem[] = [];
 
   if (mode === 'default') {
-    [boardSummary, messagesSummary, meetingsSummary] = await Promise.all([
+    // Fetch summaries and board post index in parallel
+    const [boardSummaryResult, messagesSummaryResult, meetingsSummaryResult, boardIndexResult] = await Promise.all([
       getOrGenerateSummary(supabase, communityId, userId, 'board_activity', metadata),
       getOrGenerateSummary(supabase, communityId, userId, 'room_messages', metadata),
       getOrGenerateSummary(supabase, communityId, userId, 'meetings', metadata),
+      fetchBoardPostIndex(supabase, communityId),
     ]);
+    boardSummary = boardSummaryResult;
+    messagesSummary = messagesSummaryResult;
+    meetingsSummary = meetingsSummaryResult;
+    boardPostIndex = boardIndexResult;
   }
 
   // 5. Assemble the final context string
@@ -90,6 +97,7 @@ export async function buildContext(params: BuildContextParams): Promise<ContextR
     userContext,
     communityContext,
     conversationSummary,
+    boardPostIndex,
     boardSummary,
     messagesSummary,
     meetingsSummary,
@@ -223,6 +231,50 @@ async function fetchCommunityContext(
       description: s.description,
     })),
   };
+}
+
+/**
+ * Fetch recent board posts as a structured index for quick reference
+ * Returns up to 15 recent posts with key metadata (no full content)
+ */
+async function fetchBoardPostIndex(
+  supabase: SupabaseClient,
+  communityId: string
+): Promise<BoardPostIndexItem[]> {
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 14); // 2 weeks of posts
+
+  const { data: posts, error } = await supabase
+    .from('board_posts')
+    .select(`
+      id,
+      title,
+      is_pinned,
+      reply_count,
+      created_at,
+      category:board_categories(name),
+      author:profiles(name)
+    `)
+    .eq('community_id', communityId)
+    .gte('created_at', sevenDaysAgo.toISOString())
+    .order('is_pinned', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(15);
+
+  if (error || !posts) {
+    console.error('[Context] Error fetching board post index:', error);
+    return [];
+  }
+
+  return posts.map((p: any) => ({
+    id: p.id,
+    title: p.title,
+    category: p.category?.name || 'General',
+    author: p.author?.name || 'Unknown',
+    reply_count: p.reply_count || 0,
+    is_pinned: p.is_pinned || false,
+    created_at: p.created_at,
+  }));
 }
 
 /**
@@ -451,6 +503,7 @@ function assembleContext(data: {
   userContext: UserContextData;
   communityContext: CommunityContextData;
   conversationSummary: string;
+  boardPostIndex: BoardPostIndexItem[];
   boardSummary: string;
   messagesSummary: string;
   meetingsSummary: string;
@@ -524,9 +577,25 @@ Honey Pot: $${data.communityContext.honeyPot.toFixed(2)}
 ### Upcoming Events (Next 7 Days)
 ${events}`);
 
+    // Board post index (structured data for reference)
+    if (data.boardPostIndex.length > 0) {
+      const postIndex = data.boardPostIndex.map((p) => ({
+        id: p.id,
+        title: p.title,
+        category: p.category,
+        author: p.author,
+        replies: p.reply_count,
+        pinned: p.is_pinned,
+      }));
+      sections.push(`## Board Posts Index (use get_board_post tool to see full content)
+\`\`\`json
+${JSON.stringify(postIndex, null, 2)}
+\`\`\``);
+    }
+
     // Cached summaries (only include if we have content)
     if (data.boardSummary) {
-      sections.push(`## Recent Board Activity
+      sections.push(`## Recent Board Activity Summary
 ${data.boardSummary}`);
     }
 

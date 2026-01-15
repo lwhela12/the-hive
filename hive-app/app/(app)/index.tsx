@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Pressable, Text, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import { ChatInterface } from '../../components/chat/ChatInterface';
 import { ConversationSidebar } from '../../components/chat/ConversationSidebar';
 import { useConversations } from '../../lib/hooks/useConversations';
 import type { Conversation } from '../../types';
 
 export default function ChatScreen() {
+  const { refineWish } = useLocalSearchParams<{ refineWish?: string }>();
+
   const {
     conversations,
     currentConversation,
@@ -120,6 +123,7 @@ export default function ChatScreen() {
           <ChatInterface
             conversationId={currentConversation?.id || null}
             onConversationCreated={handleConversationCreated}
+            refineWishContext={refineWish}
           />
         </View>
       </View>

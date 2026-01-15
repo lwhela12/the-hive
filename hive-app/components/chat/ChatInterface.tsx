@@ -22,6 +22,7 @@ interface ChatInterfaceProps {
   onOnboardingComplete?: () => void;
   onConversationCreated?: (conversation: Conversation) => void;
   skipLoadHistory?: boolean;
+  refineWishContext?: string; // Rough wish to refine with Clive
 }
 
 const SUPABASE_FUNCTIONS_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.functions.supabase.co');
@@ -71,6 +72,7 @@ export function ChatInterface({
   onOnboardingComplete,
   onConversationCreated,
   skipLoadHistory = false,
+  refineWishContext,
 }: ChatInterfaceProps) {
   const { session, profile, communityId } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -84,6 +86,7 @@ export function ChatInterface({
   const previousMessageCountRef = useRef(0);
   const isLoadingMessagesRef = useRef(false);
   const hasLoadedForConversationRef = useRef<string | null>(null);
+  const hasInitiatedRefineRef = useRef(false);
 
   // Update activeConversationId when prop changes
   useEffect(() => {
@@ -526,6 +529,31 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     handleSendMessageStreaming,
     handleSendMessageNonStreaming,
   ]);
+
+  // Handle refine wish context - initiate a refinement conversation
+  useEffect(() => {
+    const initiateRefineWish = async () => {
+      if (!refineWishContext || hasInitiatedRefineRef.current) return;
+      if (!session?.user?.id || !communityId) return;
+
+      hasInitiatedRefineRef.current = true;
+
+      // Create a new conversation for the refinement
+      const newConversationId = await createConversation();
+      if (!newConversationId) {
+        console.error('Failed to create conversation for wish refinement');
+        return;
+      }
+
+      // Send the initial message that triggers REFINE_WISH flow
+      // Small delay to ensure conversation is set up
+      setTimeout(() => {
+        handleSendMessage(`[REFINE_WISH] ${refineWishContext}`);
+      }, 100);
+    };
+
+    initiateRefineWish();
+  }, [refineWishContext, session?.user?.id, communityId, createConversation, handleSendMessage]);
 
   const scrollToBottom = useCallback((animated = true) => {
     if (flatListRef.current && messages.length > 0) {

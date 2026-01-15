@@ -11,6 +11,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
+import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import type { Skill, Wish, ActionItem, UserInsights, Profile } from '../../types';
@@ -45,6 +46,7 @@ export default function ProfileScreen() {
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [wishToGrant, setWishToGrant] = useState<(Wish & { user: Profile }) | null>(null);
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
+  const [addWishModalVisible, setAddWishModalVisible] = useState(false);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
 
   // Editable profile fields
@@ -349,6 +351,15 @@ export default function ProfileScreen() {
     setWishToGrant({ ...wish, user: profile });
   };
 
+  const handleRefineWithClive = (roughWish: string) => {
+    setAddWishModalVisible(false);
+    // Navigate to chat with the rough wish as context
+    router.push({
+      pathname: '/(app)',
+      params: { refineWish: roughWish },
+    });
+  };
+
   if (!profile) return null;
 
   return (
@@ -649,9 +660,17 @@ export default function ProfileScreen() {
 
         {/* Wishes */}
         <View className="mb-6">
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
-            Your Wishes ({wishes.length})
-          </Text>
+          <View className="flex-row items-center justify-between mb-2">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
+              Your Wishes ({wishes.length})
+            </Text>
+            <Pressable
+              onPress={() => setAddWishModalVisible(true)}
+              className="w-8 h-8 rounded-full bg-gold items-center justify-center active:opacity-80"
+            >
+              <Ionicons name="add" size={20} color="white" />
+            </Pressable>
+          </View>
           {wishes.length === 0 ? (
             <View className="bg-white rounded-xl p-4 shadow-sm">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
@@ -790,6 +809,16 @@ export default function ProfileScreen() {
         userId={profile?.id}
         existingSkills={skills}
         onSave={fetchData}
+      />
+
+      {/* Add Wish Modal */}
+      <AddWishModal
+        visible={addWishModalVisible}
+        onClose={() => setAddWishModalVisible(false)}
+        communityId={communityId}
+        userId={profile?.id}
+        onSave={fetchData}
+        onRefineWithClive={handleRefineWithClive}
       />
     </SafeAreaView>
   );
