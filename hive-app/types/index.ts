@@ -240,6 +240,7 @@ export interface Event {
   event_type: EventType;
   google_event_id?: string;
   meet_link?: string;
+  location?: string;
   related_user_id?: string;
   related_queen_bee_id?: string;
   created_by?: string;

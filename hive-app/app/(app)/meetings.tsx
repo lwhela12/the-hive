@@ -96,6 +96,7 @@ export default function MeetingsScreen() {
     duration: number;
     attendeeIds: string[];
     timezone: string;
+    location?: string;
   }) => {
     if (!communityId || !session?.access_token) {
       throw new Error('Not authenticated');
@@ -111,6 +112,7 @@ export default function MeetingsScreen() {
         communityId,
         attendeeIds: data.attendeeIds,
         timezone: data.timezone,
+        location: data.location,
       },
     });
 
@@ -300,6 +302,11 @@ export default function MeetingsScreen() {
                       {formatDateLong(event.event_date)}
                       {event.event_time ? ` at ${event.event_time}` : ''}
                     </Text>
+                    {event.location && (
+                      <Text className="text-sm text-gray-600 mt-1">
+                        📍 {event.location}
+                      </Text>
+                    )}
                     {event.description && (
                       <Text className="text-sm text-gray-600 mt-2">
                         {event.description}

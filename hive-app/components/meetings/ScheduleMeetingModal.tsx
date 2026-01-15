@@ -32,6 +32,7 @@ interface ScheduleMeetingModalProps {
     duration: number;
     attendeeIds: string[];
     timezone: string;
+    location?: string;
   }) => Promise<void>;
 }
 
@@ -43,6 +44,7 @@ export function ScheduleMeetingModal({
 }: ScheduleMeetingModalProps) {
   const [title, setTitle] = useState('Hive Meeting');
   const [description, setDescription] = useState('');
+  const [location, setLocation] = useState('');
   const [date, setDate] = useState(new Date());
   const [duration, setDuration] = useState('60');
   const [loading, setLoading] = useState(false);
@@ -143,11 +145,13 @@ export function ScheduleMeetingModal({
         duration: parseInt(duration) || 60,
         attendeeIds: Array.from(selectedMembers),
         timezone: userTimezone,
+        location: location.trim() || undefined,
       });
 
       // Reset form
       setTitle('Hive Meeting');
       setDescription('');
+      setLocation('');
       setDate(new Date());
       setDuration('60');
       setSelectedMembers(new Set());
@@ -269,6 +273,13 @@ export function ScheduleMeetingModal({
               placeholder="What's this meeting about?"
               multiline
               numberOfLines={3}
+            />
+
+            <Input
+              label="Location (optional)"
+              value={location}
+              onChangeText={setLocation}
+              placeholder="Physical address for in-person meetings"
             />
 
             {/* Date Picker */}
@@ -400,13 +411,13 @@ export function ScheduleMeetingModal({
               )}
             </View>
 
-            {/* Meet Link Info */}
+            {/* Meeting Info */}
             <View className="bg-blue-50 rounded-xl p-4 mb-6">
               <Text className="text-blue-800 font-medium mb-1">
                 Calendar Invites
               </Text>
               <Text className="text-blue-600 text-sm">
-                Selected members will receive a calendar invite with a Google Meet link in their email.
+                Selected members will receive a calendar invite with a Google Meet link. Add a location for in-person meetings or leave blank for remote-only.
               </Text>
             </View>
 

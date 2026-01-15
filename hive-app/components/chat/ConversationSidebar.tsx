@@ -133,7 +133,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   // Navigation items for mobile sidebar
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
   const navItems = [
-    { icon: null, imageSource: beeIcon, label: 'Hive', route: '/hive' as const },
+    { icon: null, imageSource: beeIcon, label: 'HIVE', route: '/hive' as const },
     { icon: '📋', label: 'Board', route: '/board' as const },
     { icon: '💬', label: 'Chat', route: '/messages' as const, badge: totalUnreadDMs },
     { icon: null, customIcon: 'honeycomb', label: 'Meetings', route: '/meetings' as const },

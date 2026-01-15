@@ -8,11 +8,13 @@ import {
   Alert,
   RefreshControl,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../../components/ui/Avatar';
+import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { formatDateMedium, parseAmericanDate, isoToAmerican } from '../../lib/dateUtils';
 import type { Profile, QueenBee, Event, UserRole, CommunityInvite } from '../../types';
 
@@ -28,6 +30,9 @@ type InviteRow = CommunityInvite & {
 
 export default function AdminScreen() {
   const { profile, communityId, communityRole } = useAuth();
+  const { width } = useWindowDimensions();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const useMobileLayout = width < 768;
   const [refreshing, setRefreshing] = useState(false);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [queenBees, setQueenBees] = useState<QueenBee[]>([]);
@@ -244,6 +249,23 @@ export default function AdminScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
+      {/* Mobile Header */}
+      {useMobileLayout && (
+        <AppHeader
+          title="Admin"
+          onMenuPress={() => setDrawerOpen(true)}
+        />
+      )}
+
+      {/* Navigation Drawer */}
+      {useMobileLayout && (
+        <NavigationDrawer
+          isOpen={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          mode="navigation"
+        />
+      )}
+
       <ScrollView
         className="flex-1"
         contentContainerClassName="p-4"

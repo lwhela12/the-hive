@@ -2,7 +2,7 @@ import { View, Text, Pressable, Image } from 'react-native';
 import { Avatar } from '../ui/Avatar';
 import { formatDateShort } from '../../lib/dateUtils';
 
-const hiveLogo = require('../../assets/The Hive Logo_Low Res (1).png');
+const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 import type { ChatRoom, Profile, RoomMessage } from '../../types';
 
 interface ChatRoomItemProps {

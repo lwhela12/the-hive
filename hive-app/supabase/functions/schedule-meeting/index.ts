@@ -40,6 +40,7 @@ interface ScheduleMeetingRequest {
   communityId: string;
   attendeeIds?: string[]; // User IDs to invite
   timezone?: string; // User's timezone, e.g., 'America/Los_Angeles'
+  location?: string; // Physical address for in-person meetings
 }
 
 interface Attendee {
@@ -90,9 +91,10 @@ async function createCalendarEvent(
     endDateTime: string;
     timeZone: string;
     attendees?: Attendee[];
+    location?: string;
   }
 ): Promise<GoogleCalendarEvent> {
-  const { title, description, startDateTime, endDateTime, timeZone, attendees } = params;
+  const { title, description, startDateTime, endDateTime, timeZone, attendees, location } = params;
 
   const requestBody: Record<string, unknown> = {
     summary: title,
@@ -106,6 +108,11 @@ async function createCalendarEvent(
       },
     },
   };
+
+  // Add location if provided (for in-person meetings)
+  if (location) {
+    requestBody.location = location;
+  }
 
   // Add attendees if provided
   if (attendees && attendees.length > 0) {
@@ -168,7 +175,7 @@ Deno.serve(async (req) => {
   try {
     // Parse request body
     const body: ScheduleMeetingRequest = await req.json();
-    const { title, description, date, time, duration = 60, communityId, attendeeIds, timezone } = body;
+    const { title, description, date, time, duration = 60, communityId, attendeeIds, timezone, location } = body;
 
     // Validate required fields
     if (!title || !date || !time || !communityId) {
@@ -229,6 +236,7 @@ Deno.serve(async (req) => {
       endDateTime,
       timeZone,
       attendees,
+      location,
     });
 
     const meetLink = extractMeetLink(calendarEvent);
@@ -258,6 +266,7 @@ Deno.serve(async (req) => {
         event_type: 'meeting',
         google_event_id: calendarEvent.id,
         meet_link: meetLink,
+        location,
         community_id: communityId,
         created_by: userId,
       })
