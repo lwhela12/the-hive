@@ -45,12 +45,10 @@ export default function JoinScreen() {
     setLoading(true);
     try {
       // GENESIS CHECK: Is this the very first user?
-      // Check if ANY community memberships exist in the system
-      const { count: membershipCount } = await supabase
-        .from('community_memberships')
-        .select('*', { count: 'exact', head: true });
+      // Use the RPC function which bypasses RLS
+      const { data: isGenesis } = await supabase.rpc('is_genesis_state');
 
-      if (membershipCount === 0) {
+      if (isGenesis === true) {
         // GENESIS USER - First ever user becomes admin
         console.log('Genesis user detected - bootstrapping community');
         await bootstrapGenesisCommunity();
