@@ -159,7 +159,9 @@ export function ChatInterface({
       try {
         setMessages([]);
         const greeting = getGreeting();
-        await addMessage('assistant', greeting);
+        if (greeting) {
+          await addMessage('assistant', greeting);
+        }
         hasLoadedForConversationRef.current = 'skipLoadHistory';
       } finally {
         isLoadingMessagesRef.current = false;
@@ -190,10 +192,12 @@ export function ChatInterface({
         setMessages(data);
         messageCountRef.current = data.length;
 
-        // Add initial greeting if no messages in this conversation
+        // Add initial greeting if no messages in this conversation (only for onboarding)
         if (data.length === 0) {
           const greeting = getGreeting();
-          await addMessage('assistant', greeting);
+          if (greeting) {
+            await addMessage('assistant', greeting);
+          }
         }
 
         hasLoadedForConversationRef.current = activeConversationId;
@@ -223,8 +227,8 @@ What are you working on these days? Is there anything you've been meaning to do 
 Before we dive in, when's your birthday? We love celebrating our members!`;
     }
 
-    // Default greeting for new conversations
-    return `Hey ${profile?.name || 'there'}! How can I help you today?`;
+    // No greeting for default chat mode
+    return null;
   };
 
   const generateTitleIfNeeded = async (convId: string) => {
@@ -322,7 +326,8 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
   const handleSendMessageStreaming = useCallback(async (
     userMessage: string,
     attachments: Attachment[] | undefined,
-    conversationIdToUse: string | null
+    conversationIdToUse: string | null,
+    refineWish?: string // The rough wish being refined (if applicable)
   ) => {
     const accessToken = await getAccessToken();
     if (!accessToken) {
@@ -343,6 +348,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
         conversation_id: conversationIdToUse,
         attachments: attachments,
         stream: true,
+        ...(refineWish ? { refine_wish: refineWish } : {}),
       }),
     });
 
@@ -426,7 +432,8 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
   const handleSendMessageNonStreaming = useCallback(async (
     userMessage: string,
     attachments: Attachment[] | undefined,
-    conversationIdToUse: string | null
+    conversationIdToUse: string | null,
+    refineWish?: string // The rough wish being refined (if applicable)
   ) => {
     const accessToken = await getAccessToken();
     if (!accessToken) {
@@ -447,6 +454,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
         conversation_id: conversationIdToUse,
         attachments: attachments,
         stream: false,
+        ...(refineWish ? { refine_wish: refineWish } : {}),
       }),
     });
 
@@ -461,7 +469,11 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
   }, [getAccessToken, mode, context, handleResponseMetadata]);
 
   // Main send message handler
-  const handleSendMessage = useCallback(async (userMessage: string, images?: SelectedImage[]) => {
+  const handleSendMessage = useCallback(async (
+    userMessage: string,
+    images?: SelectedImage[],
+    refineWish?: string // The rough wish being refined (triggers REFINE_WISH flow)
+  ) => {
     if (!SUPABASE_FUNCTIONS_URL) {
       console.error('Missing Supabase functions URL');
       return;
@@ -496,19 +508,21 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
         responseText = await handleSendMessageStreaming(
           userMessage,
           attachments,
-          conversationIdToUse
+          conversationIdToUse,
+          refineWish
         );
       } else {
         responseText = await handleSendMessageNonStreaming(
           userMessage,
           attachments,
-          conversationIdToUse
+          conversationIdToUse,
+          refineWish
         );
       }
 
-      // Clear streaming state and save the final message
-      setStreamingContent(null);
+      // Save the final message first, then clear streaming state to avoid flicker
       await addMessage('assistant', responseText, undefined, conversationIdToUse);
+      setStreamingContent(null);
 
     } catch (error) {
       console.error('Error sending message:', error);
@@ -545,10 +559,11 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
         return;
       }
 
-      // Send the initial message that triggers REFINE_WISH flow
+      // Send the wish as the user message, with refineWish flag to trigger the REFINE_WISH flow
       // Small delay to ensure conversation is set up
       setTimeout(() => {
-        handleSendMessage(`[REFINE_WISH] ${refineWishContext}`);
+        // The user sees their wish as the message, the backend gets the refineWish flag
+        handleSendMessage(refineWishContext, undefined, refineWishContext);
       }, 100);
     };
 

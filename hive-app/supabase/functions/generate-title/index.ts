@@ -62,7 +62,7 @@ serve(async (req) => {
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
 
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20250929',
+      model: 'claude-haiku-4-5',
       max_tokens: 50,
       messages: [{
         role: 'user',

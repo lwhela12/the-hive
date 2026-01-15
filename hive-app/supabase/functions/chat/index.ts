@@ -431,7 +431,7 @@ serve(async (req) => {
       { global: { headers: { Authorization: `Bearer ${token}`, apikey: supabaseAnonKey } } }
     );
 
-    const { message, mode, context, conversation_id, attachments, stream = false } = await req.json();
+    const { message, mode, context, conversation_id, attachments, stream = false, refine_wish } = await req.json();
 
     // Get user profile
     const { data: profile } = await supabaseClient
@@ -457,23 +457,14 @@ serve(async (req) => {
       mode: mode || 'default',
     });
 
-    // Check if this is a wish refinement request
-    const isRefineWish = message.startsWith('[REFINE_WISH]');
-    let processedMessage = message;
-    let roughWish = '';
-
-    if (isRefineWish) {
-      // Extract the rough wish from the message
-      roughWish = message.replace('[REFINE_WISH] ', '').trim();
-      // Don't show the [REFINE_WISH] prefix to Claude - it's just a trigger
-      processedMessage = roughWish;
-    }
+    // Check if this is a wish refinement request (refine_wish contains the rough wish)
+    const isRefineWish = !!refine_wish;
 
     // Select the appropriate system prompt based on mode
     let systemPrompt = SYSTEM_PROMPT;
     if (isRefineWish) {
       // Use the refine wish prompt with the rough wish inserted
-      systemPrompt = REFINE_WISH_PROMPT.replace('{rough_wish}', roughWish);
+      systemPrompt = REFINE_WISH_PROMPT.replace('{rough_wish}', refine_wish);
     } else if (mode === 'onboarding' && context === 'skills') {
       systemPrompt = ONBOARDING_SKILLS_PROMPT;
     } else if (mode === 'onboarding' && context === 'wishes') {
@@ -515,12 +506,12 @@ serve(async (req) => {
       // Add text block (even if empty, Claude needs at least the text block)
       contentBlocks.push({
         type: 'text' as const,
-        text: processedMessage || 'What do you see in this image?',
+        text: message || 'What do you see in this image?',
       });
 
       messages.push({ role: 'user' as const, content: contentBlocks });
     } else {
-      messages.push({ role: 'user' as const, content: processedMessage });
+      messages.push({ role: 'user' as const, content: message });
     }
 
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
