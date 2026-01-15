@@ -15,6 +15,21 @@ import type { Skill, Wish, ActionItem, UserInsights, Profile } from '../../types
 
 const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
 
+// Format phone number as (XXX) XXX-XXXX
+const formatPhoneNumber = (value: string): string => {
+  // Remove all non-digits
+  const digits = value.replace(/\D/g, '');
+
+  // Limit to 10 digits
+  const limited = digits.slice(0, 10);
+
+  // Format based on length
+  if (limited.length === 0) return '';
+  if (limited.length <= 3) return `(${limited}`;
+  if (limited.length <= 6) return `(${limited.slice(0, 3)}) ${limited.slice(3)}`;
+  return `(${limited.slice(0, 3)}) ${limited.slice(3, 6)}-${limited.slice(6)}`;
+};
+
 export default function ProfileScreen() {
   const { profile, communityId, communityRole, refreshProfile } = useAuth();
   const { permissionStatus, requestPermissions } = useNotifications();
@@ -88,7 +103,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (profile) {
       setEditName(profile.name || '');
-      setEditPhone(profile.phone || '');
+      setEditPhone(formatPhoneNumber(profile.phone || ''));
       // Convert ISO date to American format for editing
       setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
       setEditOccupation(profile.occupation || '');
@@ -99,7 +114,7 @@ export default function ProfileScreen() {
   const startEditing = () => {
     if (profile) {
       setEditName(profile.name || '');
-      setEditPhone(profile.phone || '');
+      setEditPhone(formatPhoneNumber(profile.phone || ''));
       // Convert ISO date to American format for editing
       setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
       setEditOccupation(profile.occupation || '');
@@ -113,7 +128,7 @@ export default function ProfileScreen() {
     // Reset to original values
     if (profile) {
       setEditName(profile.name || '');
-      setEditPhone(profile.phone || '');
+      setEditPhone(formatPhoneNumber(profile.phone || ''));
       // Convert ISO date to American format for editing
       setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
       setEditOccupation(profile.occupation || '');
@@ -456,16 +471,16 @@ export default function ProfileScreen() {
               {isEditing ? (
                 <TextInput
                   value={editPhone}
-                  onChangeText={setEditPhone}
+                  onChangeText={(text) => setEditPhone(formatPhoneNumber(text))}
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal text-base p-0"
-                  placeholder="Your phone number"
+                  placeholder="(555) 555-5555"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="phone-pad"
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
-                  {profile.phone || 'Not set'}
+                  {profile.phone ? formatPhoneNumber(profile.phone) : 'Not set'}
                 </Text>
               )}
             </View>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking } from 'react-native';
 import Svg, { Path, Text as SvgText, TextPath, Defs } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -251,23 +251,54 @@ export default function HiveScreen() {
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
               Upcoming Events
             </Text>
-            <View className="bg-white rounded-xl p-4 shadow-sm">
-              {upcomingEvents.map((event) => (
+            <View className="bg-white rounded-xl shadow-sm overflow-hidden">
+              {upcomingEvents.map((event, index) => (
                 <View
                   key={event.id}
-                  className="flex-row items-center py-2 border-b border-cream last:border-b-0"
+                  className={`p-4 ${index < upcomingEvents.length - 1 ? 'border-b border-cream' : ''}`}
                 >
-                  <Text className="text-2xl mr-3">
-                    {event.event_type === 'birthday' ? '🎂' :
-                     event.event_type === 'meeting' ? '📅' :
-                     event.event_type === 'queen_bee' ? '👑' : '📌'}
-                  </Text>
-                  <View className="flex-1">
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{event.title}</Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60">
-                      {formatDateShort(event.event_date)}
+                  <View className="flex-row items-start">
+                    <Text className="text-2xl mr-3">
+                      {event.event_type === 'birthday' ? '🎂' :
+                       event.event_type === 'meeting' ? '📅' :
+                       event.event_type === 'queen_bee' ? '👑' : '📌'}
                     </Text>
+                    <View className="flex-1">
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{event.title}</Text>
+                      <View className="flex-row flex-wrap items-center mt-1">
+                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60">
+                          {formatDateShort(event.event_date)}
+                        </Text>
+                        {event.event_time && (
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60">
+                            {' '}at {formatTime(event.event_time)}
+                          </Text>
+                        )}
+                      </View>
+                      {event.location && (
+                        <Pressable
+                          onPress={() => Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(event.location!)}`)}
+                          className="flex-row items-center mt-1 active:opacity-60"
+                        >
+                          <Text className="text-xs mr-1">📍</Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-gold underline">
+                            {event.location}
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
                   </View>
+                  {event.meet_link && (
+                    <Pressable
+                      onPress={() => Linking.openURL(event.meet_link!)}
+                      className="mt-3 bg-gold/10 py-2 px-4 rounded-lg flex-row items-center justify-center active:bg-gold/20"
+                    >
+                      <Text className="text-base mr-2">📹</Text>
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">
+                        Join Google Meet
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
               ))}
             </View>
