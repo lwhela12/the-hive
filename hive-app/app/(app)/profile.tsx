@@ -10,6 +10,8 @@ import { useWishes } from '../../lib/hooks/useWishes';
 import { Avatar } from '../../components/ui/Avatar';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
+import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
+import { Ionicons } from '@expo/vector-icons';
 import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import type { Skill, Wish, ActionItem, UserInsights, Profile } from '../../types';
 
@@ -42,6 +44,7 @@ export default function ProfileScreen() {
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [wishToGrant, setWishToGrant] = useState<(Wish & { user: Profile }) | null>(null);
+  const [skillsModalVisible, setSkillsModalVisible] = useState(false);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
 
   // Editable profile fields
@@ -613,9 +616,17 @@ export default function ProfileScreen() {
 
         {/* Skills */}
         <View className="mb-6">
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
-            Your Skills ({skills.length})
-          </Text>
+          <View className="flex-row items-center justify-between mb-2">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
+              Your Skills ({skills.length})
+            </Text>
+            <Pressable
+              onPress={() => setSkillsModalVisible(true)}
+              className="w-8 h-8 rounded-full bg-gold items-center justify-center active:opacity-80"
+            >
+              <Ionicons name="add" size={20} color="white" />
+            </Pressable>
+          </View>
           {skills.length === 0 ? (
             <View className="bg-white rounded-xl p-4 shadow-sm">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
@@ -770,6 +781,16 @@ export default function ProfileScreen() {
           onGrant={handleGrantWish}
         />
       )}
+
+      {/* Skills Manage Modal */}
+      <SkillsManageModal
+        visible={skillsModalVisible}
+        onClose={() => setSkillsModalVisible(false)}
+        communityId={communityId}
+        userId={profile?.id}
+        existingSkills={skills}
+        onSave={fetchData}
+      />
     </SafeAreaView>
   );
 }
