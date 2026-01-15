@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,6 +39,9 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
   const [editContent, setEditContent] = useState('');
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [groupName, setGroupName] = useState(room.name || '');
+  const [currentRoomName, setCurrentRoomName] = useState(room.name);
 
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -53,16 +57,47 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
   // Get room display name
   const getRoomName = () => {
     if (room.room_type === 'community') {
-      return room.name || 'General';
+      return currentRoomName || 'General';
     }
     if (room.room_type === 'group_dm') {
       // Use custom name if set, otherwise show member names
-      if (room.name) return room.name;
+      if (currentRoomName) return currentRoomName;
       if (otherMembers.length === 0) return 'Group';
       return otherMembers.map((m) => m.name.split(' ')[0]).join(', ');
     }
     const otherMember = room.members?.find((m) => m.user?.id !== profile?.id);
     return otherMember?.user?.name || 'Direct Message';
+  };
+
+  // Check if room can be renamed (only group DMs for now)
+  const canRename = room.room_type === 'group_dm';
+
+  // Handle renaming the group
+  const handleRenameGroup = async () => {
+    const newName = groupName.trim() || null;
+
+    try {
+      const { error } = await supabase
+        .from('chat_rooms')
+        .update({ name: newName })
+        .eq('id', room.id);
+
+      if (error) throw error;
+
+      setCurrentRoomName(newName ?? undefined);
+      setShowRenameModal(false);
+    } catch (error) {
+      console.error('Error renaming group:', error);
+      Alert.alert('Error', 'Failed to rename group.');
+    }
+  };
+
+  // Handle header tap for renaming
+  const handleHeaderPress = () => {
+    if (canRename) {
+      setGroupName(currentRoomName || '');
+      setShowRenameModal(true);
+    }
   };
 
   // Get subtitle for header
@@ -394,17 +429,68 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
           <Pressable onPress={onBack} className="mr-4">
             <Text className="text-2xl">←</Text>
           </Pressable>
-          <View className="flex-1">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg" numberOfLines={1}>
-              {getRoomName()}
-            </Text>
+          <Pressable
+            onPress={handleHeaderPress}
+            disabled={!canRename}
+            className="flex-1"
+          >
+            <View className="flex-row items-center">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg flex-1" numberOfLines={1}>
+                {getRoomName()}
+              </Text>
+              {canRename && (
+                <Ionicons name="pencil" size={14} color="#9ca3af" style={{ marginLeft: 4 }} />
+              )}
+            </View>
             {getHeaderSubtitle() && (
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm">
                 {getHeaderSubtitle()}
               </Text>
             )}
-          </View>
+          </Pressable>
         </View>
+
+        {/* Rename Group Modal */}
+        <Modal visible={showRenameModal} transparent animationType="fade">
+          <Pressable
+            onPress={() => setShowRenameModal(false)}
+            className="flex-1 justify-center items-center bg-black/50"
+          >
+            <Pressable className="bg-white rounded-2xl p-4 mx-8 w-80">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg mb-4 text-center">
+                Rename Group
+              </Text>
+              <TextInput
+                value={groupName}
+                onChangeText={setGroupName}
+                placeholder="Enter group name (or leave empty)"
+                placeholderTextColor="#9ca3af"
+                className="bg-cream rounded-xl px-4 py-3 mb-4"
+                style={{ fontFamily: 'Lato_400Regular' }}
+                autoFocus
+                maxLength={50}
+              />
+              <View className="flex-row gap-3">
+                <Pressable
+                  onPress={() => setShowRenameModal(false)}
+                  className="flex-1 py-3 rounded-xl bg-cream"
+                >
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal text-center">
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleRenameGroup}
+                  className="flex-1 py-3 rounded-xl bg-gold"
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-center">
+                    Save
+                  </Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         {/* Messages */}
         <FlatList

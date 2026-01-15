@@ -8,6 +8,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { queryClient } from '../lib/queryClient';
 import { AuthContext } from '../lib/hooks/useAuth';
+import { usePrefetchAppData } from '../lib/hooks/usePrefetchAppData';
 import type { Profile, Community, UserRole } from '../types';
 import { useFonts } from 'expo-font';
 import {
@@ -18,6 +19,20 @@ import {
   Lato_400Regular,
   Lato_700Bold,
 } from '@expo-google-fonts/lato';
+
+// Inner component to handle prefetching (must be inside QueryClientProvider)
+function AppPrefetcher({
+  communityId,
+  userId,
+  isAuthenticated,
+}: {
+  communityId: string | null;
+  userId: string | null;
+  isAuthenticated: boolean;
+}) {
+  usePrefetchAppData(communityId, userId, isAuthenticated);
+  return null;
+}
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -162,6 +177,11 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AppPrefetcher
+        communityId={communityId}
+        userId={profile?.id ?? null}
+        isAuthenticated={!!session && !loading}
+      />
       <AuthContext.Provider value={{
         session,
         profile,
