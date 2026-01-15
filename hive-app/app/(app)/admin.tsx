@@ -119,17 +119,35 @@ export default function AdminScreen() {
   };
 
   const createQueenBee = async () => {
-    if (!selectedMember || !qbMonth || !qbTitle || !communityId) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!selectedMember || !communityId) {
+      Alert.alert('Error', 'Please select a member');
       return;
+    }
+
+    // Auto-generate month if not provided (next available month)
+    let month = qbMonth;
+    if (!month) {
+      const existingMonths = queenBees.map(qb => qb.month).sort();
+      const lastMonth = existingMonths[existingMonths.length - 1];
+      if (lastMonth) {
+        // Increment last month
+        const [year, monthNum] = lastMonth.split('-').map(Number);
+        const nextMonth = monthNum === 12 ? 1 : monthNum + 1;
+        const nextYear = monthNum === 12 ? year + 1 : year;
+        month = `${nextYear}-${String(nextMonth).padStart(2, '0')}`;
+      } else {
+        // Start with current month
+        const now = new Date();
+        month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      }
     }
 
     const { error } = await supabase.from('queen_bees').insert({
       user_id: selectedMember.id,
       community_id: communityId,
-      month: qbMonth,
-      project_title: qbTitle,
-      project_description: qbDescription,
+      month,
+      project_title: qbTitle || 'TBD',
+      project_description: qbDescription || null,
       status: qbStatus,
     });
 
@@ -626,10 +644,10 @@ export default function AdminScreen() {
                 </ScrollView>
 
                 <TextInput
-                  placeholder="Month (YYYY-MM)"
+                  placeholder="Month (auto-fills next)"
                   value={qbMonth}
                   onChangeText={setQbMonth}
-                  className="border border-gray-300 rounded-lg p-3 mb-3"
+                  className="border border-gray-200 rounded-lg p-3 mb-3 bg-gray-50"
                 />
               </>
             )}
@@ -643,18 +661,18 @@ export default function AdminScreen() {
             )}
 
             <TextInput
-              placeholder="Project Title"
+              placeholder="Project Title (optional - defaults to TBD)"
               value={qbTitle}
               onChangeText={setQbTitle}
-              className="border border-gray-300 rounded-lg p-3 mb-3"
+              className="border border-gray-200 rounded-lg p-3 mb-3 bg-gray-50"
             />
             <TextInput
-              placeholder="Project Description"
+              placeholder="Project Description (optional)"
               value={qbDescription}
               onChangeText={setQbDescription}
               multiline
               numberOfLines={3}
-              className="border border-gray-300 rounded-lg p-3 mb-3"
+              className="border border-gray-200 rounded-lg p-3 mb-3 bg-gray-50"
             />
 
             <Text className="text-gray-600 mb-2">Status</Text>

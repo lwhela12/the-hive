@@ -22,19 +22,10 @@ interface RpcQueenBeeRow {
   highlights: MonthlyHighlight[];
 }
 
-function getMonthStrings() {
-  const now = new Date();
-  const current = now.toISOString().slice(0, 7);
-  const lastDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const nextDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return {
-    last: lastDate.toISOString().slice(0, 7),
-    current,
-    next: nextDate.toISOString().slice(0, 7),
-  };
-}
-
-// Fetch queen bees with highlights using optimized RPC or fallback
+// Fetch queen bees by STATUS (order-based model, not calendar-based)
+// - lastMonth = most recent 'completed' QB
+// - currentMonth = the 'active' QB
+// - nextMonth = first 'upcoming' QB (by month order)
 async function fetchQueenBeesWithHighlights(
   communityId: string
 ): Promise<{
@@ -42,59 +33,36 @@ async function fetchQueenBeesWithHighlights(
   currentMonth: QueenBeeWithHighlights | null;
   nextMonth: (QueenBee & { user: Profile }) | null;
 }> {
-  const { last, current, next } = getMonthStrings();
-
-  // Try optimized RPC first
-  const { data: rpcData, error: rpcError } = await supabase.rpc(
-    'get_queen_bees_with_highlights',
-    {
-      p_community_id: communityId,
-      p_months: [last, current, next],
-    }
-  );
-
-  if (!rpcError && rpcData) {
-    const rows = rpcData as RpcQueenBeeRow[];
-    const findByMonth = (month: string) =>
-      rows.find((r) => r.queen_bee.month === month);
-
-    const lastMonthData = findByMonth(last);
-    const currentMonthData = findByMonth(current);
-    const nextMonthData = findByMonth(next);
-
-    return {
-      lastMonth: lastMonthData
-        ? { ...lastMonthData.queen_bee, highlights: lastMonthData.highlights }
-        : null,
-      currentMonth: currentMonthData
-        ? {
-            ...currentMonthData.queen_bee,
-            highlights: currentMonthData.highlights,
-          }
-        : null,
-      nextMonth: nextMonthData?.queen_bee || null,
-    };
-  }
-
-  // Fallback to manual queries if RPC doesn't exist
-  console.warn(
-    'get_queen_bees_with_highlights RPC not found, using fallback queries'
-  );
-
-  const { data: qbData } = (await supabase
+  // Fetch all queen bees for this community
+  const { data: allQBs } = (await supabase
     .from('queen_bees')
     .select('*, user:profiles(*)')
     .eq('community_id', communityId)
-    .in('month', [last, current, next])) as {
+    .order('month', { ascending: true })) as {
     data: (QueenBee & { user: Profile })[] | null;
   };
 
-  const lastMonthQB = qbData?.find((qb) => qb.month === last) || null;
-  const currentMonthQB = qbData?.find((qb) => qb.month === current) || null;
-  const nextMonthQB = qbData?.find((qb) => qb.month === next) || null;
+  if (!allQBs || allQBs.length === 0) {
+    return { lastMonth: null, currentMonth: null, nextMonth: null };
+  }
 
-  // Fetch highlights separately
-  const qbIdsForHighlights = [lastMonthQB?.id, currentMonthQB?.id].filter(
+  // Find by status
+  const activeQB = allQBs.find((qb) => qb.status === 'active') || null;
+
+  // Most recent completed (last in the completed list by month)
+  const completedQBs = allQBs
+    .filter((qb) => qb.status === 'completed')
+    .sort((a, b) => b.month.localeCompare(a.month)); // Descending - most recent first
+  const lastCompletedQB = completedQBs[0] || null;
+
+  // First upcoming (earliest by month)
+  const upcomingQBs = allQBs
+    .filter((qb) => qb.status === 'upcoming')
+    .sort((a, b) => a.month.localeCompare(b.month)); // Ascending - earliest first
+  const nextUpcomingQB = upcomingQBs[0] || null;
+
+  // Fetch highlights for completed and active QBs
+  const qbIdsForHighlights = [lastCompletedQB?.id, activeQB?.id].filter(
     Boolean
   ) as string[];
   let highlightsMap: Record<string, MonthlyHighlight[]> = {};
@@ -121,16 +89,16 @@ async function fetchQueenBeesWithHighlights(
   }
 
   return {
-    lastMonth: lastMonthQB
-      ? { ...lastMonthQB, highlights: highlightsMap[lastMonthQB.id] || [] }
+    lastMonth: lastCompletedQB
+      ? { ...lastCompletedQB, highlights: highlightsMap[lastCompletedQB.id] || [] }
       : null,
-    currentMonth: currentMonthQB
+    currentMonth: activeQB
       ? {
-          ...currentMonthQB,
-          highlights: highlightsMap[currentMonthQB.id] || [],
+          ...activeQB,
+          highlights: highlightsMap[activeQB.id] || [],
         }
       : null,
-    nextMonth: nextMonthQB || null,
+    nextMonth: nextUpcomingQB || null,
   };
 }
 
