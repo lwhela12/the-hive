@@ -182,10 +182,21 @@ export default function JoinScreen() {
   };
 
   const handleAcceptInvite = async () => {
-    if (!invite || !profile) return;
+    console.log('Accept invite clicked', { invite, profile });
+
+    if (!invite) {
+      Alert.alert('Error', 'No invite found. Please refresh and try again.');
+      return;
+    }
+    if (!profile) {
+      Alert.alert('Error', 'Profile not loaded. Please refresh and try again.');
+      return;
+    }
 
     setSubmitting(true);
     try {
+      console.log('Creating membership...', { community_id: invite.community_id, user_id: profile.id, role: invite.role });
+
       // Create membership
       const { error: membershipError } = await supabase
         .from('community_memberships')
@@ -195,6 +206,7 @@ export default function JoinScreen() {
           role: invite.role,
         });
 
+      console.log('Membership result:', { error: membershipError });
       if (membershipError) throw membershipError;
 
       // Update profile with current community

@@ -119,6 +119,46 @@ export default function AdminScreen() {
     }
   };
 
+  const removeMember = async (membershipId: string, memberName: string, memberId: string) => {
+    // Don't allow removing yourself
+    if (memberId === profile?.id) {
+      Alert.alert('Error', "You can't remove yourself from the community.");
+      return;
+    }
+
+    const doRemove = async () => {
+      try {
+        const { error } = await supabase
+          .from('community_memberships')
+          .delete()
+          .eq('id', membershipId);
+
+        if (error) throw error;
+        await fetchData();
+        Alert.alert('Success', `${memberName} has been removed from the community.`);
+      } catch (err) {
+        console.error('Remove member error:', err);
+        Alert.alert('Error', 'Failed to remove member');
+      }
+    };
+
+    // Confirmation
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(`Remove ${memberName} from the community?\n\nThey can be re-invited later.`)) {
+        await doRemove();
+      }
+    } else {
+      Alert.alert(
+        'Remove Member',
+        `Remove ${memberName} from the community?\n\nThey can be re-invited later.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Remove', style: 'destructive', onPress: doRemove },
+        ]
+      );
+    }
+  };
+
   const createQueenBee = async () => {
     if (!selectedMember || !communityId) {
       Alert.alert('Error', 'Please select a member');
@@ -639,7 +679,7 @@ export default function AdminScreen() {
                   </Text>
                   <Text className="text-sm text-gray-500">{member.profiles.email}</Text>
                 </View>
-                <View className="flex-row">
+                <View className="flex-row items-center">
                   {(['member', 'treasurer', 'admin'] as UserRole[]).map(
                     (role) => (
                       <Pressable
@@ -662,6 +702,14 @@ export default function AdminScreen() {
                         </Text>
                       </Pressable>
                     )
+                  )}
+                  {member.profiles.id !== profile?.id && (
+                    <Pressable
+                      onPress={() => removeMember(member.id, member.profiles.name, member.profiles.id)}
+                      className="px-2 py-1 ml-2 bg-red-100 rounded active:bg-red-200"
+                    >
+                      <Text className="text-red-600 text-xs">✕</Text>
+                    </Pressable>
                   )}
                 </View>
               </View>
