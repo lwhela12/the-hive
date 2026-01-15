@@ -520,9 +520,41 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
         );
       }
 
-      // Save the final message first, then clear streaming state to avoid flicker
-      await addMessage('assistant', responseText, undefined, conversationIdToUse);
+      // Optimistic update: add to local state immediately to avoid flicker
+      // Both state updates happen synchronously, so React batches them
+      const optimisticMessage: ChatMessage = {
+        id: `pending-${Date.now()}`,
+        user_id: session?.user?.id || '',
+        community_id: communityId || '',
+        conversation_id: conversationIdToUse || '',
+        role: 'assistant',
+        content: responseText,
+        created_at: new Date().toISOString(),
+        attachments: null,
+      };
+      setMessages(prev => [...prev, optimisticMessage]);
       setStreamingContent(null);
+
+      // Persist to DB in background (don't use addMessage to avoid duplicate state update)
+      supabase
+        .from('chat_messages')
+        .insert({
+          user_id: session?.user?.id,
+          community_id: communityId,
+          conversation_id: conversationIdToUse,
+          role: 'assistant',
+          content: responseText,
+        })
+        .then(({ error }) => {
+          if (!error) {
+            messageCountRef.current += 1;
+            if (conversationIdToUse) {
+              generateTitleIfNeeded(conversationIdToUse);
+            }
+          } else {
+            console.error('Failed to save assistant message:', error);
+          }
+        });
 
     } catch (error) {
       console.error('Error sending message:', error);
