@@ -40,7 +40,11 @@
     },
     "web": {
       "favicon": "./assets/BEE ONLY IN GOLD BG.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "name": "The HIVE",
+      "shortName": "HIVE",
+      "themeColor": "#bd9348",
+      "backgroundColor": "#bd9348"
     },
     "plugins": [
       "expo-router",
