@@ -185,6 +185,66 @@ export default function AdminScreen() {
     setQbStatus('upcoming');
   };
 
+  const rotateQueenBee = async () => {
+    // Find current active QB
+    const activeQB = queenBees.find(qb => qb.status === 'active');
+    // Find next upcoming QB (earliest by month)
+    const upcomingQBs = queenBees
+      .filter(qb => qb.status === 'upcoming')
+      .sort((a, b) => a.month.localeCompare(b.month));
+    const nextQB = upcomingQBs[0];
+
+    if (!nextQB) {
+      Alert.alert('No Next Queen Bee', 'There are no upcoming Queen Bees to rotate to. Add one first.');
+      return;
+    }
+
+    const activeQBName = activeQB
+      ? members.find(m => m.profiles.id === activeQB.user_id)?.profiles.name
+      : null;
+    const nextQBName = members.find(m => m.profiles.id === nextQB.user_id)?.profiles.name;
+
+    const confirmMessage = activeQB
+      ? `This will:\n• Mark ${activeQBName}'s turn as completed\n• Make ${nextQBName} the active Queen Bee\n\nProceed?`
+      : `This will make ${nextQBName} the active Queen Bee. Proceed?`;
+
+    const doRotation = async () => {
+      try {
+        // Mark current active as completed (if exists)
+        if (activeQB) {
+          await supabase
+            .from('queen_bees')
+            .update({ status: 'completed' })
+            .eq('id', activeQB.id);
+        }
+
+        // Mark next as active
+        await supabase
+          .from('queen_bees')
+          .update({ status: 'active' })
+          .eq('id', nextQB.id);
+
+        await fetchData();
+        Alert.alert('Success', `${nextQBName} is now the active Queen Bee!`);
+      } catch (err) {
+        console.error('Rotation error:', err);
+        Alert.alert('Error', 'Failed to rotate Queen Bee');
+      }
+    };
+
+    // Use window.confirm on web, Alert.alert on native
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(confirmMessage)) {
+        await doRotation();
+      }
+    } else {
+      Alert.alert('Rotate Queen Bee', confirmMessage, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Rotate', onPress: doRotation },
+      ]);
+    }
+  };
+
   const createEvent = async () => {
     if (!eventTitle || !eventDate || !communityId) {
       Alert.alert('Error', 'Please fill in all required fields');
@@ -325,12 +385,20 @@ export default function AdminScreen() {
             <Text className="text-lg font-semibold text-gray-700">
               Queen Bee Schedule
             </Text>
-            <Pressable
-              onPress={() => setShowQueenBeeModal(true)}
-              className="bg-honey-500 px-3 py-1 rounded-lg active:bg-honey-600"
-            >
-              <Text className="text-white font-medium">+ Add</Text>
-            </Pressable>
+            <View className="flex-row">
+              <Pressable
+                onPress={rotateQueenBee}
+                className="bg-green-500 px-3 py-1 rounded-lg active:bg-green-600 mr-2"
+              >
+                <Text className="text-white font-medium">Next →</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setShowQueenBeeModal(true)}
+                className="bg-honey-500 px-3 py-1 rounded-lg active:bg-honey-600"
+              >
+                <Text className="text-white font-medium">+ Add</Text>
+              </Pressable>
+            </View>
           </View>
           <View className="bg-white rounded-xl shadow-sm overflow-hidden">
             {queenBees.map((qb) => (
