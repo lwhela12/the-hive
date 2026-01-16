@@ -134,12 +134,10 @@ export function ChatInterface({
     }
 
     if (data) {
-      console.log('[Chat] Created conversation:', data.id);
       setActiveConversationId(data.id);
       messageCountRef.current = 0; // Reset for new conversation
       // Mark as already loaded to prevent loadMessages from overwriting optimistic updates
       hasLoadedForConversationRef.current = data.id;
-      console.log('[Chat] Setting messages to empty array for new conversation');
       setMessages([]); // Start fresh for new conversation
       onConversationCreated?.(data);
       return data.id;
@@ -149,7 +147,6 @@ export function ChatInterface({
   };
 
   const loadMessages = async () => {
-    console.log('[Chat] loadMessages called, activeConversationId:', activeConversationId, 'hasLoadedFor:', hasLoadedForConversationRef.current);
     if (!session?.user?.id || !communityId) return;
 
     // Prevent concurrent loads
@@ -194,7 +191,6 @@ export function ChatInterface({
         .limit(100);
 
       if (data) {
-        console.log('[Chat] loadMessages: fetched', data.length, 'messages from DB, setting state');
         setMessages(data);
         messageCountRef.current = data.length;
 
@@ -480,19 +476,16 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     images?: SelectedImage[],
     refineWish?: string // The rough wish being refined (triggers REFINE_WISH flow)
   ) => {
-    console.log('[Chat] handleSendMessage called with:', userMessage?.substring(0, 50));
-
     if (!SUPABASE_FUNCTIONS_URL) {
-      console.error('[Chat] Missing Supabase functions URL');
+      console.error('Missing Supabase functions URL');
       return;
     }
 
     if (!session?.user?.id) {
-      console.error('[Chat] No user session');
+      console.error('No user session');
       return;
     }
 
-    console.log('[Chat] Passed initial checks, setting loading state');
     setIsLoading(true);
     setStreamingContent(null);
 
@@ -526,13 +519,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
       created_at: new Date().toISOString(),
       attachments: attachments || null,
     };
-    console.log('[Chat] Adding optimistic user message:', optimisticUserMessage.content.substring(0, 50));
-    setMessages(prev => {
-      console.log('[Chat] Previous messages count:', prev.length);
-      const newMessages = [...prev, optimisticUserMessage];
-      console.log('[Chat] New messages count:', newMessages.length);
-      return newMessages;
-    });
+    setMessages(prev => [...prev, optimisticUserMessage]);
 
     // Save user message to DB in background
     supabase

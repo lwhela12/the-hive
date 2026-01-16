@@ -306,6 +306,9 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
 
       if (error) throw error;
 
+      // Refetch messages to show the new one
+      await refetchMessages();
+
       // Send push notification for DM and group DM messages
       if (room.room_type === 'dm' || room.room_type === 'group_dm') {
         const recipientIds = otherMembers.map((m) => m.id).filter((id) => id !== profile.id);

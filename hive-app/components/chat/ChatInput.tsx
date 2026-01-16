@@ -28,12 +28,7 @@ export const ChatInput = memo(function ChatInput({ onSend, isLoading }: ChatInpu
   };
 
   const handleSend = () => {
-    console.log('[ChatInput] handleSend called, inputText:', inputText, 'isLoading:', isLoading);
-    if ((!inputText.trim() && selectedImages.length === 0) || isLoading) {
-      console.log('[ChatInput] Early return - no content or loading');
-      return;
-    }
-    console.log('[ChatInput] Calling onSend with:', inputText.trim().substring(0, 50));
+    if ((!inputText.trim() && selectedImages.length === 0) || isLoading) return;
     onSend(inputText.trim(), selectedImages.length > 0 ? selectedImages : undefined);
     setInputText('');
     setSelectedImages([]);
