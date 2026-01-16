@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert } from 'react-native';
 import Svg, { Path, Text as SvgText, TextPath, Defs } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
@@ -12,7 +13,7 @@ import { HoneyPotDisplay } from '../../components/hive/HoneyPotDisplay';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { Avatar } from '../../components/ui/Avatar';
 import { formatDateShort, formatDateLong, formatTime } from '../../lib/dateUtils';
-import type { Profile, Wish, WishGranter } from '../../types';
+import type { Profile, Wish, WishGranter, MonthlyHighlight } from '../../types';
 
 type WishTab = 'open' | 'granted';
 
@@ -37,6 +38,9 @@ export default function HiveScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedWish, setSelectedWish] = useState<WishWithGranters | null>(null);
   const [wishTab, setWishTab] = useState<WishTab>('open');
+  const [showHighlightsModal, setShowHighlightsModal] = useState(false);
+  const [newHighlight, setNewHighlight] = useState('');
+  const [savingHighlight, setSavingHighlight] = useState(false);
 
   // Use the optimized hive data hook (React Query with caching)
   const {
@@ -58,6 +62,50 @@ export default function HiveScreen() {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
+  };
+
+  const handleAddHighlight = async () => {
+    if (!newHighlight.trim() || !queenBees.currentMonth || !communityId) return;
+
+    setSavingHighlight(true);
+    try {
+      const currentHighlights = queenBees.currentMonth.highlights || [];
+      const maxOrder = currentHighlights.length > 0
+        ? Math.max(...currentHighlights.map(h => h.display_order))
+        : 0;
+
+      const { error } = await supabase.from('monthly_highlights').insert({
+        queen_bee_id: queenBees.currentMonth.id,
+        community_id: communityId,
+        highlight: newHighlight.trim(),
+        display_order: maxOrder + 1,
+      });
+
+      if (error) throw error;
+
+      setNewHighlight('');
+      await refetch();
+    } catch (error) {
+      console.error('Error adding highlight:', error);
+      Alert.alert('Error', 'Failed to add highlight');
+    } finally {
+      setSavingHighlight(false);
+    }
+  };
+
+  const handleDeleteHighlight = async (highlightId: string) => {
+    try {
+      const { error } = await supabase
+        .from('monthly_highlights')
+        .delete()
+        .eq('id', highlightId);
+
+      if (error) throw error;
+      await refetch();
+    } catch (error) {
+      console.error('Error deleting highlight:', error);
+      Alert.alert('Error', 'Failed to delete highlight');
+    }
   };
 
   // Handle grant wish
@@ -238,9 +286,19 @@ export default function HiveScreen() {
         {/* Queen Bee Section */}
         {queenBees.currentMonth && (
           <View className="mb-6">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
-              This Month's Queen Bee 👑
-            </Text>
+            <View className="flex-row items-center justify-between mb-2">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
+                This Month's Queen Bee 👑
+              </Text>
+              <Pressable
+                onPress={() => setShowHighlightsModal(true)}
+                className="bg-cream px-3 py-1 rounded-lg active:bg-gold-light"
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+                  Edit Notes
+                </Text>
+              </Pressable>
+            </View>
             <QueenBeeCard queenBee={queenBees.currentMonth} />
           </View>
         )}
@@ -398,6 +456,92 @@ export default function HiveScreen() {
 
         </View>
       </ScrollView>
+
+      {/* Queen Bee Highlights Modal */}
+      <Modal
+        visible={showHighlightsModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowHighlightsModal(false)}
+      >
+        <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <Pressable onPress={() => setShowHighlightsModal(false)}>
+              <Text className="text-gray-500 text-base">Close</Text>
+            </Pressable>
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
+              Queen Bee Notes
+            </Text>
+            <View style={{ width: 50 }} />
+          </View>
+
+          <ScrollView className="flex-1 p-4">
+            {queenBees.currentMonth && (
+              <>
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 mb-4">
+                  Add highlights and notes for {queenBees.currentMonth.user?.name}'s month as Queen Bee.
+                </Text>
+
+                {/* Existing highlights */}
+                {queenBees.currentMonth.highlights && queenBees.currentMonth.highlights.length > 0 ? (
+                  <View className="mb-6">
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
+                      Current Notes
+                    </Text>
+                    {queenBees.currentMonth.highlights.map((highlight) => (
+                      <View
+                        key={highlight.id}
+                        className="flex-row items-center bg-cream/50 rounded-lg p-3 mb-2"
+                      >
+                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="flex-1 text-charcoal">
+                          {highlight.highlight}
+                        </Text>
+                        <Pressable
+                          onPress={() => handleDeleteHighlight(highlight.id)}
+                          className="ml-2 p-2"
+                        >
+                          <Text className="text-red-500">✕</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View className="bg-cream/30 rounded-lg p-4 mb-6">
+                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
+                      No notes yet
+                    </Text>
+                  </View>
+                )}
+
+                {/* Add new highlight */}
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
+                  Add Note
+                </Text>
+                <TextInput
+                  value={newHighlight}
+                  onChangeText={setNewHighlight}
+                  placeholder="Enter a highlight or note..."
+                  multiline
+                  numberOfLines={3}
+                  className="border border-gray-300 rounded-lg px-4 py-3 text-base mb-3"
+                  style={{ textAlignVertical: 'top', minHeight: 80 }}
+                />
+                <Pressable
+                  onPress={handleAddHighlight}
+                  disabled={savingHighlight || !newHighlight.trim()}
+                  className={`bg-gold py-3 rounded-lg items-center ${
+                    savingHighlight || !newHighlight.trim() ? 'opacity-50' : 'active:bg-gold/80'
+                  }`}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white">
+                    {savingHighlight ? 'Adding...' : 'Add Note'}
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
