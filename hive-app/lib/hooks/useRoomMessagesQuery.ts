@@ -1,7 +1,6 @@
-import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
-import { useEffect, useCallback } from 'react';
+import { useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { supabase } from '../supabase';
-import { queryKeys } from '../queryClient';
 import type { RoomMessage, Profile, MessageReaction } from '../../types';
 
 export type MessageWithData = RoomMessage & {
@@ -70,8 +69,6 @@ export const roomMessagesKey = (roomId: string) => ['roomMessages', roomId] as c
  * Initially loads recent messages, can load older messages on demand.
  */
 export function useRoomMessagesQuery(roomId: string) {
-  const queryClient = useQueryClient();
-
   // Use infinite query for pagination
   const {
     data,
@@ -96,123 +93,8 @@ export function useRoomMessagesQuery(roomId: string) {
       )
     : [];
 
-  // Subscribe to realtime changes
-  useEffect(() => {
-    if (!roomId) return;
-
-    const channel = supabase
-      .channel(`room-messages-query:${roomId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'room_messages',
-          filter: `room_id=eq.${roomId}`,
-        },
-        async (payload) => {
-          // Fetch the new message with sender info
-          const { data: newMsg } = await supabase
-            .from('room_messages')
-            .select('*, sender:profiles(*)')
-            .eq('id', payload.new.id)
-            .single();
-
-          if (newMsg) {
-            // Add to cache
-            queryClient.setQueryData(roomMessagesKey(roomId), (old: any) => {
-              if (!old?.pages?.length) return old;
-
-              const newMessage = { ...newMsg, reactions: [] } as MessageWithData;
-              const lastPageIndex = old.pages.length - 1;
-
-              return {
-                ...old,
-                pages: old.pages.map((page: any, index: number) => {
-                  if (index === lastPageIndex) {
-                    return {
-                      ...page,
-                      messages: [...page.messages, newMessage],
-                    };
-                  }
-                  return page;
-                }),
-              };
-            });
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'room_messages',
-          filter: `room_id=eq.${roomId}`,
-        },
-        async (payload) => {
-          // Refetch to get updated message
-          const { data: updatedMsg } = await supabase
-            .from('room_messages')
-            .select('*, sender:profiles(*)')
-            .eq('id', payload.new.id)
-            .single();
-
-          if (updatedMsg) {
-            queryClient.setQueryData(roomMessagesKey(roomId), (old: any) => {
-              if (!old?.pages) return old;
-
-              return {
-                ...old,
-                pages: old.pages.map((page: any) => ({
-                  ...page,
-                  messages: page.messages.map((msg: MessageWithData) =>
-                    msg.id === updatedMsg.id ? { ...updatedMsg, reactions: msg.reactions } : msg
-                  ),
-                })),
-              };
-            });
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'message_reactions',
-        },
-        async (payload) => {
-          // Refetch reactions for the affected message
-          const messageId = (payload.new as any)?.message_id || (payload.old as any)?.message_id;
-          if (!messageId) return;
-
-          const { data: reactions } = await supabase
-            .from('message_reactions')
-            .select('*')
-            .eq('message_id', messageId);
-
-          queryClient.setQueryData(roomMessagesKey(roomId), (old: any) => {
-            if (!old?.pages) return old;
-
-            return {
-              ...old,
-              pages: old.pages.map((page: any) => ({
-                ...page,
-                messages: page.messages.map((msg: MessageWithData) =>
-                  msg.id === messageId ? { ...msg, reactions: reactions || [] } : msg
-                ),
-              })),
-            };
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [roomId, queryClient]);
+  // Note: Realtime subscription is handled in RoomChatView component
+  // to be in the same channel as typing indicators (which works reliably)
 
   // Function to load older messages
   const loadOlderMessages = useCallback(() => {

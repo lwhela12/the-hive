@@ -131,13 +131,13 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
     return null;
   };
 
-  // Subscribe to typing indicators and update last_read_at
+  // Subscribe to typing indicators, new messages, and update last_read_at
   useEffect(() => {
     // Guard against undefined room.id to prevent subscription errors
     if (!room.id) return;
 
     const channel = supabase
-      .channel(`room-typing:${room.id}`)
+      .channel(`room-realtime:${room.id}`)
       .on(
         'postgres_changes',
         {
@@ -154,6 +154,19 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
             .eq('room_id', room.id)
             .gt('updated_at', new Date(Date.now() - 5000).toISOString());
           setTypingUsers((data || []) as Array<TypingIndicator & { user?: Profile }>);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'room_messages',
+          filter: `room_id=eq.${room.id}`,
+        },
+        async () => {
+          // Refetch messages when any change happens
+          await refetchMessages();
         }
       )
       .subscribe();
