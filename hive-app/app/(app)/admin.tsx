@@ -166,12 +166,26 @@ export default function AdminScreen() {
     }
 
     // Auto-generate month if not provided (next available month)
-    // Format: MM-YYYY
+    // Format: YYYY-MM (ISO format for proper sorting and querying)
     let month = qbMonth;
+
+    // Normalize manual input: convert MM-YYYY to YYYY-MM if needed
+    if (month) {
+      const parts = month.split('-');
+      if (parts.length === 2) {
+        const first = parseInt(parts[0], 10);
+        const second = parseInt(parts[1], 10);
+        if (first <= 12 && second > 12) {
+          // MM-YYYY format entered, convert to YYYY-MM
+          month = `${second}-${String(first).padStart(2, '0')}`;
+        }
+      }
+    }
+
     if (!month) {
       // Sort existing months to find the latest one
       const existingMonths = queenBees.map(qb => qb.month);
-      // Parse MM-YYYY format and find the latest
+      // Parse both MM-YYYY and YYYY-MM formats for backwards compatibility
       const parsedMonths = existingMonths
         .map(m => {
           const parts = m.split('-');
@@ -183,7 +197,7 @@ export default function AdminScreen() {
               // YYYY-MM format
               return { year: first, month: second };
             } else {
-              // MM-YYYY format
+              // MM-YYYY format (legacy)
               return { year: second, month: first };
             }
           }
@@ -201,11 +215,11 @@ export default function AdminScreen() {
         // Increment
         const nextMonth = latest.month === 12 ? 1 : latest.month + 1;
         const nextYear = latest.month === 12 ? latest.year + 1 : latest.year;
-        month = `${String(nextMonth).padStart(2, '0')}-${nextYear}`;
+        month = `${nextYear}-${String(nextMonth).padStart(2, '0')}`;
       } else {
         // Start with current month
         const now = new Date();
-        month = `${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+        month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       }
     }
 
@@ -822,7 +836,7 @@ export default function AdminScreen() {
                 </ScrollView>
 
                 <TextInput
-                  placeholder="Month MM-YYYY (auto-fills next)"
+                  placeholder="Month YYYY-MM (auto-fills next)"
                   value={qbMonth}
                   onChangeText={setQbMonth}
                   className="border border-gray-200 rounded-lg p-3 mb-3 bg-gray-50"

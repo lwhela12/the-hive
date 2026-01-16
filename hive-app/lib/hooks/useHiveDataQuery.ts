@@ -111,7 +111,9 @@ async function fetchQueenBeesWithHighlights(
 }
 
 export function useHiveDataQuery(communityId?: string, userId?: string) {
-  const today = new Date().toISOString().split('T')[0];
+  // Use local date to avoid timezone issues (toISOString uses UTC which can be wrong date)
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   // Use useQueries for parallel fetching
   const results = useQueries({
