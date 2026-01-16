@@ -1,0 +1,17 @@
+{
+  "name": "The HIVE",
+  "short_name": "HIVE",
+  "description": "AI-powered wish coordination for your community",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#bd9348",
+  "theme_color": "#bd9348",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
