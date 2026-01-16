@@ -136,7 +136,9 @@ export function ChatInterface({
     if (data) {
       setActiveConversationId(data.id);
       messageCountRef.current = 0; // Reset for new conversation
-      hasLoadedForConversationRef.current = null;
+      // Mark as already loaded to prevent loadMessages from overwriting optimistic updates
+      hasLoadedForConversationRef.current = data.id;
+      setMessages([]); // Start fresh for new conversation
       onConversationCreated?.(data);
       return data.id;
     }
@@ -496,9 +498,47 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
       }
     }
 
-    // Add user message to chat (with attachments if any)
-    const userMsg = await addMessage('user', userMessage, attachments);
-    const conversationIdToUse = userMsg?.conversation_id || activeConversationId;
+    // Ensure we have a conversation before adding messages
+    let conversationIdToUse = activeConversationId;
+    if (!conversationIdToUse) {
+      conversationIdToUse = await createConversation();
+      if (!conversationIdToUse) {
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    // Optimistic update: show user message immediately
+    const optimisticUserMessage: ChatMessage = {
+      id: `user-pending-${Date.now()}`,
+      user_id: session.user.id,
+      community_id: communityId || '',
+      conversation_id: conversationIdToUse,
+      role: 'user',
+      content: userMessage,
+      created_at: new Date().toISOString(),
+      attachments: attachments || null,
+    };
+    setMessages(prev => [...prev, optimisticUserMessage]);
+
+    // Save user message to DB in background
+    supabase
+      .from('chat_messages')
+      .insert({
+        user_id: session.user.id,
+        community_id: communityId,
+        conversation_id: conversationIdToUse,
+        role: 'user',
+        content: userMessage,
+        attachments: attachments && attachments.length > 0 ? attachments : null,
+      })
+      .then(({ error }) => {
+        if (error) {
+          console.error('Failed to save user message:', error);
+        } else {
+          messageCountRef.current += 1;
+        }
+      });
 
     try {
       let responseText: string;
@@ -572,6 +612,8 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
   }, [
     session?.user?.id,
     activeConversationId,
+    communityId,
+    createConversation,
     handleSendMessageStreaming,
     handleSendMessageNonStreaming,
   ]);
