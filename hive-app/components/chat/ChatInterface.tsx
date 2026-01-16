@@ -134,10 +134,12 @@ export function ChatInterface({
     }
 
     if (data) {
+      console.log('[Chat] Created conversation:', data.id);
       setActiveConversationId(data.id);
       messageCountRef.current = 0; // Reset for new conversation
       // Mark as already loaded to prevent loadMessages from overwriting optimistic updates
       hasLoadedForConversationRef.current = data.id;
+      console.log('[Chat] Setting messages to empty array for new conversation');
       setMessages([]); // Start fresh for new conversation
       onConversationCreated?.(data);
       return data.id;
@@ -147,6 +149,7 @@ export function ChatInterface({
   };
 
   const loadMessages = async () => {
+    console.log('[Chat] loadMessages called, activeConversationId:', activeConversationId, 'hasLoadedFor:', hasLoadedForConversationRef.current);
     if (!session?.user?.id || !communityId) return;
 
     // Prevent concurrent loads
@@ -191,6 +194,7 @@ export function ChatInterface({
         .limit(100);
 
       if (data) {
+        console.log('[Chat] loadMessages: fetched', data.length, 'messages from DB, setting state');
         setMessages(data);
         messageCountRef.current = data.length;
 
@@ -519,7 +523,13 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
       created_at: new Date().toISOString(),
       attachments: attachments || null,
     };
-    setMessages(prev => [...prev, optimisticUserMessage]);
+    console.log('[Chat] Adding optimistic user message:', optimisticUserMessage.content.substring(0, 50));
+    setMessages(prev => {
+      console.log('[Chat] Previous messages count:', prev.length);
+      const newMessages = [...prev, optimisticUserMessage];
+      console.log('[Chat] New messages count:', newMessages.length);
+      return newMessages;
+    });
 
     // Save user message to DB in background
     supabase
@@ -700,7 +710,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
       <FlatList
         ref={flatListRef}
         data={messages}
-        extraData={[isLoading, streamingContent]}
+        extraData={[isLoading, streamingContent, messages.length]}
         keyExtractor={keyExtractor}
         renderItem={renderMessage}
         contentContainerClassName="p-4 pb-2"
