@@ -52,6 +52,11 @@ verify_jwt = false
 [functions.delete-meeting]
 verify_jwt = false
 
+# Update meetings in Google Calendar and database - requires user authentication
+# Auth handled via _shared/auth.ts using jose library
+[functions.update-meeting]
+verify_jwt = false
+
 # DM notification system - uses service_role key
 # Sends push notifications for new DM messages
 [functions.notify-dm]

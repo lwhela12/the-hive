@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, Alert } from 'react-native';
-import { Audio } from 'expo-av';
+import { View, Text, Pressable, Alert, AppState, AppStateStatus, Platform } from 'react-native';
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
+import { useKeepAwake } from 'expo-keep-awake';
 import { supabase } from '../../lib/supabase';
 
 const NUM_BARS = 20;
@@ -15,10 +16,28 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
   const [duration, setDuration] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [audioLevels, setAudioLevels] = useState<number[]>(Array(NUM_BARS).fill(0));
+  const [wentToBackground, setWentToBackground] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const meterRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isUnloadedRef = useRef(false);
+
+  // Prevent screen from sleeping while recording
+  useKeepAwake();
+
+  // Track app state changes during recording
+  useEffect(() => {
+    if (!isRecording) return;
+
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        setWentToBackground(true);
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, [isRecording]);
 
   // Cleanup on unmount only
   useEffect(() => {
@@ -98,6 +117,10 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+        shouldDuckAndroid: false,
       });
 
       const { recording: newRecording } = await Audio.Recording.createAsync(
@@ -110,6 +133,7 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
       isUnloadedRef.current = false;
       setIsRecording(true);
       setDuration(0);
+      setWentToBackground(false);
 
       // Start timer after state is set
       if (timerRef.current) {
@@ -258,6 +282,22 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
             ? 'Saving recording...'
             : 'Ready to record'}
         </Text>
+
+        {/* Background warning */}
+        {wentToBackground && isRecording && (
+          <View className="mt-4 bg-amber-100 px-4 py-2 rounded-lg">
+            <Text className="text-amber-800 text-sm text-center">
+              ⚠️ App went to background - recording may be affected
+            </Text>
+          </View>
+        )}
+
+        {/* Keep screen on notice */}
+        {isRecording && !wentToBackground && Platform.OS !== 'web' && (
+          <Text className="text-gray-400 text-xs mt-4 text-center">
+            Screen will stay on while recording
+          </Text>
+        )}
       </View>
 
       {/* Controls */}

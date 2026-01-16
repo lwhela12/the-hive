@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, Pressable, Alert, Linking, useWindowDimensions, Platform } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Pressable, Alert, Linking, useWindowDimensions, Platform, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -21,6 +21,15 @@ export default function MeetingsScreen() {
   const [showRecorder, setShowRecorder] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    description: '',
+    location: '',
+    event_date: '',
+    event_time: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const fetchMeetings = useCallback(async () => {
     if (!communityId) return;
@@ -168,6 +177,78 @@ export default function MeetingsScreen() {
   };
 
   const isAdmin = profile?.role === 'admin';
+
+  const handleMarkComplete = async (meetingId: string) => {
+    const doMark = async () => {
+      const { error } = await supabase
+        .from('meetings')
+        .update({ processing_status: 'complete' })
+        .eq('id', meetingId);
+
+      if (error) {
+        Alert.alert('Error', 'Failed to update meeting status');
+      } else {
+        await fetchMeetings();
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Mark this meeting as complete? You can add notes manually.')) {
+        doMark();
+      }
+    } else {
+      Alert.alert(
+        'Mark Complete',
+        'Mark this meeting as complete? You can add notes manually.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Mark Complete', onPress: doMark },
+        ]
+      );
+    }
+  };
+
+  const handleEditEvent = (event: Event) => {
+    setEditForm({
+      title: event.title,
+      description: event.description || '',
+      location: event.location || '',
+      event_date: event.event_date,
+      event_time: event.event_time || '',
+    });
+    setEditingEvent(event);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingEvent) return;
+
+    setSavingEdit(true);
+    try {
+      // Use edge function to update both database and Google Calendar
+      const { error } = await supabase.functions.invoke('update-meeting', {
+        body: {
+          eventId: editingEvent.id,
+          title: editForm.title,
+          description: editForm.description || null,
+          location: editForm.location || null,
+          date: editForm.event_date,
+          time: editForm.event_time || null,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+      });
+
+      if (error) throw error;
+
+      setEditingEvent(null);
+      await fetchMeetings();
+      Alert.alert('Success', 'Meeting updated');
+    } catch (error) {
+      console.error('Error updating event:', error);
+      Alert.alert('Error', 'Failed to update meeting');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const handleRecordingComplete = async (audioPath: string) => {
     if (!communityId) {
@@ -322,6 +403,12 @@ export default function MeetingsScreen() {
                         <Text className="text-white font-semibold">Join</Text>
                       </Pressable>
                     )}
+                    <Pressable
+                      onPress={() => handleEditEvent(event)}
+                      className="bg-gray-200 px-3 py-2 rounded-lg active:bg-gray-300"
+                    >
+                      <Text className="text-gray-700 font-semibold">Edit</Text>
+                    </Pressable>
                     {isAdmin && (
                       <Pressable
                         onPress={() => handleDeleteMeeting(event.id, event.title)}
@@ -353,12 +440,14 @@ export default function MeetingsScreen() {
           </View>
         ) : (
           meetings.map((meeting) => (
-            <Pressable
+            <View
               key={meeting.id}
-              onPress={() => setSelectedMeeting(meeting)}
-              className="bg-white rounded-xl p-4 mb-3 shadow-sm active:bg-gray-50"
+              className="bg-white rounded-xl p-4 mb-3 shadow-sm"
             >
-              <View className="flex-row items-center justify-between">
+              <Pressable
+                onPress={() => setSelectedMeeting(meeting)}
+                className="flex-row items-center justify-between active:opacity-70"
+              >
                 <View className="flex-1">
                   <Text className="font-semibold text-gray-800">
                     Meeting on {formatDateLong(meeting.date)}
@@ -385,8 +474,19 @@ export default function MeetingsScreen() {
                     ? '✗'
                     : '⏳'}
                 </Text>
-              </View>
-            </Pressable>
+              </Pressable>
+              {/* Show Mark Complete button for non-complete meetings */}
+              {meeting.processing_status !== 'complete' && (
+                <Pressable
+                  onPress={() => handleMarkComplete(meeting.id)}
+                  className="mt-3 bg-gray-100 py-2 px-4 rounded-lg active:bg-gray-200 self-start"
+                >
+                  <Text className="text-gray-700 text-sm font-medium">
+                    {meeting.processing_status === 'failed' ? 'Skip & Mark Complete' : 'Mark Complete'}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           ))
         )}
       </ScrollView>
@@ -398,6 +498,95 @@ export default function MeetingsScreen() {
         communityId={communityId}
         onSchedule={handleScheduleMeeting}
       />
+
+      {/* Edit Meeting Modal */}
+      <Modal
+        visible={!!editingEvent}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setEditingEvent(null)}
+      >
+        <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <Pressable onPress={() => setEditingEvent(null)}>
+              <Text className="text-gray-500 text-base">Cancel</Text>
+            </Pressable>
+            <Text className="text-lg font-bold text-hive-dark">Edit Meeting</Text>
+            <Pressable
+              onPress={handleSaveEdit}
+              disabled={savingEdit || !editForm.title.trim()}
+              className={savingEdit || !editForm.title.trim() ? 'opacity-50' : ''}
+            >
+              <Text className="text-honey-600 text-base font-semibold">
+                {savingEdit ? 'Saving...' : 'Save'}
+              </Text>
+            </Pressable>
+          </View>
+
+          <ScrollView className="flex-1 p-4">
+            <View className="mb-4">
+              <Text className="text-sm font-medium text-gray-700 mb-1">Title</Text>
+              <TextInput
+                value={editForm.title}
+                onChangeText={(text) => setEditForm((f) => ({ ...f, title: text }))}
+                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                placeholder="Meeting title"
+              />
+            </View>
+
+            <View className="mb-4">
+              <Text className="text-sm font-medium text-gray-700 mb-1">Description</Text>
+              <TextInput
+                value={editForm.description}
+                onChangeText={(text) => setEditForm((f) => ({ ...f, description: text }))}
+                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                placeholder="Optional description"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <View className="mb-4">
+              <Text className="text-sm font-medium text-gray-700 mb-1">Location / Address</Text>
+              <TextInput
+                value={editForm.location}
+                onChangeText={(text) => setEditForm((f) => ({ ...f, location: text }))}
+                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                placeholder="e.g., 123 Main St or Joe's Coffee"
+              />
+            </View>
+
+            <View className="flex-row gap-4 mb-4">
+              <View className="flex-1">
+                <Text className="text-sm font-medium text-gray-700 mb-1">Date</Text>
+                <TextInput
+                  value={editForm.event_date}
+                  onChangeText={(text) => setEditForm((f) => ({ ...f, event_date: text }))}
+                  className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                  placeholder="YYYY-MM-DD"
+                />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-medium text-gray-700 mb-1">Time</Text>
+                <TextInput
+                  value={editForm.event_time}
+                  onChangeText={(text) => setEditForm((f) => ({ ...f, event_time: text }))}
+                  className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                  placeholder="HH:MM (24hr)"
+                />
+              </View>
+            </View>
+
+            {editingEvent?.meet_link && (
+              <View className="bg-gray-50 rounded-lg p-4 mt-4">
+                <Text className="text-sm text-gray-600">
+                  📹 This meeting has a Google Meet link attached
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }

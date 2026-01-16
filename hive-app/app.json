@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.lucaswhelan.thehive",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "The HIVE needs microphone access to record meetings.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["audio"]
       }
     },
     "notification": {
