@@ -210,10 +210,10 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
 
     if (currentCount > 0) {
       if (isInitialLoadRef.current) {
-        // Initial load: scroll immediately without animation
-        requestAnimationFrame(() => {
+        // Initial load: scroll to bottom after layout completes
+        setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: false });
-        });
+        }, 100);
         isInitialLoadRef.current = false;
       } else if (currentCount > previousCount) {
         // New message added: animate scroll
