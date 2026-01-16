@@ -196,6 +196,7 @@ export interface Meeting {
   recorded_by?: string;
   processing_status: 'pending' | 'transcribing' | 'summarizing' | 'complete' | 'failed';
   assemblyai_transcript_id?: string;
+  linked_event_id?: string;
   created_at: string;
 }
 
@@ -230,6 +231,8 @@ export interface HoneyPotTransaction {
   created_at: string;
 }
 
+export type EventStatus = 'scheduled' | 'completed' | 'cancelled';
+
 export interface Event {
   id: string;
   community_id: string;
@@ -241,6 +244,7 @@ export interface Event {
   google_event_id?: string;
   meet_link?: string;
   location?: string;
+  status?: EventStatus;
   related_user_id?: string;
   related_queen_bee_id?: string;
   created_by?: string;

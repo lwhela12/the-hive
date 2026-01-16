@@ -175,6 +175,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         refetchOnMount: 'always',
       },
       // Upcoming events (limit 5 for the hook, UI can further limit)
+      // Excludes completed events
       {
         queryKey: queryKeys.events(communityId || ''),
         queryFn: async () => {
@@ -183,6 +184,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
             .select('*')
             .gte('event_date', today)
             .eq('community_id', communityId!)
+            .or('status.is.null,status.eq.scheduled')
             .order('event_date', { ascending: true })
             .limit(5);
           return (data as Event[]) || [];
@@ -238,6 +240,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         staleTime: 30 * 60 * 1000, // Admin changes rarely
       },
       // Next meeting (for "Next Month" section and display)
+      // Excludes completed meetings
       {
         queryKey: ['nextMeeting', communityId],
         queryFn: async () => {
@@ -247,12 +250,14 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
             .gte('event_date', today)
             .eq('community_id', communityId!)
             .eq('event_type', 'meeting')
+            .or('status.is.null,status.eq.scheduled')
             .order('event_date', { ascending: true })
             .limit(1)) as { data: { event_date: string; event_time: string | null; title: string }[] | null };
           return data?.[0] || null;
         },
         enabled: !!communityId,
         staleTime: 10 * 60 * 1000,
+        refetchOnMount: 'always',
       },
       // User skills (for matching wishes)
       {

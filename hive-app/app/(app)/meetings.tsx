@@ -20,6 +20,8 @@ export default function MeetingsScreen() {
   const [upcomingMeetings, setUpcomingMeetings] = useState<Event[]>([]);
   const [showRecorder, setShowRecorder] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
+  const [showEventPicker, setShowEventPicker] = useState(false);
+  const [selectedEventForRecording, setSelectedEventForRecording] = useState<Event | null>(null);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [editForm, setEditForm] = useState({
@@ -47,6 +49,7 @@ export default function MeetingsScreen() {
     }
 
     // Fetch upcoming scheduled meetings - use local date to avoid timezone issues
+    // Exclude completed meetings
     const now = new Date();
     const today = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
     const { data: events, error: eventsError } = await supabase
@@ -55,6 +58,7 @@ export default function MeetingsScreen() {
       .eq('community_id', communityId)
       .eq('event_type', 'meeting')
       .gte('event_date', today)
+      .or('status.is.null,status.eq.scheduled')
       .order('event_date', { ascending: true })
       .limit(10);
 
@@ -62,6 +66,13 @@ export default function MeetingsScreen() {
       setUpcomingMeetings(events);
     }
   }, [communityId]);
+
+  // Get today's scheduled meetings for the event picker
+  const todaysMeetings = upcomingMeetings.filter((event) => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+    return event.event_date === today;
+  });
 
   useEffect(() => {
     fetchMeetings();
@@ -260,7 +271,7 @@ export default function MeetingsScreen() {
       const now = new Date();
       const localDate = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
 
-      // Create meeting record
+      // Create meeting record, optionally linked to a scheduled event
       const { data: meeting, error } = await supabase
         .from('meetings')
         .insert({
@@ -269,11 +280,20 @@ export default function MeetingsScreen() {
           recorded_by: profile?.id,
           processing_status: 'pending',
           community_id: communityId,
+          linked_event_id: selectedEventForRecording?.id || null,
         })
         .select()
         .single();
 
       if (error) throw error;
+
+      // Mark the linked event as completed
+      if (selectedEventForRecording) {
+        await supabase
+          .from('events')
+          .update({ status: 'completed' })
+          .eq('id', selectedEventForRecording.id);
+      }
 
       // Trigger transcription automatically
       const { error: transcribeError } = await supabase.functions.invoke('transcribe', {
@@ -285,10 +305,13 @@ export default function MeetingsScreen() {
       }
 
       setShowRecorder(false);
+      setSelectedEventForRecording(null);
       await fetchMeetings();
       Alert.alert(
         'Meeting Recorded',
-        'Your meeting has been saved and transcription has started. This may take a few minutes.'
+        selectedEventForRecording
+          ? `Recording linked to "${selectedEventForRecording.title}" and transcription started.`
+          : 'Your meeting has been saved and transcription has started. This may take a few minutes.'
       );
     } catch (error) {
       console.error('Error saving meeting:', error);
@@ -355,7 +378,15 @@ export default function MeetingsScreen() {
               <Text className="text-white font-semibold">Schedule</Text>
             </Pressable>
             <Pressable
-              onPress={() => setShowRecorder(true)}
+              onPress={() => {
+                // If there are today's meetings, show picker first
+                if (todaysMeetings.length > 0) {
+                  setShowEventPicker(true);
+                } else {
+                  setSelectedEventForRecording(null);
+                  setShowRecorder(true);
+                }
+              }}
               className="bg-honey-500 px-4 py-2 rounded-lg active:bg-honey-600"
             >
               <Text className="text-white font-semibold">Record</Text>
@@ -584,6 +615,77 @@ export default function MeetingsScreen() {
                 </Text>
               </View>
             )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Event Picker Modal - shown before recording */}
+      <Modal
+        visible={showEventPicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowEventPicker(false)}
+      >
+        <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <Pressable onPress={() => setShowEventPicker(false)}>
+              <Text className="text-gray-500 text-base">Cancel</Text>
+            </Pressable>
+            <Text className="text-lg font-bold text-hive-dark">Link to Meeting</Text>
+            <View style={{ width: 50 }} />
+          </View>
+
+          <ScrollView className="flex-1 p-4">
+            <Text className="text-gray-600 mb-4">
+              Select a scheduled meeting to link this recording to, or record without linking.
+            </Text>
+
+            {/* Today's scheduled meetings */}
+            {todaysMeetings.length > 0 && (
+              <View className="mb-6">
+                <Text className="text-sm font-semibold text-gray-500 uppercase mb-2">
+                  Today's Meetings
+                </Text>
+                {todaysMeetings.map((event) => (
+                  <Pressable
+                    key={event.id}
+                    onPress={() => {
+                      setSelectedEventForRecording(event);
+                      setShowEventPicker(false);
+                      setShowRecorder(true);
+                    }}
+                    className="bg-honey-50 border border-honey-200 rounded-xl p-4 mb-2 active:bg-honey-100"
+                  >
+                    <Text className="font-semibold text-gray-800">{event.title}</Text>
+                    {event.event_time && (
+                      <Text className="text-sm text-gray-500 mt-1">
+                        {event.event_time}
+                      </Text>
+                    )}
+                    {event.location && (
+                      <Text className="text-sm text-gray-500">📍 {event.location}</Text>
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            {/* Record without linking */}
+            <Pressable
+              onPress={() => {
+                setSelectedEventForRecording(null);
+                setShowEventPicker(false);
+                setShowRecorder(true);
+              }}
+              className="bg-gray-100 rounded-xl p-4 active:bg-gray-200"
+            >
+              <Text className="font-semibold text-gray-700 text-center">
+                Record Without Linking
+              </Text>
+              <Text className="text-sm text-gray-500 text-center mt-1">
+                Create a standalone recording
+              </Text>
+            </Pressable>
           </ScrollView>
         </SafeAreaView>
       </Modal>
