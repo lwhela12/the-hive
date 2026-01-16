@@ -480,16 +480,19 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     images?: SelectedImage[],
     refineWish?: string // The rough wish being refined (triggers REFINE_WISH flow)
   ) => {
+    console.log('[Chat] handleSendMessage called with:', userMessage?.substring(0, 50));
+
     if (!SUPABASE_FUNCTIONS_URL) {
-      console.error('Missing Supabase functions URL');
+      console.error('[Chat] Missing Supabase functions URL');
       return;
     }
 
     if (!session?.user?.id) {
-      console.error('No user session');
+      console.error('[Chat] No user session');
       return;
     }
 
+    console.log('[Chat] Passed initial checks, setting loading state');
     setIsLoading(true);
     setStreamingContent(null);
 
