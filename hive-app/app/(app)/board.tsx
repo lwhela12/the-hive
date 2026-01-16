@@ -8,6 +8,7 @@ import { BoardCategoryTabs } from '../../components/board/BoardCategoryTabs';
 import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
 import { BoardComposer } from '../../components/board/BoardComposer';
+import { BoardTopicComposer } from '../../components/board/BoardTopicComposer';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import type { BoardCategory, Attachment } from '../../types';
 
@@ -20,6 +21,7 @@ export default function BoardScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [showComposer, setShowComposer] = useState(false);
+  const [showTopicComposer, setShowTopicComposer] = useState(false);
 
   const isAdmin = communityRole === 'admin';
 
@@ -27,6 +29,7 @@ export default function BoardScreen() {
   const {
     data: categories = [],
     refetch: refetchCategories,
+    invalidateCategories,
   } = useBoardCategoriesQuery(communityId);
 
   // Auto-select first category when categories load
@@ -99,6 +102,54 @@ export default function BoardScreen() {
     return true;
   };
 
+  const handleCreateTopic = async (name: string, description: string, icon: string) => {
+    if (!profile || !communityId) {
+      Alert.alert('Not ready', 'Your profile is still loading. Please try again in a moment.');
+      return false;
+    }
+
+    try {
+      // Get the highest display_order to put new topic at the end
+      const maxOrder = categories.length > 0
+        ? Math.max(...categories.map(c => c.display_order))
+        : 0;
+
+      const { data, error } = await supabase.from('board_categories').insert({
+        community_id: communityId,
+        name,
+        description: description || null,
+        category_type: 'custom',
+        icon,
+        display_order: maxOrder + 1,
+        is_system: false,
+        requires_admin: false,
+        requires_approval: false, // Immediately available (no approval needed)
+        created_by: profile.id,
+      }).select().single();
+
+      if (error) {
+        console.error('Error creating topic:', error);
+        Alert.alert('Error', `Failed to create topic: ${error.message}`);
+        return false;
+      }
+
+      if (!data) {
+        Alert.alert('Error', 'Topic was not created. Please try again.');
+        return false;
+      }
+
+      // Refresh categories and select the new one
+      invalidateCategories();
+      setSelectedCategoryId(data.id);
+      return true;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error creating topic:', error);
+      Alert.alert('Error', `Failed to create topic: ${message}`);
+      return false;
+    }
+  };
+
   // Show post detail view
   if (selectedPostId) {
     return (
@@ -142,6 +193,7 @@ export default function BoardScreen() {
         categories={categories}
         selectedId={selectedCategory?.id || null}
         onSelect={handleCategorySelect}
+        onAddTopic={() => setShowTopicComposer(true)}
       />
 
       {/* Posts list */}
@@ -196,6 +248,13 @@ export default function BoardScreen() {
         userId={profile?.id || ''}
         onClose={() => setShowComposer(false)}
         onSubmit={handleCreatePost}
+      />
+
+      {/* Topic composer modal */}
+      <BoardTopicComposer
+        visible={showTopicComposer}
+        onClose={() => setShowTopicComposer(false)}
+        onSubmit={handleCreateTopic}
       />
     </SafeAreaView>
   );

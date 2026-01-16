@@ -62,13 +62,27 @@ async function fetchPosts(
 }
 
 export function useBoardCategoriesQuery(communityId?: string) {
-  return useQuery({
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
     queryKey: queryKeys.boardCategories(communityId || ''),
     queryFn: () => fetchCategories(communityId!),
     enabled: !!communityId,
     // Categories rarely change, cache for 10 minutes
     staleTime: 10 * 60 * 1000,
   });
+
+  // Invalidate categories cache (e.g., after creating a new category)
+  const invalidateCategories = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.boardCategories(communityId || ''),
+    });
+  }, [communityId, queryClient]);
+
+  return {
+    ...query,
+    invalidateCategories,
+  };
 }
 
 export function useBoardPostsQuery(communityId?: string, categoryId?: string) {
