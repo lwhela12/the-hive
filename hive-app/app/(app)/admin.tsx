@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../../components/ui/Avatar';
+import { EventDatePicker } from '../../components/ui/DatePicker';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { formatDateMedium, parseAmericanDate, isoToAmerican } from '../../lib/dateUtils';
 import type { Profile, QueenBee, Event, UserRole, CommunityInvite } from '../../types';
@@ -923,12 +924,12 @@ export default function AdminScreen() {
               onChangeText={setEventTitle}
               className="border border-gray-300 rounded-lg p-3 mb-3"
             />
-            <TextInput
-              placeholder="Date (MM-DD-YYYY)"
-              value={eventDate}
-              onChangeText={setEventDate}
-              className="border border-gray-300 rounded-lg p-3 mb-3"
-            />
+            <View className="mb-3">
+              <EventDatePicker
+                value={eventDate}
+                onChange={setEventDate}
+              />
+            </View>
             <TextInput
               placeholder="Description (optional)"
               value={eventDescription}

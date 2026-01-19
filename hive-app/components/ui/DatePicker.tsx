@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, Text, Pressable, Modal, ScrollView, Platform } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, Pressable, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const MONTHS = [
@@ -20,13 +20,17 @@ const MONTHS = [
 // Generate days 1-31
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
-// Generate years from 1920 to current year
-const currentYear = new Date().getFullYear();
-const YEARS = Array.from({ length: currentYear - 1919 }, (_, i) => currentYear - i);
-
-interface BirthdayPickerProps {
+interface DatePickerProps {
   value?: string; // ISO date string (YYYY-MM-DD) or American format (MM-DD-YYYY)
   onChange: (value: string) => void; // Returns American format (MM-DD-YYYY)
+  /** Minimum year to show (default: 1920 for birthdays) */
+  minYear?: number;
+  /** Maximum year to show (default: current year) */
+  maxYear?: number;
+  /** Whether to show future years (default: false for birthdays, true for events) */
+  allowFuture?: boolean;
+  /** Number of future years to show when allowFuture is true (default: 5) */
+  futureYears?: number;
 }
 
 function parseDate(dateStr?: string): { month: number | null; day: number | null; year: number | null } {
@@ -139,11 +143,34 @@ function Dropdown({ label, value, options, onChange, placeholder }: DropdownProp
   );
 }
 
-export function BirthdayPicker({ value, onChange }: BirthdayPickerProps) {
+export function DatePicker({
+  value,
+  onChange,
+  minYear = 1920,
+  maxYear,
+  allowFuture = false,
+  futureYears = 5,
+}: DatePickerProps) {
+  const currentYear = new Date().getFullYear();
+  const effectiveMaxYear = maxYear ?? (allowFuture ? currentYear + futureYears : currentYear);
+
+  // Generate years from max to min (newest first for events, oldest last for birthdays)
+  const YEARS = allowFuture
+    ? Array.from({ length: effectiveMaxYear - minYear + 1 }, (_, i) => effectiveMaxYear - i)
+    : Array.from({ length: effectiveMaxYear - minYear + 1 }, (_, i) => effectiveMaxYear - i);
+
   const parsed = parseDate(value);
   const [month, setMonth] = useState<number | null>(parsed.month);
   const [day, setDay] = useState<number | null>(parsed.day);
   const [year, setYear] = useState<number | null>(parsed.year);
+
+  // Re-parse when value changes externally
+  useEffect(() => {
+    const newParsed = parseDate(value);
+    setMonth(newParsed.month);
+    setDay(newParsed.day);
+    setYear(newParsed.year);
+  }, [value]);
 
   const updateDate = (newMonth: number | null, newDay: number | null, newYear: number | null) => {
     // Validate day against month/year
@@ -211,4 +238,15 @@ export function BirthdayPicker({ value, onChange }: BirthdayPickerProps) {
       />
     </View>
   );
+}
+
+// Convenience export for birthday-specific usage
+export function BirthdayPicker(props: Omit<DatePickerProps, 'allowFuture' | 'futureYears'>) {
+  return <DatePicker {...props} allowFuture={false} minYear={1920} />;
+}
+
+// Convenience export for event date usage
+export function EventDatePicker(props: Omit<DatePickerProps, 'minYear'>) {
+  const currentYear = new Date().getFullYear();
+  return <DatePicker {...props} minYear={currentYear - 1} allowFuture={true} futureYears={5} />;
 }

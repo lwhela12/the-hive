@@ -19,6 +19,7 @@ import {
 } from '../../components/hive/skeletons';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { Avatar } from '../../components/ui/Avatar';
+import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import type { Profile, Wish, WishGranter, MonthlyHighlight, Event } from '../../types';
 
@@ -222,35 +223,41 @@ export default function HiveScreen() {
   };
 
   const deleteEvent = async () => {
-    if (!editingEvent) return;
+    if (!editingEvent || !communityId) return;
 
-    Alert.alert(
-      'Delete Event',
-      'Are you sure you want to delete this event?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error } = await supabase
-                .from('events')
-                .delete()
-                .eq('id', editingEvent.id);
+    const doDelete = async () => {
+      try {
+        const { error } = await supabase
+          .from('events')
+          .delete()
+          .eq('id', editingEvent.id)
+          .eq('community_id', communityId);
 
-              if (error) throw error;
+        if (error) throw error;
 
-              closeEventModal();
-              await refetch();
-            } catch (error) {
-              console.error('Error deleting event:', error);
-              Alert.alert('Error', 'Failed to delete event');
-            }
-          },
-        },
-      ]
-    );
+        closeEventModal();
+        await refetch();
+      } catch (error) {
+        console.error('Error deleting event:', error);
+        Alert.alert('Error', 'Failed to delete event');
+      }
+    };
+
+    // Use window.confirm on web, Alert.alert on native
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm('Are you sure you want to delete this event?')) {
+        await doDelete();
+      }
+    } else {
+      Alert.alert(
+        'Delete Event',
+        'Are you sure you want to delete this event?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: doDelete },
+        ]
+      );
+    }
   };
 
   // Handle grant wish
@@ -818,18 +825,19 @@ export default function HiveScreen() {
                         onChangeText={setEventTitle}
                         className="border border-gray-300 rounded-lg px-4 py-3 text-base mb-3"
                       />
-                      <View className="flex-row mb-3">
-                        <TextInput
-                          placeholder="Date (MM-DD-YYYY)"
+                      <View className="mb-3">
+                        <EventDatePicker
                           value={eventDate}
-                          onChangeText={setEventDate}
-                          className="flex-1 border border-gray-300 rounded-lg px-4 py-3 text-base mr-2"
+                          onChange={setEventDate}
                         />
+                      </View>
+                      <View className="mb-3">
+                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Time (optional)</Text>
                         <TextInput
-                          placeholder="Time (HH:MM)"
+                          placeholder="HH:MM (e.g. 14:30)"
                           value={eventTime}
                           onChangeText={setEventTime}
-                          className="w-28 border border-gray-300 rounded-lg px-4 py-3 text-base"
+                          className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-cream"
                         />
                       </View>
                       <TextInput

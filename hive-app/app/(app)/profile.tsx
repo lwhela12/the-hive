@@ -8,7 +8,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { Avatar } from '../../components/ui/Avatar';
-import { BirthdayPicker } from '../../components/ui/BirthdayPicker';
+import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
