@@ -101,6 +101,15 @@ export interface CommunitySkillData {
   description: string;
 }
 
+// Recent room message for context
+export interface RecentRoomMessage {
+  roomName: string;
+  roomType: 'community' | 'dm' | 'group';
+  senderName: string;
+  content: string;
+  createdAt: string;
+}
+
 // Board post index for quick reference
 export interface BoardPostIndexItem {
   id: string;

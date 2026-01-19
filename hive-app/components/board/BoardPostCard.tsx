@@ -1,6 +1,7 @@
 import { View, Text, Pressable, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDateShort } from '../../lib/dateUtils';
+import { LinkifiedText } from '../ui/LinkifiedText';
 import type { BoardPost, BoardReaction, Profile } from '../../types';
 
 interface BoardPostCardProps {
@@ -42,13 +43,12 @@ export function BoardPostCard({ post, onPress }: BoardPostCardProps) {
           >
             {post.title}
           </Text>
-          <Text
-            style={{ fontFamily: 'Lato_400Regular' }}
-            className="text-charcoal/70 text-sm mb-2"
-            numberOfLines={2}
+          <LinkifiedText
+            style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: 'rgba(49, 49, 48, 0.7)', marginBottom: 8 }}
+            linkStyle={{ color: '#bd9348' }}
           >
-            {post.content}
-          </Text>
+            {post.content.length > 100 ? post.content.slice(0, 100) + '...' : post.content}
+          </LinkifiedText>
           <View className="flex-row items-center">
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs">
               {post.author?.name || 'Unknown'} · {timeAgo}

@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import {
-  View,
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -14,6 +14,27 @@ import { SelectedImage } from '../../lib/imagePicker';
 import { uploadMultipleImages } from '../../lib/attachmentUpload';
 import type { ChatMessage, Conversation, ConversationMode, Attachment } from '../../types';
 
+// Retry helper with exponential backoff
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 500
+): Promise<T> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      if (attempt < maxRetries - 1) {
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
 interface ChatInterfaceProps {
   mode?: ConversationMode;
   context?: 'skills' | 'wishes';
@@ -21,6 +42,7 @@ interface ChatInterfaceProps {
   onSkillsCaptured?: () => void;
   onOnboardingComplete?: () => void;
   onConversationCreated?: (conversation: Conversation) => void;
+  onTitleGenerated?: (conversationId: string, title: string) => void;
   skipLoadHistory?: boolean;
   refineWishContext?: string; // Rough wish to refine with Clive
 }
@@ -71,6 +93,7 @@ export function ChatInterface({
   onSkillsCaptured,
   onOnboardingComplete,
   onConversationCreated,
+  onTitleGenerated,
   skipLoadHistory = false,
   refineWishContext,
 }: ChatInterfaceProps) {
@@ -86,6 +109,7 @@ export function ChatInterface({
   const previousMessageCountRef = useRef(0);
   const isLoadingMessagesRef = useRef(false);
   const hasLoadedForConversationRef = useRef<string | null>(null);
+  const hasGeneratedTitleRef = useRef<Set<string>>(new Set());
   const hasInitiatedRefineRef = useRef(false);
 
   // Update activeConversationId when prop changes
@@ -233,26 +257,42 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     return null;
   };
 
-  const generateTitleIfNeeded = async (convId: string) => {
+  const generateTitleIfNeeded = async (convId: string, currentMessageCount: number) => {
     // Generate title after 3 messages (greeting + user message + assistant response)
-    if (messageCountRef.current === 3) {
-      try {
-        const accessToken = await getAccessToken();
-        if (!accessToken) return;
+    // Use passed count to avoid stale ref issues
+    // Skip if we've already generated/attempted title for this conversation
+    if (currentMessageCount < 3 || hasGeneratedTitleRef.current.has(convId)) {
+      return;
+    }
 
-        // Call edge function to generate title with Claude Haiku
-        await fetch(`${SUPABASE_FUNCTIONS_URL}/generate-title`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-            ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY } : {}),
-          },
-          body: JSON.stringify({ conversation_id: convId }),
-        });
-      } catch (error) {
-        console.error('Failed to generate title:', error);
+    // Mark as attempted before the async call to prevent duplicate attempts
+    hasGeneratedTitleRef.current.add(convId);
+
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) return;
+
+      // Call edge function to generate title with Claude Haiku
+      const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/generate-title`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY } : {}),
+        },
+        body: JSON.stringify({ conversation_id: convId }),
+      });
+
+      if (response.ok) {
+        const { title } = await response.json();
+        if (title && onTitleGenerated) {
+          onTitleGenerated(convId, title);
+        }
       }
+    } catch (error) {
+      console.error('Failed to generate title:', error);
+      // On error, remove from set so it can be retried
+      hasGeneratedTitleRef.current.delete(convId);
     }
   };
 
@@ -290,8 +330,8 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
       setMessages((prev) => [...prev, data]);
       messageCountRef.current += 1;
 
-      // Generate title after a few messages
-      generateTitleIfNeeded(convId);
+      // Generate title after a few messages (pass current count)
+      generateTitleIfNeeded(convId, messageCountRef.current);
     }
 
     return data;
@@ -521,24 +561,30 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     };
     setMessages(prev => [...prev, optimisticUserMessage]);
 
-    // Save user message to DB in background
-    supabase
-      .from('chat_messages')
-      .insert({
-        user_id: session.user.id,
-        community_id: communityId,
-        conversation_id: conversationIdToUse,
-        role: 'user',
-        content: userMessage,
-        attachments: attachments && attachments.length > 0 ? attachments : null,
-      })
-      .then(({ error }) => {
-        if (error) {
-          console.error('Failed to save user message:', error);
-        } else {
-          messageCountRef.current += 1;
-        }
-      });
+    // Save user message to DB in background with retry
+    const saveUserMessage = async () => {
+      const { error } = await supabase
+        .from('chat_messages')
+        .insert({
+          user_id: session.user.id,
+          community_id: communityId,
+          conversation_id: conversationIdToUse,
+          role: 'user',
+          content: userMessage,
+          attachments: attachments && attachments.length > 0 ? attachments : null,
+        });
+      if (error) throw error;
+      messageCountRef.current += 1;
+    };
+
+    retryWithBackoff(saveUserMessage).catch((error) => {
+      console.error('Failed to save user message after retries:', error);
+      Alert.alert(
+        'Message not saved',
+        'Your message was sent but could not be saved. Please check your connection.',
+        [{ text: 'OK' }]
+      );
+    });
 
     try {
       let responseText: string;
@@ -575,26 +621,28 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
       setMessages(prev => [...prev, optimisticMessage]);
       setStreamingContent(null);
 
-      // Persist to DB in background (don't use addMessage to avoid duplicate state update)
-      supabase
-        .from('chat_messages')
-        .insert({
-          user_id: session?.user?.id,
-          community_id: communityId,
-          conversation_id: conversationIdToUse,
-          role: 'assistant',
-          content: responseText,
-        })
-        .then(({ error }) => {
-          if (!error) {
-            messageCountRef.current += 1;
-            if (conversationIdToUse) {
-              generateTitleIfNeeded(conversationIdToUse);
-            }
-          } else {
-            console.error('Failed to save assistant message:', error);
-          }
-        });
+      // Persist to DB in background with retry (don't use addMessage to avoid duplicate state update)
+      const saveAssistantMessage = async () => {
+        const { error } = await supabase
+          .from('chat_messages')
+          .insert({
+            user_id: session?.user?.id,
+            community_id: communityId,
+            conversation_id: conversationIdToUse,
+            role: 'assistant',
+            content: responseText,
+          });
+        if (error) throw error;
+        messageCountRef.current += 1;
+        if (conversationIdToUse) {
+          generateTitleIfNeeded(conversationIdToUse, messageCountRef.current);
+        }
+      };
+
+      retryWithBackoff(saveAssistantMessage).catch((error) => {
+        console.error('Failed to save assistant message after retries:', error);
+        // Don't alert for assistant messages - less critical since user can see the response
+      });
 
     } catch (error) {
       console.error('Error sending message:', error);

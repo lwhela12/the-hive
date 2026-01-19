@@ -84,7 +84,7 @@ export async function summarizeBoardActivity(
       reply_count,
       created_at,
       category:board_categories(name, category_type),
-      author:profiles(name)
+      author:profiles!board_posts_author_id_fkey(name)
     `
     )
     .eq('community_id', communityId)
@@ -159,8 +159,8 @@ export async function summarizeRoomMessages(
   }
 
   const roomIds = memberships.map((m) => m.room_id);
-  const oneDayAgo = new Date();
-  oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
   // Get recent messages from these rooms
   const { data: messages } = await supabase
@@ -176,9 +176,9 @@ export async function summarizeRoomMessages(
     .in('room_id', roomIds)
     .eq('community_id', communityId)
     .is('deleted_at', null)
-    .gte('created_at', oneDayAgo.toISOString())
+    .gte('created_at', sevenDaysAgo.toISOString())
     .order('created_at', { ascending: false })
-    .limit(30);
+    .limit(50);
 
   if (!messages || messages.length === 0) {
     return { summary: '', count: 0 };
@@ -195,15 +195,16 @@ export async function summarizeRoomMessages(
   });
 
   const formattedMessages = Object.entries(roomGroups)
-    .map(([room, msgs]) => `[${room}]\n${msgs.slice(0, 5).join('\n')}`)
+    .map(([room, msgs]) => `[${room}]\n${msgs.slice(0, 10).join('\n')}`)
     .join('\n\n');
 
-  const prompt = `Summarize recent chat activity in the HIVE community chat rooms.
+  const prompt = `Summarize recent chat activity in the HIVE community chat rooms from the last 7 days.
 
-For community rooms: Summarize main discussion topics and any important info.
-For DMs: Just note who the user has been chatting with and general topics (no private details).
+For community rooms: Summarize main discussion topics, any decisions made, questions asked, and important info shared.
+For DMs/group chats: Note who the user has been chatting with and the key topics discussed.
 
-Keep summary under 100 words. Be brief.
+Be specific about what was discussed - include names, topics, and any action items or plans mentioned.
+Keep summary under 200 words but be informative.
 
 Recent chat activity:
 ${formattedMessages}
@@ -214,7 +215,7 @@ Summary:`;
     const anthropic = getAnthropicClient();
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 200,
+      max_tokens: 400,
       messages: [{ role: 'user', content: prompt }],
     });
 

@@ -78,11 +78,13 @@ Examples:
 
 5. **You know the community.** You can see everyone's public wishes and skills. When relevant, mention potential matches.
 
-6. **You can reference board posts.** Use the search_board_posts and get_board_post tools to find and reference specific discussions.
+6. **You can see recent conversations.** Your context includes recent messages from chat rooms the user is part of (in the "Recent Conversations" section). Reference these naturally when relevant - you don't need a tool to access them, they're already in your context.
 
-7. **The Queen Bee is special.** The current Queen Bee's project takes priority. Look for ways to help their project.
+7. **You can reference board posts.** Use the search_board_posts and get_board_post tools to find and reference specific discussions.
 
-8. **Consolidation over accumulation.** Help users refine and combine wishes rather than accumulating a long list.
+8. **The Queen Bee is special.** The current Queen Bee's project takes priority. Look for ways to help their project.
+
+9. **Consolidation over accumulation.** Help users refine and combine wishes rather than accumulating a long list.
 
 ## New User Setup Flow
 
@@ -767,7 +769,7 @@ serve(async (req) => {
                 reply_count,
                 created_at,
                 category:board_categories(name, category_type),
-                author:profiles(name)
+                author:profiles!board_posts_author_id_fkey(name)
               `)
               .eq('community_id', communityId)
               .order('is_pinned', { ascending: false })
@@ -831,7 +833,7 @@ serve(async (req) => {
                 reply_count,
                 created_at,
                 category:board_categories(name, category_type),
-                author:profiles(name, avatar_url)
+                author:profiles!board_posts_author_id_fkey(name, avatar_url)
               `)
               .eq('id', post_id)
               .eq('community_id', communityId)
@@ -849,7 +851,7 @@ serve(async (req) => {
                 id,
                 content,
                 created_at,
-                author:profiles(name)
+                author:profiles!board_replies_author_id_fkey(name)
               `)
               .eq('post_id', post_id)
               .order('created_at', { ascending: true });

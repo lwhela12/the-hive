@@ -3,6 +3,7 @@ import { View, Text, Pressable, Modal, Dimensions, Image } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../ui/Avatar';
+import { LinkifiedText } from '../ui/LinkifiedText';
 import type { RoomMessage, Profile, MessageReaction, Attachment } from '../../types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -190,13 +191,17 @@ export const RoomMessageItem = memo(function RoomMessageItem({
             >
               {/* Message content */}
               {(!isDeleted && hasContent) && (
-                <Text
-                  selectable={false}
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className={`text-base leading-6 ${isOwnMessage ? 'text-white' : 'text-charcoal'}`}
+                <LinkifiedText
+                  style={{
+                    fontFamily: 'Lato_400Regular',
+                    fontSize: 16,
+                    lineHeight: 24,
+                    color: isOwnMessage ? '#FFFFFF' : '#313130',
+                  }}
+                  linkStyle={{ color: isOwnMessage ? '#f6f4e5' : '#bd9348' }}
                 >
                   {message.content}
-                </Text>
+                </LinkifiedText>
               )}
               {isDeleted && (
                 <Text

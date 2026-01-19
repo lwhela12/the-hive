@@ -4,6 +4,7 @@ import { formatDateShort } from '../../lib/dateUtils';
 import type { BoardReply, Profile } from '../../types';
 import { BoardReactionBar } from './BoardReactionBar';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
+import { LinkifiedText } from '../ui/LinkifiedText';
 
 interface BoardReplyItemProps {
   reply: BoardReply & { author?: Profile };
@@ -94,9 +95,12 @@ export function BoardReplyItem({
               </View>
             </View>
           ) : (
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal mb-2">
+            <LinkifiedText
+              style={{ fontFamily: 'Lato_400Regular', fontSize: 16, color: '#313130', marginBottom: 8 }}
+              linkStyle={{ color: '#bd9348' }}
+            >
               {reply.content}
-            </Text>
+            </LinkifiedText>
           )}
 
           {reply.attachments && reply.attachments.length > 0 && (

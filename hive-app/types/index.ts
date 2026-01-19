@@ -178,11 +178,13 @@ export interface QueenBeeUpdate {
 export interface MonthlyHighlight {
   id: string;
   queen_bee_id: string;
-  meeting_id: string;
+  meeting_id?: string;
   community_id: string;
   highlight: string;
   display_order: number;
+  created_by?: string;
   created_at: string;
+  creator?: Profile;
 }
 
 export interface Meeting {

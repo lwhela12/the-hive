@@ -35,6 +35,26 @@ serve(async (req) => {
       return errorResponse('conversation_id is required', 400);
     }
 
+    // Check if conversation already has a title
+    const { data: conversation, error: convError } = await supabaseClient
+      .from('conversations')
+      .select('title')
+      .eq('id', conversation_id)
+      .eq('user_id', userId)
+      .single();
+
+    if (convError) {
+      return errorResponse('Could not fetch conversation', 400);
+    }
+
+    // If already has a title, return it without regenerating
+    if (conversation?.title) {
+      return new Response(
+        JSON.stringify({ title: conversation.title, existing: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Get the first few messages from the conversation
     const { data: messages, error: messagesError } = await supabaseClient
       .from('chat_messages')

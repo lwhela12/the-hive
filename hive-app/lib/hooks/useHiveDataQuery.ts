@@ -78,7 +78,7 @@ async function fetchQueenBeesWithHighlights(
   if (qbIdsForHighlights.length > 0) {
     const { data: highlights } = (await supabase
       .from('monthly_highlights')
-      .select('*')
+      .select('*, creator:profiles!created_by(*)')
       .in('queen_bee_id', qbIdsForHighlights)
       .order('display_order', { ascending: true })) as {
       data: MonthlyHighlight[] | null;
@@ -136,7 +136,6 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
             .eq('status', 'public')
             .eq('is_active', true)
             .eq('community_id', communityId!)
-            .neq('user_id', userId!)
             .order('created_at', { ascending: false });
           if (error) {
             console.error('Error fetching public wishes:', error);
@@ -307,6 +306,14 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
     userSkills: userSkillsResult.data || [],
     isLoading,
     isRefetching,
+    // Per-query loading states for skeleton UI
+    loading: {
+      queenBees: queenBeesResult.isLoading,
+      publicWishes: wishesResult.isLoading,
+      grantedWishes: grantedWishesResult.isLoading,
+      events: eventsResult.isLoading,
+      honeyPot: honeyPotResult.isLoading,
+    },
     refetch: () => Promise.all(results.map((r) => r.refetch())),
   };
 }

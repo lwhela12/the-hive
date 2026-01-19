@@ -1,10 +1,10 @@
 import { View, Text, Pressable } from 'react-native';
 import { useState } from 'react';
 import { Avatar } from '../ui/Avatar';
-import type { QueenBee, Profile } from '../../types';
+import type { QueenBee, Profile, MonthlyHighlight } from '../../types';
 
 interface QueenBeeCardProps {
-  queenBee: QueenBee & { user: Profile };
+  queenBee: QueenBee & { user: Profile; highlights?: MonthlyHighlight[] };
   onAddUpdate?: () => void;
 }
 
@@ -38,6 +38,30 @@ export function QueenBeeCard({ queenBee, onAddUpdate }: QueenBeeCardProps) {
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal mb-4">
               {queenBee.project_description}
             </Text>
+          )}
+
+          {/* Notes/Highlights */}
+          {queenBee.highlights && queenBee.highlights.length > 0 && (
+            <View className="mb-4">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm mb-2">
+                Notes
+              </Text>
+              {queenBee.highlights.map((highlight) => (
+                <View key={highlight.id} className="flex-row items-start mb-2">
+                  <Text className="text-gold mr-2">•</Text>
+                  <View className="flex-1">
+                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                      {highlight.highlight}
+                    </Text>
+                    {highlight.creator && (
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs mt-0.5">
+                        — {highlight.creator.name}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
           )}
 
           <View className="flex-row items-center justify-between">

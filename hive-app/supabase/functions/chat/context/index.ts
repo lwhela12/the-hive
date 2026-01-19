@@ -12,6 +12,7 @@ import type {
   CachedSummary,
   ContextSummaryType,
   BoardPostIndexItem,
+  RecentRoomMessage,
 } from './types.ts';
 import {
   summarizeConversation,
@@ -69,24 +70,27 @@ export async function buildContext(params: BuildContextParams): Promise<ContextR
   );
   metadata.conversationMessageCount = messageCount;
 
-  // 4. Get cached summaries and board post index (only for default mode)
+  // 4. Get cached summaries, board post index, and recent room messages (only for default mode)
   let boardSummary = '';
   let messagesSummary = '';
   let meetingsSummary = '';
   let boardPostIndex: BoardPostIndexItem[] = [];
+  let recentRoomMessages: RecentRoomMessage[] = [];
 
   if (mode === 'default') {
-    // Fetch summaries and board post index in parallel
-    const [boardSummaryResult, messagesSummaryResult, meetingsSummaryResult, boardIndexResult] = await Promise.all([
+    // Fetch summaries, board post index, and recent room messages in parallel
+    const [boardSummaryResult, messagesSummaryResult, meetingsSummaryResult, boardIndexResult, roomMessagesResult] = await Promise.all([
       getOrGenerateSummary(supabase, communityId, userId, 'board_activity', metadata),
       getOrGenerateSummary(supabase, communityId, userId, 'room_messages', metadata),
       getOrGenerateSummary(supabase, communityId, userId, 'meetings', metadata),
       fetchBoardPostIndex(supabase, communityId),
+      fetchRecentRoomMessages(supabase, userId, communityId),
     ]);
     boardSummary = boardSummaryResult;
     messagesSummary = messagesSummaryResult;
     meetingsSummary = meetingsSummaryResult;
     boardPostIndex = boardIndexResult;
+    recentRoomMessages = roomMessagesResult;
   }
 
   // 5. Assemble the final context string
@@ -98,6 +102,7 @@ export async function buildContext(params: BuildContextParams): Promise<ContextR
     communityContext,
     conversationSummary,
     boardPostIndex,
+    recentRoomMessages,
     boardSummary,
     messagesSummary,
     meetingsSummary,
@@ -234,6 +239,69 @@ async function fetchCommunityContext(
 }
 
 /**
+ * Fetch recent room messages that the user can see
+ * Returns raw messages from rooms the user is a member of (last 3 days)
+ */
+async function fetchRecentRoomMessages(
+  supabase: SupabaseClient,
+  userId: string,
+  communityId: string
+): Promise<RecentRoomMessage[]> {
+  // Get rooms the user is a member of
+  const { data: memberships } = await supabase
+    .from('chat_room_members')
+    .select('room_id')
+    .eq('user_id', userId);
+
+  if (!memberships || memberships.length === 0) {
+    console.log('[Context] User has no room memberships');
+    return [];
+  }
+
+  const roomIds = memberships.map((m) => m.room_id);
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+  console.log('[Context] Fetching room messages for user from', roomIds.length, 'rooms');
+
+  // Get recent messages from these rooms
+  const { data: messages, error } = await supabase
+    .from('room_messages')
+    .select(`
+      content,
+      created_at,
+      room:chat_rooms(name, room_type),
+      sender:profiles(name)
+    `)
+    .in('room_id', roomIds)
+    .eq('community_id', communityId)
+    .is('deleted_at', null)
+    .gte('created_at', threeDaysAgo.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  if (error) {
+    console.error('[Context] Error fetching room messages:', error);
+    return [];
+  }
+
+  if (!messages || messages.length === 0) {
+    console.log('[Context] No recent room messages found');
+    return [];
+  }
+
+  console.log('[Context] Found', messages.length, 'recent room messages');
+
+  return messages.map((m: any) => ({
+    roomName: m.room?.name || (m.room?.room_type === 'dm' ? 'DM' : 'Chat'),
+    roomType: m.room?.room_type || 'community',
+    senderName: m.sender?.name || 'Unknown',
+    content: m.content,
+    createdAt: m.created_at,
+  }));
+}
+
+/**
  * Fetch recent board posts as a structured index for quick reference
  * Returns up to 15 recent posts with key metadata (no full content)
  */
@@ -241,8 +309,11 @@ async function fetchBoardPostIndex(
   supabase: SupabaseClient,
   communityId: string
 ): Promise<BoardPostIndexItem[]> {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 14); // 2 weeks of posts
+  const fourteenDaysAgo = new Date();
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+  console.log('[Context] Fetching board post index for community:', communityId);
+  console.log('[Context] Date filter - posts since:', fourteenDaysAgo.toISOString());
 
   const { data: posts, error } = await supabase
     .from('board_posts')
@@ -253,20 +324,32 @@ async function fetchBoardPostIndex(
       reply_count,
       created_at,
       category:board_categories(name),
-      author:profiles(name)
+      author:profiles!board_posts_author_id_fkey(name)
     `)
     .eq('community_id', communityId)
-    .gte('created_at', sevenDaysAgo.toISOString())
+    .gte('created_at', fourteenDaysAgo.toISOString())
     .order('is_pinned', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(15);
 
-  if (error || !posts) {
+  if (error) {
     console.error('[Context] Error fetching board post index:', error);
     return [];
   }
 
-  return posts.map((p: any) => ({
+  console.log('[Context] Board post index query returned', posts?.length || 0, 'posts');
+
+  if (!posts || posts.length === 0) {
+    // Try without date filter to see if posts exist at all
+    const { data: allPosts, count } = await supabase
+      .from('board_posts')
+      .select('id', { count: 'exact', head: true })
+      .eq('community_id', communityId);
+    console.log('[Context] Total board posts in community (no date filter):', count);
+    return [];
+  }
+
+  const result = posts.map((p: any) => ({
     id: p.id,
     title: p.title,
     category: p.category?.name || 'General',
@@ -275,6 +358,10 @@ async function fetchBoardPostIndex(
     is_pinned: p.is_pinned || false,
     created_at: p.created_at,
   }));
+
+  console.log('[Context] Board post index items:', JSON.stringify(result.map(r => ({ id: r.id, title: r.title }))));
+
+  return result;
 }
 
 /**
@@ -504,6 +591,7 @@ function assembleContext(data: {
   communityContext: CommunityContextData;
   conversationSummary: string;
   boardPostIndex: BoardPostIndexItem[];
+  recentRoomMessages: RecentRoomMessage[];
   boardSummary: string;
   messagesSummary: string;
   meetingsSummary: string;
@@ -578,6 +666,7 @@ Honey Pot: $${data.communityContext.honeyPot.toFixed(2)}
 ${events}`);
 
     // Board post index (structured data for reference)
+    console.log('[Context] assembleContext - boardPostIndex length:', data.boardPostIndex.length);
     if (data.boardPostIndex.length > 0) {
       const postIndex = data.boardPostIndex.map((p) => ({
         id: p.id,
@@ -591,6 +680,37 @@ ${events}`);
 \`\`\`json
 ${JSON.stringify(postIndex, null, 2)}
 \`\`\``);
+      console.log('[Context] Board post index added to context');
+    } else {
+      console.log('[Context] No board posts to add to context');
+    }
+
+    // Recent room messages (raw messages from last 3 days for detail)
+    if (data.recentRoomMessages.length > 0) {
+      // Group messages by room
+      const messagesByRoom: Record<string, string[]> = {};
+      for (const msg of data.recentRoomMessages) {
+        const roomKey = msg.roomName;
+        if (!messagesByRoom[roomKey]) {
+          messagesByRoom[roomKey] = [];
+        }
+        // Format: "Name: message content (timestamp)"
+        const timeStr = new Date(msg.createdAt).toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        });
+        messagesByRoom[roomKey].push(`${msg.senderName}: ${msg.content.slice(0, 200)}${msg.content.length > 200 ? '...' : ''} (${timeStr})`);
+      }
+
+      const formattedRoomMessages = Object.entries(messagesByRoom)
+        .map(([room, msgs]) => `### ${room}\n${msgs.join('\n')}`)
+        .join('\n\n');
+
+      sections.push(`## Recent Conversations (Last 3 Days)
+${formattedRoomMessages}`);
+      console.log('[Context] Added', data.recentRoomMessages.length, 'recent room messages to context');
     }
 
     // Cached summaries (only include if we have content)
@@ -600,7 +720,7 @@ ${data.boardSummary}`);
     }
 
     if (data.messagesSummary) {
-      sections.push(`## Recent Chat Activity
+      sections.push(`## Chat Activity Summary (Last 7 Days)
 ${data.messagesSummary}`);
     }
 

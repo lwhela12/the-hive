@@ -8,6 +8,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { Avatar } from '../../components/ui/Avatar';
+import { BirthdayPicker } from '../../components/ui/BirthdayPicker';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
@@ -504,13 +505,9 @@ export default function ProfileScreen() {
             <View className="p-4 border-b border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Birthday</Text>
               {isEditing ? (
-                <TextInput
+                <BirthdayPicker
                   value={editBirthday}
-                  onChangeText={setEditBirthday}
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal text-base p-0"
-                  placeholder="MM-DD-YYYY"
-                  placeholderTextColor="#9CA3AF"
+                  onChange={setEditBirthday}
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">

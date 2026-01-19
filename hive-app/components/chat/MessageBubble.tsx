@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { View, Text, Dimensions } from 'react-native';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { MarkdownContent } from './MarkdownContent';
+import { LinkifiedText } from '../ui/LinkifiedText';
 import type { ChatMessage } from '../../types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -37,13 +38,13 @@ export const MessageBubble = memo(function MessageBubble({
           }`}
         >
           {isUser ? (
-            // User messages: plain text (users don't write markdown)
-            <Text
-              style={{ fontFamily: 'Lato_400Regular' }}
-              className="text-base leading-6 text-white"
+            // User messages: plain text with clickable links
+            <LinkifiedText
+              style={{ fontFamily: 'Lato_400Regular', fontSize: 16, lineHeight: 24, color: '#FFFFFF' }}
+              linkStyle={{ color: '#f6f4e5' }}
             >
               {message.content}
-            </Text>
+            </LinkifiedText>
           ) : (
             // Assistant messages: render with Markdown
             <View className="flex-1 flex-shrink">

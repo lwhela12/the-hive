@@ -7,17 +7,19 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { formatDateMedium } from '../../lib/dateUtils';
 import { BoardReactionBar } from './BoardReactionBar';
 import { BoardReplyItem } from './BoardReplyItem';
+import { BoardComposer } from './BoardComposer';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
+import { LinkifiedText } from '../ui/LinkifiedText';
 import { pickMultipleImages, SelectedImage } from '../../lib/imagePicker';
 import { uploadMultipleImages } from '../../lib/attachmentUpload';
-import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment } from '../../types';
+import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment, BoardCategory } from '../../types';
 
 interface BoardPostDetailProps {
   postId: string;
   onBack: () => void;
 }
 
-type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardReaction[] };
+type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardReaction[]; category?: BoardCategory };
 type ReplyWithAuthor = BoardReply & { author?: Profile; reactions?: BoardReaction[]; nested_replies?: ReplyWithAuthor[] };
 
 export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
@@ -29,11 +31,14 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showEditComposer, setShowEditComposer] = useState(false);
+
+  const isAuthor = profile?.id === post?.author_id;
 
   const fetchPost = useCallback(async () => {
     const { data, error } = await supabase
       .from('board_posts')
-      .select('*, author:profiles!board_posts_author_id_fkey(*)')
+      .select('*, author:profiles!board_posts_author_id_fkey(*), category:board_categories!board_posts_category_id_fkey(*)')
       .eq('id', postId)
       .single();
 
@@ -254,6 +259,49 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     ]);
   };
 
+  const handleEditPost = async (title: string, content: string, attachments?: Attachment[]) => {
+    try {
+      const { error } = await supabase
+        .from('board_posts')
+        .update({
+          title,
+          content,
+          edited_at: new Date().toISOString(),
+          // Only update attachments if new ones were provided
+          ...(attachments && attachments.length > 0 ? { attachments } : {}),
+        })
+        .eq('id', postId);
+
+      if (error) throw error;
+
+      await fetchPost();
+      return true;
+    } catch (error) {
+      console.error('Error editing post:', error);
+      Alert.alert('Error', 'Failed to edit post.');
+      return false;
+    }
+  };
+
+  const handleDeletePost = async () => {
+    Alert.alert('Delete Post', 'Are you sure you want to delete this post? This will also delete all replies.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await supabase.from('board_posts').delete().eq('id', postId);
+            onBack(); // Navigate back after deletion
+          } catch (error) {
+            console.error('Error deleting post:', error);
+            Alert.alert('Error', 'Failed to delete post.');
+          }
+        },
+      },
+    ]);
+  };
+
   if (!post) {
     return (
       <SafeAreaView className="flex-1 bg-cream items-center justify-center" edges={['top']}>
@@ -274,6 +322,24 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg flex-1">
           Post
         </Text>
+        {isAuthor && (
+          <View className="flex-row items-center gap-2">
+            <Pressable
+              onPress={() => setShowEditComposer(true)}
+              className="p-2"
+              hitSlop={8}
+            >
+              <Ionicons name="pencil-outline" size={20} color="#4A4A4A" />
+            </Pressable>
+            <Pressable
+              onPress={handleDeletePost}
+              className="p-2"
+              hitSlop={8}
+            >
+              <Ionicons name="trash-outline" size={20} color="#ef4444" />
+            </Pressable>
+          </View>
+        )}
       </View>
 
       <ScrollView
@@ -304,11 +370,16 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             </Text>
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm ml-2">
               {formatDateMedium(post.created_at)}
+              {post.edited_at && ' (edited)'}
             </Text>
           </View>
-          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6 mb-4">
+          <LinkifiedText
+            style={{ fontFamily: 'Lato_400Regular', fontSize: 16, lineHeight: 24, color: '#313130' }}
+            linkStyle={{ color: '#bd9348' }}
+          >
             {post.content}
-          </Text>
+          </LinkifiedText>
+          <View className="mb-4" />
 
           {post.attachments && post.attachments.length > 0 && (
             <View className="mb-4">
@@ -436,6 +507,16 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
           </View>
         </View>
       )}
+
+      {/* Edit post modal */}
+      <BoardComposer
+        visible={showEditComposer}
+        category={post.category || null}
+        userId={profile?.id || ''}
+        onClose={() => setShowEditComposer(false)}
+        onSubmit={handleEditPost}
+        existingPost={post}
+      />
     </SafeAreaView>
   );
 }

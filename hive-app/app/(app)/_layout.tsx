@@ -82,7 +82,7 @@ export default function AppLayout() {
         name="hive"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon imageSource={beeIcon} label="Hive" focused={focused} />
+            <TabIcon imageSource={beeIcon} label="HIVE" focused={focused} />
           ),
         }}
       />

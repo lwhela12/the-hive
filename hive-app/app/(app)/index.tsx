@@ -42,7 +42,19 @@ export default function ChatScreen() {
 
   const handleConversationCreated = useCallback((conversation: Conversation) => {
     setCurrentConversation(conversation);
-  }, [setCurrentConversation]);
+    // Refresh the conversation list to include the new conversation
+    loadConversations();
+  }, [setCurrentConversation, loadConversations]);
+
+  const handleTitleGenerated = useCallback((conversationId: string, title: string) => {
+    // Update the conversation title in the hook's state
+    // This avoids needing a full refresh
+    if (currentConversation?.id === conversationId) {
+      setCurrentConversation({ ...currentConversation, title });
+    }
+    // Refresh to update sidebar - could optimize later with direct state update
+    loadConversations();
+  }, [currentConversation, setCurrentConversation, loadConversations]);
 
   const handleDeleteConversation = useCallback(async (id: string) => {
     await deleteConversation(id);
@@ -123,6 +135,7 @@ export default function ChatScreen() {
           <ChatInterface
             conversationId={currentConversation?.id || null}
             onConversationCreated={handleConversationCreated}
+            onTitleGenerated={handleTitleGenerated}
             refineWishContext={refineWish}
           />
         </View>
