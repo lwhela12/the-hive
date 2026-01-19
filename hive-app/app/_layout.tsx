@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
-import { Session } from '@supabase/supabase-js';
+import { Session, User } from '@supabase/supabase-js';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { queryClient } from '../lib/queryClient';
@@ -34,6 +34,13 @@ function AppPrefetcher({
   return null;
 }
 
+// Type for membership with joined community data
+type MembershipWithCommunity = {
+  community_id: string;
+  role: UserRole;
+  community: Community;
+};
+
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -49,12 +56,91 @@ export default function RootLayout() {
     Lato_700Bold,
   });
 
+  // Optimized: Fetch profile and memberships in parallel to reduce startup latency
+  const initializeUserData = useCallback(async (userId: string, authUser: User) => {
+    // Fetch profile AND all memberships (with community data) in parallel
+    // This reduces 4-5 sequential calls to just 1 parallel batch
+    const [profileResult, membershipsResult] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single(),
+      supabase
+        .from('community_memberships')
+        .select('community_id, role, community:communities(*)')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true }),
+    ]);
+
+    // Handle profile
+    let profileData = profileResult.data as Profile | null;
+
+    if (profileResult.error && profileResult.error.code === 'PGRST116') {
+      // Profile doesn't exist - create one from OAuth data
+      const { data: newProfile } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          name: authUser.user_metadata?.full_name || 'New Member',
+          email: authUser.email || '',
+          avatar_url: authUser.user_metadata?.avatar_url || null,
+          role: 'member',
+        })
+        .select()
+        .single();
+
+      profileData = newProfile as Profile | null;
+    }
+
+    if (profileData) {
+      setProfile(profileData);
+    }
+
+    // Handle community context
+    const memberships = (membershipsResult.data || []) as MembershipWithCommunity[];
+
+    if (memberships.length === 0) {
+      setCommunity(null);
+      setCommunityId(null);
+      setCommunityRole(null);
+      setLoading(false);
+      return;
+    }
+
+    // Find the active membership: use profile's current_community_id or fall back to first
+    const currentCommunityId = profileData?.current_community_id;
+    let activeMembership = currentCommunityId
+      ? memberships.find(m => m.community_id === currentCommunityId)
+      : memberships[0];
+
+    // If profile had a community_id but we don't have membership there, use first
+    if (!activeMembership) {
+      activeMembership = memberships[0];
+    }
+
+    // If using first membership and profile didn't have community set, update it (fire and forget)
+    if (!currentCommunityId && activeMembership) {
+      supabase
+        .from('profiles')
+        .update({ current_community_id: activeMembership.community_id })
+        .eq('id', userId)
+        .then();
+    }
+
+    // Set all community context at once
+    setCommunityId(activeMembership.community_id);
+    setCommunityRole(activeMembership.role);
+    setCommunity(activeMembership.community);
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
-    // Get initial session (Supabase handles OAuth callback automatically with detectSessionInUrl: true)
+    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        initializeUserData(session.user.id, session.user);
       } else {
         setLoading(false);
       }
@@ -64,7 +150,7 @@ export default function RootLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        initializeUserData(session.user.id, session.user);
       } else {
         setProfile(null);
         setCommunity(null);
@@ -75,94 +161,11 @@ export default function RootLayout() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchCommunityContext = useCallback(async (userId: string, activeCommunityId?: string | null) => {
-    let resolvedCommunityId = activeCommunityId;
-
-    if (!resolvedCommunityId) {
-      const { data: membership } = await supabase
-        .from('community_memberships')
-        .select('community_id, role')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .single();
-
-      if (membership?.community_id) {
-        resolvedCommunityId = membership.community_id;
-        await supabase
-          .from('profiles')
-          .update({ current_community_id: resolvedCommunityId })
-          .eq('id', userId);
-      }
-    }
-
-    if (!resolvedCommunityId) {
-      setCommunity(null);
-      setCommunityId(null);
-      setCommunityRole(null);
-      return;
-    }
-
-    setCommunityId(resolvedCommunityId);
-
-    const { data: membership } = await supabase
-      .from('community_memberships')
-      .select('role')
-      .eq('community_id', resolvedCommunityId)
-      .eq('user_id', userId)
-      .single();
-    setCommunityRole(membership?.role ?? null);
-
-    const { data: communityData } = await supabase
-      .from('communities')
-      .select('*')
-      .eq('id', resolvedCommunityId)
-      .single();
-    setCommunity(communityData ?? null);
-  }, []);
-
-  const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-
-    if (error && error.code === 'PGRST116') {
-      // Profile doesn't exist - create one from Google OAuth data
-      const currentSession = await supabase.auth.getSession();
-      const user = currentSession.data.session?.user;
-
-      if (user) {
-        const { data: newProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert({
-            id: userId,
-            name: user.user_metadata?.full_name || 'New Member',
-            email: user.email || '',
-            avatar_url: user.user_metadata?.avatar_url || null,
-            role: 'member',
-          })
-          .select()
-          .single();
-
-        if (!createError && newProfile) {
-          setProfile(newProfile);
-          await fetchCommunityContext(userId, newProfile.current_community_id);
-        }
-      }
-    } else if (!error && data) {
-      setProfile(data);
-      await fetchCommunityContext(userId, data.current_community_id);
-    }
-    setLoading(false);
-  };
+  }, [initializeUserData]);
 
   const refreshProfile = async () => {
     if (session?.user) {
-      await fetchProfile(session.user.id);
+      await initializeUserData(session.user.id, session.user);
     }
   };
 
