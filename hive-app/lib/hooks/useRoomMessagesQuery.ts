@@ -10,15 +10,20 @@ export type MessageWithData = RoomMessage & {
 
 const MESSAGES_PER_PAGE = 20;
 
-// Fetch messages with reactions
+// Fetch messages with reactions in a single optimized query
 async function fetchMessagesPage(
   roomId: string,
   cursor?: string, // created_at of oldest message for pagination
   limit: number = MESSAGES_PER_PAGE
 ): Promise<{ messages: MessageWithData[]; hasMore: boolean; oldestCursor?: string }> {
+  // Join reactions and only select needed profile fields for better performance
   let query = supabase
     .from('room_messages')
-    .select('*, sender:profiles(*)')
+    .select(`
+      *,
+      sender:profiles(id, name, avatar_url),
+      reactions:message_reactions(id, message_id, user_id, emoji, created_at)
+    `)
     .eq('room_id', roomId)
     .order('created_at', { ascending: false }) // Fetch newest first for pagination
     .limit(limit + 1); // Fetch one extra to check if there's more
@@ -37,22 +42,10 @@ async function fetchMessagesPage(
   const hasMore = data.length > limit;
   const messages = hasMore ? data.slice(0, limit) : data;
 
-  // Fetch reactions for all messages
   if (messages.length > 0) {
-    const messageIds = messages.map((m) => m.id);
-    const { data: reactions } = await supabase
-      .from('message_reactions')
-      .select('*')
-      .in('message_id', messageIds);
-
-    const messagesWithReactions = messages.map((msg) => ({
-      ...msg,
-      reactions: reactions?.filter((r) => r.message_id === msg.id) || [],
-    }));
-
     // Reverse to get chronological order (oldest first for display)
     return {
-      messages: messagesWithReactions.reverse() as MessageWithData[],
+      messages: messages.reverse() as MessageWithData[],
       hasMore,
       oldestCursor: messages[messages.length - 1]?.created_at,
     };
