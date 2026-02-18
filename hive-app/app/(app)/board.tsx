@@ -10,10 +10,12 @@ import { BoardPostDetail } from '../../components/board/BoardPostDetail';
 import { BoardComposer } from '../../components/board/BoardComposer';
 import { BoardTopicComposer } from '../../components/board/BoardTopicComposer';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
+import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import type { BoardCategory, Attachment } from '../../types';
 
 export default function BoardScreen() {
   const { profile, communityId, communityRole } = useAuth();
+  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const useMobileLayout = width < 768;
@@ -196,6 +198,7 @@ export default function BoardScreen() {
             isOpen={drawerOpen}
             onClose={handleDrawerClose}
             mode="navigation"
+            unreadDMCount={unreadDMCount}
           />
         )}
 

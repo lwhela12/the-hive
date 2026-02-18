@@ -7,11 +7,13 @@ import { AudioRecorder } from '../../components/meetings/AudioRecorder';
 import { MeetingSummary } from '../../components/meetings/MeetingSummary';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
+import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { formatDateLong } from '../../lib/dateUtils';
 import type { Meeting, Event } from '../../types';
 
 export default function MeetingsScreen() {
   const { profile, communityId, session } = useAuth();
+  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -357,6 +359,7 @@ export default function MeetingsScreen() {
           isOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           mode="navigation"
+          unreadDMCount={unreadDMCount}
         />
       )}
 

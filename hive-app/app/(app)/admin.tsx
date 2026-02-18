@@ -16,6 +16,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../../components/ui/Avatar';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
+import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { formatDateMedium, parseAmericanDate, isoToAmerican } from '../../lib/dateUtils';
 import type { Profile, QueenBee, Event, UserRole, CommunityInvite } from '../../types';
 
@@ -31,6 +32,7 @@ type InviteRow = CommunityInvite & {
 
 export default function AdminScreen() {
   const { profile, communityId, communityRole } = useAuth();
+  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const useMobileLayout = width < 768;
@@ -545,6 +547,7 @@ export default function AdminScreen() {
           isOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           mode="navigation"
+          unreadDMCount={unreadDMCount}
         />
       )}
 

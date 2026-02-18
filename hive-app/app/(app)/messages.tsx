@@ -9,10 +9,12 @@ import { ChatRoomItem } from '../../components/messaging/ChatRoomItem';
 import { RoomChatView } from '../../components/messaging/RoomChatView';
 import { MemberPicker } from '../../components/messaging/MemberPicker';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
+import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import type { Profile } from '../../types';
 
 export default function MessagesScreen() {
   const { profile, communityId } = useAuth();
+  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -127,6 +129,7 @@ export default function MessagesScreen() {
           isOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           mode="navigation"
+          unreadDMCount={unreadDMCount}
         />
       )}
 

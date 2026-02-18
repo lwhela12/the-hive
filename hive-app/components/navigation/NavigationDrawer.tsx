@@ -1,4 +1,4 @@
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, usePathname } from 'expo-router';
@@ -6,11 +6,11 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  cancelAnimation,
   Easing,
 } from 'react-native-reanimated';
 import { HexagonIcon } from '../ui/HexagonIcon';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 
 const beeIcon = require('../../assets/BEE ONLY IN GOLD BG.png');
 const cliveIcon = require('../../assets/Clive_logo.png');
@@ -20,6 +20,7 @@ interface NavigationDrawerProps {
   onClose: () => void;
   children?: React.ReactNode;
   mode?: 'conversations' | 'navigation';
+  unreadDMCount?: number;
 }
 
 const DRAWER_WIDTH_PERCENT = 0.85;
@@ -29,11 +30,11 @@ export const NavigationDrawer = memo(function NavigationDrawer({
   onClose,
   children,
   mode = 'navigation',
+  unreadDMCount,
 }: NavigationDrawerProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { profile, communityId, communityRole } = useAuth();
-  const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
+  const { profile, communityRole } = useAuth();
 
   // Navigation items for the app
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
@@ -41,7 +42,7 @@ export const NavigationDrawer = memo(function NavigationDrawer({
     { icon: null, imageSource: cliveIcon, label: 'Clive', route: '/' },
     { icon: null, imageSource: beeIcon, label: 'HIVE', route: '/hive' },
     { icon: '📋', label: 'Board', route: '/board' },
-    { icon: '💬', label: 'Chat', route: '/messages', badge: totalUnreadDMs },
+    { icon: '💬', label: 'Chat', route: '/messages', badge: unreadDMCount },
     { icon: null, customIcon: 'honeycomb', label: 'Meetings', route: '/meetings' },
     { icon: '👤', imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined, label: 'Profile', route: '/profile', isCircular: true },
     ...(isAdmin ? [{ icon: '⚙️', label: 'Admin', route: '/admin' }] : []),
@@ -49,20 +50,27 @@ export const NavigationDrawer = memo(function NavigationDrawer({
   const { width: screenWidth } = useWindowDimensions();
   const drawerWidth = screenWidth * DRAWER_WIDTH_PERCENT;
 
+  // Keep a ref for drawerWidth so the close animation uses the latest value
+  // without restarting the effect when dimensions settle on PWA cold start
+  const drawerWidthRef = useRef(drawerWidth);
+  drawerWidthRef.current = drawerWidth;
+
   // Animation values — drawer starts off-screen, always mounted so opening is instant
   const translateX = useSharedValue(-drawerWidth);
   const backdropOpacity = useSharedValue(0);
 
-  // Update animation when isOpen changes
+  // Update animation when isOpen changes — only depends on isOpen
   useEffect(() => {
+    cancelAnimation(translateX);
+    cancelAnimation(backdropOpacity);
     if (isOpen) {
       translateX.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
       backdropOpacity.value = withTiming(1, { duration: 200 });
     } else {
-      translateX.value = withTiming(-drawerWidth, { duration: 220, easing: Easing.in(Easing.cubic) });
+      translateX.value = withTiming(-drawerWidthRef.current, { duration: 220, easing: Easing.in(Easing.cubic) });
       backdropOpacity.value = withTiming(0, { duration: 200 });
     }
-  }, [isOpen, drawerWidth]);
+  }, [isOpen]);
 
   // Animated styles
   const drawerAnimatedStyle = useAnimatedStyle(() => ({

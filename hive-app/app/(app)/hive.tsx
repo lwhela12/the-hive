@@ -18,6 +18,7 @@ import {
   WishSectionSkeleton,
 } from '../../components/hive/skeletons';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
+import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { Avatar } from '../../components/ui/Avatar';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
@@ -32,6 +33,7 @@ type WishWithGranters = Wish & {
 
 export default function HiveScreen() {
   const { profile, communityId } = useAuth();
+  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const useMobileLayout = width < 768;
@@ -302,6 +304,7 @@ export default function HiveScreen() {
           isOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           mode="navigation"
+          unreadDMCount={unreadDMCount}
         />
       )}
 

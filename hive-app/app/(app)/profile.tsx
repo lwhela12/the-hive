@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Pl
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { requestMediaLibraryPermission } from '../../lib/imagePicker';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
@@ -10,6 +11,7 @@ import { useWishes } from '../../lib/hooks/useWishes';
 import { Avatar } from '../../components/ui/Avatar';
 import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
+import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
@@ -36,9 +38,12 @@ const formatPhoneNumber = (value: string): string => {
 
 export default function ProfileScreen() {
   const { profile, communityId, communityRole, refreshProfile } = useAuth();
-  const { permissionStatus, requestPermissions } = useNotifications();
+  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
+  const { permissionStatus, requestPermissions } = useNotifications({ enableListeners: false });
   const { grantWish } = useWishes();
   const { width } = useWindowDimensions();
+  const isNotificationEnabled =
+    permissionStatus === 'granted' || permissionStatus === 'provisional';
   const [drawerOpen, setDrawerOpen] = useState(false);
   const useMobileLayout = width < 768;
   const [refreshing, setRefreshing] = useState(false);
@@ -180,16 +185,8 @@ export default function ProfileScreen() {
 
   const pickImage = async () => {
     // Request permission
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Permission Required',
-        'Please allow access to your photo library to change your profile photo.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => Linking.openSettings() },
-        ]
-      );
+    const hasPermission = await requestMediaLibraryPermission();
+    if (!hasPermission) {
       return;
     }
 
@@ -381,6 +378,7 @@ export default function ProfileScreen() {
           isOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           mode="navigation"
+          unreadDMCount={unreadDMCount}
         />
       )}
 
@@ -744,14 +742,14 @@ export default function ProfileScreen() {
                     Push Notifications
                   </Text>
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
-                    {permissionStatus === 'granted'
+                    {isNotificationEnabled
                       ? 'Enabled - you will receive notifications'
                       : permissionStatus === 'denied'
                       ? 'Disabled - enable in Settings'
                       : 'Not yet enabled'}
                   </Text>
                 </View>
-                {permissionStatus !== 'granted' && (
+                {!isNotificationEnabled && (
                   <Pressable
                     onPress={async () => {
                       if (permissionStatus === 'denied') {
@@ -768,7 +766,7 @@ export default function ProfileScreen() {
                     </Text>
                   </Pressable>
                 )}
-                {permissionStatus === 'granted' && (
+                {isNotificationEnabled && (
                   <View className="bg-green-100 px-3 py-1 rounded-full">
                     <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-green-700 text-sm">
                       Enabled
