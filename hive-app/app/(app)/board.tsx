@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
-import { View, Text, FlatList, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Pressable, Alert, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { useBoardCategoriesQuery, useBoardPostsQuery, type PostWithAuthor } from '../../lib/hooks/useBoardQuery';
+import { useBoardCategoriesQuery, useBoardPostsQuery } from '../../lib/hooks/useBoardQuery';
 import { BoardCategoryList } from '../../components/board/BoardCategoryList';
 import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
@@ -37,6 +37,7 @@ export default function BoardScreen() {
 
   const {
     posts,
+    loading: postsLoading,
     refetch: refetchPosts,
     invalidatePosts,
   } = useBoardPostsQuery(communityId, selectedCategory?.id);
@@ -245,6 +246,9 @@ export default function BoardScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#bd9348" />
         }
+        initialNumToRender={5}
+        maxToRenderPerBatch={5}
+        windowSize={5}
         ListHeaderComponent={
           selectedCategory.description ? (
             <View className="mb-4">
@@ -255,13 +259,19 @@ export default function BoardScreen() {
           ) : null
         }
         ListEmptyComponent={
-          <View className="bg-white rounded-xl p-8 shadow-sm items-center">
-            <Text className="text-4xl mb-4">📝</Text>
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
-              No posts in this category yet.
-              {canPost() && '\nBe the first to start a discussion!'}
-            </Text>
-          </View>
+          postsLoading ? (
+            <View className="items-center py-16">
+              <ActivityIndicator size="large" color="#bd9348" />
+            </View>
+          ) : (
+            <View className="bg-white rounded-xl p-8 shadow-sm items-center">
+              <Text className="text-4xl mb-4">📝</Text>
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
+                No posts in this category yet.
+                {canPost() && '\nBe the first to start a discussion!'}
+              </Text>
+            </View>
+          )
         }
         removeClippedSubviews
       />

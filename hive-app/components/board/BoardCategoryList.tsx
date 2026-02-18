@@ -43,7 +43,6 @@ export const BoardCategoryList = memo(function BoardCategoryList({
       keyExtractor={(item) => item.id}
       renderItem={({ item, index }) => {
         const emoji = item.icon ? EMOJI_MAP[item.icon] || item.icon : '📁';
-        const postCount = item.post_count ?? 0;
         const isLast = index === categories.length - 1;
 
         return (
@@ -60,15 +59,15 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                 >
                   {item.name}
                 </Text>
-                <Text
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal/50 text-sm mt-0.5"
-                  numberOfLines={1}
-                >
-                  {item.description
-                    ? `${item.description} · ${postCount} ${postCount === 1 ? 'post' : 'posts'}`
-                    : `${postCount} ${postCount === 1 ? 'post' : 'posts'}`}
-                </Text>
+                {item.description ? (
+                  <Text
+                    style={{ fontFamily: 'Lato_400Regular' }}
+                    className="text-charcoal/50 text-sm mt-0.5"
+                    numberOfLines={1}
+                  >
+                    {item.description}
+                  </Text>
+                ) : null}
               </View>
               <Text className="text-charcoal/30 text-xl ml-2">›</Text>
             </View>
