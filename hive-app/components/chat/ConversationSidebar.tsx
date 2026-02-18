@@ -119,10 +119,8 @@ export const ConversationSidebar = memo(function ConversationSidebar({
     transform: [{ translateX: translateX.value }],
   }));
 
-  // pointerEvents: 'none' when closed so the off-screen drawer doesn't block touches
   const backdropAnimatedStyle = useAnimatedStyle(() => ({
     opacity: backdropOpacity.value,
-    pointerEvents: backdropOpacity.value > 0 ? 'auto' : 'none',
   }));
 
   // Navigation items for mobile sidebar
@@ -289,7 +287,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   // On mobile, render as animated overlay (always mounted so opening is instant)
   if (isMobile) {
     return (
-      <View style={StyleSheet.absoluteFill} className="z-50">
+      <View style={StyleSheet.absoluteFill} pointerEvents={isOpen ? 'auto' : 'none'} className="z-50">
         {/* Animated Backdrop */}
         <Animated.View style={[StyleSheet.absoluteFill, backdropAnimatedStyle]}>
           <Pressable

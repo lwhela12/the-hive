@@ -75,7 +75,6 @@ export const NavigationDrawer = memo(function NavigationDrawer({
 
   const backdropAnimatedStyle = useAnimatedStyle(() => ({
     opacity: backdropOpacity.value,
-    pointerEvents: backdropOpacity.value > 0 ? 'auto' : 'none',
   }));
 
   const handleNavigation = (route: string) => {
@@ -164,7 +163,7 @@ export const NavigationDrawer = memo(function NavigationDrawer({
   );
 
   return (
-    <View style={StyleSheet.absoluteFill} className="z-50">
+    <View style={StyleSheet.absoluteFill} pointerEvents={isOpen ? 'auto' : 'none'} className="z-50">
       {/* Animated Backdrop */}
       <Animated.View style={[StyleSheet.absoluteFill, backdropAnimatedStyle]}>
         <Pressable
