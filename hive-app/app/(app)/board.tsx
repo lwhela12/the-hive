@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { useBoardCategoriesQuery, useBoardPostsQuery, prefetchBoardPosts, type PostWithAuthor } from '../../lib/hooks/useBoardQuery';
-import { BoardCategoryTabs } from '../../components/board/BoardCategoryTabs';
+import { useBoardCategoriesQuery, useBoardPostsQuery, type PostWithAuthor } from '../../lib/hooks/useBoardQuery';
+import { BoardCategoryList } from '../../components/board/BoardCategoryList';
 import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
 import { BoardComposer } from '../../components/board/BoardComposer';
@@ -25,30 +24,17 @@ export default function BoardScreen() {
   const [showTopicComposer, setShowTopicComposer] = useState(false);
 
   const isAdmin = communityRole === 'admin';
-  const queryClient = useQueryClient();
 
-  // Fetch categories with React Query (cached)
   const {
     data: categories = [],
     refetch: refetchCategories,
     invalidateCategories,
   } = useBoardCategoriesQuery(communityId);
 
-  // Auto-select first category when categories load
   const selectedCategory = selectedCategoryId
     ? categories.find((c) => c.id === selectedCategoryId) || null
-    : categories[0] || null;
+    : null;
 
-  // Prefetch posts for every category as soon as the category list loads.
-  // This makes tab switches instant — data is already in cache by the time the user taps.
-  useEffect(() => {
-    if (!communityId || categories.length === 0) return;
-    categories.forEach((category) => {
-      prefetchBoardPosts(queryClient, communityId, category.id);
-    });
-  }, [categories, communityId, queryClient]);
-
-  // Fetch posts for selected category with React Query (cached per category)
   const {
     posts,
     refetch: refetchPosts,
@@ -57,7 +43,10 @@ export default function BoardScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refetchCategories(), refetchPosts()]);
+    await Promise.all([
+      refetchCategories(),
+      ...(selectedCategory ? [refetchPosts()] : []),
+    ]);
     setRefreshing(false);
   };
 
@@ -65,13 +54,15 @@ export default function BoardScreen() {
     setSelectedCategoryId(category.id);
   }, []);
 
+  const handleBack = useCallback(() => {
+    setSelectedCategoryId(null);
+  }, []);
+
   const handleCreatePost = async (title: string, content: string, attachments?: Attachment[]) => {
     if (!profile || !communityId || !selectedCategory) {
       Alert.alert('Not ready', 'Your profile is still loading. Please try again in a moment.');
       return false;
     }
-
-    console.log('Creating post:', { communityId, categoryId: selectedCategory.id, authorId: profile.id, title });
 
     try {
       const { data, error } = await supabase.from('board_posts').insert({
@@ -83,10 +74,7 @@ export default function BoardScreen() {
         attachments: attachments && attachments.length > 0 ? attachments : null,
       }).select().single();
 
-      console.log('Insert result:', { data, error });
-
       if (error) {
-        console.error('Insert error:', error);
         Alert.alert('Error', `Failed to create post: ${error.message}`);
         return false;
       }
@@ -96,12 +84,10 @@ export default function BoardScreen() {
         return false;
       }
 
-      console.log('Post created successfully:', data.id);
       invalidatePosts();
       return true;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Error creating post:', error);
       Alert.alert('Error', `Failed to create post: ${message}`);
       return false;
     }
@@ -120,7 +106,6 @@ export default function BoardScreen() {
     }
 
     try {
-      // Get the highest display_order to put new topic at the end
       const maxOrder = categories.length > 0
         ? Math.max(...categories.map(c => c.display_order))
         : 0;
@@ -134,12 +119,11 @@ export default function BoardScreen() {
         display_order: maxOrder + 1,
         is_system: false,
         requires_admin: false,
-        requires_approval: false, // Immediately available (no approval needed)
+        requires_approval: false,
         created_by: profile.id,
       }).select().single();
 
       if (error) {
-        console.error('Error creating topic:', error);
         Alert.alert('Error', `Failed to create topic: ${error.message}`);
         return false;
       }
@@ -149,48 +133,97 @@ export default function BoardScreen() {
         return false;
       }
 
-      // Refresh categories and select the new one
       invalidateCategories();
       setSelectedCategoryId(data.id);
       return true;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Error creating topic:', error);
       Alert.alert('Error', `Failed to create topic: ${message}`);
       return false;
     }
   };
 
-  // Show post detail view
+  // Post detail view
   if (selectedPostId) {
     return (
       <BoardPostDetail
         postId={selectedPostId}
         onBack={() => {
           setSelectedPostId(null);
-          invalidatePosts(); // Refresh to get updated reply counts
+          invalidatePosts();
         }}
       />
     );
   }
 
+  // Category list view
+  if (!selectedCategory) {
+    const addTopicButton = isAdmin ? (
+      <Pressable onPress={() => setShowTopicComposer(true)} className="px-1 active:opacity-70">
+        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">+ Topic</Text>
+      </Pressable>
+    ) : undefined;
+
+    return (
+      <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+        {useMobileLayout ? (
+          <AppHeader
+            title="Message Board"
+            onMenuPress={() => setDrawerOpen(true)}
+            rightElement={addTopicButton}
+          />
+        ) : (
+          <View className="bg-white px-4 py-3 border-b border-cream flex-row items-center justify-between">
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-charcoal">
+              Message Board
+            </Text>
+            {isAdmin && (
+              <Pressable onPress={() => setShowTopicComposer(true)} className="active:opacity-70">
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">+ Topic</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        {useMobileLayout && (
+          <NavigationDrawer
+            isOpen={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+            mode="navigation"
+          />
+        )}
+
+        <BoardCategoryList
+          categories={categories}
+          onSelect={handleCategorySelect}
+        />
+
+        <BoardTopicComposer
+          visible={showTopicComposer}
+          onClose={() => setShowTopicComposer(false)}
+          onSubmit={handleCreateTopic}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // Posts view
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
-      {/* Mobile Header */}
-      {useMobileLayout ? (
-        <AppHeader
-          title="Message Board"
-          onMenuPress={() => setDrawerOpen(true)}
-        />
-      ) : (
-        <View className="bg-white px-4 py-3 border-b border-cream">
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-charcoal">
-            Message Board
-          </Text>
-        </View>
-      )}
+      {/* Posts view header with back button */}
+      <View className="bg-white border-b border-cream flex-row items-center px-4 py-3">
+        <Pressable onPress={handleBack} hitSlop={8} className="mr-3 active:opacity-70">
+          <Text className="text-gold text-2xl leading-none">‹</Text>
+        </Pressable>
+        <Text
+          style={{ fontFamily: 'LibreBaskerville_700Bold' }}
+          className="text-xl text-charcoal flex-1"
+          numberOfLines={1}
+        >
+          {selectedCategory.name}
+        </Text>
+      </View>
 
-      {/* Navigation Drawer */}
       {useMobileLayout && (
         <NavigationDrawer
           isOpen={drawerOpen}
@@ -199,15 +232,6 @@ export default function BoardScreen() {
         />
       )}
 
-      {/* Category tabs */}
-      <BoardCategoryTabs
-        categories={categories}
-        selectedId={selectedCategory?.id || null}
-        onSelect={handleCategorySelect}
-        onAddTopic={() => setShowTopicComposer(true)}
-      />
-
-      {/* Posts list — FlatList virtualizes rendering so the JS thread stays free while loading */}
       <FlatList
         data={posts}
         keyExtractor={(item) => item.id}
@@ -222,7 +246,7 @@ export default function BoardScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#bd9348" />
         }
         ListHeaderComponent={
-          selectedCategory?.description ? (
+          selectedCategory.description ? (
             <View className="mb-4">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-sm">
                 {selectedCategory.description}
@@ -242,7 +266,6 @@ export default function BoardScreen() {
         removeClippedSubviews
       />
 
-      {/* FAB for new post */}
       {canPost() && (
         <Pressable
           onPress={() => setShowComposer(true)}
@@ -252,7 +275,6 @@ export default function BoardScreen() {
         </Pressable>
       )}
 
-      {/* Post composer modal */}
       <BoardComposer
         visible={showComposer}
         category={selectedCategory}
@@ -261,7 +283,6 @@ export default function BoardScreen() {
         onSubmit={handleCreatePost}
       />
 
-      {/* Topic composer modal */}
       <BoardTopicComposer
         visible={showTopicComposer}
         onClose={() => setShowTopicComposer(false)}

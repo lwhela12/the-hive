@@ -330,6 +330,7 @@ export interface BoardCategory {
   approved_by?: string;
   created_by?: string;
   created_at: string;
+  post_count?: number;
 }
 
 export interface BoardPost {
