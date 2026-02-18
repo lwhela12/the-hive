@@ -79,9 +79,7 @@ export const NavigationDrawer = memo(function NavigationDrawer({
 
   const handleNavigation = (route: string) => {
     onClose();
-    setTimeout(() => {
-      router.push(route as any);
-    }, 250);
+    router.push(route as any);
   };
 
   // Navigation menu content

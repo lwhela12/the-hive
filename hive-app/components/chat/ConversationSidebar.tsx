@@ -137,23 +137,17 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   // Close with animation, then perform action
   const closeAndNavigate = (route: string) => {
     onClose?.();
-    setTimeout(() => {
-      router.push(route as any);
-    }, 250);
+    router.push(route as any);
   };
 
   const closeAndSelectConversation = (id: string) => {
     onClose?.();
-    setTimeout(() => {
-      onSelectConversation(id);
-    }, 250);
+    onSelectConversation(id);
   };
 
   const closeAndNewConversation = () => {
     onClose?.();
-    setTimeout(() => {
-      onNewConversation();
-    }, 250);
+    onNewConversation();
   };
 
   const sidebarContent = (
