@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect } from 'react';
 import { View, Text, Pressable, Image, StyleSheet, useWindowDimensions } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import Animated, {
@@ -6,7 +6,6 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  runOnJS,
 } from 'react-native-reanimated';
 import { HexagonIcon } from '../ui/HexagonIcon';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -54,24 +53,18 @@ export const NavigationDrawer = memo(function NavigationDrawer({
   const { width: screenWidth } = useWindowDimensions();
   const drawerWidth = screenWidth * DRAWER_WIDTH_PERCENT;
 
-  // Track visibility separately from isOpen to allow close animation
-  const [isVisible, setIsVisible] = useState(isOpen);
-
-  // Animation values
+  // Animation values — drawer starts off-screen, always mounted so opening is instant
   const translateX = useSharedValue(-drawerWidth);
   const backdropOpacity = useSharedValue(0);
 
   // Update animation when isOpen changes
   useEffect(() => {
     if (isOpen) {
-      setIsVisible(true);
       translateX.value = withSpring(0, SPRING_CONFIG);
       backdropOpacity.value = withTiming(1, { duration: 200 });
     } else {
       translateX.value = withSpring(-drawerWidth, SPRING_CONFIG);
-      backdropOpacity.value = withTiming(0, { duration: 200 }, () => {
-        runOnJS(setIsVisible)(false);
-      });
+      backdropOpacity.value = withTiming(0, { duration: 200 });
     }
   }, [isOpen, drawerWidth]);
 
@@ -169,10 +162,6 @@ export const NavigationDrawer = memo(function NavigationDrawer({
       </View>
     </View>
   );
-
-  if (!isVisible) {
-    return null;
-  }
 
   return (
     <View style={StyleSheet.absoluteFill} className="z-50">

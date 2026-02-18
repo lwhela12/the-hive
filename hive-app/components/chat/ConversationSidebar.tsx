@@ -1,4 +1,4 @@
-import { useMemo, memo, useEffect, useState } from 'react';
+import { useMemo, memo, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, Image, useWindowDimensions, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -6,7 +6,6 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  runOnJS,
 } from 'react-native-reanimated';
 import { ConversationItem } from './ConversationItem';
 import { HexagonIcon } from '../ui/HexagonIcon';
@@ -98,10 +97,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   // Use mobile layout for narrow screens (< 768px)
   const isMobile = screenWidth < 768;
 
-  // Track visibility separately from isOpen to allow close animation
-  const [isVisible, setIsVisible] = useState(isOpen);
-
-  // Animation values
+  // Animation values — drawer starts off-screen, always mounted so opening is instant
   const translateX = useSharedValue(-drawerWidth);
   const backdropOpacity = useSharedValue(0);
 
@@ -109,14 +105,11 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   useEffect(() => {
     if (isMobile) {
       if (isOpen) {
-        setIsVisible(true);
         translateX.value = withSpring(0, SPRING_CONFIG);
         backdropOpacity.value = withTiming(1, { duration: 200 });
       } else {
         translateX.value = withSpring(-drawerWidth, SPRING_CONFIG);
-        backdropOpacity.value = withTiming(0, { duration: 200 }, () => {
-          runOnJS(setIsVisible)(false);
-        });
+        backdropOpacity.value = withTiming(0, { duration: 200 });
       }
     }
   }, [isOpen, isMobile, drawerWidth]);
@@ -126,8 +119,10 @@ export const ConversationSidebar = memo(function ConversationSidebar({
     transform: [{ translateX: translateX.value }],
   }));
 
+  // pointerEvents: 'none' when closed so the off-screen drawer doesn't block touches
   const backdropAnimatedStyle = useAnimatedStyle(() => ({
     opacity: backdropOpacity.value,
+    pointerEvents: backdropOpacity.value > 0 ? 'auto' : 'none',
   }));
 
   // Navigation items for mobile sidebar
@@ -291,12 +286,8 @@ export const ConversationSidebar = memo(function ConversationSidebar({
     </View>
   );
 
-  // On mobile, render as animated overlay
+  // On mobile, render as animated overlay (always mounted so opening is instant)
   if (isMobile) {
-    if (!isVisible) {
-      return null;
-    }
-
     return (
       <View style={StyleSheet.absoluteFill} className="z-50">
         {/* Animated Backdrop */}
