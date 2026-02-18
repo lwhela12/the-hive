@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { useBoardCategoriesQuery, useBoardPostsQuery, type PostWithAuthor } from '../../lib/hooks/useBoardQuery';
+import { useBoardCategoriesQuery, useBoardPostsQuery, prefetchBoardPosts, type PostWithAuthor } from '../../lib/hooks/useBoardQuery';
 import { BoardCategoryTabs } from '../../components/board/BoardCategoryTabs';
 import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
@@ -24,6 +25,7 @@ export default function BoardScreen() {
   const [showTopicComposer, setShowTopicComposer] = useState(false);
 
   const isAdmin = communityRole === 'admin';
+  const queryClient = useQueryClient();
 
   // Fetch categories with React Query (cached)
   const {
@@ -36,6 +38,15 @@ export default function BoardScreen() {
   const selectedCategory = selectedCategoryId
     ? categories.find((c) => c.id === selectedCategoryId) || null
     : categories[0] || null;
+
+  // Prefetch posts for every category as soon as the category list loads.
+  // This makes tab switches instant — data is already in cache by the time the user taps.
+  useEffect(() => {
+    if (!communityId || categories.length === 0) return;
+    categories.forEach((category) => {
+      prefetchBoardPosts(queryClient, communityId, category.id);
+    });
+  }, [categories, communityId, queryClient]);
 
   // Fetch posts for selected category with React Query (cached per category)
   const {
@@ -50,9 +61,9 @@ export default function BoardScreen() {
     setRefreshing(false);
   };
 
-  const handleCategorySelect = (category: BoardCategory) => {
+  const handleCategorySelect = useCallback((category: BoardCategory) => {
     setSelectedCategoryId(category.id);
-  };
+  }, []);
 
   const handleCreatePost = async (title: string, content: string, attachments?: Attachment[]) => {
     if (!profile || !communityId || !selectedCategory) {

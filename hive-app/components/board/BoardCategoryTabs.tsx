@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ScrollView, Pressable, Text, View } from 'react-native';
 import type { BoardCategory } from '../../types';
 
@@ -35,7 +36,7 @@ const EMOJI_MAP: Record<string, string> = {
   '1F4C5': '📅',
 };
 
-export function BoardCategoryTabs({ categories, selectedId, onSelect, onAddTopic }: BoardCategoryTabsProps) {
+export const BoardCategoryTabs = memo(function BoardCategoryTabs({ categories, selectedId, onSelect, onAddTopic }: BoardCategoryTabsProps) {
   return (
     <View className="bg-white border-b border-cream">
       <ScrollView
@@ -83,4 +84,4 @@ export function BoardCategoryTabs({ categories, selectedId, onSelect, onAddTopic
       </ScrollView>
     </View>
   );
-}
+});

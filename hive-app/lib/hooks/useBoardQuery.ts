@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
@@ -42,6 +42,20 @@ async function fetchPosts(
   }
 
   return (data as PostWithAuthor[]) || [];
+}
+
+// Prefetch posts for a single category into the React Query cache.
+// Call this for all categories when the board loads so tab switches are instant.
+export function prefetchBoardPosts(
+  queryClient: QueryClient,
+  communityId: string,
+  categoryId: string
+) {
+  return queryClient.prefetchQuery({
+    queryKey: queryKeys.boardPosts(communityId, categoryId),
+    queryFn: () => fetchPosts(communityId, categoryId),
+    staleTime: 2 * 60 * 1000,
+  });
 }
 
 export function useBoardCategoriesQuery(communityId?: string) {
