@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Tabs } from 'expo-router';
-import { Text, View, Image, ImageSourcePropType, Platform, useWindowDimensions } from 'react-native';
+import { Tabs, useRouter } from 'expo-router';
+import { Text, View, Image, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
@@ -43,7 +43,8 @@ function TabIcon({ icon, imageSource, customIcon, label, focused, isCircular, ba
 }
 
 export default function AppLayout() {
-  const { communityRole, profile, communityId } = useAuth();
+  const { session, communityId, communityRole, profile, loading } = useAuth();
+  const router = useRouter();
   const isAdmin = communityRole === 'admin';
   const { width } = useWindowDimensions();
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
@@ -51,8 +52,29 @@ export default function AppLayout() {
   // Use mobile layout for narrow screens (< 768px) regardless of platform
   const useMobileLayout = width < 768;
 
-  // Initialize push notifications - this will request permission and save token
-  useNotifications();
+  // Initialize push notification listeners and state (no permission prompt on load)
+  useNotifications({ autoRequestPermission: false });
+
+  // Guard: redirect to login/join if auth resolves without a valid session.
+  // This runs for any deep link that bypasses the index.tsx routing logic
+  // (e.g., opening /board directly from a home screen bookmark).
+  useEffect(() => {
+    if (loading) return;
+    if (!session) {
+      router.replace('/(auth)/login');
+    } else if (!communityId) {
+      router.replace('/join');
+    }
+  }, [loading, session, communityId]);
+
+  // Show a spinner while auth is resolving rather than flashing empty tabs
+  if (loading || !session || !communityId) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#faf8f3' }}>
+        <ActivityIndicator size="large" color="#bd9348" />
+      </View>
+    );
+  }
 
   return (
     <Tabs
