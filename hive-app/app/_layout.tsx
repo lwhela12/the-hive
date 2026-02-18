@@ -178,6 +178,16 @@ export default function RootLayout() {
     }
   }, [session, initializeUserData]);
 
+  const authContextValue = useMemo(() => ({
+    session,
+    profile,
+    community,
+    communityId,
+    communityRole,
+    loading,
+    refreshProfile,
+  }), [session, profile, community, communityId, communityRole, loading, refreshProfile]);
+
   // Show loading screen while fonts load
   if (!fontsLoaded) {
     return (
@@ -194,15 +204,7 @@ export default function RootLayout() {
         userId={profile?.id ?? null}
         isAuthenticated={!!session && !loading}
       />
-      <AuthContext.Provider value={useMemo(() => ({
-        session,
-        profile,
-        community,
-        communityId,
-        communityRole,
-        loading,
-        refreshProfile,
-      }), [session, profile, community, communityId, communityRole, loading, refreshProfile])}>
+      <AuthContext.Provider value={authContextValue}>
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(auth)" />
