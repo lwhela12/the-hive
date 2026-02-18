@@ -26,9 +26,10 @@ async function fetchPosts(
   communityId: string,
   categoryId: string
 ): Promise<PostWithAuthor[]> {
+  // Join reactions in the same query to avoid a sequential round-trip
   const { data, error } = await supabase
     .from('board_posts')
-    .select('*, author:profiles!board_posts_author_id_fkey(*)')
+    .select('*, author:profiles!board_posts_author_id_fkey(*), reactions:board_reactions(*)')
     .eq('community_id', communityId)
     .eq('category_id', categoryId)
     .order('is_pinned', { ascending: false })
@@ -40,25 +41,7 @@ async function fetchPosts(
     throw error;
   }
 
-  const posts = (data as PostWithAuthor[]) || [];
-
-  // Fetch reactions for all posts in one query
-  if (posts.length > 0) {
-    const postIds = posts.map((p) => p.id);
-    const { data: reactions } = await supabase
-      .from('board_reactions')
-      .select('*')
-      .in('post_id', postIds);
-
-    // Attach reactions to their respective posts
-    if (reactions) {
-      posts.forEach((post) => {
-        post.reactions = reactions.filter((r) => r.post_id === post.id);
-      });
-    }
-  }
-
-  return posts;
+  return (data as PostWithAuthor[]) || [];
 }
 
 export function useBoardCategoriesQuery(communityId?: string) {

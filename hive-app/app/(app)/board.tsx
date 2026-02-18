@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -196,23 +196,30 @@ export default function BoardScreen() {
         onAddTopic={() => setShowTopicComposer(true)}
       />
 
-      {/* Posts list */}
-      <ScrollView
-        className="flex-1"
-        contentContainerClassName="p-4"
+      {/* Posts list — FlatList virtualizes rendering so the JS thread stays free while loading */}
+      <FlatList
+        data={posts}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <BoardPostCard
+            post={item}
+            onPress={() => setSelectedPostId(item.id)}
+          />
+        )}
+        contentContainerStyle={{ padding: 16 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#bd9348" />
         }
-      >
-        {selectedCategory && (
-          <View className="mb-4">
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-sm">
-              {selectedCategory.description}
-            </Text>
-          </View>
-        )}
-
-        {posts.length === 0 ? (
+        ListHeaderComponent={
+          selectedCategory?.description ? (
+            <View className="mb-4">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-sm">
+                {selectedCategory.description}
+              </Text>
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
           <View className="bg-white rounded-xl p-8 shadow-sm items-center">
             <Text className="text-4xl mb-4">📝</Text>
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
@@ -220,16 +227,9 @@ export default function BoardScreen() {
               {canPost() && '\nBe the first to start a discussion!'}
             </Text>
           </View>
-        ) : (
-          posts.map((post) => (
-            <BoardPostCard
-              key={post.id}
-              post={post}
-              onPress={() => setSelectedPostId(post.id)}
-            />
-          ))
-        )}
-      </ScrollView>
+        }
+        removeClippedSubviews
+      />
 
       {/* FAB for new post */}
       {canPost() && (
