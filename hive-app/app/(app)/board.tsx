@@ -3,7 +3,7 @@ import { View, Text, FlatList, RefreshControl, Pressable, Alert, ActivityIndicat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { useBoardCategoriesQuery, useBoardPostsQuery } from '../../lib/hooks/useBoardQuery';
+import { useBoardCategoriesQuery, useBoardPostsQuery, useBoardPostCountsQuery } from '../../lib/hooks/useBoardQuery';
 import { BoardCategoryList } from '../../components/board/BoardCategoryList';
 import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
@@ -35,6 +35,8 @@ export default function BoardScreen() {
     ? categories.find((c) => c.id === selectedCategoryId) || null
     : null;
 
+  const { data: postCounts } = useBoardPostCountsQuery(communityId);
+
   const {
     posts,
     loading: postsLoading,
@@ -58,6 +60,8 @@ export default function BoardScreen() {
   const handleBack = useCallback(() => {
     setSelectedCategoryId(null);
   }, []);
+
+  const handleDrawerClose = useCallback(() => setDrawerOpen(false), []);
 
   const handleCreatePost = async (title: string, content: string, attachments?: Attachment[]) => {
     if (!profile || !communityId || !selectedCategory) {
@@ -189,7 +193,7 @@ export default function BoardScreen() {
         {useMobileLayout && (
           <NavigationDrawer
             isOpen={drawerOpen}
-            onClose={() => setDrawerOpen(false)}
+            onClose={handleDrawerClose}
             mode="navigation"
           />
         )}
@@ -197,6 +201,7 @@ export default function BoardScreen() {
         <BoardCategoryList
           categories={categories}
           onSelect={handleCategorySelect}
+          postCounts={postCounts}
         />
 
         <BoardTopicComposer
@@ -228,7 +233,7 @@ export default function BoardScreen() {
       {useMobileLayout && (
         <NavigationDrawer
           isOpen={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
+          onClose={handleDrawerClose}
           mode="navigation"
         />
       )}

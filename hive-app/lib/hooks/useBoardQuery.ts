@@ -22,6 +22,24 @@ async function fetchCategories(communityId: string): Promise<BoardCategory[]> {
   return data || [];
 }
 
+async function fetchPostCounts(communityId: string): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from('board_posts')
+    .select('category_id')
+    .eq('community_id', communityId);
+
+  if (error) {
+    console.error('Error fetching post counts:', error);
+    throw error;
+  }
+
+  const counts: Record<string, number> = {};
+  (data || []).forEach((row: { category_id: string }) => {
+    counts[row.category_id] = (counts[row.category_id] || 0) + 1;
+  });
+  return counts;
+}
+
 async function fetchPosts(
   communityId: string,
   categoryId: string
@@ -44,6 +62,15 @@ async function fetchPosts(
   return (data as PostWithAuthor[]) || [];
 }
 
+
+export function useBoardPostCountsQuery(communityId?: string) {
+  return useQuery({
+    queryKey: queryKeys.boardPostCounts(communityId || ''),
+    queryFn: () => fetchPostCounts(communityId!),
+    enabled: !!communityId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
 
 export function useBoardCategoriesQuery(communityId?: string) {
   const queryClient = useQueryClient();

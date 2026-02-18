@@ -31,11 +31,13 @@ const EMOJI_MAP: Record<string, string> = {
 interface BoardCategoryListProps {
   categories: BoardCategory[];
   onSelect: (category: BoardCategory) => void;
+  postCounts?: Record<string, number>;
 }
 
 export const BoardCategoryList = memo(function BoardCategoryList({
   categories,
   onSelect,
+  postCounts,
 }: BoardCategoryListProps) {
   return (
     <FlatList
@@ -44,6 +46,9 @@ export const BoardCategoryList = memo(function BoardCategoryList({
       renderItem={({ item, index }) => {
         const emoji = item.icon ? EMOJI_MAP[item.icon] || item.icon : '📁';
         const isLast = index === categories.length - 1;
+        const count = postCounts?.[item.id] ?? 0;
+        const countLabel = `${count} ${count === 1 ? 'post' : 'posts'}`;
+        const subtitle = item.description ? `${item.description} · ${countLabel}` : countLabel;
 
         return (
           <Pressable
@@ -59,15 +64,13 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                 >
                   {item.name}
                 </Text>
-                {item.description ? (
-                  <Text
-                    style={{ fontFamily: 'Lato_400Regular' }}
-                    className="text-charcoal/50 text-sm mt-0.5"
-                    numberOfLines={1}
-                  >
-                    {item.description}
-                  </Text>
-                ) : null}
+                <Text
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className="text-charcoal/50 text-sm mt-0.5"
+                  numberOfLines={1}
+                >
+                  {subtitle}
+                </Text>
               </View>
               <Text className="text-charcoal/30 text-xl ml-2">›</Text>
             </View>
