@@ -124,7 +124,6 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         queryFn: () => fetchQueenBeesWithHighlights(communityId!),
         enabled: !!communityId,
         staleTime: 5 * 60 * 1000,
-        refetchOnMount: 'always', // Always refetch on mount to handle iOS cache restoration
       },
       // Public wishes (open)
       {
@@ -144,7 +143,6 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         },
         enabled: !!communityId && !!userId,
         staleTime: 5 * 60 * 1000,
-        refetchOnMount: 'always',
       },
       // Granted wishes (fulfilled)
       {
@@ -171,7 +169,6 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         },
         enabled: !!communityId,
         staleTime: 5 * 60 * 1000,
-        refetchOnMount: 'always',
       },
       // Upcoming events (limit 5 for the hook, UI can further limit)
       // Excludes completed events
@@ -190,7 +187,6 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         },
         enabled: !!communityId,
         staleTime: 10 * 60 * 1000, // Events change less frequently
-        refetchOnMount: 'always', // Always refetch on mount to handle iOS cache restoration
       },
       // Honey pot
       {
@@ -205,7 +201,6 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         },
         enabled: !!communityId,
         staleTime: 10 * 60 * 1000,
-        refetchOnMount: 'always',
       },
       // Recent meetings
       {
@@ -256,7 +251,6 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         },
         enabled: !!communityId,
         staleTime: 10 * 60 * 1000,
-        refetchOnMount: 'always',
       },
       // User skills (for matching wishes)
       {

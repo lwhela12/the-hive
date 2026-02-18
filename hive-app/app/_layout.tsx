@@ -1,8 +1,8 @@
 import '../global.css';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
@@ -40,6 +40,15 @@ type MembershipWithCommunity = {
   role: UserRole;
   community: Community;
 };
+
+// Register service worker for PWA home screen caching (web only)
+if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('Service worker registration failed:', err);
+    });
+  });
+}
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -163,11 +172,11 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, [initializeUserData]);
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     if (session?.user) {
       await initializeUserData(session.user.id, session.user);
     }
-  };
+  }, [session, initializeUserData]);
 
   // Show loading screen while fonts load
   if (!fontsLoaded) {
@@ -185,7 +194,7 @@ export default function RootLayout() {
         userId={profile?.id ?? null}
         isAuthenticated={!!session && !loading}
       />
-      <AuthContext.Provider value={{
+      <AuthContext.Provider value={useMemo(() => ({
         session,
         profile,
         community,
@@ -193,7 +202,7 @@ export default function RootLayout() {
         communityRole,
         loading,
         refreshProfile,
-      }}>
+      }), [session, profile, community, communityId, communityRole, loading, refreshProfile])}>
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(auth)" />

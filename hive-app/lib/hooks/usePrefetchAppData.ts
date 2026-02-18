@@ -40,7 +40,6 @@ export function usePrefetchAppData(
           .eq('status', 'public')
           .eq('is_active', true)
           .eq('community_id', communityId)
-          .neq('user_id', userId)
           .order('created_at', { ascending: false });
         return (data as (Wish & { user: Profile })[]) || [];
       },
@@ -56,6 +55,7 @@ export function usePrefetchAppData(
           .select('*')
           .gte('event_date', today)
           .eq('community_id', communityId)
+          .or('status.is.null,status.eq.scheduled')
           .order('event_date', { ascending: true })
           .limit(5);
         return (data as Event[]) || [];

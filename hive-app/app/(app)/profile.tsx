@@ -63,42 +63,43 @@ export default function ProfileScreen() {
   const fetchData = useCallback(async () => {
     if (!profile || !communityId) return;
 
-    // Fetch skills
-    const { data: skillsData } = await supabase
-      .from('skills')
-      .select('*')
-      .eq('user_id', profile.id)
-      .eq('community_id', communityId)
-      .order('created_at', { ascending: false });
+    const [
+      { data: skillsData },
+      { data: wishesData },
+      { data: actionItemsData },
+      { data: insightsData },
+    ] = await Promise.all([
+      supabase
+        .from('skills')
+        .select('*')
+        .eq('user_id', profile.id)
+        .eq('community_id', communityId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('wishes')
+        .select('*')
+        .eq('user_id', profile.id)
+        .eq('community_id', communityId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('action_items')
+        .select('*')
+        .eq('assigned_to', profile.id)
+        .eq('community_id', communityId)
+        .eq('completed', false)
+        .order('due_date', { ascending: true }),
+      // Use maybeSingle() to gracefully handle cases where no record exists yet
+      supabase
+        .from('user_insights')
+        .select('*')
+        .eq('user_id', profile.id)
+        .eq('community_id', communityId)
+        .maybeSingle(),
+    ]);
+
     if (skillsData) setSkills(skillsData);
-
-    // Fetch wishes
-    const { data: wishesData } = await supabase
-      .from('wishes')
-      .select('*')
-      .eq('user_id', profile.id)
-      .eq('community_id', communityId)
-      .order('created_at', { ascending: false });
     if (wishesData) setWishes(wishesData);
-
-    // Fetch action items
-    const { data: actionItemsData } = await supabase
-      .from('action_items')
-      .select('*')
-      .eq('assigned_to', profile.id)
-      .eq('community_id', communityId)
-      .eq('completed', false)
-      .order('due_date', { ascending: true });
     if (actionItemsData) setActionItems(actionItemsData);
-
-    // Fetch user insights (personality notes)
-    // Use maybeSingle() instead of single() to gracefully handle cases where no record exists yet
-    const { data: insightsData } = await supabase
-      .from('user_insights')
-      .select('*')
-      .eq('user_id', profile.id)
-      .eq('community_id', communityId)
-      .maybeSingle();
     setUserInsights(insightsData);
   }, [profile?.id, communityId]);
 
