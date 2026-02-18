@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import {
   View,
-  Image,
   Pressable,
   Modal,
   Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Attachment } from '../../types';
 
@@ -84,9 +84,9 @@ export function AttachmentGallery({
       >
         <Image
           source={{ uri: attachment.url }}
-          style={{ width, height }}
-          className="rounded-lg"
-          resizeMode="cover"
+          style={{ width, height, borderRadius: 8 }}
+          contentFit="cover"
+          cachePolicy="memory-disk"
         />
       </Pressable>
     );
@@ -179,11 +179,9 @@ export function AttachmentGallery({
             <View className="flex-1 items-center justify-center">
               <Image
                 source={{ uri: attachments[selectedIndex].url }}
-                style={{
-                  width: SCREEN_WIDTH,
-                  height: SCREEN_HEIGHT * 0.8,
-                }}
-                resizeMode="contain"
+                style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT * 0.8 }}
+                contentFit="contain"
+                cachePolicy="memory-disk"
               />
             </View>
           )}

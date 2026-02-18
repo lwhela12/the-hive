@@ -1,4 +1,5 @@
-import { View, Text, Image } from 'react-native';
+import { View, Text } from 'react-native';
+import { Image } from 'expo-image';
 
 interface AvatarProps {
   name: string;
@@ -18,8 +19,9 @@ export function Avatar({ name, url, size = 40 }: AvatarProps) {
     return (
       <Image
         source={{ uri: url }}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        className="bg-gray-200"
+        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: '#e5e7eb' }}
+        contentFit="cover"
+        cachePolicy="memory-disk"
       />
     );
   }

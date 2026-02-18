@@ -1,4 +1,5 @@
-import { View, Text, Pressable, Image } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDateShort } from '../../lib/dateUtils';
 import { LinkifiedText } from '../ui/LinkifiedText';
@@ -67,8 +68,9 @@ export function BoardPostCard({ post, onPress }: BoardPostCardProps) {
           {firstAttachment && (
             <Image
               source={{ uri: firstAttachment.url }}
-              className="w-16 h-16 rounded-lg bg-gray-100"
-              resizeMode="cover"
+              style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: '#f3f4f6' }}
+              contentFit="cover"
+              cachePolicy="memory-disk"
             />
           )}
           <View className="flex-row items-center flex-wrap gap-1 justify-end">
