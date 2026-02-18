@@ -148,7 +148,19 @@ export default function MessagesScreen() {
           <RefreshControl refreshing={refreshing || loading} onRefresh={onRefresh} tintColor="#bd9348" />
         }
         ListEmptyComponent={
-          !loading ? (
+          loading ? (
+            <View className="mt-2">
+              {[...Array(5)].map((_, i) => (
+                <View key={i} className="flex-row items-center px-4 py-4 bg-white border-b border-gray-100">
+                  <View className="w-12 h-12 rounded-full bg-gray-200 mr-3" />
+                  <View className="flex-1">
+                    <View className="h-4 bg-gray-200 rounded w-2/5 mb-2" />
+                    <View className="h-3 bg-gray-100 rounded w-3/4" />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
             <View className="items-center py-8">
               <Text className="text-4xl mb-4">💬</Text>
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
@@ -156,7 +168,7 @@ export default function MessagesScreen() {
                 Tap + to start a new message.
               </Text>
             </View>
-          ) : null
+          )
         }
       />
 

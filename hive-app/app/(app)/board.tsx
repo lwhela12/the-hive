@@ -27,6 +27,7 @@ export default function BoardScreen() {
 
   const {
     data: categories = [],
+    isLoading: categoriesLoading,
     refetch: refetchCategories,
     invalidateCategories,
   } = useBoardCategoriesQuery(communityId);
@@ -198,11 +199,26 @@ export default function BoardScreen() {
           />
         )}
 
-        <BoardCategoryList
-          categories={categories}
-          onSelect={handleCategorySelect}
-          postCounts={postCounts}
-        />
+        {categoriesLoading && categories.length === 0 ? (
+          <View className="mt-2">
+            {[...Array(5)].map((_, i) => (
+              <View key={i} className="flex-row items-center px-4 py-4 bg-white border-b border-cream">
+                <View className="w-10 h-10 rounded-lg bg-gray-200 mr-4" />
+                <View className="flex-1">
+                  <View className="h-4 bg-gray-200 rounded w-2/5 mb-2" />
+                  <View className="h-3 bg-gray-100 rounded w-3/5" />
+                </View>
+                <View className="w-4 h-4 bg-gray-100 rounded ml-2" />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <BoardCategoryList
+            categories={categories}
+            onSelect={handleCategorySelect}
+            postCounts={postCounts}
+          />
+        )}
 
         <BoardTopicComposer
           visible={showTopicComposer}

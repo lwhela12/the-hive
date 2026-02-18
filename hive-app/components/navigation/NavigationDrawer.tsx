@@ -1,11 +1,12 @@
 import { memo, useEffect } from 'react';
-import { View, Text, Pressable, Image, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter, usePathname } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
+  Easing,
 } from 'react-native-reanimated';
 import { HexagonIcon } from '../ui/HexagonIcon';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -22,11 +23,6 @@ interface NavigationDrawerProps {
 }
 
 const DRAWER_WIDTH_PERCENT = 0.85;
-const SPRING_CONFIG = {
-  damping: 20,
-  stiffness: 200,
-  mass: 0.5,
-};
 
 export const NavigationDrawer = memo(function NavigationDrawer({
   isOpen,
@@ -60,10 +56,10 @@ export const NavigationDrawer = memo(function NavigationDrawer({
   // Update animation when isOpen changes
   useEffect(() => {
     if (isOpen) {
-      translateX.value = withSpring(0, SPRING_CONFIG);
+      translateX.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
       backdropOpacity.value = withTiming(1, { duration: 200 });
     } else {
-      translateX.value = withSpring(-drawerWidth, SPRING_CONFIG);
+      translateX.value = withTiming(-drawerWidth, { duration: 220, easing: Easing.in(Easing.cubic) });
       backdropOpacity.value = withTiming(0, { duration: 200 });
     }
   }, [isOpen, drawerWidth]);
@@ -123,6 +119,8 @@ export const NavigationDrawer = memo(function NavigationDrawer({
                   <Image
                     source={item.imageSource}
                     style={{ width: 40, height: 40, borderRadius: item.isCircular ? 20 : 8 }}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
                   />
                 ) : (
                   <Text className="text-2xl">{item.icon}</Text>

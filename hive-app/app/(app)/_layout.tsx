@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
-import { Text, View, Image, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { Text, View, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
@@ -16,7 +17,7 @@ function TabIcon({ icon, imageSource, customIcon, label, focused, isCircular, ba
         {customIcon ? (
           customIcon
         ) : imageSource ? (
-          <Image source={imageSource} style={{ width: 28, height: 28, borderRadius: isCircular ? 14 : 6 }} />
+          <Image source={imageSource} style={{ width: 28, height: 28, borderRadius: isCircular ? 14 : 6 }} contentFit="cover" cachePolicy="memory-disk" />
         ) : (
           <Text className="text-2xl">{icon}</Text>
         )}

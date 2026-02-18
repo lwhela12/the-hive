@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
+import { InteractionManager } from 'react-native';
 import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
 import type { Event, Wish, Profile, BoardCategory } from '../../types';
@@ -27,6 +28,10 @@ export function usePrefetchAppData(
 
     const today = new Date().toISOString().split('T')[0];
 
+    // Defer prefetching until after animations and interactions have settled.
+    // This prevents the 5 parallel Supabase requests from competing with the
+    // initial render and drawer animation on cold start.
+    const task = InteractionManager.runAfterInteractions(() => {
     // Prefetch all critical data in parallel
     // These match the exact queries in useHiveDataQuery, useChatRoomsQuery, useBoardQuery
 
@@ -120,5 +125,8 @@ export function usePrefetchAppData(
       },
       staleTime: 10 * 60 * 1000,
     });
+    }); // end InteractionManager.runAfterInteractions
+
+    return () => task.cancel();
   }, [isAuthenticated, communityId, userId, queryClient]);
 }
