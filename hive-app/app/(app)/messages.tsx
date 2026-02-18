@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, FlatList, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -130,36 +130,35 @@ export default function MessagesScreen() {
         />
       )}
 
-      {/* Room list */}
-      <ScrollView
-        className="flex-1"
+      {/* Room list — FlatList keeps JS thread free during load */}
+      <FlatList
+        data={rooms}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <ChatRoomItem
+            room={item}
+            currentUserId={profile?.id}
+            onPress={() => {
+              markRoomAsRead(item.id);
+              setSelectedRoom(item);
+            }}
+          />
+        )}
         refreshControl={
           <RefreshControl refreshing={refreshing || loading} onRefresh={onRefresh} tintColor="#bd9348" />
         }
-      >
-        {rooms.length === 0 && !loading ? (
-          <View className="items-center py-8">
-            <Text className="text-4xl mb-4">💬</Text>
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
-              No conversations yet.{'\n'}
-              Tap + to start a new message.
-            </Text>
-          </View>
-        ) : (
-          rooms.map((room) => (
-            <ChatRoomItem
-              key={room.id}
-              room={room}
-              currentUserId={profile?.id}
-              onPress={() => {
-                // Mark as read immediately when clicking into the room
-                markRoomAsRead(room.id);
-                setSelectedRoom(room);
-              }}
-            />
-          ))
-        )}
-      </ScrollView>
+        ListEmptyComponent={
+          !loading ? (
+            <View className="items-center py-8">
+              <Text className="text-4xl mb-4">💬</Text>
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
+                No conversations yet.{'\n'}
+                Tap + to start a new message.
+              </Text>
+            </View>
+          ) : null
+        }
+      />
 
       {/* Member picker modal */}
       <MemberPicker

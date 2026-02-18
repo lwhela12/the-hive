@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { View, Text, Pressable, Image } from 'react-native';
 import { Avatar } from '../ui/Avatar';
 import { formatDateShort } from '../../lib/dateUtils';
@@ -14,7 +15,7 @@ interface ChatRoomItemProps {
   onPress: () => void;
 }
 
-export function ChatRoomItem({ room, currentUserId, onPress }: ChatRoomItemProps) {
+export const ChatRoomItem = memo(function ChatRoomItem({ room, currentUserId, onPress }: ChatRoomItemProps) {
   // For DMs, get the other person's info
   const otherMember = room.members?.find((m) => m.user?.id !== currentUserId)?.user;
 
@@ -167,4 +168,4 @@ export function ChatRoomItem({ room, currentUserId, onPress }: ChatRoomItemProps
       )}
     </Pressable>
   );
-}
+});

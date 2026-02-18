@@ -352,7 +352,7 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
     }
   };
 
-  const handleReact = async (messageId: string, emoji: string) => {
+  const handleReact = useCallback(async (messageId: string, emoji: string) => {
     if (!profile) return;
 
     try {
@@ -365,9 +365,9 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
     } catch (error) {
       console.error('Error adding reaction:', error);
     }
-  };
+  }, [profile, refetchMessages]);
 
-  const handleRemoveReaction = async (messageId: string, emoji: string) => {
+  const handleRemoveReaction = useCallback(async (messageId: string, emoji: string) => {
     if (!profile) return;
 
     try {
@@ -381,15 +381,15 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
     } catch (error) {
       console.error('Error removing reaction:', error);
     }
-  };
+  }, [profile, refetchMessages]);
 
-  const handleEdit = (messageId: string) => {
+  const handleEdit = useCallback((messageId: string) => {
     const message = messages.find((m) => m.id === messageId);
     if (message) {
       setEditingMessageId(messageId);
       setEditContent(message.content);
     }
-  };
+  }, [messages]);
 
   const handleSaveEdit = async () => {
     if (!editingMessageId || !editContent.trim()) return;
@@ -412,7 +412,7 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
     }
   };
 
-  const handleDelete = async (messageId: string) => {
+  const handleDelete = useCallback(async (messageId: string) => {
     Alert.alert('Delete Message', 'Are you sure you want to delete this message?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -432,7 +432,18 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
         },
       },
     ]);
-  };
+  }, [refetchMessages]);
+
+  const renderMessageItem = useCallback(({ item }: { item: any }) => (
+    <RoomMessageItem
+      message={item}
+      currentUserId={profile?.id}
+      onReact={(emoji) => handleReact(item.id, emoji)}
+      onRemoveReaction={(emoji) => handleRemoveReaction(item.id, emoji)}
+      onEdit={() => handleEdit(item.id)}
+      onDelete={() => handleDelete(item.id)}
+    />
+  ), [profile?.id, handleReact, handleRemoveReaction, handleEdit, handleDelete]);
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
@@ -513,16 +524,7 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
           ref={flatListRef}
           data={messages}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <RoomMessageItem
-              message={item}
-              currentUserId={profile?.id}
-              onReact={(emoji) => handleReact(item.id, emoji)}
-              onRemoveReaction={(emoji) => handleRemoveReaction(item.id, emoji)}
-              onEdit={() => handleEdit(item.id)}
-              onDelete={() => handleDelete(item.id)}
-            />
-          )}
+          renderItem={renderMessageItem}
           onScroll={handleScroll}
           scrollEventThrottle={100}
           contentContainerClassName="p-4 pb-2"
