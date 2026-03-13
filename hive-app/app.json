@@ -3,9 +3,6 @@
     "name": "The HIVE",
     "slug": "the-hive",
     "version": "1.0.0",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
     "orientation": "portrait",
     "icon": "./assets/The Hive Logo_Low Res (1).png",
     "userInterfaceStyle": "light",

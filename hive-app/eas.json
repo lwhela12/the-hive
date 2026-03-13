@@ -11,6 +11,11 @@
     "preview": {
       "distribution": "internal"
     },
+    "testflight": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "channel": "testflight"
+    },
     "production": {
       "autoIncrement": true
     }
