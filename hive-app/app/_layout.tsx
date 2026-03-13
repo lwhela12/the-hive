@@ -204,6 +204,7 @@ export default function RootLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (session?.user) {
+        setLoading(true); // Re-enter loading state while we fetch user data
         initializeUserData(session.user.id, session.user);
       } else {
         setProfile(null);

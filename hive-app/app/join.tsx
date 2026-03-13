@@ -12,7 +12,7 @@ type InviteWithDetails = CommunityInvite & {
 };
 
 export default function JoinScreen() {
-  const { session, profile, refreshProfile, loading: authLoading } = useAuth();
+  const { session, profile, communityId, refreshProfile, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [invite, setInvite] = useState<InviteWithDetails | null>(null);
   const [showWaitlist, setShowWaitlist] = useState(false);
@@ -27,6 +27,12 @@ export default function JoinScreen() {
     // If auth is still loading, wait
     if (authLoading) return;
 
+    // If community resolved (e.g., initializeUserData completed), go to app
+    if (session && communityId) {
+      router.replace('/(app)');
+      return;
+    }
+
     // If no session, redirect to login with return URL
     if (!session) {
       router.replace('/(auth)/login?returnTo=/join');
@@ -40,7 +46,7 @@ export default function JoinScreen() {
       // Profile not loaded yet — don't hang on loading forever
       console.log('[Join] Waiting for profile to load...');
     }
-  }, [session, authLoading, userEmail, profile]);
+  }, [session, authLoading, userEmail, profile, communityId]);
 
   const checkForInvite = async () => {
     if (!userEmail || !profile) return;
