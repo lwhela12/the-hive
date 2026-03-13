@@ -1,5 +1,5 @@
 import '../global.css';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, Platform } from 'react-native';
@@ -65,8 +65,14 @@ export default function RootLayout() {
     Lato_700Bold,
   });
 
+  // Guard against concurrent calls from getSession + onAuthStateChange
+  const initializingRef = useRef(false);
+
   // Optimized: Fetch profile and memberships in parallel to reduce startup latency
   const initializeUserData = useCallback(async (userId: string, authUser: User) => {
+    if (initializingRef.current) return;
+    initializingRef.current = true;
+    try {
     // Fetch profile AND all memberships (with community data) in parallel
     // This reduces 4-5 sequential calls to just 1 parallel batch
     const [profileResult, membershipsResult] = await Promise.all([
@@ -100,6 +106,8 @@ export default function RootLayout() {
         .single();
 
       profileData = newProfile as Profile | null;
+    } else if (profileResult.error) {
+      console.error('[Auth] Profile fetch error:', profileResult.error.message);
     }
 
     if (profileData) {
@@ -107,7 +115,38 @@ export default function RootLayout() {
     }
 
     // Handle community context
-    const memberships = (membershipsResult.data || []) as MembershipWithCommunity[];
+    if (membershipsResult.error) {
+      console.error('[Auth] Memberships fetch error:', membershipsResult.error.message);
+    }
+    let memberships = (membershipsResult.data || []) as MembershipWithCommunity[];
+
+    // If the JOIN query failed (e.g., communities RLS issue), retry without the join
+    if (memberships.length === 0 && membershipsResult.error) {
+      console.log('[Auth] Retrying memberships query without community join...');
+      const { data: plainMemberships, error: retryError } = await supabase
+        .from('community_memberships')
+        .select('community_id, role')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true });
+
+      if (retryError) {
+        console.error('[Auth] Memberships retry error:', retryError.message);
+      } else if (plainMemberships && plainMemberships.length > 0) {
+        console.log('[Auth] Retry found', plainMemberships.length, 'memberships');
+        // Fetch the community separately
+        const { data: communityData } = await supabase
+          .from('communities')
+          .select('*')
+          .eq('id', plainMemberships[0].community_id)
+          .single();
+        memberships = plainMemberships.map(m => ({
+          ...m,
+          community: communityData as Community,
+        })) as MembershipWithCommunity[];
+      }
+    }
+
+    console.log('[Auth] Found', memberships.length, 'memberships for user', userId);
 
     if (memberships.length === 0) {
       setCommunity(null);
@@ -142,6 +181,12 @@ export default function RootLayout() {
     setCommunityRole(activeMembership.role);
     setCommunity(activeMembership.community);
     setLoading(false);
+    } catch (err) {
+      console.error('[Auth] initializeUserData failed:', err);
+      setLoading(false);
+    } finally {
+      initializingRef.current = false;
+    }
   }, []);
 
   useEffect(() => {
@@ -174,6 +219,8 @@ export default function RootLayout() {
 
   const refreshProfile = useCallback(async () => {
     if (session?.user) {
+      // Reset guard so refresh can proceed
+      initializingRef.current = false;
       await initializeUserData(session.user.id, session.user);
     }
   }, [session, initializeUserData]);

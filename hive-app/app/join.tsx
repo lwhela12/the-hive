@@ -33,11 +33,14 @@ export default function JoinScreen() {
       return;
     }
 
-    // If we have a user email, check for invite
-    if (userEmail) {
+    // Need both userEmail and profile to check for invites
+    if (userEmail && profile) {
       checkForInvite();
+    } else if (userEmail && !profile) {
+      // Profile not loaded yet — don't hang on loading forever
+      console.log('[Join] Waiting for profile to load...');
     }
-  }, [session, authLoading, userEmail]);
+  }, [session, authLoading, userEmail, profile]);
 
   const checkForInvite = async () => {
     if (!userEmail || !profile) return;
