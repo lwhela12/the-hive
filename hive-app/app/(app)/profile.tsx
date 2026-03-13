@@ -12,6 +12,8 @@ import { Avatar } from '../../components/ui/Avatar';
 import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
+import { FadeIn } from '../../components/ui/FadeIn';
+import { ProfileHeaderSkeleton, ProfileInfoSkeleton, ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
@@ -54,6 +56,7 @@ export default function ProfileScreen() {
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   // Editable profile fields
   const [isEditing, setIsEditing] = useState(false);
@@ -106,6 +109,7 @@ export default function ProfileScreen() {
     if (wishesData) setWishes(wishesData);
     if (actionItemsData) setActionItems(actionItemsData);
     setUserInsights(insightsData);
+    setInitialLoading(false);
   }, [profile?.id, communityId]);
 
   useEffect(() => {
@@ -390,6 +394,7 @@ export default function ProfileScreen() {
         }
       >
         {/* Profile Header */}
+        <FadeIn>
         <View className="items-center mb-6">
           <Pressable onPress={pickImage} disabled={isUploadingPhoto} className="relative active:opacity-80">
             <Avatar name={profile.name} url={profile.avatar_url} size={80} />
@@ -425,8 +430,10 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+        </FadeIn>
 
         {/* Profile Information */}
+        <FadeIn delay={100}>
         <View className="mb-6">
           <View className="flex-row items-center justify-between mb-2">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
@@ -576,9 +583,18 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+        </FadeIn>
+
+        {/* Loading skeletons for dynamic sections */}
+        {initialLoading && (
+          <>
+            <ListSectionSkeleton count={2} />
+            <ListSectionSkeleton count={2} />
+          </>
+        )}
 
         {/* Personality Notes - How the Hive Sees You */}
-        {userInsights?.personality_notes && (
+        {!initialLoading && userInsights?.personality_notes && (
           <View className="mb-6">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
               How the HIVE Sees You
@@ -595,7 +611,7 @@ export default function ProfileScreen() {
         )}
 
         {/* Action Items */}
-        {actionItems.length > 0 && (
+        {!initialLoading && actionItems.length > 0 && (
           <View className="mb-6">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
               Your Action Items
@@ -623,6 +639,7 @@ export default function ProfileScreen() {
         )}
 
         {/* Skills */}
+        {!initialLoading && <FadeIn delay={50}>
         <View className="mb-6">
           <View className="flex-row items-center justify-between mb-2">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
@@ -728,6 +745,7 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+        </FadeIn>}
 
         {/* Notification Settings */}
         {Platform.OS !== 'web' && (

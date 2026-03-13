@@ -62,7 +62,39 @@ verify_jwt = false
 [functions.notify-dm]
 verify_jwt = false
 
+# Board reply notification system - uses service_role key
+# Sends push notifications when someone replies to a board post
+[functions.notify-board-reply]
+verify_jwt = false
+
 # Generate conversation titles using Claude Haiku - requires user authentication
 # Auth handled via _shared/auth.ts using jose library
 [functions.generate-title]
+verify_jwt = false
+
+# Daily meeting reminder - uses service_role key
+# Sends push notifications the day before a scheduled meeting
+# No user auth required (triggered by cron or manual HTTP call)
+#
+# Scheduling: Supabase config.toml does not support cron scheduling directly.
+# Set up an external cron job (e.g., GitHub Actions, Vercel Cron, or a
+# pg_cron job in Supabase SQL) to call this function daily at 9:00 AM:
+#
+#   curl -X POST https://<project-ref>.supabase.co/functions/v1/meeting-reminder \
+#     -H "Content-Type: application/json" \
+#     -d '{}'
+#
+# Example pg_cron (run in Supabase SQL Editor):
+#   select cron.schedule(
+#     'daily-meeting-reminder',
+#     '0 9 * * *',
+#     $$
+#     select net.http_post(
+#       url := 'https://<project-ref>.supabase.co/functions/v1/meeting-reminder',
+#       headers := '{"Content-Type": "application/json"}'::jsonb,
+#       body := '{}'::jsonb
+#     );
+#     $$
+#   );
+[functions.meeting-reminder]
 verify_jwt = false

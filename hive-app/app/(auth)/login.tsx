@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { View, Text, Pressable, Image, ActivityIndicator, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
-import { useLocalSearchParams } from 'expo-router';
+import * as Linking from 'expo-linking';
+import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -31,8 +32,8 @@ export default function LoginScreen() {
         if (error) throw error;
         // The page will redirect to Google, then back
       } else {
-        // For native (development build), use custom scheme
-        const redirectTo = 'thehive://auth/callback';
+        // For native, use expo-linking to generate the correct URL
+        const redirectTo = Linking.createURL('auth/callback');
         console.log('OAuth redirect URL:', redirectTo);
 
         const { data, error } = await supabase.auth.signInWithOAuth({
@@ -55,22 +56,36 @@ export default function LoginScreen() {
 
           if (result.type === 'success') {
             const url = result.url;
-            console.log('Callback URL:', url);
 
-            // Extract tokens from URL fragment (after #)
-            const hashPart = url.split('#')[1];
-            if (hashPart) {
-              const hashParams = new URLSearchParams(hashPart);
-              const accessToken = hashParams.get('access_token');
-              const refreshToken = hashParams.get('refresh_token');
+            // PKCE flow: extract code from query params
+            const parsedUrl = Linking.parse(url);
+            const code = parsedUrl.queryParams?.code as string | undefined;
 
-              if (accessToken && refreshToken) {
-                await supabase.auth.setSession({
-                  access_token: accessToken,
-                  refresh_token: refreshToken,
-                });
+            if (code) {
+              const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+              if (exchangeError) throw exchangeError;
+            } else {
+              // Fall back to implicit token flow (#access_token)
+              const hashPart = url.split('#')[1];
+              if (hashPart) {
+                const hashParams = new URLSearchParams(hashPart);
+                const accessToken = hashParams.get('access_token');
+                const refreshToken = hashParams.get('refresh_token');
+
+                if (accessToken && refreshToken) {
+                  await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken,
+                  });
+                } else {
+                  throw new Error('No authentication tokens received from Google');
+                }
+              } else {
+                throw new Error('No authentication tokens received from Google');
               }
             }
+
+            router.replace('/');
           } else if (result.type === 'cancel') {
             console.log('User cancelled auth');
           }

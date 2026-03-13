@@ -29,7 +29,8 @@ export type NotificationType =
   | 'board_reply'
   | 'board_mention'
   | 'chat_dm'
-  | 'chat_mention';
+  | 'chat_mention'
+  | 'meeting_reminder';
 export type ExtractionSource = 'chat' | 'onboarding' | 'meeting' | 'manual';
 
 // Attachment type for photos/files in messages and posts

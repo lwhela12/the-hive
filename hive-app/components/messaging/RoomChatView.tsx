@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,6 @@ import {
   ScrollView,
   Modal,
   ActivityIndicator,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -186,41 +184,33 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
     };
   }, [room.id, profile]);
 
-  // Handle scroll to detect when user is near the top to load older messages
-  const handleScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset } = event.nativeEvent;
-      // If user scrolls near the top (within 100px), load older messages
-      if (contentOffset.y < 100 && hasOlderMessages && !loadingOlder && !isLoadingOlderRef.current) {
-        isLoadingOlderRef.current = true;
-        loadOlderMessages();
-        // Reset the flag after a short delay
-        setTimeout(() => {
-          isLoadingOlderRef.current = false;
-        }, 1000);
-      }
-    },
-    [hasOlderMessages, loadingOlder, loadOlderMessages]
-  );
+  // Reverse messages for inverted FlatList (newest first)
+  const invertedMessages = useMemo(() => [...messages].reverse(), [messages]);
 
-  // Scroll to bottom when messages change
+  // Load older messages when user scrolls to the end of inverted list (visual top)
+  const handleEndReached = useCallback(() => {
+    if (hasOlderMessages && !loadingOlder && !isLoadingOlderRef.current) {
+      isLoadingOlderRef.current = true;
+      loadOlderMessages();
+      setTimeout(() => {
+        isLoadingOlderRef.current = false;
+      }, 1000);
+    }
+  }, [hasOlderMessages, loadingOlder, loadOlderMessages]);
+
+  // Scroll to bottom (offset 0 in inverted list) when new messages arrive
   useEffect(() => {
     const currentCount = messages.length;
     const previousCount = previousMessageCountRef.current;
 
-    if (currentCount > 0) {
-      if (isInitialLoadRef.current) {
-        // Initial load: scroll to bottom after layout completes
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: false });
-        }, 100);
-        isInitialLoadRef.current = false;
-      } else if (currentCount > previousCount) {
-        // New message added: animate scroll
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
+    if (currentCount > 0 && currentCount > previousCount && !isInitialLoadRef.current) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      }, 100);
+    }
+
+    if (isInitialLoadRef.current && currentCount > 0) {
+      isInitialLoadRef.current = false;
     }
 
     previousMessageCountRef.current = currentCount;
@@ -522,13 +512,14 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
         {/* Messages */}
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={invertedMessages}
+          inverted
           keyExtractor={(item) => item.id}
           renderItem={renderMessageItem}
-          onScroll={handleScroll}
-          scrollEventThrottle={100}
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.3}
           contentContainerClassName="p-4 pb-2"
-          ListHeaderComponent={
+          ListFooterComponent={
             loadingOlder ? (
               <View className="items-center py-3">
                 <ActivityIndicator size="small" color="#bd9348" />
@@ -536,12 +527,6 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
                   Loading older messages...
                 </Text>
               </View>
-            ) : hasOlderMessages ? (
-              <Pressable onPress={loadOlderMessages} className="items-center py-3">
-                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-gold text-sm">
-                  Load older messages
-                </Text>
-              </Pressable>
             ) : null
           }
           ListEmptyComponent={
@@ -562,7 +547,6 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
           maxToRenderPerBatch={10}
           windowSize={10}
           initialNumToRender={20}
-          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         />
 
         {/* Typing indicator */}

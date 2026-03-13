@@ -1,5 +1,61 @@
-import { View, Platform, StyleSheet } from 'react-native';
+import { View, Platform, Animated } from 'react-native';
 import { useEffect, useRef } from 'react';
+
+function NativeDot({ delay }: { delay: number }) {
+  const translateY = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const animate = () => {
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.loop(
+          Animated.sequence([
+            Animated.parallel([
+              Animated.timing(translateY, {
+                toValue: -8,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.timing(opacity, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+            ]),
+            Animated.parallel([
+              Animated.timing(translateY, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.timing(opacity, {
+                toValue: 0.4,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+            ]),
+            Animated.delay(800),
+          ]),
+        ),
+      ]).start();
+    };
+    animate();
+  }, []);
+
+  return (
+    <Animated.View
+      style={{
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#bd9348',
+        transform: [{ translateY }],
+        opacity,
+      }}
+    />
+  );
+}
 
 export function TypingIndicator() {
   // Add CSS keyframes for web
@@ -41,19 +97,25 @@ export function TypingIndicator() {
   return (
     <View className="self-start bg-cream rounded-2xl rounded-bl-md px-4 py-3 mb-3 ml-2">
       <View className="flex-row items-center h-6 gap-1.5">
-        {[0, 1, 2].map((index) => (
-          <View
-            key={index}
-            // @ts-ignore - className for web CSS animation
-            className="typing-dot"
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: 5,
-              backgroundColor: '#bd9348', // gold color
-            }}
-          />
-        ))}
+        {Platform.OS === 'web' ? (
+          [0, 1, 2].map((index) => (
+            <View
+              key={index}
+              // @ts-ignore - className for web CSS animation
+              className="typing-dot"
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 5,
+                backgroundColor: '#bd9348',
+              }}
+            />
+          ))
+        ) : (
+          [0, 200, 400].map((delay, index) => (
+            <NativeDot key={index} delay={delay} />
+          ))
+        )}
       </View>
     </View>
   );

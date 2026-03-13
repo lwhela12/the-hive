@@ -12,7 +12,7 @@ import Animated, {
 import { HexagonIcon } from '../ui/HexagonIcon';
 import { useAuth } from '../../lib/hooks/useAuth';
 
-const beeIcon = require('../../assets/BEE ONLY IN GOLD BG.png');
+const beeIcon = require('../../assets/bee-gold-bg.png');
 const cliveIcon = require('../../assets/Clive_logo.png');
 
 interface NavigationDrawerProps {

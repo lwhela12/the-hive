@@ -7,7 +7,7 @@ import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { HexagonIcon } from '../../components/ui/HexagonIcon';
 
-const beeIcon = require('../../assets/BEE ONLY IN GOLD BG.png');
+const beeIcon = require('../../assets/bee-gold-bg.png');
 const cliveIcon = require('../../assets/Clive_logo.png');
 
 function TabIcon({ icon, imageSource, customIcon, label, focused, isCircular, badge }: { icon?: string; imageSource?: ImageSourcePropType; customIcon?: React.ReactNode; label: string; focused: boolean; isCircular?: boolean; badge?: number }) {

@@ -220,6 +220,7 @@ Format your response as JSON:
       }
 
       // Submit to AssemblyAI
+      console.log('Submitting to AssemblyAI, audio URL length:', signedUrl.signedUrl.length);
       const transcriptResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
         method: 'POST',
         headers: {
@@ -234,6 +235,18 @@ Format your response as JSON:
       });
 
       const transcriptData = await transcriptResponse.json();
+
+      if (!transcriptResponse.ok) {
+        console.error('AssemblyAI API error:', transcriptResponse.status, JSON.stringify(transcriptData));
+        return errorResponse(`AssemblyAI error: ${transcriptData.error || transcriptResponse.statusText}`, 502);
+      }
+
+      if (!transcriptData.id) {
+        console.error('AssemblyAI returned no transcript ID:', JSON.stringify(transcriptData));
+        return errorResponse('AssemblyAI returned no transcript ID', 502);
+      }
+
+      console.log('AssemblyAI transcript created:', transcriptData.id);
 
       // Update status and store the transcript_id so we can match on webhook callback
       await supabaseAdmin

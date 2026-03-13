@@ -3,6 +3,9 @@
     "name": "The HIVE",
     "slug": "the-hive",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "icon": "./assets/The Hive Logo_Low Res (1).png",
     "userInterfaceStyle": "light",
@@ -16,8 +19,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.lucaswhelan.thehive",
+      "buildNumber": "1",
       "infoPlist": {
+        "NSCameraUsageDescription": "The HIVE needs camera access to take profile photos and attach images to posts and messages.",
         "NSMicrophoneUsageDescription": "The HIVE needs microphone access to record meetings.",
+        "NSPhotoLibraryAddUsageDescription": "The HIVE needs photo library access to save photos you create in the app.",
+        "NSPhotoLibraryUsageDescription": "The HIVE needs photo library access to upload profile photos and attach images to posts and messages.",
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": ["audio"]
       }
@@ -61,6 +68,13 @@
         {
           "icon": "./assets/Bee ( Hive) .png",
           "color": "#bd9348"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The HIVE needs photo library access to upload profile photos and attach images to posts and messages.",
+          "cameraPermission": "The HIVE needs camera access to take profile photos and attach images to posts and messages."
         }
       ]
     ],

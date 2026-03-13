@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import { Attachment } from '../types';
 import { SelectedImage, getImageExtension, getContentType } from './imagePicker';
@@ -35,17 +36,34 @@ export async function uploadSingleImage(
     const fileName = `${userId}/${id}.${ext}`;
     const contentType = getContentType(ext);
 
-    // Fetch the image and convert to blob
-    const response = await fetch(image.uri);
-    const blob = await response.blob();
+    let uploadBody: Blob | FormData;
+    let fileSize = image.fileSize ?? 0;
+
+    if (Platform.OS !== 'web') {
+      // On native iOS/Android, use FormData with the file URI directly.
+      // fetch(fileUri).blob() can return empty data on iOS.
+      const formData = new FormData();
+      formData.append('file', {
+        uri: image.uri,
+        name: `${id}.${ext}`,
+        type: contentType,
+      } as any);
+      uploadBody = formData;
+    } else {
+      // On web, fetch and convert to blob works fine
+      const response = await fetch(image.uri);
+      const blob = await response.blob();
+      fileSize = fileSize || blob.size;
+      uploadBody = blob;
+    }
 
     // Upload to Supabase Storage
     const { error: uploadError } = await supabase.storage
       .from('attachments')
-      .upload(fileName, blob, {
+      .upload(fileName, uploadBody, {
         cacheControl: '3600',
         upsert: false,
-        contentType,
+        contentType: Platform.OS !== 'web' ? contentType : undefined,
       });
 
     if (uploadError) {
@@ -58,14 +76,13 @@ export async function uploadSingleImage(
       .from('attachments')
       .getPublicUrl(fileName);
 
-    // No cache-busting needed - each attachment has a unique UUID
     const url = urlData.publicUrl;
 
     return {
       id,
       url,
       filename: image.fileName ?? `image.${ext}`,
-      size: image.fileSize ?? blob.size,
+      size: fileSize,
       mime_type: contentType,
       width: image.width,
       height: image.height,

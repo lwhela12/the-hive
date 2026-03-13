@@ -31,6 +31,85 @@ type WishWithGranters = Wish & {
   granters?: (WishGranter & { granter: Profile })[];
 };
 
+const INITIAL_EVENTS_SHOWN = 3;
+
+function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (event: Event) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const visibleEvents = expanded ? events : events.slice(0, INITIAL_EVENTS_SHOWN);
+  const hasMore = events.length > INITIAL_EVENTS_SHOWN;
+
+  return (
+    <View className="bg-white rounded-xl shadow-sm overflow-hidden">
+      {visibleEvents.map((event, index) => (
+        <Pressable
+          key={event.id}
+          onPress={() => onEditEvent(event)}
+          className={`p-4 active:bg-gray-50 ${index < visibleEvents.length - 1 || (hasMore && !expanded) ? 'border-b border-cream' : ''}`}
+        >
+          <View className="flex-row items-start">
+            <Text className="text-2xl mr-3">
+              {event.event_type === 'birthday' ? '🎂' :
+               event.event_type === 'meeting' ? '📅' :
+               event.event_type === 'queen_bee' ? '👑' : '📌'}
+            </Text>
+            <View className="flex-1">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{event.title}</Text>
+              <View className="flex-row flex-wrap items-center mt-1">
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60">
+                  {formatDateShort(event.event_date)}
+                </Text>
+                {event.event_time && (
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60">
+                    {' '}at {formatTime(event.event_time)}
+                  </Text>
+                )}
+              </View>
+              {event.location && (
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(event.location!)}`);
+                  }}
+                  className="flex-row items-center mt-1 active:opacity-60"
+                >
+                  <Text className="text-xs mr-1">📍</Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-gold underline">
+                    {event.location}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+          {event.meet_link && (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                Linking.openURL(event.meet_link!);
+              }}
+              className="mt-3 bg-gold/10 py-2 px-4 rounded-lg flex-row items-center justify-center active:bg-gold/20"
+            >
+              <Text className="text-base mr-2">📹</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">
+                Join Google Meet
+              </Text>
+            </Pressable>
+          )}
+        </Pressable>
+      ))}
+      {hasMore && (
+        <Pressable
+          onPress={() => setExpanded(!expanded)}
+          className="py-3 items-center active:bg-gray-50"
+        >
+          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+            {expanded ? 'Show less' : `Show all ${events.length} events`}
+          </Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 export default function HiveScreen() {
   const { profile, communityId } = useAuth();
   const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
@@ -489,64 +568,7 @@ export default function HiveScreen() {
           {loading.events ? (
             <EventsListSkeleton />
           ) : upcomingEvents.length > 0 ? (
-            <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-              {upcomingEvents.map((event, index) => (
-                <Pressable
-                  key={event.id}
-                  onPress={() => openEditEvent(event)}
-                  className={`p-4 active:bg-gray-50 ${index < upcomingEvents.length - 1 ? 'border-b border-cream' : ''}`}
-                >
-                  <View className="flex-row items-start">
-                    <Text className="text-2xl mr-3">
-                      {event.event_type === 'birthday' ? '🎂' :
-                       event.event_type === 'meeting' ? '📅' :
-                       event.event_type === 'queen_bee' ? '👑' : '📌'}
-                    </Text>
-                    <View className="flex-1">
-                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{event.title}</Text>
-                      <View className="flex-row flex-wrap items-center mt-1">
-                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60">
-                          {formatDateShort(event.event_date)}
-                        </Text>
-                        {event.event_time && (
-                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60">
-                            {' '}at {formatTime(event.event_time)}
-                          </Text>
-                        )}
-                      </View>
-                      {event.location && (
-                        <Pressable
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(event.location!)}`);
-                          }}
-                          className="flex-row items-center mt-1 active:opacity-60"
-                        >
-                          <Text className="text-xs mr-1">📍</Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-gold underline">
-                            {event.location}
-                          </Text>
-                        </Pressable>
-                      )}
-                    </View>
-                  </View>
-                  {event.meet_link && (
-                    <Pressable
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        Linking.openURL(event.meet_link!);
-                      }}
-                      className="mt-3 bg-gold/10 py-2 px-4 rounded-lg flex-row items-center justify-center active:bg-gold/20"
-                    >
-                      <Text className="text-base mr-2">📹</Text>
-                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">
-                        Join Google Meet
-                      </Text>
-                    </Pressable>
-                  )}
-                </Pressable>
-              ))}
-            </View>
+            <EventsList events={upcomingEvents} onEditEvent={openEditEvent} />
           ) : (
             <View className="bg-white rounded-xl p-6 shadow-sm items-center">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">

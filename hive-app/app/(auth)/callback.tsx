@@ -1,0 +1,79 @@
+import { useEffect, useState } from 'react';
+import { View, Text, ActivityIndicator } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import * as Linking from 'expo-linking';
+import { supabase } from '../../lib/supabase';
+
+export default function AuthCallbackScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ code?: string; error?: string; returnTo?: string }>();
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    handleCallback();
+  }, []);
+
+  async function handleCallback() {
+    try {
+      // Check for error from OAuth provider
+      if (params.error) {
+        throw new Error(params.error);
+      }
+
+      // Try code exchange flow first
+      if (params.code) {
+        await supabase.auth.exchangeCodeForSession(params.code);
+        router.replace(typeof params.returnTo === 'string' ? params.returnTo : '/');
+        return;
+      }
+
+      // Fall back to reading the full URL for hash fragment tokens
+      const url = await Linking.getInitialURL();
+      if (url) {
+        const hashPart = url.split('#')[1];
+        if (hashPart) {
+          const hashParams = new URLSearchParams(hashPart);
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
+
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            router.replace(typeof params.returnTo === 'string' ? params.returnTo : '/');
+            return;
+          }
+        }
+      }
+
+      throw new Error('No authentication tokens received');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Authentication failed';
+      setError(message);
+      console.error('Auth callback error:', err);
+      // Redirect back to login after a brief delay
+      setTimeout(() => {
+        router.replace('/(auth)/login');
+      }, 2000);
+    }
+  }
+
+  if (error) {
+    return (
+      <View className="flex-1 bg-cream justify-center items-center px-8">
+        <Text className="text-charcoal text-center text-base">{error}</Text>
+        <Text className="text-charcoal/60 text-center text-sm mt-2">
+          Redirecting to login...
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View className="flex-1 bg-cream justify-center items-center">
+      <ActivityIndicator size="large" color="#bd9348" />
+      <Text className="text-charcoal mt-4 text-base">Signing you in...</Text>
+    </View>
+  );
+}

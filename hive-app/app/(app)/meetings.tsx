@@ -8,6 +8,8 @@ import { MeetingSummary } from '../../components/meetings/MeetingSummary';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
+import { FadeIn } from '../../components/ui/FadeIn';
+import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
 import { formatDateLong } from '../../lib/dateUtils';
 import type { Meeting, Event } from '../../types';
 
@@ -18,6 +20,7 @@ export default function MeetingsScreen() {
   const useMobileLayout = width < 768;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [upcomingMeetings, setUpcomingMeetings] = useState<Event[]>([]);
   const [showRecorder, setShowRecorder] = useState(false);
@@ -67,6 +70,8 @@ export default function MeetingsScreen() {
     if (!eventsError && events) {
       setUpcomingMeetings(events);
     }
+
+    setInitialLoading(false);
   }, [communityId]);
 
   // Get today's scheduled meetings for the event picker
@@ -139,7 +144,21 @@ export default function MeetingsScreen() {
     });
 
     if (response.error) {
-      throw new Error(response.error.message || 'Failed to schedule meeting');
+      // Extract actual error from edge function response
+      let errorMsg = 'Failed to schedule meeting';
+      try {
+        const ctx = (response.error as any).context;
+        if (ctx instanceof Response) {
+          const body = await ctx.json();
+          errorMsg = body?.error || errorMsg;
+        }
+      } catch {
+        // Fall back to generic message
+      }
+      if (errorMsg === 'Failed to schedule meeting') {
+        errorMsg = response.error.message || errorMsg;
+      }
+      throw new Error(errorMsg);
     }
 
     Alert.alert(
@@ -398,7 +417,9 @@ export default function MeetingsScreen() {
         </View>
 
         {/* Upcoming Meetings */}
-        {upcomingMeetings.length > 0 && (
+        {initialLoading && <UpcomingMeetingsSkeleton />}
+        {!initialLoading && upcomingMeetings.length > 0 && (
+          <FadeIn>
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-800 mb-3">
               Upcoming Meetings
@@ -456,6 +477,7 @@ export default function MeetingsScreen() {
               </View>
             ))}
           </View>
+          </FadeIn>
         )}
 
         {/* Past Meetings Header */}
@@ -464,7 +486,9 @@ export default function MeetingsScreen() {
         </Text>
 
         {/* Meeting List */}
-        {meetings.length === 0 ? (
+        {initialLoading ? (
+          <PastRecordingsSkeleton />
+        ) : meetings.length === 0 ? (
           <View className="bg-white rounded-xl p-8 shadow-sm items-center">
             <Text className="text-4xl mb-4">📝</Text>
             <Text className="text-gray-600 text-center">
@@ -473,7 +497,8 @@ export default function MeetingsScreen() {
             </Text>
           </View>
         ) : (
-          meetings.map((meeting) => (
+          <FadeIn>
+          {meetings.map((meeting) => (
             <View
               key={meeting.id}
               className="bg-white rounded-xl p-4 mb-3 shadow-sm"
@@ -521,7 +546,8 @@ export default function MeetingsScreen() {
                 </Pressable>
               )}
             </View>
-          ))
+          ))}
+          </FadeIn>
         )}
       </ScrollView>
 

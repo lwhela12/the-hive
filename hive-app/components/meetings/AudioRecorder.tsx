@@ -21,9 +21,41 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const meterRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isUnloadedRef = useRef(false);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   // Prevent screen from sleeping while recording
   useKeepAwake();
+
+  // Web: Use Screen Wake Lock API to prevent computer sleep
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLockRef.current = await navigator.wakeLock.request('screen');
+        }
+      } catch {
+        // Wake Lock not supported or denied
+      }
+    };
+
+    requestWakeLock();
+
+    // Re-acquire wake lock when tab regains visibility (browser releases it on hide)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !wakeLockRef.current) {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      wakeLockRef.current?.release();
+      wakeLockRef.current = null;
+    };
+  }, []);
 
   // Track app state changes during recording
   useEffect(() => {
@@ -287,7 +319,8 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
         {wentToBackground && isRecording && (
           <View className="mt-4 bg-amber-100 px-4 py-2 rounded-lg">
             <Text className="text-amber-800 text-sm text-center">
-              ⚠️ App went to background - recording may be affected
+              ⚠️ App went to background - recording may be affected.
+              {Platform.OS === 'web' ? ' Keep this tab visible and active.' : ''}
             </Text>
           </View>
         )}

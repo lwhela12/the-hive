@@ -8,34 +8,27 @@ import type { Database } from '../types';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Use SecureStore on native, AsyncStorage on web
-const ExpoSecureStoreAdapter = {
+// Use AsyncStorage for auth session storage on all platforms.
+// SecureStore has a 2048-byte limit which is too small for PKCE session tokens.
+const StorageAdapter = {
   getItem: async (key: string) => {
-    if (Platform.OS === 'web') {
-      return AsyncStorage.getItem(key);
-    }
-    return SecureStore.getItemAsync(key);
+    return AsyncStorage.getItem(key);
   },
   setItem: async (key: string, value: string) => {
-    if (Platform.OS === 'web') {
-      return AsyncStorage.setItem(key, value);
-    }
-    return SecureStore.setItemAsync(key, value);
+    return AsyncStorage.setItem(key, value);
   },
   removeItem: async (key: string) => {
-    if (Platform.OS === 'web') {
-      return AsyncStorage.removeItem(key);
-    }
-    return SecureStore.deleteItemAsync(key);
+    return AsyncStorage.removeItem(key);
   },
 };
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: ExpoSecureStoreAdapter,
+    storage: StorageAdapter,
     storageKey: 'the-hive-auth',
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: Platform.OS === 'web',
+    flowType: 'pkce',
   },
 });

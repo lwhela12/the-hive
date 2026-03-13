@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import type { EventSubscription } from 'expo-modules-core';
 import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
@@ -17,7 +18,13 @@ Notifications.setNotificationHandler({
   }),
 });
 
-export function useNotifications() {
+interface UseNotificationsOptions {
+  enableListeners?: boolean;
+  autoRequestPermission?: boolean;
+}
+
+export function useNotifications(options: UseNotificationsOptions = {}) {
+  const { enableListeners = true, autoRequestPermission = true } = options;
   const { profile } = useAuth();
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notifications.Notification | null>(null);
@@ -26,23 +33,27 @@ export function useNotifications() {
   const responseListener = useRef<EventSubscription | null>(null);
 
   useEffect(() => {
-    registerForPushNotificationsAsync().then((token) => {
-      if (token) {
-        setExpoPushToken(token);
-      }
-    });
+    if (autoRequestPermission) {
+      registerForPushNotificationsAsync().then((token) => {
+        if (token) {
+          setExpoPushToken(token);
+        }
+      });
+    }
 
-    // Listen for incoming notifications while app is open
-    notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
-      setNotification(notification);
-    });
+    if (enableListeners) {
+      // Listen for incoming notifications while app is open
+      notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
+        setNotification(notification);
+      });
 
-    // Listen for notification responses (user tapped notification)
-    responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      // Handle navigation based on notification type
-      handleNotificationResponse(data);
-    });
+      // Listen for notification responses (user tapped notification)
+      responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data;
+        // Handle navigation based on notification type
+        handleNotificationResponse(data);
+      });
+    }
 
     return () => {
       if (notificationListener.current) {
@@ -62,6 +73,10 @@ export function useNotifications() {
   }, [expoPushToken, profile]);
 
   async function registerForPushNotificationsAsync(): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      return null;
+    }
+
     let token: string | null = null;
 
     // Check if running on physical device
@@ -130,12 +145,38 @@ export function useNotifications() {
   }
 
   function handleNotificationResponse(data: Record<string, unknown>) {
-    // Handle different notification types
-    // Navigation would happen here based on data.type
-    // For example:
-    // if (data.type === 'wish_match') router.push('/hive');
-    // if (data.type === 'chat_message') router.push('/messages');
     console.log('Notification tapped:', data);
+
+    switch (data.type) {
+      case 'chat_dm':
+        if (data.room_id) {
+          router.push(`/messages?roomId=${data.room_id}`);
+        } else {
+          router.push('/messages');
+        }
+        break;
+      case 'wish_match':
+        router.push('/hive');
+        break;
+      case 'meeting_summary':
+        router.push('/meetings');
+        break;
+      case 'queen_bee_update':
+        router.push('/hive');
+        break;
+      case 'action_item':
+        router.push('/meetings');
+        break;
+      case 'board_reply':
+        router.push('/board');
+        break;
+      case 'meeting_reminder':
+        router.push('/meetings');
+        break;
+      default:
+        router.push('/');
+        break;
+    }
   }
 
   async function requestPermissions() {

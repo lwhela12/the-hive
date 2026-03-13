@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -692,31 +692,27 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     initiateRefineWish();
   }, [refineWishContext, session?.user?.id, communityId, createConversation, handleSendMessage]);
 
+  // Reverse messages for inverted FlatList (newest first)
+  const invertedMessages = useMemo(() => [...messages].reverse(), [messages]);
+
   const scrollToBottom = useCallback((animated = true) => {
     if (flatListRef.current && messages.length > 0) {
-      flatListRef.current.scrollToEnd({ animated });
+      flatListRef.current.scrollToOffset({ offset: 0, animated });
     }
   }, [messages.length]);
 
-  // Handle scrolling when messages change
+  // Scroll to bottom when new messages are added (inverted: offset 0 = bottom)
   useEffect(() => {
     const currentCount = messages.length;
     const previousCount = previousMessageCountRef.current;
 
-    // Only scroll if messages were added (not on initial empty state)
-    if (currentCount > 0) {
-      if (isInitialLoadRef.current) {
-        // Initial load: scroll immediately without animation
-        // Use requestAnimationFrame to ensure layout is complete
-        requestAnimationFrame(() => {
-          flatListRef.current?.scrollToEnd({ animated: false });
-        });
-        isInitialLoadRef.current = false;
-      } else if (currentCount > previousCount) {
-        // New message added: animate scroll
-        const timer = setTimeout(() => scrollToBottom(true), 100);
-        return () => clearTimeout(timer);
-      }
+    if (currentCount > 0 && currentCount > previousCount && !isInitialLoadRef.current) {
+      const timer = setTimeout(() => scrollToBottom(true), 100);
+      return () => clearTimeout(timer);
+    }
+
+    if (isInitialLoadRef.current && currentCount > 0) {
+      isInitialLoadRef.current = false;
     }
 
     previousMessageCountRef.current = currentCount;
@@ -747,12 +743,13 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     >
       <FlatList
         ref={flatListRef}
-        data={messages}
+        data={invertedMessages}
+        inverted
         extraData={[isLoading, streamingContent, messages.length]}
         keyExtractor={keyExtractor}
         renderItem={renderMessage}
         contentContainerClassName="p-4 pb-2"
-        ListFooterComponent={
+        ListHeaderComponent={
           <ListFooter isLoading={isLoading} streamingContent={streamingContent} />
         }
         // Performance optimizations
@@ -760,7 +757,6 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
         maxToRenderPerBatch={10}
         windowSize={10}
         initialNumToRender={20}
-        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
       />
 
       <ChatInput onSend={handleSendMessage} isLoading={isLoading} />

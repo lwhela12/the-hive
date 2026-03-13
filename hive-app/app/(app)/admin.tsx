@@ -80,13 +80,16 @@ export default function AdminScreen() {
       .limit(12);
     if (qbData) setQueenBees(qbData);
 
-    // Fetch events
+    // Fetch events (today and future only)
+    const now = new Date();
+    const today = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
     const { data: eventsData } = await supabase
       .from('events')
       .select('*')
       .eq('community_id', communityId)
+      .gte('event_date', today)
       .order('event_date', { ascending: true })
-      .limit(20);
+      .limit(50);
     if (eventsData) setEvents(eventsData);
 
     // Fetch pending invites

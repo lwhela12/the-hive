@@ -170,7 +170,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         enabled: !!communityId,
         staleTime: 5 * 60 * 1000,
       },
-      // Upcoming events (limit 5 for the hook, UI can further limit)
+      // Upcoming events — fetch all so the UI can show 3 initially with "Show all" toggle
       // Excludes completed events
       {
         queryKey: queryKeys.events(communityId || ''),
@@ -182,7 +182,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
             .eq('community_id', communityId!)
             .or('status.is.null,status.eq.scheduled')
             .order('event_date', { ascending: true })
-            .limit(5);
+            .limit(50);
           return (data as Event[]) || [];
         },
         enabled: !!communityId,

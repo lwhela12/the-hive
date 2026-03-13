@@ -47,7 +47,7 @@ export const MessageBubble = memo(function MessageBubble({
             </LinkifiedText>
           ) : (
             // Assistant messages: render with Markdown
-            <View className="flex-1 flex-shrink">
+            <View className="flex-shrink">
               <MarkdownContent content={message.content} isUser={false} />
               {isStreaming && (
                 <Text className="text-gold text-lg">|</Text>

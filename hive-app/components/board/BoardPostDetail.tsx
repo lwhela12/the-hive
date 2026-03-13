@@ -147,6 +147,16 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
 
       if (error) throw error;
 
+      // Fire and forget - don't block on notification
+      supabase.functions.invoke('notify-board-reply', {
+        body: {
+          post_id: postId,
+          reply_author_id: profile.id,
+          reply_preview: newReply.trim() || 'Sent an image',
+          community_id: communityId,
+        },
+      }).catch((err) => console.log('Board reply notification error (non-blocking):', err));
+
       setNewReply('');
       setSelectedImages([]);
       setReplyingTo(null);
