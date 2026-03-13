@@ -23,7 +23,9 @@
         "NSPhotoLibraryAddUsageDescription": "The HIVE needs photo library access to save photos you create in the app.",
         "NSPhotoLibraryUsageDescription": "The HIVE needs photo library access to upload profile photos and attach images to posts and messages.",
         "ITSAppUsesNonExemptEncryption": false,
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     },
     "notification": {
@@ -38,7 +40,6 @@
       "package": "com.lucaswhelan.thehive",
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "RECORD_AUDIO",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
@@ -83,6 +84,14 @@
       "eas": {
         "projectId": "20097652-8224-4286-aa03-5d7f4f3c0991"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/20097652-8224-4286-aa03-5d7f4f3c0991",
+      "checkAutomatically": "ON_ERROR_RECOVERY",
+      "fallbackToCacheTimeout": 0
     }
   }
 }
