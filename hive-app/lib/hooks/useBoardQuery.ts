@@ -63,9 +63,6 @@ async function fetchPosts(
     .select('*, author:profiles!board_posts_author_id_fkey(*), reactions:board_reactions(*)')
     .eq('community_id', communityId)
     .eq('category_id', categoryId)
-    .order('is_pinned', { ascending: false })
-    .order('last_reply_at', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false })
     .limit(50);
 
   if (error) {
@@ -73,7 +70,21 @@ async function fetchPosts(
     throw error;
   }
 
-  return (data as PostWithAuthor[]) || [];
+  const posts = (data as PostWithAuthor[]) || [];
+
+  // Sort client-side: pinned first, then by most recent activity (reply or creation)
+  posts.sort((a, b) => {
+    // Pinned posts always first
+    if (a.is_pinned && !b.is_pinned) return -1;
+    if (!a.is_pinned && b.is_pinned) return 1;
+
+    // Sort by most recent activity: last_reply_at or created_at, whichever is later
+    const aActivity = a.last_reply_at || a.created_at;
+    const bActivity = b.last_reply_at || b.created_at;
+    return bActivity.localeCompare(aActivity);
+  });
+
+  return posts;
 }
 
 
