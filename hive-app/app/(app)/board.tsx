@@ -217,7 +217,13 @@ export default function BoardScreen() {
           </View>
         ) : (
           <BoardCategoryList
-            categories={categories}
+            categories={[...categories].sort((a, b) => {
+              const aActivity = postCounts?.[a.id]?.latestActivity || '';
+              const bActivity = postCounts?.[b.id]?.latestActivity || '';
+              // Sort by most recent activity descending, then by display_order for ties
+              if (bActivity !== aActivity) return bActivity.localeCompare(aActivity);
+              return a.display_order - b.display_order;
+            })}
             onSelect={handleCategorySelect}
             postCounts={postCounts}
           />

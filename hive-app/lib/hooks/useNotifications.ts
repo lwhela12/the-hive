@@ -174,7 +174,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         router.push('/meetings');
         break;
       default:
-        router.push('/');
+        router.push('/hive');
         break;
     }
   }

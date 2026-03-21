@@ -111,7 +111,7 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
 }
 
 export default function HiveScreen() {
-  const { profile, communityId } = useAuth();
+  const { profile, communityId, communityRole } = useAuth();
   const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -774,7 +774,10 @@ export default function HiveScreen() {
           <View className="bg-white rounded-t-3xl p-6">
             {(() => {
               const isCreator = !editingEvent || editingEvent.created_by === profile?.id;
-              const isViewOnly = editingEvent && !isCreator;
+              const isHistorian = communityRole === 'historian';
+              const isAdminRole = communityRole === 'admin';
+              const canEdit = isCreator || isHistorian || isAdminRole;
+              const isViewOnly = editingEvent && !canEdit;
 
               return (
                 <>
@@ -782,7 +785,7 @@ export default function HiveScreen() {
                     <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xl text-charcoal">
                       {isViewOnly ? 'Event Details' : editingEvent ? 'Edit Event' : 'Add Event'}
                     </Text>
-                    {editingEvent && isCreator && (
+                    {editingEvent && canEdit && (
                       <Pressable onPress={deleteEvent} className="p-2">
                         <Text className="text-red-500 text-sm">Delete</Text>
                       </Pressable>

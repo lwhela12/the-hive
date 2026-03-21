@@ -28,10 +28,15 @@ const EMOJI_MAP: Record<string, string> = {
   '1F4C5': '📅',
 };
 
+interface CategoryStats {
+  count: number;
+  latestActivity: string | null;
+}
+
 interface BoardCategoryListProps {
   categories: BoardCategory[];
   onSelect: (category: BoardCategory) => void;
-  postCounts?: Record<string, number>;
+  postCounts?: Record<string, CategoryStats>;
 }
 
 export const BoardCategoryList = memo(function BoardCategoryList({
@@ -46,7 +51,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
       renderItem={({ item, index }) => {
         const emoji = item.icon ? EMOJI_MAP[item.icon] || item.icon : '📁';
         const isLast = index === categories.length - 1;
-        const count = postCounts?.[item.id] ?? 0;
+        const count = postCounts?.[item.id]?.count ?? 0;
         const countLabel = `${count} ${count === 1 ? 'post' : 'posts'}`;
         const subtitle = item.description ? `${item.description} · ${countLabel}` : countLabel;
 

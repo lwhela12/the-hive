@@ -10,6 +10,7 @@ import { HexagonIcon } from '../../components/ui/HexagonIcon';
 const beeIcon = require('../../assets/bee-gold-bg.png');
 const cliveIcon = require('../../assets/Clive_logo.png');
 
+
 function TabIcon({ icon, imageSource, customIcon, label, focused, isCircular, badge }: { icon?: string; imageSource?: ImageSourcePropType; customIcon?: React.ReactNode; label: string; focused: boolean; isCircular?: boolean; badge?: number }) {
   return (
     <View className="items-center justify-center pt-2">
@@ -47,6 +48,7 @@ export default function AppLayout() {
   const { session, communityId, communityRole, profile, loading } = useAuth();
   const router = useRouter();
   const isAdmin = communityRole === 'admin';
+  const showAdminTab = communityRole === 'admin' || communityRole === 'treasurer';
   const { width } = useWindowDimensions();
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
 
@@ -150,7 +152,7 @@ export default function AppLayout() {
       <Tabs.Screen
         name="admin"
         options={{
-          href: isAdmin ? '/admin' : undefined,
+          href: showAdminTab ? '/admin' : undefined,
           tabBarIcon: ({ focused }) => (
             <TabIcon icon="⚙️" label="Admin" focused={focused} />
           ),

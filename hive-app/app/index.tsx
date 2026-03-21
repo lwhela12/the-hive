@@ -23,6 +23,6 @@ export default function Index() {
     return <Redirect href="/join" />;
   }
 
-  // Has community -> go to main app (chat handles welcome/onboarding)
-  return <Redirect href="/(app)" />;
+  // Has community -> go to main app (land on HIVE tab)
+  return <Redirect href="/(app)/hive" />;
 }

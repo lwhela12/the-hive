@@ -96,7 +96,7 @@ export default function OnboardingChatScreen() {
       if (error) throw error;
 
       await refreshProfile();
-      router.replace('/(app)');
+      router.replace('/(app)/hive');
     } catch (error) {
       console.error('Error completing onboarding:', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');

@@ -22,10 +22,15 @@ async function fetchCategories(communityId: string): Promise<BoardCategory[]> {
   return data || [];
 }
 
-async function fetchPostCounts(communityId: string): Promise<Record<string, number>> {
+interface CategoryStats {
+  count: number;
+  latestActivity: string | null; // ISO timestamp of most recent activity
+}
+
+async function fetchPostCounts(communityId: string): Promise<Record<string, CategoryStats>> {
   const { data, error } = await supabase
     .from('board_posts')
-    .select('category_id')
+    .select('category_id, created_at, last_reply_at')
     .eq('community_id', communityId);
 
   if (error) {
@@ -33,11 +38,19 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, numb
     throw error;
   }
 
-  const counts: Record<string, number> = {};
-  (data || []).forEach((row: { category_id: string }) => {
-    counts[row.category_id] = (counts[row.category_id] || 0) + 1;
+  const stats: Record<string, CategoryStats> = {};
+  (data || []).forEach((row: { category_id: string; created_at: string; last_reply_at: string | null }) => {
+    if (!stats[row.category_id]) {
+      stats[row.category_id] = { count: 0, latestActivity: null };
+    }
+    stats[row.category_id].count += 1;
+    // Track latest activity (most recent of created_at or last_reply_at)
+    const activity = row.last_reply_at || row.created_at;
+    if (!stats[row.category_id].latestActivity || activity > stats[row.category_id].latestActivity!) {
+      stats[row.category_id].latestActivity = activity;
+    }
   });
-  return counts;
+  return stats;
 }
 
 async function fetchPosts(
@@ -51,6 +64,7 @@ async function fetchPosts(
     .eq('community_id', communityId)
     .eq('category_id', categoryId)
     .order('is_pinned', { ascending: false })
+    .order('last_reply_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
     .limit(50);
 

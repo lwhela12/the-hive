@@ -29,7 +29,7 @@ export default function JoinScreen() {
 
     // If community resolved (e.g., initializeUserData completed), go to app
     if (session && communityId) {
-      router.replace('/(app)');
+      router.replace('/(app)/hive');
       return;
     }
 
@@ -179,7 +179,7 @@ export default function JoinScreen() {
       await refreshProfile();
 
       // Navigate to main app
-      router.replace('/(app)');
+      router.replace('/(app)/hive');
     } catch (err) {
       console.error('Error bootstrapping genesis community:', err);
       Alert.alert('Error', 'Failed to set up community. Please try again.');
@@ -269,7 +269,7 @@ export default function JoinScreen() {
       await refreshProfile();
 
       // Navigate to main app
-      router.replace('/(app)');
+      router.replace('/(app)/hive');
     } catch (err) {
       console.error('Error accepting invite:', err);
       Alert.alert('Error', 'Failed to accept invite. Please try again.');

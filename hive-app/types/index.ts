@@ -1,4 +1,4 @@
-export type UserRole = 'member' | 'treasurer' | 'admin';
+export type UserRole = 'member' | 'treasurer' | 'historian' | 'admin';
 
 // Board types
 export type BoardCategoryType =
