@@ -3,6 +3,37 @@ import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
 import type { Conversation, ConversationMode } from '../../types';
 
+const SUPABASE_FUNCTIONS_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.functions.supabase.co');
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+const createFallbackTitle = (text: string): string => {
+  const cleaned = text
+    .replace(/\s+/g, ' ')
+    .replace(/^(hey|hi|hello|yo)[,!\s]+clive[,!\s]*/i, '')
+    .replace(/^clive[,!\s]*/i, '')
+    .replace(/^[#>*\-\s]+/, '')
+    .trim();
+
+  if (!cleaned) return 'New conversation';
+
+  const words = cleaned.split(' ').slice(0, 7);
+  const title = words.join(' ').replace(/[.,!?;:]+$/, '');
+  return title.length > 52 ? `${title.slice(0, 49).trim()}...` : title;
+};
+
+const isLowSignalTitle = (title?: string | null): boolean => {
+  if (!title) return true;
+  const normalized = title.toLowerCase().replace(/^[#>*\-\s]+/, '').trim();
+  return (
+    normalized === 'new conversation' ||
+    normalized.startsWith('clive') ||
+    normalized.startsWith('hey clive') ||
+    normalized.startsWith('hi clive') ||
+    normalized.startsWith('hello clive') ||
+    normalized.startsWith('yo clive')
+  );
+};
+
 export function useConversations() {
   const { session, communityId } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -23,7 +54,70 @@ export function useConversations() {
       .order('updated_at', { ascending: false });
 
     if (!error && data) {
-      setConversations(data);
+      const loadedConversations = data as Conversation[];
+      setConversations(loadedConversations);
+      const untitledConversations = loadedConversations
+        .filter((conversation) => isLowSignalTitle(conversation.title))
+        .slice(0, 12);
+
+      untitledConversations.forEach(async (conversation) => {
+        const { data: messages } = await supabase
+          .from('chat_messages')
+          .select('content, role')
+          .eq('conversation_id', conversation.id)
+          .eq('role', 'user')
+          .order('created_at', { ascending: true })
+          .limit(1);
+
+        const firstUserMessage = (messages as { content: string }[] | null)?.[0];
+        if (!firstUserMessage?.content) return;
+
+        let title = createFallbackTitle(firstUserMessage.content);
+
+        const accessToken = session?.access_token;
+        if (SUPABASE_FUNCTIONS_URL && accessToken) {
+          try {
+            if (conversation.title) {
+              await (supabase as any)
+                .from('conversations')
+                .update({ title: null })
+                .eq('id', conversation.id);
+            }
+
+            const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/generate-title`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+                ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY } : {}),
+              },
+              body: JSON.stringify({ conversation_id: conversation.id }),
+            });
+
+            if (response.ok) {
+              const generated = await response.json();
+              if (generated?.title && !isLowSignalTitle(generated.title)) {
+                title = generated.title;
+              }
+            }
+          } catch (error) {
+            console.error('Failed to generate conversation title:', error);
+          }
+        }
+
+        const { error: updateError } = await (supabase as any)
+          .from('conversations')
+          .update({ title })
+          .eq('id', conversation.id);
+
+        if (!updateError) {
+          setConversations((prev) =>
+            prev.map((item) =>
+              item.id === conversation.id ? { ...item, title } : item
+            )
+          );
+        }
+      });
     } else if (error) {
       setError('Failed to load conversations');
     }

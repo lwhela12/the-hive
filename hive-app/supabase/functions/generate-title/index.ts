@@ -78,7 +78,7 @@ serve(async (req) => {
       .map(m => `${m.role}: ${m.content}`)
       .join('\n\n');
 
-    // Call Claude Haiku to generate a title
+    // Call Claude Haiku to generate a short, practical sidebar title
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
 
     const response = await anthropic.messages.create({
@@ -86,7 +86,26 @@ serve(async (req) => {
       max_tokens: 50,
       messages: [{
         role: 'user',
-        content: `Generate a short, concise title (3-6 words) for this conversation. Just return the title, nothing else.
+        content: `Generate a short, practical sidebar title for this conversation.
+
+Rules:
+- 3-6 words
+- Name the concrete topic, not the emotional vibe
+- Use title case
+- No full sentences
+- No punctuation unless it is part of a name
+- No cute bee, honey, buzz, or HIVE language unless the conversation is actually about the HIVE app/community
+- Return only the title, nothing else
+
+Good examples:
+- Community Profile Help
+- Queen Bee Schedule
+- Google Calendar Sync
+- Landing Page Copy
+- Board Post Ideas
+- Wish Refinement
+- Member Invite Flow
+- Meeting Transcript Fix
 
 Conversation:
 ${conversationContext}`

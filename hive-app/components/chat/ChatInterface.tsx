@@ -57,6 +57,21 @@ const supportsStreaming = (): boolean => {
   return Platform.OS === 'web';
 };
 
+const createFallbackTitle = (text: string): string => {
+  const cleaned = text
+    .replace(/\s+/g, ' ')
+    .replace(/^(hey|hi|hello|yo)[,!\s]+clive[,!\s]*/i, '')
+    .replace(/^clive[,!\s]*/i, '')
+    .replace(/^[#>*\-\s]+/, '')
+    .trim();
+
+  if (!cleaned) return 'New conversation';
+
+  const words = cleaned.split(' ').slice(0, 7);
+  const title = words.join(' ').replace(/[.,!?;:]+$/, '');
+  return title.length > 52 ? `${title.slice(0, 49).trim()}...` : title;
+};
+
 // Memoized footer component that handles both loading and streaming states
 const ListFooter = memo(function ListFooter({
   isLoading,
@@ -257,11 +272,15 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     return null;
   };
 
-  const generateTitleIfNeeded = async (convId: string, currentMessageCount: number) => {
-    // Generate title after 3 messages (greeting + user message + assistant response)
-    // Use passed count to avoid stale ref issues
+  const generateTitleIfNeeded = async (
+    convId: string,
+    currentMessageCount: number,
+    fallbackSeed?: string
+  ) => {
+    // Generate title after the first real exchange (user message + assistant response).
+    // Use passed count to avoid stale ref issues.
     // Skip if we've already generated/attempted title for this conversation
-    if (currentMessageCount < 3 || hasGeneratedTitleRef.current.has(convId)) {
+    if (currentMessageCount < 2 || hasGeneratedTitleRef.current.has(convId)) {
       return;
     }
 
@@ -283,14 +302,31 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
         body: JSON.stringify({ conversation_id: convId }),
       });
 
-      if (response.ok) {
-        const { title } = await response.json();
-        if (title && onTitleGenerated) {
-          onTitleGenerated(convId, title);
-        }
+      if (!response.ok) {
+        throw new Error(`Title request failed: ${response.status}`);
+      }
+
+      const { title } = await response.json();
+      if (title && onTitleGenerated) {
+        onTitleGenerated(convId, title);
       }
     } catch (error) {
       console.error('Failed to generate title:', error);
+
+      // If the AI title function is unavailable, still make the sidebar useful.
+      if (fallbackSeed) {
+        const fallbackTitle = createFallbackTitle(fallbackSeed);
+        const { error: updateError } = await (supabase as any)
+          .from('conversations')
+          .update({ title: fallbackTitle })
+          .eq('id', convId);
+
+        if (!updateError) {
+          onTitleGenerated?.(convId, fallbackTitle);
+          return;
+        }
+      }
+
       // On error, remove from set so it can be retried
       hasGeneratedTitleRef.current.delete(convId);
     }
@@ -577,7 +613,8 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
       messageCountRef.current += 1;
     };
 
-    retryWithBackoff(saveUserMessage).catch((error) => {
+    const saveUserMessagePromise = retryWithBackoff(saveUserMessage);
+    saveUserMessagePromise.catch((error) => {
       console.error('Failed to save user message after retries:', error);
       Alert.alert(
         'Message not saved',
@@ -635,7 +672,12 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
         if (error) throw error;
         messageCountRef.current += 1;
         if (conversationIdToUse) {
-          generateTitleIfNeeded(conversationIdToUse, messageCountRef.current);
+          await saveUserMessagePromise.catch(() => null);
+          generateTitleIfNeeded(
+            conversationIdToUse,
+            Math.max(messageCountRef.current, 2),
+            userMessage
+          );
         }
       };
 
