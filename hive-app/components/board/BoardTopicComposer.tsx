@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { BoardCategory } from '../../types';
 
 interface BoardTopicComposerProps {
   visible: boolean;
   onClose: () => void;
   onSubmit: (name: string, description: string, icon: string) => Promise<boolean>;
+  existingCategory?: BoardCategory | null;
 }
 
 // Common emojis for topic icons
@@ -32,11 +34,30 @@ const EMOJI_OPTIONS = [
   { code: '1F4C5', emoji: '📅' }, // Calendar
 ];
 
-export function BoardTopicComposer({ visible, onClose, onSubmit }: BoardTopicComposerProps) {
+function getEmojiOption(icon?: string) {
+  return EMOJI_OPTIONS.find((option) => option.code === icon) || EMOJI_OPTIONS[0];
+}
+
+export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategory }: BoardTopicComposerProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedIcon, setSelectedIcon] = useState(EMOJI_OPTIONS[0]);
   const [submitting, setSubmitting] = useState(false);
+  const isEditMode = !!existingCategory;
+
+  useEffect(() => {
+    if (!visible) return;
+
+    if (existingCategory) {
+      setName(existingCategory.name);
+      setDescription(existingCategory.description || '');
+      setSelectedIcon(getEmojiOption(existingCategory.icon));
+    } else {
+      setName('');
+      setDescription('');
+      setSelectedIcon(EMOJI_OPTIONS[0]);
+    }
+  }, [visible, existingCategory]);
 
   const handleSubmit = async () => {
     if (!name.trim()) return;
@@ -79,7 +100,7 @@ export function BoardTopicComposer({ visible, onClose, onSubmit }: BoardTopicCom
               </Text>
             </Pressable>
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg">
-              New Topic
+              {isEditMode ? 'Edit Topic' : 'New Topic'}
             </Text>
             <Pressable
               onPress={handleSubmit}
@@ -90,7 +111,7 @@ export function BoardTopicComposer({ visible, onClose, onSubmit }: BoardTopicCom
                 style={{ fontFamily: 'Lato_700Bold' }}
                 className={isValid && !submitting ? 'text-white' : 'text-charcoal/30'}
               >
-                {submitting ? 'Creating...' : 'Create'}
+                {submitting ? (isEditMode ? 'Saving...' : 'Creating...') : (isEditMode ? 'Save' : 'Create')}
               </Text>
             </Pressable>
           </View>

@@ -40,8 +40,8 @@ export const NavigationDrawer = memo(function NavigationDrawer({
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
   const navItems = [
     { icon: null, imageSource: cliveIcon, label: 'Clive', route: '/' },
-    { icon: null, imageSource: beeIcon, label: 'HIVE', route: '/hive' },
-    { icon: '📋', label: 'Board', route: '/board' },
+    { icon: null, imageSource: beeIcon, label: 'HIVE Home', route: '/hive' },
+    { icon: '📋', label: 'Message Board', route: '/board' },
     { icon: '💬', label: 'Chat', route: '/messages', badge: unreadDMCount },
     { icon: null, customIcon: 'honeycomb', label: 'Meetings', route: '/meetings' },
     { icon: '👤', imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined, label: 'Profile', route: '/profile', isCircular: true },

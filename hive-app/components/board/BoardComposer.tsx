@@ -13,9 +13,10 @@ interface BoardComposerProps {
   onClose: () => void;
   onSubmit: (title: string, content: string, attachments?: Attachment[]) => Promise<boolean>;
   existingPost?: BoardPost | null; // For edit mode
+  draftStorageKey?: string | null;
 }
 
-export function BoardComposer({ visible, category, userId, onClose, onSubmit, existingPost }: BoardComposerProps) {
+export function BoardComposer({ visible, category, userId, onClose, onSubmit, existingPost, draftStorageKey }: BoardComposerProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
@@ -26,6 +27,20 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
 
   // Pre-fill fields when editing
   useEffect(() => {
+    if (visible && draftStorageKey && typeof window !== 'undefined') {
+      const savedDraft = window.localStorage.getItem(draftStorageKey);
+      if (savedDraft) {
+        try {
+          const draft = JSON.parse(savedDraft) as { title?: string; content?: string };
+          setTitle(draft.title || '');
+          setContent(draft.content || '');
+          return;
+        } catch {
+          window.localStorage.removeItem(draftStorageKey);
+        }
+      }
+    }
+
     if (visible && existingPost) {
       setTitle(existingPost.title);
       setContent(existingPost.content);
@@ -36,7 +51,13 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
       setContent('');
       setSelectedImages([]);
     }
-  }, [visible, existingPost]);
+  }, [visible, existingPost, draftStorageKey]);
+
+  useEffect(() => {
+    if (!visible || !draftStorageKey || typeof window === 'undefined') return;
+
+    window.localStorage.setItem(draftStorageKey, JSON.stringify({ title, content }));
+  }, [visible, draftStorageKey, title, content]);
 
   const handleSubmit = async () => {
     console.log('BoardComposer handleSubmit called', { title: title.trim(), content: content.trim() });
@@ -67,6 +88,9 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
         setTitle('');
         setContent('');
         setSelectedImages([]);
+        if (draftStorageKey && typeof window !== 'undefined') {
+          window.localStorage.removeItem(draftStorageKey);
+        }
         onClose();
       }
     } finally {
@@ -79,6 +103,9 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
     setTitle('');
     setContent('');
     setSelectedImages([]);
+    if (draftStorageKey && typeof window !== 'undefined') {
+      window.localStorage.removeItem(draftStorageKey);
+    }
     onClose();
   };
 

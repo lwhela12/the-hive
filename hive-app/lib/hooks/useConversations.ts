@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
-import type { Conversation, ConversationMode } from '../../types';
+import type { Conversation, ConversationMode, ConversationProject } from '../../types';
 
 const SUPABASE_FUNCTIONS_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.functions.supabase.co');
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -37,6 +37,7 @@ const isLowSignalTitle = (title?: string | null): boolean => {
 export function useConversations() {
   const { session, communityId } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [projects, setProjects] = useState<ConversationProject[]>([]);
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +124,84 @@ export function useConversations() {
     }
     setLoading(false);
   }, [session?.user?.id, communityId]);
+
+  const loadProjects = useCallback(async () => {
+    if (!session?.user?.id || !communityId) return;
+
+    const { data, error } = await supabase
+      .from('conversation_projects' as any)
+      .select('*')
+      .eq('user_id', session.user.id)
+      .eq('community_id', communityId)
+      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    if (!error && data) {
+      setProjects(data as unknown as ConversationProject[]);
+    } else if (error) {
+      console.warn('Conversation projects unavailable:', error.message);
+      setProjects([]);
+    }
+  }, [session?.user?.id, communityId]);
+
+  const createProject = useCallback(async (name: string): Promise<ConversationProject | null> => {
+    if (!session?.user?.id || !communityId) {
+      setError('Not authenticated');
+      return null;
+    }
+
+    const trimmedName = name.trim();
+    if (!trimmedName) return null;
+
+    const { data, error } = await (supabase as any)
+      .from('conversation_projects')
+      .insert({
+        user_id: session.user.id,
+        community_id: communityId,
+        name: trimmedName,
+        display_order: projects.length,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Failed to create project:', error);
+      setError('Failed to create project');
+      return null;
+    }
+
+    const project = data as ConversationProject;
+    setProjects((prev) => [...prev, project]);
+    return project;
+  }, [session?.user?.id, communityId, projects.length]);
+
+  const moveConversationToProject = useCallback(async (
+    conversationId: string,
+    projectId: string | null
+  ) => {
+    const { error } = await (supabase as any)
+      .from('conversations')
+      .update({ project_id: projectId })
+      .eq('id', conversationId);
+
+    if (!error) {
+      setConversations((prev) =>
+        prev.map((conversation) =>
+          conversation.id === conversationId
+            ? { ...conversation, project_id: projectId }
+            : conversation
+        )
+      );
+      if (currentConversation?.id === conversationId) {
+        setCurrentConversation((prev) => prev ? { ...prev, project_id: projectId } : null);
+      }
+    } else {
+      console.error('Failed to move conversation:', error);
+      setError('Failed to move conversation');
+    }
+
+    return !error;
+  }, [currentConversation?.id]);
 
   const createConversation = useCallback(async (
     mode: ConversationMode = 'default',
@@ -276,13 +355,17 @@ export function useConversations() {
 
   return {
     conversations,
+    projects,
     currentConversation,
     loading,
     error,
     loadConversations,
+    loadProjects,
     createConversation,
+    createProject,
     getOrCreateConversation,
     selectConversation,
+    moveConversationToProject,
     updateConversationTitle,
     archiveConversation,
     deleteConversation,

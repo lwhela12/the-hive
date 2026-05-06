@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, Alert, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useBoardCategoriesQuery, useBoardPostsQuery, useBoardPostCountsQuery } from '../../lib/hooks/useBoardQuery';
@@ -24,8 +25,14 @@ export default function BoardScreen() {
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [showTopicComposer, setShowTopicComposer] = useState(false);
+  const [editingTopic, setEditingTopic] = useState<BoardCategory | null>(null);
+  const boardCategoryStorageKey = communityId ? `the-hive:last-board-category:${communityId}` : null;
+  const boardComposerStorageKey = communityId ? `the-hive:board-composer-open:${communityId}` : null;
+  const boardPostStorageKey = communityId ? `the-hive:last-board-post:${communityId}` : null;
+  const boardDraftStorageKey = selectedCategoryId ? `the-hive:board-draft:${selectedCategoryId}` : null;
 
   const isAdmin = communityRole === 'admin';
+  const canManageCategories = isAdmin;
 
   const {
     data: categories = [],
@@ -56,13 +63,83 @@ export default function BoardScreen() {
     setRefreshing(false);
   };
 
+  useEffect(() => {
+    if (!boardCategoryStorageKey || selectedCategoryId || categories.length === 0) return;
+    if (typeof window === 'undefined') return;
+
+    const savedCategoryId = window.localStorage.getItem(boardCategoryStorageKey);
+    if (savedCategoryId && categories.some((category) => category.id === savedCategoryId)) {
+      setSelectedCategoryId(savedCategoryId);
+    }
+  }, [boardCategoryStorageKey, categories, selectedCategoryId]);
+
+  useEffect(() => {
+    if (!boardComposerStorageKey || !selectedCategoryId) return;
+    if (typeof window === 'undefined') return;
+
+    setShowComposer(window.localStorage.getItem(boardComposerStorageKey) === 'true');
+  }, [boardComposerStorageKey, selectedCategoryId]);
+
+  useEffect(() => {
+    if (!boardPostStorageKey || selectedPostId) return;
+    if (typeof window === 'undefined') return;
+
+    const savedPostId = window.localStorage.getItem(boardPostStorageKey);
+    if (savedPostId) {
+      setSelectedPostId(savedPostId);
+    }
+  }, [boardPostStorageKey, selectedPostId]);
+
   const handleCategorySelect = useCallback((category: BoardCategory) => {
     setSelectedCategoryId(category.id);
-  }, []);
+    if (boardCategoryStorageKey && typeof window !== 'undefined') {
+      window.localStorage.setItem(boardCategoryStorageKey, category.id);
+    }
+  }, [boardCategoryStorageKey]);
 
   const handleBack = useCallback(() => {
     setSelectedCategoryId(null);
-  }, []);
+    if (boardCategoryStorageKey && typeof window !== 'undefined') {
+      window.localStorage.removeItem(boardCategoryStorageKey);
+    }
+    if (boardComposerStorageKey && typeof window !== 'undefined') {
+      window.localStorage.removeItem(boardComposerStorageKey);
+    }
+    if (boardPostStorageKey && typeof window !== 'undefined') {
+      window.localStorage.removeItem(boardPostStorageKey);
+    }
+    setShowComposer(false);
+    setSelectedPostId(null);
+  }, [boardCategoryStorageKey, boardComposerStorageKey, boardPostStorageKey]);
+
+  const handleOpenComposer = useCallback(() => {
+    setShowComposer(true);
+    if (boardComposerStorageKey && typeof window !== 'undefined') {
+      window.localStorage.setItem(boardComposerStorageKey, 'true');
+    }
+  }, [boardComposerStorageKey]);
+
+  const handleCloseComposer = useCallback(() => {
+    setShowComposer(false);
+    if (boardComposerStorageKey && typeof window !== 'undefined') {
+      window.localStorage.removeItem(boardComposerStorageKey);
+    }
+  }, [boardComposerStorageKey]);
+
+  const handlePostSelect = useCallback((postId: string) => {
+    setSelectedPostId(postId);
+    if (boardPostStorageKey && typeof window !== 'undefined') {
+      window.localStorage.setItem(boardPostStorageKey, postId);
+    }
+  }, [boardPostStorageKey]);
+
+  const handlePostBack = useCallback(() => {
+    setSelectedPostId(null);
+    invalidatePosts();
+    if (boardPostStorageKey && typeof window !== 'undefined') {
+      window.localStorage.removeItem(boardPostStorageKey);
+    }
+  }, [boardPostStorageKey, invalidatePosts]);
 
   const handleDrawerClose = useCallback(() => setDrawerOpen(false), []);
 
@@ -151,15 +228,122 @@ export default function BoardScreen() {
     }
   };
 
+  const handleUpdateTopic = async (name: string, description: string, icon: string) => {
+    if (!editingTopic || !profile || !communityId || !canManageCategories) {
+      Alert.alert('Not ready', 'Your profile is still loading. Please try again in a moment.');
+      return false;
+    }
+
+    if (editingTopic.is_system) {
+      Alert.alert('Protected topic', 'Default board topics cannot be edited here.');
+      return false;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('board_categories')
+        .update({
+          name,
+          description: description || null,
+          icon,
+        })
+        .eq('id', editingTopic.id)
+        .eq('community_id', communityId);
+
+      if (error) {
+        Alert.alert('Error', `Failed to update topic: ${error.message}`);
+        return false;
+      }
+
+      invalidateCategories();
+      setEditingTopic(null);
+      return true;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Error', `Failed to update topic: ${message}`);
+      return false;
+    }
+  };
+
+  const openEditTopic = useCallback((category: BoardCategory) => {
+    if (!canManageCategories || category.is_system) return;
+    setEditingTopic(category);
+    setShowTopicComposer(true);
+  }, [canManageCategories]);
+
+  const closeTopicComposer = useCallback(() => {
+    setShowTopicComposer(false);
+    setEditingTopic(null);
+  }, []);
+
+  const handleDeleteTopic = useCallback((category: BoardCategory) => {
+    if (!canManageCategories || category.is_system) return;
+
+    const count = postCounts?.[category.id]?.count ?? 0;
+    const message = count > 0
+      ? `Delete "${category.name}" and its ${count} ${count === 1 ? 'post' : 'posts'}? This cannot be undone.`
+      : `Delete "${category.name}"? This cannot be undone.`;
+
+    const deleteCategory = async () => {
+      try {
+        const { error } = await supabase
+          .from('board_categories')
+          .delete()
+          .eq('id', category.id)
+          .eq('community_id', category.community_id)
+          .eq('is_system', false);
+
+        if (error) {
+          Alert.alert('Error', `Failed to delete topic: ${error.message}`);
+          return;
+        }
+
+        if (selectedCategoryId === category.id) {
+          setSelectedCategoryId(null);
+        }
+        if (boardCategoryStorageKey && typeof window !== 'undefined') {
+          window.localStorage.removeItem(boardCategoryStorageKey);
+        }
+        if (boardComposerStorageKey && typeof window !== 'undefined') {
+          window.localStorage.removeItem(boardComposerStorageKey);
+        }
+        if (boardPostStorageKey && typeof window !== 'undefined') {
+          window.localStorage.removeItem(boardPostStorageKey);
+        }
+        invalidateCategories();
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        Alert.alert('Error', `Failed to delete topic: ${errorMessage}`);
+      }
+    };
+
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) {
+        deleteCategory();
+      }
+      return;
+    }
+
+    Alert.alert('Delete Topic', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: deleteCategory },
+    ]);
+  }, [
+    boardCategoryStorageKey,
+    boardComposerStorageKey,
+    boardPostStorageKey,
+    canManageCategories,
+    invalidateCategories,
+    postCounts,
+    selectedCategoryId,
+  ]);
+
   // Post detail view
   if (selectedPostId) {
     return (
       <BoardPostDetail
         postId={selectedPostId}
-        onBack={() => {
-          setSelectedPostId(null);
-          invalidatePosts();
-        }}
+        onBack={handlePostBack}
       />
     );
   }
@@ -228,13 +412,17 @@ export default function BoardScreen() {
             }
             onSelect={handleCategorySelect}
             postCounts={postCounts}
+            canManageCategories={canManageCategories}
+            onEdit={openEditTopic}
+            onDelete={handleDeleteTopic}
           />
         )}
 
         <BoardTopicComposer
           visible={showTopicComposer}
-          onClose={() => setShowTopicComposer(false)}
-          onSubmit={handleCreateTopic}
+          onClose={closeTopicComposer}
+          onSubmit={editingTopic ? handleUpdateTopic : handleCreateTopic}
+          existingCategory={editingTopic}
         />
       </SafeAreaView>
     );
@@ -255,6 +443,24 @@ export default function BoardScreen() {
         >
           {selectedCategory.name}
         </Text>
+        {canManageCategories && !selectedCategory.is_system && (
+          <View className="flex-row items-center ml-2">
+            <Pressable
+              onPress={() => openEditTopic(selectedCategory)}
+              className="w-9 h-9 items-center justify-center rounded-full active:bg-cream"
+              hitSlop={8}
+            >
+              <Ionicons name="pencil-outline" size={20} color="#4A4A4A" />
+            </Pressable>
+            <Pressable
+              onPress={() => handleDeleteTopic(selectedCategory)}
+              className="w-9 h-9 items-center justify-center rounded-full active:bg-cream"
+              hitSlop={8}
+            >
+              <Ionicons name="trash-outline" size={20} color="#ef4444" />
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {useMobileLayout && (
@@ -271,7 +477,7 @@ export default function BoardScreen() {
         renderItem={({ item }) => (
           <BoardPostCard
             post={item}
-            onPress={() => setSelectedPostId(item.id)}
+            onPress={() => handlePostSelect(item.id)}
           />
         )}
         contentContainerStyle={{ padding: 16 }}
@@ -310,7 +516,7 @@ export default function BoardScreen() {
 
       {canPost() && (
         <Pressable
-          onPress={() => setShowComposer(true)}
+          onPress={handleOpenComposer}
           className="absolute bottom-6 right-6 w-14 h-14 bg-gold rounded-full items-center justify-center shadow-lg active:opacity-80"
         >
           <Text className="text-white text-3xl">+</Text>
@@ -321,14 +527,16 @@ export default function BoardScreen() {
         visible={showComposer}
         category={selectedCategory}
         userId={profile?.id || ''}
-        onClose={() => setShowComposer(false)}
+        onClose={handleCloseComposer}
         onSubmit={handleCreatePost}
+        draftStorageKey={boardDraftStorageKey}
       />
 
       <BoardTopicComposer
         visible={showTopicComposer}
-        onClose={() => setShowTopicComposer(false)}
-        onSubmit={handleCreateTopic}
+        onClose={closeTopicComposer}
+        onSubmit={editingTopic ? handleUpdateTopic : handleCreateTopic}
+        existingCategory={editingTopic}
       />
     </SafeAreaView>
   );

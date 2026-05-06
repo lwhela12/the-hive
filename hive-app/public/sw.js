@@ -1,6 +1,6 @@
 // Cache names — bump APP_CACHE version when you want to force a full refresh
-const APP_CACHE = 'hive-app-v1';
-const STATIC_CACHE = 'hive-static-v1';
+const APP_CACHE = 'hive-app-v2';
+const STATIC_CACHE = 'hive-static-v2';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant
@@ -57,23 +57,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ── HTML / navigation: stale-while-revalidate ────────────────────────────
-  // Serve cached HTML immediately (instant launch), then fetch fresh copy
-  // in the background so the *next* visit is always up to date.
+  // ── HTML / navigation: network-first ─────────────────────────────────────
+  // Prefer the freshest app shell so returning to the app keeps route state
+  // accurate. Fall back to cache only when offline.
   event.respondWith(
     caches.open(APP_CACHE).then(async (cache) => {
       const cached = await cache.match(request);
 
-      const networkFetch = fetch(request)
+      return fetch(request)
         .then((response) => {
           if (response.ok) cache.put(request, response.clone());
           return response;
         })
         .catch(() => cached); // offline fallback: return cached copy
-
-      // If we have a cached copy, return it immediately and update in the background.
-      // If not (first ever visit), wait for the network.
-      return cached ?? networkFetch;
     })
   );
 });

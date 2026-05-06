@@ -1,6 +1,7 @@
 import { View, ActivityIndicator } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useAuth } from '../lib/hooks/useAuth';
+import { getLastAppPath } from '../lib/navigationState';
 
 export default function Index() {
   const { session, communityId, loading } = useAuth();
@@ -23,6 +24,6 @@ export default function Index() {
     return <Redirect href="/join" />;
   }
 
-  // Has community -> go to main app (land on HIVE tab)
-  return <Redirect href="/(app)/hive" />;
+  // Has community -> go back to the last app tab this browser used.
+  return <Redirect href={getLastAppPath() as any} />;
 }

@@ -1,26 +1,51 @@
 import { useState, useEffect } from 'react';
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs, usePathname, useRouter } from 'expo-router';
 import { Text, View, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { HexagonIcon } from '../../components/ui/HexagonIcon';
+import { getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 
 const beeIcon = require('../../assets/bee-gold-bg.png');
 const cliveIcon = require('../../assets/Clive_logo.png');
 
 
-function TabIcon({ icon, imageSource, customIcon, label, focused, isCircular, badge }: { icon?: string; imageSource?: ImageSourcePropType; customIcon?: React.ReactNode; label: string; focused: boolean; isCircular?: boolean; badge?: number }) {
+function TabIcon({
+  icon,
+  imageSource,
+  customIcon,
+  label,
+  focused,
+  isCircular,
+  badge,
+  compact,
+}: {
+  icon?: string;
+  imageSource?: ImageSourcePropType;
+  customIcon?: React.ReactNode;
+  label: string;
+  focused: boolean;
+  isCircular?: boolean;
+  badge?: number;
+  compact?: boolean;
+}) {
+  const displayLabel = compact
+    ? label.replace('HIVE Home', 'HIVE\nHome').replace('Message Board', 'Message\nBoard')
+    : label;
+  const iconSize = compact ? 22 : 28;
+  const iconRadius = isCircular ? iconSize / 2 : 6;
+
   return (
-    <View className="items-center justify-center pt-2">
+    <View className={`items-center justify-center ${compact ? 'pt-1' : 'pt-2'}`}>
       <View>
         {customIcon ? (
           customIcon
         ) : imageSource ? (
-          <Image source={imageSource} style={{ width: 28, height: 28, borderRadius: isCircular ? 14 : 6 }} contentFit="cover" cachePolicy="memory-disk" />
+          <Image source={imageSource} style={{ width: iconSize, height: iconSize, borderRadius: iconRadius }} contentFit="cover" cachePolicy="memory-disk" />
         ) : (
-          <Text className="text-2xl">{icon}</Text>
+          <Text className={compact ? 'text-xl' : 'text-2xl'}>{icon}</Text>
         )}
         {badge > 0 ? (
           <View
@@ -33,12 +58,18 @@ function TabIcon({ icon, imageSource, customIcon, label, focused, isCircular, ba
         ) : null}
       </View>
       <Text
-        style={{ fontFamily: focused ? 'Lato_700Bold' : 'Lato_400Regular' }}
-        className={`text-xs mt-1 ${
+        numberOfLines={2}
+        style={{
+          fontFamily: focused ? 'Lato_700Bold' : 'Lato_400Regular',
+          fontSize: compact ? 9 : 12,
+          lineHeight: compact ? 10 : 14,
+          textAlign: 'center',
+        }}
+        className={`${compact ? 'mt-0.5' : 'mt-1'} ${
           focused ? 'text-gold' : 'text-charcoal/50'
         }`}
       >
-        {label}
+        {displayLabel}
       </Text>
     </View>
   );
@@ -47,6 +78,7 @@ function TabIcon({ icon, imageSource, customIcon, label, focused, isCircular, ba
 export default function AppLayout() {
   const { session, communityId, communityRole, profile, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const isAdmin = communityRole === 'admin';
   const showAdminTab = communityRole === 'admin' || communityRole === 'treasurer';
   const { width } = useWindowDimensions();
@@ -57,6 +89,12 @@ export default function AppLayout() {
 
   // Initialize push notification listeners and state (no permission prompt on load)
   useNotifications({ autoRequestPermission: false });
+
+  useEffect(() => {
+    if (!loading && session && communityId) {
+      saveLastAppPath(pathname);
+    }
+  }, [loading, session, communityId, pathname]);
 
   // Guard: redirect to login/join if auth resolves without a valid session.
   // This runs for any deep link that bypasses the index.tsx routing logic
@@ -81,17 +119,26 @@ export default function AppLayout() {
 
   return (
     <Tabs
+      initialRouteName={getLastAppTabName()}
       screenOptions={{
         headerShown: false,
-        // Hide tab bar on mobile/narrow screens - navigation via sidebar
         tabBarStyle: useMobileLayout
-          ? { display: 'none' }
+          ? {
+              height: 78,
+              paddingTop: 4,
+              paddingBottom: Platform.OS === 'ios' ? 14 : 8,
+              backgroundColor: '#fff',
+              borderTopColor: '#dec181',
+            }
           : {
               height: 70,
               paddingBottom: 8,
               backgroundColor: '#fff',
               borderTopColor: '#dec181',
             },
+        tabBarItemStyle: useMobileLayout
+          ? { minWidth: 0, paddingHorizontal: 0 }
+          : undefined,
         tabBarShowLabel: false,
       }}
     >
@@ -99,7 +146,7 @@ export default function AppLayout() {
         name="index"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon imageSource={cliveIcon} label="Clive" focused={focused} />
+            <TabIcon imageSource={cliveIcon} label="Clive" focused={focused} compact={useMobileLayout} />
           ),
         }}
       />
@@ -107,7 +154,7 @@ export default function AppLayout() {
         name="hive"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon imageSource={beeIcon} label="HIVE" focused={focused} />
+            <TabIcon imageSource={beeIcon} label="HIVE Home" focused={focused} compact={useMobileLayout} />
           ),
         }}
       />
@@ -115,7 +162,7 @@ export default function AppLayout() {
         name="board"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon="📋" label="Board" focused={focused} />
+            <TabIcon icon="📋" label="Message Board" focused={focused} compact={useMobileLayout} />
           ),
         }}
       />
@@ -123,7 +170,7 @@ export default function AppLayout() {
         name="messages"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon="💬" label="Chat" focused={focused} badge={totalUnreadDMs} />
+            <TabIcon icon="💬" label="Chat" focused={focused} badge={totalUnreadDMs} compact={useMobileLayout} />
           ),
         }}
       />
@@ -131,7 +178,7 @@ export default function AppLayout() {
         name="meetings"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon customIcon={<HexagonIcon size={26} />} label="Meetings" focused={focused} />
+            <TabIcon customIcon={<HexagonIcon size={useMobileLayout ? 22 : 26} />} label="Meetings" focused={focused} compact={useMobileLayout} />
           ),
         }}
       />
@@ -145,6 +192,7 @@ export default function AppLayout() {
               label="Profile"
               focused={focused}
               isCircular
+              compact={useMobileLayout}
             />
           ),
         }}
@@ -154,7 +202,7 @@ export default function AppLayout() {
         options={{
           href: showAdminTab ? '/admin' : undefined,
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon="⚙️" label="Admin" focused={focused} />
+            <TabIcon icon="⚙️" label="Admin" focused={focused} compact={useMobileLayout} />
           ),
         }}
       />

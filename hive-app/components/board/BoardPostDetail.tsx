@@ -32,6 +32,8 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showEditComposer, setShowEditComposer] = useState(false);
+  const editComposerStorageKey = communityId ? `the-hive:board-edit-open:${communityId}:${postId}` : null;
+  const editDraftStorageKey = communityId ? `the-hive:board-edit-draft:${communityId}:${postId}` : null;
 
   const isAuthor = profile?.id === post?.author_id;
 
@@ -104,6 +106,29 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     fetchPost();
     fetchReplies();
   }, [fetchPost, fetchReplies]);
+
+  useEffect(() => {
+    if (!editComposerStorageKey || typeof window === 'undefined') return;
+
+    setShowEditComposer(window.localStorage.getItem(editComposerStorageKey) === 'true');
+  }, [editComposerStorageKey]);
+
+  const handleOpenEditComposer = useCallback(() => {
+    setShowEditComposer(true);
+    if (editComposerStorageKey && typeof window !== 'undefined') {
+      window.localStorage.setItem(editComposerStorageKey, 'true');
+    }
+  }, [editComposerStorageKey]);
+
+  const handleCloseEditComposer = useCallback(() => {
+    setShowEditComposer(false);
+    if (editComposerStorageKey && typeof window !== 'undefined') {
+      window.localStorage.removeItem(editComposerStorageKey);
+    }
+    if (editDraftStorageKey && typeof window !== 'undefined') {
+      window.localStorage.removeItem(editDraftStorageKey);
+    }
+  }, [editComposerStorageKey, editDraftStorageKey]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -285,6 +310,12 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
       if (error) throw error;
 
       await fetchPost();
+      if (editComposerStorageKey && typeof window !== 'undefined') {
+        window.localStorage.removeItem(editComposerStorageKey);
+      }
+      if (editDraftStorageKey && typeof window !== 'undefined') {
+        window.localStorage.removeItem(editDraftStorageKey);
+      }
       return true;
     } catch (error) {
       console.error('Error editing post:', error);
@@ -335,7 +366,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         {isAuthor && (
           <View className="flex-row items-center gap-2">
             <Pressable
-              onPress={() => setShowEditComposer(true)}
+              onPress={handleOpenEditComposer}
               className="p-2"
               hitSlop={8}
             >
@@ -523,9 +554,10 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         visible={showEditComposer}
         category={post.category || null}
         userId={profile?.id || ''}
-        onClose={() => setShowEditComposer(false)}
+        onClose={handleCloseEditComposer}
         onSubmit={handleEditPost}
         existingPost={post}
+        draftStorageKey={editDraftStorageKey}
       />
     </SafeAreaView>
   );

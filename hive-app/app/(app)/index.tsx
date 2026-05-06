@@ -12,10 +12,14 @@ export default function ChatScreen() {
 
   const {
     conversations,
+    projects,
     currentConversation,
     loadConversations,
+    loadProjects,
     createConversation,
+    createProject,
     selectConversation,
+    moveConversationToProject,
     deleteConversation,
     setCurrentConversation,
   } = useConversations();
@@ -26,7 +30,8 @@ export default function ChatScreen() {
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
-  }, [loadConversations]);
+    loadProjects();
+  }, [loadConversations, loadProjects]);
 
   const handleNewConversation = useCallback(async () => {
     const newConv = await createConversation('default');
@@ -71,9 +76,12 @@ export default function ChatScreen() {
         {!useMobileLayout && (
           <ConversationSidebar
             conversations={conversations}
+            projects={projects}
             currentConversationId={currentConversation?.id || null}
             onSelectConversation={handleSelectConversation}
             onNewConversation={handleNewConversation}
+            onCreateProject={createProject}
+            onMoveConversation={moveConversationToProject}
             onDelete={handleDeleteConversation}
             isOpen={true}
             isCollapsed={sidebarCollapsed}
@@ -85,9 +93,12 @@ export default function ChatScreen() {
         {useMobileLayout && (
           <ConversationSidebar
             conversations={conversations}
+            projects={projects}
             currentConversationId={currentConversation?.id || null}
             onSelectConversation={handleSelectConversation}
             onNewConversation={handleNewConversation}
+            onCreateProject={createProject}
+            onMoveConversation={moveConversationToProject}
             onDelete={handleDeleteConversation}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}

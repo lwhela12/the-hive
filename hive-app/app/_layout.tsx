@@ -41,12 +41,30 @@ type MembershipWithCommunity = {
   community: Community;
 };
 
-// Register service worker for PWA home screen caching (web only)
+const isLocalWeb =
+  Platform.OS === 'web' &&
+  typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+// Register service worker for PWA home screen caching (web only).
+// Local development should always use fresh bundles, so clear any old dev worker.
 if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.warn('Service worker registration failed:', err);
-    });
+    if (isLocalWeb) {
+      navigator.serviceWorker.getRegistrations()
+        .then((registrations) => registrations.forEach((registration) => registration.unregister()))
+        .catch((err) => console.warn('Service worker cleanup failed:', err));
+
+      if ('caches' in window) {
+        caches.keys()
+          .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+          .catch((err) => console.warn('Cache cleanup failed:', err));
+      }
+      return;
+    }
+
+    navigator.serviceWorker.register('/sw.js')
+      .catch((err) => console.warn('Service worker registration failed:', err));
   });
 }
 

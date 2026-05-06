@@ -1,5 +1,6 @@
-import { useMemo, memo, useEffect } from 'react';
-import { View, Text, Pressable, ScrollView, Image, useWindowDimensions, StyleSheet } from 'react-native';
+import { createElement, useMemo, memo, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import { View, Text, Pressable, ScrollView, Image, useWindowDimensions, StyleSheet, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -7,20 +8,24 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { ConversationItem } from './ConversationItem';
 import { HexagonIcon } from '../ui/HexagonIcon';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
-import type { Conversation } from '../../types';
+import type { Conversation, ConversationProject } from '../../types';
 
 const beeIcon = require('../../assets/bee-gold-bg.png');
 const cliveIcon = require('../../assets/Clive_logo.png');
 
 interface ConversationSidebarProps {
   conversations: Conversation[];
+  projects?: ConversationProject[];
   currentConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onNewConversation: () => void;
+  onCreateProject?: (name: string) => Promise<ConversationProject | null>;
+  onMoveConversation?: (conversationId: string, projectId: string | null) => Promise<boolean>;
   onDelete?: (id: string) => void;
   isOpen?: boolean;
   onClose?: () => void;
@@ -74,9 +79,12 @@ function groupByDate(conversations: Conversation[]) {
 
 export const ConversationSidebar = memo(function ConversationSidebar({
   conversations,
+  projects = [],
   currentConversationId,
   onSelectConversation,
   onNewConversation,
+  onCreateProject,
+  onMoveConversation,
   onDelete,
   isOpen = true,
   onClose,
@@ -84,14 +92,30 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   onToggleCollapse,
 }: ConversationSidebarProps) {
   const router = useRouter();
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set());
+  const [draggingConversationId, setDraggingConversationId] = useState<string | null>(null);
+  const [dropTargetProjectId, setDropTargetProjectId] = useState<string | null>(null);
   const { profile, communityId, communityRole } = useAuth();
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width: screenWidth } = useWindowDimensions();
   const drawerWidth = screenWidth * DRAWER_WIDTH_PERCENT;
 
-  const groupedConversations = useMemo(
-    () => groupByDate(conversations),
+  const recents = useMemo(
+    () => conversations.filter((conversation) => !conversation.project_id),
     [conversations]
+  );
+
+  const groupedConversations = useMemo(
+    () => groupByDate(recents),
+    [recents]
+  );
+
+  const projectConversations = useMemo(
+    () => projects.map((project) => ({
+      project,
+      conversations: conversations.filter((conversation) => conversation.project_id === project.id),
+    })),
+    [projects, conversations]
   );
 
   // Use mobile layout for narrow screens (< 768px)
@@ -126,8 +150,8 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   // Navigation items for mobile sidebar
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
   const navItems = [
-    { icon: null, imageSource: beeIcon, label: 'HIVE', route: '/hive' as const },
-    { icon: '📋', label: 'Board', route: '/board' as const },
+    { icon: null, imageSource: beeIcon, label: 'HIVE Home', route: '/hive' as const },
+    { icon: '📋', label: 'Message Board', route: '/board' as const },
     { icon: '💬', label: 'Chat', route: '/messages' as const, badge: totalUnreadDMs },
     { icon: null, customIcon: 'honeycomb', label: 'Meetings', route: '/meetings' as const },
     { icon: '👤', imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined, label: 'Profile', route: '/profile' as const, isCircular: true },
@@ -148,6 +172,110 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   const closeAndNewConversation = () => {
     onClose?.();
     onNewConversation();
+  };
+
+  const toggleProject = (projectId: string) => {
+    setExpandedProjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  };
+
+  const handleCreateProject = () => {
+    if (!onCreateProject) return;
+
+    if (Platform.OS === 'web') {
+      const name = window.prompt('Project name');
+      if (name?.trim()) {
+        onCreateProject(name).then((project) => {
+          if (!project) {
+            window.alert('Could not create project yet. The conversation projects database migration may need to be applied first.');
+          }
+        });
+      }
+      return;
+    }
+
+    Alert.prompt(
+      'New Project',
+      'Name this project',
+      (name) => {
+        if (name?.trim()) {
+          onCreateProject(name).then((project) => {
+            if (!project) {
+              Alert.alert('Project Not Created', 'The conversation projects database migration may need to be applied first.');
+            }
+          });
+        }
+      }
+    );
+  };
+
+  const getDraggedConversationId = (event: any) => {
+    return (
+      event.dataTransfer?.getData('application/x-hive-conversation') ||
+      event.dataTransfer?.getData('text/plain') ||
+      draggingConversationId
+    );
+  };
+
+  const handleDropOnProject = async (event: any, projectId: string) => {
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    setDropTargetProjectId(null);
+
+    const conversationId = getDraggedConversationId(event);
+    if (!conversationId || !onMoveConversation) return;
+
+    await onMoveConversation(conversationId, projectId);
+    setExpandedProjectIds((prev) => new Set(prev).add(projectId));
+  };
+
+  const handleDropOnRecents = async (event: any) => {
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    setDropTargetProjectId(null);
+
+    const conversationId = getDraggedConversationId(event);
+    if (!conversationId || !onMoveConversation) return;
+
+    await onMoveConversation(conversationId, null);
+  };
+
+  const createDropProps = (projectId: string | null) => Platform.OS === 'web'
+    ? ({
+        onDragOver: (event: any) => {
+          event.preventDefault?.();
+          event.dataTransfer.dropEffect = 'move';
+          setDropTargetProjectId(projectId ?? 'recents');
+        },
+        onDragLeave: () => setDropTargetProjectId(null),
+        onDrop: (event: any) => {
+          if (projectId) {
+            handleDropOnProject(event, projectId);
+          } else {
+            handleDropOnRecents(event);
+          }
+        },
+      } as any)
+    : {};
+
+  const wrapDropTarget = (projectId: string | null, child: ReactNode) => {
+    if (Platform.OS !== 'web') return child;
+
+    return createElement(
+      'div',
+      {
+        ...createDropProps(projectId),
+        style: { borderRadius: 12 },
+      },
+      child
+    );
   };
 
   const sidebarContent = (
@@ -197,6 +325,94 @@ export const ConversationSidebar = memo(function ConversationSidebar({
 
       {/* Conversations List */}
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        <View>
+          <View className="px-4 pt-4 pb-2 flex-row items-center">
+            <Text
+              style={{ fontFamily: 'Lato_700Bold' }}
+              className="text-lg text-charcoal"
+            >
+              Projects
+            </Text>
+            <Ionicons name="chevron-down" size={16} color="#9CA3AF" style={{ marginLeft: 4, marginTop: 2 }} />
+          </View>
+          <Pressable
+            onPress={handleCreateProject}
+            className="mx-3 mb-1 px-3 py-2.5 rounded-xl flex-row items-center active:bg-gray-50"
+          >
+            <View style={{ width: 28, marginRight: 8 }}>
+              <Ionicons name="folder-open-outline" size={24} color="#313130" />
+              <Ionicons name="add" size={15} color="#313130" style={{ position: 'absolute', right: -2, bottom: -4 }} />
+            </View>
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal text-base">
+              New project
+            </Text>
+          </Pressable>
+          {projectConversations.map(({ project, conversations: projectItems }) => {
+            const isExpanded = expandedProjectIds.has(project.id);
+            const isDropTarget = dropTargetProjectId === project.id;
+            return (
+              <View key={project.id}>
+                {wrapDropTarget(project.id, (
+                  <Pressable
+                    onPress={() => toggleProject(project.id)}
+                    className={`mx-3 px-3 py-2.5 rounded-xl flex-row items-center active:bg-gray-50 ${
+                      isDropTarget ? 'bg-gold/10 border border-gold/40' : ''
+                    }`}
+                  >
+                    <Ionicons
+                      name={isExpanded ? 'folder-open-outline' : 'folder-outline'}
+                      size={24}
+                      color={isDropTarget ? '#bd9348' : '#313130'}
+                      style={{ marginRight: 12 }}
+                    />
+                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="flex-1 text-charcoal text-base" numberOfLines={1}>
+                      {project.name}
+                    </Text>
+                    {isDropTarget ? (
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-gold ml-2">
+                        Drop
+                      </Text>
+                    ) : null}
+                    {projectItems.length > 0 ? (
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-gray-400 ml-2">
+                        {projectItems.length}
+                      </Text>
+                    ) : null}
+                  </Pressable>
+                ))}
+                {isExpanded && projectItems.map((conversation) => (
+                  <View key={conversation.id} className="ml-8 mr-3">
+                    <ConversationItem
+                      conversation={conversation}
+                      isActive={conversation.id === currentConversationId}
+                      onSelect={isMobile ? closeAndSelectConversation : onSelectConversation}
+                      onDelete={onDelete}
+                      projects={projects}
+                      onMove={onMoveConversation}
+                      onDragStart={setDraggingConversationId}
+                      onDragEnd={() => {
+                        setDraggingConversationId(null);
+                        setDropTargetProjectId(null);
+                      }}
+                    />
+                  </View>
+                ))}
+              </View>
+            );
+          })}
+        </View>
+
+        {wrapDropTarget(null, (
+          <Text
+            style={{ fontFamily: 'Lato_700Bold' }}
+            className={`px-4 pt-8 pb-3 text-lg text-charcoal ${
+              dropTargetProjectId === 'recents' ? 'bg-gold/10' : ''
+            }`}
+          >
+            Recents
+          </Text>
+        ))}
+
         {groupedConversations.length === 0 ? (
           <View className="px-4 py-8">
             <Text
@@ -209,12 +425,14 @@ export const ConversationSidebar = memo(function ConversationSidebar({
         ) : (
           groupedConversations.map(([group, convs]) => (
             <View key={group}>
-              <Text
-                style={{ fontFamily: 'Lato_700Bold' }}
-                className="px-4 py-2 text-xs text-gray-400 uppercase tracking-wide bg-gray-50"
-              >
-                {group}
-              </Text>
+              {group !== 'Today' && (
+                <Text
+                  style={{ fontFamily: 'Lato_700Bold' }}
+                  className="px-4 py-2 text-xs text-gray-400 uppercase tracking-wide bg-gray-50"
+                >
+                  {group}
+                </Text>
+              )}
               {convs.map((conversation) => (
                 <ConversationItem
                   key={conversation.id}
@@ -222,6 +440,13 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                   isActive={conversation.id === currentConversationId}
                   onSelect={isMobile ? closeAndSelectConversation : onSelectConversation}
                   onDelete={onDelete}
+                  projects={projects}
+                  onMove={onMoveConversation}
+                  onDragStart={setDraggingConversationId}
+                  onDragEnd={() => {
+                    setDraggingConversationId(null);
+                    setDropTargetProjectId(null);
+                  }}
                 />
               ))}
             </View>
@@ -239,39 +464,42 @@ export const ConversationSidebar = memo(function ConversationSidebar({
             Navigate
           </Text>
           <View className="flex-row flex-wrap gap-2">
-            {navItems.map((item) => (
-              <Pressable
-                key={item.route}
-                onPress={() => closeAndNavigate(item.route)}
-                className="flex-row items-center bg-gray-50 px-3 py-2.5 rounded-xl active:bg-gray-100"
-              >
-                {item.customIcon === 'honeycomb' ? (
-                  <View style={{ marginRight: 8 }}>
-                    <HexagonIcon size={20} />
-                  </View>
-                ) : item.imageSource ? (
-                  <Image
-                    source={item.imageSource}
-                    style={{ width: 20, height: 20, borderRadius: item.isCircular ? 10 : 4, marginRight: 8 }}
-                  />
-                ) : (
-                  <Text className="mr-2">{item.icon}</Text>
-                )}
-                <Text
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal text-sm"
+            {navItems.map((item) => {
+              const badge = item.badge ?? 0;
+              return (
+                <Pressable
+                  key={item.route}
+                  onPress={() => closeAndNavigate(item.route)}
+                  className="flex-row items-center bg-gray-50 px-3 py-2.5 rounded-xl active:bg-gray-100"
                 >
-                  {item.label}
-                </Text>
-                {item.badge > 0 ? (
-                  <View className="ml-1.5 bg-gold rounded-full min-w-[18px] h-[18px] px-1 items-center justify-center">
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-[10px]">
-                      {item.badge > 99 ? '99+' : item.badge}
-                    </Text>
-                  </View>
-                ) : null}
-              </Pressable>
-            ))}
+                  {item.customIcon === 'honeycomb' ? (
+                    <View style={{ marginRight: 8 }}>
+                      <HexagonIcon size={20} />
+                    </View>
+                  ) : item.imageSource ? (
+                    <Image
+                      source={item.imageSource}
+                      style={{ width: 20, height: 20, borderRadius: item.isCircular ? 10 : 4, marginRight: 8 }}
+                    />
+                  ) : (
+                    <Text className="mr-2">{item.icon}</Text>
+                  )}
+                  <Text
+                    style={{ fontFamily: 'Lato_400Regular' }}
+                    className="text-charcoal text-sm"
+                  >
+                    {item.label}
+                  </Text>
+                  {badge > 0 ? (
+                    <View className="ml-1.5 bg-gold rounded-full min-w-[18px] h-[18px] px-1 items-center justify-center">
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-[10px]">
+                        {badge > 99 ? '99+' : badge}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       )}

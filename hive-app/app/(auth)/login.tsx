@@ -101,57 +101,69 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-cream">
-      <View className="flex-1 justify-center px-8">
-        {/* Logo/Header */}
-        <View className="items-center mb-12">
-          <Image
-            source={require('../../assets/HIVE Logo Transparent  BG.png')}
-            style={{ width: 160, height: 160, marginBottom: 16 }}
-            resizeMode="contain"
-          />
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-4xl text-charcoal">HIVE</Text>
-          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-lg text-charcoal mt-2 text-center">
-            Where wishes become reality
-          </Text>
+      <View className="flex-1 justify-center px-6 py-10">
+        <View className="w-full max-w-md mx-auto">
+          <View className="items-center mb-10">
+            <Image
+              source={require('../../assets/HIVE Logo Transparent  BG.png')}
+              style={{ width: 148, height: 148, marginBottom: 18 }}
+              resizeMode="contain"
+            />
+            <Text
+              style={{ fontFamily: 'LibreBaskerville_700Bold' }}
+              className="text-5xl text-charcoal text-center"
+            >
+              The HIVE
+            </Text>
+            <Text
+              style={{ fontFamily: 'Lato_700Bold' }}
+              className="text-base text-gold mt-3 text-center"
+            >
+              Where wishes become reality
+            </Text>
+          </View>
+
+          <View className="mb-9">
+            <Text
+              style={{ fontFamily: 'Lato_400Regular' }}
+              className="text-center text-charcoal text-lg leading-7"
+            >
+              A private circle for high-definition wishing, thoughtful support,
+              and matching what members need with what members know.
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={handleGoogleSignIn}
+            disabled={loading}
+            className={`flex-row items-center justify-center bg-white border border-gold/30 rounded-xl py-4 px-6 shadow-sm ${
+              loading ? 'opacity-50' : 'active:bg-gray-50'
+            }`}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#bd9348" />
+            ) : (
+              <>
+                <Image
+                  source={{ uri: 'https://www.google.com/favicon.ico' }}
+                  style={{ width: 20, height: 20, marginRight: 12 }}
+                />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-base text-charcoal">
+                  Continue with Google
+                </Text>
+              </>
+            )}
+          </Pressable>
+
+          <View className="mt-7 border-t border-gold/20 pt-5">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-center text-charcoal text-sm">
+              Invitation only
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-center text-charcoal/60 text-sm mt-1 leading-5">
+              Sign in with the email address that received your invite.
+            </Text>
+          </View>
         </View>
-
-        {/* Description */}
-        <View className="mb-12">
-          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-center text-charcoal leading-6">
-            A community of 12 people practicing high-definition wishing —
-            helping each other articulate what they actually want and
-            matching wishes to skills.
-          </Text>
-        </View>
-
-        {/* Sign in button */}
-        <Pressable
-          onPress={handleGoogleSignIn}
-          disabled={loading}
-          className={`flex-row items-center justify-center bg-white border border-gray-300 rounded-xl py-4 px-6 shadow-sm ${
-            loading ? 'opacity-50' : 'active:bg-gray-50'
-          }`}
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color="#bd9348" />
-          ) : (
-            <>
-              <Image
-                source={{ uri: 'https://www.google.com/favicon.ico' }}
-                style={{ width: 20, height: 20, marginRight: 12 }}
-              />
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-base text-charcoal">
-                Continue with Google
-              </Text>
-            </>
-          )}
-        </Pressable>
-
-        {/* Footer */}
-        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-center text-charcoal/60 text-sm mt-8">
-          This is a private community app.{'\n'}
-          Only invited members can join.
-        </Text>
       </View>
     </SafeAreaView>
   );

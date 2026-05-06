@@ -293,9 +293,20 @@ export interface Conversation {
   id: string;
   user_id: string;
   community_id: string;
+  project_id?: string | null;
   title: string | null;
   mode: ConversationMode;
   is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConversationProject {
+  id: string;
+  user_id: string;
+  community_id: string;
+  name: string;
+  display_order: number;
   created_at: string;
   updated_at: string;
 }
@@ -544,6 +555,11 @@ export interface Database {
         Row: Conversation;
         Insert: Omit<Conversation, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<Conversation, 'id' | 'created_at'>>;
+      };
+      conversation_projects: {
+        Row: ConversationProject;
+        Insert: Omit<ConversationProject, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<ConversationProject, 'id' | 'created_at'>>;
       };
       context_summaries: {
         Row: ContextSummary;
