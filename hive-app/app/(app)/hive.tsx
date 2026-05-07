@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert } from 'react-native';
 import Svg, { Path, Text as SvgText, TextPath, Defs } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -276,6 +276,31 @@ export default function HiveScreen() {
   const [eventLocation, setEventLocation] = useState('');
   const [savingEvent, setSavingEvent] = useState(false);
   const [eventError, setEventError] = useState<string | null>(null);
+
+  // Member carousel state
+  const [carouselMembers, setCarouselMembers] = useState<{ id: string; name: string; avatar_url?: string | null; role: string }[]>([]);
+  const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; avatar_url?: string | null; role: string } | null>(null);
+
+  useEffect(() => {
+    if (!communityId) return;
+    supabase
+      .from('community_memberships')
+      .select('user_id, role, created_at, profiles(id, name, avatar_url)')
+      .eq('community_id', communityId)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        if (data) {
+          setCarouselMembers(
+            data.map((m: any) => ({
+              id: m.profiles?.id ?? m.user_id,
+              name: m.profiles?.name ?? '',
+              avatar_url: m.profiles?.avatar_url ?? null,
+              role: m.role ?? 'member',
+            })).filter(m => m.name)
+          );
+        }
+      });
+  }, [communityId]);
 
   // Use the optimized hive data hook (React Query with caching)
   const {
@@ -588,129 +613,56 @@ export default function HiveScreen() {
           <RefreshControl refreshing={refreshing || isLoading} onRefresh={onRefresh} tintColor="#bd9348" />
         }
       >
-        {/* Queen Bee Seals with Details */}
-        {loading.queenBees ? (
-          <QueenBeeSealsSkeleton />
-        ) : (
-          (() => {
-            const avatarSize = Math.floor(sealSize * 0.4);
-            const columnWidth = sealSize + 8; // seal width plus small margin
-
-            const renderSealColumn = (
-              label: string,
-              profile: Profile | null,
-              arcId: string,
-              details: React.ReactNode
-            ) => {
-              const displayProfile = profile || fallbackAdmin;
+        {/* Member Stories Carousel */}
+        <View style={{ borderBottomWidth: 1, borderBottomColor: '#f3f0ea', paddingVertical: 16 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 20 }}
+          >
+            {carouselMembers.map(member => {
+              const isMe = member.id === profile?.id;
+              const firstName = member.name.split(' ')[0];
               return (
-                <View className="items-center" style={{ width: columnWidth }}>
-                  {/* Seal */}
-                  <View style={{ width: sealSize, height: sealSize }}>
-                    <Image
-                      source={require('../../assets/SIMPLIFIED SEAL 2.png')}
-                      style={{ width: sealSize, height: sealSize, position: 'absolute' }}
-                      resizeMode="contain"
-                    />
-                    <View style={{
-                      position: 'absolute',
-                      top: (sealSize - avatarSize) / 2 - sealSize * 0.015,
-                      left: (sealSize - avatarSize) / 2
-                    }}>
-                      {displayProfile && (
-                        <Avatar name={displayProfile.name} url={displayProfile.avatar_url} size={avatarSize} />
-                      )}
-                    </View>
-                    <Svg width={sealSize} height={sealSize} style={{ position: 'absolute' }}>
-                      <Defs>
-                        <Path
-                          id={arcId}
-                          d={`M ${arcStart},${arcY} A ${arcRadius},${arcRadius} 0 0,0 ${arcEnd},${arcY}`}
-                        />
-                      </Defs>
-                      <SvgText fill="#333" fontSize={fontSize} fontWeight="bold">
-                        <TextPath href={`#${arcId}`} startOffset="50%" textAnchor="middle">
-                          {label}
-                        </TextPath>
-                      </SvgText>
-                    </Svg>
+                <Pressable
+                  key={member.id}
+                  onPress={() => setSelectedMember(member)}
+                  style={{ alignItems: 'center', width: 68 }}
+                >
+                  <View style={{
+                    borderRadius: 36,
+                    borderWidth: isMe ? 2.5 : 2,
+                    borderColor: isMe ? '#bd9348' : 'rgba(222,193,129,0.6)',
+                    padding: 2.5,
+                    marginBottom: 6,
+                    shadowColor: '#000',
+                    shadowOpacity: 0.08,
+                    shadowRadius: 6,
+                    shadowOffset: { width: 0, height: 2 },
+                    elevation: 2,
+                    backgroundColor: 'white',
+                  }}>
+                    {member.avatar_url ? (
+                      <Image
+                        source={{ uri: member.avatar_url }}
+                        style={{ width: 56, height: 56, borderRadius: 28 }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#e8e3da', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden' }}>
+                        <View style={{ width: 21, height: 21, borderRadius: 10.5, backgroundColor: '#b8b0a4', position: 'absolute', top: 10 }} />
+                        <View style={{ width: 42, height: 28, borderTopLeftRadius: 21, borderTopRightRadius: 21, backgroundColor: '#b8b0a4' }} />
+                      </View>
+                    )}
                   </View>
-                  {/* Details */}
-                  <View className="mt-2 items-center" style={{ width: columnWidth }}>
-                    {details}
-                  </View>
-                </View>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#2d2d2d', textAlign: 'center' }} numberOfLines={1}>
+                    {isMe ? 'You' : firstName}
+                  </Text>
+                </Pressable>
               );
-            };
-
-            return (
-              <View className="flex-row justify-evenly py-4 border-b border-gray-100">
-                {renderSealColumn(
-                  'Last Month',
-                  queenBees.lastMonth?.user || null,
-                  'lastMonthArc',
-                  <>
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal text-center" numberOfLines={1}>
-                      {queenBees.lastMonth?.user?.name || fallbackAdmin?.name || 'TBD'}
-                    </Text>
-                    {queenBees.lastMonth?.highlights && queenBees.lastMonth.highlights.length > 0 ? (
-                      queenBees.lastMonth.highlights.slice(0, 2).map((h) => (
-                        <Text key={h.id} style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/60 text-center" numberOfLines={2}>
-                          {h.highlight}
-                        </Text>
-                      ))
-                    ) : (
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 italic text-center">
-                        No highlights
-                      </Text>
-                    )}
-                  </>
-                )}
-                {renderSealColumn(
-                  'Current',
-                  queenBees.currentMonth?.user || null,
-                  'currentArc',
-                  <>
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal text-center" numberOfLines={1}>
-                      {queenBees.currentMonth?.user?.name || fallbackAdmin?.name || 'TBD'}
-                    </Text>
-                    {queenBees.currentMonth?.project_title && (
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/70 text-center" numberOfLines={2}>
-                        {queenBees.currentMonth.project_title}
-                      </Text>
-                    )}
-                    {queenBees.currentMonth?.highlights && queenBees.currentMonth.highlights.length > 0 ? (
-                      queenBees.currentMonth.highlights.slice(0, 1).map((h) => (
-                        <Text key={h.id} style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/60 text-center" numberOfLines={2}>
-                          {h.highlight}
-                        </Text>
-                      ))
-                    ) : (
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 italic text-center">
-                        Updates soon
-                      </Text>
-                    )}
-                  </>
-                )}
-                {renderSealColumn(
-                  'Next Month',
-                  queenBees.nextMonth?.user || null,
-                  'nextMonthArc',
-                  <>
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal text-center" numberOfLines={1}>
-                      {queenBees.nextMonth?.user?.name || 'TBD'}
-                    </Text>
-                    {nextMeeting && (
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/70 text-center">
-                        Next: {formatDateShort(nextMeeting.event_date)}
-                      </Text>
-                    )}
-                  </>
-                )}
-              </View>
-            );
-          })()
-        )}
+            })}
+          </ScrollView>
+        </View>
 
         {/* Main Content */}
         <View className="p-4">
@@ -1128,6 +1080,45 @@ export default function HiveScreen() {
         onSave={handleEditWishSave}
         existingWish={editingWish}
       />
+
+      {/* Quick member peek modal from carousel */}
+      {selectedMember && (
+        <Modal visible animationType="slide" transparent onRequestClose={() => setSelectedMember(null)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32 }}>
+              <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
+              </View>
+              <View style={{ alignItems: 'center', paddingVertical: 20, paddingHorizontal: 24 }}>
+                <View style={{ borderRadius: 52, borderWidth: 2, borderColor: '#dec181', padding: 3, marginBottom: 12 }}>
+                  {selectedMember.avatar_url ? (
+                    <Image source={{ uri: selectedMember.avatar_url }} style={{ width: 88, height: 88, borderRadius: 44 }} resizeMode="cover" />
+                  ) : (
+                    <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: '#e8e3da', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden' }}>
+                      <View style={{ width: 33, height: 33, borderRadius: 16.5, backgroundColor: '#b8b0a4', position: 'absolute', top: 16 }} />
+                      <View style={{ width: 66, height: 44, borderTopLeftRadius: 33, borderTopRightRadius: 33, backgroundColor: '#b8b0a4' }} />
+                    </View>
+                  )}
+                </View>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 20, color: '#2d2d2d' }}>{selectedMember.name}</Text>
+                {selectedMember.role !== 'member' && (
+                  <View style={{ marginTop: 6, backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', textTransform: 'capitalize' }}>{selectedMember.role}</Text>
+                  </View>
+                )}
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', marginTop: 8, textAlign: 'center' }}>
+                  Visit the Members tab to see their full profile, skills & wishes.
+                </Text>
+              </View>
+              <View style={{ paddingHorizontal: 24 }}>
+                <Pressable onPress={() => setSelectedMember(null)} style={{ backgroundColor: '#faf8f3', borderRadius: 14, paddingVertical: 14 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }

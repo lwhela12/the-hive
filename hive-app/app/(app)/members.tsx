@@ -93,15 +93,39 @@ function MemberDetailModal({ member, onClose }: { member: MemberData; onClose: (
               </View>
             )}
 
-            {/* Skills */}
+            {/* Skills — floating bubble cloud, size varies by description length */}
             {member.skills.length > 0 && (
               <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', marginBottom: 8 }}>✨ Skills</Text>
-                {member.skills.map(s => (
-                  <View key={s.id} style={{ backgroundColor: '#faf8f3', borderRadius: 12, padding: 12, marginBottom: 6 }}>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d' }}>{s.description}</Text>
-                  </View>
-                ))}
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', marginBottom: 10 }}>✨ Skills</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {member.skills.map((s, i) => {
+                    // Shorter skill names = larger bubble (more memorable/punchy)
+                    const len = s.description.length;
+                    const size = len <= 12 ? 'large' : len <= 22 ? 'medium' : 'small';
+                    const styles = {
+                      large:  { px: 18, py: 10, fontSize: 15, bg: '#fdf3dc', border: 'rgba(222,193,129,0.5)' },
+                      medium: { px: 14, py: 8,  fontSize: 13, bg: '#faf8f3', border: 'rgba(222,193,129,0.3)' },
+                      small:  { px: 10, py: 6,  fontSize: 11, bg: '#f5f3ee', border: 'rgba(200,190,170,0.3)' },
+                    }[size];
+                    return (
+                      <View
+                        key={s.id}
+                        style={{
+                          backgroundColor: styles.bg,
+                          borderWidth: 1,
+                          borderColor: styles.border,
+                          borderRadius: 24,
+                          paddingHorizontal: styles.px,
+                          paddingVertical: styles.py,
+                        }}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: styles.fontSize, color: '#2d2d2d' }}>
+                          {s.description}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
               </View>
             )}
 
