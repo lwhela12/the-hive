@@ -113,13 +113,13 @@ export default function LoginScreen() {
               style={{ fontFamily: 'LibreBaskerville_700Bold' }}
               className="text-5xl text-charcoal text-center"
             >
-              The HIVE
+              H.I.V.E.
             </Text>
             <Text
               style={{ fontFamily: 'Lato_700Bold' }}
               className="text-base text-gold mt-3 text-center"
             >
-              Where wishes become reality
+              Architects of Collective Abundance
             </Text>
           </View>
 
