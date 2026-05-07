@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Tabs, usePathname, useRouter } from 'expo-router';
-import { Text, View, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { Text, View, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
@@ -129,109 +129,159 @@ export default function AppLayout() {
     );
   }
 
+  const tabBarHeight = useMobileLayout
+    ? Platform.OS === 'ios' ? 92 : 86
+    : 70;
+
+  // Hide floating Clive bubble when already on the Clive chat page
+  const onClivePage = pathname === '/' || pathname === '/index';
+
   return (
-    <Tabs
-      initialRouteName={getLastAppTabName()}
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: useMobileLayout
-          ? {
-              height: 78,
-              paddingTop: 4,
-              paddingBottom: Platform.OS === 'ios' ? 14 : 8,
-              backgroundColor: '#fff',
-              borderTopColor: '#dec181',
-            }
-          : {
-              height: 70,
-              paddingBottom: 8,
-              backgroundColor: '#fff',
-              borderTopColor: '#dec181',
-            },
-        tabBarItemStyle: useMobileLayout
-          ? { minWidth: 0, paddingHorizontal: 0 }
-          : undefined,
-        tabBarShowLabel: false,
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Clive',
-          tabBarAccessibilityLabel: 'Clive',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon imageSource={cliveIcon} label="Clive" focused={focused} compact={useMobileLayout} />
-          ),
+    <View style={{ flex: 1 }}>
+      <Tabs
+        initialRouteName={getLastAppTabName()}
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: useMobileLayout
+            ? {
+                height: 78,
+                paddingTop: 4,
+                paddingBottom: Platform.OS === 'ios' ? 14 : 8,
+                backgroundColor: '#fff',
+                borderTopColor: '#dec181',
+              }
+            : {
+                height: 70,
+                paddingBottom: 8,
+                backgroundColor: '#fff',
+                borderTopColor: '#dec181',
+              },
+          tabBarItemStyle: useMobileLayout
+            ? { minWidth: 0, paddingHorizontal: 0 }
+            : undefined,
+          tabBarShowLabel: false,
         }}
-      />
-      <Tabs.Screen
-        name="hive"
-        options={{
-          title: 'HIVE Home',
-          tabBarAccessibilityLabel: 'HIVE Home',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon imageSource={beeIcon} label="HIVE Home" focused={focused} compact={useMobileLayout} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="board"
-        options={{
-          title: 'Message Board',
-          tabBarAccessibilityLabel: 'Message Board',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon icon="📋" label="Message Board" focused={focused} compact={useMobileLayout} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="messages"
-        options={{
-          title: 'Chat',
-          tabBarAccessibilityLabel: 'Chat',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon icon="💬" label="Chat" focused={focused} badge={totalUnreadDMs} compact={useMobileLayout} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="meetings"
-        options={{
-          title: 'Meetings',
-          tabBarAccessibilityLabel: 'Meetings',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon customIcon={<HexagonIcon size={useMobileLayout ? 22 : 26} />} label="Meetings" focused={focused} compact={useMobileLayout} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarAccessibilityLabel: 'Profile',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon
-              icon="👤"
-              imageSource={profile?.avatar_url ? { uri: profile.avatar_url } : undefined}
-              label="Profile"
-              focused={focused}
-              isCircular
-              compact={useMobileLayout}
+      >
+        {/* Clive chat — hidden from tab bar, accessible via floating button */}
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Clive',
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="members"
+          options={{
+            title: 'Members',
+            tabBarAccessibilityLabel: 'Members',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon icon="🐝" label="Members" focused={focused} compact={useMobileLayout} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="hive"
+          options={{
+            title: 'HIVE Home',
+            tabBarAccessibilityLabel: 'HIVE Home',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon imageSource={beeIcon} label="HIVE Home" focused={focused} compact={useMobileLayout} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="board"
+          options={{
+            title: 'Message Board',
+            tabBarAccessibilityLabel: 'Message Board',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon icon="📋" label="Message Board" focused={focused} compact={useMobileLayout} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="messages"
+          options={{
+            title: 'Chat',
+            tabBarAccessibilityLabel: 'Chat',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon icon="💬" label="Chat" focused={focused} badge={totalUnreadDMs} compact={useMobileLayout} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="meetings"
+          options={{
+            title: 'Meetings',
+            tabBarAccessibilityLabel: 'Meetings',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon customIcon={<HexagonIcon size={useMobileLayout ? 22 : 26} />} label="Meetings" focused={focused} compact={useMobileLayout} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: 'Profile',
+            tabBarAccessibilityLabel: 'Profile',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon
+                icon="👤"
+                imageSource={profile?.avatar_url ? { uri: profile.avatar_url } : undefined}
+                label="Profile"
+                focused={focused}
+                isCircular
+                compact={useMobileLayout}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="admin"
+          options={{
+            title: 'Admin',
+            href: showAdminTab ? '/admin' : undefined,
+            tabBarAccessibilityLabel: 'Admin',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon icon="⚙️" label="Admin" focused={focused} compact={useMobileLayout} />
+            ),
+          }}
+        />
+      </Tabs>
+
+      {/* Floating Clive bubble — visible on every page except the Clive chat itself */}
+      {!onClivePage && (
+        <Pressable
+          onPress={() => router.push('/')}
+          style={{
+            position: 'absolute',
+            bottom: tabBarHeight + 12,
+            right: 16,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            shadowColor: '#bd9348',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.35,
+            shadowRadius: 8,
+            elevation: 8,
+          }}
+          className="active:opacity-80"
+        >
+          <View
+            style={{ width: 56, height: 56, borderRadius: 28 }}
+            className="border-2 border-gold bg-white overflow-hidden"
+          >
+            <Image
+              source={cliveIcon}
+              style={{ width: 52, height: 52 }}
+              contentFit="cover"
+              cachePolicy="memory-disk"
             />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="admin"
-        options={{
-          title: 'Admin',
-          href: showAdminTab ? '/admin' : undefined,
-          tabBarAccessibilityLabel: 'Admin',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon icon="⚙️" label="Admin" focused={focused} compact={useMobileLayout} />
-          ),
-        }}
-      />
-    </Tabs>
+          </View>
+        </Pressable>
+      )}
+    </View>
   );
 }
