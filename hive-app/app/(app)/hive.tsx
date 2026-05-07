@@ -432,10 +432,7 @@ export default function HiveScreen() {
       await refetch();
     } catch (error) {
       console.error('Error saving event:', error);
-      Alert.alert(
-        'Event Not Saved',
-        `I could not ${editingEvent ? 'update' : 'create'} this event. If you are not an admin, Lucas may need to apply the event-permissions database migration first.`
-      );
+      Alert.alert('Error', `Failed to ${editingEvent ? 'update' : 'create'} event. Please try again.`);
     } finally {
       setSavingEvent(false);
     }
