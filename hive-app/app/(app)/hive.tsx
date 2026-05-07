@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import Svg, { Polygon, Text as SvgText } from 'react-native-svg';
+import Svg, { Polygon } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -18,7 +18,7 @@ import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
-import type { Profile, Wish, WishGranter, MonthlyHighlight, Event } from '../../types';
+import type { Profile, Wish, WishGranter, Event } from '../../types';
 
 type WishTab = 'open' | 'granted';
 
@@ -239,6 +239,14 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
   );
 }
 
+const DAILY_QUESTION = "What's one thing you've been putting off that could change everything if you just started?";
+
+const PLACEHOLDER_ANSWERS = [
+  { name: 'Charlee', initials: 'CH', avatar: null, answer: 'Learning how to properly meal-prep on Sundays so weeknights feel effortless.', color: '#f9dcc4' },
+  { name: 'Maya', initials: 'MA', avatar: null, answer: 'Writing the first chapter of the novel I keep talking about!', color: '#d4e8d0' },
+  { name: 'Sara', initials: 'SA', avatar: null, answer: 'Setting up a consistent morning routine — even just 15 minutes of movement.', color: '#d6e4f7' },
+];
+
 const PLACEHOLDER_ACTIVITY = [
   { emoji: '🌟', text: 'Sarah posted a new wish: help planning a veggie garden', time: '2h ago', read: false },
   { emoji: '✅', text: "Maya's wish for recipe ideas was granted by Charlee", time: '5h ago', read: false },
@@ -247,27 +255,28 @@ const PLACEHOLDER_ACTIVITY = [
   { emoji: '🍯', text: 'Honey Pot updated by Treasurer', time: '3d ago', read: true },
 ];
 
-function HexShortcut({ emoji, label, sublabel, onPress, color = '#fdf3dc' }: {
+function HexShortcut({ emoji, label, sublabel, onPress }: {
   emoji: string;
   label: string;
   sublabel?: string;
   onPress: () => void;
-  color?: string;
 }) {
   return (
-    <Pressable onPress={onPress} style={{ alignItems: 'center', flex: 1 }}>
-      <Svg width={72} height={64} viewBox="0 0 72 64">
-        <Polygon
-          points="36,2 70,20 70,44 36,62 2,44 2,20"
-          fill={color}
-          stroke="rgba(222,193,129,0.5)"
-          strokeWidth={1.5}
-        />
-        <SvgText x="36" y="38" textAnchor="middle" fontSize={24}>{emoji}</SvgText>
-      </Svg>
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#2d2d2d', marginTop: 4, textAlign: 'center' }}>{label}</Text>
+    <Pressable onPress={onPress} style={{ alignItems: 'center', flex: 1 }} className="active:opacity-70">
+      <View style={{ width: 72, height: 64, alignItems: 'center', justifyContent: 'center' }}>
+        <Svg width={72} height={64} viewBox="0 0 72 64" style={{ position: 'absolute' }}>
+          <Polygon
+            points="36,2 70,20 70,44 36,62 2,44 2,20"
+            fill="#fdf3dc"
+            stroke="rgba(222,193,129,0.6)"
+            strokeWidth={1.5}
+          />
+        </Svg>
+        <Text style={{ fontSize: 26, lineHeight: 30 }}>{emoji}</Text>
+      </View>
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#2d2d2d', marginTop: 5, textAlign: 'center' }}>{label}</Text>
       {sublabel ? (
-        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#bd9348', marginTop: 1, textAlign: 'center' }}>{sublabel}</Text>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginTop: 2, textAlign: 'center' }}>{sublabel}</Text>
       ) : null}
     </Pressable>
   );
@@ -282,6 +291,8 @@ export default function HiveScreen() {
   const useMobileLayout = width < 768;
 
   const [refreshing, setRefreshing] = useState(false);
+  const [showAnswerModal, setShowAnswerModal] = useState(false);
+  const [myAnswer, setMyAnswer] = useState('');
   const [selectedWish, setSelectedWish] = useState<WishWithGranters | null>(null);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [wishTab, setWishTab] = useState<WishTab>('open');
@@ -639,27 +650,89 @@ export default function HiveScreen() {
         {/* Main Content */}
         <View className="p-4">
 
-        {/* Daily Question Placeholder */}
-        <Pressable
-          style={{
-            marginBottom: 16,
-            backgroundColor: '#fffbf0',
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: 'rgba(222,193,129,0.35)',
-            padding: 16,
-          }}
-        >
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', marginBottom: 6, letterSpacing: 0.5 }}>
-            ✨ DAILY QUESTION
-          </Text>
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 22 }}>
-            What's one thing you've been putting off that could change everything if you just started?
-          </Text>
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 10 }}>
-            Tap to share your answer with the Hive 🐝
-          </Text>
-        </Pressable>
+        {/* Daily Question */}
+        <View style={{ marginBottom: 16, backgroundColor: '#fffbf0', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.35)', overflow: 'hidden' }}>
+          {/* Question header */}
+          <Pressable onPress={() => setShowAnswerModal(true)} style={{ padding: 16 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginBottom: 8, letterSpacing: 0.8 }}>
+              ✨ DAILY QUESTION
+            </Text>
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 23 }}>
+              {DAILY_QUESTION}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
+              {/* Stacked answer avatars */}
+              {PLACEHOLDER_ANSWERS.map((a, i) => (
+                <View key={i} style={{
+                  width: 26, height: 26, borderRadius: 13,
+                  backgroundColor: a.color,
+                  borderWidth: 2, borderColor: '#fffbf0',
+                  marginLeft: i === 0 ? 0 : -8,
+                  alignItems: 'center', justifyContent: 'center',
+                  zIndex: PLACEHOLDER_ANSWERS.length - i,
+                }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#2d2d2d' }}>{a.initials}</Text>
+                </View>
+              ))}
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginLeft: 10 }}>
+                {PLACEHOLDER_ANSWERS.length} answered · tap to share yours
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* Scrolling answer previews */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 10 }}
+          >
+            {PLACEHOLDER_ANSWERS.map((a, i) => (
+              <View key={i} style={{
+                width: 200,
+                backgroundColor: 'white',
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: 'rgba(222,193,129,0.25)',
+                padding: 12,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{
+                    width: 28, height: 28, borderRadius: 14,
+                    backgroundColor: a.color,
+                    alignItems: 'center', justifyContent: 'center',
+                    marginRight: 8,
+                  }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#2d2d2d' }}>{a.initials}</Text>
+                  </View>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d' }}>{a.name}</Text>
+                </View>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#4b5563', lineHeight: 18 }} numberOfLines={4}>
+                  {a.answer}
+                </Text>
+              </View>
+            ))}
+            {/* "Add yours" card */}
+            <Pressable
+              onPress={() => setShowAnswerModal(true)}
+              style={{
+                width: 140,
+                backgroundColor: '#fdf3dc',
+                borderRadius: 12,
+                borderWidth: 1.5,
+                borderColor: 'rgba(222,193,129,0.5)',
+                borderStyle: 'dashed',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 16,
+              }}
+            >
+              <Text style={{ fontSize: 24, marginBottom: 8 }}>✍️</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', textAlign: 'center' }}>
+                Share your answer
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </View>
 
         {/* Activity Feed */}
         <View style={{ marginBottom: 16 }}>
@@ -766,14 +839,14 @@ export default function HiveScreen() {
             onPress={() => {}}
           />
           <HexShortcut
+            emoji="📋"
+            label="Message Board"
+            onPress={() => router.push('/board')}
+          />
+          <HexShortcut
             emoji="💬"
             label="Chat"
             onPress={() => router.push('/messages')}
-          />
-          <HexShortcut
-            emoji="📅"
-            label="Meetings"
-            onPress={() => router.push('/meetings')}
           />
         </View>
 
@@ -1038,6 +1111,61 @@ export default function HiveScreen() {
         onSave={handleEditWishSave}
         existingWish={editingWish}
       />
+
+      {/* Daily Question Answer Modal */}
+      <Modal visible={showAnswerModal} animationType="slide" transparent onRequestClose={() => setShowAnswerModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+            <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
+            </View>
+            <View style={{ paddingHorizontal: 24, paddingBottom: 40 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', letterSpacing: 0.8, marginTop: 12, marginBottom: 6 }}>
+                ✨ DAILY QUESTION
+              </Text>
+              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 22, marginBottom: 20 }}>
+                {DAILY_QUESTION}
+              </Text>
+              <TextInput
+                value={myAnswer}
+                onChangeText={setMyAnswer}
+                placeholder="Share your answer with the Hive..."
+                placeholderTextColor="#9ca3af"
+                multiline
+                numberOfLines={4}
+                style={{
+                  fontFamily: 'Lato_400Regular',
+                  fontSize: 15,
+                  color: '#2d2d2d',
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.5)',
+                  borderRadius: 14,
+                  padding: 14,
+                  minHeight: 100,
+                  textAlignVertical: 'top',
+                  backgroundColor: '#fffbf0',
+                  marginBottom: 14,
+                }}
+              />
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Pressable
+                  onPress={() => setShowAnswerModal(false)}
+                  style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => { setShowAnswerModal(false); setMyAnswer(''); }}
+                  style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: myAnswer.trim() ? 1 : 0.4 }}
+                  disabled={!myAnswer.trim()}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white', textAlign: 'center' }}>Share with Hive 🐝</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Quick member peek modal from carousel */}
       {selectedMember && (
