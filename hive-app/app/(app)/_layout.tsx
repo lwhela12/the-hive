@@ -175,22 +175,12 @@ export default function AppLayout() {
           tabBarShowLabel: false,
         }}
       >
-        {/* Clive chat — hidden from tab bar, accessible via floating button */}
+        {/* Clive chat — hidden from tab bar, accessible via floating pill bar */}
         <Tabs.Screen
           name="index"
           options={{
             title: 'Clive',
             href: null,
-          }}
-        />
-        <Tabs.Screen
-          name="members"
-          options={{
-            title: 'Members',
-            tabBarAccessibilityLabel: 'Members',
-            tabBarIcon: ({ focused }) => (
-              <TabIcon icon="🐝" label="Members" focused={focused} compact={useMobileLayout} />
-            ),
           }}
         />
         <Tabs.Screen
@@ -200,6 +190,27 @@ export default function AppLayout() {
             tabBarAccessibilityLabel: 'HIVE Home',
             tabBarIcon: ({ focused }) => (
               <TabIcon imageSource={beeIcon} label="HIVE Home" focused={focused} compact={useMobileLayout} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="members"
+          options={{
+            title: 'Members',
+            tabBarAccessibilityLabel: 'Members',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon
+                customIcon={
+                  <Ionicons
+                    name="people-outline"
+                    size={useMobileLayout ? 22 : 26}
+                    color={focused ? '#bd9348' : '#2d2d2d80'}
+                  />
+                }
+                label="Members"
+                focused={focused}
+                compact={useMobileLayout}
+              />
             ),
           }}
         />
@@ -263,14 +274,14 @@ export default function AppLayout() {
         />
       </Tabs>
 
-      {/* Floating Clive pill bar — visible on every page except the Clive chat itself */}
+      {/* Floating Clive pill bar — bottom right, visible on every page except the Clive chat itself */}
       {!onClivePage && (
         <View
           style={{
             position: 'absolute',
             bottom: tabBarHeight + 10,
-            left: 12,
             right: 12,
+            width: 260,
             shadowColor: '#bd9348',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.25,
