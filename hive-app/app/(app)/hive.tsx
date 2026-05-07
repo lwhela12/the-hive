@@ -275,6 +275,7 @@ export default function HiveScreen() {
   const [eventDescription, setEventDescription] = useState('');
   const [eventLocation, setEventLocation] = useState('');
   const [savingEvent, setSavingEvent] = useState(false);
+  const [eventError, setEventError] = useState<string | null>(null);
 
   // Use the optimized hive data hook (React Query with caching)
   const {
@@ -376,6 +377,7 @@ export default function HiveScreen() {
   const closeEventModal = () => {
     setShowEventModal(false);
     setEditingEvent(null);
+    setEventError(null);
     setEventTitle('');
     setEventDate('');
     setEventTime('');
@@ -384,15 +386,24 @@ export default function HiveScreen() {
   };
 
   const saveEvent = async () => {
-    if (!eventTitle || !eventDate || !communityId) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    setEventError(null);
+    if (!eventTitle.trim()) {
+      setEventError('Please enter an event title.');
+      return;
+    }
+    if (!eventDate) {
+      setEventError('Please select a date.');
+      return;
+    }
+    if (!communityId) {
+      setEventError('No community found. Please refresh and try again.');
       return;
     }
 
     // Convert American date format to ISO for storage
     const eventDateIso = parseAmericanDate(eventDate);
     if (!eventDateIso) {
-      Alert.alert('Error', 'Please enter date in MM-DD-YYYY format');
+      setEventError('Invalid date format. Please pick a date using the calendar.');
       return;
     }
 
@@ -430,9 +441,14 @@ export default function HiveScreen() {
 
       closeEventModal();
       await refetch();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving event:', error);
-      Alert.alert('Error', `Failed to ${editingEvent ? 'update' : 'create'} event. Please try again.`);
+      const msg = error?.message || '';
+      if (msg.includes('row-level security') || msg.includes('policy') || msg.includes('permission')) {
+        setEventError('Permission denied. Ask your admin to apply the latest database update.');
+      } else {
+        setEventError(`Failed to ${editingEvent ? 'update' : 'create'} event. Please try again.`);
+      }
     } finally {
       setSavingEvent(false);
     }
@@ -1069,6 +1085,14 @@ export default function HiveScreen() {
                         className="border border-gray-300 rounded-lg px-4 py-3 text-base mb-4"
                         style={{ textAlignVertical: 'top', minHeight: 80 }}
                       />
+
+                      {eventError && (
+                        <View className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-3">
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-red-600 text-sm text-center">
+                            {eventError}
+                          </Text>
+                        </View>
+                      )}
 
                       <View className="flex-row">
                         <Pressable
