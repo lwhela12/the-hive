@@ -9,6 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { MessageBubble } from './MessageBubble';
@@ -17,6 +18,8 @@ import { ChatInput } from './ChatInput';
 import { SelectedImage } from '../../lib/imagePicker';
 import { uploadMultipleImages } from '../../lib/attachmentUpload';
 import type { ChatMessage, Conversation, ConversationMode, Attachment } from '../../types';
+
+const cliveIcon = require('../../assets/Clive_logo.png');
 
 // Retry helper with exponential backoff
 async function retryWithBackoff<T>(
@@ -103,6 +106,17 @@ const WelcomeState = memo(function WelcomeState({
   return (
     <View className="flex-1 items-center justify-center px-5">
       <View className="w-full max-w-3xl items-center">
+        <Image
+          source={cliveIcon}
+          style={{
+            width: isNarrow ? 64 : 72,
+            height: isNarrow ? 64 : 72,
+            borderRadius: isNarrow ? 18 : 20,
+            marginBottom: 18,
+          }}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+        />
         <Text
           style={{ fontFamily: 'LibreBaskerville_700Bold' }}
           className={`${isNarrow ? 'text-3xl' : 'text-4xl'} text-charcoal text-center mb-4`}

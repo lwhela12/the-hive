@@ -412,9 +412,6 @@ export default function BoardScreen() {
             }
             onSelect={handleCategorySelect}
             postCounts={postCounts}
-            canManageCategories={canManageCategories}
-            onEdit={openEditTopic}
-            onDelete={handleDeleteTopic}
           />
         )}
 

@@ -1,6 +1,5 @@
 import { memo } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import type { BoardCategory } from '../../types';
 
 const EMOJI_MAP: Record<string, string> = {
@@ -38,18 +37,12 @@ interface BoardCategoryListProps {
   categories: BoardCategory[];
   onSelect: (category: BoardCategory) => void;
   postCounts?: Record<string, CategoryStats>;
-  canManageCategories?: boolean;
-  onEdit?: (category: BoardCategory) => void;
-  onDelete?: (category: BoardCategory) => void;
 }
 
 export const BoardCategoryList = memo(function BoardCategoryList({
   categories,
   onSelect,
   postCounts,
-  canManageCategories,
-  onEdit,
-  onDelete,
 }: BoardCategoryListProps) {
   return (
     <FlatList
@@ -84,32 +77,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                   {subtitle}
                 </Text>
               </View>
-              {canManageCategories && !item.is_system ? (
-                <View className="flex-row items-center ml-2">
-                  <Pressable
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      onEdit?.(item);
-                    }}
-                    className="w-9 h-9 items-center justify-center rounded-full active:bg-cream"
-                    hitSlop={8}
-                  >
-                    <Ionicons name="pencil-outline" size={18} color="#4A4A4A" />
-                  </Pressable>
-                  <Pressable
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      onDelete?.(item);
-                    }}
-                    className="w-9 h-9 items-center justify-center rounded-full active:bg-cream"
-                    hitSlop={8}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                  </Pressable>
-                </View>
-              ) : (
-                <Text className="text-charcoal/30 text-xl ml-2">›</Text>
-              )}
+              <Text className="text-charcoal/30 text-xl ml-2">›</Text>
             </View>
           </Pressable>
         );
