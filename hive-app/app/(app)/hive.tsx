@@ -34,6 +34,127 @@ type WishWithGranters = Wish & {
 
 const INITIAL_EVENTS_SHOWN = 3;
 
+const CALENDAR_DURATION_MS = 60 * 60 * 1000;
+
+const getEventStartDate = (event: Event) => {
+  const [year, month, day] = event.event_date.split('-').map(Number);
+  const [hour = 9, minute = 0] = (event.event_time || '09:00').split(':').map(Number);
+  return new Date(year, month - 1, day, hour, minute);
+};
+
+const formatGoogleCalendarDate = (date: Date) => {
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+};
+
+const formatIcsDate = (date: Date) => formatGoogleCalendarDate(date);
+
+const escapeIcsText = (value = '') => value
+  .replace(/\\/g, '\\\\')
+  .replace(/;/g, '\\;')
+  .replace(/,/g, '\\,')
+  .replace(/\n/g, '\\n');
+
+const getCalendarDescription = (event: Event) => {
+  return [
+    event.description,
+    event.meet_link ? `Join Google Meet: ${event.meet_link}` : null,
+  ].filter(Boolean).join('\n\n');
+};
+
+const createCalendarLinks = (event: Event) => {
+  const start = getEventStartDate(event);
+  const end = new Date(start.getTime() + CALENDAR_DURATION_MS);
+  const description = getCalendarDescription(event);
+
+  const googleParams = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: event.title,
+    dates: `${formatGoogleCalendarDate(start)}/${formatGoogleCalendarDate(end)}`,
+    details: description,
+    location: event.location || '',
+  });
+
+  const outlookParams = new URLSearchParams({
+    path: '/calendar/action/compose',
+    rru: 'addevent',
+    subject: event.title,
+    startdt: start.toISOString(),
+    enddt: end.toISOString(),
+    body: description,
+    location: event.location || '',
+  });
+
+  return {
+    google: `https://calendar.google.com/calendar/render?${googleParams.toString()}`,
+    outlook: `https://outlook.live.com/calendar/0/deeplink/compose?${outlookParams.toString()}`,
+  };
+};
+
+const createIcsContent = (event: Event) => {
+  const start = getEventStartDate(event);
+  const end = new Date(start.getTime() + CALENDAR_DURATION_MS);
+  const timestamp = formatIcsDate(new Date());
+  const uid = `${event.id}@the-hive.app`;
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//HIVE//Community Event//EN',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${timestamp}`,
+    `DTSTART:${formatIcsDate(start)}`,
+    `DTEND:${formatIcsDate(end)}`,
+    `SUMMARY:${escapeIcsText(event.title)}`,
+    `DESCRIPTION:${escapeIcsText(getCalendarDescription(event))}`,
+    `LOCATION:${escapeIcsText(event.location || '')}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+};
+
+const downloadIcsFile = (event: Event) => {
+  const icsContent = createIcsContent(event);
+  const safeTitle = event.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'hive-event';
+  const fileName = `${safeTitle}.ics`;
+
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  const dataUrl = `data:text/calendar;charset=utf8,${encodeURIComponent(icsContent)}`;
+  Linking.openURL(dataUrl);
+};
+
+const openAddToCalendar = (event: Event) => {
+  const links = createCalendarLinks(event);
+
+  if (typeof window !== 'undefined' && window.confirm) {
+    if (window.confirm('Open Google Calendar? Press Cancel to download a calendar file instead.')) {
+      Linking.openURL(links.google);
+    } else {
+      downloadIcsFile(event);
+    }
+    return;
+  }
+
+  Alert.alert('Add to Calendar', event.title, [
+    { text: 'Google Calendar', onPress: () => Linking.openURL(links.google) },
+    { text: 'Outlook Calendar', onPress: () => Linking.openURL(links.outlook) },
+    { text: 'Apple / Other Calendar', onPress: () => downloadIcsFile(event) },
+    { text: 'Cancel', style: 'cancel' },
+  ]);
+};
+
 function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (event: Event) => void }) {
   const [expanded, setExpanded] = useState(false);
   const visibleEvents = expanded ? events : events.slice(0, INITIAL_EVENTS_SHOWN);
@@ -95,6 +216,18 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
               </Text>
             </Pressable>
           )}
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              openAddToCalendar(event);
+            }}
+            className="mt-3 self-start bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10"
+          >
+            <Text className="text-xs mr-1.5">📅</Text>
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
+              Add to Calendar
+            </Text>
+          </Pressable>
         </Pressable>
       ))}
       {hasMore && (
@@ -299,7 +432,10 @@ export default function HiveScreen() {
       await refetch();
     } catch (error) {
       console.error('Error saving event:', error);
-      Alert.alert('Error', `Failed to ${editingEvent ? 'update' : 'create'} event`);
+      Alert.alert(
+        'Event Not Saved',
+        `I could not ${editingEvent ? 'update' : 'create'} this event. If you are not an admin, Lucas may need to apply the event-permissions database migration first.`
+      );
     } finally {
       setSavingEvent(false);
     }
