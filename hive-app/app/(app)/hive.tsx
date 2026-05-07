@@ -208,10 +208,10 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
                 e.stopPropagation();
                 Linking.openURL(event.meet_link!);
               }}
-              className="mt-3 bg-gold/10 py-2 px-4 rounded-lg flex-row items-center justify-center active:bg-gold/20"
+              className="mt-3 self-start bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10"
             >
-              <Text className="text-base mr-2">📹</Text>
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">
+              <Text className="text-xs mr-1.5">📹</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
                 Join Google Meet
               </Text>
             </Pressable>
