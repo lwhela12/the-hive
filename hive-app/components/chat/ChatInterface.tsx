@@ -52,6 +52,7 @@ interface ChatInterfaceProps {
   onTitleGenerated?: (conversationId: string, title: string) => void;
   skipLoadHistory?: boolean;
   refineWishContext?: string; // Rough wish to refine with Clive
+  pendingMessage?: string; // Message to auto-send when chat opens (from floating bar)
 }
 
 const SUPABASE_FUNCTIONS_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.functions.supabase.co');
@@ -190,6 +191,7 @@ export function ChatInterface({
   onTitleGenerated,
   skipLoadHistory = false,
   refineWishContext,
+  pendingMessage,
 }: ChatInterfaceProps) {
   const { session, profile, communityId } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -812,6 +814,22 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
 
     initiateRefineWish();
   }, [refineWishContext, session?.user?.id, communityId, createConversation, handleSendMessage]);
+
+  // Handle pending message from floating bar — auto-send without refine_wish flag
+  const hasInitiatedPendingRef = useRef(false);
+  useEffect(() => {
+    const initiatePending = async () => {
+      if (!pendingMessage || hasInitiatedPendingRef.current) return;
+      if (!session?.user?.id || !communityId) return;
+      hasInitiatedPendingRef.current = true;
+      const newConversationId = await createConversation();
+      if (!newConversationId) return;
+      setTimeout(() => {
+        handleSendMessage(pendingMessage);
+      }, 100);
+    };
+    initiatePending();
+  }, [pendingMessage, session?.user?.id, communityId, createConversation, handleSendMessage]);
 
   // Reverse messages for inverted FlatList (newest first)
   const invertedMessages = useMemo(() => [...messages].reverse(), [messages]);

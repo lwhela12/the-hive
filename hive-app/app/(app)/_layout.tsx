@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Tabs, usePathname, useRouter } from 'expo-router';
-import { Text, View, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator, Pressable } from 'react-native';
+import { Text, View, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator, Pressable, TextInput } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
@@ -133,8 +134,20 @@ export default function AppLayout() {
     ? Platform.OS === 'ios' ? 92 : 86
     : 70;
 
-  // Hide floating Clive bubble when already on the Clive chat page
+  const [cliveDraft, setCliveDraft] = useState('');
+
+  // Hide floating Clive bar when already on the Clive chat page
   const onClivePage = pathname === '/' || pathname === '/index';
+
+  const submitToClive = () => {
+    const text = cliveDraft.trim();
+    setCliveDraft('');
+    if (text) {
+      router.push({ pathname: '/', params: { message: text } });
+    } else {
+      router.push('/');
+    }
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -250,37 +263,71 @@ export default function AppLayout() {
         />
       </Tabs>
 
-      {/* Floating Clive bubble — visible on every page except the Clive chat itself */}
+      {/* Floating Clive pill bar — visible on every page except the Clive chat itself */}
       {!onClivePage && (
-        <Pressable
-          onPress={() => router.push('/')}
+        <View
           style={{
             position: 'absolute',
-            bottom: tabBarHeight + 12,
-            right: 16,
-            width: 56,
-            height: 56,
-            borderRadius: 28,
+            bottom: tabBarHeight + 10,
+            left: 12,
+            right: 12,
             shadowColor: '#bd9348',
             shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.35,
-            shadowRadius: 8,
+            shadowOpacity: 0.25,
+            shadowRadius: 12,
             elevation: 8,
           }}
-          className="active:opacity-80"
         >
           <View
-            style={{ width: 56, height: 56, borderRadius: 28 }}
-            className="border-2 border-gold bg-white overflow-hidden"
+            style={{ borderRadius: 32, overflow: 'hidden' }}
+            className="flex-row items-center bg-white border border-gold/30 px-2 py-1.5"
           >
-            <Image
-              source={cliveIcon}
-              style={{ width: 52, height: 52 }}
-              contentFit="cover"
-              cachePolicy="memory-disk"
+            {/* Clive avatar — tapping opens chat */}
+            <Pressable onPress={() => router.push('/')} className="mr-2 active:opacity-70">
+              <View style={{ width: 36, height: 36, borderRadius: 18, overflow: 'hidden' }}
+                className="border border-gold/40">
+                <Image
+                  source={cliveIcon}
+                  style={{ width: 36, height: 36 }}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                />
+              </View>
+            </Pressable>
+
+            {/* Text input */}
+            <TextInput
+              value={cliveDraft}
+              onChangeText={setCliveDraft}
+              placeholder="Ask Clive..."
+              placeholderTextColor="#b5860d80"
+              returnKeyType="send"
+              onSubmitEditing={submitToClive}
+              style={{
+                flex: 1,
+                fontFamily: 'Lato_400Regular',
+                fontSize: 15,
+                color: '#2d2d2d',
+                paddingVertical: 6,
+              }}
             />
+
+            {/* Send arrow — only shows when there's text */}
+            {cliveDraft.trim().length > 0 && (
+              <Pressable onPress={submitToClive} className="ml-1 p-1.5 active:opacity-60">
+                <Ionicons name="arrow-up-circle" size={28} color="#bd9348" />
+              </Pressable>
+            )}
+
+            {/* Mic icon placeholder */}
+            <Pressable
+              onPress={() => router.push('/')}
+              className="ml-1 p-1.5 active:opacity-60"
+            >
+              <Ionicons name="mic-outline" size={22} color="#bd9348" />
+            </Pressable>
           </View>
-        </Pressable>
+        </View>
       )}
     </View>
   );
