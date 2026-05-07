@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { queryClient } from '../lib/queryClient';
 import { AuthContext } from '../lib/hooks/useAuth';
 import { usePrefetchAppData } from '../lib/hooks/usePrefetchAppData';
+import { clearLastAppPath } from '../lib/navigationState';
 import type { Profile, Community, UserRole } from '../types';
 import { useFonts } from 'expo-font';
 import {
@@ -225,6 +226,9 @@ export default function RootLayout() {
         setLoading(true); // Re-enter loading state while we fetch user data
         initializeUserData(session.user.id, session.user);
       } else {
+        if (event === 'SIGNED_OUT') {
+          clearLastAppPath();
+        }
         setProfile(null);
         setCommunity(null);
         setCommunityId(null);

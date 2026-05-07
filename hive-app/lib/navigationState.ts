@@ -32,6 +32,14 @@ export function saveLastAppPath(pathname: string | null | undefined) {
   window.localStorage.setItem(LAST_APP_PATH_KEY, pathname);
 }
 
+export function clearLastAppPath() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.removeItem(LAST_APP_PATH_KEY);
+}
+
 export function getLastAppTabName(fallback = 'hive') {
   const path = getLastAppPath(`/${fallback}`);
 

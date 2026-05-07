@@ -1,7 +1,6 @@
 import { View, ActivityIndicator } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useAuth } from '../lib/hooks/useAuth';
-import { getLastAppPath } from '../lib/navigationState';
 
 export default function Index() {
   const { session, communityId, loading } = useAuth();
@@ -24,6 +23,7 @@ export default function Index() {
     return <Redirect href="/join" />;
   }
 
-  // Has community -> go back to the last app tab this browser used.
-  return <Redirect href={getLastAppPath() as any} />;
+  // Fresh app entry after login starts on HIVE Home.
+  // In-session navigation is still preserved by the app tabs while the user switches apps.
+  return <Redirect href="/hive" />;
 }

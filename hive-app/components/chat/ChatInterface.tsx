@@ -109,10 +109,10 @@ const WelcomeState = memo(function WelcomeState({
         <Image
           source={cliveIcon}
           style={{
-            width: isNarrow ? 64 : 72,
-            height: isNarrow ? 64 : 72,
-            borderRadius: isNarrow ? 18 : 20,
-            marginBottom: 18,
+            width: isNarrow ? 78 : 88,
+            height: isNarrow ? 78 : 88,
+            borderRadius: isNarrow ? 22 : 24,
+            marginBottom: 20,
           }}
           contentFit="cover"
           cachePolicy="memory-disk"

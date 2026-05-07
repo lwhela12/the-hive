@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useChatRooms, RoomWithData } from '../../lib/hooks/useChatRooms';
@@ -13,6 +14,7 @@ import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import type { Profile } from '../../types';
 
 export default function MessagesScreen() {
+  const { roomId } = useLocalSearchParams<{ roomId?: string }>();
   const { profile, communityId } = useAuth();
   const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
@@ -23,6 +25,7 @@ export default function MessagesScreen() {
   const [selectedRoom, setSelectedRoom] = useState<RoomWithData | null>(null);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
   const hasPrefetchedRef = useRef(false);
+  const selectedRoomStorageKey = communityId ? `the-hive:last-chat-room:${communityId}` : null;
 
   // Use the optimized chat rooms hook (React Query with caching)
   const { rooms, loading, refetch, getOrCreateDMRoom, getOrCreateGroupDMRoom, markRoomAsRead } = useChatRooms(
@@ -45,6 +48,29 @@ export default function MessagesScreen() {
     }
   }, [rooms, queryClient]);
 
+  useEffect(() => {
+    if (selectedRoom || rooms.length === 0) return;
+
+    const savedRoomId = selectedRoomStorageKey && typeof window !== 'undefined'
+      ? window.localStorage.getItem(selectedRoomStorageKey)
+      : null;
+    const roomToRestore = rooms.find((room) => room.id === (roomId || savedRoomId));
+
+    if (roomToRestore) {
+      setSelectedRoom(roomToRestore);
+      markRoomAsRead(roomToRestore.id);
+    }
+  }, [markRoomAsRead, roomId, rooms, selectedRoom, selectedRoomStorageKey]);
+
+  const openRoom = useCallback((room: RoomWithData) => {
+    markRoomAsRead(room.id);
+    setSelectedRoom(room);
+
+    if (selectedRoomStorageKey && typeof window !== 'undefined') {
+      window.localStorage.setItem(selectedRoomStorageKey, room.id);
+    }
+  }, [markRoomAsRead, selectedRoomStorageKey]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await refetch();
@@ -57,7 +83,7 @@ export default function MessagesScreen() {
     try {
       const roomWithData = await getOrCreateDMRoom(member.id);
       if (roomWithData) {
-        setSelectedRoom(roomWithData);
+        openRoom(roomWithData);
       }
     } catch (error) {
       console.error('Error creating DM:', error);
@@ -71,7 +97,7 @@ export default function MessagesScreen() {
     try {
       const roomWithData = await getOrCreateGroupDMRoom(members.map((m) => m.id));
       if (roomWithData) {
-        setSelectedRoom(roomWithData);
+        openRoom(roomWithData);
       }
     } catch (error) {
       console.error('Error creating group DM:', error);
@@ -88,6 +114,9 @@ export default function MessagesScreen() {
           // Mark room as read when leaving
           markRoomAsRead(selectedRoom.id);
           setSelectedRoom(null);
+          if (selectedRoomStorageKey && typeof window !== 'undefined') {
+            window.localStorage.removeItem(selectedRoomStorageKey);
+          }
         }}
       />
     );
@@ -141,10 +170,7 @@ export default function MessagesScreen() {
           <ChatRoomItem
             room={item}
             currentUserId={profile?.id}
-            onPress={() => {
-              markRoomAsRead(item.id);
-              setSelectedRoom(item);
-            }}
+            onPress={() => openRoom(item)}
           />
         )}
         refreshControl={

@@ -12,6 +12,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
+import { clearLastAppPath } from '../../lib/navigationState';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { ProfileHeaderSkeleton, ProfileInfoSkeleton, ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
@@ -270,6 +271,7 @@ export default function ProfileScreen() {
   };
 
   const performSignOut = async () => {
+    clearLastAppPath();
     const { error } = await supabase.auth.signOut({ scope: 'local' });
     if (error) {
       console.error('Sign out error:', error);
