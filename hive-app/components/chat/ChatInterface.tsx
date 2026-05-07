@@ -4,6 +4,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Pressable,
+  Text,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -71,6 +75,67 @@ const createFallbackTitle = (text: string): string => {
   const title = words.join(' ').replace(/[.,!?;:]+$/, '');
   return title.length > 52 ? `${title.slice(0, 49).trim()}...` : title;
 };
+
+const STARTER_PROMPTS = [
+  'Help me write a community post',
+  'Turn this idea into a wish',
+  'Summarize my notes',
+  'Plan a HIVE meetup',
+];
+
+const getFirstName = (name?: string | null) => {
+  const firstName = name?.trim().split(/\s+/)[0];
+  return firstName || 'there';
+};
+
+const WelcomeState = memo(function WelcomeState({
+  name,
+  isLoading,
+  onSelectPrompt,
+}: {
+  name?: string | null;
+  isLoading: boolean;
+  onSelectPrompt: (prompt: string) => void;
+}) {
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 768;
+
+  return (
+    <View className="flex-1 items-center justify-center px-5">
+      <View className="w-full max-w-3xl items-center">
+        <Text
+          style={{ fontFamily: 'LibreBaskerville_700Bold' }}
+          className={`${isNarrow ? 'text-3xl' : 'text-4xl'} text-charcoal text-center mb-4`}
+        >
+          Hello {getFirstName(name)}, how can I help?
+        </Text>
+        <Text
+          style={{ fontFamily: 'Lato_400Regular' }}
+          className="text-base text-gray-500 text-center mb-7"
+        >
+          Ask Clive for help thinking, writing, organizing, or turning a loose idea into a HIVE action.
+        </Text>
+        <View className="flex-row flex-wrap justify-center gap-3">
+          {STARTER_PROMPTS.map((prompt) => (
+            <Pressable
+              key={prompt}
+              onPress={() => onSelectPrompt(prompt)}
+              disabled={isLoading}
+              className="bg-cream border border-gold/20 rounded-full px-4 py-3 active:opacity-80"
+            >
+              <Text
+                style={{ fontFamily: 'Lato_700Bold' }}
+                className="text-charcoal text-sm"
+              >
+                {prompt}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+});
 
 // Memoized footer component that handles both loading and streaming states
 const ListFooter = memo(function ListFooter({
@@ -776,6 +841,11 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
 
   // Memoized key extractor
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
+  const showWelcomeState =
+    mode === 'default' &&
+    messages.length === 0 &&
+    !streamingContent &&
+    !refineWishContext;
 
   return (
     <KeyboardAvoidingView
@@ -783,25 +853,37 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
       className="flex-1"
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <FlatList
-        ref={flatListRef}
-        data={invertedMessages}
-        inverted
-        extraData={[isLoading, streamingContent, messages.length]}
-        keyExtractor={keyExtractor}
-        renderItem={renderMessage}
-        contentContainerClassName="p-4 pb-2"
-        ListHeaderComponent={
-          <ListFooter isLoading={isLoading} streamingContent={streamingContent} />
-        }
-        // Performance optimizations
-        removeClippedSubviews={Platform.OS !== 'web'}
-        maxToRenderPerBatch={10}
-        windowSize={10}
-        initialNumToRender={20}
-      />
+      {showWelcomeState ? (
+        <WelcomeState
+          name={profile?.name}
+          isLoading={isLoading}
+          onSelectPrompt={handleSendMessage}
+        />
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={invertedMessages}
+          inverted
+          extraData={[isLoading, streamingContent, messages.length]}
+          keyExtractor={keyExtractor}
+          renderItem={renderMessage}
+          contentContainerClassName="p-4 pb-2"
+          ListHeaderComponent={
+            <ListFooter isLoading={isLoading} streamingContent={streamingContent} />
+          }
+          // Performance optimizations
+          removeClippedSubviews={Platform.OS !== 'web'}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={20}
+        />
+      )}
 
-      <ChatInput onSend={handleSendMessage} isLoading={isLoading} />
+      <ChatInput
+        onSend={handleSendMessage}
+        isLoading={isLoading}
+        placeholder="Message Clive..."
+      />
     </KeyboardAvoidingView>
   );
 }

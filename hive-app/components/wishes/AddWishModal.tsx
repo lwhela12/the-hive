@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
+import type { Wish } from '../../types';
 
 interface AddWishModalProps {
   visible: boolean;
@@ -20,7 +21,8 @@ interface AddWishModalProps {
   communityId: string | null;
   userId: string | undefined;
   onSave: () => void;
-  onRefineWithClive: (roughWish: string) => void;
+  onRefineWithClive?: (roughWish: string) => void;
+  existingWish?: Wish | null;
 }
 
 export function AddWishModal({
@@ -30,18 +32,22 @@ export function AddWishModal({
   userId,
   onSave,
   onRefineWithClive,
+  existingWish,
 }: AddWishModalProps) {
   const [wishText, setWishText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const isEditMode = !!existingWish;
 
-  // Reset form when modal closes
   useEffect(() => {
-    if (!visible) {
+    if (visible && existingWish) {
+      setWishText(existingWish.description);
+      setError('');
+    } else if (!visible) {
       setWishText('');
       setError('');
     }
-  }, [visible]);
+  }, [visible, existingWish]);
 
   const handleSave = async (makePublic: boolean) => {
     if (!userId || !communityId || !wishText.trim()) return;
@@ -50,29 +56,43 @@ export function AddWishModal({
     setError('');
 
     try {
-      const { error: insertError } = await supabase.from('wishes').insert({
-        user_id: userId,
-        community_id: communityId,
-        description: wishText.trim(),
-        raw_input: wishText.trim(),
-        status: makePublic ? 'public' : 'private',
-        is_active: makePublic, // Only active if public
-        extracted_from: 'manual',
-      });
+      if (existingWish) {
+        const { error: updateError } = await supabase
+          .from('wishes')
+          .update({
+            description: wishText.trim(),
+            raw_input: wishText.trim(),
+          })
+          .eq('id', existingWish.id)
+          .eq('user_id', userId)
+          .eq('community_id', communityId);
 
-      if (insertError) throw insertError;
+        if (updateError) throw updateError;
+      } else {
+        const { error: insertError } = await supabase.from('wishes').insert({
+          user_id: userId,
+          community_id: communityId,
+          description: wishText.trim(),
+          raw_input: wishText.trim(),
+          status: makePublic ? 'public' : 'private',
+          is_active: makePublic, // Only active if public
+          extracted_from: 'manual',
+        });
+
+        if (insertError) throw insertError;
+      }
 
       onSave();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save wish');
+      setError(err instanceof Error ? err.message : (isEditMode ? 'Failed to update wish' : 'Failed to save wish'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleRefine = () => {
-    if (!wishText.trim()) return;
+    if (!wishText.trim() || !onRefineWithClive) return;
     onRefineWithClive(wishText.trim());
   };
 
@@ -106,7 +126,7 @@ export function AddWishModal({
                   style={{ fontFamily: 'Lato_700Bold' }}
                   className="text-xl text-charcoal"
                 >
-                  Add a Wish
+                  {isEditMode ? 'Edit Wish' : 'Add a Wish'}
                 </Text>
                 <View style={{ width: 50 }} />
               </View>
@@ -176,48 +196,61 @@ export function AddWishModal({
               ) : null}
 
               {/* Action Buttons */}
-              <View className="flex-row gap-3 mb-4">
-                <View className="flex-1">
+              {isEditMode ? (
+                <View className="mb-4">
                   <Button
-                    title="Save as Private"
-                    variant="secondary"
-                    onPress={() => handleSave(false)}
+                    title="Save Changes"
+                    onPress={() => handleSave(existingWish?.status === 'public')}
                     loading={saving}
                     disabled={saving || !canSubmit}
                   />
                 </View>
-                <View className="flex-1">
-                  <Button
-                    title="Make Public"
-                    onPress={() => handleSave(true)}
-                    loading={saving}
-                    disabled={saving || !canSubmit}
-                  />
+              ) : (
+                <View className="flex-row gap-3 mb-4">
+                  <View className="flex-1">
+                    <Button
+                      title="Save as Private"
+                      variant="secondary"
+                      onPress={() => handleSave(false)}
+                      loading={saving}
+                      disabled={saving || !canSubmit}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Button
+                      title="Make Public"
+                      onPress={() => handleSave(true)}
+                      loading={saving}
+                      disabled={saving || !canSubmit}
+                    />
+                  </View>
                 </View>
-              </View>
+              )}
 
               {/* Refine with Clive */}
-              <Pressable
-                onPress={handleRefine}
-                disabled={!canSubmit}
-                className={`flex-row items-center justify-center py-3 rounded-xl ${
-                  canSubmit ? 'active:bg-gold/10' : 'opacity-50'
-                }`}
-              >
-                <Ionicons
-                  name="sparkles"
-                  size={18}
-                  color={canSubmit ? '#E8B923' : '#9ca3af'}
-                />
-                <Text
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  className={`ml-2 text-base ${
-                    canSubmit ? 'text-gold' : 'text-charcoal/40'
+              {!isEditMode && onRefineWithClive && (
+                <Pressable
+                  onPress={handleRefine}
+                  disabled={!canSubmit}
+                  className={`flex-row items-center justify-center py-3 rounded-xl ${
+                    canSubmit ? 'active:bg-gold/10' : 'opacity-50'
                   }`}
                 >
-                  Refine with Clive
-                </Text>
-              </Pressable>
+                  <Ionicons
+                    name="sparkles"
+                    size={18}
+                    color={canSubmit ? '#E8B923' : '#9ca3af'}
+                  />
+                  <Text
+                    style={{ fontFamily: 'Lato_700Bold' }}
+                    className={`ml-2 text-base ${
+                      canSubmit ? 'text-gold' : 'text-charcoal/40'
+                    }`}
+                  >
+                    Refine with Clive
+                  </Text>
+                </Pressable>
+              )}
             </View>
           </ScrollView>
         </KeyboardAvoidingView>

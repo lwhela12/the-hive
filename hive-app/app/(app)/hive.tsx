@@ -9,6 +9,7 @@ import { useWishes } from '../../lib/hooks/useWishes';
 import { QueenBeeCard } from '../../components/hive/QueenBeeCard';
 import { WishCard } from '../../components/hive/WishCard';
 import { WishDetail } from '../../components/hive/WishDetail';
+import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { HoneyPotDisplay } from '../../components/hive/HoneyPotDisplay';
 import {
   QueenBeeSealsSkeleton,
@@ -126,6 +127,7 @@ export default function HiveScreen() {
   const fontSize = width < 500 ? 11 : 13;
   const [refreshing, setRefreshing] = useState(false);
   const [selectedWish, setSelectedWish] = useState<WishWithGranters | null>(null);
+  const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [wishTab, setWishTab] = useState<WishTab>('open');
   const [showHighlightsModal, setShowHighlightsModal] = useState(false);
   const [newHighlight, setNewHighlight] = useState('');
@@ -352,6 +354,49 @@ export default function HiveScreen() {
       await refetch();
     }
     return result;
+  };
+
+  const handleEditWishSave = async () => {
+    await refetch();
+    setEditingWish(null);
+    setSelectedWish(null);
+  };
+
+  const handleDeleteWish = (wish: Wish) => {
+    if (!profile || !communityId || wish.user_id !== profile.id) return;
+
+    const deleteWish = async () => {
+      const { error } = await supabase
+        .from('wishes')
+        .delete()
+        .eq('id', wish.id)
+        .eq('user_id', profile.id)
+        .eq('community_id', communityId);
+
+      if (error) {
+        Alert.alert('Error', 'Failed to delete wish. Please try again.');
+        return;
+      }
+
+      await refetch();
+      if (selectedWish?.id === wish.id) {
+        setSelectedWish(null);
+      }
+    };
+
+    const message = `Delete this wish?\n\n"${wish.description}"`;
+
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) {
+        deleteWish();
+      }
+      return;
+    }
+
+    Alert.alert('Delete Wish', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: deleteWish },
+    ]);
   };
 
   // Show wish detail fullscreen
@@ -646,6 +691,10 @@ export default function HiveScreen() {
                         key={wish.id}
                         wish={wish}
                         onPress={() => setSelectedWish(wish)}
+                        canEdit={wish.user_id === profile?.id}
+                        onEdit={() => setEditingWish(wish)}
+                        canDelete={wish.user_id === profile?.id}
+                        onDelete={() => handleDeleteWish(wish)}
                       />
                     ))
                   )}
@@ -670,6 +719,10 @@ export default function HiveScreen() {
                         key={wish.id}
                         wish={wish}
                         onPress={() => setSelectedWish(wish)}
+                        canEdit={wish.user_id === profile?.id}
+                        onEdit={() => setEditingWish(wish)}
+                        canDelete={wish.user_id === profile?.id}
+                        onDelete={() => handleDeleteWish(wish)}
                       />
                     ))
                   )}
@@ -909,6 +962,15 @@ export default function HiveScreen() {
           </View>
         </View>
       </Modal>
+
+      <AddWishModal
+        visible={!!editingWish}
+        onClose={() => setEditingWish(null)}
+        communityId={communityId}
+        userId={profile?.id}
+        onSave={handleEditWishSave}
+        existingWish={editingWish}
+      />
     </SafeAreaView>
   );
 }

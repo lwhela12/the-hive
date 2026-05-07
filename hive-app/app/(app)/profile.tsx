@@ -55,6 +55,7 @@ export default function ProfileScreen() {
   const [wishToGrant, setWishToGrant] = useState<(Wish & { user: Profile }) | null>(null);
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
+  const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
 
@@ -353,6 +354,45 @@ export default function ProfileScreen() {
     if (!profile) return;
     // Create wish with user profile for the modal
     setWishToGrant({ ...wish, user: profile });
+  };
+
+  const handleWishSaved = async () => {
+    await fetchData();
+    setEditingWish(null);
+  };
+
+  const handleDeleteWish = (wish: Wish) => {
+    if (!profile || !communityId || wish.user_id !== profile.id) return;
+
+    const deleteWish = async () => {
+      const { error } = await supabase
+        .from('wishes')
+        .delete()
+        .eq('id', wish.id)
+        .eq('user_id', profile.id)
+        .eq('community_id', communityId);
+
+      if (error) {
+        Alert.alert('Error', 'Failed to delete wish. Please try again.');
+        return;
+      }
+
+      await fetchData();
+    };
+
+    const message = `Delete this wish?\n\n"${wish.description}"`;
+
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) {
+        deleteWish();
+      }
+      return;
+    }
+
+    Alert.alert('Delete Wish', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: deleteWish },
+    ]);
   };
 
   const handleRefineWithClive = (roughWish: string) => {
@@ -713,26 +753,55 @@ export default function ProfileScreen() {
                         {wish.status === 'fulfilled' ? 'Granted' : wish.status}
                       </Text>
                     </View>
-                    {wish.status === 'private' && (
-                      <Pressable
-                        onPress={() => handlePublishWish(wish)}
-                        className="bg-gold-light px-3 py-1 rounded-full active:bg-gold/30"
-                      >
-                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                          Share with Hive
-                        </Text>
-                      </Pressable>
-                    )}
-                    {wish.status === 'public' && (
-                      <Pressable
-                        onPress={() => openGrantModal(wish)}
-                        className="bg-gold px-3 py-1 rounded-full active:bg-gold/80"
-                      >
-                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-xs">
-                          Mark as Granted
-                        </Text>
-                      </Pressable>
-                    )}
+                    <View className="flex-row items-center">
+                      {wish.status !== 'fulfilled' && (
+                        <>
+                          <Pressable
+                            onPress={() => setEditingWish(wish)}
+                            className="w-8 h-8 rounded-full items-center justify-center active:bg-cream mr-1"
+                            hitSlop={8}
+                          >
+                            <Ionicons name="pencil-outline" size={17} color="#4A4A4A" />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleDeleteWish(wish)}
+                            className="w-8 h-8 rounded-full items-center justify-center active:bg-red-50 mr-1"
+                            hitSlop={8}
+                          >
+                            <Ionicons name="trash-outline" size={17} color="#ef4444" />
+                          </Pressable>
+                        </>
+                      )}
+                      {wish.status === 'fulfilled' && (
+                        <Pressable
+                          onPress={() => handleDeleteWish(wish)}
+                          className="w-8 h-8 rounded-full items-center justify-center active:bg-red-50 mr-1"
+                          hitSlop={8}
+                        >
+                          <Ionicons name="trash-outline" size={17} color="#ef4444" />
+                        </Pressable>
+                      )}
+                      {wish.status === 'private' && (
+                        <Pressable
+                          onPress={() => handlePublishWish(wish)}
+                          className="bg-gold-light px-3 py-1 rounded-full active:bg-gold/30"
+                        >
+                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
+                            Share with Hive
+                          </Text>
+                        </Pressable>
+                      )}
+                      {wish.status === 'public' && (
+                        <Pressable
+                          onPress={() => openGrantModal(wish)}
+                          className="bg-gold px-3 py-1 rounded-full active:bg-gold/80"
+                        >
+                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-xs">
+                            Mark as Granted
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
                   </View>
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{wish.description}</Text>
                   {wish.status === 'fulfilled' && wish.thank_you_message && (
@@ -832,8 +901,16 @@ export default function ProfileScreen() {
         onClose={() => setAddWishModalVisible(false)}
         communityId={communityId}
         userId={profile?.id}
-        onSave={fetchData}
+        onSave={handleWishSaved}
         onRefineWithClive={handleRefineWithClive}
+      />
+      <AddWishModal
+        visible={!!editingWish}
+        onClose={() => setEditingWish(null)}
+        communityId={communityId}
+        userId={profile?.id}
+        onSave={handleWishSaved}
+        existingWish={editingWish}
       />
     </SafeAreaView>
   );

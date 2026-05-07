@@ -13,12 +13,16 @@ interface WishCardProps {
   wish: WishWithGranters;
   onHelp?: () => void;
   onPress?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
-export function WishCard({ wish, onHelp, onPress }: WishCardProps) {
+export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, canEdit, canDelete }: WishCardProps) {
   const isGranted = wish.status === 'fulfilled';
   const granters = wish.granters || [];
-  const displayGranters = granters.slice(0, 3);
+  const displayGranters = granters.filter((g) => g.granter).slice(0, 3);
   const extraGranters = granters.length - 3;
 
   return (
@@ -32,18 +36,48 @@ export function WishCard({ wish, onHelp, onPress }: WishCardProps) {
         <Avatar name={wish.user.name} url={wish.user.avatar_url} size={44} />
         <View className="flex-1 ml-3">
           <View className="flex-row items-center">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
-              {wish.user.name}
-            </Text>
-            {isGranted && (
-              <View className="ml-2 bg-gold px-2 py-0.5 rounded-full flex-row items-center">
-                <Ionicons name="checkmark-circle" size={10} color="#fff" />
-                <Text
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  className="text-white text-xs ml-1"
-                >
-                  Granted
-                </Text>
+            <View className="flex-1 flex-row items-center">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
+                {wish.user.name}
+              </Text>
+              {isGranted && (
+                <View className="ml-2 bg-gold px-2 py-0.5 rounded-full flex-row items-center">
+                  <Ionicons name="checkmark-circle" size={10} color="#fff" />
+                  <Text
+                    style={{ fontFamily: 'Lato_700Bold' }}
+                    className="text-white text-xs ml-1"
+                  >
+                    Granted
+                  </Text>
+                </View>
+              )}
+            </View>
+            {((!isGranted && canEdit) || canDelete) && (
+              <View className="flex-row items-center ml-2">
+                {canEdit && onEdit && (
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      onEdit();
+                    }}
+                    className="w-8 h-8 rounded-full items-center justify-center active:bg-cream"
+                    hitSlop={8}
+                  >
+                    <Ionicons name="pencil-outline" size={17} color="#4A4A4A" />
+                  </Pressable>
+                )}
+                {canDelete && onDelete && (
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      onDelete();
+                    }}
+                    className="w-8 h-8 rounded-full items-center justify-center active:bg-red-50"
+                    hitSlop={8}
+                  >
+                    <Ionicons name="trash-outline" size={17} color="#ef4444" />
+                  </Pressable>
+                )}
               </View>
             )}
           </View>
@@ -74,8 +108,8 @@ export function WishCard({ wish, onHelp, onPress }: WishCardProps) {
                       style={{ marginLeft: index > 0 ? -8 : 0, zIndex: 10 - index }}
                     >
                       <Avatar
-                        name={g.granter.name}
-                        url={g.granter.avatar_url}
+                        name={g.granter?.name || 'Unknown'}
+                        url={g.granter?.avatar_url}
                         size={24}
                       />
                     </View>

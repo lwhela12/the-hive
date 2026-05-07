@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import { Text, View, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
@@ -19,7 +19,7 @@ function TabIcon({
   label,
   focused,
   isCircular,
-  badge,
+  badge = 0,
   compact,
 }: {
   icon?: string;
@@ -36,14 +36,26 @@ function TabIcon({
     : label;
   const iconSize = compact ? 22 : 28;
   const iconRadius = isCircular ? iconSize / 2 : 6;
+  const tooltipProps = Platform.OS === 'web'
+    ? ({ title: label } as any)
+    : {};
 
   return (
-    <View className={`items-center justify-center ${compact ? 'pt-1' : 'pt-2'}`}>
+    <View
+      {...tooltipProps}
+      accessibilityLabel={label}
+      className={`items-center justify-center ${compact ? 'pt-1' : 'pt-2'}`}
+    >
       <View>
         {customIcon ? (
           customIcon
         ) : imageSource ? (
-          <Image source={imageSource} style={{ width: iconSize, height: iconSize, borderRadius: iconRadius }} contentFit="cover" cachePolicy="memory-disk" />
+          <Image
+            source={imageSource}
+            style={{ width: iconSize, height: iconSize, borderRadius: iconRadius }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
         ) : (
           <Text className={compact ? 'text-xl' : 'text-2xl'}>{icon}</Text>
         )}
@@ -145,6 +157,8 @@ export default function AppLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          title: 'Clive',
+          tabBarAccessibilityLabel: 'Clive',
           tabBarIcon: ({ focused }) => (
             <TabIcon imageSource={cliveIcon} label="Clive" focused={focused} compact={useMobileLayout} />
           ),
@@ -153,6 +167,8 @@ export default function AppLayout() {
       <Tabs.Screen
         name="hive"
         options={{
+          title: 'HIVE Home',
+          tabBarAccessibilityLabel: 'HIVE Home',
           tabBarIcon: ({ focused }) => (
             <TabIcon imageSource={beeIcon} label="HIVE Home" focused={focused} compact={useMobileLayout} />
           ),
@@ -161,6 +177,8 @@ export default function AppLayout() {
       <Tabs.Screen
         name="board"
         options={{
+          title: 'Message Board',
+          tabBarAccessibilityLabel: 'Message Board',
           tabBarIcon: ({ focused }) => (
             <TabIcon icon="📋" label="Message Board" focused={focused} compact={useMobileLayout} />
           ),
@@ -169,6 +187,8 @@ export default function AppLayout() {
       <Tabs.Screen
         name="messages"
         options={{
+          title: 'Chat',
+          tabBarAccessibilityLabel: 'Chat',
           tabBarIcon: ({ focused }) => (
             <TabIcon icon="💬" label="Chat" focused={focused} badge={totalUnreadDMs} compact={useMobileLayout} />
           ),
@@ -177,6 +197,8 @@ export default function AppLayout() {
       <Tabs.Screen
         name="meetings"
         options={{
+          title: 'Meetings',
+          tabBarAccessibilityLabel: 'Meetings',
           tabBarIcon: ({ focused }) => (
             <TabIcon customIcon={<HexagonIcon size={useMobileLayout ? 22 : 26} />} label="Meetings" focused={focused} compact={useMobileLayout} />
           ),
@@ -185,6 +207,8 @@ export default function AppLayout() {
       <Tabs.Screen
         name="profile"
         options={{
+          title: 'Profile',
+          tabBarAccessibilityLabel: 'Profile',
           tabBarIcon: ({ focused }) => (
             <TabIcon
               icon="👤"
@@ -200,7 +224,9 @@ export default function AppLayout() {
       <Tabs.Screen
         name="admin"
         options={{
+          title: 'Admin',
           href: showAdminTab ? '/admin' : undefined,
+          tabBarAccessibilityLabel: 'Admin',
           tabBarIcon: ({ focused }) => (
             <TabIcon icon="⚙️" label="Admin" focused={focused} compact={useMobileLayout} />
           ),

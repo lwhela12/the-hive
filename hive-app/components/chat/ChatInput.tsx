@@ -6,9 +6,14 @@ import { SelectedImage, pickMultipleImages } from '../../lib/imagePicker';
 interface ChatInputProps {
   onSend: (message: string, images?: SelectedImage[]) => void;
   isLoading: boolean;
+  placeholder?: string;
 }
 
-export const ChatInput = memo(function ChatInput({ onSend, isLoading }: ChatInputProps) {
+export const ChatInput = memo(function ChatInput({
+  onSend,
+  isLoading,
+  placeholder = 'Message...',
+}: ChatInputProps) {
   const [inputText, setInputText] = useState('');
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
 
@@ -65,14 +70,16 @@ export const ChatInput = memo(function ChatInput({ onSend, isLoading }: ChatInpu
       )}
 
       <View className="flex-row items-end bg-cream rounded-2xl px-3 py-2">
-        {/* Photo button */}
+        {/* Attachment button */}
         <Pressable
           onPress={handlePickImages}
           disabled={selectedImages.length >= 5 || isLoading}
           className="p-1 mr-1"
+          accessibilityRole="button"
+          accessibilityLabel="Add photos"
         >
           <Ionicons
-            name="image-outline"
+            name="attach-outline"
             size={22}
             color={selectedImages.length >= 5 || isLoading ? '#ccc' : '#666'}
           />
@@ -86,7 +93,7 @@ export const ChatInput = memo(function ChatInput({ onSend, isLoading }: ChatInpu
         <TextInput
           value={inputText}
           onChangeText={setInputText}
-          placeholder="Message..."
+          placeholder={placeholder}
           placeholderTextColor="#9CA3AF"
           selectionColor="#313130"
           multiline
