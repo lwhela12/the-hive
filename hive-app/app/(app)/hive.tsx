@@ -1,26 +1,21 @@
 import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert } from 'react-native';
-import Svg, { Path, Text as SvgText, TextPath, Defs } from 'react-native-svg';
+import { useRouter } from 'expo-router';
+import Svg, { Polygon, Text as SvgText } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
-import { QueenBeeCard } from '../../components/hive/QueenBeeCard';
 import { WishCard } from '../../components/hive/WishCard';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
-import { HoneyPotDisplay } from '../../components/hive/HoneyPotDisplay';
 import {
-  QueenBeeSealsSkeleton,
-  QueenBeeCardSkeleton,
   EventsListSkeleton,
-  HoneyPotSkeleton,
   WishSectionSkeleton,
 } from '../../components/hive/skeletons';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
-import { Avatar } from '../../components/ui/Avatar';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import type { Profile, Wish, WishGranter, MonthlyHighlight, Event } from '../../types';
@@ -244,27 +239,52 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
   );
 }
 
+const PLACEHOLDER_ACTIVITY = [
+  { emoji: '🌟', text: 'Sarah posted a new wish: help planning a veggie garden', time: '2h ago', read: false },
+  { emoji: '✅', text: "Maya's wish for recipe ideas was granted by Charlee", time: '5h ago', read: false },
+  { emoji: '📅', text: 'New event added: May Book Club — May 18 at 7pm', time: '1d ago', read: true },
+  { emoji: '👋', text: 'Leila shared an introduction on the Message Board', time: '2d ago', read: true },
+  { emoji: '🍯', text: 'Honey Pot updated by Treasurer', time: '3d ago', read: true },
+];
+
+function HexShortcut({ emoji, label, sublabel, onPress, color = '#fdf3dc' }: {
+  emoji: string;
+  label: string;
+  sublabel?: string;
+  onPress: () => void;
+  color?: string;
+}) {
+  return (
+    <Pressable onPress={onPress} style={{ alignItems: 'center', flex: 1 }}>
+      <Svg width={72} height={64} viewBox="0 0 72 64">
+        <Polygon
+          points="36,2 70,20 70,44 36,62 2,44 2,20"
+          fill={color}
+          stroke="rgba(222,193,129,0.5)"
+          strokeWidth={1.5}
+        />
+        <SvgText x="36" y="38" textAnchor="middle" fontSize={24}>{emoji}</SvgText>
+      </Svg>
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#2d2d2d', marginTop: 4, textAlign: 'center' }}>{label}</Text>
+      {sublabel ? (
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#bd9348', marginTop: 1, textAlign: 'center' }}>{sublabel}</Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
 export default function HiveScreen() {
   const { profile, communityId, communityRole } = useAuth();
+  const router = useRouter();
   const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const useMobileLayout = width < 768;
 
-  // Responsive seal sizing - smaller on mobile
-  const sealSize = width < 500 ? Math.floor((width - 80) / 3) : 160;
-  const arcStart = Math.floor(sealSize * 0.19);
-  const arcEnd = sealSize - arcStart;
-  const arcY = Math.floor(sealSize * 0.5);
-  const arcRadius = Math.floor(sealSize * 0.31);
-  const fontSize = width < 500 ? 11 : 13;
   const [refreshing, setRefreshing] = useState(false);
   const [selectedWish, setSelectedWish] = useState<WishWithGranters | null>(null);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [wishTab, setWishTab] = useState<WishTab>('open');
-  const [showHighlightsModal, setShowHighlightsModal] = useState(false);
-  const [newHighlight, setNewHighlight] = useState('');
-  const [savingHighlight, setSavingHighlight] = useState(false);
 
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
@@ -304,13 +324,10 @@ export default function HiveScreen() {
 
   // Use the optimized hive data hook (React Query with caching)
   const {
-    queenBees,
-    fallbackAdmin,
     publicWishes,
     grantedWishes,
     upcomingEvents,
     honeyPotBalance,
-    nextMeeting,
     isLoading,
     loading,
     refetch,
@@ -323,51 +340,6 @@ export default function HiveScreen() {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
-  };
-
-  const handleAddHighlight = async () => {
-    if (!newHighlight.trim() || !queenBees.currentMonth || !communityId) return;
-
-    setSavingHighlight(true);
-    try {
-      const currentHighlights = queenBees.currentMonth.highlights || [];
-      const maxOrder = currentHighlights.length > 0
-        ? Math.max(...currentHighlights.map(h => h.display_order))
-        : 0;
-
-      const { error } = await supabase.from('monthly_highlights').insert({
-        queen_bee_id: queenBees.currentMonth.id,
-        community_id: communityId,
-        highlight: newHighlight.trim(),
-        display_order: maxOrder + 1,
-        created_by: profile?.id,
-      });
-
-      if (error) throw error;
-
-      setNewHighlight('');
-      await refetch();
-    } catch (error) {
-      console.error('Error adding highlight:', error);
-      Alert.alert('Error', 'Failed to add highlight');
-    } finally {
-      setSavingHighlight(false);
-    }
-  };
-
-  const handleDeleteHighlight = async (highlightId: string) => {
-    try {
-      const { error } = await supabase
-        .from('monthly_highlights')
-        .delete()
-        .eq('id', highlightId);
-
-      if (error) throw error;
-      await refetch();
-    } catch (error) {
-      console.error('Error deleting highlight:', error);
-      Alert.alert('Error', 'Failed to delete highlight');
-    }
   };
 
   // Helper to format ISO date to MM-DD-YYYY for display in input
@@ -667,75 +639,147 @@ export default function HiveScreen() {
         {/* Main Content */}
         <View className="p-4">
 
-        {/* Queen Bee Section */}
-        {loading.queenBees ? (
-          <View className="mb-6">
-            <View className="flex-row items-center justify-between mb-2">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
-                This Month's Queen Bee 👑
-              </Text>
-            </View>
-            <QueenBeeCardSkeleton />
+        {/* Daily Question Placeholder */}
+        <Pressable
+          style={{
+            marginBottom: 16,
+            backgroundColor: '#fffbf0',
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: 'rgba(222,193,129,0.35)',
+            padding: 16,
+          }}
+        >
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', marginBottom: 6, letterSpacing: 0.5 }}>
+            ✨ DAILY QUESTION
+          </Text>
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 22 }}>
+            What's one thing you've been putting off that could change everything if you just started?
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 10 }}>
+            Tap to share your answer with the Hive 🐝
+          </Text>
+        </Pressable>
+
+        {/* Activity Feed */}
+        <View style={{ marginBottom: 16 }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 10 }}>
+            Activity
+          </Text>
+          <View style={{
+            backgroundColor: 'white',
+            borderRadius: 16,
+            shadowColor: '#000',
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 2,
+            overflow: 'hidden',
+            maxHeight: 260,
+          }}>
+            <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+              {PLACEHOLDER_ACTIVITY.map((item, i) => (
+                <View
+                  key={i}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
+                    padding: 14,
+                    borderBottomWidth: i < PLACEHOLDER_ACTIVITY.length - 1 ? 1 : 0,
+                    borderBottomColor: '#f3f0ea',
+                    backgroundColor: item.read ? 'white' : '#fffef5',
+                  }}
+                >
+                  <View style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: item.read ? '#f5f3ee' : '#fdf3dc',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                    flexShrink: 0,
+                  }}>
+                    <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: item.read ? 'Lato_400Regular' : 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', lineHeight: 18 }}>
+                      {item.text}
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
+                      {item.time}
+                    </Text>
+                  </View>
+                  {!item.read && (
+                    <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#bd9348', marginTop: 5, marginLeft: 6, flexShrink: 0 }} />
+                  )}
+                </View>
+              ))}
+            </ScrollView>
           </View>
-        ) : queenBees.currentMonth ? (
-          <View className="mb-6">
-            <View className="flex-row items-center justify-between mb-2">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
-                This Month's Queen Bee 👑
-              </Text>
-              <Pressable
-                onPress={() => setShowHighlightsModal(true)}
-                className="bg-cream px-3 py-1 rounded-lg active:bg-gold-light"
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-                  Edit Notes
-                </Text>
-              </Pressable>
-            </View>
-            <QueenBeeCard queenBee={queenBees.currentMonth} />
-          </View>
-        ) : null}
+        </View>
 
         {/* Upcoming Events */}
-        <View className="mb-6">
-          <View className="flex-row items-center justify-between mb-2">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
+        <View style={{ marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
               Upcoming Events
             </Text>
             <Pressable
               onPress={openCreateEvent}
-              className="bg-cream px-3 py-1 rounded-lg active:bg-gold-light"
+              style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }}
             >
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-                + Add Event
-              </Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Add</Text>
             </Pressable>
           </View>
-          {loading.events ? (
-            <EventsListSkeleton />
-          ) : upcomingEvents.length > 0 ? (
-            <EventsList events={upcomingEvents} onEditEvent={openEditEvent} />
-          ) : (
-            <View className="bg-white rounded-xl p-6 shadow-sm items-center">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
-                No upcoming events
-              </Text>
-            </View>
-          )}
+          <View style={{
+            backgroundColor: 'white',
+            borderRadius: 16,
+            shadowColor: '#000',
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 2,
+            overflow: 'hidden',
+            maxHeight: 320,
+          }}>
+            {loading.events ? (
+              <View style={{ padding: 16 }}><EventsListSkeleton /></View>
+            ) : upcomingEvents.length > 0 ? (
+              <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                <EventsList events={upcomingEvents} onEditEvent={openEditEvent} />
+              </ScrollView>
+            ) : (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', color: '#9ca3af' }}>No upcoming events</Text>
+              </View>
+            )}
+          </View>
         </View>
 
-        {/* Honey Pot */}
-        <View className="mb-6">
-          {loading.honeyPot ? (
-            <HoneyPotSkeleton />
-          ) : (
-            <HoneyPotDisplay balance={honeyPotBalance} />
-          )}
+        {/* Hex Shortcuts */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 24, paddingHorizontal: 8 }}>
+          <HexShortcut
+            emoji="🍯"
+            label="Honey Pot"
+            sublabel={loading.honeyPot ? '...' : `$${honeyPotBalance?.toFixed(0) ?? '0'}`}
+            onPress={() => {}}
+          />
+          <HexShortcut
+            emoji="💬"
+            label="Chat"
+            onPress={() => router.push('/messages')}
+          />
+          <HexShortcut
+            emoji="📅"
+            label="Meetings"
+            onPress={() => router.push('/meetings')}
+          />
         </View>
 
         {/* Community Wishes */}
-        <View className="mb-6">
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
+        <View style={{ marginBottom: 24 }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 10 }}>
             Community Wishes
           </Text>
 
@@ -835,92 +879,6 @@ export default function HiveScreen() {
 
         </View>
       </ScrollView>
-
-      {/* Queen Bee Highlights Modal */}
-      <Modal
-        visible={showHighlightsModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowHighlightsModal(false)}
-      >
-        <SafeAreaView className="flex-1 bg-white" edges={['top']}>
-          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
-            <Pressable onPress={() => setShowHighlightsModal(false)}>
-              <Text className="text-gray-500 text-base">Close</Text>
-            </Pressable>
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
-              Queen Bee Notes
-            </Text>
-            <View style={{ width: 50 }} />
-          </View>
-
-          <ScrollView className="flex-1 p-4">
-            {queenBees.currentMonth && (
-              <>
-                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 mb-4">
-                  Add highlights and notes for {queenBees.currentMonth.user?.name}'s month as Queen Bee.
-                </Text>
-
-                {/* Existing highlights */}
-                {queenBees.currentMonth.highlights && queenBees.currentMonth.highlights.length > 0 ? (
-                  <View className="mb-6">
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
-                      Current Notes
-                    </Text>
-                    {queenBees.currentMonth.highlights.map((highlight) => (
-                      <View
-                        key={highlight.id}
-                        className="flex-row items-center bg-cream/50 rounded-lg p-3 mb-2"
-                      >
-                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="flex-1 text-charcoal">
-                          {highlight.highlight}
-                        </Text>
-                        <Pressable
-                          onPress={() => handleDeleteHighlight(highlight.id)}
-                          className="ml-2 p-2"
-                        >
-                          <Text className="text-red-500">✕</Text>
-                        </Pressable>
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <View className="bg-cream/30 rounded-lg p-4 mb-6">
-                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
-                      No notes yet
-                    </Text>
-                  </View>
-                )}
-
-                {/* Add new highlight */}
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
-                  Add Note
-                </Text>
-                <TextInput
-                  value={newHighlight}
-                  onChangeText={setNewHighlight}
-                  placeholder="Enter a highlight or note..."
-                  multiline
-                  numberOfLines={3}
-                  className="border border-gray-300 rounded-lg px-4 py-3 text-base mb-3"
-                  style={{ textAlignVertical: 'top', minHeight: 80 }}
-                />
-                <Pressable
-                  onPress={handleAddHighlight}
-                  disabled={savingHighlight || !newHighlight.trim()}
-                  className={`bg-gold py-3 rounded-lg items-center ${
-                    savingHighlight || !newHighlight.trim() ? 'opacity-50' : 'active:bg-gold/80'
-                  }`}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white">
-                    {savingHighlight ? 'Adding...' : 'Add Note'}
-                  </Text>
-                </Pressable>
-              </>
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
 
       {/* Add/Edit/View Event Modal */}
       <Modal visible={showEventModal} animationType="slide" transparent>
