@@ -86,17 +86,14 @@ export default function ChatScreen() {
 
         {/* Main chat area */}
         <View className="flex-1">
-          {/* Mobile header */}
-          {useMobileLayout && (
-            <View className="items-center px-4 py-3 bg-charcoal">
-              <Text
-                style={{ fontFamily: 'LibreBaskerville_700Bold' }}
-                className="text-base text-white"
-              >
-                Clive
-              </Text>
-            </View>
-          )}
+          <View className="items-center px-4 py-3 bg-charcoal">
+            <Text
+              style={{ fontFamily: 'LibreBaskerville_700Bold' }}
+              className="text-base text-white"
+            >
+              Clive
+            </Text>
+          </View>
 
           <ChatInterface
             conversationId={currentConversation?.id || null}

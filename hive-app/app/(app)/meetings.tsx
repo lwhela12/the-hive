@@ -364,13 +364,10 @@ export default function MeetingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      {/* Mobile Header */}
-      {useMobileLayout && (
-        <AppHeader
-          title="Meetings"
-          onMenuPress={() => setDrawerOpen(true)}
-        />
-      )}
+      <AppHeader
+        title="Meetings"
+        onMenuPress={() => setDrawerOpen(true)}
+      />
 
       {/* Navigation Drawer */}
       {useMobileLayout && (
