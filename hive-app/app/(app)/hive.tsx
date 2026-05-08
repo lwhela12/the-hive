@@ -808,8 +808,8 @@ export default function HiveScreen() {
                   <ActivityIndicator size="small" color="#bd9348" />
                 </View>
               ) : activityItems.length === 0 ? (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: '#fdf3dc' }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center' }}>
                     No recent activity yet.{'\n'}Start by sharing a wish or posting on the board!
                   </Text>
                 </View>
@@ -825,15 +825,15 @@ export default function HiveScreen() {
                           alignItems: 'flex-start',
                           padding: 14,
                           borderBottomWidth: i < activityItems.length - 1 ? 1 : 0,
-                          borderBottomColor: '#f3f0ea',
-                          backgroundColor: isUnread ? '#fffef5' : 'white',
+                          borderBottomColor: isUnread ? 'rgba(255,255,255,0.18)' : 'rgba(196,154,60,0.15)',
+                          backgroundColor: isUnread ? '#bd9348' : '#fdf3dc',
                         }}
                       >
                         <View style={{
                           width: 36,
                           height: 36,
                           borderRadius: 18,
-                          backgroundColor: isUnread ? '#fdf3dc' : '#f5f3ee',
+                          backgroundColor: isUnread ? 'rgba(255,255,255,0.22)' : 'rgba(189,147,72,0.18)',
                           alignItems: 'center',
                           justifyContent: 'center',
                           marginRight: 12,
@@ -842,15 +842,15 @@ export default function HiveScreen() {
                           <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontFamily: isUnread ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: '#2d2d2d', lineHeight: 18 }}>
+                          <Text style={{ fontFamily: isUnread ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: isUnread ? 'white' : '#2d2d2d', lineHeight: 18 }}>
                             {item.text}
                           </Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: isUnread ? 'rgba(255,255,255,0.7)' : '#9a8060', marginTop: 3 }}>
                             {getRelativeTime(item.timestamp)}
                           </Text>
                         </View>
                         {isUnread && (
-                          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#bd9348', marginTop: 5, marginLeft: 6, flexShrink: 0 }} />
+                          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: 'white', marginTop: 5, marginLeft: 6, flexShrink: 0 }} />
                         )}
                       </View>
                     );
