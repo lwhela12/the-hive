@@ -7,6 +7,9 @@ export interface ActivityItem {
   emoji: string;
   text: string;
   timestamp: string; // ISO string
+  sourceId: string;  // the DB record ID (post id, event id, wish id, user id)
+  categoryId?: string; // board_post only — to deep-link into the right topic
+  navigatesTo?: 'board' | 'members'; // screens that can be navigated to
 }
 
 function truncate(text: string, max: number): string {
@@ -49,11 +52,11 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
       .order('created_at', { ascending: false })
       .limit(15),
 
-    // Board posts
+    // Board posts — include category_id for deep-link navigation
     supabase
       .from('board_posts')
       .select(
-        'id, title, created_at, author:profiles!author_id(name), category:board_categories!category_id(name)'
+        'id, title, category_id, created_at, author:profiles!author_id(name), category:board_categories!category_id(name)'
       )
       .eq('community_id', communityId)
       .gte('created_at', thirtyDaysAgo)
@@ -81,6 +84,7 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
       emoji: '🌟',
       text: `${name} posted a new wish: ${truncate(w.description, 55)}`,
       timestamp: w.created_at,
+      sourceId: w.id,
     });
   }
 
@@ -97,6 +101,7 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
       emoji: '✅',
       text: `${wisherName}'s wish "${truncate(w.description, 40)}" was granted${grantedBy}`,
       timestamp: (w as any).fulfilled_at,
+      sourceId: w.id,
     });
   }
 
@@ -104,15 +109,14 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
   for (const e of eventsRes.data ?? []) {
     const [, month, day] = e.event_date.split('-');
     const dateStr = `${parseInt(month)}/${parseInt(day)}`;
-    const timeStr = e.event_time
-      ? ` at ${formatTime(e.event_time)}`
-      : '';
+    const timeStr = e.event_time ? ` at ${formatTime(e.event_time)}` : '';
     items.push({
       id: `event_${e.id}`,
       type: 'event_added',
       emoji: '📅',
       text: `New event: ${e.title} — ${dateStr}${timeStr}`,
       timestamp: e.created_at,
+      sourceId: e.id,
     });
   }
 
@@ -127,6 +131,9 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
       emoji: isIntro ? '👋' : '📋',
       text: `${authorName} posted in ${categoryName}: ${truncate(p.title, 50)}`,
       timestamp: p.created_at,
+      sourceId: p.id,
+      categoryId: (p as any).category_id,
+      navigatesTo: 'board',
     });
   }
 
@@ -139,6 +146,8 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
       emoji: '🐝',
       text: `${name} joined the Hive`,
       timestamp: m.created_at,
+      sourceId: m.user_id,
+      navigatesTo: 'members',
     });
   }
 

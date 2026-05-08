@@ -355,8 +355,10 @@ export default function HiveScreen() {
   // Activity feed
   const { items: activityItems, loading: activityLoading, refetch: refetchActivity } = useActivityFeed(communityId ?? undefined);
 
-  // Read state — stored in localStorage so it persists across sessions per device
+  // Read state — timestamp-based (for auto-clear) + per-item set (for tap-to-clear)
   const activityReadKey = communityId ? `the-hive:activity-viewed:${communityId}` : null;
+  const activityReadIdsKey = communityId ? `the-hive:activity-read-ids:${communityId}` : null;
+
   const [sessionReadAt, setSessionReadAt] = useState<string>(() => {
     if (typeof window !== 'undefined' && activityReadKey) {
       return window.localStorage.getItem(activityReadKey) ?? new Date(0).toISOString();
@@ -364,15 +366,56 @@ export default function HiveScreen() {
     return new Date(0).toISOString();
   });
 
+  const [readItemIds, setReadItemIds] = useState<Set<string>>(new Set());
+
+  // Load per-item read IDs from localStorage once communityId is known
+  useEffect(() => {
+    if (!activityReadIdsKey || typeof window === 'undefined') return;
+    try {
+      const stored = window.localStorage.getItem(activityReadIdsKey);
+      if (stored) setReadItemIds(new Set(JSON.parse(stored)));
+    } catch {}
+  }, [activityReadIdsKey]);
+
+  const markItemRead = useCallback((itemId: string) => {
+    setReadItemIds(prev => {
+      const next = new Set(prev);
+      next.add(itemId);
+      if (activityReadIdsKey && typeof window !== 'undefined') {
+        window.localStorage.setItem(activityReadIdsKey, JSON.stringify([...next]));
+      }
+      return next;
+    });
+  }, [activityReadIdsKey]);
+
   const markAllActivityRead = useCallback(() => {
     const now = new Date().toISOString();
     setSessionReadAt(now);
-    if (activityReadKey && typeof window !== 'undefined') {
-      window.localStorage.setItem(activityReadKey, now);
+    setReadItemIds(new Set());
+    if (typeof window !== 'undefined') {
+      if (activityReadKey) window.localStorage.setItem(activityReadKey, now);
+      if (activityReadIdsKey) window.localStorage.removeItem(activityReadIdsKey);
     }
-  }, [activityReadKey]);
+  }, [activityReadKey, activityReadIdsKey]);
 
-  // After 3 seconds, silently persist for next visit (state already shows dots this visit)
+  const handleActivityPress = useCallback((item: import('../../lib/hooks/useActivityFeed').ActivityItem) => {
+    markItemRead(item.id);
+    if (item.navigatesTo === 'board') {
+      // Pre-set the board's localStorage keys so it opens directly to the right post
+      if (communityId && typeof window !== 'undefined') {
+        if (item.categoryId) {
+          window.localStorage.setItem(`the-hive:last-board-category:${communityId}`, item.categoryId);
+        }
+        window.localStorage.setItem(`the-hive:last-board-post:${communityId}`, item.sourceId);
+      }
+      router.push('/board');
+    } else if (item.navigatesTo === 'members') {
+      router.push('/members');
+    }
+    // events and wishes: just mark read (content is already on this screen)
+  }, [communityId, markItemRead, router]);
+
+  // After 3 seconds, silently persist timestamp for next visit
   const hasAutoMarkedRef = useRef(false);
   useEffect(() => {
     if (!activityReadKey || typeof window === 'undefined' || hasAutoMarkedRef.current) return;
@@ -816,18 +859,22 @@ export default function HiveScreen() {
               ) : (
                 <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
                   {activityItems.map((item, i) => {
-                    const isUnread = item.timestamp > sessionReadAt;
+                    const isUnread = item.timestamp > sessionReadAt && !readItemIds.has(item.id);
+                    const canNavigate = !!item.navigatesTo;
                     return (
-                      <View
+                      <Pressable
                         key={item.id}
-                        style={{
+                        onPress={() => handleActivityPress(item)}
+                        style={({ pressed }) => ({
                           flexDirection: 'row',
-                          alignItems: 'flex-start',
+                          alignItems: 'center',
                           padding: 14,
                           borderBottomWidth: i < activityItems.length - 1 ? 1 : 0,
                           borderBottomColor: isUnread ? 'rgba(255,255,255,0.18)' : 'rgba(196,154,60,0.15)',
-                          backgroundColor: isUnread ? '#bd9348' : '#fdf3dc',
-                        }}
+                          backgroundColor: isUnread
+                            ? pressed ? '#a8823e' : '#bd9348'
+                            : pressed ? '#f0e4c0' : '#fdf3dc',
+                        })}
                       >
                         <View style={{
                           width: 36,
@@ -849,10 +896,15 @@ export default function HiveScreen() {
                             {getRelativeTime(item.timestamp)}
                           </Text>
                         </View>
-                        {isUnread && (
-                          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: 'white', marginTop: 5, marginLeft: 6, flexShrink: 0 }} />
-                        )}
-                      </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6, flexShrink: 0 }}>
+                          {isUnread && (
+                            <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: 'white', marginRight: canNavigate ? 6 : 0 }} />
+                          )}
+                          {canNavigate && (
+                            <Text style={{ fontSize: 16, color: isUnread ? 'rgba(255,255,255,0.7)' : 'rgba(189,147,72,0.6)', lineHeight: 20 }}>›</Text>
+                          )}
+                        </View>
+                      </Pressable>
                     );
                   })}
                 </ScrollView>
