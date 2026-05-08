@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
 import Svg, { Polygon } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
@@ -293,6 +294,15 @@ export default function HiveScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAnswerModal, setShowAnswerModal] = useState(false);
   const [myAnswer, setMyAnswer] = useState('');
+  const [mySubmittedAnswer, setMySubmittedAnswer] = useState('');
+
+  const handleSubmitAnswer = () => {
+    const text = myAnswer.trim();
+    if (!text) return;
+    setMySubmittedAnswer(text);
+    setMyAnswer('');
+    setShowAnswerModal(false);
+  };
   const [selectedWish, setSelectedWish] = useState<WishWithGranters | null>(null);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [wishTab, setWishTab] = useState<WishTab>('open');
@@ -672,11 +682,17 @@ export default function HiveScreen() {
 
                     {/* Name / Answer label */}
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: isMe ? '#bd9348' : hasAnswered ? '#2d2d2d' : '#b0a898', textAlign: 'center', marginBottom: 5 }} numberOfLines={1}>
-                      {isMe ? 'Answer' : firstName}
+                      {isMe ? (mySubmittedAnswer ? 'Edit' : 'Answer') : firstName}
                     </Text>
 
                     {/* Answer snippet or placeholder */}
-                    {hasAnswered ? (
+                    {isMe && mySubmittedAnswer ? (
+                      <View style={{ backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#c49a3c', padding: 6, width: 74 }}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 9, color: '#4b5563', lineHeight: 13 }} numberOfLines={4}>
+                          {mySubmittedAnswer}
+                        </Text>
+                      </View>
+                    ) : hasAnswered ? (
                       <View style={{ backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#c49a3c', padding: 6, width: 74 }}>
                         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 9, color: '#4b5563', lineHeight: 13 }} numberOfLines={4}>
                           {placeholderAnswer.answer}
@@ -1099,36 +1115,54 @@ export default function HiveScreen() {
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 22, marginBottom: 20 }}>
                 {DAILY_QUESTION}
               </Text>
-              <TextInput
-                value={myAnswer}
-                onChangeText={setMyAnswer}
-                placeholder="Share your answer with the Hive..."
-                placeholderTextColor="#9ca3af"
-                multiline
-                numberOfLines={4}
-                style={{
-                  fontFamily: 'Lato_400Regular',
-                  fontSize: 15,
-                  color: '#2d2d2d',
-                  borderWidth: 1,
-                  borderColor: 'rgba(222,193,129,0.5)',
-                  borderRadius: 14,
-                  padding: 14,
-                  minHeight: 100,
-                  textAlignVertical: 'top',
-                  backgroundColor: '#fffbf0',
-                  marginBottom: 14,
-                }}
-              />
+              {/* Text input + mic */}
+              <View style={{ marginBottom: 14, position: 'relative' }}>
+                <TextInput
+                  value={myAnswer}
+                  onChangeText={setMyAnswer}
+                  placeholder="Share your answer with the Hive..."
+                  placeholderTextColor="#9ca3af"
+                  multiline
+                  numberOfLines={4}
+                  blurOnSubmit={false}
+                  onKeyPress={(e: any) => {
+                    if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                      e.preventDefault?.();
+                      handleSubmitAnswer();
+                    }
+                  }}
+                  style={{
+                    fontFamily: 'Lato_400Regular',
+                    fontSize: 15,
+                    color: '#2d2d2d',
+                    borderWidth: 1,
+                    borderColor: '#c49a3c',
+                    borderRadius: 14,
+                    padding: 14,
+                    paddingRight: 48,
+                    minHeight: 100,
+                    textAlignVertical: 'top',
+                    backgroundColor: '#fffbf0',
+                  }}
+                />
+                <VoiceMicButton
+                  onTranscript={(text) => setMyAnswer(prev => prev ? prev + ' ' + text : text)}
+                  size={20}
+                  style={{ position: 'absolute', bottom: 10, right: 10 }}
+                />
+              </View>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginBottom: 14, marginTop: -6 }}>
+                Press Enter to send · Shift+Enter for a new line
+              </Text>
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Pressable
-                  onPress={() => setShowAnswerModal(false)}
+                  onPress={() => { setShowAnswerModal(false); setMyAnswer(''); }}
                   style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => { setShowAnswerModal(false); setMyAnswer(''); }}
+                  onPress={handleSubmitAnswer}
                   style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: myAnswer.trim() ? 1 : 0.4 }}
                   disabled={!myAnswer.trim()}
                 >

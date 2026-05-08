@@ -8,6 +8,7 @@ import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { HexagonIcon } from '../../components/ui/HexagonIcon';
 import { getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
+import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
 
 const beeIcon = require('../../assets/bee-gold-bg.png');
 const cliveIcon = require('../../assets/Clive_logo.png');
@@ -330,13 +331,21 @@ export default function AppLayout() {
               </Pressable>
             )}
 
-            {/* Mic icon placeholder */}
-            <Pressable
-              onPress={() => router.push('/')}
-              className="ml-1 p-1.5 active:opacity-60"
-            >
-              <Ionicons name="mic-outline" size={22} color="#bd9348" />
-            </Pressable>
+            {/* Mic — voice-to-text fills the input, then auto-submits */}
+            <VoiceMicButton
+              size={20}
+              style={{ marginLeft: 4 }}
+              onTranscript={(text) => {
+                setCliveDraft(text);
+                // small delay so state flushes before submit
+                setTimeout(() => {
+                  if (text.trim()) {
+                    setCliveDraft('');
+                    router.push({ pathname: '/', params: { message: text } });
+                  }
+                }, 80);
+              }}
+            />
           </View>
         </View>
       )}
