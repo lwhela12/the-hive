@@ -597,7 +597,7 @@ export default function HiveScreen() {
         }
       >
         {/* Member Stories Carousel */}
-        <View style={{ borderBottomWidth: 1, borderBottomColor: '#f3f0ea', paddingVertical: 16 }}>
+        <View style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(189,147,72,0.25)', paddingVertical: 16 }}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -651,7 +651,7 @@ export default function HiveScreen() {
         <View className="p-4">
 
         {/* Daily Question */}
-        <View style={{ marginBottom: 16, backgroundColor: '#fffbf0', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.35)', overflow: 'hidden' }}>
+        <View style={{ marginBottom: 16, backgroundColor: '#fffbf0', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(189,147,72,0.3)', overflow: 'hidden', shadowColor: '#bd9348', shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
           {/* Question header */}
           <Pressable onPress={() => setShowAnswerModal(true)} style={{ padding: 16 }}>
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginBottom: 8, letterSpacing: 0.8 }}>
@@ -734,100 +734,109 @@ export default function HiveScreen() {
           </ScrollView>
         </View>
 
-        {/* Activity Feed */}
-        <View style={{ marginBottom: 16 }}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 10 }}>
-            Activity
-          </Text>
-          <View style={{
-            backgroundColor: 'white',
-            borderRadius: 16,
-            shadowColor: '#000',
-            shadowOpacity: 0.06,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 2 },
-            elevation: 2,
-            overflow: 'hidden',
-            maxHeight: 260,
-          }}>
-            <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
-              {PLACEHOLDER_ACTIVITY.map((item, i) => (
-                <View
-                  key={i}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'flex-start',
-                    padding: 14,
-                    borderBottomWidth: i < PLACEHOLDER_ACTIVITY.length - 1 ? 1 : 0,
-                    borderBottomColor: '#f3f0ea',
-                    backgroundColor: item.read ? 'white' : '#fffef5',
-                  }}
-                >
-                  <View style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: item.read ? '#f5f3ee' : '#fdf3dc',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 12,
-                    flexShrink: 0,
-                  }}>
-                    <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: item.read ? 'Lato_400Regular' : 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', lineHeight: 18 }}>
-                      {item.text}
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
-                      {item.time}
-                    </Text>
-                  </View>
-                  {!item.read && (
-                    <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#bd9348', marginTop: 5, marginLeft: 6, flexShrink: 0 }} />
-                  )}
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
+        {/* Activity Feed + Upcoming Events — side by side on wide screens */}
+        <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 12, marginBottom: 16 }}>
 
-        {/* Upcoming Events */}
-        <View style={{ marginBottom: 16 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-              Upcoming Events
+          {/* Activity Feed */}
+          <View style={{ flex: 1, marginBottom: useMobileLayout ? 0 : 0 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 10 }}>
+              Activity
             </Text>
-            <Pressable
-              onPress={openCreateEvent}
-              style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }}
-            >
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Add</Text>
-            </Pressable>
-          </View>
-          <View style={{
-            backgroundColor: 'white',
-            borderRadius: 16,
-            shadowColor: '#000',
-            shadowOpacity: 0.06,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 2 },
-            elevation: 2,
-            overflow: 'hidden',
-            maxHeight: 320,
-          }}>
-            {loading.events ? (
-              <View style={{ padding: 16 }}><EventsListSkeleton /></View>
-            ) : upcomingEvents.length > 0 ? (
+            <View style={{
+              backgroundColor: 'white',
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: 'rgba(189,147,72,0.3)',
+              shadowColor: '#bd9348',
+              shadowOpacity: 0.1,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 2,
+              overflow: 'hidden',
+              height: 280,
+            }}>
               <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                <EventsList events={upcomingEvents} onEditEvent={openEditEvent} />
+                {PLACEHOLDER_ACTIVITY.map((item, i) => (
+                  <View
+                    key={i}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'flex-start',
+                      padding: 14,
+                      borderBottomWidth: i < PLACEHOLDER_ACTIVITY.length - 1 ? 1 : 0,
+                      borderBottomColor: '#f3f0ea',
+                      backgroundColor: item.read ? 'white' : '#fffef5',
+                    }}
+                  >
+                    <View style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: item.read ? '#f5f3ee' : '#fdf3dc',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 12,
+                      flexShrink: 0,
+                    }}>
+                      <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: item.read ? 'Lato_400Regular' : 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', lineHeight: 18 }}>
+                        {item.text}
+                      </Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
+                        {item.time}
+                      </Text>
+                    </View>
+                    {!item.read && (
+                      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#bd9348', marginTop: 5, marginLeft: 6, flexShrink: 0 }} />
+                    )}
+                  </View>
+                ))}
               </ScrollView>
-            ) : (
-              <View style={{ padding: 24, alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Lato_400Regular', color: '#9ca3af' }}>No upcoming events</Text>
-              </View>
-            )}
+            </View>
           </View>
+
+          {/* Upcoming Events */}
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+                Upcoming Events
+              </Text>
+              <Pressable
+                onPress={openCreateEvent}
+                style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Add</Text>
+              </Pressable>
+            </View>
+            <View style={{
+              backgroundColor: 'white',
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: 'rgba(189,147,72,0.3)',
+              shadowColor: '#bd9348',
+              shadowOpacity: 0.1,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 2,
+              overflow: 'hidden',
+              height: 280,
+            }}>
+              {loading.events ? (
+                <View style={{ padding: 16 }}><EventsListSkeleton /></View>
+              ) : upcomingEvents.length > 0 ? (
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                  <EventsList events={upcomingEvents} onEditEvent={openEditEvent} />
+                </ScrollView>
+              ) : (
+                <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', color: '#9ca3af' }}>No upcoming events</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
         </View>
 
         {/* Hex Shortcuts */}
