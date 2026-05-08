@@ -366,13 +366,16 @@ export default function BoardScreen() {
           />
         ) : (
           <View className="bg-gold px-4 py-3 flex-row items-center justify-between">
-            <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-xl text-white">
+            <View className="w-10 h-10" />
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-base text-white">
               Message Board
             </Text>
-            {isAdmin && (
-              <Pressable onPress={() => setShowTopicComposer(true)} className="active:opacity-70">
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">+ Topic</Text>
+            {isAdmin ? (
+              <Pressable onPress={() => setShowTopicComposer(true)} className="w-10 h-10 items-center justify-center active:opacity-70">
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">+ Topic</Text>
               </Pressable>
+            ) : (
+              <View className="w-10 h-10" />
             )}
           </View>
         )}

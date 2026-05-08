@@ -140,12 +140,13 @@ export default function MessagesScreen() {
         />
       ) : (
         <View className="flex-row items-center justify-between bg-gold px-4 py-3">
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-xl text-white">
+          <View className="w-10 h-10" />
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-base text-white">
             Chat
           </Text>
           <Pressable
             onPress={() => setShowMemberPicker(true)}
-            className="w-10 h-10 bg-gold rounded-full items-center justify-center"
+            className="w-10 h-10 items-center justify-center active:opacity-70"
           >
             <Text className="text-white text-xl">+</Text>
           </Pressable>

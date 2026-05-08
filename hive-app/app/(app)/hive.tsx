@@ -582,7 +582,7 @@ export default function HiveScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       <AppHeader
-        title="HIVE"
+        title="H.I.V.E."
         onMenuPress={() => setDrawerOpen(true)}
       />
 

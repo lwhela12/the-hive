@@ -614,10 +614,6 @@ export default function AdminScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <Text className="text-2xl font-bold text-hive-dark mb-6">
-          {isAdmin ? 'Admin Panel' : 'Treasurer Panel'} ⚙️
-        </Text>
-
         {/* Honey Pot Section - visible to admin and treasurer */}
         <View className="mb-6">
           <Text className="text-lg font-semibold text-gray-700 mb-2">

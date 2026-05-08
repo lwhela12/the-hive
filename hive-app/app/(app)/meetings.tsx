@@ -387,8 +387,7 @@ export default function MeetingsScreen() {
         }
       >
         {/* Header */}
-        <View className={`flex-row items-center mb-6 ${useMobileLayout ? 'justify-end' : 'justify-between'}`}>
-          {!useMobileLayout && <Text className="text-2xl font-bold text-hive-dark">Meetings</Text>}
+        <View className="flex-row items-center mb-6 justify-end">
           <View className="flex-row gap-2">
             <Pressable
               onPress={() => setShowScheduler(true)}
