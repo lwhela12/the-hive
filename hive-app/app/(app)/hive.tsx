@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, Platform } from 'react-native';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
 import Svg, { Polygon } from 'react-native-svg';
@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
+import { useActivityFeed } from '../../lib/hooks/useActivityFeed';
 import { WishCard } from '../../components/hive/WishCard';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
@@ -241,13 +242,17 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
   );
 }
 
-const PLACEHOLDER_ACTIVITY = [
-  { emoji: '🌟', text: 'Sarah posted a new wish: help planning a veggie garden', time: '2h ago', read: false },
-  { emoji: '✅', text: "Maya's wish for recipe ideas was granted by Charlee", time: '5h ago', read: false },
-  { emoji: '📅', text: 'New event added: May Book Club — May 18 at 7pm', time: '1d ago', read: true },
-  { emoji: '👋', text: 'Leila shared an introduction on the Message Board', time: '2d ago', read: true },
-  { emoji: '🍯', text: 'Honey Pot updated by Treasurer', time: '3d ago', read: true },
-];
+function getRelativeTime(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
+  return `${Math.floor(days / 7)}w ago`;
+}
 
 function HexShortcut({ emoji, label, sublabel, onPress }: {
   emoji: string;
@@ -343,6 +348,29 @@ export default function HiveScreen() {
   const [savingEvent, setSavingEvent] = useState(false);
   const [eventError, setEventError] = useState<string | null>(null);
 
+  // Activity feed
+  const { items: activityItems, loading: activityLoading, refetch: refetchActivity } = useActivityFeed(communityId ?? undefined);
+
+  // Read state — stored in localStorage so it persists across sessions per device
+  const activityReadKey = communityId ? `the-hive:activity-viewed:${communityId}` : null;
+  const [lastViewedAt] = useState<string>(() => {
+    if (typeof window !== 'undefined' && activityReadKey) {
+      return window.localStorage.getItem(activityReadKey) ?? new Date(0).toISOString();
+    }
+    return new Date(0).toISOString();
+  });
+  // After 3 seconds on this screen, persist "now" so NEXT visit these items show as read
+  // We don't update state so dots remain visible during the current visit
+  const hasMarkedReadRef = useRef(false);
+  useEffect(() => {
+    if (!activityReadKey || typeof window === 'undefined' || hasMarkedReadRef.current) return;
+    const timer = setTimeout(() => {
+      window.localStorage.setItem(activityReadKey, new Date().toISOString());
+      hasMarkedReadRef.current = true;
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [activityReadKey]);
+
   // Member carousel state
   const [carouselMembers, setCarouselMembers] = useState<{ id: string; name: string; avatar_url?: string | null; role: string }[]>([]);
   const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; avatar_url?: string | null; role: string } | null>(null);
@@ -384,7 +412,7 @@ export default function HiveScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refetch();
+    await Promise.all([refetch(), refetchActivity()]);
     setRefreshing(false);
   };
 
@@ -754,45 +782,60 @@ export default function HiveScreen() {
               overflow: 'hidden',
               height: 280,
             }}>
-              <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                {PLACEHOLDER_ACTIVITY.map((item, i) => (
-                  <View
-                    key={i}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'flex-start',
-                      padding: 14,
-                      borderBottomWidth: i < PLACEHOLDER_ACTIVITY.length - 1 ? 1 : 0,
-                      borderBottomColor: '#f3f0ea',
-                      backgroundColor: item.read ? 'white' : '#fffef5',
-                    }}
-                  >
-                    <View style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      backgroundColor: item.read ? '#f5f3ee' : '#fdf3dc',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 12,
-                      flexShrink: 0,
-                    }}>
-                      <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: item.read ? 'Lato_400Regular' : 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', lineHeight: 18 }}>
-                        {item.text}
-                      </Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
-                        {item.time}
-                      </Text>
-                    </View>
-                    {!item.read && (
-                      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#bd9348', marginTop: 5, marginLeft: 6, flexShrink: 0 }} />
-                    )}
-                  </View>
-                ))}
-              </ScrollView>
+              {activityLoading ? (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                  <ActivityIndicator size="small" color="#bd9348" />
+                </View>
+              ) : activityItems.length === 0 ? (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
+                    No recent activity yet.{'\n'}Start by sharing a wish or posting on the board!
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                  {activityItems.map((item, i) => {
+                    const isUnread = item.timestamp > lastViewedAt;
+                    return (
+                      <View
+                        key={item.id}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'flex-start',
+                          padding: 14,
+                          borderBottomWidth: i < activityItems.length - 1 ? 1 : 0,
+                          borderBottomColor: '#f3f0ea',
+                          backgroundColor: isUnread ? '#fffef5' : 'white',
+                        }}
+                      >
+                        <View style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: isUnread ? '#fdf3dc' : '#f5f3ee',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: 12,
+                          flexShrink: 0,
+                        }}>
+                          <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: isUnread ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: '#2d2d2d', lineHeight: 18 }}>
+                            {item.text}
+                          </Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
+                            {getRelativeTime(item.timestamp)}
+                          </Text>
+                        </View>
+                        {isUnread && (
+                          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#bd9348', marginTop: 5, marginLeft: 6, flexShrink: 0 }} />
+                        )}
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              )}
             </View>
           </View>
 

@@ -1,0 +1,180 @@
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../supabase';
+
+export interface ActivityItem {
+  id: string;
+  type: 'wish_posted' | 'wish_granted' | 'event_added' | 'board_post' | 'member_joined';
+  emoji: string;
+  text: string;
+  timestamp: string; // ISO string
+}
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max) + '…' : text;
+}
+
+async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [wishesRes, grantedRes, eventsRes, postsRes, membersRes] = await Promise.all([
+    // New public wishes
+    supabase
+      .from('wishes')
+      .select('id, description, created_at, user:profiles!user_id(name)')
+      .eq('community_id', communityId)
+      .eq('status', 'public')
+      .gte('created_at', thirtyDaysAgo)
+      .order('created_at', { ascending: false })
+      .limit(20),
+
+    // Granted wishes
+    supabase
+      .from('wishes')
+      .select(
+        'id, description, fulfilled_at, user:profiles!user_id(name), granters:wish_granters(granter:profiles!granter_id(name))'
+      )
+      .eq('community_id', communityId)
+      .eq('status', 'fulfilled')
+      .not('fulfilled_at', 'is', null)
+      .gte('fulfilled_at', thirtyDaysAgo)
+      .order('fulfilled_at', { ascending: false })
+      .limit(15),
+
+    // New events added recently
+    supabase
+      .from('events')
+      .select('id, title, event_date, event_time, created_at')
+      .eq('community_id', communityId)
+      .gte('created_at', thirtyDaysAgo)
+      .order('created_at', { ascending: false })
+      .limit(15),
+
+    // Board posts
+    supabase
+      .from('board_posts')
+      .select(
+        'id, title, created_at, author:profiles!author_id(name), category:board_categories!category_id(name)'
+      )
+      .eq('community_id', communityId)
+      .gte('created_at', thirtyDaysAgo)
+      .order('created_at', { ascending: false })
+      .limit(20),
+
+    // Recent member joins
+    supabase
+      .from('community_memberships')
+      .select('user_id, created_at, profiles(name)')
+      .eq('community_id', communityId)
+      .gte('created_at', thirtyDaysAgo)
+      .order('created_at', { ascending: false })
+      .limit(10),
+  ]);
+
+  const items: ActivityItem[] = [];
+
+  // New public wishes
+  for (const w of wishesRes.data ?? []) {
+    const name: string = (w as any).user?.name ?? 'Someone';
+    items.push({
+      id: `wish_${w.id}`,
+      type: 'wish_posted',
+      emoji: '🌟',
+      text: `${name} posted a new wish: ${truncate(w.description, 55)}`,
+      timestamp: w.created_at,
+    });
+  }
+
+  // Granted wishes
+  for (const w of grantedRes.data ?? []) {
+    const wisherName: string = (w as any).user?.name ?? 'Someone';
+    const granters: { granter: { name: string } }[] = (w as any).granters ?? [];
+    const granterNames = granters.map((g) => g.granter?.name).filter(Boolean);
+    const grantedBy =
+      granterNames.length > 0 ? ` — granted by ${granterNames.join(' & ')}` : '';
+    items.push({
+      id: `granted_${w.id}`,
+      type: 'wish_granted',
+      emoji: '✅',
+      text: `${wisherName}'s wish "${truncate(w.description, 40)}" was granted${grantedBy}`,
+      timestamp: (w as any).fulfilled_at,
+    });
+  }
+
+  // New events
+  for (const e of eventsRes.data ?? []) {
+    const [, month, day] = e.event_date.split('-');
+    const dateStr = `${parseInt(month)}/${parseInt(day)}`;
+    const timeStr = e.event_time
+      ? ` at ${formatTime(e.event_time)}`
+      : '';
+    items.push({
+      id: `event_${e.id}`,
+      type: 'event_added',
+      emoji: '📅',
+      text: `New event: ${e.title} — ${dateStr}${timeStr}`,
+      timestamp: e.created_at,
+    });
+  }
+
+  // Board posts
+  for (const p of postsRes.data ?? []) {
+    const authorName: string = (p as any).author?.name ?? 'Someone';
+    const categoryName: string = (p as any).category?.name ?? 'the board';
+    const isIntro = categoryName.toLowerCase().includes('intro');
+    items.push({
+      id: `post_${p.id}`,
+      type: 'board_post',
+      emoji: isIntro ? '👋' : '📋',
+      text: `${authorName} posted in ${categoryName}: ${truncate(p.title, 50)}`,
+      timestamp: p.created_at,
+    });
+  }
+
+  // Recent member joins
+  for (const m of membersRes.data ?? []) {
+    const name: string = (m as any).profiles?.name ?? 'Someone';
+    items.push({
+      id: `join_${m.user_id}`,
+      type: 'member_joined',
+      emoji: '🐝',
+      text: `${name} joined the Hive`,
+      timestamp: m.created_at,
+    });
+  }
+
+  items.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  return items.slice(0, 40);
+}
+
+function formatTime(timeStr: string): string {
+  const [hourStr, minStr] = timeStr.split(':');
+  const hour = parseInt(hourStr);
+  const min = minStr ?? '00';
+  const ampm = hour >= 12 ? 'pm' : 'am';
+  const h = hour % 12 || 12;
+  return min === '00' ? `${h}${ampm}` : `${h}:${min}${ampm}`;
+}
+
+export function useActivityFeed(communityId?: string) {
+  const [items, setItems] = useState<ActivityItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetch = useCallback(async () => {
+    if (!communityId) return;
+    setLoading(true);
+    try {
+      const data = await fetchActivityItems(communityId);
+      setItems(data);
+    } catch (e) {
+      console.error('Activity feed error:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [communityId]);
+
+  useEffect(() => {
+    fetch();
+  }, [fetch]);
+
+  return { items, loading, refetch: fetch };
+}
