@@ -23,57 +23,70 @@ export function BoardPostCard({ post, onPress }: BoardPostCardProps) {
   const timeAgo = getTimeAgo(new Date(post.created_at));
   const hasAttachments = post.attachments && post.attachments.length > 0;
   const firstAttachment = hasAttachments ? post.attachments![0] : null;
+  const extraCount = hasAttachments && post.attachments!.length > 1 ? post.attachments!.length - 1 : 0;
   const reactionCounts = getReactionCounts(post.reactions || []);
 
   return (
     <Pressable
       onPress={onPress}
-      className="bg-white rounded-xl p-4 mb-3 shadow-sm active:opacity-80"
+      className="bg-white rounded-xl mb-3 shadow-sm active:opacity-80 overflow-hidden"
     >
-      <View className="flex-row items-start justify-between">
-        <View className="flex-1 mr-3">
-          {post.is_pinned && (
-            <View className="flex-row items-center mb-1">
-              <Text className="text-xs text-gold">📌 Pinned</Text>
+      {/* Hero image when post has attachments */}
+      {firstAttachment && (
+        <View style={{ position: 'relative' }}>
+          <Image
+            source={{ uri: firstAttachment.url }}
+            style={{ width: '100%', height: 180, backgroundColor: '#f3f4f6' }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+          {extraCount > 0 && (
+            <View
+              style={{
+                position: 'absolute',
+                bottom: 8,
+                right: 8,
+                backgroundColor: 'rgba(0,0,0,0.55)',
+                borderRadius: 12,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+            >
+              <Ionicons name="images-outline" size={12} color="white" />
+              <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 12, marginLeft: 4 }}>
+                +{extraCount}
+              </Text>
             </View>
           )}
-          <Text
-            style={{ fontFamily: 'Lato_700Bold' }}
-            className="text-charcoal text-base mb-1"
-            numberOfLines={2}
-          >
-            {post.title}
-          </Text>
-          <LinkifiedText
-            style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: 'rgba(49, 49, 48, 0.7)', marginBottom: 8 }}
-            linkStyle={{ color: '#bd9348' }}
-          >
-            {post.content.length > 100 ? post.content.slice(0, 100) + '...' : post.content}
-          </LinkifiedText>
-          <View className="flex-row items-center">
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs">
-              {post.author?.name || 'Unknown'} · {timeAgo}
-            </Text>
-            {hasAttachments && (
-              <View className="flex-row items-center ml-2">
-                <Ionicons name="image-outline" size={12} color="#9ca3af" />
-                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs ml-1">
-                  {post.attachments!.length}
-                </Text>
-              </View>
-            )}
-          </View>
         </View>
-        <View className="items-end gap-2">
-          {firstAttachment && (
-            <Image
-              source={{ uri: firstAttachment.url }}
-              style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: '#f3f4f6' }}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-            />
-          )}
-          <View className="flex-row items-center flex-wrap gap-1 justify-end">
+      )}
+
+      <View className="p-4">
+        {post.is_pinned && (
+          <View className="flex-row items-center mb-1">
+            <Text className="text-xs text-gold">📌 Pinned</Text>
+          </View>
+        )}
+        <Text
+          style={{ fontFamily: 'Lato_700Bold' }}
+          className="text-charcoal text-base mb-1"
+          numberOfLines={2}
+        >
+          {post.title}
+        </Text>
+        <LinkifiedText
+          style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: 'rgba(49, 49, 48, 0.7)', marginBottom: 8 }}
+          linkStyle={{ color: '#bd9348' }}
+        >
+          {post.content.length > 120 ? post.content.slice(0, 120) + '...' : post.content}
+        </LinkifiedText>
+        <View className="flex-row items-center justify-between">
+          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs">
+            {post.author?.name || 'Unknown'} · {timeAgo}
+          </Text>
+          <View className="flex-row items-center gap-1">
             {reactionCounts.map(({ emoji, count }) => (
               <View key={emoji} className="flex-row items-center bg-cream px-2 py-1 rounded-full">
                 <Text className="text-xs">{emoji}</Text>
