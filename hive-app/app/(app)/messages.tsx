@@ -139,7 +139,7 @@ export default function MessagesScreen() {
           }
         />
       ) : (
-        <View className="flex-row items-center justify-between bg-charcoal px-4 py-3">
+        <View className="flex-row items-center justify-between bg-gold px-4 py-3">
           <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-xl text-white">
             Chat
           </Text>

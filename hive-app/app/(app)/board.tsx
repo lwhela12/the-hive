@@ -365,7 +365,7 @@ export default function BoardScreen() {
             rightElement={addTopicButton}
           />
         ) : (
-          <View className="bg-charcoal px-4 py-3 flex-row items-center justify-between">
+          <View className="bg-gold px-4 py-3 flex-row items-center justify-between">
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-xl text-white">
               Message Board
             </Text>
@@ -429,7 +429,7 @@ export default function BoardScreen() {
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       {/* Posts view header with back button */}
-      <View className="bg-charcoal flex-row items-center px-4 py-3">
+      <View className="bg-gold flex-row items-center px-4 py-3">
         <Pressable onPress={handleBack} hitSlop={8} className="mr-3 active:opacity-70">
           <Text className="text-gold text-2xl leading-none">‹</Text>
         </Pressable>

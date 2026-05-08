@@ -12,7 +12,7 @@ export const AppHeader = memo(function AppHeader({
   rightElement,
 }: AppHeaderProps) {
   return (
-    <View className="flex-row items-center justify-between px-4 py-3 bg-charcoal">
+    <View className="flex-row items-center justify-between px-4 py-3 bg-gold">
       <View className="w-10 h-10" />
 
       {/* Title */}

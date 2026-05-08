@@ -260,10 +260,10 @@ export default function MembersScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#faf8f3' }}>
       {/* Header */}
-      <View style={{ backgroundColor: '#313130', paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' }}>
-        <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#ffffff' }}>Members</Text>
+      <View style={{ backgroundColor: '#bd9348', paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' }}>
+        <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: '#ffffff' }}>Members</Text>
         {!loading && members.length > 0 && (
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
             {members.length} members · tap to learn more
           </Text>
         )}

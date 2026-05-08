@@ -86,7 +86,7 @@ export default function ChatScreen() {
 
         {/* Main chat area */}
         <View className="flex-1">
-          <View className="items-center px-4 py-3 bg-charcoal">
+          <View className="items-center px-4 py-3 bg-gold">
             <Text
               style={{ fontFamily: 'LibreBaskerville_700Bold' }}
               className="text-base text-white"
