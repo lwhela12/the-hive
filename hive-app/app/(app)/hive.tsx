@@ -596,143 +596,109 @@ export default function HiveScreen() {
           <RefreshControl refreshing={refreshing || isLoading} onRefresh={onRefresh} tintColor="#bd9348" />
         }
       >
-        {/* Member Stories Carousel */}
-        <View style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(189,147,72,0.25)', paddingVertical: 16 }}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16, gap: 20 }}
-          >
-            {carouselMembers.map(member => {
-              const isMe = member.id === profile?.id;
-              const firstName = member.name.split(' ')[0];
-              return (
-                <Pressable
-                  key={member.id}
-                  onPress={() => setSelectedMember(member)}
-                  style={{ alignItems: 'center', width: 68 }}
+        {/* Combined Daily Question + Member Answer Bubbles */}
+        <View style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(189,147,72,0.45)', backgroundColor: '#fffbf0' }}>
+          <View style={{ flexDirection: 'row' }}>
+
+            {/* Left: fixed question panel */}
+            <Pressable
+              onPress={() => setShowAnswerModal(true)}
+              style={{
+                width: useMobileLayout ? 138 : 176,
+                padding: 14,
+                borderRightWidth: 1,
+                borderRightColor: 'rgba(189,147,72,0.5)',
+                justifyContent: 'space-between',
+                minHeight: 176,
+              }}
+            >
+              <View>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', letterSpacing: 0.9, marginBottom: 7 }}>
+                  ✨ DAILY QUESTION
+                </Text>
+                <Text
+                  style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: useMobileLayout ? 12 : 13, color: '#2d2d2d', lineHeight: 18 }}
+                  numberOfLines={6}
                 >
-                  <View style={{
-                    borderRadius: 36,
-                    borderWidth: isMe ? 2.5 : 2,
-                    borderColor: isMe ? '#bd9348' : 'rgba(222,193,129,0.6)',
-                    padding: 2.5,
-                    marginBottom: 6,
-                    shadowColor: '#000',
-                    shadowOpacity: 0.08,
-                    shadowRadius: 6,
-                    shadowOffset: { width: 0, height: 2 },
-                    elevation: 2,
-                    backgroundColor: 'white',
-                  }}>
-                    {member.avatar_url ? (
-                      <Image
-                        source={{ uri: member.avatar_url }}
-                        style={{ width: 56, height: 56, borderRadius: 28 }}
-                        resizeMode="cover"
-                      />
+                  {DAILY_QUESTION}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, alignSelf: 'flex-start', backgroundColor: '#fdf3dc', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Answer ›</Text>
+              </View>
+            </Pressable>
+
+            {/* Right: scrolling member answer bubbles */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 14, gap: 10 }}
+            >
+              {carouselMembers.map((member, i) => {
+                const isMe = member.id === profile?.id;
+                const firstName = member.name.split(' ')[0];
+                const placeholderAnswer = PLACEHOLDER_ANSWERS[i] ?? null;
+                const hasAnswered = !!placeholderAnswer;
+                return (
+                  <Pressable
+                    key={member.id}
+                    onPress={isMe ? () => setShowAnswerModal(true) : () => setSelectedMember(member)}
+                    style={{ width: 74, alignItems: 'center' }}
+                  >
+                    {/* Avatar circle */}
+                    <View style={{
+                      borderRadius: 28,
+                      borderWidth: isMe ? 2.5 : 2,
+                      borderColor: hasAnswered ? '#bd9348' : 'rgba(222,193,129,0.4)',
+                      padding: 2.5,
+                      marginBottom: 5,
+                      backgroundColor: 'white',
+                      shadowColor: '#000',
+                      shadowOpacity: hasAnswered ? 0.1 : 0.04,
+                      shadowRadius: 4,
+                      shadowOffset: { width: 0, height: 1 },
+                      elevation: hasAnswered ? 2 : 1,
+                    }}>
+                      {member.avatar_url ? (
+                        <Image
+                          source={{ uri: member.avatar_url }}
+                          style={{ width: 44, height: 44, borderRadius: 22, opacity: hasAnswered ? 1 : 0.45 }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#e8e3da', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden', opacity: hasAnswered ? 1 : 0.45 }}>
+                          <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#b8b0a4', position: 'absolute', top: 8 }} />
+                          <View style={{ width: 32, height: 21, borderTopLeftRadius: 16, borderTopRightRadius: 16, backgroundColor: '#b8b0a4' }} />
+                        </View>
+                      )}
+                    </View>
+
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: hasAnswered ? '#2d2d2d' : '#b0a898', textAlign: 'center', marginBottom: 5 }} numberOfLines={1}>
+                      {isMe ? 'You' : firstName}
+                    </Text>
+
+                    {/* Answer snippet or placeholder */}
+                    {hasAnswered ? (
+                      <View style={{ backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(189,147,72,0.5)', padding: 6, width: 74 }}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 9, color: '#4b5563', lineHeight: 13 }} numberOfLines={4}>
+                          {placeholderAnswer.answer}
+                        </Text>
+                      </View>
                     ) : (
-                      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#e8e3da', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden' }}>
-                        <View style={{ width: 21, height: 21, borderRadius: 10.5, backgroundColor: '#b8b0a4', position: 'absolute', top: 10 }} />
-                        <View style={{ width: 42, height: 28, borderTopLeftRadius: 21, borderTopRightRadius: 21, backgroundColor: '#b8b0a4' }} />
+                      <View style={{ borderRadius: 8, borderWidth: 1, borderColor: 'rgba(222,193,129,0.25)', borderStyle: 'dashed', padding: 5, width: 74, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 13 }}>💭</Text>
                       </View>
                     )}
-                  </View>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#2d2d2d', textAlign: 'center' }} numberOfLines={1}>
-                    {isMe ? 'You' : firstName}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+          </View>
         </View>
 
         {/* Main Content */}
         <View className="p-4">
-
-        {/* Daily Question */}
-        <View style={{ marginBottom: 16, backgroundColor: '#fffbf0', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(189,147,72,0.3)', overflow: 'hidden', shadowColor: '#bd9348', shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
-          {/* Question header */}
-          <Pressable onPress={() => setShowAnswerModal(true)} style={{ padding: 16 }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginBottom: 8, letterSpacing: 0.8 }}>
-              ✨ DAILY QUESTION
-            </Text>
-            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 23 }}>
-              {DAILY_QUESTION}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
-              {/* Stacked answer avatars */}
-              {PLACEHOLDER_ANSWERS.map((a, i) => (
-                <View key={i} style={{
-                  width: 26, height: 26, borderRadius: 13,
-                  backgroundColor: a.color,
-                  borderWidth: 2, borderColor: '#fffbf0',
-                  marginLeft: i === 0 ? 0 : -8,
-                  alignItems: 'center', justifyContent: 'center',
-                  zIndex: PLACEHOLDER_ANSWERS.length - i,
-                }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#2d2d2d' }}>{a.initials}</Text>
-                </View>
-              ))}
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginLeft: 10 }}>
-                {PLACEHOLDER_ANSWERS.length} answered · tap to share yours
-              </Text>
-            </View>
-          </Pressable>
-
-          {/* Scrolling answer previews */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 10 }}
-          >
-            {PLACEHOLDER_ANSWERS.map((a, i) => (
-              <View key={i} style={{
-                width: 200,
-                backgroundColor: 'white',
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: 'rgba(222,193,129,0.25)',
-                padding: 12,
-              }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <View style={{
-                    width: 28, height: 28, borderRadius: 14,
-                    backgroundColor: a.color,
-                    alignItems: 'center', justifyContent: 'center',
-                    marginRight: 8,
-                  }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#2d2d2d' }}>{a.initials}</Text>
-                  </View>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d' }}>{a.name}</Text>
-                </View>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#4b5563', lineHeight: 18 }} numberOfLines={4}>
-                  {a.answer}
-                </Text>
-              </View>
-            ))}
-            {/* "Add yours" card */}
-            <Pressable
-              onPress={() => setShowAnswerModal(true)}
-              style={{
-                width: 140,
-                backgroundColor: '#fdf3dc',
-                borderRadius: 12,
-                borderWidth: 1.5,
-                borderColor: 'rgba(222,193,129,0.5)',
-                borderStyle: 'dashed',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 16,
-              }}
-            >
-              <Text style={{ fontSize: 24, marginBottom: 8 }}>✍️</Text>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', textAlign: 'center' }}>
-                Share your answer
-              </Text>
-            </Pressable>
-          </ScrollView>
-        </View>
 
         {/* Activity Feed + Upcoming Events — side by side on wide screens */}
         <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 12, marginBottom: 16 }}>
@@ -746,7 +712,7 @@ export default function HiveScreen() {
               backgroundColor: 'white',
               borderRadius: 16,
               borderWidth: 1,
-              borderColor: 'rgba(189,147,72,0.3)',
+              borderColor: 'rgba(189,147,72,0.5)',
               shadowColor: '#bd9348',
               shadowOpacity: 0.1,
               shadowRadius: 8,
@@ -814,7 +780,7 @@ export default function HiveScreen() {
               backgroundColor: 'white',
               borderRadius: 16,
               borderWidth: 1,
-              borderColor: 'rgba(189,147,72,0.3)',
+              borderColor: 'rgba(189,147,72,0.5)',
               shadowColor: '#bd9348',
               shadowOpacity: 0.1,
               shadowRadius: 8,
