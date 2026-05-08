@@ -601,32 +601,26 @@ export default function HiveScreen() {
           <View style={{ flexDirection: 'row' }}>
 
             {/* Left: fixed question panel */}
-            <Pressable
-              onPress={() => setShowAnswerModal(true)}
+            <View
               style={{
                 width: useMobileLayout ? 138 : 176,
                 padding: 14,
                 borderRightWidth: 1,
-                borderRightColor: 'rgba(189,147,72,0.5)',
-                justifyContent: 'space-between',
+                borderRightColor: '#c49a3c',
+                justifyContent: 'center',
                 minHeight: 176,
               }}
             >
-              <View>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', letterSpacing: 0.9, marginBottom: 7 }}>
-                  ✨ DAILY QUESTION
-                </Text>
-                <Text
-                  style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: useMobileLayout ? 12 : 13, color: '#2d2d2d', lineHeight: 18 }}
-                  numberOfLines={6}
-                >
-                  {DAILY_QUESTION}
-                </Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, alignSelf: 'flex-start', backgroundColor: '#fdf3dc', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Answer ›</Text>
-              </View>
-            </Pressable>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', letterSpacing: 0.9, marginBottom: 7 }}>
+                ✨ DAILY QUESTION
+              </Text>
+              <Text
+                style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: useMobileLayout ? 12 : 13, color: '#2d2d2d', lineHeight: 18 }}
+                numberOfLines={6}
+              >
+                {DAILY_QUESTION}
+              </Text>
+            </View>
 
             {/* Right: scrolling member answer bubbles */}
             <ScrollView
@@ -634,11 +628,14 @@ export default function HiveScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 14, gap: 10 }}
             >
-              {carouselMembers.map((member, i) => {
+              {[...carouselMembers].sort((a, b) => (a.id === profile?.id ? -1 : b.id === profile?.id ? 1 : 0)).map((member, i) => {
                 const isMe = member.id === profile?.id;
                 const firstName = member.name.split(' ')[0];
-                const placeholderAnswer = PLACEHOLDER_ANSWERS[i] ?? null;
+                // non-me members: first 3 get placeholder answers; me: never auto-answered
+                const nonMeIndex = isMe ? -1 : [...carouselMembers].filter(m => m.id !== profile?.id).indexOf(member);
+                const placeholderAnswer = !isMe && nonMeIndex < PLACEHOLDER_ANSWERS.length ? PLACEHOLDER_ANSWERS[nonMeIndex] : null;
                 const hasAnswered = !!placeholderAnswer;
+                const imgOpacity = isMe ? 1 : hasAnswered ? 1 : 0.45;
                 return (
                   <Pressable
                     key={member.id}
@@ -649,44 +646,45 @@ export default function HiveScreen() {
                     <View style={{
                       borderRadius: 28,
                       borderWidth: isMe ? 2.5 : 2,
-                      borderColor: hasAnswered ? '#bd9348' : 'rgba(222,193,129,0.4)',
+                      borderColor: isMe ? '#bd9348' : hasAnswered ? '#bd9348' : 'rgba(222,193,129,0.4)',
                       padding: 2.5,
                       marginBottom: 5,
                       backgroundColor: 'white',
                       shadowColor: '#000',
-                      shadowOpacity: hasAnswered ? 0.1 : 0.04,
+                      shadowOpacity: isMe || hasAnswered ? 0.1 : 0.04,
                       shadowRadius: 4,
                       shadowOffset: { width: 0, height: 1 },
-                      elevation: hasAnswered ? 2 : 1,
+                      elevation: isMe || hasAnswered ? 2 : 1,
                     }}>
                       {member.avatar_url ? (
                         <Image
                           source={{ uri: member.avatar_url }}
-                          style={{ width: 44, height: 44, borderRadius: 22, opacity: hasAnswered ? 1 : 0.45 }}
+                          style={{ width: 44, height: 44, borderRadius: 22, opacity: imgOpacity }}
                           resizeMode="cover"
                         />
                       ) : (
-                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#e8e3da', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden', opacity: hasAnswered ? 1 : 0.45 }}>
+                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#e8e3da', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden', opacity: imgOpacity }}>
                           <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#b8b0a4', position: 'absolute', top: 8 }} />
                           <View style={{ width: 32, height: 21, borderTopLeftRadius: 16, borderTopRightRadius: 16, backgroundColor: '#b8b0a4' }} />
                         </View>
                       )}
                     </View>
 
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: hasAnswered ? '#2d2d2d' : '#b0a898', textAlign: 'center', marginBottom: 5 }} numberOfLines={1}>
-                      {isMe ? 'You' : firstName}
+                    {/* Name / Answer label */}
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: isMe ? '#bd9348' : hasAnswered ? '#2d2d2d' : '#b0a898', textAlign: 'center', marginBottom: 5 }} numberOfLines={1}>
+                      {isMe ? 'Answer' : firstName}
                     </Text>
 
                     {/* Answer snippet or placeholder */}
                     {hasAnswered ? (
-                      <View style={{ backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(189,147,72,0.5)', padding: 6, width: 74 }}>
+                      <View style={{ backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#c49a3c', padding: 6, width: 74 }}>
                         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 9, color: '#4b5563', lineHeight: 13 }} numberOfLines={4}>
                           {placeholderAnswer.answer}
                         </Text>
                       </View>
                     ) : (
-                      <View style={{ borderRadius: 8, borderWidth: 1, borderColor: 'rgba(222,193,129,0.25)', borderStyle: 'dashed', padding: 5, width: 74, alignItems: 'center' }}>
-                        <Text style={{ fontSize: 13 }}>💭</Text>
+                      <View style={{ borderRadius: 8, borderWidth: 1, borderColor: isMe ? 'rgba(189,147,72,0.4)' : 'rgba(222,193,129,0.25)', borderStyle: 'dashed', padding: 5, width: 74, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 13 }}>{isMe ? '✍️' : '💭'}</Text>
                       </View>
                     )}
                   </Pressable>
@@ -712,9 +710,9 @@ export default function HiveScreen() {
               backgroundColor: 'white',
               borderRadius: 16,
               borderWidth: 1,
-              borderColor: 'rgba(189,147,72,0.5)',
-              shadowColor: '#bd9348',
-              shadowOpacity: 0.1,
+              borderColor: '#c49a3c',
+              shadowColor: '#c49a3c',
+              shadowOpacity: 0.18,
               shadowRadius: 8,
               shadowOffset: { width: 0, height: 2 },
               elevation: 2,
@@ -780,9 +778,9 @@ export default function HiveScreen() {
               backgroundColor: 'white',
               borderRadius: 16,
               borderWidth: 1,
-              borderColor: 'rgba(189,147,72,0.5)',
-              shadowColor: '#bd9348',
-              shadowOpacity: 0.1,
+              borderColor: '#c49a3c',
+              shadowColor: '#c49a3c',
+              shadowOpacity: 0.18,
               shadowRadius: 8,
               shadowOffset: { width: 0, height: 2 },
               elevation: 2,
