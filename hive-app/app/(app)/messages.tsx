@@ -139,8 +139,8 @@ export default function MessagesScreen() {
           }
         />
       ) : (
-        <View className="flex-row items-center justify-between bg-white px-4 py-3 border-b border-cream">
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-charcoal">
+        <View className="flex-row items-center justify-between bg-charcoal px-4 py-3">
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-xl text-white">
             Chat
           </Text>
           <Pressable

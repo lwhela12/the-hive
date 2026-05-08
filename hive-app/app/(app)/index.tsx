@@ -88,10 +88,10 @@ export default function ChatScreen() {
         <View className="flex-1">
           {/* Mobile header */}
           {useMobileLayout && (
-            <View className="items-center px-4 py-3">
+            <View className="items-center px-4 py-3 bg-charcoal">
               <Text
                 style={{ fontFamily: 'LibreBaskerville_700Bold' }}
-                className="text-base text-charcoal"
+                className="text-base text-white"
               >
                 Clive
               </Text>

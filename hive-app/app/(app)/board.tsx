@@ -365,8 +365,8 @@ export default function BoardScreen() {
             rightElement={addTopicButton}
           />
         ) : (
-          <View className="bg-white px-4 py-3 border-b border-cream flex-row items-center justify-between">
-            <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-charcoal">
+          <View className="bg-charcoal px-4 py-3 flex-row items-center justify-between">
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-xl text-white">
               Message Board
             </Text>
             {isAdmin && (
@@ -429,13 +429,13 @@ export default function BoardScreen() {
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       {/* Posts view header with back button */}
-      <View className="bg-white border-b border-cream flex-row items-center px-4 py-3">
+      <View className="bg-charcoal flex-row items-center px-4 py-3">
         <Pressable onPress={handleBack} hitSlop={8} className="mr-3 active:opacity-70">
           <Text className="text-gold text-2xl leading-none">‹</Text>
         </Pressable>
         <Text
           style={{ fontFamily: 'LibreBaskerville_700Bold' }}
-          className="text-xl text-charcoal flex-1"
+          className="text-base text-white flex-1"
           numberOfLines={1}
         >
           {selectedCategory.name}
@@ -444,17 +444,17 @@ export default function BoardScreen() {
           <View className="flex-row items-center ml-2">
             <Pressable
               onPress={() => openEditTopic(selectedCategory)}
-              className="w-9 h-9 items-center justify-center rounded-full active:bg-cream"
+              className="w-9 h-9 items-center justify-center rounded-full active:opacity-70"
               hitSlop={8}
             >
-              <Ionicons name="pencil-outline" size={20} color="#4A4A4A" />
+              <Ionicons name="pencil-outline" size={20} color="rgba(255,255,255,0.8)" />
             </Pressable>
             <Pressable
               onPress={() => handleDeleteTopic(selectedCategory)}
-              className="w-9 h-9 items-center justify-center rounded-full active:bg-cream"
+              className="w-9 h-9 items-center justify-center rounded-full active:opacity-70"
               hitSlop={8}
             >
-              <Ionicons name="trash-outline" size={20} color="#ef4444" />
+              <Ionicons name="trash-outline" size={20} color="#f87171" />
             </Pressable>
           </View>
         )}

@@ -12,13 +12,13 @@ export const AppHeader = memo(function AppHeader({
   rightElement,
 }: AppHeaderProps) {
   return (
-    <View className="flex-row items-center justify-between px-4 py-3 bg-white">
+    <View className="flex-row items-center justify-between px-4 py-3 bg-charcoal">
       <View className="w-10 h-10" />
 
       {/* Title */}
       <Text
         style={{ fontFamily: 'LibreBaskerville_700Bold' }}
-        className="text-base text-charcoal"
+        className="text-base text-white"
       >
         {title}
       </Text>

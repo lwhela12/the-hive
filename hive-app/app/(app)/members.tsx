@@ -259,15 +259,17 @@ export default function MembersScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#faf8f3' }}>
+      {/* Header */}
+      <View style={{ backgroundColor: '#313130', paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' }}>
+        <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#ffffff' }}>Members</Text>
+        {!loading && members.length > 0 && (
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
+            {members.length} members · tap to learn more
+          </Text>
+        )}
+      </View>
+
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 140 }}>
-        <View style={{ marginBottom: 20 }}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 24, color: '#2d2d2d' }}>Members</Text>
-          {!loading && members.length > 0 && (
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
-              {members.length} members · tap to learn more
-            </Text>
-          )}
-        </View>
 
         {loading ? (
           <View style={{ alignItems: 'center', paddingTop: 80 }}>
