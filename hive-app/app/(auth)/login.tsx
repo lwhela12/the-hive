@@ -106,35 +106,46 @@ export default function LoginScreen() {
           <View className="items-center mb-10">
             <Image
               source={require('../../assets/HIVE Logo Transparent  BG.png')}
-              style={{ width: 120, height: 120, marginBottom: 12 }}
+              style={{ width: 110, height: 110, marginBottom: 10 }}
               resizeMode="contain"
             />
+            {/* H.I.V.E. */}
             <Text
               style={{ fontFamily: 'LibreBaskerville_700Bold' }}
               className="text-5xl text-charcoal text-center"
             >
               H.I.V.E.
             </Text>
+            {/* "Architects of Collective" dark, "Abundance" gold — matching website layout */}
             <Text
-              style={{ fontFamily: 'LibreBaskerville_700Bold' }}
-              className="text-lg text-gold mt-3 text-center"
+              style={{ fontFamily: 'LibreBaskerville_700Bold', lineHeight: 38 }}
+              className="text-3xl text-charcoal text-center mt-2"
             >
-              Architects of Collective Abundance
+              {'Architects '}
+              <Text style={{ fontFamily: 'LibreBaskerville_400Regular', fontStyle: 'italic' }}>of</Text>
+              {' Collective'}
             </Text>
-            {/* Tagline with mixed styling matching the website */}
-            <View className="flex-row flex-wrap justify-center mt-3 px-2">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/70 text-sm text-center leading-5">
-                {'Where brilliant minds don\'t just network—'}
-                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic' }}>they </Text>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', color: '#bd9348' }}>build.</Text>
-              </Text>
-            </View>
+            <Text
+              style={{ fontFamily: 'LibreBaskerville_700Bold', lineHeight: 38 }}
+              className="text-3xl text-gold text-center"
+            >
+              Abundance
+            </Text>
+            {/* Tagline */}
+            <Text
+              style={{ fontFamily: 'Lato_700Bold', lineHeight: 22 }}
+              className="text-sm text-charcoal text-center mt-3 px-2"
+            >
+              {'Where brilliant minds don\'t just network—'}
+              <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic' }}>they </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', color: '#bd9348' }}>build.</Text>
+            </Text>
           </View>
 
           <View className="mb-9">
             <Text
               style={{ fontFamily: 'Lato_400Regular' }}
-              className="text-center text-charcoal/60 text-base leading-7"
+              className="text-center text-charcoal/60 text-sm leading-6"
             >
               A private circle for high-definition wishing, thoughtful support,
               and matching what members need with what members know.
