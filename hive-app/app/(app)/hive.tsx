@@ -200,32 +200,35 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
               )}
             </View>
           </View>
-          {event.meet_link && (
+          {/* Action buttons — Meet and Calendar inline on one row */}
+          <View className="flex-row flex-wrap gap-2 mt-3">
+            {event.meet_link && (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  Linking.openURL(event.meet_link!);
+                }}
+                className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10"
+              >
+                <Text className="text-xs mr-1.5">📹</Text>
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
+                  Join Google Meet
+                </Text>
+              </Pressable>
+            )}
             <Pressable
               onPress={(e) => {
                 e.stopPropagation();
-                Linking.openURL(event.meet_link!);
+                openAddToCalendar(event);
               }}
-              className="mt-3 self-start bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10"
+              className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10"
             >
-              <Text className="text-xs mr-1.5">📹</Text>
+              <Text className="text-xs mr-1.5">📅</Text>
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                Join Google Meet
+                Add to Calendar
               </Text>
             </Pressable>
-          )}
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation();
-              openAddToCalendar(event);
-            }}
-            className="mt-3 self-start bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10"
-          >
-            <Text className="text-xs mr-1.5">📅</Text>
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-              Add to Calendar
-            </Text>
-          </Pressable>
+          </View>
         </Pressable>
       ))}
       {hasMore && (
@@ -260,20 +263,21 @@ function HexShortcut({ emoji, label, sublabel, onPress }: {
   sublabel?: string;
   onPress: () => void;
 }) {
+  // Flat-top honeycomb hexagon: flat edges on top & bottom, points on left & right
   return (
     <Pressable onPress={onPress} style={{ alignItems: 'center', flex: 1 }} className="active:opacity-70">
-      <View style={{ width: 72, height: 64, alignItems: 'center', justifyContent: 'center' }}>
-        <Svg width={72} height={64} viewBox="0 0 72 64" style={{ position: 'absolute' }}>
+      <View style={{ width: 80, height: 70, alignItems: 'center', justifyContent: 'center' }}>
+        <Svg width={80} height={70} viewBox="0 0 80 70" style={{ position: 'absolute' }}>
           <Polygon
-            points="36,2 70,20 70,44 36,62 2,44 2,20"
+            points="20,1 60,1 79,35 60,69 20,69 1,35"
             fill="#fdf3dc"
-            stroke="rgba(222,193,129,0.6)"
+            stroke="rgba(196,154,60,0.55)"
             strokeWidth={1.5}
           />
         </Svg>
-        <Text style={{ fontSize: 26, lineHeight: 30 }}>{emoji}</Text>
+        <Text style={{ fontSize: 28, lineHeight: 32 }}>{emoji}</Text>
       </View>
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#2d2d2d', marginTop: 5, textAlign: 'center' }}>{label}</Text>
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#2d2d2d', marginTop: 4, textAlign: 'center' }}>{label}</Text>
       {sublabel ? (
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginTop: 2, textAlign: 'center' }}>{sublabel}</Text>
       ) : null}
@@ -353,20 +357,28 @@ export default function HiveScreen() {
 
   // Read state — stored in localStorage so it persists across sessions per device
   const activityReadKey = communityId ? `the-hive:activity-viewed:${communityId}` : null;
-  const [lastViewedAt] = useState<string>(() => {
+  const [sessionReadAt, setSessionReadAt] = useState<string>(() => {
     if (typeof window !== 'undefined' && activityReadKey) {
       return window.localStorage.getItem(activityReadKey) ?? new Date(0).toISOString();
     }
     return new Date(0).toISOString();
   });
-  // After 3 seconds on this screen, persist "now" so NEXT visit these items show as read
-  // We don't update state so dots remain visible during the current visit
-  const hasMarkedReadRef = useRef(false);
+
+  const markAllActivityRead = useCallback(() => {
+    const now = new Date().toISOString();
+    setSessionReadAt(now);
+    if (activityReadKey && typeof window !== 'undefined') {
+      window.localStorage.setItem(activityReadKey, now);
+    }
+  }, [activityReadKey]);
+
+  // After 3 seconds, silently persist for next visit (state already shows dots this visit)
+  const hasAutoMarkedRef = useRef(false);
   useEffect(() => {
-    if (!activityReadKey || typeof window === 'undefined' || hasMarkedReadRef.current) return;
+    if (!activityReadKey || typeof window === 'undefined' || hasAutoMarkedRef.current) return;
     const timer = setTimeout(() => {
       window.localStorage.setItem(activityReadKey, new Date().toISOString());
-      hasMarkedReadRef.current = true;
+      hasAutoMarkedRef.current = true;
     }, 3000);
     return () => clearTimeout(timer);
   }, [activityReadKey]);
@@ -766,9 +778,18 @@ export default function HiveScreen() {
 
           {/* Activity Feed */}
           <View style={{ flex: 1, marginBottom: useMobileLayout ? 0 : 0 }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 10 }}>
-              Activity
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+                Activity
+              </Text>
+              {activityItems.some(item => item.timestamp > sessionReadAt) && (
+                <Pressable onPress={markAllActivityRead} className="active:opacity-60">
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#bd9348' }}>
+                    Mark all read
+                  </Text>
+                </Pressable>
+              )}
+            </View>
             <View style={{
               backgroundColor: 'white',
               borderRadius: 16,
@@ -795,7 +816,7 @@ export default function HiveScreen() {
               ) : (
                 <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
                   {activityItems.map((item, i) => {
-                    const isUnread = item.timestamp > lastViewedAt;
+                    const isUnread = item.timestamp > sessionReadAt;
                     return (
                       <View
                         key={item.id}
