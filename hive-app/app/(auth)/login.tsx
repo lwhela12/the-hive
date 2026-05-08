@@ -106,7 +106,7 @@ export default function LoginScreen() {
           <View className="items-center mb-10">
             <Image
               source={require('../../assets/HIVE Logo Transparent  BG.png')}
-              style={{ width: 150, height: 150, marginBottom: 10 }}
+              style={{ width: 190, height: 190, marginBottom: 10 }}
               resizeMode="contain"
             />
             {/* H.I.V.E. */}
