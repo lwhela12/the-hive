@@ -106,7 +106,7 @@ export default function LoginScreen() {
           <View className="items-center mb-10">
             <Image
               source={require('../../assets/HIVE Logo Transparent  BG.png')}
-              style={{ width: 148, height: 148, marginBottom: 18 }}
+              style={{ width: 120, height: 120, marginBottom: 12 }}
               resizeMode="contain"
             />
             <Text
@@ -116,17 +116,25 @@ export default function LoginScreen() {
               H.I.V.E.
             </Text>
             <Text
-              style={{ fontFamily: 'Lato_700Bold' }}
-              className="text-base text-gold mt-3 text-center"
+              style={{ fontFamily: 'LibreBaskerville_700Bold' }}
+              className="text-lg text-gold mt-3 text-center"
             >
               Architects of Collective Abundance
             </Text>
+            {/* Tagline with mixed styling matching the website */}
+            <View className="flex-row flex-wrap justify-center mt-3 px-2">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/70 text-sm text-center leading-5">
+                {'Where brilliant minds don\'t just network—'}
+                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic' }}>they </Text>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', color: '#bd9348' }}>build.</Text>
+              </Text>
+            </View>
           </View>
 
           <View className="mb-9">
             <Text
               style={{ fontFamily: 'Lato_400Regular' }}
-              className="text-center text-charcoal text-lg leading-7"
+              className="text-center text-charcoal/60 text-base leading-7"
             >
               A private circle for high-definition wishing, thoughtful support,
               and matching what members need with what members know.
