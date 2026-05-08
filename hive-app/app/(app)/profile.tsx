@@ -67,6 +67,14 @@ export default function ProfileScreen() {
   const [editBirthday, setEditBirthday] = useState('');
   const [editOccupation, setEditOccupation] = useState('');
   const [editPreferredContact, setEditPreferredContact] = useState('email');
+  const [editBio, setEditBio] = useState('');
+  const [editCurrentProject, setEditCurrentProject] = useState('');
+  const [editHometown, setEditHometown] = useState('');
+  const [editFavBook, setEditFavBook] = useState('');
+  const [editFavFood, setEditFavFood] = useState('');
+  const [editFavHobby, setEditFavHobby] = useState('');
+  const [editKnownFor, setEditKnownFor] = useState('');
+  const [editFunFacts, setEditFunFacts] = useState(['', '', '']);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
@@ -127,6 +135,14 @@ export default function ProfileScreen() {
       setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
       setEditOccupation(profile.occupation || '');
       setEditPreferredContact(profile.preferred_contact || 'email');
+      setEditBio((profile as any).bio || '');
+      setEditCurrentProject((profile as any).current_project || '');
+      setEditHometown((profile as any).hometown || '');
+      setEditFavBook((profile as any).favorite_book || '');
+      setEditFavFood((profile as any).favorite_food || '');
+      setEditFavHobby((profile as any).favorite_hobby || '');
+      setEditKnownFor((profile as any).known_for || '');
+      setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
     }
   }, [profile]);
 
@@ -138,6 +154,14 @@ export default function ProfileScreen() {
       setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
       setEditOccupation(profile.occupation || '');
       setEditPreferredContact(profile.preferred_contact || 'email');
+      setEditBio((profile as any).bio || '');
+      setEditCurrentProject((profile as any).current_project || '');
+      setEditHometown((profile as any).hometown || '');
+      setEditFavBook((profile as any).favorite_book || '');
+      setEditFavFood((profile as any).favorite_food || '');
+      setEditFavHobby((profile as any).favorite_hobby || '');
+      setEditKnownFor((profile as any).known_for || '');
+      setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
     }
     setIsEditing(true);
   };
@@ -152,6 +176,14 @@ export default function ProfileScreen() {
       setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
       setEditOccupation(profile.occupation || '');
       setEditPreferredContact(profile.preferred_contact || 'email');
+      setEditBio((profile as any).bio || '');
+      setEditCurrentProject((profile as any).current_project || '');
+      setEditHometown((profile as any).hometown || '');
+      setEditFavBook((profile as any).favorite_book || '');
+      setEditFavFood((profile as any).favorite_food || '');
+      setEditFavHobby((profile as any).favorite_hobby || '');
+      setEditKnownFor((profile as any).known_for || '');
+      setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
     }
   };
 
@@ -170,6 +202,16 @@ export default function ProfileScreen() {
         birthday: birthdayIso,
         occupation: editOccupation.trim() || null,
         preferred_contact: editPreferredContact,
+        bio: editBio.trim() || null,
+        current_project: editCurrentProject.trim() || null,
+        hometown: editHometown.trim() || null,
+        favorite_book: editFavBook.trim() || null,
+        favorite_food: editFavFood.trim() || null,
+        favorite_hobby: editFavHobby.trim() || null,
+        known_for: editKnownFor.trim() || null,
+        fun_facts: editFunFacts.map(f => f.trim()).filter(Boolean).length > 0
+          ? editFunFacts.map(f => f.trim()).filter(Boolean)
+          : null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', profile.id);
@@ -577,6 +619,147 @@ export default function ProfileScreen() {
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
                   {profile.occupation || 'Not set'}
                 </Text>
+              )}
+            </View>
+
+            {/* Bio */}
+            <View className="p-4 border-b border-cream">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">About me</Text>
+              {isEditing ? (
+                <TextInput
+                  value={editBio}
+                  onChangeText={setEditBio}
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className="text-charcoal text-base p-0"
+                  placeholder="A few sentences about yourself..."
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={3}
+                />
+              ) : (
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
+                  {(profile as any).bio || 'Not set'}
+                </Text>
+              )}
+            </View>
+
+            {/* Current Project */}
+            <View className="p-4 border-b border-cream">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Current project</Text>
+              {isEditing ? (
+                <TextInput
+                  value={editCurrentProject}
+                  onChangeText={setEditCurrentProject}
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className="text-charcoal text-base p-0"
+                  placeholder="What are you working on right now?"
+                  placeholderTextColor="#9CA3AF"
+                />
+              ) : (
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                  {(profile as any).current_project || 'Not set'}
+                </Text>
+              )}
+            </View>
+
+            {/* Hometown */}
+            <View className="p-4 border-b border-cream">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Hometown</Text>
+              {isEditing ? (
+                <TextInput
+                  value={editHometown}
+                  onChangeText={setEditHometown}
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className="text-charcoal text-base p-0"
+                  placeholder="Where are you from?"
+                  placeholderTextColor="#9CA3AF"
+                />
+              ) : (
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                  {(profile as any).hometown || 'Not set'}
+                </Text>
+              )}
+            </View>
+
+            {/* Known for */}
+            <View className="p-4 border-b border-cream">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Known for in the group</Text>
+              {isEditing ? (
+                <TextInput
+                  value={editKnownFor}
+                  onChangeText={setEditKnownFor}
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className="text-charcoal text-base p-0"
+                  placeholder="e.g. best dinner party host, always has good book recs..."
+                  placeholderTextColor="#9CA3AF"
+                />
+              ) : (
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                  {(profile as any).known_for || 'Not set'}
+                </Text>
+              )}
+            </View>
+
+            {/* Favorites */}
+            <View className="p-4 border-b border-cream">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/50 mb-3">Favorites</Text>
+              {(['favorite_book', 'favorite_food', 'favorite_hobby'] as const).map((field, idx) => {
+                const labels = ['📚 Favorite book', '🍽️ Favorite food', '🎯 Favorite hobby'];
+                const setters = [setEditFavBook, setEditFavFood, setEditFavHobby];
+                const values = [editFavBook, editFavFood, editFavHobby];
+                return (
+                  <View key={field} className={idx < 2 ? 'mb-3' : ''}>
+                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">{labels[idx]}</Text>
+                    {isEditing ? (
+                      <TextInput
+                        value={values[idx]}
+                        onChangeText={setters[idx]}
+                        style={{ fontFamily: 'Lato_400Regular' }}
+                        className="text-charcoal text-base p-0"
+                        placeholder="Not set"
+                        placeholderTextColor="#9CA3AF"
+                      />
+                    ) : (
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                        {(profile as any)[field] || 'Not set'}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Fun facts */}
+            <View className="p-4 border-b border-cream">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-3">3 fun facts about me</Text>
+              {isEditing ? (
+                editFunFacts.map((fact, idx) => (
+                  <TextInput
+                    key={idx}
+                    value={fact}
+                    onChangeText={(text) => {
+                      const updated = [...editFunFacts];
+                      updated[idx] = text;
+                      setEditFunFacts(updated);
+                    }}
+                    style={{ fontFamily: 'Lato_400Regular' }}
+                    className="text-charcoal text-base p-0 mb-3"
+                    placeholder={`Fun fact ${idx + 1}...`}
+                    placeholderTextColor="#9CA3AF"
+                  />
+                ))
+              ) : (
+                <View className="gap-2">
+                  {(((profile as any).fun_facts as string[] | null) ?? []).length > 0
+                    ? ((profile as any).fun_facts as string[]).map((fact: string, idx: number) => (
+                        <View key={idx} className="flex-row items-start">
+                          <Text className="text-gold mr-2">✦</Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal flex-1">{fact}</Text>
+                        </View>
+                      ))
+                    : <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40">Not set</Text>
+                  }
+                </View>
               )}
             </View>
 
