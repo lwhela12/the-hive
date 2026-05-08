@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
@@ -16,6 +16,7 @@ import {
   WishSectionSkeleton,
 } from '../../components/hive/skeletons';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
+import { getTodayQuestion } from '../../lib/dailyQuestions';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
@@ -240,14 +241,6 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
   );
 }
 
-const DAILY_QUESTION = "What's one thing you've been putting off that could change everything if you just started?";
-
-const PLACEHOLDER_ANSWERS = [
-  { name: 'Charlee', initials: 'CH', avatar: null, answer: 'Learning how to properly meal-prep on Sundays so weeknights feel effortless.', color: '#f9dcc4' },
-  { name: 'Maya', initials: 'MA', avatar: null, answer: 'Writing the first chapter of the novel I keep talking about!', color: '#d4e8d0' },
-  { name: 'Sara', initials: 'SA', avatar: null, answer: 'Setting up a consistent morning routine — even just 15 minutes of movement.', color: '#d6e4f7' },
-];
-
 const PLACEHOLDER_ACTIVITY = [
   { emoji: '🌟', text: 'Sarah posted a new wish: help planning a veggie garden', time: '2h ago', read: false },
   { emoji: '✅', text: "Maya's wish for recipe ideas was granted by Charlee", time: '5h ago', read: false },
@@ -295,13 +288,45 @@ export default function HiveScreen() {
   const [showAnswerModal, setShowAnswerModal] = useState(false);
   const [myAnswer, setMyAnswer] = useState('');
   const [mySubmittedAnswer, setMySubmittedAnswer] = useState('');
+  // Map of user_id → answer text for today's question
+  const [memberAnswers, setMemberAnswers] = useState<Map<string, string>>(new Map());
 
-  const handleSubmitAnswer = () => {
+  const { question: todayQuestion, index: todayIndex } = getTodayQuestion();
+
+  const fetchTodayAnswers = useCallback(async () => {
+    if (!communityId) return;
+    const { data } = await supabase
+      .from('daily_question_answers')
+      .select('user_id, answer')
+      .eq('community_id', communityId)
+      .eq('question_index', todayIndex);
+    if (data) {
+      const map = new Map<string, string>();
+      data.forEach((row: any) => map.set(row.user_id, row.answer));
+      setMemberAnswers(map);
+      if (profile?.id && map.has(profile.id)) {
+        setMySubmittedAnswer(map.get(profile.id)!);
+        setMyAnswer(map.get(profile.id)!);
+      }
+    }
+  }, [communityId, todayIndex, profile?.id]);
+
+  useEffect(() => { fetchTodayAnswers(); }, [fetchTodayAnswers]);
+
+  const handleSubmitAnswer = async () => {
     const text = myAnswer.trim();
-    if (!text) return;
+    if (!text || !profile?.id || !communityId) return;
     setMySubmittedAnswer(text);
-    setMyAnswer('');
     setShowAnswerModal(false);
+    await supabase.from('daily_question_answers').upsert({
+      user_id: profile.id,
+      community_id: communityId,
+      question_index: todayIndex,
+      answer: text,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,question_index' });
+    // Refresh so other bubbles update if someone else answered
+    fetchTodayAnswers();
   };
   const [selectedWish, setSelectedWish] = useState<WishWithGranters | null>(null);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
@@ -622,10 +647,15 @@ export default function HiveScreen() {
                 ✨ DAILY QUESTION
               </Text>
               <Text
+                style={{ fontFamily: 'Lato_400Regular', fontSize: 9, color: '#bd9348', letterSpacing: 0.5, marginBottom: 3 }}
+              >
+                {todayQuestion.emoji} {todayQuestion.category.toUpperCase()}
+              </Text>
+              <Text
                 style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: useMobileLayout ? 12 : 13, color: '#2d2d2d', lineHeight: 18 }}
                 numberOfLines={6}
               >
-                {DAILY_QUESTION}
+                {todayQuestion.text}
               </Text>
             </View>
 
@@ -635,13 +665,11 @@ export default function HiveScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 14, gap: 10 }}
             >
-              {[...carouselMembers].sort((a, b) => (a.id === profile?.id ? -1 : b.id === profile?.id ? 1 : 0)).map((member, i) => {
+              {[...carouselMembers].sort((a, b) => (a.id === profile?.id ? -1 : b.id === profile?.id ? 1 : 0)).map((member) => {
                 const isMe = member.id === profile?.id;
                 const firstName = member.name.split(' ')[0];
-                // non-me members: first 3 get placeholder answers; me: never auto-answered
-                const nonMeIndex = isMe ? -1 : [...carouselMembers].filter(m => m.id !== profile?.id).indexOf(member);
-                const placeholderAnswer = !isMe && nonMeIndex < PLACEHOLDER_ANSWERS.length ? PLACEHOLDER_ANSWERS[nonMeIndex] : null;
-                const hasAnswered = !!placeholderAnswer;
+                const memberAnswer = isMe ? mySubmittedAnswer : (memberAnswers.get(member.id) ?? '');
+                const hasAnswered = !!memberAnswer;
                 const imgOpacity = isMe ? 1 : hasAnswered ? 1 : 0.45;
                 return (
                   <Pressable
@@ -683,16 +711,10 @@ export default function HiveScreen() {
                     </Text>
 
                     {/* Answer snippet or placeholder */}
-                    {isMe && mySubmittedAnswer ? (
+                    {hasAnswered ? (
                       <View style={{ backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#c49a3c', padding: 6, width: 74 }}>
                         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 9, color: '#4b5563', lineHeight: 13 }} numberOfLines={4}>
-                          {mySubmittedAnswer}
-                        </Text>
-                      </View>
-                    ) : hasAnswered ? (
-                      <View style={{ backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#c49a3c', padding: 6, width: 74 }}>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 9, color: '#4b5563', lineHeight: 13 }} numberOfLines={4}>
-                          {placeholderAnswer.answer}
+                          {memberAnswer}
                         </Text>
                       </View>
                     ) : (
@@ -1107,10 +1129,10 @@ export default function HiveScreen() {
             </View>
             <View style={{ paddingHorizontal: 24, paddingBottom: 40 }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', letterSpacing: 0.8, marginTop: 12, marginBottom: 6 }}>
-                ✨ DAILY QUESTION
+                {todayQuestion.emoji} {todayQuestion.category.toUpperCase()}
               </Text>
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 22, marginBottom: 20 }}>
-                {DAILY_QUESTION}
+                {todayQuestion.text}
               </Text>
               {/* Text input + mic */}
               <View style={{ marginBottom: 14, position: 'relative' }}>
