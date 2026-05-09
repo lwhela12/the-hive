@@ -1,7 +1,9 @@
-import { useState, memo } from 'react';
+import { useState, memo, useEffect } from 'react';
 import { View, TextInput, Pressable, Text, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SelectedImage, pickMultipleImages } from '../../lib/imagePicker';
+import { takePendingAttachments } from '../../lib/pendingAttachments';
+import { VoiceMicButton } from '../ui/VoiceMicButton';
 
 interface ChatInputProps {
   onSend: (message: string, images?: SelectedImage[]) => void;
@@ -16,6 +18,14 @@ export const ChatInput = memo(function ChatInput({
 }: ChatInputProps) {
   const [inputText, setInputText] = useState('');
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+
+  // Pick up any images queued from the floating Clive bubble
+  useEffect(() => {
+    const pending = takePendingAttachments();
+    if (pending.length > 0) {
+      setSelectedImages(pending);
+    }
+  }, []);
 
   const handlePickImages = async () => {
     if (isLoading) return;
@@ -113,6 +123,14 @@ export const ChatInput = memo(function ChatInput({
         >
           <Text className="text-sm text-white" style={{ marginTop: -1 }}>↑</Text>
         </Pressable>
+
+        <VoiceMicButton
+          size={20}
+          style={{ marginLeft: 6 }}
+          onTranscript={(text) => {
+            setInputText((prev) => prev ? prev + ' ' + text : text);
+          }}
+        />
       </View>
     </View>
   );

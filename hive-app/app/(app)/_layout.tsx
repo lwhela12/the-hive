@@ -9,6 +9,8 @@ import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { HexagonIcon } from '../../components/ui/HexagonIcon';
 import { getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
+import { pickMultipleImages, SelectedImage } from '../../lib/imagePicker';
+import { setPendingAttachments } from '../../lib/pendingAttachments';
 
 const beeIcon = require('../../assets/bee-gold-bg.png');
 const cliveIcon = require('../../assets/Clive_logo.png');
@@ -97,6 +99,8 @@ export default function AppLayout() {
   const showAdminTab = communityRole === 'admin' || communityRole === 'treasurer';
   const { width } = useWindowDimensions();
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
+  const [cliveDraft, setCliveDraft] = useState('');
+  const [bubbleImages, setBubbleImages] = useState<SelectedImage[]>([]);
 
   // Use mobile layout for narrow screens (< 768px) regardless of platform
   const useMobileLayout = width < 768;
@@ -135,14 +139,25 @@ export default function AppLayout() {
     ? Platform.OS === 'ios' ? 92 : 86
     : 70;
 
-  const [cliveDraft, setCliveDraft] = useState('');
-
   // Hide floating Clive bar when already on the Clive chat page
   const onClivePage = pathname === '/' || pathname === '/index';
+
+  const handleBubbleAttach = async () => {
+    const remaining = 5 - bubbleImages.length;
+    if (remaining <= 0) return;
+    const images = await pickMultipleImages({ maxImages: remaining });
+    if (images.length > 0) {
+      setBubbleImages((prev) => [...prev, ...images]);
+    }
+  };
 
   const submitToClive = () => {
     const text = cliveDraft.trim();
     setCliveDraft('');
+    if (bubbleImages.length > 0) {
+      setPendingAttachments(bubbleImages);
+      setBubbleImages([]);
+    }
     if (text) {
       router.push({ pathname: '/', params: { message: text } });
     } else {
@@ -176,14 +191,6 @@ export default function AppLayout() {
           tabBarShowLabel: false,
         }}
       >
-        {/* Clive chat — hidden from tab bar, accessible via floating pill bar */}
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: 'Clive',
-            href: null,
-          }}
-        />
         <Tabs.Screen
           name="hive"
           options={{
@@ -191,6 +198,23 @@ export default function AppLayout() {
             tabBarAccessibilityLabel: 'HIVE Home',
             tabBarIcon: ({ focused }) => (
               <TabIcon imageSource={beeIcon} label="HIVE Home" focused={focused} compact={useMobileLayout} />
+            ),
+          }}
+        />
+        {/* Clive chat — accessible via tab bar and floating pill bar */}
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Clive',
+            tabBarAccessibilityLabel: 'Clive',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon
+                imageSource={cliveIcon}
+                label="Clive"
+                focused={focused}
+                isCircular
+                compact={useMobileLayout}
+              />
             ),
           }}
         />
@@ -331,6 +355,41 @@ export default function AppLayout() {
               </Pressable>
             )}
 
+            {/* Paperclip — pick images before sending to Clive */}
+            <Pressable
+              onPress={handleBubbleAttach}
+              disabled={bubbleImages.length >= 5}
+              className="p-1 ml-1 active:opacity-60"
+              style={{ position: 'relative' }}
+              accessibilityLabel="Attach image"
+            >
+              <Ionicons
+                name="attach-outline"
+                size={20}
+                color={bubbleImages.length >= 5 ? '#ccc' : '#bd9348'}
+              />
+              {bubbleImages.length > 0 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: -2,
+                    right: -4,
+                    backgroundColor: '#bd9348',
+                    borderRadius: 8,
+                    minWidth: 14,
+                    height: 14,
+                    paddingHorizontal: 2,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 9 }}>
+                    {bubbleImages.length}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+
             {/* Mic — voice-to-text fills the input, then auto-submits */}
             <VoiceMicButton
               size={20}
@@ -340,6 +399,10 @@ export default function AppLayout() {
                 // small delay so state flushes before submit
                 setTimeout(() => {
                   if (text.trim()) {
+                    if (bubbleImages.length > 0) {
+                      setPendingAttachments(bubbleImages);
+                      setBubbleImages([]);
+                    }
                     setCliveDraft('');
                     router.push({ pathname: '/', params: { message: text } });
                   }

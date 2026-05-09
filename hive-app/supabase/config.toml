@@ -72,6 +72,11 @@ verify_jwt = false
 [functions.generate-title]
 verify_jwt = false
 
+# Create community events from the member-facing HIVE home screen.
+# Auth and membership checks are handled in function code.
+[functions.create-event]
+verify_jwt = false
+
 # Daily meeting reminder - uses service_role key
 # Sends push notifications the day before a scheduled meeting
 # No user auth required (triggered by cron or manual HTTP call)

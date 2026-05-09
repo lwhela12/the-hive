@@ -46,6 +46,34 @@ const formatGoogleCalendarDate = (date: Date) => {
 
 const formatIcsDate = (date: Date) => formatGoogleCalendarDate(date);
 
+const normalizeEventTimeInput = (value: string) => {
+  const raw = value.trim();
+  if (!raw) return { time: null, note: '' };
+
+  const exactMatch = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+  const looseMatches = [...raw.matchAll(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/gi)];
+  const looseMatch = looseMatches[0];
+  const match = exactMatch || looseMatch;
+  if (!match) return { time: null, note: raw };
+
+  let hour = Number(match[1]);
+  const minute = match[2] ?? '00';
+  const laterMeridiem = looseMatches.find((timeMatch) => timeMatch[3])?.[3]?.toLowerCase();
+  const meridiem = match[3]?.toLowerCase() ?? laterMeridiem;
+
+  if (hour < 1 || hour > 23 || Number(minute) > 59) {
+    return { time: null, note: raw };
+  }
+
+  if (meridiem === 'pm' && hour < 12) hour += 12;
+  if (meridiem === 'am' && hour === 12) hour = 0;
+
+  return {
+    time: `${String(hour).padStart(2, '0')}:${minute}`,
+    note: exactMatch ? '' : raw,
+  };
+};
+
 const escapeIcsText = (value = '') => value
   .replace(/\\/g, '\\\\')
   .replace(/;/g, '\\;')
@@ -533,6 +561,16 @@ export default function HiveScreen() {
       return;
     }
 
+    const normalizedTime = normalizeEventTimeInput(eventTime);
+    if (eventTime.trim() && !normalizedTime.time) {
+      setEventError('For time, use something like 7:30 PM. Put extra details like doors/showtime in the description.');
+      return;
+    }
+    const descriptionWithTimeNote = [
+      normalizedTime.note ? `Time note: ${normalizedTime.note}` : null,
+      eventDescription.trim() || null,
+    ].filter(Boolean).join('\n\n');
+
     setSavingEvent(true);
     try {
       if (editingEvent) {
@@ -542,8 +580,8 @@ export default function HiveScreen() {
           .update({
             title: eventTitle,
             event_date: eventDateIso,
-            event_time: eventTime || null,
-            description: eventDescription || null,
+            event_time: normalizedTime.time,
+            description: descriptionWithTimeNote || null,
             location: eventLocation || null,
           })
           .eq('id', editingEvent.id);
@@ -551,15 +589,18 @@ export default function HiveScreen() {
         if (error) throw error;
       } else {
         // Create new event
-        const { error } = await supabase.from('events').insert({
+        const newEvent: Record<string, string | null> = {
           title: eventTitle,
           event_date: eventDateIso,
-          event_time: eventTime || null,
-          description: eventDescription || null,
-          location: eventLocation || null,
-          event_type: 'custom',
-          created_by: profile?.id,
           community_id: communityId,
+        };
+
+        if (descriptionWithTimeNote) newEvent.description = descriptionWithTimeNote;
+        if (normalizedTime.time) newEvent.event_time = normalizedTime.time;
+        if (eventLocation.trim()) newEvent.location = eventLocation.trim();
+
+        const { error } = await supabase.functions.invoke('create-event', {
+          body: newEvent,
         });
 
         if (error) throw error;
@@ -573,7 +614,7 @@ export default function HiveScreen() {
       if (msg.includes('row-level security') || msg.includes('policy') || msg.includes('permission')) {
         setEventError('Permission denied. Ask your admin to apply the latest database update.');
       } else {
-        setEventError(`Failed to ${editingEvent ? 'update' : 'create'} event. Please try again.`);
+        setEventError(error?.message || `Failed to ${editingEvent ? 'update' : 'create'} event. Please try again.`);
       }
     } finally {
       setSavingEvent(false);
@@ -822,30 +863,38 @@ export default function HiveScreen() {
           {/* Activity Feed */}
           <View style={{ flex: 1, marginBottom: useMobileLayout ? 0 : 0 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-                Activity
-              </Text>
+              <View style={{ backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+                  Activity
+                </Text>
+              </View>
               {activityItems.some(item => item.timestamp > sessionReadAt) && (
-                <Pressable onPress={markAllActivityRead} className="active:opacity-60">
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#bd9348' }}>
+                <Pressable
+                  onPress={markAllActivityRead}
+                  className="active:opacity-60"
+                  style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
                     Mark all read
                   </Text>
                 </Pressable>
               )}
             </View>
             <View style={{
-              backgroundColor: 'white',
-              borderRadius: 16,
+              backgroundColor: '#fffdf5',
+              borderRadius: 20,
               borderWidth: 1,
-              borderColor: '#c49a3c',
-              shadowColor: '#c49a3c',
-              shadowOpacity: 0.18,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 2,
+              borderColor: 'rgba(222,193,129,0.7)',
+              shadowColor: '#bd9348',
+              shadowOpacity: 0.16,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 5 },
+              elevation: 3,
               overflow: 'hidden',
               height: 280,
             }}>
+              {/* Inner top highlight — liquid glass gloss */}
+              <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10, marginTop: 0 }} />
               {activityLoading ? (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                   <ActivityIndicator size="small" color="#bd9348" />
@@ -870,17 +919,17 @@ export default function HiveScreen() {
                           alignItems: 'center',
                           padding: 14,
                           borderBottomWidth: i < activityItems.length - 1 ? 1 : 0,
-                          borderBottomColor: isUnread ? 'rgba(255,255,255,0.18)' : 'rgba(196,154,60,0.15)',
+                          borderBottomColor: 'rgba(222,193,129,0.28)',
                           backgroundColor: isUnread
-                            ? pressed ? '#a8823e' : '#bd9348'
-                            : pressed ? '#f0e4c0' : '#fdf3dc',
+                            ? pressed ? '#fbf0d7' : '#fff8e8'
+                            : pressed ? '#fbf4e3' : '#fffdf5',
                         })}
                       >
                         <View style={{
                           width: 36,
                           height: 36,
                           borderRadius: 18,
-                          backgroundColor: isUnread ? 'rgba(255,255,255,0.22)' : 'rgba(189,147,72,0.18)',
+                          backgroundColor: isUnread ? 'rgba(222,193,129,0.26)' : 'rgba(222,193,129,0.14)',
                           alignItems: 'center',
                           justifyContent: 'center',
                           marginRight: 12,
@@ -888,20 +937,20 @@ export default function HiveScreen() {
                         }}>
                           <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
                         </View>
+                        {isUnread && (
+                          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#bd9348', marginRight: 10, shadowColor: '#bd9348', shadowOpacity: 0.18, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } }} />
+                        )}
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontFamily: isUnread ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: isUnread ? 'white' : '#2d2d2d', lineHeight: 18 }}>
+                          <Text style={{ fontFamily: isUnread ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: isUnread ? '#2d2d2d' : '#756b5f', lineHeight: 18 }}>
                             {item.text}
                           </Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: isUnread ? 'rgba(255,255,255,0.7)' : '#9a8060', marginTop: 3 }}>
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: isUnread ? '#7b653e' : '#9a8d7c', marginTop: 3 }}>
                             {getRelativeTime(item.timestamp)}
                           </Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6, flexShrink: 0 }}>
-                          {isUnread && (
-                            <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: 'white', marginRight: canNavigate ? 6 : 0 }} />
-                          )}
                           {canNavigate && (
-                            <Text style={{ fontSize: 16, color: isUnread ? 'rgba(255,255,255,0.7)' : 'rgba(189,147,72,0.6)', lineHeight: 20 }}>›</Text>
+                            <Text style={{ fontSize: 16, color: isUnread ? 'rgba(143,109,49,0.72)' : 'rgba(189,147,72,0.35)', lineHeight: 20 }}>›</Text>
                           )}
                         </View>
                       </Pressable>
@@ -915,9 +964,11 @@ export default function HiveScreen() {
           {/* Upcoming Events */}
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-                Upcoming Events
-              </Text>
+              <View style={{ backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+                  Upcoming Events
+                </Text>
+              </View>
               <Pressable
                 onPress={openCreateEvent}
                 style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }}
@@ -926,18 +977,20 @@ export default function HiveScreen() {
               </Pressable>
             </View>
             <View style={{
-              backgroundColor: 'white',
-              borderRadius: 16,
+              backgroundColor: '#fdf3dc',
+              borderRadius: 20,
               borderWidth: 1,
-              borderColor: '#c49a3c',
-              shadowColor: '#c49a3c',
-              shadowOpacity: 0.18,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 2,
+              borderColor: 'rgba(222,193,129,0.7)',
+              shadowColor: '#bd9348',
+              shadowOpacity: 0.12,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 5 },
+              elevation: 3,
               overflow: 'hidden',
               height: 280,
             }}>
+              {/* Inner top highlight — liquid glass gloss */}
+              <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.95)', marginHorizontal: 10, marginTop: 0 }} />
               {loading.events ? (
                 <View style={{ padding: 16 }}><EventsListSkeleton /></View>
               ) : upcomingEvents.length > 0 ? (
@@ -976,21 +1029,43 @@ export default function HiveScreen() {
 
         {/* Community Wishes */}
         <View style={{ marginBottom: 24 }}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 10 }}>
-            Community Wishes
-          </Text>
+          <View style={{ marginBottom: 10 }}>
+            <View style={{ alignSelf: 'flex-start', backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+                Community Wishes
+              </Text>
+            </View>
+          </View>
 
           {loading.publicWishes && loading.grantedWishes ? (
             <WishSectionSkeleton />
           ) : (
-            <>
+            <View style={{
+              backgroundColor: '#fdf3dc',
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: 'rgba(222,193,129,0.7)',
+              shadowColor: '#bd9348',
+              shadowOpacity: 0.12,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 5 },
+              elevation: 3,
+              padding: 12,
+            }}>
               {/* Tabs */}
-              <View className="flex-row mb-3 bg-cream/50 rounded-lg p-1">
+              <View style={{ flexDirection: 'row', marginBottom: 12, backgroundColor: '#fff8e8', borderRadius: 12, padding: 4, borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)' }}>
                 <Pressable
                   onPress={() => setWishTab('open')}
-                  className={`flex-1 py-2 rounded-md ${
-                    wishTab === 'open' ? 'bg-white shadow-sm' : ''
-                  }`}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    borderRadius: 9,
+                    backgroundColor: wishTab === 'open' ? '#ffffff' : 'transparent',
+                    shadowColor: wishTab === 'open' ? '#bd9348' : 'transparent',
+                    shadowOpacity: wishTab === 'open' ? 0.10 : 0,
+                    shadowRadius: 5,
+                    shadowOffset: { width: 0, height: 2 },
+                  }}
                 >
                   <Text
                     style={{ fontFamily: wishTab === 'open' ? 'Lato_700Bold' : 'Lato_400Regular' }}
@@ -1003,9 +1078,16 @@ export default function HiveScreen() {
                 </Pressable>
                 <Pressable
                   onPress={() => setWishTab('granted')}
-                  className={`flex-1 py-2 rounded-md ${
-                    wishTab === 'granted' ? 'bg-white shadow-sm' : ''
-                  }`}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    borderRadius: 9,
+                    backgroundColor: wishTab === 'granted' ? '#ffffff' : 'transparent',
+                    shadowColor: wishTab === 'granted' ? '#bd9348' : 'transparent',
+                    shadowOpacity: wishTab === 'granted' ? 0.10 : 0,
+                    shadowRadius: 5,
+                    shadowOffset: { width: 0, height: 2 },
+                  }}
                 >
                   <Text
                     style={{ fontFamily: wishTab === 'granted' ? 'Lato_700Bold' : 'Lato_400Regular' }}
@@ -1070,7 +1152,7 @@ export default function HiveScreen() {
                   )}
                 </>
               )}
-            </>
+            </View>
           )}
         </View>
 
@@ -1171,11 +1253,14 @@ export default function HiveScreen() {
                       <View className="mb-3">
                         <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Time (optional)</Text>
                         <TextInput
-                          placeholder="HH:MM (e.g. 14:30)"
+                          placeholder="7:30 PM"
                           value={eventTime}
                           onChangeText={setEventTime}
                           className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-cream"
                         />
+                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-1">
+                          Extra details like doors/showtime can go here too. We’ll save the first time and keep your note.
+                        </Text>
                       </View>
                       <TextInput
                         placeholder="Location (optional)"

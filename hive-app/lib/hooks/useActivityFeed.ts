@@ -3,7 +3,7 @@ import { supabase } from '../supabase';
 
 export interface ActivityItem {
   id: string;
-  type: 'wish_posted' | 'wish_granted' | 'event_added' | 'board_post' | 'member_joined';
+  type: 'wish_posted' | 'wish_granted' | 'event_added' | 'board_post' | 'member_joined' | 'app_update';
   emoji: string;
   text: string;
   timestamp: string; // ISO string
@@ -74,6 +74,15 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
   ]);
 
   const items: ActivityItem[] = [];
+
+  items.push({
+    id: 'app_update_2026_05_09',
+    type: 'app_update',
+    emoji: '✨',
+    text: 'HIVE update: Clive is easier to start, wishes can be edited, boards are cleaner, events can be added to calendars, and Activity is easier to scan.',
+    timestamp: '2026-05-09T18:00:00.000Z',
+    sourceId: 'app_update_2026_05_09',
+  });
 
   // New public wishes
   for (const w of wishesRes.data ?? []) {

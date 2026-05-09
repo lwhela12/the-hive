@@ -28,9 +28,12 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, canEdit, can
   return (
     <Pressable
       onPress={onPress}
-      className={`rounded-xl p-4 shadow-sm mb-3 active:opacity-80 ${
-        isGranted ? 'bg-gold/5 border border-gold/20' : 'bg-white'
-      }`}
+      className="rounded-xl p-4 shadow-sm mb-3 active:opacity-80"
+      style={{
+        backgroundColor: isGranted ? '#f6e8c4' : '#fff8e8',
+        borderWidth: 1,
+        borderColor: isGranted ? 'rgba(189,147,72,0.28)' : 'rgba(222,193,129,0.45)',
+      }}
     >
       <View className="flex-row items-start">
         <Avatar name={wish.user.name} url={wish.user.avatar_url} size={44} />
