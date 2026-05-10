@@ -5,6 +5,7 @@ import { Image } from 'expo-image';
 import type { UserRole } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 
 interface MemberData {
   id: string;
@@ -62,12 +63,21 @@ const HIVE_CABINET = [
     icon: '🐝',
     description: 'Tends the app, systems, and tech infrastructure.',
   },
+  {
+    title: 'People & Culture',
+    memberName: 'Izzy',
+    aliases: ['Isabelle'],
+    icon: '🤝',
+    description: 'Helps make sure every HIVE member is heard, welcomed, and connected.',
+  },
 ];
 
 const PROFILE_PROMPT_LIMITS = {
+  name: 80,
   bio: 1000,
   short: 180,
   funFact: 220,
+  skills: 700,
 };
 
 function getHiveTitle(name: string) {
@@ -81,6 +91,17 @@ function getHiveTitle(name: string) {
 
 function getHiveTitleIcon(title?: string | null) {
   return HIVE_CABINET.find(role => role.title === title)?.icon ?? '✨';
+}
+
+function parseSkillList(input: string) {
+  return Array.from(
+    new Set(
+      input
+        .split(',')
+        .map(skill => skill.trim())
+        .filter(Boolean)
+    )
+  );
 }
 
 function SilhouetteAvatar({ size }: { size: number }) {
@@ -168,11 +189,13 @@ function MemberDetailModal({
   onClose,
   isCurrentUser,
   onMemberUpdated,
+  communityId,
 }: {
   member: MemberData;
   onClose: () => void;
   isCurrentUser: boolean;
   onMemberUpdated: (member: MemberData) => void;
+  communityId: string | null;
 }) {
   const publicWishes = member.wishes.filter(w => w.status === 'public');
   const roleLabel = ROLE_LABELS[member.role];
@@ -180,6 +203,9 @@ function MemberDetailModal({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState(member.name ?? '');
+  const [draftOccupation, setDraftOccupation] = useState(member.occupation ?? '');
+  const [draftBirthday, setDraftBirthday] = useState(member.birthday ? isoToAmerican(member.birthday) : '');
   const [draftBio, setDraftBio] = useState(member.bio ?? '');
   const [draftCurrentProject, setDraftCurrentProject] = useState(member.current_project ?? '');
   const [draftHometown, setDraftHometown] = useState(member.hometown ?? '');
@@ -190,6 +216,7 @@ function MemberDetailModal({
   const [draftFunFact1, setDraftFunFact1] = useState(member.fun_facts?.[0] ?? '');
   const [draftFunFact2, setDraftFunFact2] = useState(member.fun_facts?.[1] ?? '');
   const [draftFunFact3, setDraftFunFact3] = useState(member.fun_facts?.[2] ?? '');
+  const [draftSkills, setDraftSkills] = useState(member.skills.map(skill => skill.description).join(', '));
 
   const hasFavorites = member.favorite_book || member.favorite_food || member.favorite_hobby;
   const hasDetails = member.bio || member.current_project || member.hometown || member.known_for || hasFavorites;
@@ -203,6 +230,9 @@ function MemberDetailModal({
     setIntroExpanded(false);
     setEditing(false);
     setSaveError(null);
+    setDraftName(member.name ?? '');
+    setDraftOccupation(member.occupation ?? '');
+    setDraftBirthday(member.birthday ? isoToAmerican(member.birthday) : '');
     setDraftBio(member.bio ?? '');
     setDraftCurrentProject(member.current_project ?? '');
     setDraftHometown(member.hometown ?? '');
@@ -213,50 +243,124 @@ function MemberDetailModal({
     setDraftFunFact1(member.fun_facts?.[0] ?? '');
     setDraftFunFact2(member.fun_facts?.[1] ?? '');
     setDraftFunFact3(member.fun_facts?.[2] ?? '');
+    setDraftSkills(member.skills.map(skill => skill.description).join(', '));
   }, [member]);
 
   const saveProfilePrompts = async () => {
     setSaving(true);
     setSaveError(null);
-    const funFacts = [draftFunFact1, draftFunFact2, draftFunFact3]
-      .map(fact => fact.trim())
-      .filter(Boolean);
-    const updates = {
-      bio: draftBio.trim() || null,
-      current_project: draftCurrentProject.trim() || null,
-      hometown: draftHometown.trim() || null,
-      known_for: draftKnownFor.trim() || null,
-      favorite_book: draftFavBook.trim() || null,
-      favorite_food: draftFavFood.trim() || null,
-      favorite_hobby: draftFavHobby.trim() || null,
-      fun_facts: funFacts.length > 0 ? funFacts : null,
-      updated_at: new Date().toISOString(),
-    };
-    const { error } = await (supabase as any)
-      .from('profiles')
-      .update(updates)
-      .eq('id', member.id);
+    const cleanName = draftName.trim();
+    const cleanBirthday = draftBirthday.trim();
+    const birthdayIso = cleanBirthday ? parseAmericanDate(cleanBirthday) : null;
+    const skillDescriptions = parseSkillList(draftSkills);
 
-    setSaving(false);
-    if (error) {
+    if (!cleanName) {
+      setSaveError('Please keep a name on your profile.');
+      setSaving(false);
+      return;
+    }
+
+    if (cleanBirthday && !birthdayIso) {
+      setSaveError('Birthday should look like MM-DD-YYYY, like 10-12-1987.');
+      setSaving(false);
+      return;
+    }
+
+    if (skillDescriptions.length > 30) {
+      setSaveError('Let’s keep skills to 30 bubbles or fewer for now.');
+      setSaving(false);
+      return;
+    }
+
+    try {
+      const funFacts = [draftFunFact1, draftFunFact2, draftFunFact3]
+        .map(fact => fact.trim())
+        .filter(Boolean);
+      const updates = {
+        name: cleanName,
+        occupation: draftOccupation.trim() || null,
+        birthday: birthdayIso,
+        bio: draftBio.trim() || null,
+        current_project: draftCurrentProject.trim() || null,
+        hometown: draftHometown.trim() || null,
+        known_for: draftKnownFor.trim() || null,
+        favorite_book: draftFavBook.trim() || null,
+        favorite_food: draftFavFood.trim() || null,
+        favorite_hobby: draftFavHobby.trim() || null,
+        fun_facts: funFacts.length > 0 ? funFacts : null,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await (supabase as any)
+        .from('profiles')
+        .update(updates)
+        .eq('id', member.id);
+
+      if (error) throw error;
+
+      if (communityId) {
+        const nextSkillLookup = new Set(skillDescriptions.map(description => description.toLowerCase()));
+        const existingSkillLookup = new Set(member.skills.map(skill => skill.description.toLowerCase()));
+        const skillIdsToDelete = member.skills
+          .filter(skill => !nextSkillLookup.has(skill.description.toLowerCase()))
+          .map(skill => skill.id)
+          .filter(id => !id.startsWith('draft-skill-'));
+        const skillsToInsert = skillDescriptions.filter(description => !existingSkillLookup.has(description.toLowerCase()));
+
+        if (skillIdsToDelete.length > 0) {
+          const { error: deleteSkillsError } = await (supabase as any)
+            .from('skills')
+            .delete()
+            .in('id', skillIdsToDelete)
+            .eq('user_id', member.id);
+
+          if (deleteSkillsError) throw deleteSkillsError;
+        }
+
+        if (skillsToInsert.length > 0) {
+          const { error: insertSkillsError } = await (supabase as any)
+            .from('skills')
+            .insert(skillsToInsert.map(description => ({
+              user_id: member.id,
+              community_id: communityId,
+              description,
+              raw_input: description,
+              extracted_from: 'manual',
+            })));
+
+          if (insertSkillsError) throw insertSkillsError;
+        }
+      }
+
+      onMemberUpdated({
+        ...member,
+        ...updates,
+        hiveTitle: getHiveTitle(cleanName),
+        skills: skillDescriptions.map((description, index) => ({
+          id: member.skills[index]?.id ?? `draft-skill-${index}`,
+          description,
+        })),
+      });
+      setEditing(false);
+    } catch (error: any) {
       console.warn('[Members] profile prompt save failed', error);
-      const missingProfileFields = error.message?.includes('does not exist') || error.code === '42703';
+      const missingProfileFields = error?.message?.includes('does not exist') || error?.code === '42703';
       setSaveError(
         missingProfileFields
           ? 'These new profile fields are not installed in Supabase yet. We need to apply the profile fields migration once, then this will save.'
           : 'Could not save profile updates. Please try again.'
       );
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    onMemberUpdated({ ...member, ...updates });
-    setEditing(false);
   };
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-        <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%' }}>
+      <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <Pressable
+          onPress={(event: any) => event.stopPropagation()}
+          style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%' }}
+        >
           {/* Handle */}
           <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
@@ -322,6 +426,27 @@ function MemberDetailModal({
 
                 {editing && (
                   <>
+                    <ProfilePromptInput
+                      label="Name"
+                      placeholder="Your name"
+                      value={draftName}
+                      onChangeText={setDraftName}
+                      maxLength={PROFILE_PROMPT_LIMITS.name}
+                    />
+                    <ProfilePromptInput
+                      label="Title / what you do"
+                      placeholder="Writer, artist, founder, coach..."
+                      value={draftOccupation}
+                      onChangeText={setDraftOccupation}
+                      maxLength={PROFILE_PROMPT_LIMITS.short}
+                    />
+                    <ProfilePromptInput
+                      label="Birthday"
+                      placeholder="MM-DD-YYYY"
+                      value={draftBirthday}
+                      onChangeText={setDraftBirthday}
+                      maxLength={10}
+                    />
                     <ProfilePromptInput
                       label="Tiny bio"
                       placeholder="A few sentences about who you are..."
@@ -393,6 +518,17 @@ function MemberDetailModal({
                       onChangeText={setDraftFunFact3}
                       maxLength={PROFILE_PROMPT_LIMITS.funFact}
                     />
+                    <ProfilePromptInput
+                      label="Skills / what I'm good at"
+                      placeholder="Writing, party planning, spreadsheets, pep talks..."
+                      value={draftSkills}
+                      onChangeText={setDraftSkills}
+                      maxLength={PROFILE_PROMPT_LIMITS.skills}
+                      multiline
+                    />
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8a8173', marginTop: -6, marginBottom: 12 }}>
+                      Separate skills with commas. These become the little profile bubbles.
+                    </Text>
 
                     {saveError && (
                       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#ef4444', marginBottom: 10 }}>{saveError}</Text>
@@ -551,8 +687,8 @@ function MemberDetailModal({
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
             </Pressable>
           </ScrollView>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -698,16 +834,6 @@ export default function MembersScreen() {
   const numCols = width >= 1100 ? 3 : width >= 720 ? 2 : 1;
   const avatarSize = width >= 768 ? 74 : 64;
   const cellWidth = `${100 / numCols}%`;
-  const cabinetMembers = HIVE_CABINET.map(role => {
-    const member = members.find(m => {
-      const normalized = m.name.toLowerCase();
-      const names = [role.memberName, ...(role.aliases ?? [])];
-      return names.some(alias => normalized.includes(alias.toLowerCase()));
-    });
-    return { ...role, member };
-  });
-  const currentMember = currentUserId ? members.find(member => member.id === currentUserId) : null;
-
   const filtered = search.trim()
     ? members.filter(m => {
         const query = search.toLowerCase();
@@ -772,79 +898,6 @@ export default function MembersScreen() {
           </View>
         ) : (
           <>
-            {currentMember && (
-              <Pressable
-                onPress={() => setSelected(currentMember)}
-                style={{
-                  backgroundColor: '#fffaf0',
-                  borderWidth: 1,
-                  borderColor: 'rgba(222,193,129,0.65)',
-                  borderRadius: 18,
-                  padding: 16,
-                  marginBottom: 18,
-                  shadowColor: '#bd9348',
-                  shadowOpacity: 0.08,
-                  shadowRadius: 14,
-                  shadowOffset: { width: 0, height: 5 },
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={{ borderRadius: 28, borderWidth: 1.5, borderColor: '#dec181', padding: 2, backgroundColor: 'white' }}>
-                    <Avatar uri={currentMember.avatar_url} name={currentMember.name} size={50} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-                      Edit my get-to-know-you profile
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8a8173', lineHeight: 18, marginTop: 3 }}>
-                      Add your tiny bio, favorites, fun facts, and what HIVE members should ask you about.
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 22, color: '#bd9348' }}>›</Text>
-                </View>
-              </Pressable>
-            )}
-
-            <View style={{ marginBottom: 18 }}>
-              <View style={{ alignSelf: 'flex-start', backgroundColor: '#fffaf0', borderWidth: 1, borderColor: '#dec181', borderBottomWidth: 0, borderTopLeftRadius: 18, borderTopRightRadius: 18, paddingHorizontal: 18, paddingVertical: 10 }}>
-                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>HIVE Cabinet</Text>
-              </View>
-              <View style={{ backgroundColor: '#fffaf0', borderWidth: 1, borderColor: '#dec181', borderRadius: 18, borderTopLeftRadius: 0, padding: 14, shadowColor: '#bd9348', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } }}>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                  {cabinetMembers.map(role => (
-                    <Pressable
-                      key={role.title}
-                      disabled={!role.member}
-                      onPress={() => role.member && setSelected(role.member)}
-                      style={{
-                        flexGrow: 1,
-                        flexBasis: width >= 900 ? '30%' : width >= 620 ? '45%' : '100%',
-                        backgroundColor: 'rgba(255,255,255,0.72)',
-                        borderWidth: 1,
-                        borderColor: 'rgba(222,193,129,0.45)',
-                        borderRadius: 14,
-                        padding: 12,
-                        opacity: role.member ? 1 : 0.65,
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <Text style={{ fontSize: 22 }}>{role.icon}</Text>
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#bd9348' }}>{role.title}</Text>
-                          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', marginTop: 2 }} numberOfLines={1}>
-                            {role.member?.name ?? role.memberName}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#6b7280', lineHeight: 17, marginTop: 8 }}>
-                        {role.description}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            </View>
-
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 }}>
               {filtered.map(member => {
                 const isMe = member.id === currentUserId;
@@ -962,6 +1015,7 @@ export default function MembersScreen() {
         <MemberDetailModal
           member={selected}
           isCurrentUser={selected.id === currentUserId}
+          communityId={communityId}
           onClose={() => setSelected(null)}
           onMemberUpdated={(updatedMember) => {
             setSelected(updatedMember);

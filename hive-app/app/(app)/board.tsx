@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, Alert, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useBoardCategoriesQuery, useBoardPostsQuery, useBoardPostCountsQuery } from '../../lib/hooks/useBoardQuery';
@@ -29,6 +30,7 @@ export default function BoardScreen() {
   const boardCategoryStorageKey = communityId ? `the-hive:last-board-category:${communityId}` : null;
   const boardComposerStorageKey = communityId ? `the-hive:board-composer-open:${communityId}` : null;
   const boardPostStorageKey = communityId ? `the-hive:last-board-post:${communityId}` : null;
+  const boardDirectOpenStorageKey = communityId ? `the-hive:board-direct-open:${communityId}` : null;
   const boardDraftStorageKey = selectedCategoryId ? `the-hive:board-draft:${selectedCategoryId}` : null;
 
   const isAdmin = communityRole === 'admin';
@@ -39,20 +41,20 @@ export default function BoardScreen() {
     isLoading: categoriesLoading,
     refetch: refetchCategories,
     invalidateCategories,
-  } = useBoardCategoriesQuery(communityId);
+  } = useBoardCategoriesQuery(communityId ?? undefined);
 
   const selectedCategory = selectedCategoryId
     ? categories.find((c) => c.id === selectedCategoryId) || null
     : null;
 
-  const { data: postCounts } = useBoardPostCountsQuery(communityId);
+  const { data: postCounts } = useBoardPostCountsQuery(communityId ?? undefined);
 
   const {
     posts,
     loading: postsLoading,
     refetch: refetchPosts,
     invalidatePosts,
-  } = useBoardPostsQuery(communityId, selectedCategory?.id);
+  } = useBoardPostsQuery(communityId ?? undefined, selectedCategory?.id);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -62,6 +64,42 @@ export default function BoardScreen() {
     ]);
     setRefreshing(false);
   };
+
+  const resetBoardToList = useCallback(() => {
+    setSelectedCategoryId(null);
+    setSelectedPostId(null);
+    setShowComposer(false);
+    if (typeof window !== 'undefined') {
+      if (boardCategoryStorageKey) window.localStorage.removeItem(boardCategoryStorageKey);
+      if (boardPostStorageKey) window.localStorage.removeItem(boardPostStorageKey);
+      if (boardComposerStorageKey) window.localStorage.removeItem(boardComposerStorageKey);
+    }
+  }, [boardCategoryStorageKey, boardComposerStorageKey, boardPostStorageKey]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (typeof window === 'undefined') return;
+
+      const isDirectOpen = boardDirectOpenStorageKey
+        ? window.localStorage.getItem(boardDirectOpenStorageKey) === 'true'
+        : false;
+      if (isDirectOpen) {
+        window.localStorage.removeItem(boardDirectOpenStorageKey!);
+        const savedCategoryId = boardCategoryStorageKey ? window.localStorage.getItem(boardCategoryStorageKey) : null;
+        const savedPostId = boardPostStorageKey ? window.localStorage.getItem(boardPostStorageKey) : null;
+        if (savedCategoryId) setSelectedCategoryId(savedCategoryId);
+        if (savedPostId) setSelectedPostId(savedPostId);
+        return;
+      }
+
+      const isComposing = boardComposerStorageKey
+        ? window.localStorage.getItem(boardComposerStorageKey) === 'true'
+        : false;
+      if (!isComposing) {
+        resetBoardToList();
+      }
+    }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey, resetBoardToList])
+  );
 
   useEffect(() => {
     if (!boardCategoryStorageKey || selectedCategoryId || categories.length === 0) return;
@@ -98,19 +136,8 @@ export default function BoardScreen() {
   }, [boardCategoryStorageKey]);
 
   const handleBack = useCallback(() => {
-    setSelectedCategoryId(null);
-    if (boardCategoryStorageKey && typeof window !== 'undefined') {
-      window.localStorage.removeItem(boardCategoryStorageKey);
-    }
-    if (boardComposerStorageKey && typeof window !== 'undefined') {
-      window.localStorage.removeItem(boardComposerStorageKey);
-    }
-    if (boardPostStorageKey && typeof window !== 'undefined') {
-      window.localStorage.removeItem(boardPostStorageKey);
-    }
-    setShowComposer(false);
-    setSelectedPostId(null);
-  }, [boardCategoryStorageKey, boardComposerStorageKey, boardPostStorageKey]);
+    resetBoardToList();
+  }, [resetBoardToList]);
 
   const handleOpenComposer = useCallback(() => {
     setShowComposer(true);
@@ -150,7 +177,7 @@ export default function BoardScreen() {
     }
 
     try {
-      const { data, error } = await supabase.from('board_posts').insert({
+      const { data, error } = await (supabase as any).from('board_posts').insert({
         community_id: communityId,
         category_id: selectedCategory.id,
         author_id: profile.id,
@@ -195,7 +222,7 @@ export default function BoardScreen() {
         ? Math.max(...categories.map(c => c.display_order))
         : 0;
 
-      const { data, error } = await supabase.from('board_categories').insert({
+      const { data, error } = await (supabase as any).from('board_categories').insert({
         community_id: communityId,
         name,
         description: description || null,
@@ -240,7 +267,7 @@ export default function BoardScreen() {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('board_categories')
         .update({
           name,
@@ -434,7 +461,7 @@ export default function BoardScreen() {
       {/* Posts view header with back button */}
       <View className="bg-gold flex-row items-center px-4 py-3">
         <Pressable onPress={handleBack} hitSlop={8} className="mr-3 active:opacity-70">
-          <Text className="text-gold text-2xl leading-none">‹</Text>
+          <Ionicons name="arrow-back" size={24} color="white" />
         </Pressable>
         <Text
           style={{ fontFamily: 'LibreBaskerville_700Bold' }}

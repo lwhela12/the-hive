@@ -437,6 +437,7 @@ export default function HiveScreen() {
           window.localStorage.setItem(`the-hive:last-board-category:${communityId}`, item.categoryId);
         }
         window.localStorage.setItem(`the-hive:last-board-post:${communityId}`, item.sourceId);
+        window.localStorage.setItem(`the-hive:board-direct-open:${communityId}`, 'true');
       }
       router.push('/board');
     } else if (item.navigatesTo === 'members') {
