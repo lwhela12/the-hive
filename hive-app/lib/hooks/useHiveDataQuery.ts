@@ -17,6 +17,8 @@ type QueenBeeWithHighlights = QueenBee & {
   highlights: MonthlyHighlight[];
 };
 
+type BirthdayMember = Pick<Profile, 'id' | 'name' | 'birthday'>;
+
 interface RpcQueenBeeRow {
   queen_bee: QueenBee & { user: Profile };
   highlights: MonthlyHighlight[];
@@ -115,6 +117,32 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
+  const getNextBirthdayEvent = (member: BirthdayMember): Event | null => {
+    if (!member.birthday) return null;
+
+    const [, month, day] = member.birthday.split('-').map(Number);
+    if (!month || !day) return null;
+
+    const todayAtNoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+    let birthdayDate = new Date(now.getFullYear(), month - 1, day, 12);
+    if (birthdayDate < todayAtNoon) {
+      birthdayDate = new Date(now.getFullYear() + 1, month - 1, day, 12);
+    }
+
+    const eventDate = `${birthdayDate.getFullYear()}-${String(birthdayDate.getMonth() + 1).padStart(2, '0')}-${String(birthdayDate.getDate()).padStart(2, '0')}`;
+
+    return {
+      id: `birthday-${member.id}-${birthdayDate.getFullYear()}`,
+      community_id: communityId!,
+      title: `${member.name}'s birthday`,
+      description: `Celebrate ${member.name}!`,
+      event_date: eventDate,
+      event_type: 'birthday',
+      related_user_id: member.id,
+      created_at: member.birthday,
+    };
+  };
+
   // Use useQueries for parallel fetching
   const results = useQueries({
     queries: [
@@ -187,6 +215,33 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         },
         enabled: !!communityId,
         staleTime: 10 * 60 * 1000, // Events change less frequently
+      },
+      // Annual birthday reminders generated from member profiles.
+      {
+        queryKey: ['memberBirthdays', communityId],
+        queryFn: async () => {
+          const { data, error } = (await supabase
+            .from('community_memberships')
+            .select('profiles(id, name, birthday)')
+            .eq('community_id', communityId!)) as {
+              data: { profiles: BirthdayMember | null }[] | null;
+              error: { message?: string } | null;
+            };
+
+          if (error) {
+            console.error('Error fetching birthdays:', error);
+            return [];
+          }
+
+          return (data || [])
+            .map((row) => row.profiles)
+            .filter((member): member is BirthdayMember => !!member?.id && !!member.name && !!member.birthday)
+            .map(getNextBirthdayEvent)
+            .filter((event): event is Event => !!event)
+            .sort((a, b) => a.event_date.localeCompare(b.event_date));
+        },
+        enabled: !!communityId,
+        staleTime: 30 * 60 * 1000,
       },
       // Honey pot
       {
@@ -274,6 +329,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
     wishesResult,
     grantedWishesResult,
     eventsResult,
+    birthdayEventsResult,
     honeyPotResult,
     meetingsResult,
     adminResult,
@@ -293,7 +349,14 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
     fallbackAdmin: adminResult.data || null,
     publicWishes: wishesResult.data || [],
     grantedWishes: grantedWishesResult.data || [],
-    upcomingEvents: eventsResult.data || [],
+    upcomingEvents: [
+      ...((eventsResult.data || []) as Event[]),
+      ...((birthdayEventsResult.data || []) as Event[]),
+    ].sort((a, b) => {
+      const dateCompare = a.event_date.localeCompare(b.event_date);
+      if (dateCompare !== 0) return dateCompare;
+      return (a.event_time || '').localeCompare(b.event_time || '');
+    }),
     honeyPotBalance: honeyPotResult.data || 0,
     meetings: meetingsResult.data || [],
     nextMeeting: nextMeetingResult.data || null,
@@ -305,7 +368,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
       queenBees: queenBeesResult.isLoading,
       publicWishes: wishesResult.isLoading,
       grantedWishes: grantedWishesResult.isLoading,
-      events: eventsResult.isLoading,
+      events: eventsResult.isLoading || birthdayEventsResult.isLoading,
       honeyPot: honeyPotResult.isLoading,
     },
     refetch: () => Promise.all(results.map((r) => r.refetch())),

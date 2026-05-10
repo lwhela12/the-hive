@@ -191,7 +191,9 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
       {visibleEvents.map((event, index) => (
         <Pressable
           key={event.id}
-          onPress={() => onEditEvent(event)}
+          onPress={() => {
+            if (event.event_type !== 'birthday') onEditEvent(event);
+          }}
           className={`p-4 active:bg-gray-50 ${index < visibleEvents.length - 1 || (hasMore && !expanded) ? 'border-b border-cream' : ''}`}
         >
           <View className="flex-row items-start">

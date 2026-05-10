@@ -581,6 +581,7 @@ export default function AdminScreen() {
 
   const isAdmin = communityRole === 'admin';
   const isTreasurer = communityRole === 'treasurer';
+  const canEditHoneyPot = isTreasurer;
 
   if (!isAdmin && !isTreasurer) {
     return (
@@ -624,264 +625,60 @@ export default function AdminScreen() {
               ${honeyPotBalance.toFixed(2)}
             </Text>
 
-            <View className="flex-row mb-3">
-              {(['deposit', 'withdrawal'] as const).map((type) => (
+            {canEditHoneyPot ? (
+              <>
+                <View className="flex-row mb-3">
+                  {(['deposit', 'withdrawal'] as const).map((type) => (
+                    <Pressable
+                      key={type}
+                      onPress={() => setHoneyPotType(type)}
+                      className={`flex-1 py-2 rounded-lg mr-2 last:mr-0 ${
+                        honeyPotType === type
+                          ? type === 'deposit' ? 'bg-green-500' : 'bg-red-400'
+                          : 'bg-gray-100'
+                      }`}
+                    >
+                      <Text className={`text-center capitalize font-medium ${
+                        honeyPotType === type ? 'text-white' : 'text-gray-600'
+                      }`}>
+                        {type}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <TextInput
+                  placeholder="Amount"
+                  value={honeyPotAmount}
+                  onChangeText={setHoneyPotAmount}
+                  keyboardType="decimal-pad"
+                  className="border border-gray-300 rounded-lg p-3 mb-3"
+                />
+                <TextInput
+                  placeholder="Note (optional)"
+                  value={honeyPotNote}
+                  onChangeText={setHoneyPotNote}
+                  className="border border-gray-300 rounded-lg p-3 mb-3"
+                />
                 <Pressable
-                  key={type}
-                  onPress={() => setHoneyPotType(type)}
-                  className={`flex-1 py-2 rounded-lg mr-2 last:mr-0 ${
-                    honeyPotType === type
-                      ? type === 'deposit' ? 'bg-green-500' : 'bg-red-400'
-                      : 'bg-gray-100'
-                  }`}
+                  onPress={updateHoneyPot}
+                  className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
                 >
-                  <Text className={`text-center capitalize font-medium ${
-                    honeyPotType === type ? 'text-white' : 'text-gray-600'
-                  }`}>
-                    {type}
+                  <Text className="text-center font-semibold text-white">
+                    Record {honeyPotType === 'deposit' ? 'Deposit' : 'Withdrawal'}
                   </Text>
                 </Pressable>
-              ))}
-            </View>
-
-            <TextInput
-              placeholder="Amount"
-              value={honeyPotAmount}
-              onChangeText={setHoneyPotAmount}
-              keyboardType="decimal-pad"
-              className="border border-gray-300 rounded-lg p-3 mb-3"
-            />
-            <TextInput
-              placeholder="Note (optional)"
-              value={honeyPotNote}
-              onChangeText={setHoneyPotNote}
-              className="border border-gray-300 rounded-lg p-3 mb-3"
-            />
-            <Pressable
-              onPress={updateHoneyPot}
-              className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
-            >
-              <Text className="text-center font-semibold text-white">
-                Record {honeyPotType === 'deposit' ? 'Deposit' : 'Withdrawal'}
+              </>
+            ) : (
+              <Text className="text-center text-gray-500">
+                Honey Pot changes are limited to the Treasurer.
               </Text>
-            </Pressable>
+            )}
           </View>
         </View>
 
-        {/* Queen Bee Section - Admin only */}
+        {/* Admin tools */}
         {isAdmin && (<>
-        <View className="mb-6">
-          <View className="flex-row justify-between items-center mb-2">
-            <Text className="text-lg font-semibold text-gray-700">
-              Queen Bee Schedule
-            </Text>
-            <View className="flex-row">
-              <Pressable
-                onPress={() => {
-                  // "Next" opens modal to set up next month's QB and auto-rotates
-                  setEditingQueenBee(null);
-                  setSelectedMember(null);
-                  setQbTitle('');
-                  setQbDescription('');
-                  setQbStatus('upcoming');
-                  // Auto-fill next available month
-                  const existingMonths = queenBees.map(qb => qb.month);
-                  const parsedMonths = existingMonths
-                    .map(m => {
-                      const parts = m.split('-');
-                      if (parts.length === 2) {
-                        const first = parseInt(parts[0], 10);
-                        const second = parseInt(parts[1], 10);
-                        if (first > 12) return { year: first, month: second };
-                        else return { year: second, month: first };
-                      }
-                      return null;
-                    })
-                    .filter(Boolean) as { year: number; month: number }[];
-                  if (parsedMonths.length > 0) {
-                    parsedMonths.sort((a, b) => a.year !== b.year ? b.year - a.year : b.month - a.month);
-                    const latest = parsedMonths[0];
-                    const nextMonth = latest.month === 12 ? 1 : latest.month + 1;
-                    const nextYear = latest.month === 12 ? latest.year + 1 : latest.year;
-                    setQbMonth(`${nextYear}-${String(nextMonth).padStart(2, '0')}`);
-                  } else {
-                    const now = new Date();
-                    const nm = now.getMonth() + 2; // next month (0-indexed + 2)
-                    const ny = nm > 12 ? now.getFullYear() + 1 : now.getFullYear();
-                    setQbMonth(`${ny}-${String(nm > 12 ? nm - 12 : nm).padStart(2, '0')}`);
-                  }
-                  setShowQueenBeeModal(true);
-                }}
-                className="bg-green-500 px-3 py-1 rounded-lg active:bg-green-600 mr-2"
-              >
-                <Text className="text-white font-medium">+ Next Month</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setShowQueenBeeModal(true)}
-                className="bg-honey-500 px-3 py-1 rounded-lg active:bg-honey-600"
-              >
-                <Text className="text-white font-medium">+ Add</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          {/* 3-card layout: Last Month / Current / Next Month */}
-          {(() => {
-            const completedQBs = queenBees
-              .filter(qb => qb.status === 'completed')
-              .sort((a, b) => {
-                const orderA = (a as any).display_order ?? 999;
-                const orderB = (b as any).display_order ?? 999;
-                return orderB - orderA;
-              });
-            const lastMonthQB = completedQBs[0] || null;
-            const currentQB = queenBees.find(qb => qb.status === 'active') || null;
-            const upcomingQBs = queenBees
-              .filter(qb => qb.status === 'upcoming')
-              .sort((a, b) => {
-                const orderA = (a as any).display_order ?? 999;
-                const orderB = (b as any).display_order ?? 999;
-                return orderA - orderB;
-              });
-            const nextMonthQB = upcomingQBs[0] || null;
-
-            const renderQBCard = (label: string, qb: QueenBee | null, statusColor: string, statusBg: string) => (
-              <View className="flex-1 mx-1">
-                <Text className="text-xs font-semibold text-gray-500 mb-1 text-center">{label}</Text>
-                <View className={`bg-white rounded-xl shadow-sm p-3 min-h-[100px] ${qb ? '' : 'opacity-50'}`}>
-                  {qb ? (
-                    <Pressable onPress={() => openEditQueenBee(qb)} className="active:opacity-70">
-                      <Text className="font-semibold text-gray-800 text-sm" numberOfLines={1}>
-                        {members.find(m => m.profiles.id === qb.user_id)?.profiles.name || 'Unknown'}
-                      </Text>
-                      <Text className="text-xs text-gray-500 mt-1" numberOfLines={2}>{qb.project_title}</Text>
-                      <View className={`mt-2 self-start px-2 py-0.5 rounded ${statusBg}`}>
-                        <Text className={`text-xs capitalize ${statusColor}`}>{qb.status}</Text>
-                      </View>
-                    </Pressable>
-                  ) : (
-                    <Text className="text-gray-400 text-center text-sm mt-4">Not set</Text>
-                  )}
-                </View>
-              </View>
-            );
-
-            return (
-              <View className="flex-row mb-3">
-                {renderQBCard('Last Month', lastMonthQB, 'text-gray-600', 'bg-gray-100')}
-                {renderQBCard('Current', currentQB, 'text-green-700', 'bg-green-100')}
-                {renderQBCard('Next Month', nextMonthQB, 'text-honey-700', 'bg-honey-100')}
-              </View>
-            );
-          })()}
-
-          {/* Advance / Rotate button */}
-          <Pressable
-            onPress={rotateQueenBee}
-            className="bg-green-500 py-2 rounded-lg active:bg-green-600 mb-3"
-          >
-            <Text className="text-white font-medium text-center">Advance to Next Queen Bee</Text>
-          </Pressable>
-
-          {/* All QB entries for manual management / deletion */}
-          <Text className="text-sm font-semibold text-gray-500 mb-1">All Entries (tap to edit, swipe to delete)</Text>
-          <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-            {queenBees.map((qb) => (
-              <View
-                key={qb.id}
-                className="flex-row items-center border-b border-gray-100 last:border-b-0"
-              >
-                <Pressable
-                  onPress={() => openEditQueenBee(qb)}
-                  className="flex-1 p-3 active:bg-gray-50"
-                >
-                  <View className="flex-row justify-between items-center">
-                    <View className="flex-1">
-                      <Text className="font-medium text-gray-800 text-sm">
-                        {members.find(m => m.profiles.id === qb.user_id)?.profiles.name || 'Unknown'}
-                      </Text>
-                      <Text className="text-xs text-gray-500">{qb.project_title} ({qb.month})</Text>
-                    </View>
-                    <View className={`px-2 py-0.5 rounded ${
-                      qb.status === 'active' ? 'bg-green-100' :
-                      qb.status === 'completed' ? 'bg-gray-100' : 'bg-honey-100'
-                    }`}>
-                      <Text className={`text-xs capitalize ${
-                        qb.status === 'active' ? 'text-green-700' :
-                        qb.status === 'completed' ? 'text-gray-600' : 'text-honey-700'
-                      }`}>{qb.status}</Text>
-                    </View>
-                  </View>
-                </Pressable>
-                <Pressable
-                  onPress={async () => {
-                    const name = members.find(m => m.profiles.id === qb.user_id)?.profiles.name || 'this entry';
-                    const doDelete = async () => {
-                      const { error } = await supabase.from('queen_bees').delete().eq('id', qb.id);
-                      if (error) {
-                        Alert.alert('Error', 'Failed to delete');
-                      } else {
-                        await fetchData();
-                      }
-                    };
-                    if (typeof window !== 'undefined' && window.confirm) {
-                      if (window.confirm(`Delete ${name}'s Queen Bee entry for ${qb.month}?`)) {
-                        await doDelete();
-                      }
-                    } else {
-                      Alert.alert('Delete Queen Bee', `Delete ${name}'s entry for ${qb.month}?`, [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Delete', style: 'destructive', onPress: doDelete },
-                      ]);
-                    }
-                  }}
-                  className="px-3 py-2 mr-2 active:opacity-60"
-                >
-                  <Text className="text-red-500 text-sm">Delete</Text>
-                </Pressable>
-              </View>
-            ))}
-            {queenBees.length === 0 && (
-              <View className="p-4">
-                <Text className="text-gray-500 text-center">No Queen Bee schedule set</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Events Section */}
-        <View className="mb-6">
-          <View className="flex-row justify-between items-center mb-2">
-            <Text className="text-lg font-semibold text-gray-700">Events</Text>
-            <Pressable
-              onPress={() => setShowEventModal(true)}
-              className="bg-honey-500 px-3 py-1 rounded-lg active:bg-honey-600"
-            >
-              <Text className="text-white font-medium">+ Add</Text>
-            </Pressable>
-          </View>
-          <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-            {events.map((event) => (
-              <View
-                key={event.id}
-                className="p-4 border-b border-gray-100 last:border-b-0"
-              >
-                <Text className="font-semibold text-gray-800">
-                  {event.title}
-                </Text>
-                <Text className="text-sm text-gray-500 mt-1">
-                  {formatDateMedium(event.event_date)}
-                </Text>
-              </View>
-            ))}
-            {events.length === 0 && (
-              <View className="p-4">
-                <Text className="text-gray-500 text-center">No events</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
         {/* Members Section */}
         <View className="mb-6">
           <Text className="text-lg font-semibold text-gray-700 mb-2">

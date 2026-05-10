@@ -37,6 +37,13 @@ const ROLE_LABELS: Partial<Record<UserRole, string>> = {
 
 const HIVE_CABINET = [
   {
+    title: 'Founder & Apiarist',
+    memberName: 'Nat',
+    aliases: ['Natalie'],
+    icon: '👑',
+    description: 'Guides the HIVE vision, culture, and creative abundance.',
+  },
+  {
     title: 'Historian',
     memberName: 'Charlee',
     icon: '📚',
