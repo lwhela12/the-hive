@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowDimensions, TextInput } from 'react-native';
+import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowDimensions, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import type { UserRole } from '../../types';
+import { useRouter } from 'expo-router';
+import type { Skill, UserRole, Wish } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
+import { SKILL_CATEGORIES, ALL_SKILLS } from '../../lib/skillsList';
 
 interface MemberData {
   id: string;
@@ -24,8 +26,8 @@ interface MemberData {
   known_for?: string | null;
   fun_facts?: string[] | null;
   birthday?: string | null;
-  skills: { id: string; description: string }[];
-  wishes: { id: string; description: string; status: string }[];
+  skills: Skill[];
+  wishes: Wish[];
   introPost?: { title: string; content: string } | null;
   questionAnswerCount: number;
 }
@@ -98,16 +100,6 @@ function getHiveTitleRank(title?: string | null) {
   return index === -1 ? Number.POSITIVE_INFINITY : index;
 }
 
-function parseSkillList(input: string) {
-  return Array.from(
-    new Set(
-      input
-        .split(',')
-        .map(skill => skill.trim())
-        .filter(Boolean)
-    )
-  );
-}
 
 function SilhouetteAvatar({ size }: { size: number }) {
   return (
@@ -192,22 +184,25 @@ function ProfilePromptInput({
 function MemberDetailModal({
   member,
   onClose,
-  isCurrentUser,
   onMemberUpdated,
   communityId,
 }: {
   member: MemberData;
   onClose: () => void;
-  isCurrentUser: boolean;
   onMemberUpdated: (member: MemberData) => void;
   communityId: string | null;
 }) {
+  const router = useRouter();
+  const { profile, session } = useAuth();
+  const currentAuthId = profile?.id ?? session?.user?.id ?? null;
+  const isCurrentUser = !!currentAuthId && member.id === currentAuthId;
   const publicWishes = member.wishes.filter(w => w.status === 'public');
   const roleLabel = ROLE_LABELS[member.role];
   const [introExpanded, setIntroExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showDeeper, setShowDeeper] = useState(false);
   const [draftName, setDraftName] = useState(member.name ?? '');
   const [draftOccupation, setDraftOccupation] = useState(member.occupation ?? '');
   const [draftBirthday, setDraftBirthday] = useState(member.birthday ? isoToAmerican(member.birthday) : '');
@@ -221,7 +216,20 @@ function MemberDetailModal({
   const [draftFunFact1, setDraftFunFact1] = useState(member.fun_facts?.[0] ?? '');
   const [draftFunFact2, setDraftFunFact2] = useState(member.fun_facts?.[1] ?? '');
   const [draftFunFact3, setDraftFunFact3] = useState(member.fun_facts?.[2] ?? '');
-  const [draftSkills, setDraftSkills] = useState(member.skills.map(skill => skill.description).join(', '));
+  // Skill bubbles — array-based so we can add/remove individual chips
+  const [draftSkillList, setDraftSkillList] = useState<string[]>(member.skills.map(s => s.description));
+  const [newSkillInput, setNewSkillInput] = useState('');
+  const [editingSkills, setEditingSkills] = useState(false);
+  const [savingSkills, setSavingSkills] = useState(false);
+  const [showSkillPicker, setShowSkillPicker] = useState(false);
+  const [skillSearch, setSkillSearch] = useState('');
+  const [showWishesSheet, setShowWishesSheet] = useState(false);
+  // Wishes management (for current user only)
+  const [myWishes, setMyWishes] = useState<{ id: string; description: string; status: string }[]>([]);
+  const [wishesLoading, setWishesLoading] = useState(false);
+  const [addingWish, setAddingWish] = useState(false);
+  const [newWishInput, setNewWishInput] = useState('');
+  const [wishActionLoading, setWishActionLoading] = useState<string | null>(null);
 
   const hasFavorites = member.favorite_book || member.favorite_food || member.favorite_hobby;
   const hasDetails = member.bio || member.current_project || member.hometown || member.known_for || hasFavorites;
@@ -235,6 +243,7 @@ function MemberDetailModal({
     setIntroExpanded(false);
     setEditing(false);
     setSaveError(null);
+    setShowDeeper(false);
     setDraftName(member.name ?? '');
     setDraftOccupation(member.occupation ?? '');
     setDraftBirthday(member.birthday ? isoToAmerican(member.birthday) : '');
@@ -248,8 +257,119 @@ function MemberDetailModal({
     setDraftFunFact1(member.fun_facts?.[0] ?? '');
     setDraftFunFact2(member.fun_facts?.[1] ?? '');
     setDraftFunFact3(member.fun_facts?.[2] ?? '');
-    setDraftSkills(member.skills.map(skill => skill.description).join(', '));
+    setDraftSkillList(member.skills.map(s => s.description));
+    setNewSkillInput('');
+    setEditingSkills(false);
+    setShowSkillPicker(false);
+    setSkillSearch('');
+    setShowWishesSheet(false);
   }, [member]);
+
+  // Fetch current user's own wishes (all statuses) when modal opens
+  useEffect(() => {
+    if (!isCurrentUser || !communityId) return;
+    setWishesLoading(true);
+    supabase
+      .from('wishes')
+      .select('id, description, status')
+      .eq('user_id', member.id)
+      .eq('community_id', communityId)
+      .in('status', ['private', 'public'])
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setMyWishes(data ?? []);
+        setWishesLoading(false);
+      });
+  }, [isCurrentUser, member.id, communityId]);
+
+  const addSkillChip = () => {
+    const trimmed = newSkillInput.trim();
+    if (!trimmed || draftSkillList.length >= 30) return;
+    if (!draftSkillList.some(s => s.toLowerCase() === trimmed.toLowerCase())) {
+      setDraftSkillList(prev => [...prev, trimmed]);
+    }
+    setNewSkillInput('');
+  };
+
+  const saveSkillsOnly = async () => {
+    if (!communityId) return;
+    setSavingSkills(true);
+    const skillDescriptions = Array.from(new Set(draftSkillList.map(s => s.trim()).filter(Boolean)));
+    try {
+      const nextSkillSet = new Set(skillDescriptions.map(d => d.toLowerCase()));
+      const existingSkillSet = new Set(member.skills.map(s => s.description.toLowerCase()));
+      const idsToDelete = member.skills
+        .filter(s => !nextSkillSet.has(s.description.toLowerCase()))
+        .map(s => s.id)
+        .filter(id => !id.startsWith('draft-skill-'));
+      const toInsert = skillDescriptions.filter(d => !existingSkillSet.has(d.toLowerCase()));
+
+      if (idsToDelete.length > 0) {
+        await supabase.from('skills').delete().in('id', idsToDelete).eq('user_id', member.id);
+      }
+      if (toInsert.length > 0) {
+        await supabase.from('skills').insert(toInsert.map(description => ({
+          user_id: member.id, community_id: communityId, description, raw_input: description, extracted_from: 'manual',
+        })));
+      }
+      onMemberUpdated({
+        ...member,
+        skills: skillDescriptions.map((description, i) => ({
+          id: member.skills[i]?.id ?? `draft-skill-${i}`,
+          description,
+        })),
+      });
+      setEditingSkills(false);
+    } catch (e) {
+      console.warn('[Members] skills save failed', e);
+    } finally {
+      setSavingSkills(false);
+    }
+  };
+
+  const publishWish = async (wishId: string) => {
+    setWishActionLoading(wishId);
+    await supabase.from('wishes').update({ status: 'public', is_active: true }).eq('id', wishId);
+    setMyWishes(prev => prev.map(w => w.id === wishId ? { ...w, status: 'public' } : w));
+    setWishActionLoading(null);
+  };
+
+  const makeWishPrivate = async (wishId: string) => {
+    setWishActionLoading(wishId);
+    await supabase.from('wishes').update({ status: 'private', is_active: false }).eq('id', wishId);
+    setMyWishes(prev => prev.map(w => w.id === wishId ? { ...w, status: 'private' } : w));
+    setWishActionLoading(null);
+  };
+
+  const deleteWish = async (wishId: string) => {
+    Alert.alert('Delete wish', 'Remove this wish from your profile?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          await supabase.from('wishes').delete().eq('id', wishId);
+          setMyWishes(prev => prev.filter(w => w.id !== wishId));
+        },
+      },
+    ]);
+  };
+
+  const saveNewWish = async () => {
+    const desc = newWishInput.trim();
+    if (!desc || !communityId) return;
+    const { data } = await supabase
+      .from('wishes')
+      .insert({ user_id: member.id, community_id: communityId, description: desc, status: 'private', extracted_from: 'manual' })
+      .select('id, description, status')
+      .single();
+    if (data) setMyWishes(prev => [data, ...prev]);
+    setNewWishInput('');
+    setAddingWish(false);
+  };
+
+  const refineWithClive = (description: string) => {
+    router.push({ pathname: '/', params: { refineWish: description } });
+  };
 
   const saveProfilePrompts = async () => {
     setSaving(true);
@@ -257,7 +377,7 @@ function MemberDetailModal({
     const cleanName = draftName.trim();
     const cleanBirthday = draftBirthday.trim();
     const birthdayIso = cleanBirthday ? parseAmericanDate(cleanBirthday) : null;
-    const skillDescriptions = parseSkillList(draftSkills);
+    const skillDescriptions = Array.from(new Set(draftSkillList.map(s => s.trim()).filter(Boolean)));
 
     if (!cleanName) {
       setSaveError('Please keep a name on your profile.');
@@ -371,6 +491,238 @@ function MemberDetailModal({
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
           </View>
 
+          {/* ── Skill Picker Sheet ── */}
+          {showSkillPicker && (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, zIndex: 10 }}>
+              <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
+              </View>
+              <View style={{ paddingHorizontal: 20, paddingBottom: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>Pick your skills</Text>
+                  <Pressable onPress={() => { setShowSkillPicker(false); setSkillSearch(''); }} style={{ padding: 6 }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#9ca3af' }}>Done picking</Text>
+                  </Pressable>
+                </View>
+                {/* Selected count */}
+                {draftSkillList.length > 0 && (
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#bd9348', marginBottom: 8 }}>
+                    {draftSkillList.length} selected · tap any to remove
+                  </Text>
+                )}
+                {/* Search */}
+                <TextInput
+                  value={skillSearch}
+                  onChangeText={setSkillSearch}
+                  placeholder="Search skills..."
+                  placeholderTextColor="#b5ad9f"
+                  style={{ backgroundColor: '#faf8f3', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 4 }}
+                />
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
+                {/* Custom / type-your-own */}
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#9ca3af', letterSpacing: 0.7, marginBottom: 8 }}>✍️ TYPE YOUR OWN</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TextInput
+                      value={newSkillInput}
+                      onChangeText={setNewSkillInput}
+                      onSubmitEditing={addSkillChip}
+                      placeholder="Something unique to you..."
+                      placeholderTextColor="#b5ad9f"
+                      returnKeyType="done"
+                      style={{ flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 12, color: '#2d2d2d', fontFamily: 'Lato_400Regular', fontSize: 14, paddingHorizontal: 12, paddingVertical: 9 }}
+                    />
+                    <Pressable onPress={addSkillChip} style={{ backgroundColor: '#bd9348', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9, justifyContent: 'center' }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>+ Add</Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* Category sections */}
+                {SKILL_CATEGORIES.map(cat => {
+                  const filtered = skillSearch.trim()
+                    ? cat.skills.filter(s => s.toLowerCase().includes(skillSearch.toLowerCase()))
+                    : cat.skills;
+                  if (filtered.length === 0) return null;
+                  return (
+                    <View key={cat.label} style={{ marginBottom: 20 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#9ca3af', letterSpacing: 0.7, marginBottom: 10 }}>
+                        {cat.emoji} {cat.label.toUpperCase()}
+                      </Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        {filtered.map(skill => {
+                          const selected = draftSkillList.some(s => s.toLowerCase() === skill.toLowerCase());
+                          return (
+                            <Pressable
+                              key={skill}
+                              onPress={() => {
+                                if (selected) {
+                                  setDraftSkillList(prev => prev.filter(s => s.toLowerCase() !== skill.toLowerCase()));
+                                } else if (draftSkillList.length < 30) {
+                                  setDraftSkillList(prev => [...prev, skill]);
+                                }
+                              }}
+                              style={{
+                                backgroundColor: selected ? '#bd9348' : '#faf8f3',
+                                borderWidth: 1,
+                                borderColor: selected ? '#bd9348' : 'rgba(222,193,129,0.4)',
+                                borderRadius: 24,
+                                paddingHorizontal: 14,
+                                paddingVertical: 8,
+                              }}
+                            >
+                              <Text style={{ fontFamily: selected ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: selected ? 'white' : '#2d2d2d' }}>
+                                {selected ? '✓ ' : ''}{skill}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+              {/* Save bar */}
+              <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.3)', padding: 20, paddingBottom: 32, flexDirection: 'row', gap: 10 }}>
+                <Pressable
+                  onPress={() => { setShowSkillPicker(false); setDraftSkillList(member.skills.map(s => s.description)); setSkillSearch(''); }}
+                  style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center' }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => { await saveSkillsOnly(); setShowSkillPicker(false); setSkillSearch(''); }}
+                  disabled={savingSkills}
+                  style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: savingSkills ? 0.6 : 1 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center' }}>
+                    {savingSkills ? 'Saving...' : `Save ${draftSkillList.length} skill${draftSkillList.length !== 1 ? 's' : ''}`}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* ── Wishes Sheet ── */}
+          {showWishesSheet && (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, zIndex: 10 }}>
+              <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingBottom: 12 }}>
+                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>My Wishes 🌟</Text>
+                <Pressable onPress={() => setShowWishesSheet(false)} style={{ padding: 6 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#9ca3af' }}>Close</Text>
+                </Pressable>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 120 }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', marginBottom: 16, lineHeight: 18 }}>
+                  Private wishes are just for you. Share with the HIVE when you're ready — someone might know exactly how to help.
+                </Text>
+                {wishesLoading ? (
+                  <ActivityIndicator size="small" color="#bd9348" style={{ marginVertical: 20 }} />
+                ) : (
+                  <>
+                    {myWishes.map(wish => (
+                      <View key={wish.id} style={{
+                        backgroundColor: wish.status === 'public' ? '#fffbf0' : '#faf8f3',
+                        borderWidth: 1,
+                        borderColor: wish.status === 'public' ? 'rgba(222,193,129,0.5)' : 'rgba(200,190,170,0.3)',
+                        borderRadius: 16, padding: 16, marginBottom: 12,
+                      }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: wish.status === 'public' ? '#22c55e' : '#d1d5db', marginRight: 8 }} />
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: wish.status === 'public' ? '#16a34a' : '#9ca3af' }}>
+                            {wish.status === 'public' ? 'Shared with the HIVE' : 'Private'}
+                          </Text>
+                        </View>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', lineHeight: 21, marginBottom: 12 }}>
+                          {wish.description}
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {wish.status === 'private' ? (
+                            <Pressable
+                              onPress={() => publishWish(wish.id)}
+                              disabled={wishActionLoading === wish.id}
+                              style={{ backgroundColor: '#22c55e', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, opacity: wishActionLoading === wish.id ? 0.5 : 1 }}
+                            >
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: 'white' }}>Share with HIVE</Text>
+                            </Pressable>
+                          ) : (
+                            <Pressable
+                              onPress={() => makeWishPrivate(wish.id)}
+                              disabled={wishActionLoading === wish.id}
+                              style={{ backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, opacity: wishActionLoading === wish.id ? 0.5 : 1 }}
+                            >
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#6b7280' }}>Make private</Text>
+                            </Pressable>
+                          )}
+                          <Pressable
+                            onPress={() => refineWithClive(wish.description)}
+                            style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7 }}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>Refine with Clive ✨</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => deleteWish(wish.id)}
+                            style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 }}
+                          >
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#ef4444' }}>Delete</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ))}
+                    {myWishes.length === 0 && !addingWish && (
+                      <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 24, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 32, marginBottom: 10 }}>🌟</Text>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', marginBottom: 6 }}>No wishes yet</Text>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center', lineHeight: 18 }}>
+                          Add something below, or chat with Clive to discover what you really want.
+                        </Text>
+                      </View>
+                    )}
+                    {addingWish && (
+                      <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16, marginBottom: 12 }}>
+                        <TextInput
+                          value={newWishInput}
+                          onChangeText={setNewWishInput}
+                          placeholder="Describe what you're wishing for..."
+                          placeholderTextColor="#b5ad9f"
+                          multiline
+                          autoFocus
+                          style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', minHeight: 80, textAlignVertical: 'top', marginBottom: 10 }}
+                        />
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <Pressable onPress={() => { setAddingWish(false); setNewWishInput(''); }} style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
+                          </Pressable>
+                          <Pressable onPress={saveNewWish} disabled={!newWishInput.trim()} style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Save as private</Text>
+                          </Pressable>
+                          <Pressable onPress={() => refineWithClive(newWishInput)} style={{ flex: 2, backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 10, paddingVertical: 10 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', textAlign: 'center', fontSize: 13 }}>Refine with Clive ✨</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    )}
+                  </>
+                )}
+              </ScrollView>
+              {/* Add wish bar */}
+              {!addingWish && (
+                <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.3)', padding: 20, paddingBottom: 32 }}>
+                  <Pressable
+                    onPress={() => setAddingWish(true)}
+                    style={{ backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>+ Add a wish</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          )}
+
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}>
             {/* Header */}
             <View style={{ alignItems: 'center', paddingVertical: 20 }}>
@@ -409,6 +761,32 @@ function MemberDetailModal({
                 )}
               </View>
             </View>
+
+            {/* Current user quick-action bar */}
+            {isCurrentUser && (
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+                <Pressable
+                  onPress={() => setShowWishesSheet(true)}
+                  style={{ flex: 1, backgroundColor: '#fdf3dc', borderWidth: 1.5, borderColor: '#bd9348', borderRadius: 14, paddingVertical: 12, alignItems: 'center', gap: 2 }}
+                >
+                  <Text style={{ fontSize: 20 }}>🌟</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>My Wishes</Text>
+                  {myWishes.length > 0 && (
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9a7a3a' }}>{myWishes.length} wish{myWishes.length !== 1 ? 'es' : ''}</Text>
+                  )}
+                </Pressable>
+                <Pressable
+                  onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
+                  style={{ flex: 1, backgroundColor: '#f5f3ee', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 14, paddingVertical: 12, alignItems: 'center', gap: 2 }}
+                >
+                  <Text style={{ fontSize: 20 }}>⚡️</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#2d2d2d' }}>Edit Skills</Text>
+                  {member.skills.length > 0 && (
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9ca3af' }}>{member.skills.length} skill{member.skills.length !== 1 ? 's' : ''}</Text>
+                  )}
+                </Pressable>
+              </View>
+            )}
 
             {isCurrentUser && (
               <View style={{ backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 18, padding: 16, marginBottom: 20 }}>
@@ -523,17 +901,87 @@ function MemberDetailModal({
                       onChangeText={setDraftFunFact3}
                       maxLength={PROFILE_PROMPT_LIMITS.funFact}
                     />
-                    <ProfilePromptInput
-                      label="Skills / what I'm good at"
-                      placeholder="Writing, party planning, spreadsheets, pep talks..."
-                      value={draftSkills}
-                      onChangeText={setDraftSkills}
-                      maxLength={PROFILE_PROMPT_LIMITS.skills}
-                      multiline
-                    />
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8a8173', marginTop: -6, marginBottom: 12 }}>
-                      Separate skills with commas. These become the little profile bubbles.
-                    </Text>
+                    {/* Skill bubble chip editor */}
+                    <View style={{ marginBottom: 14 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a8173', marginBottom: 8 }}>Skills & what I'm good at</Text>
+                      {draftSkillList.length > 0 && (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                          {draftSkillList.map((skill, i) => (
+                            <Pressable
+                              key={i}
+                              onPress={() => setDraftSkillList(prev => prev.filter((_, idx) => idx !== i))}
+                              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 24, paddingHorizontal: 12, paddingVertical: 7 }}
+                            >
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginRight: 5 }}>{skill}</Text>
+                              <Text style={{ fontSize: 15, color: '#bd9348', lineHeight: 18 }}>×</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TextInput
+                          value={newSkillInput}
+                          onChangeText={setNewSkillInput}
+                          onSubmitEditing={addSkillChip}
+                          placeholder="Add a skill..."
+                          placeholderTextColor="#b5ad9f"
+                          returnKeyType="done"
+                          style={{ flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 12, color: '#2d2d2d', fontFamily: 'Lato_400Regular', fontSize: 14, paddingHorizontal: 12, paddingVertical: 8 }}
+                        />
+                        <Pressable onPress={addSkillChip} style={{ backgroundColor: '#bd9348', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, justifyContent: 'center' }}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>+ Add</Text>
+                        </Pressable>
+                      </View>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#b5a898', marginTop: 6 }}>
+                        Tap any bubble to remove it. Up to 30 skills.
+                      </Text>
+                    </View>
+
+                    {/* Go deeper toggle */}
+                    <Pressable
+                      onPress={() => setShowDeeper(v => !v)}
+                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: showDeeper ? '#fdf3dc' : '#f5f3ee', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: showDeeper ? 12 : 16 }}
+                    >
+                      <View>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>Want to go deeper? 🐝</Text>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 2 }}>A few more questions for the curious ones</Text>
+                      </View>
+                      <Text style={{ fontSize: 16, color: '#bd9348' }}>{showDeeper ? '▲' : '▼'}</Text>
+                    </Pressable>
+
+                    {showDeeper && (
+                      <>
+                        <ProfilePromptInput
+                          label="Love languages"
+                          placeholder="Words of affirmation, quality time, gifts, acts of service, touch..."
+                          value={''}
+                          onChangeText={() => {}}
+                          maxLength={PROFILE_PROMPT_LIMITS.short}
+                        />
+                        <ProfilePromptInput
+                          label="What I'm currently into"
+                          placeholder="Shows, books, phases, obsessions, rabbit holes..."
+                          value={''}
+                          onChangeText={() => {}}
+                          maxLength={PROFILE_PROMPT_LIMITS.short}
+                        />
+                        <ProfilePromptInput
+                          label="If the HIVE could grant me one thing this year"
+                          placeholder="Your biggest dream wish right now..."
+                          value={''}
+                          onChangeText={() => {}}
+                          maxLength={PROFILE_PROMPT_LIMITS.short}
+                          multiline
+                        />
+                        <ProfilePromptInput
+                          label="A skill I want to learn"
+                          placeholder="Something you've always wanted to get better at"
+                          value={''}
+                          onChangeText={() => {}}
+                          maxLength={PROFILE_PROMPT_LIMITS.short}
+                        />
+                      </>
+                    )}
 
                     {saveError && (
                       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#ef4444', marginBottom: 10 }}>{saveError}</Text>
@@ -614,26 +1062,49 @@ function MemberDetailModal({
               </View>
             )}
 
-            {/* Skills */}
-            {member.skills.length > 0 && (
+            {/* Skills — inline editable for current user */}
+            {(member.skills.length > 0 || isCurrentUser) && (
               <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 10 }}>SKILLS</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {member.skills.map((s) => {
-                    const len = s.description.length;
-                    const size = len <= 12 ? 'large' : len <= 22 ? 'medium' : 'small';
-                    const styles = {
-                      large:  { px: 18, py: 10, fontSize: 15, bg: '#fdf3dc', border: 'rgba(222,193,129,0.5)' },
-                      medium: { px: 14, py: 8,  fontSize: 13, bg: '#faf8f3', border: 'rgba(222,193,129,0.3)' },
-                      small:  { px: 10, py: 6,  fontSize: 11, bg: '#f5f3ee', border: 'rgba(200,190,170,0.3)' },
-                    }[size];
-                    return (
-                      <View key={s.id} style={{ backgroundColor: styles.bg, borderWidth: 1, borderColor: styles.border, borderRadius: 24, paddingHorizontal: styles.px, paddingVertical: styles.py }}>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: styles.fontSize, color: '#2d2d2d' }}>{s.description}</Text>
-                      </View>
-                    );
-                  })}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>SKILLS</Text>
+                  {isCurrentUser && (
+                    <Pressable
+                      onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
+                      style={{ backgroundColor: '#fdf3dc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Edit skills</Text>
+                    </Pressable>
+                  )}
                 </View>
+
+                {false ? null : (
+                  /* View mode */
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {member.skills.length === 0 && isCurrentUser ? (
+                      <Pressable
+                        onPress={() => setEditingSkills(true)}
+                        style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed' }}
+                      >
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Add your skills</Text>
+                      </Pressable>
+                    ) : (
+                      member.skills.map((s) => {
+                        const len = s.description.length;
+                        const size = len <= 12 ? 'large' : len <= 22 ? 'medium' : 'small';
+                        const st = {
+                          large:  { px: 18, py: 10, fontSize: 15, bg: '#fdf3dc', border: 'rgba(222,193,129,0.5)' },
+                          medium: { px: 14, py: 8,  fontSize: 13, bg: '#faf8f3', border: 'rgba(222,193,129,0.3)' },
+                          small:  { px: 10, py: 6,  fontSize: 11, bg: '#f5f3ee', border: 'rgba(200,190,170,0.3)' },
+                        }[size];
+                        return (
+                          <View key={s.id} style={{ backgroundColor: st.bg, borderWidth: 1, borderColor: st.border, borderRadius: 24, paddingHorizontal: st.px, paddingVertical: st.py }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: st.fontSize, color: '#2d2d2d' }}>{s.description}</Text>
+                          </View>
+                        );
+                      })
+                    )}
+                  </View>
+                )}
               </View>
             )}
 
@@ -685,6 +1156,119 @@ function MemberDetailModal({
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af', textAlign: 'center' }}>
                   {member.name.split(' ')[0]} hasn't filled out their profile yet.{'\n'}Say hi at the next meeting! 🐝
                 </Text>
+              </View>
+            )}
+
+            {/* Wishes management — current user only */}
+            {isCurrentUser && (
+              <View style={{ marginBottom: 24 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>MY WISHES</Text>
+                  <Pressable
+                    onPress={() => setAddingWish(true)}
+                    style={{ backgroundColor: '#fdf3dc', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5 }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>+ New Wish</Text>
+                  </Pressable>
+                </View>
+
+                {wishesLoading ? (
+                  <ActivityIndicator size="small" color="#bd9348" style={{ marginVertical: 12 }} />
+                ) : (
+                  <>
+                    {myWishes.map(wish => (
+                      <View key={wish.id} style={{ backgroundColor: wish.status === 'public' ? '#fffbf0' : '#faf8f3', borderWidth: 1, borderColor: wish.status === 'public' ? 'rgba(222,193,129,0.4)' : 'rgba(200,190,170,0.3)', borderRadius: 14, padding: 14, marginBottom: 10 }}>
+                        {/* Status badge */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: wish.status === 'public' ? '#22c55e' : '#9ca3af', marginRight: 7 }} />
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: wish.status === 'public' ? '#16a34a' : '#9ca3af' }}>
+                            {wish.status === 'public' ? 'Shared with the HIVE' : 'Private'}
+                          </Text>
+                        </View>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', lineHeight: 20, marginBottom: 10 }}>
+                          {wish.description}
+                        </Text>
+                        {/* Actions */}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {wish.status === 'private' && (
+                            <Pressable
+                              onPress={() => publishWish(wish.id)}
+                              disabled={wishActionLoading === wish.id}
+                              style={{ backgroundColor: '#22c55e', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, opacity: wishActionLoading === wish.id ? 0.5 : 1 }}
+                            >
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: 'white' }}>Share with HIVE</Text>
+                            </Pressable>
+                          )}
+                          {wish.status === 'public' && (
+                            <Pressable
+                              onPress={() => makeWishPrivate(wish.id)}
+                              disabled={wishActionLoading === wish.id}
+                              style={{ backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, opacity: wishActionLoading === wish.id ? 0.5 : 1 }}
+                            >
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#6b7280' }}>Make private</Text>
+                            </Pressable>
+                          )}
+                          <Pressable
+                            onPress={() => refineWithClive(wish.description)}
+                            style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>Refine with Clive ✨</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => deleteWish(wish.id)}
+                            style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+                          >
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#ef4444' }}>Delete</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ))}
+
+                    {myWishes.length === 0 && !addingWish && (
+                      <View style={{ backgroundColor: '#faf8f3', borderRadius: 14, padding: 16, alignItems: 'center' }}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
+                          No wishes yet.{'\n'}Tap "+ New Wish" to add your first one, or chat with Clive to discover what you really want.
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Inline new wish composer */}
+                    {addingWish && (
+                      <View style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 14, padding: 14 }}>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginBottom: 8 }}>New wish</Text>
+                        <TextInput
+                          value={newWishInput}
+                          onChangeText={setNewWishInput}
+                          placeholder="What do you wish for? Describe it as specifically as you can..."
+                          placeholderTextColor="#b5ad9f"
+                          multiline
+                          style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', paddingHorizontal: 12, paddingVertical: 10, minHeight: 80, marginBottom: 10, textAlignVertical: 'top' }}
+                        />
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <Pressable
+                            onPress={() => { setAddingWish(false); setNewWishInput(''); }}
+                            style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={saveNewWish}
+                            disabled={!newWishInput.trim()}
+                            style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Save as private</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => refineWithClive(newWishInput)}
+                            style={{ flex: 2, backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 10, paddingVertical: 10 }}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', textAlign: 'center', fontSize: 13 }}>Refine with Clive ✨</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    )}
+                  </>
+                )}
               </View>
             )}
 
@@ -1022,7 +1606,6 @@ export default function MembersScreen() {
       {selected && (
         <MemberDetailModal
           member={selected}
-          isCurrentUser={selected.id === currentUserId}
           communityId={communityId}
           onClose={() => setSelected(null)}
           onMemberUpdated={(updatedMember) => {

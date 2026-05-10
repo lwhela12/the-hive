@@ -17,6 +17,8 @@ import { Avatar } from '../../components/ui/Avatar';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
+import { useSurveys } from '../../lib/hooks/useSurveys';
+import type { Survey } from '../../lib/hooks/useSurveys';
 import { formatDateMedium, parseAmericanDate, isoToAmerican } from '../../lib/dateUtils';
 import type { Profile, QueenBee, Event, UserRole, CommunityInvite } from '../../types';
 
@@ -45,6 +47,14 @@ export default function AdminScreen() {
   // Modal states
   const [showQueenBeeModal, setShowQueenBeeModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
+  const [showSurveyModal, setShowSurveyModal] = useState(false);
+
+  // Survey management
+  const { allSurveys, refetch: refetchSurveys } = useSurveys(communityId ?? undefined, profile?.id);
+  const [surveyTitle, setSurveyTitle] = useState('');
+  const [surveyDescription, setSurveyDescription] = useState('');
+  const [surveyDueDate, setSurveyDueDate] = useState('');
+  const [savingSurvey, setSavingSurvey] = useState(false);
 
   // Form states
   const [selectedMember, setSelectedMember] = useState<Profile | null>(null);
@@ -122,8 +132,38 @@ export default function AdminScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchData();
+    await Promise.all([fetchData(), refetchSurveys()]);
     setRefreshing(false);
+  };
+
+  const toggleSurveyActive = async (survey: Survey) => {
+    await supabase.from('surveys').update({ is_active: !survey.is_active }).eq('id', survey.id);
+    refetchSurveys();
+  };
+
+  const createQuickSurvey = async () => {
+    if (!surveyTitle.trim() || !communityId) return;
+    setSavingSurvey(true);
+    try {
+      await supabase.from('surveys').insert({
+        community_id: communityId,
+        title: surveyTitle.trim(),
+        description: surveyDescription.trim() || null,
+        due_date: surveyDueDate || null,
+        questions: [],
+        is_active: true,
+        created_by: profile?.id,
+      });
+      setSurveyTitle('');
+      setSurveyDescription('');
+      setSurveyDueDate('');
+      setShowSurveyModal(false);
+      refetchSurveys();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to create survey');
+    } finally {
+      setSavingSurvey(false);
+    }
   };
 
   const updateMemberRole = async (membershipId: string, role: UserRole) => {
@@ -810,8 +850,106 @@ export default function AdminScreen() {
             </View>
           </View>
         )}
+        {/* Surveys Section */}
+        <View style={{ marginBottom: 24 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>Surveys</Text>
+            <Pressable
+              onPress={() => setShowSurveyModal(true)}
+              style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Create</Text>
+            </Pressable>
+          </View>
+          {allSurveys.length === 0 ? (
+            <View style={{ backgroundColor: '#faf8f3', borderRadius: 14, padding: 20, alignItems: 'center' }}>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af' }}>
+                No surveys yet. Create one for the next meeting!
+              </Text>
+            </View>
+          ) : (
+            <View style={{ backgroundColor: '#faf8f3', borderRadius: 14, overflow: 'hidden' }}>
+              {allSurveys.map((survey, i) => (
+                <View key={survey.id} style={{
+                  flexDirection: 'row', alignItems: 'center', padding: 14,
+                  borderBottomWidth: i < allSurveys.length - 1 ? 1 : 0,
+                  borderBottomColor: 'rgba(222,193,129,0.3)',
+                }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>{survey.title}</Text>
+                    {survey.due_date && (
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                        Due {new Date(survey.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </Text>
+                    )}
+                  </View>
+                  <Pressable
+                    onPress={() => toggleSurveyActive(survey)}
+                    style={{
+                      backgroundColor: survey.is_active ? '#fdf3dc' : '#f3f4f6',
+                      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10,
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: survey.is_active ? '#bd9348' : '#9ca3af' }}>
+                      {survey.is_active ? 'Active' : 'Inactive'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         </>)}
       </ScrollView>
+
+      {/* Survey Create Modal */}
+      <Modal visible={showSurveyModal} animationType="slide" transparent onRequestClose={() => setShowSurveyModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 20, color: '#2d2d2d', marginBottom: 16 }}>Create Survey</Text>
+            <TextInput
+              placeholder="Survey title"
+              value={surveyTitle}
+              onChangeText={setSurveyTitle}
+              style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 15, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3' }}
+              placeholderTextColor="#b5ad9f"
+            />
+            <TextInput
+              placeholder="Description (optional)"
+              value={surveyDescription}
+              onChangeText={setSurveyDescription}
+              multiline
+              style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3', minHeight: 72, textAlignVertical: 'top' }}
+              placeholderTextColor="#b5ad9f"
+            />
+            <TextInput
+              placeholder="Due date (optional, e.g. 2026-06-01)"
+              value={surveyDueDate}
+              onChangeText={setSurveyDueDate}
+              style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 16, backgroundColor: '#faf8f3' }}
+              placeholderTextColor="#b5ad9f"
+            />
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginBottom: 16 }}>
+              💡 After creating, ask Clive to help you build questions for this survey.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable onPress={() => setShowSurveyModal(false)} style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={createQuickSurvey}
+                disabled={!surveyTitle.trim() || savingSurvey}
+                style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: surveyTitle.trim() && !savingSurvey ? 1 : 0.4 }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white', textAlign: 'center' }}>
+                  {savingSurvey ? 'Creating...' : 'Create Survey'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Queen Bee Modal */}
       <Modal visible={showQueenBeeModal} animationType="slide" transparent>

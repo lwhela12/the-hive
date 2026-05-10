@@ -9,6 +9,8 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { useActivityFeed } from '../../lib/hooks/useActivityFeed';
+import { useSurveys } from '../../lib/hooks/useSurveys';
+import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { WishCard } from '../../components/hive/WishCard';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
@@ -32,7 +34,7 @@ type WishWithGranters = Wish & {
 
 const INITIAL_EVENTS_SHOWN = 3;
 
-const CALENDAR_DURATION_MS = 60 * 60 * 1000;
+const CALENDAR_DURATION_MS = 2.5 * 60 * 60 * 1000; // 30-min arrival + 2-hour meeting
 
 const getEventStartDate = (event: Event) => {
   const [year, month, day] = event.event_date.split('-').map(Number);
@@ -493,6 +495,10 @@ export default function HiveScreen() {
     refetch,
   } = useHiveDataQuery(communityId ?? undefined, profile?.id);
 
+  // Surveys
+  const { pendingSurveys, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
+  const [activeSurvey, setActiveSurvey] = useState<import('../../lib/hooks/useSurveys').Survey | null>(null);
+
   // For granting wishes
   const { grantWish } = useWishes();
 
@@ -859,6 +865,42 @@ export default function HiveScreen() {
 
         {/* Main Content */}
         <View className="p-4">
+
+        {/* Pending Surveys Nudge */}
+        {pendingSurveys.length > 0 && pendingSurveys.map(survey => (
+          <Pressable
+            key={survey.id}
+            onPress={() => setActiveSurvey(survey)}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: pressed ? '#fce8b0' : '#fdf3dc',
+              borderWidth: 1.5,
+              borderColor: '#bd9348',
+              borderRadius: 16,
+              padding: 14,
+              marginBottom: 12,
+              gap: 12,
+              shadowColor: '#bd9348',
+              shadowOpacity: 0.18,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 3,
+            })}
+          >
+            <Text style={{ fontSize: 28 }}>📋</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 2 }}>
+                Survey waiting for you
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5a4a2e', lineHeight: 18 }} numberOfLines={2}>
+                {survey.title}
+                {survey.due_date ? ` · Due ${new Date(survey.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+              </Text>
+            </View>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>Fill out →</Text>
+          </Pressable>
+        ))}
 
         {/* Activity Feed + Upcoming Events — side by side on wide screens */}
         <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 12, marginBottom: 16 }}>
@@ -1434,6 +1476,15 @@ export default function HiveScreen() {
             </View>
           </View>
         </Modal>
+      )}
+
+      {/* Survey Modal */}
+      {activeSurvey && (
+        <SurveyModal
+          survey={activeSurvey}
+          onSubmit={(answers) => submitResponse(activeSurvey.id, answers)}
+          onClose={() => setActiveSurvey(null)}
+        />
       )}
     </SafeAreaView>
   );
