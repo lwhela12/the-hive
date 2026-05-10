@@ -273,6 +273,7 @@ export default function AppLayout() {
           name="profile"
           options={{
             title: 'Profile',
+            href: null,
             tabBarAccessibilityLabel: 'Profile',
             tabBarIcon: ({ focused }) => (
               <TabIcon

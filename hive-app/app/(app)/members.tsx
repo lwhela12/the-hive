@@ -11,6 +11,7 @@ interface MemberData {
   name: string;
   avatar_url?: string | null;
   role: UserRole;
+  hiveTitle?: string | null;
   queen_bee_month?: string | null;
   occupation?: string | null;
   bio?: string | null;
@@ -33,6 +34,47 @@ const ROLE_LABELS: Partial<Record<UserRole, string>> = {
   treasurer: 'Treasurer',
   historian: 'Historian',
 };
+
+const HIVE_CABINET = [
+  {
+    title: 'Historian',
+    memberName: 'Charlee',
+    icon: '📚',
+    description: 'Keeps the HIVE story, highlights, photos, and memory alive.',
+  },
+  {
+    title: 'Treasurer',
+    memberName: 'Ollie',
+    aliases: ['Oliver'],
+    icon: '🍯',
+    description: 'Helps steward the Honey Pot and money flow.',
+  },
+  {
+    title: 'Bee Keeper',
+    memberName: 'Lucas',
+    icon: '🐝',
+    description: 'Tends the app, systems, and tech infrastructure.',
+  },
+];
+
+const PROFILE_PROMPT_LIMITS = {
+  bio: 1000,
+  short: 180,
+  funFact: 220,
+};
+
+function getHiveTitle(name: string) {
+  const normalized = name.toLowerCase();
+  const match = HIVE_CABINET.find(role => {
+    const names = [role.memberName, ...(role.aliases ?? [])];
+    return names.some(alias => normalized.includes(alias.toLowerCase()));
+  });
+  return match?.title ?? null;
+}
+
+function getHiveTitleIcon(title?: string | null) {
+  return HIVE_CABINET.find(role => role.title === title)?.icon ?? '✨';
+}
 
 function SilhouetteAvatar({ size }: { size: number }) {
   return (
@@ -67,12 +109,142 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-function MemberDetailModal({ member, onClose }: { member: MemberData; onClose: () => void }) {
+function ProfilePromptInput({
+  label,
+  placeholder,
+  value,
+  onChangeText,
+  multiline = false,
+  maxLength = PROFILE_PROMPT_LIMITS.short,
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  multiline?: boolean;
+  maxLength?: number;
+}) {
+  const countColor = value.length > maxLength * 0.9 ? '#bd9348' : '#9ca3af';
+  return (
+    <View style={{ marginBottom: 12 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a8173' }}>{label}</Text>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: countColor }}>{value.length}/{maxLength}</Text>
+      </View>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#b5ad9f"
+        maxLength={maxLength}
+        multiline={multiline}
+        textAlignVertical={multiline ? 'top' : 'center'}
+        style={{
+          backgroundColor: 'white',
+          borderWidth: 1,
+          borderColor: 'rgba(222,193,129,0.45)',
+          borderRadius: 12,
+          color: '#2d2d2d',
+          fontFamily: 'Lato_400Regular',
+          fontSize: 14,
+          minHeight: multiline ? 92 : 44,
+          paddingHorizontal: 12,
+          paddingVertical: multiline ? 10 : 8,
+        }}
+      />
+    </View>
+  );
+}
+
+function MemberDetailModal({
+  member,
+  onClose,
+  isCurrentUser,
+  onMemberUpdated,
+}: {
+  member: MemberData;
+  onClose: () => void;
+  isCurrentUser: boolean;
+  onMemberUpdated: (member: MemberData) => void;
+}) {
   const publicWishes = member.wishes.filter(w => w.status === 'public');
   const roleLabel = ROLE_LABELS[member.role];
+  const [introExpanded, setIntroExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [draftBio, setDraftBio] = useState(member.bio ?? '');
+  const [draftCurrentProject, setDraftCurrentProject] = useState(member.current_project ?? '');
+  const [draftHometown, setDraftHometown] = useState(member.hometown ?? '');
+  const [draftKnownFor, setDraftKnownFor] = useState(member.known_for ?? '');
+  const [draftFavBook, setDraftFavBook] = useState(member.favorite_book ?? '');
+  const [draftFavFood, setDraftFavFood] = useState(member.favorite_food ?? '');
+  const [draftFavHobby, setDraftFavHobby] = useState(member.favorite_hobby ?? '');
+  const [draftFunFact1, setDraftFunFact1] = useState(member.fun_facts?.[0] ?? '');
+  const [draftFunFact2, setDraftFunFact2] = useState(member.fun_facts?.[1] ?? '');
+  const [draftFunFact3, setDraftFunFact3] = useState(member.fun_facts?.[2] ?? '');
 
   const hasFavorites = member.favorite_book || member.favorite_food || member.favorite_hobby;
   const hasDetails = member.bio || member.current_project || member.hometown || member.known_for || hasFavorites;
+  const introContent = member.introPost?.content ?? '';
+  const introNeedsToggle = introContent.length > 320;
+  const visibleIntro = introExpanded || !introNeedsToggle
+    ? introContent
+    : `${introContent.slice(0, 320).trimEnd()}...`;
+
+  useEffect(() => {
+    setIntroExpanded(false);
+    setEditing(false);
+    setSaveError(null);
+    setDraftBio(member.bio ?? '');
+    setDraftCurrentProject(member.current_project ?? '');
+    setDraftHometown(member.hometown ?? '');
+    setDraftKnownFor(member.known_for ?? '');
+    setDraftFavBook(member.favorite_book ?? '');
+    setDraftFavFood(member.favorite_food ?? '');
+    setDraftFavHobby(member.favorite_hobby ?? '');
+    setDraftFunFact1(member.fun_facts?.[0] ?? '');
+    setDraftFunFact2(member.fun_facts?.[1] ?? '');
+    setDraftFunFact3(member.fun_facts?.[2] ?? '');
+  }, [member]);
+
+  const saveProfilePrompts = async () => {
+    setSaving(true);
+    setSaveError(null);
+    const funFacts = [draftFunFact1, draftFunFact2, draftFunFact3]
+      .map(fact => fact.trim())
+      .filter(Boolean);
+    const updates = {
+      bio: draftBio.trim() || null,
+      current_project: draftCurrentProject.trim() || null,
+      hometown: draftHometown.trim() || null,
+      known_for: draftKnownFor.trim() || null,
+      favorite_book: draftFavBook.trim() || null,
+      favorite_food: draftFavFood.trim() || null,
+      favorite_hobby: draftFavHobby.trim() || null,
+      fun_facts: funFacts.length > 0 ? funFacts : null,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await (supabase as any)
+      .from('profiles')
+      .update(updates)
+      .eq('id', member.id);
+
+    setSaving(false);
+    if (error) {
+      console.warn('[Members] profile prompt save failed', error);
+      const missingProfileFields = error.message?.includes('does not exist') || error.code === '42703';
+      setSaveError(
+        missingProfileFields
+          ? 'These new profile fields are not installed in Supabase yet. We need to apply the profile fields migration once, then this will save.'
+          : 'Could not save profile updates. Please try again.'
+      );
+      return;
+    }
+
+    onMemberUpdated({ ...member, ...updates });
+    setEditing(false);
+  };
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
@@ -94,6 +266,16 @@ function MemberDetailModal({ member, onClose }: { member: MemberData; onClose: (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', marginTop: 3 }}>{member.occupation}</Text>
               )}
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {member.hiveTitle && (
+                  <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)' }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{getHiveTitleIcon(member.hiveTitle)} {member.hiveTitle}</Text>
+                  </View>
+                )}
+                {isCurrentUser && (
+                  <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)' }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>You</Text>
+                  </View>
+                )}
                 {roleLabel && (
                   <View style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{roleLabel}</Text>
@@ -111,6 +293,126 @@ function MemberDetailModal({ member, onClose }: { member: MemberData; onClose: (
                 )}
               </View>
             </View>
+
+            {isCurrentUser && (
+              <View style={{ backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 18, padding: 16, marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: editing ? 14 : 0 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d' }}>Help the HIVE get to know you</Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8a8173', marginTop: 4, lineHeight: 18 }}>
+                      Fill in a few little prompts whenever you want. Each answer makes your member profile more useful.
+                    </Text>
+                  </View>
+                  {!editing && (
+                    <Pressable
+                      onPress={() => setEditing(true)}
+                      style={{ backgroundColor: '#bd9348', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: 'white' }}>Edit</Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                {editing && (
+                  <>
+                    <ProfilePromptInput
+                      label="Tiny bio"
+                      placeholder="A few sentences about who you are..."
+                      value={draftBio}
+                      onChangeText={setDraftBio}
+                      maxLength={PROFILE_PROMPT_LIMITS.bio}
+                      multiline
+                    />
+                    <ProfilePromptInput
+                      label="Current project"
+                      placeholder="What are you building, learning, or exploring?"
+                      value={draftCurrentProject}
+                      onChangeText={setDraftCurrentProject}
+                      maxLength={PROFILE_PROMPT_LIMITS.short}
+                    />
+                    <ProfilePromptInput
+                      label="Ask me about"
+                      placeholder="What should HIVE members come to you for?"
+                      value={draftKnownFor}
+                      onChangeText={setDraftKnownFor}
+                      maxLength={PROFILE_PROMPT_LIMITS.short}
+                    />
+                    <ProfilePromptInput
+                      label="Hometown"
+                      placeholder="Where are you from?"
+                      value={draftHometown}
+                      onChangeText={setDraftHometown}
+                      maxLength={PROFILE_PROMPT_LIMITS.short}
+                    />
+                    <ProfilePromptInput
+                      label="Favorite book"
+                      placeholder="A book you love or always recommend"
+                      value={draftFavBook}
+                      onChangeText={setDraftFavBook}
+                      maxLength={PROFILE_PROMPT_LIMITS.short}
+                    />
+                    <ProfilePromptInput
+                      label="Favorite food"
+                      placeholder="Comfort meal, snack, restaurant, anything"
+                      value={draftFavFood}
+                      onChangeText={setDraftFavFood}
+                      maxLength={PROFILE_PROMPT_LIMITS.short}
+                    />
+                    <ProfilePromptInput
+                      label="Favorite hobby"
+                      placeholder="What do you do when you feel most like yourself?"
+                      value={draftFavHobby}
+                      onChangeText={setDraftFavHobby}
+                      maxLength={PROFILE_PROMPT_LIMITS.short}
+                    />
+                    <ProfilePromptInput
+                      label="Fun fact 1"
+                      placeholder="Something delightful or unexpected"
+                      value={draftFunFact1}
+                      onChangeText={setDraftFunFact1}
+                      maxLength={PROFILE_PROMPT_LIMITS.funFact}
+                    />
+                    <ProfilePromptInput
+                      label="Fun fact 2"
+                      placeholder="Optional"
+                      value={draftFunFact2}
+                      onChangeText={setDraftFunFact2}
+                      maxLength={PROFILE_PROMPT_LIMITS.funFact}
+                    />
+                    <ProfilePromptInput
+                      label="Fun fact 3"
+                      placeholder="Optional"
+                      value={draftFunFact3}
+                      onChangeText={setDraftFunFact3}
+                      maxLength={PROFILE_PROMPT_LIMITS.funFact}
+                    />
+
+                    {saveError && (
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#ef4444', marginBottom: 10 }}>{saveError}</Text>
+                    )}
+
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <Pressable
+                        disabled={saving}
+                        onPress={() => setEditing(false)}
+                        style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 12, paddingVertical: 12, opacity: saving ? 0.55 : 1 }}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', color: '#2d2d2d', textAlign: 'center' }}>Cancel</Text>
+                      </Pressable>
+                      <Pressable
+                        disabled={saving}
+                        onPress={saveProfilePrompts}
+                        style={{ flex: 1, backgroundColor: '#bd9348', borderRadius: 12, paddingVertical: 12, opacity: saving ? 0.55 : 1 }}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center' }}>
+                          {saving ? 'Saving...' : 'Save'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+              </View>
+            )}
 
             {/* Bio */}
             {member.bio && (
@@ -206,8 +508,18 @@ function MemberDetailModal({ member, onClose }: { member: MemberData; onClose: (
                 <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16 }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 4 }}>{member.introPost.title}</Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#4b5563', lineHeight: 22 }}>
-                    {member.introPost.content.slice(0, 320)}{member.introPost.content.length > 320 ? '...' : ''}
+                    {visibleIntro}
                   </Text>
+                  {introNeedsToggle && (
+                    <Pressable
+                      onPress={() => setIntroExpanded(value => !value)}
+                      style={{ alignSelf: 'flex-start', backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
+                        {introExpanded ? 'Show less' : 'Read full intro'}
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
               </View>
             )}
@@ -239,13 +551,14 @@ function MemberDetailModal({ member, onClose }: { member: MemberData; onClose: (
 }
 
 export default function MembersScreen() {
-  const { communityId, profile } = useAuth();
+  const { communityId, profile, session } = useAuth();
   const { width } = useWindowDimensions();
   const [members, setMembers] = useState<MemberData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<MemberData | null>(null);
   const [search, setSearch] = useState('');
+  const currentUserId = profile?.id ?? session?.user?.id ?? null;
 
   useEffect(() => {
     if (!communityId) return;
@@ -255,40 +568,63 @@ export default function MembersScreen() {
 
       const { data: memberships, error: membErr } = await supabase
         .from('community_memberships')
-        .select('user_id, role, profiles(id, name, avatar_url, queen_bee_month, birthday, occupation, bio, current_project, hometown, favorite_book, favorite_food, favorite_hobby, known_for, fun_facts)')
+        .select('user_id, role')
         .eq('community_id', communityId);
 
       if (membErr || !memberships) {
+        console.warn('[Members] memberships load failed', membErr);
         setError('Could not load members.');
         setLoading(false);
         return;
       }
 
-      const memberList: MemberData[] = memberships
-        .map((m: any) => ({
-          id: m.profiles?.id ?? m.user_id,
-          name: m.profiles?.name ?? 'Unknown',
-          avatar_url: m.profiles?.avatar_url ?? null,
-          role: (m.role ?? 'member') as UserRole,
-          queen_bee_month: m.profiles?.queen_bee_month ?? null,
-          birthday: m.profiles?.birthday ?? null,
-          occupation: m.profiles?.occupation ?? null,
-          bio: m.profiles?.bio ?? null,
-          current_project: m.profiles?.current_project ?? null,
-          hometown: m.profiles?.hometown ?? null,
-          favorite_book: m.profiles?.favorite_book ?? null,
-          favorite_food: m.profiles?.favorite_food ?? null,
-          favorite_hobby: m.profiles?.favorite_hobby ?? null,
-          known_for: m.profiles?.known_for ?? null,
-          fun_facts: m.profiles?.fun_facts ?? null,
+      const userIds = memberships.map((m: any) => m.user_id).filter(Boolean);
+      if (userIds.length === 0) {
+        setMembers([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: profilesData, error: profilesErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', userIds);
+
+      if (profilesErr || !profilesData) {
+        console.warn('[Members] profiles load failed', profilesErr);
+        setError('Could not load members.');
+        setLoading(false);
+        return;
+      }
+
+      const profilesById = new Map<string, any>();
+      profilesData.forEach((p: any) => profilesById.set(p.id, p));
+
+      const memberList: MemberData[] = memberships.map((m: any) => {
+        const memberProfile = profilesById.get(m.user_id);
+        return {
+          id: m.user_id,
+          name: memberProfile?.name ?? 'Unknown member',
+          avatar_url: memberProfile?.avatar_url ?? null,
+          role: (m.role ?? memberProfile?.role ?? 'member') as UserRole,
+          hiveTitle: getHiveTitle(memberProfile?.name ?? ''),
+          queen_bee_month: memberProfile?.queen_bee_month ?? null,
+          birthday: memberProfile?.birthday ?? null,
+          occupation: memberProfile?.occupation ?? null,
+          bio: memberProfile?.bio ?? null,
+          current_project: memberProfile?.current_project ?? null,
+          hometown: memberProfile?.hometown ?? null,
+          favorite_book: memberProfile?.favorite_book ?? null,
+          favorite_food: memberProfile?.favorite_food ?? null,
+          favorite_hobby: memberProfile?.favorite_hobby ?? null,
+          known_for: memberProfile?.known_for ?? null,
+          fun_facts: Array.isArray(memberProfile?.fun_facts) ? memberProfile.fun_facts : null,
           skills: [],
           wishes: [],
           introPost: null,
           questionAnswerCount: 0,
-        }))
-        .filter((m: MemberData) => m.name !== 'Unknown');
-
-      const userIds = memberList.map(m => m.id);
+        };
+      });
 
       const [skillsRes, wishesRes, introRes, answersRes] = await Promise.all([
         supabase.from('skills').select('user_id, id, description').in('user_id', userIds),
@@ -304,6 +640,11 @@ export default function MembersScreen() {
           .select('user_id')
           .in('user_id', userIds),
       ]);
+
+      if (skillsRes.error) console.warn('[Members] skills load failed', skillsRes.error);
+      if (wishesRes.error) console.warn('[Members] wishes load failed', wishesRes.error);
+      if (introRes.error) console.warn('[Members] intro posts load failed', introRes.error);
+      if (answersRes.error) console.warn('[Members] daily answers load failed', answersRes.error);
 
       const skillsByUser = new Map<string, { id: string; description: string }[]>();
       (skillsRes.data ?? []).forEach((s: any) => {
@@ -337,22 +678,47 @@ export default function MembersScreen() {
       });
 
       memberList.sort((a, b) => {
-        if (a.id === profile?.id) return -1;
-        if (b.id === profile?.id) return 1;
+        if (a.id === currentUserId) return -1;
+        if (b.id === currentUserId) return 1;
         return a.name.localeCompare(b.name);
       });
 
       setMembers(memberList);
       setLoading(false);
     })();
-  }, [communityId, profile?.id]);
+  }, [communityId, currentUserId]);
 
-  const numCols = width >= 768 ? 4 : 3;
-  const avatarSize = width >= 768 ? 88 : 76;
-  const cellWidth = Math.floor(width / numCols);
+  const numCols = width >= 1100 ? 3 : width >= 720 ? 2 : 1;
+  const avatarSize = width >= 768 ? 74 : 64;
+  const cellWidth = `${100 / numCols}%`;
+  const cabinetMembers = HIVE_CABINET.map(role => {
+    const member = members.find(m => {
+      const normalized = m.name.toLowerCase();
+      const names = [role.memberName, ...(role.aliases ?? [])];
+      return names.some(alias => normalized.includes(alias.toLowerCase()));
+    });
+    return { ...role, member };
+  });
+  const currentMember = currentUserId ? members.find(member => member.id === currentUserId) : null;
 
   const filtered = search.trim()
-    ? members.filter(m => m.name.toLowerCase().includes(search.toLowerCase()))
+    ? members.filter(m => {
+        const query = search.toLowerCase();
+        return [
+          m.name,
+          m.hiveTitle,
+          m.occupation,
+          m.bio,
+          m.current_project,
+          m.hometown,
+          m.known_for,
+          m.favorite_book,
+          m.favorite_food,
+          m.favorite_hobby,
+          ...m.skills.map(s => s.description),
+          ...m.wishes.map(w => w.description),
+        ].some(value => value?.toLowerCase().includes(query));
+      })
     : members;
 
   return (
@@ -362,7 +728,7 @@ export default function MembersScreen() {
         <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: '#ffffff' }}>Members</Text>
         {!loading && members.length > 0 && (
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
-            {members.length} members · tap to learn more
+            {members.length} members · search roles, skills, wishes, birthdays, and stories
           </Text>
         )}
       </View>
@@ -375,7 +741,7 @@ export default function MembersScreen() {
             <TextInput
               value={search}
               onChangeText={setSearch}
-              placeholder="Search members..."
+              placeholder="Search members, skills, wishes..."
               placeholderTextColor="#9ca3af"
               style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', flex: 1 }}
             />
@@ -398,55 +764,176 @@ export default function MembersScreen() {
             <Text style={{ fontFamily: 'Lato_400Regular', color: '#ef4444', textAlign: 'center' }}>{error}</Text>
           </View>
         ) : (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {filtered.map(member => {
-              const isMe = member.id === profile?.id;
-              const roleLabel = ROLE_LABELS[member.role];
-              const profileFilled = !!(member.bio || member.current_project || member.known_for);
-              return (
-                <Pressable
-                  key={member.id}
-                  onPress={() => setSelected(member)}
-                  style={{ width: cellWidth, alignItems: 'center', marginBottom: 28, paddingHorizontal: 4 }}
-                >
-                  {/* Avatar ring */}
-                  <View style={{
-                    borderRadius: (avatarSize + 8) / 2,
-                    borderWidth: isMe ? 2.5 : 1.5,
-                    borderColor: isMe ? '#bd9348' : 'rgba(222,193,129,0.5)',
-                    padding: 3,
-                    marginBottom: 10,
-                    shadowColor: '#000',
-                    shadowOpacity: 0.1,
-                    shadowRadius: 8,
-                    shadowOffset: { width: 0, height: 3 },
-                    elevation: 3,
-                    backgroundColor: 'white',
-                  }}>
-                    <Avatar uri={member.avatar_url} name={member.name} size={avatarSize} />
+          <>
+            {currentMember && (
+              <Pressable
+                onPress={() => setSelected(currentMember)}
+                style={{
+                  backgroundColor: '#fffaf0',
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.65)',
+                  borderRadius: 18,
+                  padding: 16,
+                  marginBottom: 18,
+                  shadowColor: '#bd9348',
+                  shadowOpacity: 0.08,
+                  shadowRadius: 14,
+                  shadowOffset: { width: 0, height: 5 },
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ borderRadius: 28, borderWidth: 1.5, borderColor: '#dec181', padding: 2, backgroundColor: 'white' }}>
+                    <Avatar uri={currentMember.avatar_url} name={currentMember.name} size={50} />
                   </View>
-
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#2d2d2d', textAlign: 'center', lineHeight: 16 }} numberOfLines={2}>
-                    {isMe ? `${member.name.split(' ')[0]} (you)` : member.name}
-                  </Text>
-
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: roleLabel ? '#bd9348' : '#9ca3af', textAlign: 'center', marginTop: 2 }} numberOfLines={1}>
-                    {roleLabel ?? 'Member'}
-                  </Text>
-
-                  {/* Indicators: gold dot = has intro, teal = profile filled */}
-                  <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
-                    {member.introPost && (
-                      <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#bd9348', opacity: 0.7 }} />
-                    )}
-                    {profileFilled && (
-                      <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#6b9e8a', opacity: 0.7 }} />
-                    )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+                      Edit my get-to-know-you profile
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8a8173', lineHeight: 18, marginTop: 3 }}>
+                      Add your tiny bio, favorites, fun facts, and what HIVE members should ask you about.
+                    </Text>
                   </View>
-                </Pressable>
-              );
-            })}
-          </View>
+                  <Text style={{ fontSize: 22, color: '#bd9348' }}>›</Text>
+                </View>
+              </Pressable>
+            )}
+
+            <View style={{ marginBottom: 18 }}>
+              <View style={{ alignSelf: 'flex-start', backgroundColor: '#fffaf0', borderWidth: 1, borderColor: '#dec181', borderBottomWidth: 0, borderTopLeftRadius: 18, borderTopRightRadius: 18, paddingHorizontal: 18, paddingVertical: 10 }}>
+                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>HIVE Cabinet</Text>
+              </View>
+              <View style={{ backgroundColor: '#fffaf0', borderWidth: 1, borderColor: '#dec181', borderRadius: 18, borderTopLeftRadius: 0, padding: 14, shadowColor: '#bd9348', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                  {cabinetMembers.map(role => (
+                    <Pressable
+                      key={role.title}
+                      disabled={!role.member}
+                      onPress={() => role.member && setSelected(role.member)}
+                      style={{
+                        flexGrow: 1,
+                        flexBasis: width >= 900 ? '30%' : width >= 620 ? '45%' : '100%',
+                        backgroundColor: 'rgba(255,255,255,0.72)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(222,193,129,0.45)',
+                        borderRadius: 14,
+                        padding: 12,
+                        opacity: role.member ? 1 : 0.65,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <Text style={{ fontSize: 22 }}>{role.icon}</Text>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#bd9348' }}>{role.title}</Text>
+                          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', marginTop: 2 }} numberOfLines={1}>
+                            {role.member?.name ?? role.memberName}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#6b7280', lineHeight: 17, marginTop: 8 }}>
+                        {role.description}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 }}>
+              {filtered.map(member => {
+                const isMe = member.id === currentUserId;
+                const roleLabel = member.hiveTitle ?? ROLE_LABELS[member.role];
+                const profileFilled = !!(member.bio || member.current_project || member.known_for);
+                const publicWishes = member.wishes.filter(w => w.status === 'public');
+                const spotlight = member.known_for || member.current_project || member.bio || member.skills[0]?.description || publicWishes[0]?.description;
+                return (
+                  <Pressable
+                    key={member.id}
+                    onPress={() => setSelected(member)}
+                    style={{ width: cellWidth as any, paddingHorizontal: 6, marginBottom: 12 }}
+                  >
+                    <View style={{
+                      backgroundColor: '#fffaf0',
+                      borderWidth: 1,
+                      borderColor: 'rgba(222,193,129,0.55)',
+                      borderRadius: 18,
+                      padding: 14,
+                      minHeight: 174,
+                      shadowColor: '#000',
+                      shadowOpacity: 0.08,
+                      shadowRadius: 10,
+                      shadowOffset: { width: 0, height: 4 },
+                      elevation: 2,
+                    }}>
+                      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                        <View style={{
+                          borderRadius: (avatarSize + 8) / 2,
+                          borderWidth: isMe ? 2.5 : 1.5,
+                          borderColor: isMe ? '#bd9348' : 'rgba(222,193,129,0.7)',
+                          padding: 3,
+                          backgroundColor: 'white',
+                        }}>
+                          <Avatar uri={member.avatar_url} name={member.name} size={avatarSize} />
+                        </View>
+
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: '#2d2d2d', lineHeight: 21 }} numberOfLines={2}>
+                            {isMe ? `${member.name.split(' ')[0]} (you)` : member.name}
+                          </Text>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: roleLabel ? '#bd9348' : '#8a8173', marginTop: 3 }} numberOfLines={1}>
+                            {member.hiveTitle ? `${getHiveTitleIcon(member.hiveTitle)} ${member.hiveTitle}` : roleLabel ?? member.occupation ?? 'HIVE member'}
+                          </Text>
+                          {member.birthday && (
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8a8173', marginTop: 3 }} numberOfLines={1}>
+                              Birthday: {new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+
+                      {spotlight && (
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#4b5563', lineHeight: 19, marginTop: 12 }} numberOfLines={3}>
+                          {spotlight}
+                        </Text>
+                      )}
+
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 12 }}>
+                        {member.skills.slice(0, 2).map(skill => (
+                          <View key={skill.id} style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#8a6a2f' }} numberOfLines={1}>
+                              {skill.description}
+                            </Text>
+                          </View>
+                        ))}
+                        {publicWishes.length > 0 && (
+                          <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#8a6a2f' }}>
+                              {publicWishes.length} wish{publicWishes.length === 1 ? '' : 'es'}
+                            </Text>
+                          </View>
+                        )}
+                        {member.questionAnswerCount > 0 && (
+                          <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#8a6a2f' }}>
+                              {member.questionAnswerCount} answers
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 4, marginTop: 'auto', paddingTop: 12 }}>
+                        {member.introPost && (
+                          <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#bd9348', opacity: 0.7 }} />
+                        )}
+                        {profileFilled && (
+                          <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#6b9e8a', opacity: 0.7 }} />
+                        )}
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
         )}
 
         {/* Legend */}
@@ -464,7 +951,17 @@ export default function MembersScreen() {
         )}
       </ScrollView>
 
-      {selected && <MemberDetailModal member={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <MemberDetailModal
+          member={selected}
+          isCurrentUser={selected.id === currentUserId}
+          onClose={() => setSelected(null)}
+          onMemberUpdated={(updatedMember) => {
+            setSelected(updatedMember);
+            setMembers(current => current.map(member => member.id === updatedMember.id ? updatedMember : member));
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
