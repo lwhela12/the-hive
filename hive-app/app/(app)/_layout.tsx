@@ -307,7 +307,7 @@ export default function AppLayout() {
             position: 'absolute',
             bottom: tabBarHeight + 10,
             right: 12,
-            width: 260,
+            width: Math.min(width - 24, 330),
             shadowColor: '#bd9348',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.25,
@@ -342,6 +342,7 @@ export default function AppLayout() {
               onSubmitEditing={submitToClive}
               style={{
                 flex: 1,
+                minWidth: 0,
                 fontFamily: 'Lato_400Regular',
                 fontSize: 15,
                 color: '#2d2d2d',

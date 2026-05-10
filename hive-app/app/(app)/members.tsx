@@ -93,6 +93,11 @@ function getHiveTitleIcon(title?: string | null) {
   return HIVE_CABINET.find(role => role.title === title)?.icon ?? '✨';
 }
 
+function getHiveTitleRank(title?: string | null) {
+  const index = HIVE_CABINET.findIndex(role => role.title === title);
+  return index === -1 ? Number.POSITIVE_INFINITY : index;
+}
+
 function parseSkillList(input: string) {
   return Array.from(
     new Set(
@@ -823,6 +828,9 @@ export default function MembersScreen() {
       memberList.sort((a, b) => {
         if (a.id === currentUserId) return -1;
         if (b.id === currentUserId) return 1;
+        const aCabinetRank = getHiveTitleRank(a.hiveTitle);
+        const bCabinetRank = getHiveTitleRank(b.hiveTitle);
+        if (aCabinetRank !== bCabinetRank) return aCabinetRank - bCabinetRank;
         return a.name.localeCompare(b.name);
       });
 
