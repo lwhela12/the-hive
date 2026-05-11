@@ -10,7 +10,8 @@ import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
-import { formatDateLong } from '../../lib/dateUtils';
+import { formatDateLong, parseAmericanDate } from '../../lib/dateUtils';
+import { EventDatePicker } from '../../components/ui/DatePicker';
 import type { Meeting, Event } from '../../types';
 
 export default function MeetingsScreen() {
@@ -245,7 +246,10 @@ export default function MeetingsScreen() {
       title: event.title,
       description: event.description || '',
       location: event.location || '',
-      event_date: event.event_date,
+      event_date: (() => {
+        const [y, m, d] = event.event_date.split('-');
+        return `${m}-${d}-${y}`;
+      })(),
       event_time: event.event_time || '',
     });
     setEditingEvent(event);
@@ -263,7 +267,7 @@ export default function MeetingsScreen() {
           title: editForm.title,
           description: editForm.description || null,
           location: editForm.location || null,
-          date: editForm.event_date,
+          date: parseAmericanDate(editForm.event_date) ?? editForm.event_date,
           time: editForm.event_time || null,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
@@ -612,25 +616,21 @@ export default function MeetingsScreen() {
               />
             </View>
 
-            <View className="flex-row gap-4 mb-4">
-              <View className="flex-1">
-                <Text className="text-sm font-medium text-gray-700 mb-1">Date</Text>
-                <TextInput
-                  value={editForm.event_date}
-                  onChangeText={(text) => setEditForm((f) => ({ ...f, event_date: text }))}
-                  className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                  placeholder="YYYY-MM-DD"
-                />
-              </View>
-              <View className="flex-1">
-                <Text className="text-sm font-medium text-gray-700 mb-1">Time</Text>
-                <TextInput
-                  value={editForm.event_time}
-                  onChangeText={(text) => setEditForm((f) => ({ ...f, event_time: text }))}
-                  className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                  placeholder="HH:MM (24hr)"
-                />
-              </View>
+            <View className="mb-4">
+              <EventDatePicker
+                value={editForm.event_date}
+                onChange={(val) => setEditForm((f) => ({ ...f, event_date: val }))}
+              />
+            </View>
+
+            <View className="mb-4">
+              <Text className="text-sm font-medium text-gray-700 mb-1">Time (optional)</Text>
+              <TextInput
+                value={editForm.event_time}
+                onChangeText={(text) => setEditForm((f) => ({ ...f, event_time: text }))}
+                className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-cream"
+                placeholder="e.g. 6:00 PM"
+              />
             </View>
 
             {editingEvent?.meet_link && (
