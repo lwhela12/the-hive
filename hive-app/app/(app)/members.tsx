@@ -7,7 +7,10 @@ import type { Skill, UserRole, Wish } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
-import { SKILL_CATEGORIES, ALL_SKILLS } from '../../lib/skillsList';
+import { SKILL_CATEGORIES } from '../../lib/skillsList';
+
+type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
+type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish>;
 
 interface MemberData {
   id: string;
@@ -26,8 +29,8 @@ interface MemberData {
   known_for?: string | null;
   fun_facts?: string[] | null;
   birthday?: string | null;
-  skills: Skill[];
-  wishes: Wish[];
+  skills: MemberSkill[];
+  wishes: MemberWish[];
   introPost?: { title: string; content: string } | null;
   questionAnswerCount: number;
 }
@@ -225,7 +228,7 @@ function MemberDetailModal({
   const [skillSearch, setSkillSearch] = useState('');
   const [showWishesSheet, setShowWishesSheet] = useState(false);
   // Wishes management (for current user only)
-  const [myWishes, setMyWishes] = useState<{ id: string; description: string; status: string }[]>([]);
+  const [myWishes, setMyWishes] = useState<MemberWish[]>([]);
   const [wishesLoading, setWishesLoading] = useState(false);
   const [addingWish, setAddingWish] = useState(false);
   const [newWishInput, setNewWishInput] = useState('');
@@ -305,10 +308,10 @@ function MemberDetailModal({
       const toInsert = skillDescriptions.filter(d => !existingSkillSet.has(d.toLowerCase()));
 
       if (idsToDelete.length > 0) {
-        await supabase.from('skills').delete().in('id', idsToDelete).eq('user_id', member.id);
+        await (supabase as any).from('skills').delete().in('id', idsToDelete).eq('user_id', member.id);
       }
       if (toInsert.length > 0) {
-        await supabase.from('skills').insert(toInsert.map(description => ({
+        await (supabase as any).from('skills').insert(toInsert.map(description => ({
           user_id: member.id, community_id: communityId, description, raw_input: description, extracted_from: 'manual',
         })));
       }
@@ -329,14 +332,14 @@ function MemberDetailModal({
 
   const publishWish = async (wishId: string) => {
     setWishActionLoading(wishId);
-    await supabase.from('wishes').update({ status: 'public', is_active: true }).eq('id', wishId);
+    await (supabase as any).from('wishes').update({ status: 'public', is_active: true }).eq('id', wishId);
     setMyWishes(prev => prev.map(w => w.id === wishId ? { ...w, status: 'public' } : w));
     setWishActionLoading(null);
   };
 
   const makeWishPrivate = async (wishId: string) => {
     setWishActionLoading(wishId);
-    await supabase.from('wishes').update({ status: 'private', is_active: false }).eq('id', wishId);
+    await (supabase as any).from('wishes').update({ status: 'private', is_active: false }).eq('id', wishId);
     setMyWishes(prev => prev.map(w => w.id === wishId ? { ...w, status: 'private' } : w));
     setWishActionLoading(null);
   };
@@ -347,7 +350,7 @@ function MemberDetailModal({
       {
         text: 'Delete', style: 'destructive',
         onPress: async () => {
-          await supabase.from('wishes').delete().eq('id', wishId);
+          await (supabase as any).from('wishes').delete().eq('id', wishId);
           setMyWishes(prev => prev.filter(w => w.id !== wishId));
         },
       },
@@ -357,9 +360,9 @@ function MemberDetailModal({
   const saveNewWish = async () => {
     const desc = newWishInput.trim();
     if (!desc || !communityId) return;
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from('wishes')
-      .insert({ user_id: member.id, community_id: communityId, description: desc, status: 'private', extracted_from: 'manual' })
+      .insert({ user_id: member.id, community_id: communityId, description: desc, raw_input: desc, status: 'private', is_active: false, extracted_from: 'manual' })
       .select('id, description, status')
       .single();
     if (data) setMyWishes(prev => [data, ...prev]);
@@ -941,37 +944,14 @@ function MemberDetailModal({
                     </Pressable>
 
                     {showDeeper && (
-                      <>
-                        <ProfilePromptInput
-                          label="Love languages"
-                          placeholder="Words of affirmation, quality time, gifts, acts of service, touch..."
-                          value={''}
-                          onChangeText={() => {}}
-                          maxLength={PROFILE_PROMPT_LIMITS.short}
-                        />
-                        <ProfilePromptInput
-                          label="What I'm currently into"
-                          placeholder="Shows, books, phases, obsessions, rabbit holes..."
-                          value={''}
-                          onChangeText={() => {}}
-                          maxLength={PROFILE_PROMPT_LIMITS.short}
-                        />
-                        <ProfilePromptInput
-                          label="If the HIVE could grant me one thing this year"
-                          placeholder="Your biggest dream wish right now..."
-                          value={''}
-                          onChangeText={() => {}}
-                          maxLength={PROFILE_PROMPT_LIMITS.short}
-                          multiline
-                        />
-                        <ProfilePromptInput
-                          label="A skill I want to learn"
-                          placeholder="Something you've always wanted to get better at"
-                          value={''}
-                          onChangeText={() => {}}
-                          maxLength={PROFILE_PROMPT_LIMITS.short}
-                        />
-                      </>
+                      <View style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.35)', borderRadius: 12, padding: 12, marginBottom: 14 }}>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginBottom: 4 }}>
+                          Deeper prompts are the next layer.
+                        </Text>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: '#6b7280' }}>
+                          For now, use fun facts, favorites, skills, and wishes here. Once we choose the best deeper questions, we can make them permanent saved fields too.
+                        </Text>
+                      </View>
                     )}
 
                     {saveError && (
@@ -1369,13 +1349,13 @@ export default function MembersScreen() {
       if (introRes.error) console.warn('[Members] intro posts load failed', introRes.error);
       if (answersRes.error) console.warn('[Members] daily answers load failed', answersRes.error);
 
-      const skillsByUser = new Map<string, { id: string; description: string }[]>();
+      const skillsByUser = new Map<string, MemberSkill[]>();
       (skillsRes.data ?? []).forEach((s: any) => {
         if (!skillsByUser.has(s.user_id)) skillsByUser.set(s.user_id, []);
         skillsByUser.get(s.user_id)!.push({ id: s.id, description: s.description });
       });
 
-      const wishesByUser = new Map<string, { id: string; description: string; status: string }[]>();
+      const wishesByUser = new Map<string, MemberWish[]>();
       (wishesRes.data ?? []).forEach((w: any) => {
         if (!wishesByUser.has(w.user_id)) wishesByUser.set(w.user_id, []);
         wishesByUser.get(w.user_id)!.push({ id: w.id, description: w.description, status: w.status });
