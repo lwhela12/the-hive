@@ -329,6 +329,8 @@ export default function HiveScreen() {
   const [showAnswerModal, setShowAnswerModal] = useState(false);
   const [myAnswer, setMyAnswer] = useState('');
   const [mySubmittedAnswer, setMySubmittedAnswer] = useState('');
+  const [answerError, setAnswerError] = useState<string | null>(null);
+  const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
   // Map of user_id → answer text for today's question
   const [memberAnswers, setMemberAnswers] = useState<Map<string, string>>(new Map());
 
@@ -336,11 +338,15 @@ export default function HiveScreen() {
 
   const fetchTodayAnswers = useCallback(async () => {
     if (!communityId) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('daily_question_answers')
       .select('user_id, answer')
       .eq('community_id', communityId)
       .eq('question_index', todayIndex);
+    if (error) {
+      console.warn('Could not load daily question answers', error);
+      return;
+    }
     if (data) {
       const map = new Map<string, string>();
       data.forEach((row: any) => map.set(row.user_id, row.answer));
@@ -348,6 +354,8 @@ export default function HiveScreen() {
       if (profile?.id && map.has(profile.id)) {
         setMySubmittedAnswer(map.get(profile.id)!);
         setMyAnswer(map.get(profile.id)!);
+      } else if (profile?.id) {
+        setMySubmittedAnswer('');
       }
     }
   }, [communityId, todayIndex, profile?.id]);
@@ -356,17 +364,31 @@ export default function HiveScreen() {
 
   const handleSubmitAnswer = async () => {
     const text = myAnswer.trim();
-    if (!text || !profile?.id || !communityId) return;
-    setMySubmittedAnswer(text);
-    setShowAnswerModal(false);
-    await supabase.from('daily_question_answers').upsert({
+    if (!text || !profile?.id || !communityId || isSubmittingAnswer) return;
+    setAnswerError(null);
+    setIsSubmittingAnswer(true);
+    const { error } = await supabase.from('daily_question_answers').upsert({
       user_id: profile.id,
       community_id: communityId,
       question_index: todayIndex,
       answer: text,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id,question_index' });
-    // Refresh so other bubbles update if someone else answered
+    setIsSubmittingAnswer(false);
+
+    if (error) {
+      console.warn('Could not save daily question answer', error);
+      setAnswerError('Could not save your answer. Please try again.');
+      return;
+    }
+
+    setMySubmittedAnswer(text);
+    setMemberAnswers(prev => {
+      const next = new Map(prev);
+      next.set(profile.id, text);
+      return next;
+    });
+    setShowAnswerModal(false);
     fetchTodayAnswers();
   };
   const [selectedWish, setSelectedWish] = useState<WishWithGranters | null>(null);
@@ -504,7 +526,7 @@ export default function HiveScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refetch(), refetchActivity()]);
+    await Promise.all([refetch(), refetchActivity(), fetchTodayAnswers()]);
     setRefreshing(false);
   };
 
@@ -1419,19 +1441,30 @@ export default function HiveScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginBottom: 14, marginTop: -6 }}>
                 Press Enter to send · Shift+Enter for a new line
               </Text>
+              {answerError ? (
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#ef4444', marginBottom: 14 }}>
+                  {answerError}
+                </Text>
+              ) : null}
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Pressable
-                  onPress={() => { setShowAnswerModal(false); setMyAnswer(''); }}
+                  onPress={() => {
+                    setShowAnswerModal(false);
+                    setMyAnswer(mySubmittedAnswer);
+                    setAnswerError(null);
+                  }}
                   style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Cancel</Text>
                 </Pressable>
                 <Pressable
                   onPress={handleSubmitAnswer}
-                  style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: myAnswer.trim() ? 1 : 0.4 }}
-                  disabled={!myAnswer.trim()}
+                  style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: myAnswer.trim() && !isSubmittingAnswer ? 1 : 0.4 }}
+                  disabled={!myAnswer.trim() || isSubmittingAnswer}
                 >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white', textAlign: 'center' }}>Share with Hive 🐝</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white', textAlign: 'center' }}>
+                    {isSubmittingAnswer ? 'Saving...' : 'Share with Hive 🐝'}
+                  </Text>
                 </Pressable>
               </View>
             </View>
