@@ -55,12 +55,23 @@ export const DAILY_QUESTIONS: DailyQuestion[] = [
   { text: 'What is something you are quietly becoming?', category: 'becoming', emoji: '🌅' },
 ];
 
-/** Returns the same question for everyone on a given calendar day. */
-export function getTodayQuestion(): { question: DailyQuestion; index: number } {
+export function getQuestionDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function getQuestionForDate(date: Date): { question: DailyQuestion; index: number; dateKey: string } {
   const epoch = new Date(2025, 0, 1); // Jan 1 2025
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const daysSince = Math.floor((today.getTime() - epoch.getTime()) / 86_400_000);
+  const questionDate = new Date(date);
+  questionDate.setHours(0, 0, 0, 0);
+  const daysSince = Math.floor((questionDate.getTime() - epoch.getTime()) / 86_400_000);
   const index = ((daysSince % DAILY_QUESTIONS.length) + DAILY_QUESTIONS.length) % DAILY_QUESTIONS.length;
-  return { question: DAILY_QUESTIONS[index], index };
+  return { question: DAILY_QUESTIONS[index], index, dateKey: getQuestionDateKey(questionDate) };
+}
+
+/** Returns the same question for everyone on a given calendar day. */
+export function getTodayQuestion(): { question: DailyQuestion; index: number; dateKey: string } {
+  return getQuestionForDate(new Date());
 }

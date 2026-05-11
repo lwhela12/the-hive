@@ -19,7 +19,7 @@ import {
   WishSectionSkeleton,
 } from '../../components/hive/skeletons';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
-import { getTodayQuestion } from '../../lib/dailyQuestions';
+import { getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
@@ -35,6 +35,14 @@ type WishWithGranters = Wish & {
 const INITIAL_EVENTS_SHOWN = 3;
 
 const CALENDAR_DURATION_MS = 2.5 * 60 * 60 * 1000; // 30-min arrival + 2-hour meeting
+
+const getRecentDailyQuestions = (days = 7) => {
+  return Array.from({ length: days }, (_, offset) => {
+    const date = new Date();
+    date.setDate(date.getDate() - offset);
+    return getQuestionForDate(date);
+  });
+};
 
 const getEventStartDate = (event: Event) => {
   const [year, month, day] = event.event_date.split('-').map(Number);
@@ -327,14 +335,19 @@ export default function HiveScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [showAnswerModal, setShowAnswerModal] = useState(false);
+  const [showCatchUpModal, setShowCatchUpModal] = useState(false);
   const [myAnswer, setMyAnswer] = useState('');
   const [mySubmittedAnswer, setMySubmittedAnswer] = useState('');
   const [answerError, setAnswerError] = useState<string | null>(null);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
+  const [activeAnswerPrompt, setActiveAnswerPrompt] = useState<ReturnType<typeof getTodayQuestion> | null>(null);
   // Map of user_id → answer text for today's question
   const [memberAnswers, setMemberAnswers] = useState<Map<string, string>>(new Map());
+  const [recentAnswerMaps, setRecentAnswerMaps] = useState<Map<string, Map<string, string>>>(new Map());
 
-  const { question: todayQuestion, index: todayIndex } = getTodayQuestion();
+  const { question: todayQuestion, index: todayIndex, dateKey: todayDateKey } = getTodayQuestion();
+  const currentAnswerPrompt = activeAnswerPrompt ?? { question: todayQuestion, index: todayIndex, dateKey: todayDateKey };
+  const recentDailyQuestions = getRecentDailyQuestions(7);
 
   const fetchTodayAnswers = useCallback(async () => {
     if (!communityId) return;
@@ -342,7 +355,7 @@ export default function HiveScreen() {
       .from('daily_question_answers')
       .select('user_id, answer')
       .eq('community_id', communityId)
-      .eq('question_index', todayIndex);
+      .eq('question_date', todayDateKey);
     if (error) {
       console.warn('Could not load daily question answers', error);
       return;
@@ -358,9 +371,47 @@ export default function HiveScreen() {
         setMySubmittedAnswer('');
       }
     }
-  }, [communityId, todayIndex, profile?.id]);
+  }, [communityId, todayDateKey, profile?.id]);
+
+  const fetchRecentAnswers = useCallback(async () => {
+    if (!communityId) return;
+    const dates = getRecentDailyQuestions(7).map(item => item.dateKey);
+    const { data, error } = await supabase
+      .from('daily_question_answers')
+      .select('user_id, answer, question_date')
+      .eq('community_id', communityId)
+      .in('question_date', dates);
+    if (error) {
+      console.warn('Could not load recent daily question answers', error);
+      return;
+    }
+
+    const next = new Map<string, Map<string, string>>();
+    dates.forEach(date => next.set(date, new Map()));
+    (data ?? []).forEach((row: any) => {
+      const date = row.question_date as string;
+      const answersForDate = next.get(date) ?? new Map<string, string>();
+      answersForDate.set(row.user_id, row.answer);
+      next.set(date, answersForDate);
+    });
+    setRecentAnswerMaps(next);
+  }, [communityId]);
 
   useEffect(() => { fetchTodayAnswers(); }, [fetchTodayAnswers]);
+  useEffect(() => { fetchRecentAnswers(); }, [fetchRecentAnswers]);
+
+  const openAnswerModal = (prompt: ReturnType<typeof getTodayQuestion>, existingAnswer = '') => {
+    setActiveAnswerPrompt(prompt);
+    setMyAnswer(existingAnswer);
+    setAnswerError(null);
+    setShowAnswerModal(true);
+  };
+
+  const getMyAnswerForPrompt = (prompt: ReturnType<typeof getTodayQuestion>) => {
+    if (!profile?.id) return '';
+    if (prompt.dateKey === todayDateKey) return mySubmittedAnswer;
+    return recentAnswerMaps.get(prompt.dateKey)?.get(profile.id) ?? '';
+  };
 
   const handleSubmitAnswer = async () => {
     const text = myAnswer.trim();
@@ -370,10 +421,11 @@ export default function HiveScreen() {
     const { error } = await supabase.from('daily_question_answers').upsert({
       user_id: profile.id,
       community_id: communityId,
-      question_index: todayIndex,
+      question_index: currentAnswerPrompt.index,
+      question_date: currentAnswerPrompt.dateKey,
       answer: text,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,question_index' });
+    }, { onConflict: 'user_id,question_date' });
     setIsSubmittingAnswer(false);
 
     if (error) {
@@ -382,14 +434,26 @@ export default function HiveScreen() {
       return;
     }
 
-    setMySubmittedAnswer(text);
+    if (currentAnswerPrompt.dateKey === todayDateKey) {
+      setMySubmittedAnswer(text);
+    }
     setMemberAnswers(prev => {
       const next = new Map(prev);
-      next.set(profile.id, text);
+      if (currentAnswerPrompt.dateKey === todayDateKey) {
+        next.set(profile.id, text);
+      }
+      return next;
+    });
+    setRecentAnswerMaps(prev => {
+      const next = new Map(prev);
+      const answersForDate = new Map(next.get(currentAnswerPrompt.dateKey) ?? new Map());
+      answersForDate.set(profile.id, text);
+      next.set(currentAnswerPrompt.dateKey, answersForDate);
       return next;
     });
     setShowAnswerModal(false);
     fetchTodayAnswers();
+    fetchRecentAnswers();
   };
   const [selectedWish, setSelectedWish] = useState<WishWithGranters | null>(null);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
@@ -526,7 +590,7 @@ export default function HiveScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refetch(), refetchActivity(), fetchTodayAnswers()]);
+    await Promise.all([refetch(), refetchActivity(), fetchTodayAnswers(), fetchRecentAnswers()]);
     setRefreshing(false);
   };
 
@@ -812,6 +876,14 @@ export default function HiveScreen() {
               >
                 {todayQuestion.text}
               </Text>
+              <Pressable
+                onPress={() => setShowCatchUpModal(true)}
+                style={{ alignSelf: 'flex-start', marginTop: 10, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.35)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5 }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348' }}>
+                  Catch up
+                </Text>
+              </Pressable>
             </View>
 
             {/* Right: scrolling member answer bubbles */}
@@ -829,7 +901,7 @@ export default function HiveScreen() {
                 return (
                   <Pressable
                     key={member.id}
-                    onPress={isMe ? () => setShowAnswerModal(true) : () => setSelectedMember(member)}
+                    onPress={isMe ? () => openAnswerModal({ question: todayQuestion, index: todayIndex, dateKey: todayDateKey }, mySubmittedAnswer) : () => setSelectedMember(member)}
                     style={{ width: 74, alignItems: 'center' }}
                   >
                     {/* Avatar circle */}
@@ -1388,6 +1460,87 @@ export default function HiveScreen() {
         existingWish={editingWish}
       />
 
+      {/* Daily Question Catch-Up Modal */}
+      <Modal visible={showCatchUpModal} animationType="slide" transparent onRequestClose={() => setShowCatchUpModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '82%' }}>
+            <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
+            </View>
+            <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 }}>
+              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 6 }}>
+                Catch up
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#6b7280', lineHeight: 20, marginBottom: 14 }}>
+                Answer the questions you missed this week, or peek at the days you already joined.
+              </Text>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {recentDailyQuestions.map((item, index) => {
+                  const answersForDate = recentAnswerMaps.get(item.dateKey) ?? new Map<string, string>();
+                  const myPastAnswer = profile?.id ? answersForDate.get(profile.id) ?? '' : '';
+                  const answerCount = answersForDate.size;
+                  const date = new Date(`${item.dateKey}T00:00:00`);
+                  const dateLabel = index === 0
+                    ? 'Today'
+                    : index === 1
+                      ? 'Yesterday'
+                      : date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+                  return (
+                    <Pressable
+                      key={item.dateKey}
+                      onPress={() => {
+                        setShowCatchUpModal(false);
+                        openAnswerModal(item, myPastAnswer);
+                      }}
+                      style={({ pressed }) => ({
+                        backgroundColor: pressed ? '#fce8b0' : '#fffdf5',
+                        borderWidth: 1,
+                        borderColor: myPastAnswer ? 'rgba(189,147,72,0.55)' : 'rgba(222,193,129,0.55)',
+                        borderRadius: 16,
+                        padding: 14,
+                        marginBottom: 10,
+                      })}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                        <Text style={{ fontSize: 24, lineHeight: 30 }}>{item.question.emoji}</Text>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', letterSpacing: 0.6 }}>
+                              {dateLabel}
+                            </Text>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: myPastAnswer ? '#739a88' : '#9ca3af' }}>
+                              {myPastAnswer ? 'Answered' : 'Open'}
+                            </Text>
+                          </View>
+                          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 21 }}>
+                            {item.question.text}
+                          </Text>
+                          {myPastAnswer ? (
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', lineHeight: 18, marginTop: 8 }} numberOfLines={2}>
+                              Your answer: {myPastAnswer}
+                            </Text>
+                          ) : null}
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#9a8060', marginTop: 8 }}>
+                            {answerCount} {answerCount === 1 ? 'answer' : 'answers'} from the HIVE
+                          </Text>
+                        </View>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <Pressable
+                onPress={() => setShowCatchUpModal(false)}
+                style={{ backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14, marginTop: 6 }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Daily Question Answer Modal */}
       <Modal visible={showAnswerModal} animationType="slide" transparent onRequestClose={() => setShowAnswerModal(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
@@ -1397,10 +1550,10 @@ export default function HiveScreen() {
             </View>
             <View style={{ paddingHorizontal: 24, paddingBottom: 40 }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', letterSpacing: 0.8, marginTop: 12, marginBottom: 6 }}>
-                {todayQuestion.emoji} {todayQuestion.category.toUpperCase()}
+                {currentAnswerPrompt.question.emoji} {currentAnswerPrompt.question.category.toUpperCase()}
               </Text>
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 22, marginBottom: 20 }}>
-                {todayQuestion.text}
+                {currentAnswerPrompt.question.text}
               </Text>
               {/* Text input + mic */}
               <View style={{ marginBottom: 14, position: 'relative' }}>
@@ -1450,7 +1603,7 @@ export default function HiveScreen() {
                 <Pressable
                   onPress={() => {
                     setShowAnswerModal(false);
-                    setMyAnswer(mySubmittedAnswer);
+                    setMyAnswer(getMyAnswerForPrompt(currentAnswerPrompt));
                     setAnswerError(null);
                   }}
                   style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}
