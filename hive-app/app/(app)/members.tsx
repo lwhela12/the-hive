@@ -762,28 +762,36 @@ function MemberDetailModal({
               </View>
             </View>
 
-            {/* Current user quick-action bar */}
+            {/* Current user quick-action bar — three equal cards */}
             {isCurrentUser && (
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+                <Pressable
+                  onPress={() => setEditing(e => !e)}
+                  style={{ flex: 1, backgroundColor: '#faf8f3', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 3 }}
+                >
+                  <Text style={{ fontSize: 20 }}>✏️</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2d2d2d', textAlign: 'center' }}>My Profile</Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9ca3af', textAlign: 'center' }}>Edit info</Text>
+                </Pressable>
                 <Pressable
                   onPress={() => setShowWishesSheet(true)}
-                  style={{ flex: 1, backgroundColor: '#fdf3dc', borderWidth: 1.5, borderColor: '#bd9348', borderRadius: 14, paddingVertical: 12, alignItems: 'center', gap: 2 }}
+                  style={{ flex: 1, backgroundColor: '#fdf3dc', borderWidth: 1.5, borderColor: '#bd9348', borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 3 }}
                 >
                   <Text style={{ fontSize: 20 }}>🌟</Text>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>My Wishes</Text>
-                  {myWishes.length > 0 && (
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9a7a3a' }}>{myWishes.length} wish{myWishes.length !== 1 ? 'es' : ''}</Text>
-                  )}
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', textAlign: 'center' }}>My Wishes</Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9a7a3a', textAlign: 'center' }}>
+                    {myWishes.length > 0 ? `${myWishes.length} wish${myWishes.length !== 1 ? 'es' : ''}` : 'Add one'}
+                  </Text>
                 </Pressable>
                 <Pressable
                   onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
-                  style={{ flex: 1, backgroundColor: '#f5f3ee', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 14, paddingVertical: 12, alignItems: 'center', gap: 2 }}
+                  style={{ flex: 1, backgroundColor: '#f5f3ee', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 3 }}
                 >
                   <Text style={{ fontSize: 20 }}>⚡️</Text>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#2d2d2d' }}>Edit Skills</Text>
-                  {member.skills.length > 0 && (
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9ca3af' }}>{member.skills.length} skill{member.skills.length !== 1 ? 's' : ''}</Text>
-                  )}
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2d2d2d', textAlign: 'center' }}>My Skills</Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9ca3af', textAlign: 'center' }}>
+                    {member.skills.length > 0 ? `${member.skills.length} skill${member.skills.length !== 1 ? 's' : ''}` : 'Add some'}
+                  </Text>
                 </Pressable>
               </View>
             )}
@@ -793,9 +801,11 @@ function MemberDetailModal({
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: editing ? 14 : 0 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d' }}>Help the HIVE get to know you</Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8a8173', marginTop: 4, lineHeight: 18 }}>
-                      Fill in a few little prompts whenever you want. Each answer makes your member profile more useful.
-                    </Text>
+                    {!editing && (
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8a8173', marginTop: 4, lineHeight: 18 }}>
+                        Fill in a few little prompts whenever you want.
+                      </Text>
+                    )}
                   </View>
                   {!editing && (
                     <Pressable
