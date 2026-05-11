@@ -315,6 +315,18 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
             : 'Ready to record'}
         </Text>
 
+        {!uploading && (
+          <View className="mt-4 bg-honey-50 border border-honey-100 rounded-xl px-4 py-3 max-w-md">
+            <Text className="text-honey-800 text-sm text-center font-medium">
+              Built for full HIVE meetings
+            </Text>
+            <Text className="text-gray-600 text-xs text-center mt-1">
+              Record the full 2 hour meeting. When you stop, Clive saves the audio,
+              keeps the transcript, and pulls out action items.
+            </Text>
+          </View>
+        )}
+
         {/* Background warning */}
         {wentToBackground && isRecording && (
           <View className="mt-4 bg-amber-100 px-4 py-2 rounded-lg">

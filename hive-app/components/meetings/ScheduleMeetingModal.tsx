@@ -14,6 +14,8 @@ import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import type { Profile } from '../../types';
 
+const DEFAULT_MEETING_DURATION_MINUTES = '150';
+
 // Only import DateTimePicker on native platforms
 let DateTimePicker: typeof import('@react-native-community/datetimepicker').default | null = null;
 if (Platform.OS !== 'web') {
@@ -46,7 +48,7 @@ export function ScheduleMeetingModal({
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [date, setDate] = useState(new Date());
-  const [duration, setDuration] = useState('60');
+  const [duration, setDuration] = useState(DEFAULT_MEETING_DURATION_MINUTES);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -142,7 +144,7 @@ export function ScheduleMeetingModal({
         description: description.trim(),
         date: dateStr,
         time: timeStr,
-        duration: parseInt(duration) || 60,
+        duration: parseInt(duration) || Number(DEFAULT_MEETING_DURATION_MINUTES),
         attendeeIds: Array.from(selectedMembers),
         timezone: userTimezone,
         location: location.trim() || undefined,
@@ -153,7 +155,7 @@ export function ScheduleMeetingModal({
       setDescription('');
       setLocation('');
       setDate(new Date());
-      setDuration('60');
+      setDuration(DEFAULT_MEETING_DURATION_MINUTES);
       setSelectedMembers(new Set());
       onClose();
     } catch (err) {
@@ -339,28 +341,35 @@ export function ScheduleMeetingModal({
 
             {/* Duration */}
             <View className="mb-4">
-              <Text className="text-gray-700 font-medium mb-2">Duration (minutes)</Text>
+              <Text className="text-gray-700 font-medium mb-2">Duration</Text>
               <View className="flex-row gap-2">
-                {['30', '60', '90'].map((mins) => (
+                {[
+                  { value: '60', label: '1 hour' },
+                  { value: '120', label: '2 hours' },
+                  { value: '150', label: '2.5 hours' },
+                ].map((option) => (
                   <Pressable
-                    key={mins}
-                    onPress={() => setDuration(mins)}
+                    key={option.value}
+                    onPress={() => setDuration(option.value)}
                     className={`flex-1 py-3 rounded-xl border ${
-                      duration === mins
+                      duration === option.value
                         ? 'bg-honey-500 border-honey-500'
                         : 'bg-white border-gray-300'
                     }`}
                   >
                     <Text
                       className={`text-center font-medium ${
-                        duration === mins ? 'text-white' : 'text-gray-700'
+                        duration === option.value ? 'text-white' : 'text-gray-700'
                       }`}
                     >
-                      {mins} min
+                      {option.label}
                     </Text>
                   </Pressable>
                 ))}
               </View>
+              <Text className="text-gray-500 text-xs mt-2">
+                HIVE meetings default to 30 minutes of arrival time plus a 2 hour meeting.
+              </Text>
             </View>
 
             {/* Member Selection */}

@@ -13,6 +13,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
+const DEFAULT_MEETING_DURATION_MINUTES = 150;
+
 interface GoogleTokenResponse {
   access_token: string;
   expires_in: number;
@@ -36,7 +38,7 @@ interface ScheduleMeetingRequest {
   description?: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
-  duration?: number; // minutes, defaults to 60
+  duration?: number; // minutes, defaults to 150 for HIVE meetings
   communityId: string;
   attendeeIds?: string[]; // User IDs to invite
   timezone?: string; // User's timezone, e.g., 'America/Los_Angeles'
@@ -175,7 +177,17 @@ Deno.serve(async (req) => {
   try {
     // Parse request body
     const body: ScheduleMeetingRequest = await req.json();
-    const { title, description, date, time, duration = 60, communityId, attendeeIds, timezone, location } = body;
+    const {
+      title,
+      description,
+      date,
+      time,
+      duration = DEFAULT_MEETING_DURATION_MINUTES,
+      communityId,
+      attendeeIds,
+      timezone,
+      location
+    } = body;
 
     // Validate required fields
     if (!title || !date || !time || !communityId) {
