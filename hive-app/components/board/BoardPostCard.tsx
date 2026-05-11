@@ -31,13 +31,13 @@ export function BoardPostCard({ post, onPress }: BoardPostCardProps) {
       onPress={onPress}
       className="bg-white rounded-xl mb-3 shadow-sm active:opacity-80 overflow-hidden"
     >
-      {/* Compact image preview when post has attachments */}
+      {/* Hero image — full width, tall, cover crop */}
       {firstAttachment && (
-        <View style={{ position: 'relative', backgroundColor: '#faf8f3', borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.22)' }}>
+        <View style={{ position: 'relative' }}>
           <Image
             source={{ uri: firstAttachment.url }}
-            style={{ width: '100%', height: 140 }}
-            contentFit="contain"
+            style={{ width: '100%', height: 210 }}
+            contentFit="cover"
             cachePolicy="memory-disk"
           />
           {extraCount > 0 && (
