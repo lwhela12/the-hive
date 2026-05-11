@@ -149,6 +149,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
 
     switch (data.type) {
       case 'chat_dm':
+      case 'chat_mention':
         if (data.room_id) {
           router.push(`/messages?roomId=${data.room_id}`);
         } else {

@@ -31,6 +31,40 @@ interface RoomChatViewProps {
   onBack: () => void;
 }
 
+function normalizeMentionHandle(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function getMentionedMembers(
+  content: string,
+  members: Profile[],
+  currentUserId?: string
+): Profile[] {
+  const mentionHandles = new Set(
+    Array.from(content.matchAll(/@([a-z0-9._-]+)/gi))
+      .map((match) => normalizeMentionHandle(match[1]))
+      .filter(Boolean)
+  );
+
+  if (mentionHandles.size === 0) return [];
+
+  const mentioned = new Map<string, Profile>();
+
+  members.forEach((member) => {
+    if (!member.id || member.id === currentUserId || !member.name) return;
+
+    const nameParts = member.name.split(/\s+/).filter(Boolean);
+    const firstName = normalizeMentionHandle(nameParts[0] || '');
+    const fullName = normalizeMentionHandle(member.name);
+
+    if (mentionHandles.has(firstName) || mentionHandles.has(fullName)) {
+      mentioned.set(member.id, member);
+    }
+  });
+
+  return Array.from(mentioned.values());
+}
+
 export function RoomChatView({ room, onBack }: RoomChatViewProps) {
   const { profile, communityId } = useAuth();
   const queryClient = useQueryClient();
@@ -311,6 +345,44 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
 
       // Refetch messages to show the new one
       await refetchMessages();
+
+      // In community rooms, @mentions notify only the people named.
+      if (room.room_type === 'community' && messageContent) {
+        let mentionableMembers = (room.members || [])
+          .map((m) => m.user)
+          .filter((u): u is Profile => !!u);
+
+        if (mentionableMembers.length === 0) {
+          const { data: memberRows } = await supabase
+            .from('community_memberships')
+            .select('user:profiles(*)')
+            .eq('community_id', communityId);
+
+          mentionableMembers = (memberRows || [])
+            .map((m) => (m as any).user)
+            .filter((u): u is Profile => !!u);
+        }
+
+        const mentionedMembers = getMentionedMembers(
+          messageContent,
+          mentionableMembers,
+          profile.id
+        );
+        const messagePreview = messageContent || (attachments ? 'Sent an image' : '');
+
+        mentionedMembers.forEach((member) => {
+          supabase.functions.invoke('notify-chat-mention', {
+            body: {
+              room_id: room.id,
+              sender_id: profile.id,
+              recipient_id: member.id,
+              message_preview: messagePreview,
+              community_id: communityId,
+              room_name: getRoomName(),
+            },
+          }).catch((err) => console.log('Mention notification error (non-blocking):', err));
+        });
+      }
 
       // Send push notification for DM and group DM messages
       if (room.room_type === 'dm' || room.room_type === 'group_dm') {
