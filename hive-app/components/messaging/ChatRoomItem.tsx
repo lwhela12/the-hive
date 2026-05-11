@@ -122,7 +122,21 @@ export const ChatRoomItem = memo(function ChatRoomItem({ room, currentUserId, on
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-center px-4 py-3 bg-white active:bg-cream"
+      className="flex-row items-center px-4 py-3 active:opacity-80"
+      style={{
+        marginHorizontal: 12,
+        marginVertical: 6,
+        minHeight: 76,
+        borderRadius: 20,
+        borderWidth: hasUnread ? 1.5 : 1,
+        borderColor: hasUnread ? 'rgba(189,147,72,0.58)' : 'rgba(222,193,129,0.48)',
+        backgroundColor: hasUnread ? 'rgba(255,248,232,0.92)' : 'rgba(255,255,255,0.78)',
+        shadowColor: '#bd9348',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: hasUnread ? 0.16 : 0.09,
+        shadowRadius: 18,
+        elevation: hasUnread ? 4 : 2,
+      }}
     >
       {/* Avatar */}
       {renderAvatar()}

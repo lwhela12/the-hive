@@ -167,6 +167,7 @@ export default function MessagesScreen() {
       <FlatList
         data={rooms}
         keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingVertical: 8, paddingBottom: 24 }}
         renderItem={({ item }) => (
           <ChatRoomItem
             room={item}
