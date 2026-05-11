@@ -23,13 +23,23 @@ import { getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
-import type { Profile, Wish, WishGranter, Event } from '../../types';
+import type { Profile, Wish, WishGranter, Event, ActionItem } from '../../types';
 
 type WishTab = 'open' | 'granted';
 
 type WishWithGranters = Wish & {
   user: Profile;
   granters?: (WishGranter & { granter: Profile })[];
+};
+
+type HomeTodo = {
+  id: string;
+  emoji: string;
+  title: string;
+  detail?: string;
+  cta?: string;
+  onPress?: () => void;
+  onComplete?: () => void;
 };
 
 const INITIAL_EVENTS_SHOWN = 3;
@@ -469,6 +479,31 @@ export default function HiveScreen() {
   const [eventLocation, setEventLocation] = useState('');
   const [savingEvent, setSavingEvent] = useState(false);
   const [eventError, setEventError] = useState<string | null>(null);
+  const [homeActionItems, setHomeActionItems] = useState<ActionItem[]>([]);
+  const [homeActionLoading, setHomeActionLoading] = useState(false);
+
+  const fetchMyActionItems = useCallback(async () => {
+    if (!profile?.id) return;
+    setHomeActionLoading(true);
+    const { data } = await supabase
+      .from('action_items')
+      .select('*')
+      .eq('assigned_to', profile.id)
+      .eq('completed', false)
+      .order('due_date', { ascending: true, nullsFirst: false });
+    setHomeActionItems((data ?? []) as ActionItem[]);
+    setHomeActionLoading(false);
+  }, [profile?.id]);
+
+  useEffect(() => { fetchMyActionItems(); }, [fetchMyActionItems]);
+
+  const completeActionItem = useCallback(async (id: string) => {
+    await supabase
+      .from('action_items')
+      .update({ completed: true, completed_at: new Date().toISOString() })
+      .eq('id', id);
+    setHomeActionItems(prev => prev.filter(a => a.id !== id));
+  }, []);
 
   // Activity feed
   const { items: activityItems, loading: activityLoading, refetch: refetchActivity } = useActivityFeed(communityId ?? undefined);
@@ -590,7 +625,7 @@ export default function HiveScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refetch(), refetchActivity(), fetchTodayAnswers(), fetchRecentAnswers()]);
+    await Promise.all([refetch(), refetchActivity(), fetchTodayAnswers(), fetchRecentAnswers(), fetchMyActionItems()]);
     setRefreshing(false);
   };
 
@@ -810,6 +845,36 @@ export default function HiveScreen() {
     ]);
   };
 
+  const homeTodos: HomeTodo[] = [
+    ...pendingSurveys.map(s => ({
+      id: `survey-${s.id}`,
+      emoji: '📋',
+      title: s.title,
+      detail: s.due_date
+        ? `Due ${new Date(s.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+        : 'Awaiting your response',
+      cta: 'Fill out →',
+      onPress: () => setActiveSurvey(s),
+    })),
+    ...homeActionItems.map(a => ({
+      id: `action-${a.id}`,
+      emoji: '✅',
+      title: a.description,
+      detail: a.due_date ? `Due ${formatDateShort(a.due_date)}` : undefined,
+      onComplete: () => completeActionItem(a.id),
+    })),
+    ...(() => {
+      const nextMeeting = upcomingEvents.find(e => e.event_type === 'meeting');
+      if (!nextMeeting) return [];
+      const start = getEventStartDate(nextMeeting);
+      const msUntil = start.getTime() - Date.now();
+      if (msUntil > 0 && msUntil < 7 * 24 * 60 * 60 * 1000) {
+        return [{ id: 'donation-reminder', emoji: '🍯', title: 'Bring your monthly donation', detail: `Meeting · ${formatDateShort(nextMeeting.event_date)}` }];
+      }
+      return [];
+    })(),
+  ];
+
   // Show wish detail fullscreen
   if (selectedWish) {
     return (
@@ -960,48 +1025,12 @@ export default function HiveScreen() {
         {/* Main Content */}
         <View className="p-4">
 
-        {/* Pending Surveys Nudge */}
-        {pendingSurveys.length > 0 && pendingSurveys.map(survey => (
-          <Pressable
-            key={survey.id}
-            onPress={() => setActiveSurvey(survey)}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: pressed ? '#fce8b0' : '#fdf3dc',
-              borderWidth: 1.5,
-              borderColor: '#bd9348',
-              borderRadius: 16,
-              padding: 14,
-              marginBottom: 12,
-              gap: 12,
-              shadowColor: '#bd9348',
-              shadowOpacity: 0.18,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: 3,
-            })}
-          >
-            <Text style={{ fontSize: 28 }}>📋</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 2 }}>
-                Survey waiting for you
-              </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5a4a2e', lineHeight: 18 }} numberOfLines={2}>
-                {survey.title}
-                {survey.due_date ? ` · Due ${new Date(survey.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
-              </Text>
-            </View>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>Fill out →</Text>
-          </Pressable>
-        ))}
-
-        {/* Activity Feed + Upcoming Events — side by side on wide screens */}
-        <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 12, marginBottom: 16 }}>
+        {/* Activity · My To Do List · Upcoming Events */}
+        <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 16, marginBottom: 24 }}>
 
           {/* Activity Feed */}
-          <View style={{ flex: 1, marginBottom: useMobileLayout ? 0 : 0 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
               <View style={{ backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
                   Activity
@@ -1011,7 +1040,7 @@ export default function HiveScreen() {
                 <Pressable
                   onPress={markAllActivityRead}
                   className="active:opacity-60"
-                  style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }}
+                  style={{ paddingHorizontal: 4, paddingBottom: 4 }}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
                     Mark all read
@@ -1022,6 +1051,7 @@ export default function HiveScreen() {
             <View style={{
               backgroundColor: '#fffdf5',
               borderRadius: 20,
+              borderTopLeftRadius: 0,
               borderWidth: 1,
               borderColor: 'rgba(222,193,129,0.7)',
               shadowColor: '#bd9348',
@@ -1100,9 +1130,89 @@ export default function HiveScreen() {
             </View>
           </View>
 
+          {/* My To Do List */}
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 0 }}>
+              <View style={{ backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+                  My To Do List{homeTodos.length > 0 ? ` (${homeTodos.length})` : ''}
+                </Text>
+              </View>
+            </View>
+            <View style={{
+              backgroundColor: '#fffdf5',
+              borderRadius: 20,
+              borderTopLeftRadius: 0,
+              borderWidth: 1,
+              borderColor: 'rgba(222,193,129,0.7)',
+              shadowColor: '#bd9348',
+              shadowOpacity: 0.16,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 5 },
+              elevation: 3,
+              overflow: 'hidden',
+              height: 280,
+            }}>
+              <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10 }} />
+              {homeActionLoading ? (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                  <ActivityIndicator size="small" color="#bd9348" />
+                </View>
+              ) : homeTodos.length === 0 ? (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                  <Text style={{ fontSize: 32, marginBottom: 8 }}>✅</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', marginBottom: 4, textAlign: 'center' }}>All clear!</Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center', lineHeight: 18 }}>
+                    No pending to-dos.{'\n'}Meeting action items and{'\n'}surveys will show up here.
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                  {homeTodos.map((todo, i) => (
+                    <Pressable
+                      key={todo.id}
+                      onPress={todo.onPress}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        padding: 14,
+                        borderBottomWidth: i < homeTodos.length - 1 ? 1 : 0,
+                        borderBottomColor: 'rgba(222,193,129,0.28)',
+                        backgroundColor: pressed && todo.onPress ? '#fbf4e3' : '#fffdf5',
+                        gap: 10,
+                      })}
+                    >
+                      <Text style={{ fontSize: 18, flexShrink: 0 }}>{todo.emoji}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', lineHeight: 18 }} numberOfLines={2}>
+                          {todo.title}
+                        </Text>
+                        {todo.detail ? (
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 2 }}>
+                            {todo.detail}
+                          </Text>
+                        ) : null}
+                      </View>
+                      {todo.cta ? (
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', flexShrink: 0 }}>{todo.cta}</Text>
+                      ) : todo.onComplete ? (
+                        <Pressable
+                          onPress={todo.onComplete}
+                          style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: 'rgba(189,147,72,0.5)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                        >
+                          <Text style={{ fontSize: 12, color: '#bd9348' }}>✓</Text>
+                        </Pressable>
+                      ) : null}
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+
           {/* Upcoming Events */}
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
               <View style={{ backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
                   Upcoming Events
@@ -1110,7 +1220,7 @@ export default function HiveScreen() {
               </View>
               <Pressable
                 onPress={openCreateEvent}
-                style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }}
+                style={{ paddingHorizontal: 4, paddingBottom: 4 }}
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Add</Text>
               </Pressable>
@@ -1118,6 +1228,7 @@ export default function HiveScreen() {
             <View style={{
               backgroundColor: '#fdf3dc',
               borderRadius: 20,
+              borderTopLeftRadius: 0,
               borderWidth: 1,
               borderColor: 'rgba(222,193,129,0.7)',
               shadowColor: '#bd9348',
