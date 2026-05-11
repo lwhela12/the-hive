@@ -31,6 +31,8 @@ interface RoomChatViewProps {
   onBack: () => void;
 }
 
+const BROADCAST_MENTION_HANDLES = new Set(['everyone', 'all', 'group']);
+
 function normalizeMentionHandle(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -47,6 +49,10 @@ function getMentionedMembers(
   );
 
   if (mentionHandles.size === 0) return [];
+
+  if (Array.from(mentionHandles).some((handle) => BROADCAST_MENTION_HANDLES.has(handle))) {
+    return members.filter((member) => member.id && member.id !== currentUserId);
+  }
 
   const mentioned = new Map<string, Profile>();
 
