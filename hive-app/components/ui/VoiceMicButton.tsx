@@ -1,4 +1,4 @@
-import { Pressable, View, StyleProp, ViewStyle } from 'react-native';
+import { Alert, Pressable, StyleProp, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useVoiceInput } from '../../lib/hooks/useVoiceInput';
 
@@ -10,7 +10,9 @@ interface Props {
 }
 
 export function VoiceMicButton({ onTranscript, size = 22, style }: Props) {
-  const { isListening, toggle, isSupported } = useVoiceInput(onTranscript);
+  const { isListening, toggle, isSupported } = useVoiceInput(onTranscript, (message) => {
+    Alert.alert('Voice input', message);
+  });
 
   if (!isSupported) return null;
 
@@ -28,6 +30,8 @@ export function VoiceMicButton({ onTranscript, size = 22, style }: Props) {
         },
         style,
       ]}
+      accessibilityRole="button"
+      accessibilityLabel={isListening ? 'Stop voice input' : 'Start voice input'}
     >
       <Ionicons
         name={isListening ? 'mic' : 'mic-outline'}
