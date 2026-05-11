@@ -796,28 +796,9 @@ function MemberDetailModal({
               </View>
             )}
 
-            {isCurrentUser && (
+            {isCurrentUser && editing && (
               <View style={{ backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 18, padding: 16, marginBottom: 20 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: editing ? 14 : 0 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d' }}>Help the HIVE get to know you</Text>
-                    {!editing && (
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8a8173', marginTop: 4, lineHeight: 18 }}>
-                        Fill in a few little prompts whenever you want.
-                      </Text>
-                    )}
-                  </View>
-                  {!editing && (
-                    <Pressable
-                      onPress={() => setEditing(true)}
-                      style={{ backgroundColor: '#bd9348', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: 'white' }}>Edit</Text>
-                    </Pressable>
-                  )}
-                </View>
-
-                {editing && (
+                {(
                   <>
                     <ProfilePromptInput
                       label="Name"
