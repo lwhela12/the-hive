@@ -1465,7 +1465,6 @@ export default function MembersScreen() {
               {filtered.map(member => {
                 const isMe = member.id === currentUserId;
                 const roleLabel = member.hiveTitle ?? ROLE_LABELS[member.role];
-                const profileFilled = !!(member.bio || member.current_project || member.known_for);
                 const publicWishes = member.wishes.filter(w => w.status === 'public');
                 const spotlight = member.known_for || member.current_project || member.bio || member.skills[0]?.description || publicWishes[0]?.description;
                 return (
@@ -1542,15 +1541,6 @@ export default function MembersScreen() {
                           </View>
                         )}
                       </View>
-
-                      <View style={{ flexDirection: 'row', gap: 4, marginTop: 'auto', paddingTop: 12 }}>
-                        {member.introPost && (
-                          <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#bd9348', opacity: 0.7 }} />
-                        )}
-                        {profileFilled && (
-                          <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#6b9e8a', opacity: 0.7 }} />
-                        )}
-                      </View>
                     </View>
                   </Pressable>
                 );
@@ -1559,19 +1549,6 @@ export default function MembersScreen() {
           </>
         )}
 
-        {/* Legend */}
-        {!loading && members.length > 0 && (
-          <View style={{ flexDirection: 'row', gap: 16, justifyContent: 'center', marginTop: 8, opacity: 0.6 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#bd9348' }} />
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9ca3af' }}>has intro post</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#6b9e8a' }} />
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9ca3af' }}>profile filled out</Text>
-            </View>
-          </View>
-        )}
       </ScrollView>
 
       {selected && (
