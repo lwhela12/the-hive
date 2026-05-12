@@ -222,7 +222,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         queryFn: async () => {
           const { data, error } = (await supabase
             .from('community_memberships')
-            .select('profiles(id, name, birthday)')
+            .select('profiles!user_id(id, name, birthday)')
             .eq('community_id', communityId!)) as {
               data: { profiles: BirthdayMember | null }[] | null;
               error: { message?: string } | null;
