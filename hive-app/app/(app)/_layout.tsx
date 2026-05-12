@@ -101,6 +101,7 @@ export default function AppLayout() {
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const [cliveDraft, setCliveDraft] = useState('');
   const [bubbleImages, setBubbleImages] = useState<SelectedImage[]>([]);
+  const [cliveExpanded, setCliveExpanded] = useState(true);
 
   // Use mobile layout for narrow screens (< 768px) regardless of platform
   const useMobileLayout = width < 768;
@@ -300,14 +301,13 @@ export default function AppLayout() {
         />
       </Tabs>
 
-      {/* Floating Clive pill bar — bottom right, visible on every page except the Clive chat itself */}
+      {/* Floating Clive bar — collapses to icon bubble, expands to full pill */}
       {!onClivePage && (
         <View
           style={{
             position: 'absolute',
             bottom: tabBarHeight + 10,
             right: 12,
-            width: Math.min(width - 24, 330),
             shadowColor: '#bd9348',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.25,
@@ -315,106 +315,112 @@ export default function AppLayout() {
             elevation: 8,
           }}
         >
-          <View
-            style={{ borderRadius: 32, overflow: 'hidden' }}
-            className="flex-row items-center bg-white border border-gold/30 px-2 py-1.5"
-          >
-            {/* Clive avatar — tapping opens chat */}
-            <Pressable onPress={() => router.push('/')} className="mr-2 active:opacity-70">
-              <View style={{ width: 36, height: 36, borderRadius: 18, overflow: 'hidden' }}
-                className="border border-gold/40">
-                <Image
-                  source={cliveIcon}
-                  style={{ width: 36, height: 36 }}
-                  contentFit="cover"
-                  cachePolicy="memory-disk"
-                />
-              </View>
-            </Pressable>
-
-            {/* Text input */}
-            <TextInput
-              value={cliveDraft}
-              onChangeText={setCliveDraft}
-              placeholder="Ask Clive..."
-              placeholderTextColor="#b5860d80"
-              returnKeyType="send"
-              onSubmitEditing={submitToClive}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                fontFamily: 'Lato_400Regular',
-                fontSize: 15,
-                color: '#2d2d2d',
-                paddingVertical: 6,
-              }}
-            />
-
-            {/* Send arrow — only shows when there's text */}
-            {cliveDraft.trim().length > 0 && (
-              <Pressable onPress={submitToClive} className="ml-1 p-1.5 active:opacity-60">
-                <Ionicons name="arrow-up-circle" size={28} color="#bd9348" />
-              </Pressable>
-            )}
-
-            {/* Paperclip — pick images before sending to Clive */}
-            <Pressable
-              onPress={handleBubbleAttach}
-              disabled={bubbleImages.length >= 5}
-              className="p-1 ml-1 active:opacity-60"
-              style={{ position: 'relative' }}
-              accessibilityLabel="Attach image"
+          {cliveExpanded ? (
+            /* Expanded: full pill bar */
+            <View
+              style={{ borderRadius: 32, overflow: 'hidden', width: Math.min(width - 24, 330) }}
+              className="flex-row items-center bg-white border border-gold/30 px-2 py-1.5"
             >
-              <Ionicons
-                name="attach-outline"
-                size={20}
-                color={bubbleImages.length >= 5 ? '#ccc' : '#bd9348'}
-              />
-              {bubbleImages.length > 0 && (
-                <View
-                  style={{
-                    position: 'absolute',
-                    top: -2,
-                    right: -4,
-                    backgroundColor: '#bd9348',
-                    borderRadius: 8,
-                    minWidth: 14,
-                    height: 14,
-                    paddingHorizontal: 2,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 9 }}>
-                    {bubbleImages.length}
-                  </Text>
+              {/* Clive avatar — tap to collapse */}
+              <Pressable onPress={() => setCliveExpanded(false)} className="mr-2 active:opacity-70">
+                <View style={{ width: 36, height: 36, borderRadius: 18, overflow: 'hidden' }}
+                  className="border border-gold/40">
+                  <Image
+                    source={cliveIcon}
+                    style={{ width: 36, height: 36 }}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                  />
                 </View>
-              )}
-            </Pressable>
+              </Pressable>
 
-            {/* Mic — voice-to-text fills the input, then auto-submits */}
-            <VoiceMicButton
-              size={20}
-              style={{ marginLeft: 4 }}
-              onTranscript={(text) => {
-                setCliveDraft(text);
-                // small delay so state flushes before submit
-                setTimeout(() => {
+              {/* Text area — tap navigates to Clive's main page */}
+              <Pressable onPress={() => router.push('/')} style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{
+                  fontFamily: 'Lato_400Regular',
+                  fontSize: 15,
+                  color: '#b5860d80',
+                  paddingVertical: 6,
+                }}>
+                  {cliveDraft.trim() || 'Ask Clive...'}
+                </Text>
+              </Pressable>
+
+              {/* Paperclip — pick images before sending to Clive */}
+              <Pressable
+                onPress={handleBubbleAttach}
+                disabled={bubbleImages.length >= 5}
+                className="p-1 ml-1 active:opacity-60"
+                style={{ position: 'relative' }}
+                accessibilityLabel="Attach image"
+              >
+                <Ionicons
+                  name="attach-outline"
+                  size={20}
+                  color={bubbleImages.length >= 5 ? '#ccc' : '#bd9348'}
+                />
+                {bubbleImages.length > 0 && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: -2,
+                      right: -4,
+                      backgroundColor: '#bd9348',
+                      borderRadius: 8,
+                      minWidth: 14,
+                      height: 14,
+                      paddingHorizontal: 2,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 9 }}>
+                      {bubbleImages.length}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+
+              {/* Mic — voice-to-text, then navigate to Clive with the message */}
+              <VoiceMicButton
+                size={20}
+                style={{ marginLeft: 4 }}
+                onTranscript={(text) => {
                   if (text.trim()) {
                     if (bubbleImages.length > 0) {
                       setPendingAttachments(bubbleImages);
                       setBubbleImages([]);
                     }
-                    setCliveDraft('');
                     router.push({ pathname: '/', params: { message: text } });
                   }
-                }, 80);
+                }}
+                onInterimTranscript={(text) => {
+                  setCliveDraft(text);
+                }}
+              />
+            </View>
+          ) : (
+            /* Collapsed: just the icon bubble */
+            <Pressable
+              onPress={() => setCliveExpanded(true)}
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                overflow: 'hidden',
+                borderWidth: 1.5,
+                borderColor: 'rgba(189,147,72,0.4)',
+                backgroundColor: 'white',
               }}
-              onInterimTranscript={(text) => {
-                setCliveDraft(text);
-              }}
-            />
-          </View>
+            >
+              <Image
+                source={cliveIcon}
+                style={{ width: 48, height: 48 }}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+            </Pressable>
+          )}
         </View>
       )}
     </View>

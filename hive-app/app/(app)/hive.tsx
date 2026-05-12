@@ -508,6 +508,7 @@ export default function HiveScreen() {
   useEffect(() => { fetchMyActionItems(); }, [fetchMyActionItems]);
 
   const [showConfetti, setShowConfetti] = useState(false);
+  const [donationDismissed, setDonationDismissed] = useState(false);
 
   const completeActionItem = useCallback(async (id: string) => {
     setShowConfetti(true);
@@ -900,7 +901,8 @@ export default function HiveScreen() {
       const start = getEventStartDate(nextMeeting);
       const msUntil = start.getTime() - Date.now();
       if (msUntil > 0 && msUntil < 7 * 24 * 60 * 60 * 1000) {
-        return [{ id: 'donation-reminder', emoji: '🍯', title: 'Bring your monthly donation', detail: `Meeting · ${formatDateShort(nextMeeting.event_date)}` }];
+        if (donationDismissed) return [];
+        return [{ id: 'donation-reminder', emoji: '🍯', title: 'Bring your monthly donation', detail: `Meeting · ${formatDateShort(nextMeeting.event_date)}`, onComplete: () => { setShowConfetti(true); setDonationDismissed(true); } }];
       }
       return [];
     })(),
@@ -1322,7 +1324,7 @@ export default function HiveScreen() {
                         padding: 14,
                         borderBottomWidth: i < homeTodos.length - 1 ? 1 : 0,
                         borderBottomColor: 'rgba(222,193,129,0.28)',
-                        backgroundColor: pressed && todo.onPress ? '#fbf4e3' : '#fffdf5',
+                        backgroundColor: pressed && (todo.onPress || todo.onComplete) ? '#fbf4e3' : '#fffdf5',
                         gap: 10,
                       })}
                     >
