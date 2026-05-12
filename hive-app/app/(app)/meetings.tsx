@@ -366,6 +366,9 @@ export default function MeetingsScreen() {
     );
   }
 
+  const SLIDE_DECK_URL = 'https://www.canva.com/d/bKYr6kl9Lk9cut7';
+  const nextMeeting = upcomingMeetings[0] ?? null;
+
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <AppHeader
@@ -390,18 +393,72 @@ export default function MeetingsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Header */}
-        <View className="flex-row items-center mb-6 justify-end">
-          <View className="flex-row gap-2">
+        {/* Meeting Hub Hero */}
+        <View
+          style={{
+            backgroundColor: '#2b2b2a',
+            borderRadius: 20,
+            padding: 20,
+            marginBottom: 20,
+          }}
+        >
+          <Text style={{ fontFamily: 'Lato_400Regular', color: '#bd9348', fontSize: 11, letterSpacing: 2, marginBottom: 4 }}>
+            THE HIVE
+          </Text>
+          <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 22, marginBottom: 2 }}>
+            Meeting Hub 🐝
+          </Text>
+          {nextMeeting ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.55)', fontSize: 13, marginBottom: 18 }}>
+              Next up: {formatDateLong(nextMeeting.event_date)}{nextMeeting.event_time ? ` · ${nextMeeting.event_time}` : ''}
+            </Text>
+          ) : (
+            <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.4)', fontSize: 13, marginBottom: 18 }}>
+              No upcoming meetings scheduled
+            </Text>
+          )}
+
+          {/* Action tiles */}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {/* Join */}
             <Pressable
-              onPress={() => setShowScheduler(true)}
-              className="bg-charcoal px-4 py-2 rounded-lg active:bg-charcoal/80"
+              onPress={() => nextMeeting?.meet_link ? handleJoinMeeting(nextMeeting.meet_link) : null}
+              style={({ pressed }) => ({
+                flex: 1,
+                backgroundColor: nextMeeting?.meet_link ? '#bd9348' : 'rgba(255,255,255,0.08)',
+                borderRadius: 14,
+                paddingVertical: 16,
+                alignItems: 'center',
+                opacity: pressed ? 0.75 : 1,
+              })}
             >
-              <Text className="text-white font-semibold">Schedule</Text>
+              <Text style={{ fontSize: 22, marginBottom: 4 }}>📹</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: nextMeeting?.meet_link ? '#fff' : 'rgba(255,255,255,0.35)', fontSize: 13 }}>
+                Join
+              </Text>
             </Pressable>
+
+            {/* Slide Deck */}
+            <Pressable
+              onPress={() => Linking.openURL(SLIDE_DECK_URL)}
+              style={({ pressed }) => ({
+                flex: 1,
+                backgroundColor: 'rgba(255,255,255,0.08)',
+                borderRadius: 14,
+                paddingVertical: 16,
+                alignItems: 'center',
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 22, marginBottom: 4 }}>🎞️</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 13 }}>
+                Slide Deck
+              </Text>
+            </Pressable>
+
+            {/* Record */}
             <Pressable
               onPress={() => {
-                // If there are today's meetings, show picker first
                 if (todaysMeetings.length > 0) {
                   setShowEventPicker(true);
                 } else {
@@ -409,9 +466,37 @@ export default function MeetingsScreen() {
                   setShowRecorder(true);
                 }
               }}
-              className="bg-honey-500 px-4 py-2 rounded-lg active:bg-honey-600"
+              style={({ pressed }) => ({
+                flex: 1,
+                backgroundColor: 'rgba(255,255,255,0.08)',
+                borderRadius: 14,
+                paddingVertical: 16,
+                alignItems: 'center',
+                opacity: pressed ? 0.75 : 1,
+              })}
             >
-              <Text className="text-white font-semibold">Record</Text>
+              <Text style={{ fontSize: 22, marginBottom: 4 }}>🎙️</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 13 }}>
+                Record
+              </Text>
+            </Pressable>
+
+            {/* Schedule */}
+            <Pressable
+              onPress={() => setShowScheduler(true)}
+              style={({ pressed }) => ({
+                flex: 1,
+                backgroundColor: 'rgba(255,255,255,0.08)',
+                borderRadius: 14,
+                paddingVertical: 16,
+                alignItems: 'center',
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 22, marginBottom: 4 }}>📅</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 13 }}>
+                Schedule
+              </Text>
             </Pressable>
           </View>
         </View>
