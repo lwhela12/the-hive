@@ -308,18 +308,35 @@ export default function AppLayout() {
             position: 'absolute',
             bottom: tabBarHeight + 10,
             right: 12,
+            borderRadius: 32,
             shadowColor: '#bd9348',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.25,
-            shadowRadius: 12,
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.18,
+            shadowRadius: 16,
             elevation: 8,
           }}
         >
           {cliveExpanded ? (
             /* Expanded: full pill bar */
             <View
-              style={{ borderRadius: 32, overflow: 'hidden', width: Math.min(width - 24, 330) }}
-              className="flex-row items-center bg-white border border-gold/30 px-2 py-1.5"
+              style={{
+                borderRadius: 32,
+                overflow: 'hidden',
+                width: Math.min(width - 24, 330),
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 8,
+                paddingVertical: 6,
+                backgroundColor: 'rgba(255,255,255,0.82)',
+                borderWidth: 1,
+                borderColor: 'rgba(189,147,72,0.22)',
+                // Liquid-glass: subtle inner highlight + backdrop blur on web
+                ...(Platform.OS === 'web' ? {
+                  backdropFilter: 'blur(16px) saturate(180%)',
+                  WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(189,147,72,0.08)',
+                } as any : {}),
+              }}
             >
               {/* Clive avatar — tap to collapse */}
               <Pressable onPress={() => setCliveExpanded(false)} className="mr-2 active:opacity-70">
