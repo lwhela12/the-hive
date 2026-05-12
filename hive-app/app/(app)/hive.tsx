@@ -525,6 +525,7 @@ export default function HiveScreen() {
   });
 
   const [readItemIds, setReadItemIds] = useState<Set<string>>(new Set());
+  const [hadUnreadActivityThisSession, setHadUnreadActivityThisSession] = useState(false);
 
   // Load per-item read IDs from localStorage once communityId is known
   useEffect(() => {
@@ -573,6 +574,15 @@ export default function HiveScreen() {
     }
     // events and wishes: just mark read (content is already on this screen)
   }, [communityId, markItemRead, router]);
+
+  const hasUnreadActivity = activityItems.some(item => item.timestamp > sessionReadAt && !readItemIds.has(item.id));
+  const showCaughtUpCelebration = hadUnreadActivityThisSession && activityItems.length > 0 && !hasUnreadActivity;
+
+  useEffect(() => {
+    if (!activityLoading && hasUnreadActivity) {
+      setHadUnreadActivityThisSession(true);
+    }
+  }, [activityLoading, hasUnreadActivity]);
 
   // After 3 seconds, silently persist timestamp for next visit
   const hasAutoMarkedRef = useRef(false);
@@ -1127,7 +1137,7 @@ export default function HiveScreen() {
                   Activity
                 </Text>
               </View>
-              {activityItems.some(item => item.timestamp > sessionReadAt) && (
+              {hasUnreadActivity && (
                 <Pressable
                   onPress={markAllActivityRead}
                   className="active:opacity-60"
@@ -1217,7 +1227,7 @@ export default function HiveScreen() {
                     );
                   })}
                   {/* All caught up celebration */}
-                  {activityItems.every(item => item.timestamp <= sessionReadAt || readItemIds.has(item.id)) && (
+                  {showCaughtUpCelebration && (
                     <View style={{ paddingVertical: 16, paddingHorizontal: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.2)' }}>
                       <Text style={{ fontSize: 22, marginBottom: 4 }}>🎉</Text>
                       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>You're all caught up!</Text>
@@ -1272,7 +1282,7 @@ export default function HiveScreen() {
                   {homeTodos.map((todo, i) => (
                     <Pressable
                       key={todo.id}
-                      onPress={todo.onPress}
+                      onPress={todo.onPress ?? todo.onComplete}
                       style={({ pressed }) => ({
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -1283,6 +1293,15 @@ export default function HiveScreen() {
                         gap: 10,
                       })}
                     >
+                      <View style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 11,
+                        borderWidth: 2,
+                        borderColor: 'rgba(189,147,72,0.48)',
+                        backgroundColor: 'rgba(255,255,255,0.62)',
+                        flexShrink: 0,
+                      }} />
                       <Text style={{ fontSize: 18, flexShrink: 0 }}>{todo.emoji}</Text>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', lineHeight: 18 }} numberOfLines={2}>
@@ -1296,13 +1315,6 @@ export default function HiveScreen() {
                       </View>
                       {todo.cta ? (
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', flexShrink: 0 }}>{todo.cta}</Text>
-                      ) : todo.onComplete ? (
-                        <Pressable
-                          onPress={todo.onComplete}
-                          style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: 'rgba(189,147,72,0.5)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                        >
-                          <Text style={{ fontSize: 12, color: '#bd9348' }}>✓</Text>
-                        </Pressable>
                       ) : null}
                     </Pressable>
                   ))}
