@@ -347,6 +347,7 @@ export default function HiveScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAnswerModal, setShowAnswerModal] = useState(false);
   const [showCatchUpModal, setShowCatchUpModal] = useState(false);
+  const [showAddHomeGuide, setShowAddHomeGuide] = useState(false);
   const [myAnswer, setMyAnswer] = useState('');
   const [mySubmittedAnswer, setMySubmittedAnswer] = useState('');
   const [answerError, setAnswerError] = useState<string | null>(null);
@@ -636,33 +637,11 @@ export default function HiveScreen() {
     }
   };
 
-  const showPhoneInstallHelp = useCallback(async () => {
-    const shareUrl = 'https://app.the-hive.app/hive';
-
-    if (typeof window !== 'undefined') {
-      const navigatorWithShare = window.navigator as Navigator & {
-        share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
-      };
-
-      if (navigatorWithShare.share) {
-        try {
-          await navigatorWithShare.share({
-            title: 'HIVE Home',
-            text: 'Open HIVE, then choose Add to Home Screen from your browser share menu.',
-            url: shareUrl,
-          });
-          return;
-        } catch {
-          // If the user cancels the native share sheet, show the plain instructions below.
-        }
-      }
-    }
-
-    Alert.alert(
-      'Add HIVE to your phone',
-      'Open HIVE in Safari or Chrome, tap the share icon (box with an up arrow), then choose Add to Home Screen.'
-    );
+  const showPhoneInstallHelp = useCallback(() => {
+    setShowAddHomeGuide(true);
   }, []);
+
+  const homeIsUpdating = refreshing || isLoading || activityLoading || homeActionLoading;
 
   // Helper to format ISO date to MM-DD-YYYY for display in input
   const formatDateForInput = (isoDate: string) => {
@@ -1059,6 +1038,38 @@ export default function HiveScreen() {
 
         {/* Main Content */}
         <View className="p-4">
+
+        {homeIsUpdating && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              backgroundColor: '#fffdf5',
+              borderWidth: 1,
+              borderColor: 'rgba(222,193,129,0.7)',
+              borderRadius: 18,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              marginBottom: useMobileLayout ? 12 : 16,
+              shadowColor: '#bd9348',
+              shadowOpacity: 0.08,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 2,
+            }}
+          >
+            <ActivityIndicator size="small" color="#bd9348" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+                Clive is gathering the latest HIVE buzz...
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7b6b59', marginTop: 2 }}>
+                Pulling activity, events, questions, and your to-dos.
+              </Text>
+            </View>
+          </View>
+        )}
 
         {useMobileLayout && (
           <View
@@ -1660,6 +1671,78 @@ export default function HiveScreen() {
         onSave={handleEditWishSave}
         existingWish={editingWish}
       />
+
+      {/* Phone Home Screen Guide */}
+      <Modal visible={showAddHomeGuide} animationType="slide" transparent onRequestClose={() => setShowAddHomeGuide(false)}>
+        <Pressable
+          onPress={() => setShowAddHomeGuide(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'flex-end' }}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              backgroundColor: 'white',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingBottom: useMobileLayout ? 34 : 24,
+            }}
+          >
+            <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
+            </View>
+            <View style={{ paddingHorizontal: 22, paddingTop: 8 }}>
+              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 8 }}>
+                Add HIVE to your Home Screen
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#6b7280', lineHeight: 20, marginBottom: 16 }}>
+                iPhone keeps this inside the browser share menu. HIVE can guide you there, but the final Add to Home Screen button has to come from Safari.
+              </Text>
+
+              {[
+                'Open app.the-hive.app in Safari.',
+                'Tap the share icon, the box with an up arrow.',
+                'Scroll down and tap Add to Home Screen.',
+                'Tap Add, then HIVE will live like an app on your phone.',
+              ].map((step, index) => (
+                <View
+                  key={step}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    backgroundColor: '#fffdf5',
+                    borderWidth: 1,
+                    borderColor: 'rgba(222,193,129,0.65)',
+                    borderRadius: 16,
+                    padding: 12,
+                    marginBottom: 10,
+                  }}
+                >
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fdf3dc', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>{index + 1}</Text>
+                  </View>
+                  <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 14, color: '#3f3a34', lineHeight: 20 }}>
+                    {step}
+                  </Text>
+                </View>
+              ))}
+
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8a8175', lineHeight: 18, marginTop: 2, marginBottom: 14 }}>
+                If that option does not appear, open HIVE directly in Safari first. Some in-app browsers and Chrome on iPhone hide it.
+              </Text>
+
+              <Pressable
+                onPress={() => setShowAddHomeGuide(false)}
+                style={{ backgroundColor: '#bd9348', borderRadius: 16, paddingVertical: 14 }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white', textAlign: 'center' }}>
+                  Got it
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Daily Question Catch-Up Modal */}
       <Modal visible={showCatchUpModal} animationType="slide" transparent onRequestClose={() => setShowCatchUpModal(false)}>
