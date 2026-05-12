@@ -513,6 +513,44 @@ export default function ProfileScreen() {
         </View>
         </FadeIn>
 
+        {/* Profile Completion Bar */}
+        <FadeIn delay={50}>
+        {(() => {
+          const checks = [
+            { label: 'Add a photo', done: !!profile.avatar_url },
+            { label: 'Add your birthday', done: !!profile.birthday },
+            { label: 'Add your phone', done: !!profile.phone },
+            { label: 'Write a bio', done: !!(profile as any).bio },
+            { label: 'Add your occupation', done: !!(profile as any).occupation },
+            { label: 'Add a skill', done: skills.length > 0 },
+            { label: 'Share a wish', done: wishes.length > 0 },
+          ];
+          const done = checks.filter(c => c.done).length;
+          const pct = Math.round((done / checks.length) * 100);
+          const nextMissing = checks.find(c => !c.done);
+          const isComplete = done === checks.length;
+          return (
+            <View style={{ backgroundColor: isComplete ? '#f0faf0' : '#fffdf5', borderRadius: 16, borderWidth: 1, borderColor: isComplete ? 'rgba(100,180,100,0.3)' : 'rgba(222,193,129,0.5)', padding: 14, marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: isComplete ? '#3a7a3a' : '#2d2d2d' }}>
+                  {isComplete ? '🎉 Profile complete!' : `Profile ${pct}% complete`}
+                </Text>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: isComplete ? '#3a7a3a' : '#bd9348' }}>{pct}%</Text>
+              </View>
+              {/* Track */}
+              <View style={{ height: 8, backgroundColor: isComplete ? 'rgba(100,180,100,0.15)' : 'rgba(222,193,129,0.25)', borderRadius: 4, overflow: 'hidden' }}>
+                <View style={{ height: '100%', width: `${pct}%`, backgroundColor: isComplete ? '#5ab85a' : '#bd9348', borderRadius: 4 }} />
+              </View>
+              {!isComplete && nextMissing && (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 6 }}>
+                  Next: {nextMissing.label} to level up ✨
+                </Text>
+              )}
+            </View>
+          );
+        })()}
+        </FadeIn>
+
         {/* Profile Information */}
         <FadeIn delay={100}>
         <View className="mb-6">

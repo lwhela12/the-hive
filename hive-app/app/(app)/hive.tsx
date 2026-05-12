@@ -23,6 +23,7 @@ import { getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
+import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import type { Profile, Wish, WishGranter, Event, ActionItem } from '../../types';
 
 type WishTab = 'open' | 'granted';
@@ -497,7 +498,10 @@ export default function HiveScreen() {
 
   useEffect(() => { fetchMyActionItems(); }, [fetchMyActionItems]);
 
+  const [showConfetti, setShowConfetti] = useState(false);
+
   const completeActionItem = useCallback(async (id: string) => {
+    setShowConfetti(true);
     await supabase
       .from('action_items')
       .update({ completed: true, completed_at: new Date().toISOString() })
@@ -1125,6 +1129,14 @@ export default function HiveScreen() {
                       </Pressable>
                     );
                   })}
+                  {/* All caught up celebration */}
+                  {activityItems.every(item => item.timestamp <= sessionReadAt || readItemIds.has(item.id)) && (
+                    <View style={{ paddingVertical: 16, paddingHorizontal: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.2)' }}>
+                      <Text style={{ fontSize: 22, marginBottom: 4 }}>🎉</Text>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>You're all caught up!</Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 2 }}>Nothing new since your last visit.</Text>
+                    </View>
+                  )}
                 </ScrollView>
               )}
             </View>
@@ -1152,7 +1164,9 @@ export default function HiveScreen() {
               elevation: 3,
               overflow: 'hidden',
               height: 280,
+              position: 'relative',
             }}>
+              <ConfettiBurst visible={showConfetti} onDone={() => setShowConfetti(false)} />
               <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10 }} />
               {homeActionLoading ? (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
