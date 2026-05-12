@@ -1,4 +1,4 @@
-import { useState, memo, useEffect } from 'react';
+import { useState, memo, useEffect, useRef } from 'react';
 import { View, TextInput, Pressable, Text, Image, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SelectedImage, pickMultipleImages } from '../../lib/imagePicker';
@@ -18,6 +18,7 @@ export const ChatInput = memo(function ChatInput({
 }: ChatInputProps) {
   const [inputText, setInputText] = useState('');
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const voiceBaseTextRef = useRef<string | null>(null);
 
   // Pick up any images queued from the floating Clive bubble
   useEffect(() => {
@@ -42,11 +43,19 @@ export const ChatInput = memo(function ChatInput({
     setSelectedImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const mergeTranscript = (baseText: string, transcript: string) => {
+    const cleanBase = baseText.trimEnd();
+    const cleanTranscript = transcript.trim();
+    if (!cleanTranscript) return cleanBase;
+    return cleanBase ? `${cleanBase} ${cleanTranscript}` : cleanTranscript;
+  };
+
   const handleSend = () => {
     if ((!inputText.trim() && selectedImages.length === 0) || isLoading) return;
     onSend(inputText.trim(), selectedImages.length > 0 ? selectedImages : undefined);
     setInputText('');
     setSelectedImages([]);
+    voiceBaseTextRef.current = null;
   };
 
   const handleKeyPress = (event: any) => {
@@ -141,7 +150,21 @@ export const ChatInput = memo(function ChatInput({
           size={20}
           style={{ marginLeft: 6 }}
           onTranscript={(text) => {
-            setInputText((prev) => prev ? prev + ' ' + text : text);
+            setInputText((prev) => mergeTranscript(voiceBaseTextRef.current ?? prev, text));
+            voiceBaseTextRef.current = null;
+          }}
+          onInterimTranscript={(text) => {
+            if (!text) {
+              voiceBaseTextRef.current = null;
+              return;
+            }
+
+            setInputText((prev) => {
+              if (voiceBaseTextRef.current === null) {
+                voiceBaseTextRef.current = prev;
+              }
+              return mergeTranscript(voiceBaseTextRef.current, text);
+            });
           }}
         />
       </View>

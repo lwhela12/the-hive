@@ -19,7 +19,8 @@ function getSpeechErrorMessage(error?: string) {
 
 export function useVoiceInput(
   onTranscript: (text: string) => void,
-  onError?: (message: string) => void
+  onError?: (message: string) => void,
+  onInterimTranscript?: (text: string) => void
 ) {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -37,17 +38,35 @@ export function useVoiceInput(
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new SR();
     rec.continuous = false;
-    rec.interimResults = false;
+    rec.interimResults = true;
     rec.lang = 'en-US';
     rec.onstart = () => setIsListening(true);
-    rec.onend = () => setIsListening(false);
+    rec.onend = () => {
+      setIsListening(false);
+      onInterimTranscript?.('');
+    };
     rec.onerror = (event: any) => {
       setIsListening(false);
       onError?.(getSpeechErrorMessage(event?.error));
     };
-    rec.onresult = (e: any) => {
-      const transcript = e.results[0][0].transcript;
-      onTranscript(transcript);
+    rec.onresult = (event: any) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      onInterimTranscript?.(interimTranscript.trim());
+      if (finalTranscript.trim()) {
+        onTranscript(finalTranscript.trim());
+        onInterimTranscript?.('');
+      }
     };
     recognitionRef.current = rec;
     try {
@@ -56,7 +75,7 @@ export function useVoiceInput(
       setIsListening(false);
       onError?.(getSpeechErrorMessage());
     }
-  }, [isSupported, onError, onTranscript]);
+  }, [isSupported, onError, onInterimTranscript, onTranscript]);
 
   const stop = useCallback(() => {
     recognitionRef.current?.stop();

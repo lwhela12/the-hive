@@ -410,6 +410,9 @@ export default function AppLayout() {
                   }
                 }, 80);
               }}
+              onInterimTranscript={(text) => {
+                setCliveDraft(text);
+              }}
             />
           </View>
         </View>
