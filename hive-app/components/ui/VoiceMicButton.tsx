@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Alert, Pressable, StyleProp, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useVoiceInput } from '../../lib/hooks/useVoiceInput';
@@ -7,14 +8,20 @@ interface Props {
   onTranscript: (text: string) => void;
   /** Called while speech recognition is still guessing/correcting the current phrase */
   onInterimTranscript?: (text: string) => void;
+  /** Called whenever listening state changes */
+  onListeningChange?: (listening: boolean) => void;
   size?: number;
   style?: StyleProp<ViewStyle>;
 }
 
-export function VoiceMicButton({ onTranscript, onInterimTranscript, size = 22, style }: Props) {
+export function VoiceMicButton({ onTranscript, onInterimTranscript, onListeningChange, size = 22, style }: Props) {
   const { isListening, toggle, isSupported } = useVoiceInput(onTranscript, (message) => {
     Alert.alert('Voice input', message);
   }, onInterimTranscript);
+
+  useEffect(() => {
+    onListeningChange?.(isListening);
+  }, [isListening, onListeningChange]);
 
   if (!isSupported) return null;
 

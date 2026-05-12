@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, Platform, ActivityIndicator, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
 import Svg, { Polygon } from 'react-native-svg';
@@ -355,6 +355,21 @@ export default function HiveScreen() {
   // Map of user_id → ISO timestamp for sorting by recency
   const [answerTimestamps, setAnswerTimestamps] = useState<Map<string, string>>(new Map());
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
+  const [isVoiceListening, setIsVoiceListening] = useState(false);
+  const voicePulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (isVoiceListening) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(voicePulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+          Animated.timing(voicePulse, { toValue: 0, duration: 700, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      voicePulse.stopAnimation();
+      voicePulse.setValue(0);
+    }
+  }, [isVoiceListening, voicePulse]);
   const [activeAnswerPrompt, setActiveAnswerPrompt] = useState<ReturnType<typeof getTodayQuestion> | null>(null);
   // Map of user_id → answer text for today's question
   const [memberAnswers, setMemberAnswers] = useState<Map<string, string>>(new Map());
@@ -1908,7 +1923,7 @@ export default function HiveScreen() {
                 <TextInput
                   value={myAnswer}
                   onChangeText={setMyAnswer}
-                  placeholder="Share your answer with the Hive..."
+                  placeholder={isVoiceListening ? '' : 'Share your answer with the Hive...'}
                   placeholderTextColor="#9ca3af"
                   multiline
                   numberOfLines={4}
@@ -1923,18 +1938,47 @@ export default function HiveScreen() {
                     fontFamily: 'Lato_400Regular',
                     fontSize: 15,
                     color: '#2d2d2d',
-                    borderWidth: 1,
-                    borderColor: '#c49a3c',
+                    borderWidth: isVoiceListening ? 2 : 1,
+                    borderColor: isVoiceListening ? '#bd9348' : '#c49a3c',
                     borderRadius: 14,
                     padding: 14,
                     paddingRight: 48,
+                    paddingBottom: isVoiceListening ? 38 : 14,
                     minHeight: 100,
                     textAlignVertical: 'top',
-                    backgroundColor: '#fffbf0',
+                    backgroundColor: isVoiceListening ? '#fffbf0' : '#fffbf0',
+                    shadowColor: isVoiceListening ? '#bd9348' : 'transparent',
+                    shadowOpacity: isVoiceListening ? 0.35 : 0,
+                    shadowRadius: isVoiceListening ? 10 : 0,
+                    shadowOffset: { width: 0, height: 0 },
                   }}
                 />
+                {/* Listening indicator strip inside the box */}
+                {isVoiceListening && (
+                  <View style={{
+                    position: 'absolute',
+                    bottom: 10,
+                    left: 14,
+                    right: 48,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}>
+                    <Animated.View style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: 3.5,
+                      backgroundColor: '#bd9348',
+                      opacity: voicePulse,
+                    }} />
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', letterSpacing: 0.5 }}>
+                      Listening…
+                    </Text>
+                  </View>
+                )}
                 <VoiceMicButton
                   onTranscript={(text) => setMyAnswer(prev => prev ? prev + ' ' + text : text)}
+                  onListeningChange={setIsVoiceListening}
                   size={20}
                   style={{ position: 'absolute', bottom: 10, right: 10 }}
                 />
