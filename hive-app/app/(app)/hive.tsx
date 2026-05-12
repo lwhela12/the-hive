@@ -351,6 +351,9 @@ export default function HiveScreen() {
   const [myAnswer, setMyAnswer] = useState('');
   const [mySubmittedAnswer, setMySubmittedAnswer] = useState('');
   const [answerError, setAnswerError] = useState<string | null>(null);
+  const [expandedAnswer, setExpandedAnswer] = useState<{ member: { id: string; name: string; avatar_url?: string | null }; answer: string } | null>(null);
+  // Map of user_id → ISO timestamp for sorting by recency
+  const [answerTimestamps, setAnswerTimestamps] = useState<Map<string, string>>(new Map());
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
   const [activeAnswerPrompt, setActiveAnswerPrompt] = useState<ReturnType<typeof getTodayQuestion> | null>(null);
   // Map of user_id → answer text for today's question
@@ -365,7 +368,7 @@ export default function HiveScreen() {
     if (!communityId) return;
     const { data, error } = await supabase
       .from('daily_question_answers')
-      .select('user_id, answer')
+      .select('user_id, answer, created_at')
       .eq('community_id', communityId)
       .eq('question_date', todayDateKey);
     if (error) {
@@ -374,8 +377,13 @@ export default function HiveScreen() {
     }
     if (data) {
       const map = new Map<string, string>();
-      data.forEach((row: any) => map.set(row.user_id, row.answer));
+      const timestamps = new Map<string, string>();
+      data.forEach((row: any) => {
+        map.set(row.user_id, row.answer);
+        if (row.created_at) timestamps.set(row.user_id, row.created_at);
+      });
       setMemberAnswers(map);
+      setAnswerTimestamps(timestamps);
       if (profile?.id && map.has(profile.id)) {
         setMySubmittedAnswer(map.get(profile.id)!);
         setMyAnswer(map.get(profile.id)!);
@@ -597,7 +605,6 @@ export default function HiveScreen() {
 
   // Member carousel state
   const [carouselMembers, setCarouselMembers] = useState<{ id: string; name: string; avatar_url?: string | null; role: string }[]>([]);
-  const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; avatar_url?: string | null; role: string } | null>(null);
 
   useEffect(() => {
     if (!communityId) return;
@@ -981,64 +988,90 @@ export default function HiveScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 14, gap: 10 }}
             >
-              {[...carouselMembers].sort((a, b) => (a.id === profile?.id ? -1 : b.id === profile?.id ? 1 : 0)).map((member) => {
+              {[...carouselMembers].sort((a, b) => {
+                const aIsMe = a.id === profile?.id;
+                const bIsMe = b.id === profile?.id;
+                const aAnswer = aIsMe ? mySubmittedAnswer : (memberAnswers.get(a.id) ?? '');
+                const bAnswer = bIsMe ? mySubmittedAnswer : (memberAnswers.get(b.id) ?? '');
+                const aHas = !!aAnswer;
+                const bHas = !!bAnswer;
+                // Self first if answered, else answered members by recency, then unanswered
+                if (aIsMe && aHas) return -1;
+                if (bIsMe && bHas) return 1;
+                if (aHas && !bHas) return -1;
+                if (!aHas && bHas) return 1;
+                if (aHas && bHas) {
+                  const aTs = answerTimestamps.get(a.id) ?? '';
+                  const bTs = answerTimestamps.get(b.id) ?? '';
+                  return bTs.localeCompare(aTs); // most recent first
+                }
+                if (aIsMe) return -1;
+                if (bIsMe) return 1;
+                return 0;
+              }).map((member) => {
                 const isMe = member.id === profile?.id;
                 const firstName = member.name.split(' ')[0];
                 const memberAnswer = isMe ? mySubmittedAnswer : (memberAnswers.get(member.id) ?? '');
                 const hasAnswered = !!memberAnswer;
                 const imgOpacity = isMe ? 1 : hasAnswered ? 1 : 0.45;
                 return (
-                  <Pressable
-                    key={member.id}
-                    onPress={isMe ? () => openAnswerModal({ question: todayQuestion, index: todayIndex, dateKey: todayDateKey }, mySubmittedAnswer) : () => setSelectedMember(member)}
-                    style={{ width: 74, alignItems: 'center' }}
-                  >
-                    {/* Avatar circle */}
-                    <View style={{
-                      borderRadius: 28,
-                      borderWidth: isMe ? 2.5 : 2,
-                      borderColor: isMe ? '#bd9348' : hasAnswered ? '#bd9348' : 'rgba(222,193,129,0.4)',
-                      padding: 2.5,
-                      marginBottom: 5,
-                      backgroundColor: 'white',
-                      shadowColor: '#000',
-                      shadowOpacity: isMe || hasAnswered ? 0.1 : 0.04,
-                      shadowRadius: 4,
-                      shadowOffset: { width: 0, height: 1 },
-                      elevation: isMe || hasAnswered ? 2 : 1,
-                    }}>
-                      {member.avatar_url ? (
-                        <Image
-                          source={{ uri: member.avatar_url }}
-                          style={{ width: 44, height: 44, borderRadius: 22, opacity: imgOpacity }}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#e8e3da', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden', opacity: imgOpacity }}>
-                          <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#b8b0a4', position: 'absolute', top: 8 }} />
-                          <View style={{ width: 32, height: 21, borderTopLeftRadius: 16, borderTopRightRadius: 16, backgroundColor: '#b8b0a4' }} />
-                        </View>
-                      )}
-                    </View>
+                  <View key={member.id} style={{ width: 74, alignItems: 'center' }}>
+                    {/* Avatar + name → edit own / navigate to member profile */}
+                    <Pressable
+                      onPress={isMe
+                        ? () => openAnswerModal({ question: todayQuestion, index: todayIndex, dateKey: todayDateKey }, mySubmittedAnswer)
+                        : () => router.push({ pathname: '/(app)/members', params: { memberId: member.id } })}
+                      style={{ alignItems: 'center', width: '100%' }}
+                    >
+                      <View style={{
+                        borderRadius: 28,
+                        borderWidth: isMe ? 2.5 : 2,
+                        borderColor: isMe ? '#bd9348' : hasAnswered ? '#bd9348' : 'rgba(222,193,129,0.4)',
+                        padding: 2.5,
+                        marginBottom: 5,
+                        backgroundColor: 'white',
+                        shadowColor: '#000',
+                        shadowOpacity: isMe || hasAnswered ? 0.1 : 0.04,
+                        shadowRadius: 4,
+                        shadowOffset: { width: 0, height: 1 },
+                        elevation: isMe || hasAnswered ? 2 : 1,
+                      }}>
+                        {member.avatar_url ? (
+                          <Image
+                            source={{ uri: member.avatar_url }}
+                            style={{ width: 44, height: 44, borderRadius: 22, opacity: imgOpacity }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#e8e3da', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden', opacity: imgOpacity }}>
+                            <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#b8b0a4', position: 'absolute', top: 8 }} />
+                            <View style={{ width: 32, height: 21, borderTopLeftRadius: 16, borderTopRightRadius: 16, backgroundColor: '#b8b0a4' }} />
+                          </View>
+                        )}
+                      </View>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: isMe ? '#bd9348' : hasAnswered ? '#2d2d2d' : '#b0a898', textAlign: 'center', marginBottom: 5 }} numberOfLines={1}>
+                        {isMe ? (mySubmittedAnswer ? 'Edit' : 'Answer') : firstName}
+                      </Text>
+                    </Pressable>
 
-                    {/* Name / Answer label */}
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: isMe ? '#bd9348' : hasAnswered ? '#2d2d2d' : '#b0a898', textAlign: 'center', marginBottom: 5 }} numberOfLines={1}>
-                      {isMe ? (mySubmittedAnswer ? 'Edit' : 'Answer') : firstName}
-                    </Text>
-
-                    {/* Answer snippet or placeholder */}
+                    {/* Answer bubble → expand full answer (or placeholder) */}
                     {hasAnswered ? (
-                      <View style={{ backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#c49a3c', padding: 6, width: 74 }}>
+                      <Pressable
+                        onPress={isMe
+                          ? () => openAnswerModal({ question: todayQuestion, index: todayIndex, dateKey: todayDateKey }, mySubmittedAnswer)
+                          : () => setExpandedAnswer({ member, answer: memberAnswer })}
+                        style={({ pressed }) => ({ backgroundColor: pressed ? '#fdf3dc' : 'white', borderRadius: 8, borderWidth: 1, borderColor: '#c49a3c', padding: 6, width: 74 })}
+                      >
                         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 9, color: '#4b5563', lineHeight: 13 }} numberOfLines={4}>
                           {memberAnswer}
                         </Text>
-                      </View>
+                      </Pressable>
                     ) : (
                       <View style={{ borderRadius: 8, borderWidth: 1, borderColor: isMe ? 'rgba(189,147,72,0.4)' : 'rgba(222,193,129,0.25)', borderStyle: 'dashed', padding: 5, width: 74, alignItems: 'center' }}>
                         <Text style={{ fontSize: 13 }}>{isMe ? '✍️' : '💭'}</Text>
                       </View>
                     )}
-                  </Pressable>
+                  </View>
                 );
               })}
             </ScrollView>
@@ -1939,41 +1972,40 @@ export default function HiveScreen() {
       </Modal>
 
       {/* Quick member peek modal from carousel */}
-      {selectedMember && (
-        <Modal visible animationType="slide" transparent onRequestClose={() => setSelectedMember(null)}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-            <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32 }}>
+      {expandedAnswer && (
+        <Modal visible animationType="slide" transparent onRequestClose={() => setExpandedAnswer(null)}>
+          <Pressable
+            onPress={() => setExpandedAnswer(null)}
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'flex-end' }}
+          >
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32 }}
+            >
               <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
               </View>
-              <View style={{ alignItems: 'center', paddingVertical: 20, paddingHorizontal: 24 }}>
-                <View style={{ borderRadius: 52, borderWidth: 2, borderColor: '#dec181', padding: 3, marginBottom: 12 }}>
-                  {selectedMember.avatar_url ? (
-                    <Image source={{ uri: selectedMember.avatar_url }} style={{ width: 88, height: 88, borderRadius: 44 }} resizeMode="cover" />
-                  ) : (
-                    <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: '#e8e3da', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden' }}>
-                      <View style={{ width: 33, height: 33, borderRadius: 16.5, backgroundColor: '#b8b0a4', position: 'absolute', top: 16 }} />
-                      <View style={{ width: 66, height: 44, borderTopLeftRadius: 33, borderTopRightRadius: 33, backgroundColor: '#b8b0a4' }} />
-                    </View>
-                  )}
-                </View>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 20, color: '#2d2d2d' }}>{selectedMember.name}</Text>
-                {selectedMember.role !== 'member' && (
-                  <View style={{ marginTop: 6, backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', textTransform: 'capitalize' }}>{selectedMember.role}</Text>
-                  </View>
-                )}
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', marginTop: 8, textAlign: 'center' }}>
-                  Visit the Members tab to see their full profile, skills & wishes.
+              <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348', marginBottom: 4 }}>
+                  {expandedAnswer.member.name.split(' ')[0]}'s answer
                 </Text>
-              </View>
-              <View style={{ paddingHorizontal: 24 }}>
-                <Pressable onPress={() => setSelectedMember(null)} style={{ backgroundColor: '#faf8f3', borderRadius: 14, paddingVertical: 14 }}>
+                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 14, color: '#4b3c1e', lineHeight: 20, marginBottom: 16 }}>
+                  {todayQuestion.text}
+                </Text>
+                <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(222,193,129,0.6)', padding: 16, marginBottom: 20 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, color: '#2d2d2d', lineHeight: 22 }}>
+                    {expandedAnswer.answer}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setExpandedAnswer(null)}
+                  style={{ backgroundColor: '#faf8f3', borderRadius: 14, paddingVertical: 14 }}
+                >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
                 </Pressable>
               </View>
-            </View>
-          </View>
+            </Pressable>
+          </Pressable>
         </Modal>
       )}
 

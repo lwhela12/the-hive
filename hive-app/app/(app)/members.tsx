@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowDimensions, TextInput, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import type { Skill, UserRole, Wish } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -1255,6 +1255,7 @@ function MemberDetailModal({
 
 export default function MembersScreen() {
   const { communityId, profile, session } = useAuth();
+  const { memberId } = useLocalSearchParams<{ memberId?: string }>();
   const { width } = useWindowDimensions();
   const [members, setMembers] = useState<MemberData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1396,6 +1397,14 @@ export default function MembersScreen() {
   useEffect(() => {
     loadMembers();
   }, [loadMembers]);
+
+  // Auto-open member detail when navigated here with a memberId param
+  useEffect(() => {
+    if (memberId && members.length > 0 && !selected) {
+      const target = members.find(m => m.id === memberId);
+      if (target) setSelected(target);
+    }
+  }, [memberId, members, selected]);
 
   const numCols = width >= 1100 ? 3 : width >= 720 ? 2 : 1;
   const avatarSize = width >= 768 ? 74 : 64;
