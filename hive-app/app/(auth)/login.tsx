@@ -12,7 +12,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = async (forceAccountPicker = false) => {
     try {
       setLoading(true);
 
@@ -27,6 +27,7 @@ export default function LoginScreen() {
           provider: 'google',
           options: {
             redirectTo: redirectUrl,
+            queryParams: forceAccountPicker ? { prompt: 'select_account' } : undefined,
           },
         });
         if (error) throw error;
@@ -41,6 +42,7 @@ export default function LoginScreen() {
           options: {
             redirectTo,
             skipBrowserRedirect: true,
+            queryParams: forceAccountPicker ? { prompt: 'select_account' } : undefined,
           },
         });
 
@@ -174,7 +176,17 @@ export default function LoginScreen() {
             )}
           </Pressable>
 
-          <View className="mt-7 border-t border-gold/20 pt-5">
+          <Pressable
+            onPress={() => handleGoogleSignIn(true)}
+            disabled={loading}
+            className="mt-3 py-2 active:opacity-60"
+          >
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-center text-charcoal/50 text-sm">
+              Use a different account →
+            </Text>
+          </Pressable>
+
+          <View className="mt-5 border-t border-gold/20 pt-5">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-center text-charcoal text-sm">
               Invitation only
             </Text>
