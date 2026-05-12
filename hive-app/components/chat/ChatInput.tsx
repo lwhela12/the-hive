@@ -1,5 +1,5 @@
 import { useState, memo, useEffect } from 'react';
-import { View, TextInput, Pressable, Text, Image, ScrollView } from 'react-native';
+import { View, TextInput, Pressable, Text, Image, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SelectedImage, pickMultipleImages } from '../../lib/imagePicker';
 import { takePendingAttachments } from '../../lib/pendingAttachments';
@@ -47,6 +47,17 @@ export const ChatInput = memo(function ChatInput({
     onSend(inputText.trim(), selectedImages.length > 0 ? selectedImages : undefined);
     setInputText('');
     setSelectedImages([]);
+  };
+
+  const handleKeyPress = (event: any) => {
+    const key = event.nativeEvent?.key ?? event.key;
+    const shiftKey = event.nativeEvent?.shiftKey ?? event.shiftKey;
+
+    if (Platform.OS === 'web' && key === 'Enter' && !shiftKey) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      handleSend();
+    }
   };
 
   const hasContent = inputText.trim().length > 0 || selectedImages.length > 0;
@@ -107,6 +118,8 @@ export const ChatInput = memo(function ChatInput({
           placeholderTextColor="#9CA3AF"
           selectionColor="#313130"
           multiline
+          blurOnSubmit={false}
+          onKeyPress={handleKeyPress}
           maxLength={2000}
           className="flex-1 max-h-32 text-base text-charcoal py-1 px-1"
           style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none', caretColor: '#313130' } as any}
