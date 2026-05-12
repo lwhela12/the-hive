@@ -629,9 +629,40 @@ export default function HiveScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refetch(), refetchActivity(), fetchTodayAnswers(), fetchRecentAnswers(), fetchMyActionItems()]);
-    setRefreshing(false);
+    try {
+      await Promise.all([refetch(), refetchActivity(), fetchTodayAnswers(), fetchRecentAnswers(), fetchMyActionItems()]);
+    } finally {
+      setRefreshing(false);
+    }
   };
+
+  const showPhoneInstallHelp = useCallback(async () => {
+    const shareUrl = 'https://app.the-hive.app/hive';
+
+    if (typeof window !== 'undefined') {
+      const navigatorWithShare = window.navigator as Navigator & {
+        share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
+      };
+
+      if (navigatorWithShare.share) {
+        try {
+          await navigatorWithShare.share({
+            title: 'HIVE Home',
+            text: 'Open HIVE, then choose Add to Home Screen from your browser share menu.',
+            url: shareUrl,
+          });
+          return;
+        } catch {
+          // If the user cancels the native share sheet, show the plain instructions below.
+        }
+      }
+    }
+
+    Alert.alert(
+      'Add HIVE to your phone',
+      'Open HIVE in Safari or Chrome, tap the share icon (box with an up arrow), then choose Add to Home Screen.'
+    );
+  }, []);
 
   // Helper to format ISO date to MM-DD-YYYY for display in input
   const formatDateForInput = (isoDate: string) => {
@@ -1029,8 +1060,53 @@ export default function HiveScreen() {
         {/* Main Content */}
         <View className="p-4">
 
+        {useMobileLayout && (
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: 10,
+              marginBottom: 28,
+            }}
+          >
+            <Pressable
+              onPress={onRefresh}
+              disabled={refreshing || isLoading}
+              style={({ pressed }) => ({
+                flex: 1,
+                backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+                borderWidth: 1,
+                borderColor: 'rgba(222,193,129,0.7)',
+                borderRadius: 999,
+                paddingVertical: 10,
+                alignItems: 'center',
+                opacity: refreshing || isLoading ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+                ↻ Refresh
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={showPhoneInstallHelp}
+              style={({ pressed }) => ({
+                flex: 1.4,
+                backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+                borderWidth: 1,
+                borderColor: 'rgba(222,193,129,0.7)',
+                borderRadius: 999,
+                paddingVertical: 10,
+                alignItems: 'center',
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+                □↑ Add to Home
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Activity · My To Do List · Upcoming Events */}
-        <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 16, marginBottom: 24 }}>
+        <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: useMobileLayout ? 30 : 16, marginBottom: 24 }}>
 
           {/* Activity Feed */}
           <View style={{ flex: 1 }}>
@@ -1587,8 +1663,19 @@ export default function HiveScreen() {
 
       {/* Daily Question Catch-Up Modal */}
       <Modal visible={showCatchUpModal} animationType="slide" transparent onRequestClose={() => setShowCatchUpModal(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '82%' }}>
+        <Pressable
+          onPress={() => setShowCatchUpModal(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              backgroundColor: 'white',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              maxHeight: useMobileLayout ? '72%' : '82%',
+            }}
+          >
             <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
             </View>
@@ -1599,7 +1686,13 @@ export default function HiveScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#6b7280', lineHeight: 20, marginBottom: 14 }}>
                 Answer the questions you missed this week, or peek at the days you already joined.
               </Text>
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                style={{ maxHeight: useMobileLayout ? 470 : 620 }}
+                contentContainerStyle={{ paddingBottom: 2 }}
+              >
                 {recentDailyQuestions.map((item, index) => {
                   const answersForDate = recentAnswerMaps.get(item.dateKey) ?? new Map<string, string>();
                   const myPastAnswer = profile?.id ? answersForDate.get(profile.id) ?? '' : '';
@@ -1623,12 +1716,12 @@ export default function HiveScreen() {
                         borderWidth: 1,
                         borderColor: myPastAnswer ? 'rgba(189,147,72,0.55)' : 'rgba(222,193,129,0.55)',
                         borderRadius: 16,
-                        padding: 14,
+                        padding: useMobileLayout ? 12 : 14,
                         marginBottom: 10,
                       })}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-                        <Text style={{ fontSize: 24, lineHeight: 30 }}>{item.question.emoji}</Text>
+                        <Text style={{ fontSize: useMobileLayout ? 22 : 24, lineHeight: 30 }}>{item.question.emoji}</Text>
                         <View style={{ flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
                             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', letterSpacing: 0.6 }}>
@@ -1638,7 +1731,7 @@ export default function HiveScreen() {
                               {myPastAnswer ? 'Answered' : 'Open'}
                             </Text>
                           </View>
-                          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 21 }}>
+                          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: useMobileLayout ? 14 : 15, color: '#2d2d2d', lineHeight: useMobileLayout ? 20 : 21 }}>
                             {item.question.text}
                           </Text>
                           {myPastAnswer ? (
@@ -1662,8 +1755,8 @@ export default function HiveScreen() {
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
               </Pressable>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* Daily Question Answer Modal */}
