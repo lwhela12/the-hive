@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Modal } from 'react-native';
+import { Image } from 'expo-image';
+
+const cliveIcon = require('../../assets/Clive_logo.png');
 import type { Survey, SurveyQuestion } from '../../lib/hooks/useSurveys';
 
 interface SurveyModalProps {
@@ -156,7 +159,7 @@ export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
 
           {submitted ? (
             <View style={{ alignItems: 'center', padding: 48 }}>
-              <Text style={{ fontSize: 48, marginBottom: 16 }}>🐝</Text>
+              <Image source={cliveIcon} style={{ width: 72, height: 72, borderRadius: 36, marginBottom: 16 }} contentFit="cover" cachePolicy="memory-disk" />
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', textAlign: 'center', marginBottom: 10 }}>All done!</Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
                 Your answers are saved. Clive and the HIVE will be better prepared for the meeting.
