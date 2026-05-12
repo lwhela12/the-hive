@@ -76,6 +76,15 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
   const items: ActivityItem[] = [];
 
   items.push({
+    id: 'app_update_2026_05_11',
+    type: 'app_update',
+    emoji: '✨',
+    text: 'HIVE update: Big week! Board posts now show full photo previews, the home screen has a To Do list (surveys + action items), member birthdays auto-appear in Upcoming Events, the Meetings tab has a hub with a slide deck, and the Q1 Exit Survey is live.',
+    timestamp: '2026-05-11T18:00:00.000Z',
+    sourceId: 'app_update_2026_05_11',
+  });
+
+  items.push({
     id: 'app_update_2026_05_09',
     type: 'app_update',
     emoji: '✨',
