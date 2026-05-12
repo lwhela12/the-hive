@@ -523,16 +523,29 @@ export default function HiveScreen() {
   useEffect(() => { fetchMyActionItems(); }, [fetchMyActionItems]);
 
   const [showConfetti, setShowConfetti] = useState(false);
-  const [donationDismissed, setDonationDismissed] = useState(false);
+  const [showGoodJob, setShowGoodJob] = useState(false);
+  const goodJobOpacity = useRef(new Animated.Value(0)).current;
+  const [completedTodoIds, setCompletedTodoIds] = useState<Set<string>>(new Set());
+
+  const triggerCompletion = useCallback(() => {
+    setShowConfetti(true);
+    setShowGoodJob(true);
+    goodJobOpacity.setValue(0);
+    Animated.sequence([
+      Animated.timing(goodJobOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.delay(1400),
+      Animated.timing(goodJobOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+    ]).start(() => setShowGoodJob(false));
+  }, [goodJobOpacity]);
 
   const completeActionItem = useCallback(async (id: string) => {
-    setShowConfetti(true);
+    triggerCompletion();
+    setCompletedTodoIds(prev => new Set([...prev, `action-${id}`]));
     await supabase
       .from('action_items')
       .update({ completed: true, completed_at: new Date().toISOString() })
       .eq('id', id);
-    setHomeActionItems(prev => prev.filter(a => a.id !== id));
-  }, []);
+  }, [triggerCompletion]);
 
   // Activity feed
   const { items: activityItems, loading: activityLoading, refetch: refetchActivity } = useActivityFeed(communityId ?? undefined);
@@ -916,8 +929,7 @@ export default function HiveScreen() {
       const start = getEventStartDate(nextMeeting);
       const msUntil = start.getTime() - Date.now();
       if (msUntil > 0 && msUntil < 7 * 24 * 60 * 60 * 1000) {
-        if (donationDismissed) return [];
-        return [{ id: 'donation-reminder', emoji: '🍯', title: 'Bring your monthly donation', detail: `Meeting · ${formatDateShort(nextMeeting.event_date)}`, onComplete: () => { setShowConfetti(true); setDonationDismissed(true); } }];
+        return [{ id: 'donation-reminder', emoji: '🍯', title: 'Bring your monthly donation', detail: `Meeting · ${formatDateShort(nextMeeting.event_date)}`, onComplete: () => { triggerCompletion(); setCompletedTodoIds(prev => new Set([...prev, 'donation-reminder'])); } }];
       }
       return [];
     })(),
@@ -1314,6 +1326,22 @@ export default function HiveScreen() {
               position: 'relative',
             }}>
               <ConfettiBurst visible={showConfetti} onDone={() => setShowConfetti(false)} />
+              {showGoodJob && (
+                <Animated.View style={{
+                  position: 'absolute',
+                  top: 0, left: 0, right: 0, bottom: 0,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 10,
+                  opacity: goodJobOpacity,
+                  pointerEvents: 'none',
+                }}>
+                  <View style={{ backgroundColor: '#bd9348', borderRadius: 20, paddingHorizontal: 20, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 6, shadowColor: '#bd9348', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 }}>
+                    <Text style={{ fontSize: 18 }}>🎉</Text>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: 'white' }}>Good job!</Text>
+                  </View>
+                </Animated.View>
+              )}
               <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10 }} />
               {homeActionLoading ? (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -1329,18 +1357,24 @@ export default function HiveScreen() {
                 </View>
               ) : (
                 <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                  {homeTodos.map((todo, i) => (
+                  {[
+                    ...homeTodos.filter(t => !completedTodoIds.has(t.id)),
+                    ...homeTodos.filter(t => completedTodoIds.has(t.id)),
+                  ].map((todo, i, all) => {
+                    const isDone = completedTodoIds.has(todo.id);
+                    return (
                     <Pressable
                       key={todo.id}
-                      onPress={todo.onPress ?? todo.onComplete}
+                      onPress={isDone ? undefined : (todo.onPress ?? todo.onComplete)}
                       style={({ pressed }) => ({
                         flexDirection: 'row',
                         alignItems: 'center',
                         padding: 14,
-                        borderBottomWidth: i < homeTodos.length - 1 ? 1 : 0,
+                        borderBottomWidth: i < all.length - 1 ? 1 : 0,
                         borderBottomColor: 'rgba(222,193,129,0.28)',
-                        backgroundColor: pressed && (todo.onPress || todo.onComplete) ? '#fbf4e3' : '#fffdf5',
+                        backgroundColor: pressed && !isDone && (todo.onPress || todo.onComplete) ? '#fbf4e3' : '#fffdf5',
                         gap: 10,
+                        opacity: isDone ? 0.45 : 1,
                       })}
                     >
                       <View style={{
@@ -1348,26 +1382,31 @@ export default function HiveScreen() {
                         height: 22,
                         borderRadius: 11,
                         borderWidth: 2,
-                        borderColor: 'rgba(189,147,72,0.48)',
-                        backgroundColor: 'rgba(255,255,255,0.62)',
+                        borderColor: isDone ? '#bd9348' : 'rgba(189,147,72,0.48)',
+                        backgroundColor: isDone ? '#bd9348' : 'rgba(255,255,255,0.62)',
                         flexShrink: 0,
-                      }} />
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        {isDone && <Text style={{ color: 'white', fontSize: 12, lineHeight: 14 }}>✓</Text>}
+                      </View>
                       <Text style={{ fontSize: 18, flexShrink: 0 }}>{todo.emoji}</Text>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', lineHeight: 18 }} numberOfLines={2}>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: isDone ? '#9a8060' : '#2d2d2d', lineHeight: 18, textDecorationLine: isDone ? 'line-through' : 'none' }} numberOfLines={2}>
                           {todo.title}
                         </Text>
                         {todo.detail ? (
                           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 2 }}>
-                            {todo.detail}
+                            {isDone ? 'Done' : todo.detail}
                           </Text>
                         ) : null}
                       </View>
-                      {todo.cta ? (
+                      {!isDone && todo.cta ? (
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', flexShrink: 0 }}>{todo.cta}</Text>
                       ) : null}
                     </Pressable>
-                  ))}
+                    );
+                  })}
                 </ScrollView>
               )}
             </View>
