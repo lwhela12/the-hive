@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, useWindowDimensions, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -467,6 +467,7 @@ export default function ProfileScreen() {
         />
       )}
 
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <ScrollView
         className="flex-1"
         contentContainerClassName="p-4"
@@ -1093,6 +1094,7 @@ export default function ProfileScreen() {
           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-600">Sign Out</Text>
         </Pressable>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Grant Wish Modal */}
       {wishToGrant && (

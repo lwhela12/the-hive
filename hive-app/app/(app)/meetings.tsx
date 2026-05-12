@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, Pressable, Alert, Linking, useWindowDimensions, Platform, Modal, TextInput } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Pressable, Alert, Linking, useWindowDimensions, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -652,6 +652,7 @@ export default function MeetingsScreen() {
         onRequestClose={() => setEditingEvent(null)}
       >
         <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
             <Pressable onPress={() => setEditingEvent(null)}>
               <Text className="text-gray-500 text-base">Cancel</Text>
@@ -726,6 +727,7 @@ export default function MeetingsScreen() {
               </View>
             )}
           </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
 

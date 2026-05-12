@@ -106,7 +106,7 @@ export function MemberPicker({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 py-3 bg-white border-b border-cream">

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowDimensions, TextInput, Alert } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowDimensions, TextInput, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -1258,16 +1258,16 @@ export default function MembersScreen() {
   const { width } = useWindowDimensions();
   const [members, setMembers] = useState<MemberData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<MemberData | null>(null);
   const [search, setSearch] = useState('');
   const currentUserId = profile?.id ?? session?.user?.id ?? null;
 
-  useEffect(() => {
+  const loadMembers = useCallback(async (isRefresh = false) => {
     if (!communityId) return;
-    (async () => {
-      setLoading(true);
-      setError(null);
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    setError(null);
 
       const { data: memberships, error: membErr } = await supabase
         .from('community_memberships')
@@ -1277,14 +1277,14 @@ export default function MembersScreen() {
       if (membErr || !memberships) {
         console.warn('[Members] memberships load failed', membErr);
         setError('Could not load members.');
-        setLoading(false);
+        if (isRefresh) setRefreshing(false); else setLoading(false);
         return;
       }
 
       const userIds = memberships.map((m: any) => m.user_id).filter(Boolean);
       if (userIds.length === 0) {
         setMembers([]);
-        setLoading(false);
+        if (isRefresh) setRefreshing(false); else setLoading(false);
         return;
       }
 
@@ -1296,7 +1296,7 @@ export default function MembersScreen() {
       if (profilesErr || !profilesData) {
         console.warn('[Members] profiles load failed', profilesErr);
         setError('Could not load members.');
-        setLoading(false);
+        if (isRefresh) setRefreshing(false); else setLoading(false);
         return;
       }
 
@@ -1390,9 +1390,12 @@ export default function MembersScreen() {
       });
 
       setMembers(memberList);
-      setLoading(false);
-    })();
+      if (isRefresh) setRefreshing(false); else setLoading(false);
   }, [communityId, currentUserId]);
+
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
 
   const numCols = width >= 1100 ? 3 : width >= 720 ? 2 : 1;
   const avatarSize = width >= 768 ? 74 : 64;
@@ -1450,7 +1453,10 @@ export default function MembersScreen() {
         </View>
       )}
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 140 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: 140 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadMembers(true)} tintColor="#bd9348" />}
+      >
         {loading ? (
           <View style={{ alignItems: 'center', paddingTop: 80 }}>
             <ActivityIndicator size="large" color="#bd9348" />

@@ -1523,8 +1523,8 @@ export default function HiveScreen() {
       </ScrollView>
 
       {/* Add/Edit/View Event Modal */}
-      <Modal visible={showEventModal} animationType="slide" transparent>
-        <View className="flex-1 bg-black/50 justify-end">
+      <Modal visible={showEventModal} animationType="slide" transparent onRequestClose={() => setShowEventModal(false)}>
+        <Pressable className="flex-1 bg-black/50 justify-end" onPress={() => setShowEventModal(false)}>
           <View className="bg-white rounded-t-3xl p-6">
             {(() => {
               const isCreator = !editingEvent || editingEvent.created_by === profile?.id;
@@ -1672,7 +1672,7 @@ export default function HiveScreen() {
               );
             })()}
           </View>
-        </View>
+        </Pressable>
       </Modal>
 
       <AddWishModal

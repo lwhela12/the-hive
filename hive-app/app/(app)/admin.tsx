@@ -856,7 +856,7 @@ export default function AdminScreen() {
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>Surveys</Text>
             <Pressable
               onPress={() => setShowSurveyModal(true)}
-              style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }}
+              style={({ pressed }: { pressed: boolean }) => ({ backgroundColor: pressed ? '#f5e0b0' : '#fdf3dc', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 })}
             >
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Create</Text>
             </Pressable>
@@ -885,10 +885,10 @@ export default function AdminScreen() {
                   </View>
                   <Pressable
                     onPress={() => toggleSurveyActive(survey)}
-                    style={{
-                      backgroundColor: survey.is_active ? '#fdf3dc' : '#f3f4f6',
+                    style={({ pressed }: { pressed: boolean }) => ({
+                      backgroundColor: pressed ? (survey.is_active ? '#f5e0b0' : '#e5e7eb') : (survey.is_active ? '#fdf3dc' : '#f3f4f6'),
                       paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10,
-                    }}
+                    })}
                   >
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: survey.is_active ? '#bd9348' : '#9ca3af' }}>
                       {survey.is_active ? 'Active' : 'Inactive'}

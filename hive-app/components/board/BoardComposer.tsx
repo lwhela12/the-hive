@@ -112,7 +112,7 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
   const isValid = title.trim().length > 0 && content.trim().length > 0;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
