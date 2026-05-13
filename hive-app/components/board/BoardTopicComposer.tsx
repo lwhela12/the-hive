@@ -10,38 +10,60 @@ interface BoardTopicComposerProps {
   existingCategory?: BoardCategory | null;
 }
 
-// Common emojis for topic icons
-const EMOJI_OPTIONS = [
-  { code: '1F4AC', emoji: '💬' }, // General
-  { code: '1F4A1', emoji: '💡' }, // Ideas
-  { code: '2753', emoji: '❓' }, // Questions
-  { code: '1F389', emoji: '🎉' }, // Events
-  { code: '1F4DD', emoji: '📝' }, // Notes
-  { code: '1F3AF', emoji: '🎯' }, // Goals
-  { code: '1F4E6', emoji: '📦' }, // Projects
-  { code: '1F91D', emoji: '🤝' }, // Collaboration
-  { code: '1F4B0', emoji: '💰' }, // Money
-  { code: '1F3E0', emoji: '🏠' }, // Home
-  { code: '1F4DA', emoji: '📚' }, // Books
-  { code: '1F3A8', emoji: '🎨' }, // Art
-  { code: '1F3B5', emoji: '🎵' }, // Music
-  { code: '1F374', emoji: '🍴' }, // Food
-  { code: '1F4AA', emoji: '💪' }, // Fitness
-  { code: '2764', emoji: '❤️' }, // Love
-  { code: '1F331', emoji: '🌱' }, // Growth
-  { code: '1F680', emoji: '🚀' }, // Launch
-  { code: '1F9E0', emoji: '🧠' }, // Mind
-  { code: '1F4C5', emoji: '📅' }, // Calendar
-];
+const DEFAULT_EMOJI = '💬';
+const EMOJI_SUGGESTIONS = ['💬', '💡', '❓', '🎉', '📝', '🎯', '📦', '🤝', '💰', '🏠', '📚', '🎨', '🎵', '🍴', '💪', '❤️', '🌱', '🚀', '🧠', '📅'];
 
-function getEmojiOption(icon?: string) {
-  return EMOJI_OPTIONS.find((option) => option.code === icon) || EMOJI_OPTIONS[0];
+const LEGACY_EMOJI_MAP: Record<string, string> = {
+  '1F4E2': '📢',
+  '1F4AC': '💬',
+  '1F451': '👑',
+  '1F4DA': '📚',
+  '1F44B': '👋',
+  '1F4A1': '💡',
+  '2753': '❓',
+  '1F389': '🎉',
+  '1F4DD': '📝',
+  '1F3AF': '🎯',
+  '1F4E6': '📦',
+  '1F91D': '🤝',
+  '1F4B0': '💰',
+  '1F3E0': '🏠',
+  '1F3A8': '🎨',
+  '1F3B5': '🎵',
+  '1F374': '🍴',
+  '1F4AA': '💪',
+  '2764': '❤️',
+  '1F331': '🌱',
+  '1F680': '🚀',
+  '1F9E0': '🧠',
+  '1F4C5': '📅',
+};
+
+function getDisplayEmoji(icon?: string | null) {
+  if (!icon) return DEFAULT_EMOJI;
+  return LEGACY_EMOJI_MAP[icon] || icon;
+}
+
+function getFirstGrapheme(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl
+    ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+    : null;
+
+  if (segmenter) {
+    const [first] = Array.from(segmenter.segment(trimmed));
+    return first?.segment ?? '';
+  }
+
+  return Array.from(trimmed)[0] ?? '';
 }
 
 export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategory }: BoardTopicComposerProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedIcon, setSelectedIcon] = useState(EMOJI_OPTIONS[0]);
+  const [selectedEmoji, setSelectedEmoji] = useState(DEFAULT_EMOJI);
   const [submitting, setSubmitting] = useState(false);
   const isEditMode = !!existingCategory;
 
@@ -51,11 +73,11 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
     if (existingCategory) {
       setName(existingCategory.name);
       setDescription(existingCategory.description || '');
-      setSelectedIcon(getEmojiOption(existingCategory.icon));
+      setSelectedEmoji(getDisplayEmoji(existingCategory.icon));
     } else {
       setName('');
       setDescription('');
-      setSelectedIcon(EMOJI_OPTIONS[0]);
+      setSelectedEmoji(DEFAULT_EMOJI);
     }
   }, [visible, existingCategory]);
 
@@ -64,11 +86,11 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
 
     setSubmitting(true);
     try {
-      const success = await onSubmit(name.trim(), description.trim(), selectedIcon.code);
+      const success = await onSubmit(name.trim(), description.trim(), selectedEmoji);
       if (success) {
         setName('');
         setDescription('');
-        setSelectedIcon(EMOJI_OPTIONS[0]);
+        setSelectedEmoji(DEFAULT_EMOJI);
         onClose();
       }
     } finally {
@@ -79,8 +101,13 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
   const handleClose = () => {
     setName('');
     setDescription('');
-    setSelectedIcon(EMOJI_OPTIONS[0]);
+    setSelectedEmoji(DEFAULT_EMOJI);
     onClose();
+  };
+
+  const handleEmojiChange = (value: string) => {
+    const nextEmoji = getFirstGrapheme(value);
+    if (nextEmoji) setSelectedEmoji(nextEmoji);
   };
 
   const isValid = name.trim().length > 0;
@@ -120,7 +147,7 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
             {/* Preview */}
             <View className="items-center mb-6">
               <View className="flex-row items-center px-4 py-2 bg-gold rounded-full">
-                <Text className="mr-1 text-lg">{selectedIcon.emoji}</Text>
+                <Text className="mr-1 text-lg">{selectedEmoji}</Text>
                 <Text
                   style={{ fontFamily: 'Lato_700Bold' }}
                   className="text-white"
@@ -136,19 +163,40 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
             {/* Icon picker */}
             <View className="mb-4">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
-                Choose an Icon
+                Choose an Emoji
               </Text>
-              <View className="bg-white rounded-xl p-3">
-                <View className="flex-row flex-wrap">
-                  {EMOJI_OPTIONS.map((option) => (
+              <View className="bg-white rounded-xl p-4">
+                <View className="flex-row items-center">
+                  <TextInput
+                    value={selectedEmoji}
+                    onChangeText={handleEmojiChange}
+                    placeholder="🙂"
+                    placeholderTextColor="#9ca3af"
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    className="w-16 h-16 bg-cream rounded-2xl text-center text-4xl"
+                    style={{ fontFamily: Platform.OS === 'ios' ? undefined : 'Lato_400Regular' }}
+                  />
+                  <View className="flex-1 ml-4">
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
+                      Tap the square and use your emoji keyboard
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mt-1">
+                      Any standard phone emoji works here.
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="flex-row flex-wrap mt-3">
+                  {EMOJI_SUGGESTIONS.map((emoji) => (
                     <Pressable
-                      key={option.code}
-                      onPress={() => setSelectedIcon(option)}
+                      key={emoji}
+                      onPress={() => setSelectedEmoji(emoji)}
                       className={`w-10 h-10 items-center justify-center rounded-lg m-1 ${
-                        selectedIcon.code === option.code ? 'bg-gold/20' : 'bg-cream'
+                        selectedEmoji === emoji ? 'bg-gold/20' : 'bg-cream'
                       }`}
                     >
-                      <Text className="text-xl">{option.emoji}</Text>
+                      <Text className="text-xl">{emoji}</Text>
                     </Pressable>
                   ))}
                 </View>
