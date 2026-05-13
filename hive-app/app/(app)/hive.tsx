@@ -609,15 +609,21 @@ export default function HiveScreen() {
     });
   }, [activityReadIdsKey]);
 
+  const hasUnreadActivity = activityItems.some(item => item.timestamp > sessionReadAt && !readItemIds.has(item.id));
+
   const markAllActivityRead = useCallback(() => {
     const now = new Date().toISOString();
     setSessionReadAt(now);
     setReadItemIds(new Set());
+    if (hasUnreadActivity || activityItems.length > 0) {
+      setHadUnreadActivityThisSession(true);
+      triggerActivityCaughtUp();
+    }
     if (typeof window !== 'undefined') {
       if (activityReadKey) window.localStorage.setItem(activityReadKey, now);
       if (activityReadIdsKey) window.localStorage.removeItem(activityReadIdsKey);
     }
-  }, [activityReadKey, activityReadIdsKey]);
+  }, [activityItems.length, activityReadKey, activityReadIdsKey, hasUnreadActivity, triggerActivityCaughtUp]);
 
   const handleActivityPress = useCallback((item: import('../../lib/hooks/useActivityFeed').ActivityItem) => {
     markItemRead(item.id);
@@ -637,17 +643,20 @@ export default function HiveScreen() {
     // events and wishes: just mark read (content is already on this screen)
   }, [communityId, markItemRead, router]);
 
-  const hasUnreadActivity = activityItems.some(item => item.timestamp > sessionReadAt && !readItemIds.has(item.id));
   const showCaughtUpCelebration = hadUnreadActivityThisSession && activityItems.length > 0 && !hasUnreadActivity;
 
   const handleActivityRefresh = useCallback(async () => {
     activityRefreshSpin.setValue(0);
     Animated.timing(activityRefreshSpin, { toValue: 1, duration: 700, useNativeDriver: true }).start();
     await refetchActivity();
-    if (activityItems.length > 0 && !hasUnreadActivity) {
+    if (activityItems.length > 0) {
+      if (hasUnreadActivity) {
+        markAllActivityRead();
+        return;
+      }
       triggerActivityCaughtUp();
     }
-  }, [activityItems.length, activityRefreshSpin, hasUnreadActivity, refetchActivity, triggerActivityCaughtUp]);
+  }, [activityItems.length, activityRefreshSpin, hasUnreadActivity, markAllActivityRead, refetchActivity, triggerActivityCaughtUp]);
 
   useEffect(() => {
     if (!activityLoading && hasUnreadActivity) {
@@ -663,16 +672,20 @@ export default function HiveScreen() {
     previousHadUnreadActivity.current = hasUnreadActivity;
   }, [activityItems.length, activityLoading, hasUnreadActivity, triggerActivityCaughtUp]);
 
-  // After 3 seconds, silently persist timestamp for next visit
+  // After 3 seconds, treat visible activity as read and celebrate the cleared stack.
   const hasAutoMarkedRef = useRef(false);
   useEffect(() => {
     if (!activityReadKey || typeof window === 'undefined' || hasAutoMarkedRef.current) return;
     const timer = setTimeout(() => {
-      window.localStorage.setItem(activityReadKey, new Date().toISOString());
+      if (activityItems.length > 0 && hasUnreadActivity) {
+        markAllActivityRead();
+      } else {
+        window.localStorage.setItem(activityReadKey, new Date().toISOString());
+      }
       hasAutoMarkedRef.current = true;
     }, 3000);
     return () => clearTimeout(timer);
-  }, [activityReadKey]);
+  }, [activityItems.length, activityReadKey, hasUnreadActivity, markAllActivityRead]);
 
   // Member carousel state
   const [carouselMembers, setCarouselMembers] = useState<{ id: string; name: string; avatar_url?: string | null; role: string }[]>([]);
@@ -720,6 +733,13 @@ export default function HiveScreen() {
     setRefreshing(true);
     try {
       await Promise.all([refetch(), refetchActivity(), fetchTodayAnswers(), fetchRecentAnswers(), fetchMyActionItems()]);
+      if (activityItems.length > 0) {
+        if (hasUnreadActivity) {
+          markAllActivityRead();
+        } else {
+          triggerActivityCaughtUp();
+        }
+      }
     } finally {
       setRefreshing(false);
     }
