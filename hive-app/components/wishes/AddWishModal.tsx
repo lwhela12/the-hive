@@ -11,9 +11,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import type { Wish } from '../../types';
+
+const WISH_DRAFT_KEY = 'add-wish-draft';
 
 interface AddWishModalProps {
   visible: boolean;
@@ -42,6 +45,12 @@ export function AddWishModal({
   useEffect(() => {
     if (visible && existingWish) {
       setWishText(existingWish.description);
+      setError('');
+    } else if (visible && !existingWish) {
+      // Restore new-wish draft
+      AsyncStorage.getItem(WISH_DRAFT_KEY).then(raw => {
+        if (raw) setWishText(raw);
+      });
       setError('');
     } else if (!visible) {
       setWishText('');
@@ -82,6 +91,7 @@ export function AddWishModal({
         if (insertError) throw insertError;
       }
 
+      if (!existingWish) AsyncStorage.removeItem(WISH_DRAFT_KEY).catch(() => {});
       onSave();
       onClose();
     } catch (err) {
@@ -89,6 +99,11 @@ export function AddWishModal({
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleWishTextChange = (text: string) => {
+    setWishText(text);
+    if (!existingWish) AsyncStorage.setItem(WISH_DRAFT_KEY, text).catch(() => {});
   };
 
   const handleRefine = () => {
@@ -147,7 +162,7 @@ export function AddWishModal({
                 </Text>
                 <TextInput
                   value={wishText}
-                  onChangeText={setWishText}
+                  onChangeText={handleWishTextChange}
                   placeholder="I want help learning to cook healthier meals..."
                   placeholderTextColor="#9ca3af"
                   multiline
