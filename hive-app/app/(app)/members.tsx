@@ -1449,6 +1449,7 @@ function MemberDetailModal({
 
 export default function MembersScreen() {
   const { communityId, profile, session } = useAuth();
+  const router = useRouter();
   const { memberId } = useLocalSearchParams<{ memberId?: string }>();
   const { width } = useWindowDimensions();
   const [members, setMembers] = useState<MemberData[]>([]);
