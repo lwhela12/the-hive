@@ -572,6 +572,22 @@ export default function HiveScreen() {
 
   const [readItemIds, setReadItemIds] = useState<Set<string>>(new Set());
   const [hadUnreadActivityThisSession, setHadUnreadActivityThisSession] = useState(false);
+  const [showActivityConfetti, setShowActivityConfetti] = useState(false);
+  const [showActivityCaughtUp, setShowActivityCaughtUp] = useState(false);
+  const activityCaughtUpOpacity = useRef(new Animated.Value(0)).current;
+  const activityRefreshSpin = useRef(new Animated.Value(0)).current;
+  const previousHadUnreadActivity = useRef(false);
+
+  const triggerActivityCaughtUp = useCallback(() => {
+    setShowActivityConfetti(true);
+    setShowActivityCaughtUp(true);
+    activityCaughtUpOpacity.setValue(0);
+    Animated.sequence([
+      Animated.timing(activityCaughtUpOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.delay(1500),
+      Animated.timing(activityCaughtUpOpacity, { toValue: 0, duration: 360, useNativeDriver: true }),
+    ]).start(() => setShowActivityCaughtUp(false));
+  }, [activityCaughtUpOpacity]);
 
   // Load per-item read IDs from localStorage once communityId is known
   useEffect(() => {
@@ -624,11 +640,28 @@ export default function HiveScreen() {
   const hasUnreadActivity = activityItems.some(item => item.timestamp > sessionReadAt && !readItemIds.has(item.id));
   const showCaughtUpCelebration = hadUnreadActivityThisSession && activityItems.length > 0 && !hasUnreadActivity;
 
+  const handleActivityRefresh = useCallback(async () => {
+    activityRefreshSpin.setValue(0);
+    Animated.timing(activityRefreshSpin, { toValue: 1, duration: 700, useNativeDriver: true }).start();
+    await refetchActivity();
+    if (activityItems.length > 0 && !hasUnreadActivity) {
+      triggerActivityCaughtUp();
+    }
+  }, [activityItems.length, activityRefreshSpin, hasUnreadActivity, refetchActivity, triggerActivityCaughtUp]);
+
   useEffect(() => {
     if (!activityLoading && hasUnreadActivity) {
       setHadUnreadActivityThisSession(true);
     }
   }, [activityLoading, hasUnreadActivity]);
+
+  useEffect(() => {
+    if (activityLoading || activityItems.length === 0) return;
+    if (previousHadUnreadActivity.current && !hasUnreadActivity) {
+      triggerActivityCaughtUp();
+    }
+    previousHadUnreadActivity.current = hasUnreadActivity;
+  }, [activityItems.length, activityLoading, hasUnreadActivity, triggerActivityCaughtUp]);
 
   // After 3 seconds, silently persist timestamp for next visit
   const hasAutoMarkedRef = useRef(false);
@@ -697,6 +730,10 @@ export default function HiveScreen() {
   }, []);
 
   const homeIsUpdating = refreshing || isLoading || activityLoading || homeActionLoading;
+  const activityRefreshRotation = activityRefreshSpin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   // Helper to format ISO date to MM-DD-YYYY for display in input
   const formatDateForInput = (isoDate: string) => {
@@ -1256,17 +1293,39 @@ export default function HiveScreen() {
                   Activity
                 </Text>
               </View>
-              {hasUnreadActivity && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4 }}>
+                <Pressable
+                  onPress={handleActivityRefresh}
+                  disabled={activityLoading}
+                  accessibilityLabel="Refresh activity"
+                  style={({ pressed }) => ({
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+                    borderWidth: 1,
+                    borderColor: 'rgba(222,193,129,0.7)',
+                    opacity: activityLoading ? 0.55 : 1,
+                  })}
+                >
+                  <Animated.Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#bd9348', transform: [{ rotate: activityRefreshRotation }] }}>
+                    ↻
+                  </Animated.Text>
+                </Pressable>
+                {hasUnreadActivity && (
                 <Pressable
                   onPress={markAllActivityRead}
                   className="active:opacity-60"
-                  style={{ paddingHorizontal: 4, paddingBottom: 4 }}
+                  style={{ paddingHorizontal: 4 }}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
                     Mark all read
                   </Text>
                 </Pressable>
-              )}
+                )}
+              </View>
             </View>
             <View style={{
               backgroundColor: '#fffdf5',
@@ -1281,7 +1340,39 @@ export default function HiveScreen() {
               elevation: 3,
               overflow: 'hidden',
               height: 280,
+              position: 'relative',
             }}>
+              <ConfettiBurst visible={showActivityConfetti} onDone={() => setShowActivityConfetti(false)} />
+              {showActivityCaughtUp && (
+                <Animated.View style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 12,
+                  opacity: activityCaughtUpOpacity,
+                  pointerEvents: 'none',
+                }}>
+                  <View style={{
+                    backgroundColor: '#bd9348',
+                    borderRadius: 18,
+                    paddingHorizontal: 18,
+                    paddingVertical: 11,
+                    alignItems: 'center',
+                    shadowColor: '#bd9348',
+                    shadowOpacity: 0.36,
+                    shadowRadius: 12,
+                    shadowOffset: { width: 0, height: 4 },
+                    elevation: 7,
+                  }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>You're all caught up!</Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.82)', marginTop: 2 }}>Nothing new needs you right now.</Text>
+                  </View>
+                </Animated.View>
+              )}
               {/* Inner top highlight — liquid glass gloss */}
               <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10, marginTop: 0 }} />
               {activityLoading ? (
@@ -1295,7 +1386,11 @@ export default function HiveScreen() {
                   </Text>
                 </View>
               ) : (
-                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                <ScrollView
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                  refreshControl={<RefreshControl refreshing={activityLoading} onRefresh={handleActivityRefresh} tintColor="#bd9348" />}
+                >
                   {activityItems.map((item, i) => {
                     const isUnread = item.timestamp > sessionReadAt && !readItemIds.has(item.id);
                     const canNavigate = !!item.navigatesTo;
@@ -1347,7 +1442,7 @@ export default function HiveScreen() {
                   })}
                   {/* All caught up celebration */}
                   {showCaughtUpCelebration && (
-                    <View style={{ paddingVertical: 16, paddingHorizontal: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.2)' }}>
+                    <View style={{ paddingVertical: 16, paddingHorizontal: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.2)', backgroundColor: '#fff8e8' }}>
                       <Text style={{ fontSize: 22, marginBottom: 4 }}>🎉</Text>
                       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>You're all caught up!</Text>
                       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 2 }}>Nothing new since your last visit.</Text>
