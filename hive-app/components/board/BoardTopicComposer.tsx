@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { BoardCategory } from '../../types';
+import type { BoardCategory, Profile } from '../../types';
+
+export type BoardTopicAudience = 'community' | 'members';
 
 interface BoardTopicComposerProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (name: string, description: string, icon: string) => Promise<boolean>;
+  onSubmit: (name: string, description: string, icon: string, audience: BoardTopicAudience, taggedMemberIds: string[]) => Promise<boolean>;
   existingCategory?: BoardCategory | null;
+  members?: Pick<Profile, 'id' | 'name' | 'avatar_url'>[];
 }
 
 const DEFAULT_EMOJI = '💬';
@@ -60,10 +63,12 @@ function getFirstGrapheme(value: string) {
   return Array.from(trimmed)[0] ?? '';
 }
 
-export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategory }: BoardTopicComposerProps) {
+export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategory, members = [] }: BoardTopicComposerProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState(DEFAULT_EMOJI);
+  const [audience, setAudience] = useState<BoardTopicAudience>('community');
+  const [taggedMemberIds, setTaggedMemberIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const isEditMode = !!existingCategory;
 
@@ -74,10 +79,14 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
       setName(existingCategory.name);
       setDescription(existingCategory.description || '');
       setSelectedEmoji(getDisplayEmoji(existingCategory.icon));
+      setAudience(existingCategory.audience === 'members' ? 'members' : 'community');
+      setTaggedMemberIds((existingCategory.member_tags ?? []).map((tag) => tag.tagged_user_id));
     } else {
       setName('');
       setDescription('');
       setSelectedEmoji(DEFAULT_EMOJI);
+      setAudience('community');
+      setTaggedMemberIds([]);
     }
   }, [visible, existingCategory]);
 
@@ -86,11 +95,14 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
 
     setSubmitting(true);
     try {
-      const success = await onSubmit(name.trim(), description.trim(), selectedEmoji);
+      const finalAudience = audience === 'members' && taggedMemberIds.length > 0 ? 'members' : 'community';
+      const success = await onSubmit(name.trim(), description.trim(), selectedEmoji, finalAudience, finalAudience === 'members' ? taggedMemberIds : []);
       if (success) {
         setName('');
         setDescription('');
         setSelectedEmoji(DEFAULT_EMOJI);
+        setAudience('community');
+        setTaggedMemberIds([]);
         onClose();
       }
     } finally {
@@ -102,6 +114,8 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
     setName('');
     setDescription('');
     setSelectedEmoji(DEFAULT_EMOJI);
+    setAudience('community');
+    setTaggedMemberIds([]);
     onClose();
   };
 
@@ -111,6 +125,14 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
   };
 
   const isValid = name.trim().length > 0;
+  const toggleMember = (memberId: string) => {
+    setAudience('members');
+    setTaggedMemberIds((current) => (
+      current.includes(memberId)
+        ? current.filter((id) => id !== memberId)
+        : [...current, memberId]
+    ));
+  };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
@@ -200,6 +222,57 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
                     </Pressable>
                   ))}
                 </View>
+              </View>
+            </View>
+
+            {/* Audience picker */}
+            <View className="mb-4">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
+                Tag
+              </Text>
+              <View className="bg-white rounded-xl p-3">
+                <View className="flex-row flex-wrap">
+                  <Pressable
+                    onPress={() => {
+                      setAudience('community');
+                      setTaggedMemberIds([]);
+                    }}
+                    className={`px-4 py-2.5 rounded-full mr-2 mb-2 border ${
+                      audience === 'community' ? 'bg-gold border-gold' : 'bg-cream border-gold/20'
+                    }`}
+                  >
+                    <Text
+                      style={{ fontFamily: 'Lato_700Bold' }}
+                      className={audience === 'community' ? 'text-white' : 'text-charcoal'}
+                    >
+                      Everyone
+                    </Text>
+                  </Pressable>
+
+                  {members.map((member) => {
+                    const selected = audience === 'members' && taggedMemberIds.includes(member.id);
+                    return (
+                      <Pressable
+                        key={member.id}
+                        onPress={() => toggleMember(member.id)}
+                        className={`px-4 py-2.5 rounded-full mr-2 mb-2 border ${
+                          selected ? 'bg-gold border-gold' : 'bg-cream border-gold/20'
+                        }`}
+                      >
+                        <Text
+                          style={{ fontFamily: 'Lato_700Bold' }}
+                          className={selected ? 'text-white' : 'text-charcoal'}
+                          numberOfLines={1}
+                        >
+                          {member.name.split(' ')[0]}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mt-1">
+                  Use Everyone for all-HIVE projects, or pick one or more members when the board belongs to specific people.
+                </Text>
               </View>
             </View>
 

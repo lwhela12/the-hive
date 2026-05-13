@@ -9,7 +9,7 @@ export type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardRe
 async function fetchCategories(communityId: string): Promise<BoardCategory[]> {
   const { data, error } = await supabase
     .from('board_categories')
-    .select('*')
+    .select('*, member_tags:board_category_member_tags(*, member:profiles!board_category_member_tags_tagged_user_id_fkey(id, name, avatar_url))')
     .eq('community_id', communityId)
     .or('requires_approval.eq.false,approved_at.not.is.null')
     .order('display_order', { ascending: true });

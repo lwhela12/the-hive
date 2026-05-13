@@ -334,6 +334,7 @@ export interface BoardCategory {
   description?: string;
   category_type: BoardCategoryType;
   icon?: string;
+  audience?: 'community' | 'members';
   display_order: number;
   is_system: boolean;
   requires_admin: boolean;
@@ -342,6 +343,17 @@ export interface BoardCategory {
   approved_by?: string;
   created_by?: string;
   created_at: string;
+  member_tags?: BoardCategoryMemberTag[];
+}
+
+export interface BoardCategoryMemberTag {
+  id: string;
+  community_id: string;
+  category_id: string;
+  tagged_user_id: string;
+  tagged_by?: string;
+  created_at: string;
+  member?: Profile;
 }
 
 export interface BoardPost {

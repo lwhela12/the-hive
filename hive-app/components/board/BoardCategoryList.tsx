@@ -53,7 +53,14 @@ export const BoardCategoryList = memo(function BoardCategoryList({
         const isLast = index === categories.length - 1;
         const count = postCounts?.[item.id]?.count ?? 0;
         const countLabel = `${count} ${count === 1 ? 'post' : 'posts'}`;
-        const subtitle = item.description ? `${item.description} · ${countLabel}` : countLabel;
+        const taggedNames = (item.member_tags ?? [])
+          .map((tag) => tag.member?.name?.split(' ')[0])
+          .filter(Boolean);
+        const audienceLabel = item.audience === 'members' && taggedNames.length > 0
+          ? `For ${taggedNames.join(', ')}`
+          : 'Everyone';
+        const subtitleParts = [audienceLabel, item.description, countLabel].filter(Boolean);
+        const subtitle = subtitleParts.join(' · ');
 
         return (
           <Pressable

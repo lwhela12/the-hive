@@ -10,10 +10,10 @@ import { BoardCategoryList } from '../../components/board/BoardCategoryList';
 import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
 import { BoardComposer } from '../../components/board/BoardComposer';
-import { BoardTopicComposer } from '../../components/board/BoardTopicComposer';
+import { BoardTopicComposer, type BoardTopicAudience } from '../../components/board/BoardTopicComposer';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
-import type { BoardCategory, Attachment } from '../../types';
+import type { BoardCategory, Attachment, Profile } from '../../types';
 
 export default function BoardScreen() {
   const { profile, communityId, communityRole } = useAuth();
@@ -27,6 +27,7 @@ export default function BoardScreen() {
   const [showComposer, setShowComposer] = useState(false);
   const [showTopicComposer, setShowTopicComposer] = useState(false);
   const [editingTopic, setEditingTopic] = useState<BoardCategory | null>(null);
+  const [topicMembers, setTopicMembers] = useState<Pick<Profile, 'id' | 'name' | 'avatar_url'>[]>([]);
   const boardCategoryStorageKey = communityId ? `the-hive:last-board-category:${communityId}` : null;
   const boardComposerStorageKey = communityId ? `the-hive:board-composer-open:${communityId}` : null;
   const boardPostStorageKey = communityId ? `the-hive:last-board-post:${communityId}` : null;
@@ -128,6 +129,35 @@ export default function BoardScreen() {
     }
   }, [boardPostStorageKey, selectedPostId]);
 
+  useEffect(() => {
+    if (!communityId) return;
+
+    let cancelled = false;
+    const loadTopicMembers = async () => {
+      const { data, error } = await supabase
+        .from('community_memberships')
+        .select('user:profiles!community_memberships_user_id_fkey(id, name, avatar_url)')
+        .eq('community_id', communityId);
+
+      if (error) {
+        console.warn('[Board] topic members load failed', error);
+        return;
+      }
+
+      const members = (data ?? [])
+        .map((row: any) => row.user)
+        .filter(Boolean)
+        .sort((a: Pick<Profile, 'name'>, b: Pick<Profile, 'name'>) => a.name.localeCompare(b.name));
+
+      if (!cancelled) setTopicMembers(members);
+    };
+
+    loadTopicMembers();
+    return () => {
+      cancelled = true;
+    };
+  }, [communityId]);
+
   const handleCategorySelect = useCallback((category: BoardCategory) => {
     setSelectedCategoryId(category.id);
     if (boardCategoryStorageKey && typeof window !== 'undefined') {
@@ -211,7 +241,43 @@ export default function BoardScreen() {
     return true;
   };
 
-  const handleCreateTopic = async (name: string, description: string, icon: string) => {
+  const saveTopicMemberTags = async (categoryId: string, audience: BoardTopicAudience, taggedMemberIds: string[]) => {
+    if (!profile || !communityId) return true;
+
+    const { error: deleteError } = await (supabase as any)
+      .from('board_category_member_tags')
+      .delete()
+      .eq('category_id', categoryId)
+      .eq('community_id', communityId);
+
+    if (deleteError) {
+      Alert.alert('Error', `Failed to update topic tags: ${deleteError.message}`);
+      return false;
+    }
+
+    if (audience !== 'members' || taggedMemberIds.length === 0) return true;
+
+    const uniqueMemberIds = Array.from(new Set(taggedMemberIds));
+    const rows = uniqueMemberIds.map((memberId) => ({
+      community_id: communityId,
+      category_id: categoryId,
+      tagged_user_id: memberId,
+      tagged_by: profile.id,
+    }));
+
+    const { error: insertError } = await (supabase as any)
+      .from('board_category_member_tags')
+      .insert(rows);
+
+    if (insertError) {
+      Alert.alert('Error', `Failed to save topic tags: ${insertError.message}`);
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleCreateTopic = async (name: string, description: string, icon: string, audience: BoardTopicAudience, taggedMemberIds: string[]) => {
     if (!profile || !communityId) {
       Alert.alert('Not ready', 'Your profile is still loading. Please try again in a moment.');
       return false;
@@ -228,6 +294,7 @@ export default function BoardScreen() {
         description: description || null,
         category_type: 'custom',
         icon,
+        audience,
         display_order: maxOrder + 1,
         is_system: false,
         requires_admin: false,
@@ -245,6 +312,9 @@ export default function BoardScreen() {
         return false;
       }
 
+      const tagsSaved = await saveTopicMemberTags(data.id, audience, taggedMemberIds);
+      if (!tagsSaved) return false;
+
       invalidateCategories();
       setSelectedCategoryId(data.id);
       return true;
@@ -255,7 +325,7 @@ export default function BoardScreen() {
     }
   };
 
-  const handleUpdateTopic = async (name: string, description: string, icon: string) => {
+  const handleUpdateTopic = async (name: string, description: string, icon: string, audience: BoardTopicAudience, taggedMemberIds: string[]) => {
     if (!editingTopic || !profile || !communityId || !canManageCategories) {
       Alert.alert('Not ready', 'Your profile is still loading. Please try again in a moment.');
       return false;
@@ -273,6 +343,7 @@ export default function BoardScreen() {
           name,
           description: description || null,
           icon,
+          audience,
         })
         .eq('id', editingTopic.id)
         .eq('community_id', communityId);
@@ -281,6 +352,9 @@ export default function BoardScreen() {
         Alert.alert('Error', `Failed to update topic: ${error.message}`);
         return false;
       }
+
+      const tagsSaved = await saveTopicMemberTags(editingTopic.id, audience, taggedMemberIds);
+      if (!tagsSaved) return false;
 
       invalidateCategories();
       setEditingTopic(null);
@@ -454,6 +528,7 @@ export default function BoardScreen() {
           onClose={closeTopicComposer}
           onSubmit={editingTopic ? handleUpdateTopic : handleCreateTopic}
           existingCategory={editingTopic}
+          members={topicMembers}
         />
       </SafeAreaView>
     );
@@ -568,6 +643,7 @@ export default function BoardScreen() {
         onClose={closeTopicComposer}
         onSubmit={editingTopic ? handleUpdateTopic : handleCreateTopic}
         existingCategory={editingTopic}
+        members={topicMembers}
       />
     </SafeAreaView>
   );
