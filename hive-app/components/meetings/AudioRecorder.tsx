@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, Alert, AppState, AppStateStatus, Platform } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useKeepAwake } from 'expo-keep-awake';
 import { supabase } from '../../lib/supabase';
 
 const NUM_BARS = 20;
+const RECORDING_BUCKET = 'meeting-recordings';
 
 interface AudioRecorderProps {
-  onComplete: (audioPath: string) => void;
+  onComplete: (audioPath: string) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -17,6 +19,7 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
   const [uploading, setUploading] = useState(false);
   const [audioLevels, setAudioLevels] = useState<number[]>(Array(NUM_BARS).fill(0));
   const [wentToBackground, setWentToBackground] = useState(false);
+  const [pendingUploadUri, setPendingUploadUri] = useState<string | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const meterRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -132,6 +135,115 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const getExtensionFromUri = (uri: string, fallback = 'm4a') => {
+    const cleanUri = uri.split('?')[0];
+    const match = cleanUri.match(/\.([a-zA-Z0-9]+)$/);
+    return match?.[1]?.toLowerCase() || fallback;
+  };
+
+  const getExtensionFromMimeType = (mimeType?: string | null) => {
+    if (!mimeType) return null;
+    if (mimeType.includes('webm')) return 'webm';
+    if (mimeType.includes('mpeg')) return 'mp3';
+    if (mimeType.includes('wav')) return 'wav';
+    if (mimeType.includes('mp4') || mimeType.includes('m4a')) return 'm4a';
+    return null;
+  };
+
+  const getAudioContentType = (extension: string, detectedType?: string | null) => {
+    if (detectedType) return detectedType;
+
+    switch (extension) {
+      case 'webm':
+        return 'audio/webm';
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'wav':
+        return 'audio/wav';
+      case 'caf':
+        return 'audio/x-caf';
+      case 'mp4':
+      case 'm4a':
+      default:
+        return 'audio/mp4';
+    }
+  };
+
+  const uploadWebRecording = useCallback(async (uri: string) => {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const extension = getExtensionFromMimeType(blob.type) ?? 'webm';
+    const fileName = `meeting-${Date.now()}.${extension}`;
+
+    const { data, error } = await supabase.storage
+      .from(RECORDING_BUCKET)
+      .upload(fileName, blob, {
+        contentType: getAudioContentType(extension, blob.type),
+      });
+
+    if (error) throw error;
+    return data.path;
+  }, []);
+
+  const uploadNativeRecording = useCallback(async (uri: string) => {
+    const extension = getExtensionFromUri(uri);
+    const fileName = `meeting-${Date.now()}.${extension}`;
+    const fileInfo = await FileSystem.getInfoAsync(uri);
+
+    if (!fileInfo.exists) {
+      throw new Error('Recording file is no longer available on this device.');
+    }
+
+    const { data: signedUpload, error: signedUploadError } = await supabase.storage
+      .from(RECORDING_BUCKET)
+      .createSignedUploadUrl(fileName);
+
+    if (signedUploadError) throw signedUploadError;
+
+    const uploadResult = await FileSystem.uploadAsync(signedUpload.signedUrl, uri, {
+      httpMethod: 'PUT',
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      sessionType: FileSystem.FileSystemSessionType.BACKGROUND,
+      headers: {
+        'content-type': getAudioContentType(extension),
+        'cache-control': 'max-age=3600',
+      },
+    });
+
+    if (uploadResult.status < 200 || uploadResult.status >= 300) {
+      throw new Error(`Upload failed with status ${uploadResult.status}: ${uploadResult.body}`);
+    }
+
+    return signedUpload.path;
+  }, []);
+
+  const uploadRecording = useCallback(async (uri: string) => {
+    if (Platform.OS === 'web') {
+      return uploadWebRecording(uri);
+    }
+
+    return uploadNativeRecording(uri);
+  }, [uploadNativeRecording, uploadWebRecording]);
+
+  const saveRecordingUri = useCallback(async (uri: string) => {
+    setUploading(true);
+
+    try {
+      const audioPath = await uploadRecording(uri);
+      await onComplete(audioPath);
+      setPendingUploadUri(null);
+    } catch (error) {
+      console.error('Failed to upload recording:', error);
+      Alert.alert(
+        'Save Failed',
+        'The recording is still on this device for now. Keep the app open and tap Retry Save when your connection is steady.'
+      );
+    } finally {
+      recordingRef.current = null;
+      setUploading(false);
+    }
+  }, [onComplete, uploadRecording]);
+
   const startRecording = useCallback(async () => {
     // Prevent starting if already recording or if a recording exists
     if (recordingRef.current || isRecording) {
@@ -207,28 +319,22 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
         throw new Error('No recording URI');
       }
 
-      // Upload to Supabase Storage
-      const fileName = `meeting-${Date.now()}.m4a`;
-
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      const { data, error } = await supabase.storage
-        .from('meeting-recordings')
-        .upload(fileName, blob, {
-          contentType: 'audio/m4a',
-        });
-
-      if (error) throw error;
-      onComplete(data.path);
+      setPendingUploadUri(uri);
+      await saveRecordingUri(uri);
     } catch (error) {
       console.error('Failed to stop/upload recording:', error);
-      Alert.alert('Error', 'Failed to save recording. Please try again.');
+      Alert.alert('Error', 'Failed to stop the recording. Please try again.');
     } finally {
-      recordingRef.current = null;
-      setUploading(false);
+      if (!pendingUploadUri) {
+        recordingRef.current = null;
+      }
     }
-  }, [onComplete]);
+  }, [pendingUploadUri, saveRecordingUri]);
+
+  const retrySave = useCallback(async () => {
+    if (!pendingUploadUri || uploading) return;
+    await saveRecordingUri(pendingUploadUri);
+  }, [pendingUploadUri, saveRecordingUri, uploading]);
 
   const cancelRecording = useCallback(async () => {
     const recording = recordingRef.current;
@@ -249,9 +355,15 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
       }
       recordingRef.current = null;
     }
+    if (pendingUploadUri && Platform.OS !== 'web') {
+      await FileSystem.deleteAsync(pendingUploadUri, { idempotent: true }).catch(() => {
+        // Best-effort cleanup only.
+      });
+    }
+    setPendingUploadUri(null);
     setIsRecording(false);
     onCancel();
-  }, [onCancel]);
+  }, [onCancel, pendingUploadUri]);
 
   return (
     <View className="flex-1 bg-white p-6">
@@ -264,7 +376,7 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
 
       <View className="flex-1 items-center justify-center">
         {/* Recording indicator */}
-        {!isRecording && !uploading && (
+        {!isRecording && !uploading && !pendingUploadUri && (
           <View className="w-40 h-40 rounded-full items-center justify-center bg-gray-100">
             <Text className="text-5xl">🎙️</Text>
           </View>
@@ -273,6 +385,12 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
         {uploading && (
           <View className="w-40 h-40 rounded-full items-center justify-center bg-gray-100">
             <Text className="text-gray-600">Uploading...</Text>
+          </View>
+        )}
+
+        {pendingUploadUri && !uploading && !isRecording && (
+          <View className="w-40 h-40 rounded-full items-center justify-center bg-amber-100">
+            <Text className="text-4xl">!</Text>
           </View>
         )}
 
@@ -312,6 +430,8 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
             ? 'Recording...'
             : uploading
             ? 'Saving recording...'
+            : pendingUploadUri
+            ? 'Recording saved locally. Retry upload to finish.'
             : 'Ready to record'}
         </Text>
 
@@ -347,7 +467,26 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
 
       {/* Controls */}
       <View className="mb-8">
-        {!isRecording && !uploading ? (
+        {!isRecording && !uploading && pendingUploadUri ? (
+          <View className="gap-3">
+            <Pressable
+              onPress={retrySave}
+              className="bg-honey-500 py-4 rounded-xl items-center active:bg-honey-600"
+            >
+              <Text className="text-white text-lg font-semibold">
+                Retry Save
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={cancelRecording}
+              className="bg-gray-100 py-3 rounded-xl items-center active:bg-gray-200"
+            >
+              <Text className="text-gray-700 text-base font-semibold">
+                Discard Recording
+              </Text>
+            </Pressable>
+          </View>
+        ) : !isRecording && !uploading ? (
           <Pressable
             onPress={startRecording}
             className="bg-red-500 py-4 rounded-xl items-center active:bg-red-600"
