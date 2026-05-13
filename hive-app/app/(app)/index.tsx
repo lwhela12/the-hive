@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, Platform, useWindowDimensions } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { ChatInterface } from '../../components/chat/ChatInterface';
 import { ConversationSidebar } from '../../components/chat/ConversationSidebar';
+import { AppHeader } from '../../components/navigation';
 import { useConversations } from '../../lib/hooks/useConversations';
 import type { Conversation } from '../../types';
 
@@ -25,6 +26,7 @@ export default function ChatScreen() {
   } = useConversations();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Load conversations on mount
   useEffect(() => {
@@ -86,14 +88,25 @@ export default function ChatScreen() {
 
         {/* Main chat area */}
         <View className="flex-1">
-          <View className="items-center px-4 py-3 bg-gold">
-            <Text
-              style={{ fontFamily: 'LibreBaskerville_700Bold' }}
-              className="text-base text-white"
-            >
-              Clive
-            </Text>
-          </View>
+          <AppHeader
+            title="Clive"
+            onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
+          />
+
+          {useMobileLayout && (
+            <ConversationSidebar
+              conversations={conversations}
+              projects={projects}
+              currentConversationId={currentConversation?.id || null}
+              onSelectConversation={handleSelectConversation}
+              onNewConversation={handleNewConversation}
+              onCreateProject={createProject}
+              onMoveConversation={moveConversationToProject}
+              onDelete={handleDeleteConversation}
+              isOpen={drawerOpen}
+              onClose={() => setDrawerOpen(false)}
+            />
+          )}
 
           <ChatInterface
             conversationId={currentConversation?.id || null}

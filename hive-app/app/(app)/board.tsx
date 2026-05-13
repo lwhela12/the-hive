@@ -378,8 +378,12 @@ export default function BoardScreen() {
   // Category list view
   if (!selectedCategory) {
     const addTopicButton = isAdmin ? (
-      <Pressable onPress={() => setShowTopicComposer(true)} className="px-1 active:opacity-70">
-        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">+ Topic</Text>
+      <Pressable
+        onPress={() => setShowTopicComposer(true)}
+        className="min-w-10 h-10 px-2 items-center justify-center rounded-full active:opacity-70"
+        hitSlop={8}
+      >
+        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">+ Topic</Text>
       </Pressable>
     ) : undefined;
 

@@ -1,5 +1,6 @@
 import { memo } from 'react';
-import { View, Text } from 'react-native';
+import { Pressable, View, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 interface AppHeaderProps {
   title: string;
@@ -9,11 +10,22 @@ interface AppHeaderProps {
 
 export const AppHeader = memo(function AppHeader({
   title,
+  onMenuPress,
   rightElement,
 }: AppHeaderProps) {
   return (
     <View className="flex-row items-center justify-between px-4 py-3 bg-gold">
-      <View className="w-10 h-10" />
+      {onMenuPress ? (
+        <Pressable
+          onPress={onMenuPress}
+          className="w-10 h-10 items-center justify-center rounded-full active:opacity-70"
+          hitSlop={8}
+        >
+          <Ionicons name="menu" size={26} color="white" />
+        </Pressable>
+      ) : (
+        <View className="w-10 h-10" />
+      )}
 
       {/* Title */}
       <Text
