@@ -635,7 +635,7 @@ export default function AdminScreen() {
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <AppHeader
         title="Admin"
-        onMenuPress={() => setDrawerOpen(true)}
+        onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
       />
 
       {/* Navigation Drawer */}

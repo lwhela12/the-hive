@@ -140,8 +140,8 @@ export default function AppLayout() {
     ? Platform.OS === 'ios' ? 92 : 86
     : 70;
 
-  // Hide floating Clive bar when already on the Clive chat page
-  const onClivePage = pathname === '/' || pathname === '/index';
+  // Hide the floating Clive bar on chat surfaces where another composer owns the footer.
+  const hideFloatingCliveBar = pathname === '/' || pathname === '/index' || pathname === '/messages';
 
   const handleBubbleAttach = async () => {
     const remaining = 5 - bubbleImages.length;
@@ -263,10 +263,10 @@ export default function AppLayout() {
         <Tabs.Screen
           name="meetings"
           options={{
-            title: 'Meetings',
-            tabBarAccessibilityLabel: 'Meetings',
+            title: 'Meeting Hub',
+            tabBarAccessibilityLabel: 'Meeting Hub',
             tabBarIcon: ({ focused }) => (
-              <TabIcon customIcon={<HexagonIcon size={useMobileLayout ? 22 : 26} />} label="Meetings" focused={focused} compact={useMobileLayout} />
+              <TabIcon customIcon={<HexagonIcon size={useMobileLayout ? 22 : 26} />} label="Meeting Hub" focused={focused} compact={useMobileLayout} />
             ),
           }}
         />
@@ -302,7 +302,7 @@ export default function AppLayout() {
       </Tabs>
 
       {/* Floating Clive bar — collapses to icon bubble, expands to full pill */}
-      {!onClivePage && (
+      {!hideFloatingCliveBar && (
         <View
           style={{
             position: 'absolute',
