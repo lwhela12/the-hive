@@ -30,7 +30,7 @@ type WishTab = 'open' | 'granted';
 
 type WishWithGranters = Wish & {
   user: Profile;
-  granters?: (WishGranter & { granter: Profile })[];
+  granters?: (WishGranter & { granter?: Profile })[];
 };
 
 type HomeTodo = {
@@ -501,6 +501,7 @@ export default function HiveScreen() {
   };
   const [selectedWish, setSelectedWish] = useState<WishWithGranters | null>(null);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
+  const [showAddWishModal, setShowAddWishModal] = useState(false);
   const [wishTab, setWishTab] = useState<WishTab>('open');
 
   // Event modal state
@@ -517,17 +518,18 @@ export default function HiveScreen() {
   const [homeActionLoading, setHomeActionLoading] = useState(false);
 
   const fetchMyActionItems = useCallback(async () => {
-    if (!profile?.id) return;
+    if (!profile?.id || !communityId) return;
     setHomeActionLoading(true);
     const { data } = await supabase
       .from('action_items')
       .select('*')
       .eq('assigned_to', profile.id)
+      .eq('community_id', communityId)
       .eq('completed', false)
       .order('due_date', { ascending: true, nullsFirst: false });
     setHomeActionItems((data ?? []) as ActionItem[]);
     setHomeActionLoading(false);
-  }, [profile?.id]);
+  }, [profile?.id, communityId]);
 
   useEffect(() => { fetchMyActionItems(); }, [fetchMyActionItems]);
 
@@ -535,6 +537,10 @@ export default function HiveScreen() {
   const [showGoodJob, setShowGoodJob] = useState(false);
   const goodJobOpacity = useRef(new Animated.Value(0)).current;
   const [completedTodoIds, setCompletedTodoIds] = useState<Set<string>>(new Set());
+  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [newTaskText, setNewTaskText] = useState('');
+  const [savingTask, setSavingTask] = useState(false);
+  const [taskError, setTaskError] = useState<string | null>(null);
 
   const triggerCompletion = useCallback(() => {
     setShowConfetti(true);
@@ -555,6 +561,30 @@ export default function HiveScreen() {
       .update({ completed: true, completed_at: new Date().toISOString() })
       .eq('id', id);
   }, [triggerCompletion]);
+
+  const handleAddTask = async () => {
+    if (!newTaskText.trim() || !profile?.id || !communityId) return;
+    setSavingTask(true);
+    setTaskError(null);
+    const { error } = await supabase.from('action_items').insert({
+      meeting_id: null,
+      description: newTaskText.trim(),
+      assigned_to: profile.id,
+      community_id: communityId,
+      completed: false,
+    } as any);
+    setSavingTask(false);
+
+    if (error) {
+      console.warn('Could not add task', error);
+      setTaskError('Could not add that task. Please try again.');
+      return;
+    }
+
+    setNewTaskText('');
+    setShowAddTaskModal(false);
+    fetchMyActionItems();
+  };
 
   // Activity feed
   const { items: activityItems, loading: activityLoading, refetch: refetchActivity } = useActivityFeed(communityId ?? undefined);
@@ -1451,12 +1481,18 @@ export default function HiveScreen() {
 
           {/* My To Do List */}
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 0 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
               <View style={{ backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
                   My To Do List{homeTodos.length > 0 ? ` (${homeTodos.length})` : ''}
                 </Text>
               </View>
+              <Pressable
+                onPress={() => { setNewTaskText(''); setTaskError(null); setShowAddTaskModal(true); }}
+                style={{ paddingHorizontal: 4, paddingBottom: 4 }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Add</Text>
+              </Pressable>
             </View>
             <View style={{
               backgroundColor: '#fffdf5',
@@ -1629,12 +1665,27 @@ export default function HiveScreen() {
 
         {/* Community Wishes */}
         <View style={{ marginBottom: 24 }}>
-          <View style={{ marginBottom: 10 }}>
-            <View style={{ alignSelf: 'flex-start', backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+          <View style={{ marginBottom: 10, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+            <View style={{ alignSelf: 'flex-start', flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
+              <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: useMobileLayout ? 16 : 17, color: '#2d2d2d' }}>
                 Community Wishes
               </Text>
             </View>
+            <Pressable
+              onPress={() => setShowAddWishModal(true)}
+              style={({ pressed }) => ({
+                flexShrink: 0,
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                marginBottom: useMobileLayout ? 2 : 4,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: 'rgba(222,193,129,0.6)',
+                backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Wish</Text>
+            </Pressable>
           </View>
 
           {loading.publicWishes && loading.grantedWishes ? (
@@ -1920,6 +1971,76 @@ export default function HiveScreen() {
         onSave={handleEditWishSave}
         existingWish={editingWish}
       />
+
+      <AddWishModal
+        visible={showAddWishModal}
+        onClose={() => setShowAddWishModal(false)}
+        communityId={communityId}
+        userId={profile?.id}
+        onSave={async () => { setShowAddWishModal(false); await refetch(); }}
+        onRefineWithClive={(roughWish) => {
+          setShowAddWishModal(false);
+          router.push({ pathname: '/', params: { prefill: `I want to wish for: ${roughWish}` } });
+        }}
+      />
+
+      {/* Add Task Modal */}
+      <Modal visible={showAddTaskModal} animationType="slide" transparent onRequestClose={() => setShowAddTaskModal(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'flex-end' }} onPress={() => setShowAddTaskModal(false)}>
+          <Pressable onPress={e => e.stopPropagation()} style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+            <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d', marginBottom: 4 }}>Add a Task</Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 16 }}>Add something to your personal to-do list</Text>
+            <TextInput
+              value={newTaskText}
+              onChangeText={(text) => {
+                setNewTaskText(text);
+                if (taskError) setTaskError(null);
+              }}
+              placeholder="What do you need to do?"
+              placeholderTextColor="#9ca3af"
+              multiline
+              autoFocus
+              maxLength={300}
+              style={{
+                fontFamily: 'Lato_400Regular',
+                fontSize: 15,
+                color: '#2d2d2d',
+                backgroundColor: '#fff',
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: 'rgba(189,147,72,0.35)',
+                padding: 14,
+                minHeight: 90,
+                textAlignVertical: 'top',
+                marginBottom: 16,
+              }}
+            />
+            {taskError ? (
+              <View style={{ backgroundColor: '#fef2f2', borderColor: '#fecaca', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626', textAlign: 'center' }}>
+                  {taskError}
+                </Text>
+              </View>
+            ) : null}
+            <Pressable
+              onPress={handleAddTask}
+              disabled={savingTask || !newTaskText.trim()}
+              style={({ pressed }) => ({
+                backgroundColor: newTaskText.trim() ? '#bd9348' : '#e5e7eb',
+                borderRadius: 14,
+                paddingVertical: 14,
+                alignItems: 'center',
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: newTaskText.trim() ? 'white' : '#9ca3af' }}>
+                {savingTask ? 'Saving...' : 'Add Task'}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Phone Home Screen Guide */}
       <Modal visible={showAddHomeGuide} animationType="slide" transparent onRequestClose={() => setShowAddHomeGuide(false)}>

@@ -1,4 +1,4 @@
-export type UserRole = 'member' | 'treasurer' | 'historian' | 'admin';
+export type UserRole = 'member' | 'treasurer' | 'admin';
 
 // Board types
 export type BoardCategoryType =
@@ -48,6 +48,7 @@ export interface Community {
   id: string;
   name: string;
   slug: string;
+  slide_deck_url?: string;
   created_by?: string;
   created_at: string;
 }
@@ -205,13 +206,13 @@ export interface Meeting {
 
 export interface ActionItem {
   id: string;
-  meeting_id: string;
+  meeting_id?: string | null;
   community_id: string;
   description: string;
   assigned_to?: string;
-  due_date?: string;
+  due_date?: string | null;
   completed: boolean;
-  completed_at?: string;
+  completed_at?: string | null;
   created_at: string;
   assigned_user?: Profile;
 }

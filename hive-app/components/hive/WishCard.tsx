@@ -6,7 +6,7 @@ import type { Wish, Profile, WishGranter } from '../../types';
 
 type WishWithGranters = Wish & {
   user: Profile;
-  granters?: (WishGranter & { granter: Profile })[];
+  granters?: (WishGranter & { granter?: Profile })[];
 };
 
 interface WishCardProps {
