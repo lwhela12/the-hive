@@ -730,10 +730,6 @@ export default function HiveScreen() {
   }, []);
 
   const homeIsUpdating = refreshing || isLoading || activityLoading || homeActionLoading;
-  const activityRefreshRotation = activityRefreshSpin.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
 
   // Helper to format ISO date to MM-DD-YYYY for display in input
   const formatDateForInput = (isoDate: string) => {
@@ -1294,26 +1290,6 @@ export default function HiveScreen() {
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4 }}>
-                <Pressable
-                  onPress={handleActivityRefresh}
-                  disabled={activityLoading}
-                  accessibilityLabel="Refresh activity"
-                  style={({ pressed }) => ({
-                    width: 30,
-                    height: 30,
-                    borderRadius: 15,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-                    borderWidth: 1,
-                    borderColor: 'rgba(222,193,129,0.7)',
-                    opacity: activityLoading ? 0.55 : 1,
-                  })}
-                >
-                  <Animated.Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#bd9348', transform: [{ rotate: activityRefreshRotation }] }}>
-                    ↻
-                  </Animated.Text>
-                </Pressable>
                 {hasUnreadActivity && (
                 <Pressable
                   onPress={markAllActivityRead}
