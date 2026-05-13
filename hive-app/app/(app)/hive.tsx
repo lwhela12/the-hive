@@ -351,7 +351,7 @@ export default function HiveScreen() {
   const [myAnswer, setMyAnswer] = useState('');
   const [mySubmittedAnswer, setMySubmittedAnswer] = useState('');
   const [answerError, setAnswerError] = useState<string | null>(null);
-  const [expandedAnswer, setExpandedAnswer] = useState<{ member: { id: string; name: string; avatar_url?: string | null }; answer: string } | null>(null);
+  const [expandedAnswerId, setExpandedAnswerId] = useState<string | null>(null);
   // Map of user_id → ISO timestamp for sorting by recency
   const [answerTimestamps, setAnswerTimestamps] = useState<Map<string, string>>(new Map());
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
@@ -383,7 +383,7 @@ export default function HiveScreen() {
     if (!communityId) return;
     const { data, error } = await supabase
       .from('daily_question_answers')
-      .select('user_id, answer, created_at')
+      .select('user_id, answer, created_at, updated_at')
       .eq('community_id', communityId)
       .eq('question_date', todayDateKey);
     if (error) {
@@ -395,7 +395,8 @@ export default function HiveScreen() {
       const timestamps = new Map<string, string>();
       data.forEach((row: any) => {
         map.set(row.user_id, row.answer);
-        if (row.created_at) timestamps.set(row.user_id, row.created_at);
+        const answeredAt = row.updated_at ?? row.created_at;
+        if (answeredAt) timestamps.set(row.user_id, answeredAt);
       });
       setMemberAnswers(map);
       setAnswerTimestamps(timestamps);
@@ -472,10 +473,18 @@ export default function HiveScreen() {
     if (currentAnswerPrompt.dateKey === todayDateKey) {
       setMySubmittedAnswer(text);
     }
+    const submittedAt = new Date().toISOString();
     setMemberAnswers(prev => {
       const next = new Map(prev);
       if (currentAnswerPrompt.dateKey === todayDateKey) {
         next.set(profile.id, text);
+      }
+      return next;
+    });
+    setAnswerTimestamps(prev => {
+      const next = new Map(prev);
+      if (currentAnswerPrompt.dateKey === todayDateKey) {
+        next.set(profile.id, submittedAt);
       }
       return next;
     });
@@ -978,6 +987,7 @@ export default function HiveScreen() {
 
             {/* Left: fixed question panel */}
             <View
+              onTouchStart={() => setExpandedAnswerId(null)}
               style={{
                 width: useMobileLayout ? 138 : 176,
                 padding: 14,
@@ -1015,6 +1025,7 @@ export default function HiveScreen() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              onTouchStart={() => setExpandedAnswerId(null)}
               contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 14, gap: 10 }}
             >
               {[...carouselMembers].sort((a, b) => {
@@ -1024,9 +1035,10 @@ export default function HiveScreen() {
                 const bAnswer = bIsMe ? mySubmittedAnswer : (memberAnswers.get(b.id) ?? '');
                 const aHas = !!aAnswer;
                 const bHas = !!bAnswer;
-                // Self first if answered, else answered members by recency, then unanswered
-                if (aIsMe && aHas) return -1;
-                if (bIsMe && bHas) return 1;
+                // Before answering, keep the user's entry point first. After answering,
+                // their card joins the normal recency queue with everyone else.
+                if (aIsMe && !aHas) return -1;
+                if (bIsMe && !bHas) return 1;
                 if (aHas && !bHas) return -1;
                 if (!aHas && bHas) return 1;
                 if (aHas && bHas) {
@@ -1042,14 +1054,16 @@ export default function HiveScreen() {
                 const firstName = member.name.split(' ')[0];
                 const memberAnswer = isMe ? mySubmittedAnswer : (memberAnswers.get(member.id) ?? '');
                 const hasAnswered = !!memberAnswer;
+                const isExpanded = expandedAnswerId === member.id;
                 const imgOpacity = isMe ? 1 : hasAnswered ? 1 : 0.45;
                 return (
-                  <View key={member.id} style={{ width: 74, alignItems: 'center' }}>
-                    {/* Avatar + name → edit own / navigate to member profile */}
+                  <View key={member.id} style={{ width: isExpanded ? 180 : 74, alignItems: 'center' }}>
+                    {/* Avatar → member profile */}
                     <Pressable
-                      onPress={isMe
-                        ? () => openAnswerModal({ question: todayQuestion, index: todayIndex, dateKey: todayDateKey }, mySubmittedAnswer)
-                        : () => router.push({ pathname: '/(app)/members', params: { memberId: member.id } })}
+                      onPress={() => {
+                        setExpandedAnswerId(null);
+                        router.push(isMe ? '/profile' : { pathname: '/(app)/members', params: { memberId: member.id } });
+                      }}
                       style={{ alignItems: 'center', width: '100%' }}
                     >
                       <View style={{
@@ -1078,27 +1092,70 @@ export default function HiveScreen() {
                           </View>
                         )}
                       </View>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: isMe ? '#bd9348' : hasAnswered ? '#2d2d2d' : '#b0a898', textAlign: 'center', marginBottom: 5 }} numberOfLines={1}>
-                        {isMe ? (mySubmittedAnswer ? 'Edit' : 'Answer') : firstName}
+                    </Pressable>
+
+                    {/* Name / answer affordance */}
+                    <Pressable
+                      onPress={() => {
+                        if (isMe && !hasAnswered) {
+                          openAnswerModal({ question: todayQuestion, index: todayIndex, dateKey: todayDateKey }, '');
+                          return;
+                        }
+                        if (isMe) {
+                          router.push('/profile');
+                        } else {
+                          setExpandedAnswerId(null);
+                          router.push({ pathname: '/(app)/members', params: { memberId: member.id } });
+                        }
+                      }}
+                      style={{ width: '100%' }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: isMe && !hasAnswered ? '#bd9348' : hasAnswered ? '#2d2d2d' : '#b0a898', textAlign: 'center', marginBottom: 5 }} numberOfLines={1}>
+                        {isMe && !hasAnswered ? 'Answer' : firstName}
                       </Text>
                     </Pressable>
 
                     {/* Answer bubble → expand full answer (or placeholder) */}
                     {hasAnswered ? (
                       <Pressable
-                        onPress={isMe
-                          ? () => openAnswerModal({ question: todayQuestion, index: todayIndex, dateKey: todayDateKey }, mySubmittedAnswer)
-                          : () => setExpandedAnswer({ member, answer: memberAnswer })}
-                        style={({ pressed }) => ({ backgroundColor: pressed ? '#fdf3dc' : 'white', borderRadius: 8, borderWidth: 1, borderColor: '#c49a3c', padding: 6, width: 74 })}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          setExpandedAnswerId(isExpanded ? null : member.id);
+                        }}
+                        style={({ pressed }) => ({
+                          backgroundColor: pressed ? '#fdf3dc' : 'white',
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: isExpanded ? '#bd9348' : '#c49a3c',
+                          padding: isExpanded ? 9 : 6,
+                          width: isExpanded ? 180 : 74,
+                          shadowColor: '#bd9348',
+                          shadowOpacity: isExpanded ? 0.12 : 0,
+                          shadowRadius: 8,
+                          shadowOffset: { width: 0, height: 2 },
+                          elevation: isExpanded ? 2 : 0,
+                        })}
                       >
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 9, color: '#4b5563', lineHeight: 13 }} numberOfLines={4}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: isExpanded ? 11 : 9, color: '#4b5563', lineHeight: isExpanded ? 16 : 13 }} numberOfLines={isExpanded ? undefined : 4}>
                           {memberAnswer}
                         </Text>
                       </Pressable>
                     ) : (
-                      <View style={{ borderRadius: 8, borderWidth: 1, borderColor: isMe ? 'rgba(189,147,72,0.4)' : 'rgba(222,193,129,0.25)', borderStyle: 'dashed', padding: 5, width: 74, alignItems: 'center' }}>
+                      <Pressable
+                        onPress={isMe ? () => openAnswerModal({ question: todayQuestion, index: todayIndex, dateKey: todayDateKey }, '') : undefined}
+                        style={({ pressed }) => ({
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: isMe ? 'rgba(189,147,72,0.4)' : 'rgba(222,193,129,0.25)',
+                          borderStyle: 'dashed',
+                          padding: 5,
+                          width: 74,
+                          alignItems: 'center',
+                          backgroundColor: isMe && pressed ? '#fdf3dc' : 'transparent',
+                        })}
+                      >
                         <Text style={{ fontSize: 13 }}>{isMe ? '✍️' : '💭'}</Text>
-                      </View>
+                      </Pressable>
                     )}
                   </View>
                 );
@@ -1109,7 +1166,7 @@ export default function HiveScreen() {
         </View>
 
         {/* Main Content */}
-        <View className="p-4">
+        <View className="p-4" onTouchStart={() => setExpandedAnswerId(null)}>
 
         {homeIsUpdating && (
           <View
@@ -2055,44 +2112,6 @@ export default function HiveScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Quick member peek modal from carousel */}
-      {expandedAnswer && (
-        <Modal visible animationType="slide" transparent onRequestClose={() => setExpandedAnswer(null)}>
-          <Pressable
-            onPress={() => setExpandedAnswer(null)}
-            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'flex-end' }}
-          >
-            <Pressable
-              onPress={(e) => e.stopPropagation()}
-              style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32 }}
-            >
-              <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
-                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
-              </View>
-              <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348', marginBottom: 4 }}>
-                  {expandedAnswer.member.name.split(' ')[0]}'s answer
-                </Text>
-                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 14, color: '#4b3c1e', lineHeight: 20, marginBottom: 16 }}>
-                  {todayQuestion.text}
-                </Text>
-                <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(222,193,129,0.6)', padding: 16, marginBottom: 20 }}>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, color: '#2d2d2d', lineHeight: 22 }}>
-                    {expandedAnswer.answer}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => setExpandedAnswer(null)}
-                  style={{ backgroundColor: '#faf8f3', borderRadius: 14, paddingVertical: 14 }}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
-                </Pressable>
-              </View>
-            </Pressable>
-          </Pressable>
-        </Modal>
-      )}
 
       {/* Survey Modal */}
       {activeSurvey && (
