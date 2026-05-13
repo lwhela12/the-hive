@@ -1606,9 +1606,13 @@ export default function MembersScreen() {
   useEffect(() => {
     if (memberId && members.length > 0 && !selected) {
       const target = members.find(m => m.id === memberId);
+      if (target?.id === currentUserId) {
+        router.push('/profile');
+        return;
+      }
       if (target) setSelected(target);
     }
-  }, [memberId, members, selected]);
+  }, [currentUserId, memberId, members, router, selected]);
 
   const numCols = width >= 1100 ? 3 : width >= 720 ? 2 : 1;
   const avatarSize = width >= 768 ? 74 : 64;
@@ -1713,7 +1717,13 @@ export default function MembersScreen() {
                 return (
                   <Pressable
                     key={member.id}
-                    onPress={() => setSelected(member)}
+                    onPress={() => {
+                      if (isMe) {
+                        router.push('/profile');
+                      } else {
+                        setSelected(member);
+                      }
+                    }}
                     style={{ width: cellWidth as any, paddingHorizontal: 6, marginBottom: 12 }}
                   >
                     <View style={{

@@ -531,20 +531,35 @@ export default function ProfileScreen() {
           const nextMissing = checks.find(c => !c.done);
           const isComplete = done === checks.length;
           return (
-            <View style={{ backgroundColor: isComplete ? '#f0faf0' : '#fffdf5', borderRadius: 16, borderWidth: 1, borderColor: isComplete ? 'rgba(100,180,100,0.3)' : 'rgba(222,193,129,0.5)', padding: 14, marginBottom: 16 }}>
+            <View style={{ backgroundColor: '#fffdf5', borderRadius: 18, borderWidth: 1, borderColor: isComplete ? 'rgba(115,154,136,0.4)' : 'rgba(222,193,129,0.55)', padding: 14, marginBottom: 16, shadowColor: '#bd9348', shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: isComplete ? '#3a7a3a' : '#2d2d2d' }}>
-                  {isComplete ? '🎉 Profile complete!' : `Profile ${pct}% complete`}
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: isComplete ? '#4f7f67' : '#2d2d2d' }}>
+                  {isComplete ? 'Profile is blooming' : `Profile ${pct}% complete`}
                 </Text>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: isComplete ? '#3a7a3a' : '#bd9348' }}>{pct}%</Text>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: isComplete ? '#4f7f67' : '#bd9348' }}>{pct}%</Text>
               </View>
-              {/* Track */}
-              <View style={{ height: 8, backgroundColor: isComplete ? 'rgba(100,180,100,0.15)' : 'rgba(222,193,129,0.25)', borderRadius: 4, overflow: 'hidden' }}>
-                <View style={{ height: '100%', width: `${pct}%`, backgroundColor: isComplete ? '#5ab85a' : '#bd9348', borderRadius: 4 }} />
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ fontSize: 24, width: 30, textAlign: 'center' }}>🌼</Text>
+                <View style={{ flex: 1, height: 34, justifyContent: 'center' }}>
+                  <View style={{ height: 8, backgroundColor: 'rgba(222,193,129,0.22)', borderRadius: 999, overflow: 'hidden' }}>
+                    <View style={{ height: '100%', width: `${pct}%`, backgroundColor: isComplete ? '#739a88' : '#bd9348', borderRadius: 999 }} />
+                  </View>
+                  <View style={{ position: 'absolute', left: `${pct}%`, top: 1, marginLeft: -12, width: 24, height: 24, borderRadius: 12, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.75)', alignItems: 'center', justifyContent: 'center', shadowColor: '#bd9348', shadowOpacity: 0.16, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+                    <Text style={{ fontSize: 14 }}>🐝</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 24, width: 30, textAlign: 'center' }}>🍯</Text>
               </View>
+
               {!isComplete && nextMissing && (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 6 }}>
-                  Next: {nextMissing.label} to level up ✨
+                  Next: {nextMissing.label} to help your bee reach the hive.
+                </Text>
+              )}
+              {isComplete && (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#6f8f7d', marginTop: 6 }}>
+                  Your bee made it from flower to hive.
                 </Text>
               )}
             </View>
