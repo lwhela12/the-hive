@@ -372,8 +372,8 @@ export default function MeetingsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <AppHeader
-        title="Meetings"
-        onMenuPress={() => setDrawerOpen(true)}
+        title="Meeting Hub"
+        onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
       />
 
       {/* Navigation Drawer */}
@@ -393,7 +393,7 @@ export default function MeetingsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Meeting Hub Hero */}
+        {/* Meeting Hub Actions */}
         <View
           style={{
             backgroundColor: '#2b2b2a',
@@ -402,12 +402,6 @@ export default function MeetingsScreen() {
             marginBottom: 20,
           }}
         >
-          <Text style={{ fontFamily: 'Lato_400Regular', color: '#bd9348', fontSize: 11, letterSpacing: 2, marginBottom: 4 }}>
-            THE HIVE
-          </Text>
-          <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 22, marginBottom: 2 }}>
-            Meeting Hub 🐝
-          </Text>
           {nextMeeting ? (
             <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.55)', fontSize: 13, marginBottom: 18 }}>
               Next up: {formatDateLong(nextMeeting.event_date)}{nextMeeting.event_time ? ` · ${nextMeeting.event_time}` : ''}

@@ -454,7 +454,7 @@ export default function ProfileScreen() {
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       <AppHeader
         title="Profile"
-        onMenuPress={() => setDrawerOpen(true)}
+        onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
       />
 
       {/* Navigation Drawer */}

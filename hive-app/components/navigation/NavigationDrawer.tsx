@@ -43,7 +43,7 @@ export const NavigationDrawer = memo(function NavigationDrawer({
     { icon: null, imageSource: beeIcon, label: 'HIVE Home', route: '/hive' },
     { icon: '📋', label: 'Message Board', route: '/board' },
     { icon: '💬', label: 'Chat', route: '/messages', badge: unreadDMCount },
-    { icon: null, customIcon: 'honeycomb', label: 'Meetings', route: '/meetings' },
+    { icon: null, customIcon: 'honeycomb', label: 'Meeting Hub', route: '/meetings' },
     { icon: '👤', imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined, label: 'Profile', route: '/profile', isCircular: true },
     ...(isAdmin ? [{ icon: '⚙️', label: 'Admin', route: '/admin' }] : []),
   ];
