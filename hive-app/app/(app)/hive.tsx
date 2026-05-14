@@ -623,14 +623,20 @@ export default function HiveScreen() {
   });
 
   const [readItemIds, setReadItemIds] = useState<Set<string>>(new Set());
-  const [hadUnreadActivityThisSession, setHadUnreadActivityThisSession] = useState(false);
   const [showActivityConfetti, setShowActivityConfetti] = useState(false);
   const [showActivityCaughtUp, setShowActivityCaughtUp] = useState(false);
+  const [isActivityChecking, setIsActivityChecking] = useState(false);
+  const [showActivityPullSpace, setShowActivityPullSpace] = useState(false);
+  const [activityCaughtUpDetail, setActivityCaughtUpDetail] = useState('Nothing new needs you right now.');
   const activityCaughtUpOpacity = useRef(new Animated.Value(0)).current;
   const activityRefreshSpin = useRef(new Animated.Value(0)).current;
-  const previousHadUnreadActivity = useRef(false);
+  const activityRefreshRotation = activityRefreshSpin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
-  const triggerActivityCaughtUp = useCallback(() => {
+  const triggerActivityCaughtUp = useCallback((detail = 'Nothing new needs you right now.') => {
+    setActivityCaughtUpDetail(detail);
     setShowActivityConfetti(true);
     setShowActivityCaughtUp(true);
     activityCaughtUpOpacity.setValue(0);
@@ -661,24 +667,26 @@ export default function HiveScreen() {
     });
   }, [activityReadIdsKey]);
 
-  const hasUnreadActivity = activityItems.some(item => item.timestamp > sessionReadAt && !readItemIds.has(item.id));
+  const unreadActivityCount = activityItems.reduce(
+    (count, item) => count + (item.timestamp > sessionReadAt && !readItemIds.has(item.id) ? 1 : 0),
+    0
+  );
+  const hasUnreadActivity = unreadActivityCount > 0;
 
   const markAllActivityRead = useCallback(() => {
     const now = new Date().toISOString();
     setSessionReadAt(now);
     setReadItemIds(new Set());
-    if (hasUnreadActivity || activityItems.length > 0) {
-      setHadUnreadActivityThisSession(true);
-      triggerActivityCaughtUp();
+    if (hasUnreadActivity) {
+      triggerActivityCaughtUp('Everything is read.');
     }
     if (typeof window !== 'undefined') {
       if (activityReadKey) window.localStorage.setItem(activityReadKey, now);
       if (activityReadIdsKey) window.localStorage.removeItem(activityReadIdsKey);
     }
-  }, [activityItems.length, activityReadKey, activityReadIdsKey, hasUnreadActivity, triggerActivityCaughtUp]);
+  }, [activityReadKey, activityReadIdsKey, hasUnreadActivity, triggerActivityCaughtUp]);
 
-  const handleActivityPress = useCallback((item: import('../../lib/hooks/useActivityFeed').ActivityItem) => {
-    markItemRead(item.id);
+  const navigateFromActivityItem = useCallback((item: import('../../lib/hooks/useActivityFeed').ActivityItem) => {
     if (item.navigatesTo === 'board') {
       // Pre-set the board's localStorage keys so it opens directly to the right post
       if (communityId && typeof window !== 'undefined') {
@@ -692,52 +700,67 @@ export default function HiveScreen() {
     } else if (item.navigatesTo === 'members') {
       router.push('/members');
     }
-    // events and wishes: just mark read (content is already on this screen)
-  }, [communityId, markItemRead, router]);
+  }, [communityId, router]);
 
-  const showCaughtUpCelebration = hadUnreadActivityThisSession && activityItems.length > 0 && !hasUnreadActivity;
+  const handleActivityPress = useCallback((item: import('../../lib/hooks/useActivityFeed').ActivityItem) => {
+    const wasUnread = item.timestamp > sessionReadAt && !readItemIds.has(item.id);
+    const clearsLastUnread = wasUnread && unreadActivityCount === 1;
 
-  const handleActivityRefresh = useCallback(async () => {
-    activityRefreshSpin.setValue(0);
-    Animated.timing(activityRefreshSpin, { toValue: 1, duration: 700, useNativeDriver: true }).start();
-    await refetchActivity();
-    if (activityItems.length > 0) {
-      if (hasUnreadActivity) {
-        markAllActivityRead();
+    if (wasUnread) {
+      markItemRead(item.id);
+    }
+
+    if (clearsLastUnread) {
+      triggerActivityCaughtUp('You cleared the activity stack.');
+      if (item.navigatesTo) {
+        setTimeout(() => navigateFromActivityItem(item), 700);
         return;
       }
-      triggerActivityCaughtUp();
     }
-  }, [activityItems.length, activityRefreshSpin, hasUnreadActivity, markAllActivityRead, refetchActivity, triggerActivityCaughtUp]);
 
-  useEffect(() => {
-    if (!activityLoading && hasUnreadActivity) {
-      setHadUnreadActivityThisSession(true);
+    navigateFromActivityItem(item);
+  }, [markItemRead, navigateFromActivityItem, readItemIds, sessionReadAt, triggerActivityCaughtUp, unreadActivityCount]);
+
+  const handleActivityScroll = useCallback((event: any) => {
+    const y = event.nativeEvent?.contentOffset?.y ?? 0;
+    if (y < -8 && !showActivityPullSpace) {
+      setShowActivityPullSpace(true);
+    } else if (y >= 0 && showActivityPullSpace && !isActivityChecking) {
+      setShowActivityPullSpace(false);
     }
-  }, [activityLoading, hasUnreadActivity]);
+  }, [isActivityChecking, showActivityPullSpace]);
 
-  useEffect(() => {
-    if (activityLoading || activityItems.length === 0) return;
-    if (previousHadUnreadActivity.current && !hasUnreadActivity) {
-      triggerActivityCaughtUp();
-    }
-    previousHadUnreadActivity.current = hasUnreadActivity;
-  }, [activityItems.length, activityLoading, hasUnreadActivity, triggerActivityCaughtUp]);
+  const handleActivityRefresh = useCallback(async () => {
+    const previousTop = activityItems[0];
+    const previousIds = new Set(activityItems.map(item => item.id));
+    setIsActivityChecking(true);
+    setShowActivityPullSpace(true);
+    activityRefreshSpin.setValue(0);
+    const spin = Animated.loop(
+      Animated.timing(activityRefreshSpin, { toValue: 1, duration: 700, useNativeDriver: true })
+    );
+    spin.start();
 
-  // After 3 seconds, treat visible activity as read and celebrate the cleared stack.
-  const hasAutoMarkedRef = useRef(false);
-  useEffect(() => {
-    if (!activityReadKey || typeof window === 'undefined' || hasAutoMarkedRef.current) return;
-    const timer = setTimeout(() => {
-      if (activityItems.length > 0 && hasUnreadActivity) {
-        markAllActivityRead();
-      } else {
-        window.localStorage.setItem(activityReadKey, new Date().toISOString());
+    try {
+      const refreshed = await refetchActivity();
+      const nextItems = refreshed ?? [];
+      const nextTop = nextItems[0];
+      const hasNewActivity = !!nextTop && (
+        !previousTop ||
+        nextTop.timestamp > previousTop.timestamp ||
+        (nextTop.timestamp === previousTop.timestamp && !previousIds.has(nextTop.id))
+      );
+
+      if (!hasNewActivity && (nextItems.length > 0 || activityItems.length > 0)) {
+        triggerActivityCaughtUp('Nothing new since you last checked.');
       }
-      hasAutoMarkedRef.current = true;
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [activityItems.length, activityReadKey, hasUnreadActivity, markAllActivityRead]);
+    } finally {
+      spin.stop();
+      activityRefreshSpin.stopAnimation();
+      setIsActivityChecking(false);
+      setTimeout(() => setShowActivityPullSpace(false), 420);
+    }
+  }, [activityItems, activityRefreshSpin, refetchActivity, triggerActivityCaughtUp]);
 
   // Member carousel state
   const [carouselMembers, setCarouselMembers] = useState<{ id: string; name: string; avatar_url?: string | null; role: string }[]>([]);
@@ -784,14 +807,7 @@ export default function HiveScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetch(), refetchActivity(), fetchTodayAnswers(), fetchRecentAnswers(), fetchMyActionItems()]);
-      if (activityItems.length > 0) {
-        if (hasUnreadActivity) {
-          markAllActivityRead();
-        } else {
-          triggerActivityCaughtUp();
-        }
-      }
+      await Promise.all([refetch(), handleActivityRefresh(), fetchTodayAnswers(), fetchRecentAnswers(), fetchMyActionItems()]);
     } finally {
       setRefreshing(false);
     }
@@ -1417,13 +1433,13 @@ export default function HiveScreen() {
                     elevation: 7,
                   }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>You're all caught up!</Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.82)', marginTop: 2 }}>Nothing new needs you right now.</Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.82)', marginTop: 2 }}>{activityCaughtUpDetail}</Text>
                   </View>
                 </Animated.View>
               )}
               {/* Inner top highlight — liquid glass gloss */}
               <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10, marginTop: 0 }} />
-              {activityLoading ? (
+              {activityLoading && activityItems.length === 0 ? (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                   <ActivityIndicator size="small" color="#bd9348" />
                 </View>
@@ -1437,8 +1453,20 @@ export default function HiveScreen() {
                 <ScrollView
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={false}
-                  refreshControl={<RefreshControl refreshing={activityLoading} onRefresh={handleActivityRefresh} tintColor="#bd9348" />}
+                  onScroll={handleActivityScroll}
+                  scrollEventThrottle={16}
+                  refreshControl={<RefreshControl refreshing={isActivityChecking} onRefresh={handleActivityRefresh} tintColor="#bd9348" />}
                 >
+                  {(isActivityChecking || showActivityPullSpace) && (
+                    <View style={{ height: 54, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff8e8', borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.24)' }}>
+                      <Animated.View style={{ transform: [{ rotate: activityRefreshRotation }] }}>
+                        <Text style={{ fontSize: 18, color: '#bd9348', lineHeight: 22 }}>◌</Text>
+                      </Animated.View>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginTop: 2 }}>
+                        {isActivityChecking ? 'Checking activity...' : 'Pull to check activity'}
+                      </Text>
+                    </View>
+                  )}
                   {activityItems.map((item, i) => {
                     const isUnread = item.timestamp > sessionReadAt && !readItemIds.has(item.id);
                     const canNavigate = !!item.navigatesTo;
@@ -1488,14 +1516,6 @@ export default function HiveScreen() {
                       </Pressable>
                     );
                   })}
-                  {/* All caught up celebration */}
-                  {showCaughtUpCelebration && (
-                    <View style={{ paddingVertical: 16, paddingHorizontal: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.2)', backgroundColor: '#fff8e8' }}>
-                      <Text style={{ fontSize: 22, marginBottom: 4 }}>🎉</Text>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>You're all caught up!</Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 2 }}>Nothing new since your last visit.</Text>
-                    </View>
-                  )}
                 </ScrollView>
               )}
             </View>
