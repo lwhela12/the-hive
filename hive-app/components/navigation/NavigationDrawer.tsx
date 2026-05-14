@@ -10,7 +10,6 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { HexagonIcon } from '../ui/HexagonIcon';
 import { useAuth } from '../../lib/hooks/useAuth';
 
 const beeIcon = require('../../assets/bee-gold-bg.png');
@@ -41,12 +40,12 @@ export const NavigationDrawer = memo(function NavigationDrawer({
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer' || profile?.role === 'admin' || profile?.role === 'treasurer';
   const navItems = [
     { icon: null, imageSource: cliveIcon, label: 'Clive', route: '/' },
-    { icon: null, imageSource: beeIcon, label: 'HIVE Home', route: '/hive' },
+    { icon: null, imageSource: beeIcon, label: 'Home', route: '/hive' },
     { icon: null, customIcon: 'archive', label: 'Boards', route: '/board' },
-    { icon: '💬', label: 'Chat', route: '/messages', badge: unreadDMCount },
-    { icon: null, customIcon: 'honeycomb', label: 'Meeting Hub', route: '/meetings' },
-    { icon: '👤', imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined, label: 'Profile', route: '/profile', isCircular: true },
-    ...(isAdmin ? [{ icon: '⚙️', label: 'Admin', route: '/admin' }] : []),
+    { icon: null, customIcon: 'messages', label: 'Messages', route: '/messages', badge: unreadDMCount },
+    { icon: null, customIcon: 'meetings', label: 'Meetings', route: '/meetings' },
+    { icon: null, customIcon: 'profile', label: 'Profile', route: '/profile' },
+    ...(isAdmin ? [{ icon: null, customIcon: 'admin', label: 'Admin', route: '/admin' }] : []),
   ];
   const { width: screenWidth } = useWindowDimensions();
   const drawerWidth = screenWidth * DRAWER_WIDTH_PERCENT;
@@ -123,14 +122,20 @@ export const NavigationDrawer = memo(function NavigationDrawer({
               }`}
             >
               <View className="w-10 items-center justify-center">
-                {item.customIcon === 'honeycomb' ? (
-                  <HexagonIcon size={24} />
-                ) : item.customIcon === 'archive' ? (
+                {item.customIcon === 'archive' ? (
                   <Ionicons name="archive-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
+                ) : item.customIcon === 'messages' ? (
+                  <Ionicons name="chatbubble-ellipses-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
+                ) : item.customIcon === 'meetings' ? (
+                  <Ionicons name="calendar-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
+                ) : item.customIcon === 'admin' ? (
+                  <Ionicons name="settings-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
+                ) : item.customIcon === 'profile' ? (
+                  <Ionicons name="person-circle-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
                 ) : item.imageSource ? (
                   <Image
                     source={item.imageSource}
-                    style={{ width: 40, height: 40, borderRadius: item.isCircular ? 20 : 8 }}
+                    style={{ width: 40, height: 40, borderRadius: 'isCircular' in item && item.isCircular ? 20 : 8 }}
                     contentFit="cover"
                     cachePolicy="memory-disk"
                   />

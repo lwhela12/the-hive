@@ -6,7 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
-import { HexagonIcon } from '../../components/ui/HexagonIcon';
 import { getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 
 const beeIcon = require('../../assets/bee-gold-bg.png');
@@ -32,9 +31,7 @@ function TabIcon({
   badge?: number;
   compact?: boolean;
 }) {
-  const displayLabel = compact
-    ? label.replace('HIVE Home', 'HIVE\nHome').replace('Message Board', 'Message\nBoard').replace('Meeting Hub', 'Meeting\nHub')
-    : label;
+  const displayLabel = label;
   const iconSize = compact ? 22 : 28;
   const iconRadius = isCircular ? iconSize / 2 : 6;
   const tooltipProps = Platform.OS === 'web'
@@ -158,10 +155,10 @@ export default function AppLayout() {
         <Tabs.Screen
           name="hive"
           options={{
-            title: 'HIVE Home',
-            tabBarAccessibilityLabel: 'HIVE Home',
+            title: 'Home',
+            tabBarAccessibilityLabel: 'Home',
             tabBarIcon: ({ focused }) => (
-              <TabIcon imageSource={beeIcon} label="HIVE Home" focused={focused} compact={useMobileLayout} />
+              <TabIcon imageSource={beeIcon} label="Home" focused={focused} compact={useMobileLayout} />
             ),
           }}
         />
@@ -227,20 +224,43 @@ export default function AppLayout() {
         <Tabs.Screen
           name="messages"
           options={{
-            title: 'Chat',
-            tabBarAccessibilityLabel: 'Chat',
+            title: 'Messages',
+            tabBarAccessibilityLabel: 'Messages',
             tabBarIcon: ({ focused }) => (
-              <TabIcon icon="💬" label="Chat" focused={focused} badge={totalUnreadDMs} compact={useMobileLayout} />
+              <TabIcon
+                customIcon={
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={useMobileLayout ? 22 : 26}
+                    color={focused ? '#bd9348' : '#2d2d2d80'}
+                  />
+                }
+                label="Messages"
+                focused={focused}
+                badge={totalUnreadDMs}
+                compact={useMobileLayout}
+              />
             ),
           }}
         />
         <Tabs.Screen
           name="meetings"
           options={{
-            title: 'Meeting Hub',
-            tabBarAccessibilityLabel: 'Meeting Hub',
+            title: 'Meetings',
+            tabBarAccessibilityLabel: 'Meetings',
             tabBarIcon: ({ focused }) => (
-              <TabIcon customIcon={<HexagonIcon size={useMobileLayout ? 22 : 26} />} label="Meeting Hub" focused={focused} compact={useMobileLayout} />
+              <TabIcon
+                customIcon={
+                  <Ionicons
+                    name="calendar-outline"
+                    size={useMobileLayout ? 22 : 26}
+                    color={focused ? '#bd9348' : '#2d2d2d80'}
+                  />
+                }
+                label="Meetings"
+                focused={focused}
+                compact={useMobileLayout}
+              />
             ),
           }}
         />
@@ -269,7 +289,18 @@ export default function AppLayout() {
             href: showAdminTab ? '/admin' : undefined,
             tabBarAccessibilityLabel: 'Admin',
             tabBarIcon: ({ focused }) => (
-              <TabIcon icon="⚙️" label="Admin" focused={focused} compact={useMobileLayout} />
+              <TabIcon
+                customIcon={
+                  <Ionicons
+                    name="settings-outline"
+                    size={useMobileLayout ? 22 : 26}
+                    color={focused ? '#bd9348' : '#2d2d2d80'}
+                  />
+                }
+                label="Admin"
+                focused={focused}
+                compact={useMobileLayout}
+              />
             ),
           }}
         />
