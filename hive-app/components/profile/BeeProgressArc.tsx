@@ -1,5 +1,5 @@
 import { View, Text } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path, Circle, G } from 'react-native-svg';
 
 interface BeeProgressArcProps {
   score: number;
@@ -43,6 +43,8 @@ export function BeeProgressArc({ score, size = 220 }: BeeProgressArcProps) {
   const totalSweep = 244;
   const progressEndAngle = startAngle + totalSweep * progress;
   const marker = polarToCartesian(cx, cy, radius, progressEndAngle);
+  const startMarker = polarToCartesian(cx, cy, radius, startAngle);
+  const endMarker = polarToCartesian(cx, cy, radius, startAngle + totalSweep);
 
   return (
     <View style={{ width, height }}>
@@ -61,6 +63,24 @@ export function BeeProgressArc({ score, size = 220 }: BeeProgressArcProps) {
           strokeLinecap="round"
           fill="none"
         />
+        <G transform={`translate(${startMarker.x - 14}, ${startMarker.y - 14})`}>
+          {[0, 60, 120, 180, 240, 300].map((angle) => {
+            const petal = polarToCartesian(14, 14, 7, angle);
+            return <Circle key={angle} cx={petal.x} cy={petal.y} r={4.5} fill="#fff0a8" stroke="#dec181" strokeWidth={1} />;
+          })}
+          <Circle cx={14} cy={14} r={4.5} fill="#bd9348" />
+        </G>
+        <G transform={`translate(${endMarker.x - 14}, ${endMarker.y - 15})`}>
+          <Path
+            d="M4 23C4 12.8 8.8 5 14 5s10 7.8 10 18H4Z"
+            fill="#f5d071"
+            stroke="#bd9348"
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+          />
+          <Path d="M6.8 13.2h14.4M5.2 18.2h17.6M9.2 8.7h9.6" stroke="#bd9348" strokeWidth={1.2} strokeLinecap="round" />
+          <Circle cx={14} cy={20.4} r={3.1} fill="#7a5a24" />
+        </G>
         <Circle
           cx={marker.x}
           cy={marker.y}

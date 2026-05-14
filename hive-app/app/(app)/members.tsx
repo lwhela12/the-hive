@@ -1267,6 +1267,7 @@ function MemberDetailModal({
 export default function MembersScreen() {
   const { communityId, profile, session } = useAuth();
   const { memberId } = useLocalSearchParams<{ memberId?: string }>();
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const [members, setMembers] = useState<MemberData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1409,13 +1410,37 @@ export default function MembersScreen() {
     loadMembers();
   }, [loadMembers]);
 
+  const openMemberProfile = useCallback((member: MemberData, isCurrentUser: boolean) => {
+    if (isCurrentUser) {
+      setSelected(null);
+      router.push('/profile');
+      return;
+    }
+
+    setSelected(member);
+  }, [router]);
+
   // Auto-open member detail when navigated here with a memberId param
   useEffect(() => {
     if (memberId && members.length > 0 && !selected) {
       const target = members.find(m => m.id === memberId);
-      if (target) setSelected(target);
+      if (!target) return;
+
+      if (target.id === currentUserId) {
+        router.replace('/profile');
+        return;
+      }
+
+      setSelected(target);
     }
-  }, [memberId, members, selected]);
+  }, [currentUserId, memberId, members, router, selected]);
+
+  useEffect(() => {
+    if (selected && currentUserId && selected.id === currentUserId) {
+      setSelected(null);
+      router.replace('/profile');
+    }
+  }, [currentUserId, router, selected]);
 
   const numCols = width >= 1100 ? 3 : width >= 720 ? 2 : 1;
   const avatarSize = width >= 768 ? 74 : 64;
@@ -1496,7 +1521,7 @@ export default function MembersScreen() {
                 return (
                   <Pressable
                     key={member.id}
-                    onPress={() => setSelected(member)}
+                    onPress={() => openMemberProfile(member, isMe)}
                     style={{ width: cellWidth as any, paddingHorizontal: 6, marginBottom: 12 }}
                   >
                     <View style={{
@@ -1577,7 +1602,7 @@ export default function MembersScreen() {
 
       </ScrollView>
 
-      {selected && (
+      {selected && selected.id !== currentUserId && (
         <MemberDetailModal
           member={selected}
           communityId={communityId}
