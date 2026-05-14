@@ -503,7 +503,7 @@ export default function BoardScreen() {
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
         {useMobileLayout ? (
           <AppHeader
-            title="Message Board"
+            title="Boards"
             onMenuPress={() => setDrawerOpen(true)}
             rightElement={addTopicButton}
           />
@@ -511,7 +511,7 @@ export default function BoardScreen() {
           <View className="bg-gold px-4 py-3 flex-row items-center justify-between">
             <View className="w-10 h-10" />
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-base text-white">
-              Message Board
+              Boards
             </Text>
             {canCreateCategories ? (
               <Pressable onPress={() => setShowTopicComposer(true)} className="w-10 h-10 items-center justify-center active:opacity-70">

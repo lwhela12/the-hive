@@ -1882,12 +1882,12 @@ export default function HiveScreen() {
           />
           <HexShortcut
             emoji="📋"
-            label="Message Board"
+            label="Boards"
             onPress={() => router.push('/board')}
           />
           <HexShortcut
             emoji="💬"
-            label="Chat"
+            label="Messages"
             onPress={() => router.push('/messages')}
           />
         </View>
