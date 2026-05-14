@@ -15,6 +15,7 @@ import { supabase } from '../../lib/supabase';
 import type { Profile } from '../../types';
 
 const DEFAULT_MEETING_DURATION_MINUTES = '150';
+const normalizeHiveBrandText = (text: string) => text.replace(/\bHive\b/g, 'HIVE');
 
 // Only import DateTimePicker on native platforms
 let DateTimePicker: typeof import('@react-native-community/datetimepicker').default | null = null;
@@ -137,7 +138,7 @@ export function ScheduleMeetingModal({
       const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
       await onSchedule({
-        title: title.trim(),
+        title: normalizeHiveBrandText(title).trim(),
         description: description.trim(),
         date: dateStr,
         time: timeStr,
@@ -261,7 +262,7 @@ export function ScheduleMeetingModal({
             <Input
               label="Meeting Title"
               value={title}
-              onChangeText={setTitle}
+              onChangeText={(text) => setTitle(normalizeHiveBrandText(text))}
               placeholder="e.g., Weekly Check-in"
             />
 

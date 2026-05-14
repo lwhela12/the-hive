@@ -36,6 +36,8 @@ interface ParsedSummary {
   events_created?: number;
 }
 
+const normalizeHiveBrandText = (text?: string | null) => (text ?? '').replace(/\bHive\b/g, 'HIVE');
+
 export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdated }: MeetingSummaryProps) {
   const { communityId } = useAuth();
   const [meeting, setMeeting] = useState(initialMeeting);
@@ -254,7 +256,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         </Pressable>
         <View>
           <Text className="text-xl font-bold text-hive-dark">
-            {parsedSummary.title || 'Meeting Summary'}
+            {normalizeHiveBrandText(parsedSummary.title) || 'Meeting Summary'}
           </Text>
           <Text className="text-gray-500">
             {formatDateLong(meeting.date)}

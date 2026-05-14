@@ -41,6 +41,10 @@ const getTodayIsoDate = () => {
   return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
 };
 
+const normalizeHiveBrandText = (text?: string | null) => (text ?? '').replace(/\bHive\b/g, 'HIVE');
+
+const getImportTitle = (event?: Event | null) => normalizeHiveBrandText(event?.title).trim() || 'HIVE Meeting';
+
 const parseMeetingSummaryPreview = (summary?: string): MeetingSummaryPreview => {
   if (!summary) return {};
   try {
@@ -114,7 +118,7 @@ export default function MeetingsScreen() {
   const [showMeetingPicker, setShowMeetingPicker] = useState(false);
   const [importingNotes, setImportingNotes] = useState(false);
   const [notesImportForm, setNotesImportForm] = useState({
-    title: '',
+    title: 'HIVE Meeting',
     date: toAmericanDate(getTodayIsoDate()),
     notes: '',
     linkedEventId: null as string | null,
@@ -278,6 +282,7 @@ export default function MeetingsScreen() {
   };
 
   const handleDeleteMeeting = (eventId: string, title: string) => {
+    const displayTitle = normalizeHiveBrandText(title);
     const doDelete = async () => {
       // Call edge function to delete from Google Calendar and database
       const { error } = await supabase.functions.invoke('delete-meeting', {
@@ -294,13 +299,13 @@ export default function MeetingsScreen() {
 
     // Use window.confirm on web, Alert.alert on native
     if (Platform.OS === 'web') {
-      if (window.confirm(`Are you sure you want to delete "${title}"?`)) {
+      if (window.confirm(`Are you sure you want to delete "${displayTitle}"?`)) {
         doDelete();
       }
     } else {
       Alert.alert(
         'Delete Meeting',
-        `Are you sure you want to delete "${title}"?`,
+        `Are you sure you want to delete "${displayTitle}"?`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Delete', style: 'destructive', onPress: doDelete },
@@ -341,7 +346,7 @@ export default function MeetingsScreen() {
 
   const handleEditEvent = (event: Event) => {
     setEditForm({
-      title: event.title,
+      title: normalizeHiveBrandText(event.title),
       description: event.description || '',
       location: event.location || '',
       event_date: (() => {
@@ -362,7 +367,7 @@ export default function MeetingsScreen() {
       const { error } = await supabase.functions.invoke('update-meeting', {
         body: {
           eventId: editingEvent.id,
-          title: editForm.title,
+          title: normalizeHiveBrandText(editForm.title).trim(),
           description: editForm.description || null,
           location: editForm.location || null,
           date: parseAmericanDate(editForm.event_date) ?? editForm.event_date,
@@ -387,7 +392,7 @@ export default function MeetingsScreen() {
   const openNotesImport = (event?: Event | null) => {
     const date = event?.event_date ?? getTodayIsoDate();
     setNotesImportForm({
-      title: event?.title ?? 'HIVE Meeting',
+      title: getImportTitle(event),
       date: toAmericanDate(date),
       notes: '',
       linkedEventId: event?.id ?? null,
@@ -401,7 +406,7 @@ export default function MeetingsScreen() {
     if (event) {
       setNotesImportForm((form) => ({
         ...form,
-        title: event.title,
+        title: getImportTitle(event),
         date: toAmericanDate(event.event_date),
         linkedEventId: event.id,
       }));
@@ -539,7 +544,7 @@ export default function MeetingsScreen() {
     }
 
     const notes = notesImportForm.notes.trim();
-    const title = notesImportForm.title.trim() || 'HIVE Meeting';
+    const title = normalizeHiveBrandText(notesImportForm.title).trim() || 'HIVE Meeting';
     const date = parseAmericanDate(notesImportForm.date) ?? notesImportForm.date;
     const hasFile = notesImportForm.files.length > 0;
     const hasPastedNotes = notes.length >= 40;
@@ -571,7 +576,7 @@ export default function MeetingsScreen() {
 
       setShowNotesImport(false);
       setNotesImportForm({
-        title: '',
+        title: 'HIVE Meeting',
         date: toAmericanDate(getTodayIsoDate()),
         notes: '',
         linkedEventId: null,
@@ -612,7 +617,7 @@ export default function MeetingsScreen() {
 
   const getMeetingCardTitle = (meeting: Meeting) => {
     const parsed = parseMeetingSummaryPreview(meeting.summary);
-    return parsed.title || `Meeting on ${formatDateLong(meeting.date)}`;
+    return normalizeHiveBrandText(parsed.title) || `Meeting on ${formatDateLong(meeting.date)}`;
   };
 
   const getMeetingCardStatus = (meeting: Meeting) => {
@@ -782,7 +787,7 @@ export default function MeetingsScreen() {
                 <View className="flex-row items-start justify-between">
                   <View className="flex-1">
                     <Text className="font-semibold text-gray-800">
-                      {event.title}
+                      {normalizeHiveBrandText(event.title)}
                     </Text>
                     <Text className="text-sm text-gray-500 mt-1">
                       {formatDateLong(event.event_date)}
@@ -951,7 +956,7 @@ export default function MeetingsScreen() {
                   <View className="flex-row items-start justify-between gap-3">
                     <View className="flex-1">
                       <Text className="font-semibold text-gray-800">
-                        {selectedImportMeeting ? selectedImportMeeting.title : 'Not linked to a scheduled meeting'}
+                        {selectedImportMeeting ? normalizeHiveBrandText(selectedImportMeeting.title) : 'Not linked to a scheduled meeting'}
                       </Text>
                       <Text className="text-sm text-gray-500 mt-1">
                         {selectedImportMeeting
@@ -990,7 +995,7 @@ export default function MeetingsScreen() {
                             onPress={() => selectNotesImportMeeting(event)}
                             className={`rounded-lg p-3 mb-2 active:bg-gray-100 ${notesImportForm.linkedEventId === event.id ? 'bg-honey-50 border border-honey-200' : 'bg-gray-50'}`}
                           >
-                            <Text className="font-semibold text-gray-800">{event.title}</Text>
+                            <Text className="font-semibold text-gray-800">{normalizeHiveBrandText(event.title)}</Text>
                             <Text className="text-sm text-gray-500 mt-1">
                               {formatDateLong(event.event_date)}{event.event_time ? ` at ${event.event_time}` : ''}
                             </Text>
@@ -1006,7 +1011,7 @@ export default function MeetingsScreen() {
                 <Text className="text-sm font-medium text-gray-700 mb-1">Title</Text>
                 <TextInput
                   value={notesImportForm.title}
-                  onChangeText={(title) => setNotesImportForm((form) => ({ ...form, title }))}
+                  onChangeText={(title) => setNotesImportForm((form) => ({ ...form, title: normalizeHiveBrandText(title) }))}
                   className="border border-gray-300 rounded-lg px-4 py-3 text-base"
                   placeholder="HIVE Meeting"
                 />
@@ -1113,9 +1118,9 @@ export default function MeetingsScreen() {
               <Text className="text-sm font-medium text-gray-700 mb-1">Title</Text>
               <TextInput
                 value={editForm.title}
-                onChangeText={(text) => setEditForm((f) => ({ ...f, title: text }))}
+                onChangeText={(text) => setEditForm((f) => ({ ...f, title: normalizeHiveBrandText(text) }))}
                 className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                placeholder="Meeting title"
+                placeholder="HIVE Meeting"
               />
             </View>
 
