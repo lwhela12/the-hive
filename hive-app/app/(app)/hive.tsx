@@ -48,8 +48,6 @@ type HomeTodo = {
   onArchive?: () => void;
 };
 
-const INITIAL_EVENTS_SHOWN = 3;
-
 const CALENDAR_DURATION_MS = 2.5 * 60 * 60 * 1000; // 30-min arrival + 2-hour meeting
 
 const getRecentDailyQuestions = (days = 7) => {
@@ -208,19 +206,15 @@ const openAddToCalendar = (event: Event) => {
 };
 
 function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (event: Event) => void }) {
-  const [expanded, setExpanded] = useState(false);
-  const visibleEvents = expanded ? events : events.slice(0, INITIAL_EVENTS_SHOWN);
-  const hasMore = events.length > INITIAL_EVENTS_SHOWN;
-
   return (
     <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-      {visibleEvents.map((event, index) => (
+      {events.map((event, index) => (
         <Pressable
           key={event.id}
           onPress={() => {
             if (event.event_type !== 'birthday') onEditEvent(event);
           }}
-          className={`p-4 active:bg-gray-50 ${index < visibleEvents.length - 1 || (hasMore && !expanded) ? 'border-b border-cream' : ''}`}
+          className={`p-4 active:bg-gray-50 ${index < events.length - 1 ? 'border-b border-cream' : ''}`}
         >
           <View className="flex-row items-start">
             <Text className="text-2xl mr-3">
@@ -287,16 +281,6 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
           </View>
         </Pressable>
       ))}
-      {hasMore && (
-        <Pressable
-          onPress={() => setExpanded(!expanded)}
-          className="py-3 items-center active:bg-gray-50"
-        >
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-            {expanded ? 'Show less' : `Show all ${events.length} events`}
-          </Text>
-        </Pressable>
-      )}
     </View>
   );
 }
