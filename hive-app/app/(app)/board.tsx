@@ -134,19 +134,33 @@ export default function BoardScreen() {
 
     let cancelled = false;
     const loadTopicMembers = async () => {
-      const { data, error } = await supabase
+      const { data: memberships, error: membershipError } = await supabase
         .from('community_memberships')
-        .select('user:profiles!community_memberships_user_id_fkey(id, name, avatar_url)')
+        .select('user_id')
         .eq('community_id', communityId);
 
-      if (error) {
-        console.warn('[Board] topic members load failed', error);
+      if (membershipError) {
+        console.warn('[Board] topic memberships load failed', membershipError);
         return;
       }
 
-      const members = (data ?? [])
-        .map((row: any) => row.user)
-        .filter(Boolean)
+      const userIds = (memberships ?? []).map((row: any) => row.user_id).filter(Boolean);
+      if (userIds.length === 0) {
+        if (!cancelled) setTopicMembers([]);
+        return;
+      }
+
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, name, avatar_url')
+        .in('id', userIds);
+
+      if (profilesError) {
+        console.warn('[Board] topic member profiles load failed', profilesError);
+        return;
+      }
+
+      const members = (profilesData ?? [])
         .sort((a: Pick<Profile, 'name'>, b: Pick<Profile, 'name'>) => a.name.localeCompare(b.name));
 
       if (!cancelled) setTopicMembers(members);

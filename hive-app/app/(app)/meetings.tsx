@@ -8,7 +8,8 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { pickMultipleImages, takePhoto, getImageExtension, getContentType } from '../../lib/imagePicker';
 import { MeetingSummary } from '../../components/meetings/MeetingSummary';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
-import { AppHeader } from '../../components/navigation';
+import { NavigationDrawer, AppHeader } from '../../components/navigation';
+import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
 import { formatDateLong, parseAmericanDate } from '../../lib/dateUtils';
@@ -52,9 +53,12 @@ const parseMeetingSummaryPreview = (summary?: string): MeetingSummaryPreview => 
 
 export default function MeetingsScreen() {
   const { profile, communityId, session, communityRole, community, refreshProfile } = useAuth();
+  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
+  const useMobileLayout = width < 768;
   const useCompactActions = width < 640;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -598,7 +602,17 @@ export default function MeetingsScreen() {
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <AppHeader
         title="Meeting Hub"
+        onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
       />
+
+      {useMobileLayout && (
+        <NavigationDrawer
+          isOpen={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          mode="navigation"
+          unreadDMCount={unreadDMCount}
+        />
+      )}
 
       <ScrollView
         className="flex-1"
