@@ -336,6 +336,28 @@ function HexShortcut({ emoji, label, sublabel, onPress }: {
   );
 }
 
+function HeaderActionPill({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexShrink: 0,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        marginBottom: 4,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: 'rgba(222,193,129,0.72)',
+        backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+      })}
+    >
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export default function HiveScreen() {
   const { profile, communityId, communityRole } = useAuth();
   const router = useRouter();
@@ -1481,18 +1503,16 @@ export default function HiveScreen() {
 
           {/* My To Do List */}
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
-              <View style={{ backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 0 }}>
+              <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
                   My To Do List{homeTodos.length > 0 ? ` (${homeTodos.length})` : ''}
                 </Text>
               </View>
-              <Pressable
+              <HeaderActionPill
+                label="+ Task"
                 onPress={() => { setNewTaskText(''); setTaskError(null); setShowAddTaskModal(true); }}
-                style={{ paddingHorizontal: 4, paddingBottom: 4 }}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Add</Text>
-              </Pressable>
+              />
             </View>
             <View style={{
               backgroundColor: '#fffdf5',
@@ -1598,18 +1618,13 @@ export default function HiveScreen() {
 
           {/* Upcoming Events */}
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
-              <View style={{ backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 0 }}>
+              <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
                   Upcoming Events
                 </Text>
               </View>
-              <Pressable
-                onPress={openCreateEvent}
-                style={{ paddingHorizontal: 4, paddingBottom: 4 }}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Add</Text>
-              </Pressable>
+              <HeaderActionPill label="+ Event" onPress={openCreateEvent} />
             </View>
             <View style={{
               backgroundColor: '#fdf3dc',
@@ -1665,27 +1680,13 @@ export default function HiveScreen() {
 
         {/* Community Wishes */}
         <View style={{ marginBottom: 24 }}>
-          <View style={{ marginBottom: 10, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+          <View style={{ marginBottom: 0, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
             <View style={{ alignSelf: 'flex-start', flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
               <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: useMobileLayout ? 16 : 17, color: '#2d2d2d' }}>
                 Community Wishes
               </Text>
             </View>
-            <Pressable
-              onPress={() => setShowAddWishModal(true)}
-              style={({ pressed }) => ({
-                flexShrink: 0,
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                marginBottom: useMobileLayout ? 2 : 4,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: 'rgba(222,193,129,0.6)',
-                backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-              })}
-            >
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Wish</Text>
-            </Pressable>
+            <HeaderActionPill label="+ Wish" onPress={() => setShowAddWishModal(true)} />
           </View>
 
           {loading.publicWishes && loading.grantedWishes ? (
@@ -1694,6 +1695,7 @@ export default function HiveScreen() {
             <View style={{
               backgroundColor: '#fdf3dc',
               borderRadius: 20,
+              borderTopLeftRadius: 0,
               borderWidth: 1,
               borderColor: 'rgba(222,193,129,0.7)',
               shadowColor: '#bd9348',
