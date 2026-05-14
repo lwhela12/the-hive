@@ -148,12 +148,12 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   }));
 
   // Navigation items for mobile sidebar
-  const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
+  const isAdmin = communityRole === 'admin' || communityRole === 'treasurer' || profile?.role === 'admin' || profile?.role === 'treasurer';
   const navItems = [
     { icon: null, imageSource: beeIcon, label: 'HIVE Home', route: '/hive' as const },
     { icon: '📋', label: 'Message Board', route: '/board' as const },
     { icon: '💬', label: 'Chat', route: '/messages' as const, badge: totalUnreadDMs },
-    { icon: null, customIcon: 'honeycomb', label: 'Meetings', route: '/meetings' as const },
+    { icon: null, customIcon: 'honeycomb', label: 'Meeting Hub', route: '/meetings' as const },
     { icon: '👤', imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined, label: 'Profile', route: '/profile' as const, isCircular: true },
     ...(isAdmin ? [{ icon: '⚙️', label: 'Admin', route: '/admin' as const }] : []),
   ];

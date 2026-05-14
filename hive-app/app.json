@@ -74,7 +74,10 @@
           "photosPermission": "The HIVE needs photo library access to upload profile photos and attach images to posts and messages.",
           "cameraPermission": "The HIVE needs camera access to take profile photos and attach images to posts and messages."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

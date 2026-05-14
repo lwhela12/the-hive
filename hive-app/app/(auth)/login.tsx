@@ -35,7 +35,6 @@ export default function LoginScreen() {
       } else {
         // For native, use expo-linking to generate the correct URL
         const redirectTo = Linking.createURL('auth/callback');
-        console.log('OAuth redirect URL:', redirectTo);
 
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
@@ -53,8 +52,6 @@ export default function LoginScreen() {
             data.url,
             redirectTo
           );
-
-          console.log('Auth result:', result.type);
 
           if (result.type === 'success') {
             const url = result.url;
@@ -88,8 +85,6 @@ export default function LoginScreen() {
             }
 
             router.replace('/');
-          } else if (result.type === 'cancel') {
-            console.log('User cancelled auth');
           }
         }
       }
@@ -155,7 +150,7 @@ export default function LoginScreen() {
           </View>
 
           <Pressable
-            onPress={handleGoogleSignIn}
+            onPress={() => handleGoogleSignIn()}
             disabled={loading}
             className={`flex-row items-center justify-center bg-white border border-gold/30 rounded-xl py-4 px-6 shadow-sm ${
               loading ? 'opacity-50' : 'active:bg-gray-50'

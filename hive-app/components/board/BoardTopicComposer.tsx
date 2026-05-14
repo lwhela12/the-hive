@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { BoardCategory, Profile } from '../../types';
 
+const BOARD_DRAFT_KEY = 'board-topic-draft';
 export type BoardTopicAudience = 'community' | 'members';
 
 interface BoardTopicComposerProps {
@@ -13,94 +16,158 @@ interface BoardTopicComposerProps {
   members?: Pick<Profile, 'id' | 'name' | 'avatar_url'>[];
 }
 
-const DEFAULT_EMOJI = '💬';
-const EMOJI_SUGGESTIONS = ['💬', '💡', '❓', '🎉', '📝', '🎯', '📦', '🤝', '💰', '🏠', '📚', '🎨', '🎵', '🍴', '💪', '❤️', '🌱', '🚀', '🧠', '📅'];
+// Icon is now stored as the emoji character directly (not a code)
+// Old code-based entries are still handled by BoardCategoryList's EMOJI_MAP fallback
 
-const LEGACY_EMOJI_MAP: Record<string, string> = {
-  '1F4E2': '📢',
-  '1F4AC': '💬',
-  '1F451': '👑',
-  '1F4DA': '📚',
-  '1F44B': '👋',
-  '1F4A1': '💡',
-  '2753': '❓',
-  '1F389': '🎉',
-  '1F4DD': '📝',
-  '1F3AF': '🎯',
-  '1F4E6': '📦',
-  '1F91D': '🤝',
-  '1F4B0': '💰',
-  '1F3E0': '🏠',
-  '1F3A8': '🎨',
-  '1F3B5': '🎵',
-  '1F374': '🍴',
-  '1F4AA': '💪',
-  '2764': '❤️',
-  '1F331': '🌱',
-  '1F680': '🚀',
-  '1F9E0': '🧠',
-  '1F4C5': '📅',
-};
+const EMOJI_CATEGORIES: { label: string; icon: string; emojis: string[] }[] = [
+  {
+    label: 'Popular',
+    icon: '⭐',
+    emojis: ['💬','💡','🎯','📝','🎉','❤️','🌱','🚀','🧠','📅','💪','📚','🎨','🎵','💰','🏠','🤝','❓','📦','📋'],
+  },
+  {
+    label: 'People',
+    icon: '😀',
+    emojis: ['😀','😂','🥰','😎','🤩','🥳','🤔','😴','🤗','🙌','👏','👋','🫶','💪','🧘','🏃','🚶','👑','🎓','👩‍💻'],
+  },
+  {
+    label: 'Nature',
+    icon: '🌿',
+    emojis: ['🌱','🌸','🌺','🌻','🌹','🍀','🍁','🌿','🌳','🌲','🌴','🐝','🦋','🐢','🦊','🌙','☀️','🌈','⭐','🔥'],
+  },
+  {
+    label: 'Food',
+    icon: '🍕',
+    emojis: ['🍕','🍔','🌮','🍜','🍣','🍰','🎂','☕','🍵','🥂','🍷','🥗','🍩','🍦','🍓','🍇','🥑','🌶️','🍋','🫐'],
+  },
+  {
+    label: 'Activities',
+    icon: '⚽',
+    emojis: ['⚽','🏀','🎾','🏊','🧗','🏋️','🧩','♟️','🎸','🎹','🎭','🎬','📷','✈️','⛵','🏕️','🛹','🎮','🎲','🪄'],
+  },
+  {
+    label: 'Objects',
+    icon: '🔧',
+    emojis: ['💻','📱','📷','🔑','🔧','⚙️','💎','🏆','🎁','📮','📌','🗂️','📊','💌','🔔','🕯️','🧲','🔭','🪞','🧸'],
+  },
+  {
+    label: 'Symbols',
+    icon: '✨',
+    emojis: ['✨','💫','⚡','🌊','💥','🎆','🎇','🏳️','🔴','🟠','🟡','🟢','🔵','🟣','⬛','🔶','🔷','♾️','☯️','🌀'],
+  },
+  {
+    label: 'Travel',
+    icon: '🗺️',
+    emojis: ['🗺️','🏔️','🏖️','🏝️','🌋','🗽','🏰','⛩️','🗼','🎡','🚂','✈️','🚀','⛵','🚗','🏠','🌃','🌆','🌉','🌍'],
+  },
+];
 
-function getDisplayEmoji(icon?: string | null) {
-  if (!icon) return DEFAULT_EMOJI;
-  return LEGACY_EMOJI_MAP[icon] || icon;
+function getFirstEmoji(icon?: string): string {
+  if (!icon) return EMOJI_CATEGORIES[0].emojis[0];
+  // If it looks like a Unicode code (old format), convert to emoji
+  if (/^[0-9A-F]{4,6}$/i.test(icon)) {
+    try { return String.fromCodePoint(parseInt(icon, 16)); } catch { /* fall through */ }
+  }
+  return getGraphemes(icon)[0] ?? EMOJI_CATEGORIES[0].emojis[0];
 }
 
-function getFirstGrapheme(value: string) {
+function getGraphemes(value: string) {
   const trimmed = value.trim();
-  if (!trimmed) return '';
+  if (!trimmed) return [];
 
-  const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl
-    ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
-    : null;
-
-  if (segmenter) {
-    const [first] = Array.from(segmenter.segment(trimmed));
-    return first?.segment ?? '';
+  const Segmenter = typeof Intl !== 'undefined' ? (Intl as any).Segmenter : undefined;
+  if (Segmenter) {
+    return Array.from(
+      new Segmenter(undefined, { granularity: 'grapheme' }).segment(trimmed),
+      (part: any) => part.segment as string
+    );
   }
 
-  return Array.from(trimmed)[0] ?? '';
+  return Array.from(trimmed);
 }
 
 export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategory, members = [] }: BoardTopicComposerProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedEmoji, setSelectedEmoji] = useState(DEFAULT_EMOJI);
+  const [selectedEmoji, setSelectedEmoji] = useState(EMOJI_CATEGORIES[0].emojis[0]);
+  const [activeCategory, setActiveCategory] = useState(0);
+  const [customEmoji, setCustomEmoji] = useState('');
   const [audience, setAudience] = useState<BoardTopicAudience>('community');
   const [taggedMemberIds, setTaggedMemberIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const customInputRef = useRef<TextInput>(null);
   const isEditMode = !!existingCategory;
 
   useEffect(() => {
     if (!visible) return;
-
     if (existingCategory) {
       setName(existingCategory.name);
       setDescription(existingCategory.description || '');
-      setSelectedEmoji(getDisplayEmoji(existingCategory.icon));
+      setSelectedEmoji(getFirstEmoji(existingCategory.icon));
+      setCustomEmoji('');
+      setActiveCategory(0);
       setAudience(existingCategory.audience === 'members' ? 'members' : 'community');
       setTaggedMemberIds((existingCategory.member_tags ?? []).map((tag) => tag.tagged_user_id));
     } else {
-      setName('');
-      setDescription('');
-      setSelectedEmoji(DEFAULT_EMOJI);
+      // Restore draft for new topics
+      AsyncStorage.getItem(BOARD_DRAFT_KEY).then(raw => {
+        if (raw) {
+          try {
+            const d = JSON.parse(raw);
+            setName(d.name ?? '');
+            setDescription(d.description ?? '');
+            setSelectedEmoji(d.emoji ?? EMOJI_CATEGORIES[0].emojis[0]);
+          } catch {
+            setName(''); setDescription(''); setSelectedEmoji(EMOJI_CATEGORIES[0].emojis[0]);
+          }
+        } else {
+          setName(''); setDescription(''); setSelectedEmoji(EMOJI_CATEGORIES[0].emojis[0]);
+        }
+      });
+      setCustomEmoji('');
+      setActiveCategory(0);
       setAudience('community');
       setTaggedMemberIds([]);
     }
   }, [visible, existingCategory]);
 
+  // Auto-save draft for new topics (not editing)
+  useEffect(() => {
+    if (!visible || existingCategory) return;
+    if (!name && !description) return;
+    AsyncStorage.setItem(BOARD_DRAFT_KEY, JSON.stringify({ name, description, emoji: selectedEmoji })).catch(() => {});
+  }, [visible, existingCategory, name, description, selectedEmoji]);
+
+  const handleCustomEmojiChange = (text: string) => {
+    // Grab only the last grapheme in case they type multiple.
+    const chars = getGraphemes(text);
+    if (chars.length > 0) {
+      const last = chars[chars.length - 1];
+      setCustomEmoji(last);
+      setSelectedEmoji(last);
+    } else {
+      setCustomEmoji('');
+    }
+  };
+
   const handleSubmit = async () => {
     if (!name.trim()) return;
-
     setSubmitting(true);
     try {
       const finalAudience = audience === 'members' && taggedMemberIds.length > 0 ? 'members' : 'community';
-      const success = await onSubmit(name.trim(), description.trim(), selectedEmoji, finalAudience, finalAudience === 'members' ? taggedMemberIds : []);
+      const success = await onSubmit(
+        name.trim(),
+        description.trim(),
+        selectedEmoji,
+        finalAudience,
+        finalAudience === 'members' ? taggedMemberIds : []
+      );
       if (success) {
+        if (!existingCategory) AsyncStorage.removeItem(BOARD_DRAFT_KEY).catch(() => {});
         setName('');
         setDescription('');
-        setSelectedEmoji(DEFAULT_EMOJI);
+        setSelectedEmoji(EMOJI_CATEGORIES[0].emojis[0]);
+        setCustomEmoji('');
         setAudience('community');
         setTaggedMemberIds([]);
         onClose();
@@ -111,17 +178,15 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
   };
 
   const handleClose = () => {
+    // Clear draft on explicit cancel (user chose to abandon)
+    if (!existingCategory) AsyncStorage.removeItem(BOARD_DRAFT_KEY).catch(() => {});
     setName('');
     setDescription('');
-    setSelectedEmoji(DEFAULT_EMOJI);
+    setSelectedEmoji(EMOJI_CATEGORIES[0].emojis[0]);
+    setCustomEmoji('');
     setAudience('community');
     setTaggedMemberIds([]);
     onClose();
-  };
-
-  const handleEmojiChange = (value: string) => {
-    const nextEmoji = getFirstGrapheme(value);
-    if (nextEmoji) setSelectedEmoji(nextEmoji);
   };
 
   const isValid = name.trim().length > 0;
@@ -137,16 +202,12 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1"
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
+
           {/* Header */}
           <View className="flex-row items-center justify-between px-4 py-3 border-b border-cream bg-white">
-            <Pressable onPress={handleClose}>
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
-                Cancel
-              </Text>
+            <Pressable onPress={handleClose} className="active:opacity-60">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">Cancel</Text>
             </Pressable>
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg">
               {isEditMode ? 'Edit Topic' : 'New Topic'}
@@ -156,24 +217,18 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
               disabled={!isValid || submitting}
               className={`px-4 py-2 rounded-lg ${isValid && !submitting ? 'bg-gold' : 'bg-cream'}`}
             >
-              <Text
-                style={{ fontFamily: 'Lato_700Bold' }}
-                className={isValid && !submitting ? 'text-white' : 'text-charcoal/30'}
-              >
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className={isValid && !submitting ? 'text-white' : 'text-charcoal/30'}>
                 {submitting ? (isEditMode ? 'Saving...' : 'Creating...') : (isEditMode ? 'Save' : 'Create')}
               </Text>
             </Pressable>
           </View>
 
-          <ScrollView className="flex-1 p-4">
+          <ScrollView className="flex-1 p-4" keyboardShouldPersistTaps="handled">
             {/* Preview */}
             <View className="items-center mb-6">
               <View className="flex-row items-center px-4 py-2 bg-gold rounded-full">
                 <Text className="mr-1 text-lg">{selectedEmoji}</Text>
-                <Text
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  className="text-white"
-                >
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white">
                   {name || 'Topic Name'}
                 </Text>
               </View>
@@ -182,43 +237,94 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
               </Text>
             </View>
 
-            {/* Icon picker */}
+            {/* Emoji picker */}
             <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
-                Choose an Emoji
-              </Text>
-              <View className="bg-white rounded-xl p-4">
-                <View className="flex-row items-center">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Choose an Icon</Text>
+              <View className="bg-white rounded-xl overflow-hidden">
+
+                {/* "Type any emoji" row */}
+                <Pressable
+                  onPress={() => customInputRef.current?.focus()}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    borderBottomWidth: 1,
+                    borderBottomColor: 'rgba(222,193,129,0.2)',
+                    gap: 10,
+                  }}
+                >
+                  <Ionicons name="happy-outline" size={18} color="#bd9348" />
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', flex: 1 }}>
+                    Type or paste any emoji →
+                  </Text>
                   <TextInput
-                    value={selectedEmoji}
-                    onChangeText={handleEmojiChange}
-                    placeholder="🙂"
-                    placeholderTextColor="#9ca3af"
+                    ref={customInputRef}
+                    value={customEmoji}
+                    onChangeText={handleCustomEmojiChange}
+                    style={{
+                      fontSize: 28,
+                      width: 44,
+                      height: 44,
+                      textAlign: 'center',
+                      borderWidth: 1,
+                      borderColor: customEmoji ? '#bd9348' : 'rgba(222,193,129,0.4)',
+                      borderRadius: 10,
+                      backgroundColor: customEmoji ? '#fdf3dc' : '#faf8f3',
+                    }}
+                    maxLength={8}
                     autoCorrect={false}
                     autoCapitalize="none"
-                    className="w-16 h-16 bg-cream rounded-2xl text-center text-4xl"
-                    style={{ fontFamily: Platform.OS === 'ios' ? undefined : 'Lato_400Regular' }}
+                    placeholder="🐝"
+                    placeholderTextColor="#d1d5db"
                   />
-                  <View className="flex-1 ml-4">
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
-                      Tap the square and use your emoji keyboard
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mt-1">
-                      Any standard phone emoji works here.
-                    </Text>
-                  </View>
-                </View>
+                </Pressable>
 
-                <View className="flex-row flex-wrap mt-3">
-                  {EMOJI_SUGGESTIONS.map((emoji) => (
+                {/* Category tabs */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.2)' }}
+                  contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 6, gap: 4 }}
+                >
+                  {EMOJI_CATEGORIES.map((cat, i) => (
+                    <Pressable
+                      key={cat.label}
+                      onPress={() => setActiveCategory(i)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: 20,
+                        backgroundColor: activeCategory === i ? '#fdf3dc' : 'transparent',
+                        borderWidth: 1,
+                        borderColor: activeCategory === i ? '#bd9348' : 'transparent',
+                      }}
+                    >
+                      <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+
+                {/* Emoji grid */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 8 }}>
+                  {EMOJI_CATEGORIES[activeCategory].emojis.map((emoji) => (
                     <Pressable
                       key={emoji}
-                      onPress={() => setSelectedEmoji(emoji)}
-                      className={`w-10 h-10 items-center justify-center rounded-lg m-1 ${
-                        selectedEmoji === emoji ? 'bg-gold/20' : 'bg-cream'
-                      }`}
+                      onPress={() => { setSelectedEmoji(emoji); setCustomEmoji(''); }}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: 10,
+                        margin: 3,
+                        backgroundColor: selectedEmoji === emoji ? '#fdf3dc' : 'transparent',
+                        borderWidth: selectedEmoji === emoji ? 1.5 : 0,
+                        borderColor: '#bd9348',
+                      }}
                     >
-                      <Text className="text-xl">{emoji}</Text>
+                      <Text style={{ fontSize: 22 }}>{emoji}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -227,9 +333,7 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
 
             {/* Audience picker */}
             <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
-                Tag
-              </Text>
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Tag</Text>
               <View className="bg-white rounded-xl p-3">
                 <View className="flex-row flex-wrap">
                   <Pressable
@@ -278,9 +382,7 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
 
             {/* Name input */}
             <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
-                Topic Name *
-              </Text>
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Topic Name *</Text>
               <TextInput
                 value={name}
                 onChangeText={setName}
@@ -297,9 +399,7 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
 
             {/* Description input */}
             <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
-                Description
-              </Text>
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Description</Text>
               <TextInput
                 value={description}
                 onChangeText={setDescription}
@@ -317,7 +417,7 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
             </View>
 
             {/* Info note */}
-            <View className="bg-gold/10 rounded-xl p-4">
+            <View className="bg-gold/10 rounded-xl p-4 mb-4">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/70 text-sm">
                 Custom topics allow the community to organize discussions around specific interests or projects.
                 All members will be able to post in your new topic.

@@ -15,6 +15,7 @@ interface BoardReplyItemProps {
   onReply?: (replyId: string, authorName: string) => void;
   onEdit?: (replyId: string, content: string) => void;
   onDelete?: (replyId: string) => void;
+  canModerate?: boolean;
 }
 
 export function BoardReplyItem({
@@ -26,11 +27,13 @@ export function BoardReplyItem({
   onReply,
   onEdit,
   onDelete,
+  canModerate = false,
 }: BoardReplyItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(reply.content);
 
   const isAuthor = currentUserId === reply.author_id;
+  const canManage = isAuthor || canModerate;
   const timeAgo = getTimeAgo(new Date(reply.created_at));
 
   const handleSaveEdit = () => {
@@ -126,7 +129,7 @@ export function BoardReplyItem({
                 </Text>
               </Pressable>
             )}
-            {isAuthor && (
+            {canManage && (
               <>
                 <Pressable onPress={() => setIsEditing(true)}>
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm">
@@ -153,6 +156,7 @@ export function BoardReplyItem({
               onRemoveReaction={onRemoveReaction}
               onEdit={onEdit}
               onDelete={onDelete}
+              canModerate={canModerate}
             />
           ))}
         </View>

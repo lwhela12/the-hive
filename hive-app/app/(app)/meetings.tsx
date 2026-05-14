@@ -1,33 +1,114 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, RefreshControl, Pressable, Alert, Linking, useWindowDimensions, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { AudioRecorder } from '../../components/meetings/AudioRecorder';
 import { MeetingSummary } from '../../components/meetings/MeetingSummary';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
-import { NavigationDrawer, AppHeader } from '../../components/navigation';
-import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
+import { AppHeader } from '../../components/navigation';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
 import { formatDateLong, parseAmericanDate } from '../../lib/dateUtils';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import type { Meeting, Event } from '../../types';
 
+interface MeetingSummaryPreview {
+  title?: string;
+  source?: string;
+  import_status?: 'pending' | 'applied';
+  summary?: string;
+  decisions?: string[];
+  board_suggestions?: unknown[];
+}
+
+const toAmericanDate = (isoDate: string) => {
+  const [year, month, day] = isoDate.split('-');
+  return month && day && year ? `${month}-${day}-${year}` : isoDate;
+};
+
+const getTodayIsoDate = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+};
+
+const parseMeetingSummaryPreview = (summary?: string): MeetingSummaryPreview => {
+  if (!summary) return {};
+  try {
+    const parsed = JSON.parse(summary);
+    return typeof parsed === 'object' && parsed !== null ? parsed : { summary: String(parsed) };
+  } catch {
+    return { summary };
+  }
+};
+
 export default function MeetingsScreen() {
-  const { profile, communityId, session } = useAuth();
-  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
+  const { profile, communityId, session, communityRole, community, refreshProfile } = useAuth();
   const { width } = useWindowDimensions();
-  const useMobileLayout = width < 768;
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const useCompactActions = width < 640;
+  const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+
+  // Slide deck URL — pulled from community record, editable by admin
+  const [slideDeckUrl, setSlideDeckUrl] = useState(community?.slide_deck_url ?? '');
+  const [showDeckEdit, setShowDeckEdit] = useState(false);
+  const [deckUrlDraft, setDeckUrlDraft] = useState('');
+  const [savingDeckUrl, setSavingDeckUrl] = useState(false);
+
+  useEffect(() => {
+    if (community?.slide_deck_url !== undefined) setSlideDeckUrl(community.slide_deck_url ?? '');
+  }, [community?.slide_deck_url]);
+
+  const fetchLatestSlideDeckUrl = useCallback(async () => {
+    if (!communityId) return '';
+    const { data, error } = (await supabase
+      .from('communities')
+      .select('slide_deck_url')
+      .eq('id', communityId)
+      .single()) as { data: { slide_deck_url: string | null } | null; error: { message?: string } | null };
+
+    if (error) {
+      console.error('Failed to fetch slide deck URL:', error);
+      return slideDeckUrl;
+    }
+
+    const latestUrl = data?.slide_deck_url ?? '';
+    setSlideDeckUrl(latestUrl);
+    return latestUrl;
+  }, [communityId, slideDeckUrl]);
+
+  const handleSaveDeckUrl = async () => {
+    if (!communityId) return;
+    const nextUrl = deckUrlDraft.trim();
+    setSavingDeckUrl(true);
+    const { error } = await (supabase.from('communities') as any).update({ slide_deck_url: nextUrl || null }).eq('id', communityId);
+    setSavingDeckUrl(false);
+    if (!error) {
+      setSlideDeckUrl(nextUrl);
+      await refreshProfile();
+      await fetchLatestSlideDeckUrl();
+      setShowDeckEdit(false);
+    } else {
+      Alert.alert('Error', 'Could not save the slide deck link. Please try again.');
+      console.error('Slide deck URL save failed:', error);
+    }
+  };
   const [upcomingMeetings, setUpcomingMeetings] = useState<Event[]>([]);
-  const [showRecorder, setShowRecorder] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
-  const [showEventPicker, setShowEventPicker] = useState(false);
-  const [selectedEventForRecording, setSelectedEventForRecording] = useState<Event | null>(null);
+  const [showNotesImport, setShowNotesImport] = useState(false);
+  const [importingNotes, setImportingNotes] = useState(false);
+  const [notesImportForm, setNotesImportForm] = useState({
+    title: '',
+    date: toAmericanDate(getTodayIsoDate()),
+    notes: '',
+    linkedEventId: null as string | null,
+    fileName: null as string | null,
+    fileMimeType: null as string | null,
+    fileBase64: null as string | null,
+  });
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [editForm, setEditForm] = useState({
@@ -42,7 +123,7 @@ export default function MeetingsScreen() {
   const fetchMeetings = useCallback(async () => {
     if (!communityId) return;
 
-    // Fetch past meetings (recordings)
+    // Fetch imported meeting summaries and historical recordings.
     const { data, error } = await supabase
       .from('meetings')
       .select('*')
@@ -53,6 +134,8 @@ export default function MeetingsScreen() {
     if (!error && data) {
       setMeetings(data);
     }
+
+    await fetchLatestSlideDeckUrl();
 
     // Fetch upcoming scheduled meetings - use local date to avoid timezone issues
     // Exclude completed meetings
@@ -73,9 +156,9 @@ export default function MeetingsScreen() {
     }
 
     setInitialLoading(false);
-  }, [communityId]);
+  }, [communityId, fetchLatestSlideDeckUrl]);
 
-  // Get today's scheduled meetings for the event picker
+  // Get today's scheduled meetings for pre-filling imported notes.
   const todaysMeetings = upcomingMeetings.filter((event) => {
     const now = new Date();
     const today = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
@@ -209,8 +292,6 @@ export default function MeetingsScreen() {
     }
   };
 
-  const isAdmin = profile?.role === 'admin';
-
   const handleMarkComplete = async (meetingId: string) => {
     const doMark = async () => {
       const { error } = await supabase
@@ -286,74 +367,144 @@ export default function MeetingsScreen() {
     }
   };
 
-  const handleRecordingComplete = async (audioPath: string) => {
+  const openNotesImport = (event?: Event | null) => {
+    const date = event?.event_date ?? getTodayIsoDate();
+    setNotesImportForm({
+      title: event?.title ?? 'Hive Meeting',
+      date: toAmericanDate(date),
+      notes: '',
+      linkedEventId: event?.id ?? null,
+      fileName: null,
+      fileMimeType: null,
+      fileBase64: null,
+    });
+    setShowNotesImport(true);
+  };
+
+  const readAssetAsBase64 = async (asset: DocumentPicker.DocumentPickerAsset) => {
+    if (asset.base64) {
+      return asset.base64.includes(',') ? asset.base64.split(',').pop() ?? asset.base64 : asset.base64;
+    }
+
+    if (Platform.OS === 'web' && asset.file) {
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = typeof reader.result === 'string' ? reader.result : '';
+          resolve(result.includes(',') ? result.split(',').pop() ?? result : result);
+        };
+        reader.onerror = () => reject(reader.error ?? new Error('Could not read the selected file.'));
+        reader.readAsDataURL(asset.file!);
+      });
+    }
+
+    return await FileSystem.readAsStringAsync(asset.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  };
+
+  const handlePickNotesFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain',
+          'text/markdown',
+        ],
+        copyToCacheDirectory: true,
+        multiple: false,
+        base64: Platform.OS === 'web',
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      const asset = result.assets[0];
+      const fileBase64 = await readAssetAsBase64(asset);
+
+      setNotesImportForm((form) => ({
+        ...form,
+        fileName: asset.name,
+        fileMimeType: asset.mimeType ?? null,
+        fileBase64,
+      }));
+    } catch (error) {
+      console.error('Error picking meeting notes file:', error);
+      Alert.alert('File Not Imported', 'Could not read that notes file. Try a .docx, .pdf, .txt, or paste the notes.');
+    }
+  };
+
+  const clearNotesFile = () => {
+    setNotesImportForm((form) => ({
+      ...form,
+      fileName: null,
+      fileMimeType: null,
+      fileBase64: null,
+    }));
+  };
+
+  const handleImportNotes = async () => {
     if (!communityId) {
       Alert.alert('Error', 'No active community selected.');
       return;
     }
-    try {
-      // Use local date to avoid timezone issues
-      const now = new Date();
-      const localDate = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
 
-      // Create meeting record, optionally linked to a scheduled event
-      const { data: meeting, error } = await supabase
-        .from('meetings')
-        .insert({
-          date: localDate,
-          audio_url: audioPath,
-          recorded_by: profile?.id,
-          processing_status: 'pending',
-          community_id: communityId,
-          linked_event_id: selectedEventForRecording?.id || null,
-        })
-        .select()
-        .single();
+    const notes = notesImportForm.notes.trim();
+    const title = notesImportForm.title.trim() || 'Hive Meeting';
+    const date = parseAmericanDate(notesImportForm.date) ?? notesImportForm.date;
+    const hasFile = Boolean(notesImportForm.fileBase64 && notesImportForm.fileName);
+    const hasPastedNotes = notes.length >= 40;
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      Alert.alert('Date Needed', 'Please use a date like 05-12-2026.');
+      return;
+    }
+
+    if (!hasPastedNotes && !hasFile) {
+      Alert.alert('Notes Needed', 'Paste the Gemini notes or upload a .docx, .pdf, or text file.');
+      return;
+    }
+
+    setImportingNotes(true);
+    try {
+      const { error } = await supabase.functions.invoke('import-meeting-notes', {
+        body: {
+          communityId,
+          title,
+          date,
+          notesText: hasPastedNotes ? notes : undefined,
+          linkedEventId: notesImportForm.linkedEventId,
+          fileName: notesImportForm.fileName,
+          fileMimeType: notesImportForm.fileMimeType,
+          fileBase64: notesImportForm.fileBase64,
+        },
+      });
 
       if (error) throw error;
 
-      // Mark the linked event as completed
-      if (selectedEventForRecording) {
-        await supabase
-          .from('events')
-          .update({ status: 'completed' })
-          .eq('id', selectedEventForRecording.id);
-      }
-
-      // Trigger transcription automatically
-      const { error: transcribeError } = await supabase.functions.invoke('transcribe', {
-        body: { meeting_id: meeting.id }
+      setShowNotesImport(false);
+      setNotesImportForm({
+        title: '',
+        date: toAmericanDate(getTodayIsoDate()),
+        notes: '',
+        linkedEventId: null,
+        fileName: null,
+        fileMimeType: null,
+        fileBase64: null,
       });
-
-      if (transcribeError) {
-        console.error('Failed to start transcription:', transcribeError);
-      }
-
-      setShowRecorder(false);
-      setSelectedEventForRecording(null);
       await fetchMeetings();
+
       Alert.alert(
-        'Meeting Recorded',
-        selectedEventForRecording
-          ? `Recording linked to "${selectedEventForRecording.title}" and transcription started.`
-          : 'Your meeting has been saved and transcription has started. This may take a few minutes.'
+        'Notes Imported',
+        'Saved the notes in Meeting Summaries. Open the summary and tap Apply Notes when you are ready for Clive to create tasks, events, and board posts.'
       );
     } catch (error) {
-      console.error('Error saving meeting:', error);
-      Alert.alert('Error', 'Failed to save meeting recording.');
+      console.error('Error importing meeting notes:', error);
+      Alert.alert('Import Failed', 'Clive could not import those notes yet. Please try again.');
+    } finally {
+      setImportingNotes(false);
     }
   };
-
-  if (showRecorder) {
-    return (
-      <SafeAreaView className="flex-1 bg-white" edges={['top']}>
-        <AudioRecorder
-          onComplete={handleRecordingComplete}
-          onCancel={() => setShowRecorder(false)}
-        />
-      </SafeAreaView>
-    );
-  }
 
   if (selectedMeeting) {
     return (
@@ -361,30 +512,39 @@ export default function MeetingsScreen() {
         <MeetingSummary
           meeting={selectedMeeting}
           onBack={() => setSelectedMeeting(null)}
+          onMeetingUpdated={(meeting) => {
+            setSelectedMeeting(meeting);
+            setMeetings((currentMeetings) =>
+              currentMeetings.map((currentMeeting) =>
+                currentMeeting.id === meeting.id ? meeting : currentMeeting
+              )
+            );
+          }}
         />
       </SafeAreaView>
     );
   }
 
-  const SLIDE_DECK_URL = 'https://www.canva.com/d/bKYr6kl9Lk9cut7';
+  const getMeetingCardTitle = (meeting: Meeting) => {
+    const parsed = parseMeetingSummaryPreview(meeting.summary);
+    return parsed.title || `Meeting on ${formatDateLong(meeting.date)}`;
+  };
+
+  const getMeetingCardStatus = (meeting: Meeting) => {
+    const parsed = parseMeetingSummaryPreview(meeting.summary);
+    if (parsed.import_status === 'pending') return 'needs apply';
+    if (parsed.import_status === 'applied') return 'applied';
+    return meeting.processing_status;
+  };
+
   const nextMeeting = upcomingMeetings[0] ?? null;
+  const hasImportableNotes = notesImportForm.notes.trim().length >= 40 || Boolean(notesImportForm.fileBase64);
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <AppHeader
-        title="Meetings"
-        onMenuPress={() => setDrawerOpen(true)}
+        title="Meeting Hub"
       />
-
-      {/* Navigation Drawer */}
-      {useMobileLayout && (
-        <NavigationDrawer
-          isOpen={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          mode="navigation"
-          unreadDMCount={unreadDMCount}
-        />
-      )}
 
       <ScrollView
         className="flex-1"
@@ -393,7 +553,7 @@ export default function MeetingsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Meeting Hub Hero */}
+        {/* Meeting Hub Actions */}
         <View
           style={{
             backgroundColor: '#2b2b2a',
@@ -402,12 +562,6 @@ export default function MeetingsScreen() {
             marginBottom: 20,
           }}
         >
-          <Text style={{ fontFamily: 'Lato_400Regular', color: '#bd9348', fontSize: 11, letterSpacing: 2, marginBottom: 4 }}>
-            THE HIVE
-          </Text>
-          <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 22, marginBottom: 2 }}>
-            Meeting Hub 🐝
-          </Text>
           {nextMeeting ? (
             <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.55)', fontSize: 13, marginBottom: 18 }}>
               Next up: {formatDateLong(nextMeeting.event_date)}{nextMeeting.event_time ? ` · ${nextMeeting.event_time}` : ''}
@@ -419,12 +573,13 @@ export default function MeetingsScreen() {
           )}
 
           {/* Action tiles */}
-          <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flexDirection: 'row', flexWrap: useCompactActions ? 'wrap' : 'nowrap', gap: 10 }}>
             {/* Join */}
             <Pressable
               onPress={() => nextMeeting?.meet_link ? handleJoinMeeting(nextMeeting.meet_link) : null}
               style={({ pressed }) => ({
-                flex: 1,
+                flex: useCompactActions ? undefined : 1,
+                width: useCompactActions ? '48%' : undefined,
                 backgroundColor: nextMeeting?.meet_link ? '#bd9348' : 'rgba(255,255,255,0.08)',
                 borderRadius: 14,
                 paddingVertical: 16,
@@ -440,10 +595,22 @@ export default function MeetingsScreen() {
 
             {/* Slide Deck */}
             <Pressable
-              onPress={() => Linking.openURL(SLIDE_DECK_URL)}
+              onPress={async () => {
+                const latestUrl = await fetchLatestSlideDeckUrl();
+                if (latestUrl) {
+                  Linking.openURL(latestUrl);
+                } else if (isAdmin) {
+                  setDeckUrlDraft('');
+                  setShowDeckEdit(true);
+                }
+              }}
+              onLongPress={() => {
+                if (isAdmin) { setDeckUrlDraft(slideDeckUrl); setShowDeckEdit(true); }
+              }}
               style={({ pressed }) => ({
-                flex: 1,
-                backgroundColor: 'rgba(255,255,255,0.08)',
+                flex: useCompactActions ? undefined : 1,
+                width: useCompactActions ? '48%' : undefined,
+                backgroundColor: slideDeckUrl ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
                 borderRadius: 14,
                 paddingVertical: 16,
                 alignItems: 'center',
@@ -451,23 +618,22 @@ export default function MeetingsScreen() {
               })}
             >
               <Text style={{ fontSize: 22, marginBottom: 4 }}>🎞️</Text>
-              <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 13 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: slideDeckUrl ? '#fff' : 'rgba(255,255,255,0.35)', fontSize: 13 }}>
                 Slide Deck
               </Text>
+              {isAdmin && (
+                <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 2 }}>
+                  {slideDeckUrl ? 'hold to edit' : 'tap to set'}
+                </Text>
+              )}
             </Pressable>
 
-            {/* Record */}
+            {/* Import Notes */}
             <Pressable
-              onPress={() => {
-                if (todaysMeetings.length > 0) {
-                  setShowEventPicker(true);
-                } else {
-                  setSelectedEventForRecording(null);
-                  setShowRecorder(true);
-                }
-              }}
+              onPress={() => openNotesImport(todaysMeetings[0] ?? nextMeeting)}
               style={({ pressed }) => ({
-                flex: 1,
+                flex: useCompactActions ? undefined : 1,
+                width: useCompactActions ? '48%' : undefined,
                 backgroundColor: 'rgba(255,255,255,0.08)',
                 borderRadius: 14,
                 paddingVertical: 16,
@@ -475,9 +641,9 @@ export default function MeetingsScreen() {
                 opacity: pressed ? 0.75 : 1,
               })}
             >
-              <Text style={{ fontSize: 22, marginBottom: 4 }}>🎙️</Text>
+              <Text style={{ fontSize: 22, marginBottom: 4 }}>📝</Text>
               <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 13 }}>
-                Record
+                Import Notes
               </Text>
             </Pressable>
 
@@ -485,7 +651,8 @@ export default function MeetingsScreen() {
             <Pressable
               onPress={() => setShowScheduler(true)}
               style={({ pressed }) => ({
-                flex: 1,
+                flex: useCompactActions ? undefined : 1,
+                width: useCompactActions ? '48%' : undefined,
                 backgroundColor: 'rgba(255,255,255,0.08)',
                 borderRadius: 14,
                 paddingVertical: 16,
@@ -565,9 +732,9 @@ export default function MeetingsScreen() {
           </FadeIn>
         )}
 
-        {/* Past Meetings Header */}
+        {/* Meeting Summaries Header */}
         <Text className="text-lg font-semibold text-gray-800 mb-3">
-          Past Recordings
+          Meeting Summaries
         </Text>
 
         {/* Meeting List */}
@@ -577,13 +744,16 @@ export default function MeetingsScreen() {
           <View className="bg-white rounded-xl p-8 shadow-sm items-center">
             <Text className="text-4xl mb-4">📝</Text>
             <Text className="text-gray-600 text-center">
-              No meetings recorded yet.{'\n'}
-              Tap Record to capture your next Hive gathering.
+              No meeting summaries yet.{'\n'}
+              Import Gemini notes after your next Hive gathering.
             </Text>
           </View>
         ) : (
           <FadeIn>
           {meetings.map((meeting) => (
+            (() => {
+              const cardStatus = getMeetingCardStatus(meeting);
+              return (
             <View
               key={meeting.id}
               className="bg-white rounded-xl p-4 mb-3 shadow-sm"
@@ -594,25 +764,30 @@ export default function MeetingsScreen() {
               >
                 <View className="flex-1">
                   <Text className="font-semibold text-gray-800">
-                    Meeting on {formatDateLong(meeting.date)}
+                    {getMeetingCardTitle(meeting)}
+                  </Text>
+                  <Text className="text-sm text-gray-500 mt-1">
+                    {formatDateLong(meeting.date)}
                   </Text>
                   <Text className="text-sm text-gray-500 mt-1">
                     Status:{' '}
                     <Text
                       className={
-                        meeting.processing_status === 'complete'
+                        cardStatus === 'applied' || cardStatus === 'complete'
                           ? 'text-green-600'
-                          : meeting.processing_status === 'failed'
+                          : cardStatus === 'failed'
                           ? 'text-red-600'
                           : 'text-honey-600'
                       }
                     >
-                      {meeting.processing_status}
+                      {cardStatus}
                     </Text>
                   </Text>
                 </View>
                 <Text className="text-2xl">
-                  {meeting.processing_status === 'complete'
+                  {cardStatus === 'needs apply'
+                    ? '↪'
+                    : meeting.processing_status === 'complete'
                     ? '✓'
                     : meeting.processing_status === 'failed'
                     ? '✗'
@@ -631,6 +806,8 @@ export default function MeetingsScreen() {
                 </Pressable>
               )}
             </View>
+              );
+            })()
           ))}
           </FadeIn>
         )}
@@ -643,6 +820,107 @@ export default function MeetingsScreen() {
         communityId={communityId}
         onSchedule={handleScheduleMeeting}
       />
+
+      {/* Import Gemini meeting notes */}
+      <Modal
+        visible={showNotesImport}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowNotesImport(false)}
+      >
+        <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+            <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+              <Pressable onPress={() => setShowNotesImport(false)} disabled={importingNotes}>
+                <Text className="text-gray-500 text-base">Cancel</Text>
+              </Pressable>
+              <Text className="text-lg font-bold text-hive-dark">Import Notes</Text>
+              <Pressable
+                onPress={handleImportNotes}
+                disabled={importingNotes || !hasImportableNotes}
+                className={importingNotes || !hasImportableNotes ? 'opacity-50' : ''}
+              >
+                <Text className="text-honey-600 text-base font-semibold">
+                  {importingNotes ? 'Importing...' : 'Import'}
+                </Text>
+              </Pressable>
+            </View>
+
+            <ScrollView className="flex-1 p-4" keyboardShouldPersistTaps="handled">
+              {notesImportForm.linkedEventId && (
+                <View className="bg-honey-50 border border-honey-100 rounded-xl p-3 mb-4">
+                  <Text className="text-honey-800 font-medium">
+                    Linked to {notesImportForm.title}
+                  </Text>
+                </View>
+              )}
+
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-700 mb-1">Title</Text>
+                <TextInput
+                  value={notesImportForm.title}
+                  onChangeText={(title) => setNotesImportForm((form) => ({ ...form, title }))}
+                  className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                  placeholder="Hive Meeting"
+                />
+              </View>
+
+              <View className="mb-4">
+                <EventDatePicker
+                  value={notesImportForm.date}
+                  onChange={(date) => setNotesImportForm((form) => ({ ...form, date }))}
+                />
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-700 mb-1">Notes File</Text>
+                {notesImportForm.fileName ? (
+                  <View className="border border-honey-200 bg-honey-50 rounded-lg p-3">
+                    <Text className="text-honey-900 font-medium">{notesImportForm.fileName}</Text>
+                    <View className="flex-row gap-3 mt-3">
+                      <Pressable
+                        onPress={handlePickNotesFile}
+                        className="bg-honey-500 px-4 py-2 rounded-lg active:bg-honey-600"
+                      >
+                        <Text className="text-white font-semibold">Replace</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={clearNotesFile}
+                        className="bg-gray-200 px-4 py-2 rounded-lg active:bg-gray-300"
+                      >
+                        <Text className="text-gray-700 font-semibold">Remove</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={handlePickNotesFile}
+                    className="border border-dashed border-gray-300 rounded-lg px-4 py-4 active:bg-gray-50"
+                  >
+                    <Text className="text-gray-700 font-semibold">Upload .docx, .pdf, .txt, or .md</Text>
+                    <Text className="text-gray-500 text-sm mt-1">
+                      Or paste the notes below.
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-700 mb-1">Gemini Notes</Text>
+                <TextInput
+                  value={notesImportForm.notes}
+                  onChangeText={(notes) => setNotesImportForm((form) => ({ ...form, notes }))}
+                  className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                  placeholder="Paste Google Meet notes here"
+                  multiline
+                  textAlignVertical="top"
+                  style={{ minHeight: 260 }}
+                />
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Edit Meeting Modal */}
       <Modal
@@ -731,75 +1009,56 @@ export default function MeetingsScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Event Picker Modal - shown before recording */}
-      <Modal
-        visible={showEventPicker}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowEventPicker(false)}
-      >
-        <SafeAreaView className="flex-1 bg-white" edges={['top']}>
-          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
-            <Pressable onPress={() => setShowEventPicker(false)}>
-              <Text className="text-gray-500 text-base">Cancel</Text>
-            </Pressable>
-            <Text className="text-lg font-bold text-hive-dark">Link to Meeting</Text>
-            <View style={{ width: 50 }} />
-          </View>
-
-          <ScrollView className="flex-1 p-4">
-            <Text className="text-gray-600 mb-4">
-              Select a scheduled meeting to link this recording to, or record without linking.
-            </Text>
-
-            {/* Today's scheduled meetings */}
-            {todaysMeetings.length > 0 && (
-              <View className="mb-6">
-                <Text className="text-sm font-semibold text-gray-500 uppercase mb-2">
-                  Today's Meetings
-                </Text>
-                {todaysMeetings.map((event) => (
-                  <Pressable
-                    key={event.id}
-                    onPress={() => {
-                      setSelectedEventForRecording(event);
-                      setShowEventPicker(false);
-                      setShowRecorder(true);
-                    }}
-                    className="bg-honey-50 border border-honey-200 rounded-xl p-4 mb-2 active:bg-honey-100"
-                  >
-                    <Text className="font-semibold text-gray-800">{event.title}</Text>
-                    {event.event_time && (
-                      <Text className="text-sm text-gray-500 mt-1">
-                        {event.event_time}
-                      </Text>
-                    )}
-                    {event.location && (
-                      <Text className="text-sm text-gray-500">📍 {event.location}</Text>
-                    )}
-                  </Pressable>
-                ))}
+      {/* Admin: edit slide deck URL */}
+      <Modal visible={showDeckEdit} animationType="slide" transparent onRequestClose={() => setShowDeckEdit(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+              <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 4 }}>Slide Deck URL</Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 16, lineHeight: 18 }}>
+                Paste the Canva "View" link (not the edit link). The view link always shows the latest saved version.{'\n\n'}In Canva: Share → Copy link → choose "View only".
+              </Text>
+              <TextInput
+                value={deckUrlDraft}
+                onChangeText={setDeckUrlDraft}
+                placeholder="https://www.canva.com/design/..."
+                placeholderTextColor="#9ca3af"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus
+                style={{
+                  fontFamily: 'Lato_400Regular',
+                  fontSize: 14,
+                  color: '#2d2d2d',
+                  backgroundColor: '#fff',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: 'rgba(189,147,72,0.35)',
+                  padding: 14,
+                  marginBottom: 16,
+                }}
+              />
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Pressable
+                  onPress={() => setShowDeckEdit(false)}
+                  style={{ flex: 1, backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#6b7280' }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleSaveDeckUrl}
+                  disabled={savingDeckUrl}
+                  style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: savingDeckUrl ? 0.7 : 1 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>
+                    {savingDeckUrl ? 'Saving…' : 'Save Link'}
+                  </Text>
+                </Pressable>
               </View>
-            )}
-
-            {/* Record without linking */}
-            <Pressable
-              onPress={() => {
-                setSelectedEventForRecording(null);
-                setShowEventPicker(false);
-                setShowRecorder(true);
-              }}
-              className="bg-gray-100 rounded-xl p-4 active:bg-gray-200"
-            >
-              <Text className="font-semibold text-gray-700 text-center">
-                Record Without Linking
-              </Text>
-              <Text className="text-sm text-gray-500 text-center mt-1">
-                Create a standalone recording
-              </Text>
-            </Pressable>
-          </ScrollView>
-        </SafeAreaView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

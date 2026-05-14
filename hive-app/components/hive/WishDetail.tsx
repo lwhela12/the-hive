@@ -19,7 +19,7 @@ import type { Wish, Profile, WishComment, WishGranter } from '../../types';
 
 type WishWithGranters = Wish & {
   user: Profile;
-  granters?: (WishGranter & { granter: Profile })[];
+  granters?: (WishGranter & { granter?: Profile })[];
 };
 
 interface WishDetailProps {
@@ -157,21 +157,21 @@ export function WishDetail({ wish, onClose, onGrant }: WishDetailProps) {
                   Granted by
                 </Text>
                 <View className="flex-row flex-wrap gap-2">
-                  {wish.granters.map((g) => (
+                  {wish.granters.filter((g) => g.granter).map((g) => (
                     <View
                       key={g.id}
                       className="flex-row items-center bg-cream px-3 py-2 rounded-full"
                     >
                       <Avatar
-                        name={g.granter.name}
-                        url={g.granter.avatar_url}
+                        name={g.granter?.name || 'Unknown'}
+                        url={g.granter?.avatar_url}
                         size={24}
                       />
                       <Text
                         style={{ fontFamily: 'Lato_700Bold' }}
                         className="text-charcoal text-sm ml-2"
                       >
-                        {g.granter.name}
+                        {g.granter?.name || 'Unknown'}
                       </Text>
                     </View>
                   ))}

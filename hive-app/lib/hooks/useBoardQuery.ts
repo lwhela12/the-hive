@@ -39,7 +39,7 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
   }
 
   const stats: Record<string, CategoryStats> = {};
-  (data || []).forEach((row: { category_id: string; created_at: string; last_reply_at: string | null }) => {
+  (data || []).forEach((row: { category_id: string; created_at: string; last_reply_at?: string | null }) => {
     if (!stats[row.category_id]) {
       stats[row.category_id] = { count: 0, latestActivity: null };
     }

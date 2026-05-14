@@ -32,6 +32,15 @@ type InviteRow = CommunityInvite & {
   inviter: Pick<Profile, 'name'> | null;
 };
 
+const ROLE_OPTIONS: UserRole[] = ['member', 'treasurer', 'historian', 'admin'];
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  member: 'Member',
+  treasurer: 'Treasurer',
+  historian: 'Historian',
+  admin: 'Admin',
+};
+
 export default function AdminScreen() {
   const { profile, communityId, communityRole } = useAuth();
   const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
@@ -84,7 +93,7 @@ export default function AdminScreen() {
       .select('id, role, profiles(*)')
       .eq('community_id', communityId)
       .order('created_at', { ascending: true });
-    if (membersData) setMembers(membersData as MemberRow[]);
+    if (membersData) setMembers(membersData as unknown as MemberRow[]);
 
     // Fetch queen bees (ordered by display_order for queue)
     const { data: qbData } = await supabase
@@ -619,9 +628,9 @@ export default function AdminScreen() {
     }
   };
 
-  const isAdmin = communityRole === 'admin';
-  const isTreasurer = communityRole === 'treasurer';
-  const canEditHoneyPot = isTreasurer;
+  const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+  const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
+  const canEditHoneyPot = isTreasurer || isAdmin;
 
   if (!isAdmin && !isTreasurer) {
     return (
@@ -635,7 +644,7 @@ export default function AdminScreen() {
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <AppHeader
         title="Admin"
-        onMenuPress={() => setDrawerOpen(true)}
+        onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
       />
 
       {/* Navigation Drawer */}
@@ -711,7 +720,7 @@ export default function AdminScreen() {
               </>
             ) : (
               <Text className="text-center text-gray-500">
-                Honey Pot changes are limited to the Treasurer.
+                Honey Pot changes are limited to Admins and the Treasurer.
               </Text>
             )}
           </View>
@@ -738,12 +747,12 @@ export default function AdminScreen() {
                   <Text className="text-sm text-gray-500">{member.profiles.email}</Text>
                 </View>
                 <View className="flex-row items-center">
-                  {(['member', 'treasurer', 'historian', 'admin'] as UserRole[]).map(
+                  {ROLE_OPTIONS.map(
                     (role) => (
                       <Pressable
                         key={role}
                         onPress={() => updateMemberRole(member.id, role)}
-                        className={`px-2 py-1 rounded mr-1 ${
+                        className={`px-3 py-1 rounded mr-1 ${
                           member.role === role
                             ? 'bg-honey-500'
                             : 'bg-gray-100'
@@ -756,7 +765,7 @@ export default function AdminScreen() {
                               : 'text-gray-600'
                           }`}
                         >
-                          {role.charAt(0).toUpperCase()}
+                          {ROLE_LABELS[role]}
                         </Text>
                       </Pressable>
                     )
@@ -790,7 +799,7 @@ export default function AdminScreen() {
               className="border border-gray-300 rounded-lg p-3 mb-3"
             />
             <View className="flex-row mb-4">
-              {(['member', 'treasurer', 'historian', 'admin'] as UserRole[]).map((role) => (
+              {ROLE_OPTIONS.map((role) => (
                 <Pressable
                   key={role}
                   onPress={() => setInviteRole(role)}
@@ -799,7 +808,7 @@ export default function AdminScreen() {
                   }`}
                 >
                   <Text className={`${inviteRole === role ? 'text-white' : 'text-gray-600'} capitalize`}>
-                    {role}
+                    {ROLE_LABELS[role]}
                   </Text>
                 </Pressable>
               ))}
@@ -832,7 +841,7 @@ export default function AdminScreen() {
                         {invite.email}
                       </Text>
                       <Text className="text-sm text-gray-500">
-                        Role: {invite.role} • Invited by {invite.inviter?.name || 'Unknown'}
+                        Role: {ROLE_LABELS[invite.role] || invite.role} • Invited by {invite.inviter?.name || 'Unknown'}
                       </Text>
                       {isExpired && (
                         <Text className="text-sm text-red-500">Expired</Text>

@@ -1,6 +1,6 @@
 // Cache names — bump APP_CACHE version when you want to force a full refresh
-const APP_CACHE = 'hive-app-v2';
-const STATIC_CACHE = 'hive-static-v2';
+const APP_CACHE = 'hive-app-v3';
+const STATIC_CACHE = 'hive-static-v3';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant

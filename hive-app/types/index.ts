@@ -1,4 +1,4 @@
-export type UserRole = 'member' | 'treasurer' | 'admin';
+export type UserRole = 'member' | 'treasurer' | 'historian' | 'admin';
 
 // Board types
 export type BoardCategoryType =
@@ -14,7 +14,7 @@ export type ChatRoomType = 'community' | 'dm' | 'group_dm';
 export type WishStatus = 'private' | 'public' | 'fulfilled' | 'replaced';
 export type QueenBeeStatus = 'upcoming' | 'active' | 'completed';
 
-export interface QueenBeePreference {
+export interface QueenBeePreference extends Record<string, unknown> {
   preferred_month?: string;
   reason?: string;
   timeframe?: string;
@@ -34,7 +34,7 @@ export type NotificationType =
 export type ExtractionSource = 'chat' | 'onboarding' | 'meeting' | 'manual';
 
 // Attachment type for photos/files in messages and posts
-export interface Attachment {
+export interface Attachment extends Record<string, unknown> {
   id: string;
   url: string;
   filename: string;
@@ -44,7 +44,7 @@ export interface Attachment {
   height?: number;
 }
 
-export interface Community {
+export interface Community extends Record<string, unknown> {
   id: string;
   name: string;
   slug: string;
@@ -53,7 +53,7 @@ export interface Community {
   created_at: string;
 }
 
-export interface CommunityMembership {
+export interface CommunityMembership extends Record<string, unknown> {
   id: string;
   community_id: string;
   user_id: string;
@@ -63,7 +63,7 @@ export interface CommunityMembership {
   user?: Profile;
 }
 
-export interface CommunityInvite {
+export interface CommunityInvite extends Record<string, unknown> {
   id: string;
   community_id: string;
   email: string;
@@ -77,7 +77,7 @@ export interface CommunityInvite {
   inviter?: Profile;
 }
 
-export interface Waitlist {
+export interface Waitlist extends Record<string, unknown> {
   id: string;
   email: string;
   name?: string;
@@ -85,7 +85,7 @@ export interface Waitlist {
   created_at: string;
 }
 
-export interface Profile {
+export interface Profile extends Record<string, unknown> {
   id: string;
   name: string;
   email: string;
@@ -102,11 +102,20 @@ export interface Profile {
   push_token?: string;
   onboarded_at?: string;
   current_community_id?: string;
+  bio?: string | null;
+  current_project?: string | null;
+  hometown?: string | null;
+  favorite_book?: string | null;
+  favorite_food?: string | null;
+  favorite_hobby?: string | null;
+  known_for?: string | null;
+  fun_facts?: string[] | null;
+  love_languages?: string[] | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface Skill {
+export interface Skill extends Record<string, unknown> {
   id: string;
   user_id: string;
   community_id: string;
@@ -117,7 +126,7 @@ export interface Skill {
   user?: Profile;
 }
 
-export interface Wish {
+export interface Wish extends Record<string, unknown> {
   id: string;
   user_id: string;
   community_id: string;
@@ -135,7 +144,7 @@ export interface Wish {
   granters?: WishGranter[];
 }
 
-export interface WishComment {
+export interface WishComment extends Record<string, unknown> {
   id: string;
   wish_id: string;
   user_id: string;
@@ -145,7 +154,7 @@ export interface WishComment {
   user?: Profile;
 }
 
-export interface WishGranter {
+export interface WishGranter extends Record<string, unknown> {
   id: string;
   wish_id: string;
   granter_id: string;
@@ -154,7 +163,7 @@ export interface WishGranter {
   granter?: Profile;
 }
 
-export interface QueenBee {
+export interface QueenBee extends Record<string, unknown> {
   id: string;
   user_id: string;
   community_id: string;
@@ -162,12 +171,13 @@ export interface QueenBee {
   project_title: string;
   project_description?: string;
   status: QueenBeeStatus;
+  display_order?: number;
   created_at: string;
   updated_at: string;
   user?: Profile;
 }
 
-export interface QueenBeeUpdate {
+export interface QueenBeeUpdate extends Record<string, unknown> {
   id: string;
   queen_bee_id: string;
   user_id: string;
@@ -177,7 +187,7 @@ export interface QueenBeeUpdate {
   user?: Profile;
 }
 
-export interface MonthlyHighlight {
+export interface MonthlyHighlight extends Record<string, unknown> {
   id: string;
   queen_bee_id: string;
   meeting_id?: string;
@@ -189,7 +199,7 @@ export interface MonthlyHighlight {
   creator?: Profile;
 }
 
-export interface Meeting {
+export interface Meeting extends Record<string, unknown> {
   id: string;
   community_id: string;
   date: string;
@@ -204,7 +214,7 @@ export interface Meeting {
   created_at: string;
 }
 
-export interface ActionItem {
+export interface ActionItem extends Record<string, unknown> {
   id: string;
   meeting_id?: string | null;
   community_id: string;
@@ -217,7 +227,7 @@ export interface ActionItem {
   assigned_user?: Profile;
 }
 
-export interface HoneyPot {
+export interface HoneyPot extends Record<string, unknown> {
   id: string;
   community_id: string;
   balance: number;
@@ -225,7 +235,7 @@ export interface HoneyPot {
   updated_at: string;
 }
 
-export interface HoneyPotTransaction {
+export interface HoneyPotTransaction extends Record<string, unknown> {
   id: string;
   community_id: string;
   amount: number;
@@ -237,7 +247,7 @@ export interface HoneyPotTransaction {
 
 export type EventStatus = 'scheduled' | 'completed' | 'cancelled';
 
-export interface Event {
+export interface Event extends Record<string, unknown> {
   id: string;
   community_id: string;
   title: string;
@@ -255,7 +265,18 @@ export interface Event {
   created_at: string;
 }
 
-export interface Notification {
+export interface DailyQuestionAnswer extends Record<string, unknown> {
+  id: string;
+  user_id: string;
+  community_id: string;
+  question_index: number;
+  question_date: string;
+  answer: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Notification extends Record<string, unknown> {
   id: string;
   user_id: string;
   community_id: string;
@@ -275,7 +296,7 @@ export type ConversationMode = 'default' | 'onboarding';
 // Context summary types for smart LLM context management
 export type ContextSummaryType = 'conversation' | 'board_activity' | 'room_messages' | 'meetings';
 
-export interface ContextSummary {
+export interface ContextSummary extends Record<string, unknown> {
   id: string;
   community_id: string;
   user_id?: string;
@@ -290,7 +311,7 @@ export interface ContextSummary {
   updated_at: string;
 }
 
-export interface Conversation {
+export interface Conversation extends Record<string, unknown> {
   id: string;
   user_id: string;
   community_id: string;
@@ -302,7 +323,7 @@ export interface Conversation {
   updated_at: string;
 }
 
-export interface ConversationProject {
+export interface ConversationProject extends Record<string, unknown> {
   id: string;
   user_id: string;
   community_id: string;
@@ -312,14 +333,14 @@ export interface ConversationProject {
   updated_at: string;
 }
 
-export interface ChatMessage {
+export interface ChatMessage extends Record<string, unknown> {
   id: string;
   user_id: string;
   community_id: string;
   conversation_id?: string;
   role: 'user' | 'assistant';
   content: string;
-  attachments?: Attachment[];
+  attachments?: Attachment[] | null;
   tool_calls?: Record<string, unknown>;
   created_at: string;
 }
@@ -328,7 +349,7 @@ export interface ChatMessage {
 // MESSAGE BOARD TYPES
 // ============================================
 
-export interface BoardCategory {
+export interface BoardCategory extends Record<string, unknown> {
   id: string;
   community_id: string;
   name: string;
@@ -347,7 +368,7 @@ export interface BoardCategory {
   member_tags?: BoardCategoryMemberTag[];
 }
 
-export interface BoardCategoryMemberTag {
+export interface BoardCategoryMemberTag extends Record<string, unknown> {
   id: string;
   community_id: string;
   category_id: string;
@@ -357,14 +378,14 @@ export interface BoardCategoryMemberTag {
   member?: Profile;
 }
 
-export interface BoardPost {
+export interface BoardPost extends Record<string, unknown> {
   id: string;
   community_id: string;
   category_id: string;
   author_id: string;
   title: string;
   content: string;
-  attachments?: Attachment[];
+  attachments?: Attachment[] | null;
   is_pinned: boolean;
   is_locked: boolean;
   edited_at?: string;
@@ -378,14 +399,14 @@ export interface BoardPost {
   reactions?: BoardReaction[];
 }
 
-export interface BoardReply {
+export interface BoardReply extends Record<string, unknown> {
   id: string;
   community_id: string;
   post_id: string;
   parent_reply_id?: string;
   author_id: string;
   content: string;
-  attachments?: Attachment[];
+  attachments?: Attachment[] | null;
   edited_at?: string;
   created_at: string;
   // Joined data
@@ -394,7 +415,7 @@ export interface BoardReply {
   nested_replies?: BoardReply[];
 }
 
-export interface BoardReaction {
+export interface BoardReaction extends Record<string, unknown> {
   id: string;
   community_id: string;
   post_id?: string;
@@ -409,7 +430,7 @@ export interface BoardReaction {
 // INTERGROUP CHAT TYPES
 // ============================================
 
-export interface ChatRoom {
+export interface ChatRoom extends Record<string, unknown> {
   id: string;
   community_id: string;
   room_type: ChatRoomType;
@@ -423,7 +444,7 @@ export interface ChatRoom {
   unread_count?: number;
 }
 
-export interface ChatRoomMember {
+export interface ChatRoomMember extends Record<string, unknown> {
   id: string;
   room_id: string;
   user_id: string;
@@ -433,13 +454,13 @@ export interface ChatRoomMember {
   user?: Profile;
 }
 
-export interface RoomMessage {
+export interface RoomMessage extends Record<string, unknown> {
   id: string;
   community_id: string;
   room_id: string;
   sender_id: string;
   content: string;
-  attachments?: Attachment[];
+  attachments?: Attachment[] | null;
   edited_at?: string;
   deleted_at?: string;
   reply_to_id?: string;
@@ -450,7 +471,7 @@ export interface RoomMessage {
   reply_to?: RoomMessage;
 }
 
-export interface MessageReaction {
+export interface MessageReaction extends Record<string, unknown> {
   id: string;
   message_id: string;
   user_id: string;
@@ -459,7 +480,7 @@ export interface MessageReaction {
   user?: Profile;
 }
 
-export interface TypingIndicator {
+export interface TypingIndicator extends Record<string, unknown> {
   id: string;
   room_id: string;
   user_id: string;
@@ -471,7 +492,7 @@ export interface TypingIndicator {
 // USER INSIGHTS (AI-maintained personality profiles)
 // ============================================
 
-export interface UserInsights {
+export interface UserInsights extends Record<string, unknown> {
   id: string;
   user_id: string;
   community_id: string;
@@ -481,6 +502,49 @@ export interface UserInsights {
   updated_at: string;
 }
 
+export interface ChatRoomsWithDataRow extends Record<string, unknown> {
+  room_id: string;
+  room_community_id: string;
+  room_type: ChatRoomType;
+  room_name: string | null;
+  room_description: string | null;
+  room_created_by: string | null;
+  room_created_at: string;
+  members: ChatRoomMember[];
+  last_message: RoomMessage | null;
+  unread_count: number;
+}
+
+export interface SurveyQuestion extends Record<string, unknown> {
+  id: string;
+  text: string;
+  type: 'short' | 'long' | 'scale' | 'choice';
+  options?: string[];
+  required: boolean;
+}
+
+export interface Survey extends Record<string, unknown> {
+  id: string;
+  community_id: string;
+  title: string;
+  description?: string | null;
+  questions: SurveyQuestion[];
+  due_date?: string | null;
+  meeting_id?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  is_active: boolean;
+}
+
+export interface SurveyResponse extends Record<string, unknown> {
+  id: string;
+  survey_id: string;
+  user_id: string;
+  community_id: string;
+  answers: Record<string, string | string[] | number>;
+  submitted_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -488,148 +552,248 @@ export interface Database {
         Row: Community;
         Insert: Omit<Community, 'id' | 'created_at'>;
         Update: Partial<Omit<Community, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       community_memberships: {
         Row: CommunityMembership;
         Insert: Omit<CommunityMembership, 'id' | 'created_at'>;
         Update: Partial<Omit<CommunityMembership, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       community_invites: {
         Row: CommunityInvite;
         Insert: Omit<CommunityInvite, 'id' | 'created_at'>;
         Update: Partial<Omit<CommunityInvite, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       profiles: {
         Row: Profile;
         Insert: Omit<Profile, 'created_at' | 'updated_at'>;
         Update: Partial<Omit<Profile, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       skills: {
         Row: Skill;
         Insert: Omit<Skill, 'id' | 'created_at'>;
         Update: Partial<Omit<Skill, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       wishes: {
         Row: Wish;
         Insert: Omit<Wish, 'id' | 'created_at'>;
         Update: Partial<Omit<Wish, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      wish_comments: {
+        Row: WishComment;
+        Insert: Omit<WishComment, 'id' | 'created_at'>;
+        Update: Partial<Omit<WishComment, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       wish_granters: {
         Row: WishGranter;
         Insert: Omit<WishGranter, 'id' | 'created_at'>;
         Update: Partial<Omit<WishGranter, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       queen_bees: {
         Row: QueenBee;
         Insert: Omit<QueenBee, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<QueenBee, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       queen_bee_updates: {
         Row: QueenBeeUpdate;
         Insert: Omit<QueenBeeUpdate, 'id' | 'created_at'>;
         Update: Partial<Omit<QueenBeeUpdate, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       meetings: {
         Row: Meeting;
         Insert: Omit<Meeting, 'id' | 'created_at'>;
         Update: Partial<Omit<Meeting, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      monthly_highlights: {
+        Row: MonthlyHighlight;
+        Insert: Omit<MonthlyHighlight, 'id' | 'created_at'>;
+        Update: Partial<Omit<MonthlyHighlight, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       action_items: {
         Row: ActionItem;
         Insert: Omit<ActionItem, 'id' | 'created_at'>;
         Update: Partial<Omit<ActionItem, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       honey_pot: {
         Row: HoneyPot;
         Insert: Omit<HoneyPot, 'id' | 'updated_at'>;
         Update: Partial<Omit<HoneyPot, 'id'>>;
+        Relationships: [];
       };
       honey_pot_transactions: {
         Row: HoneyPotTransaction;
         Insert: Omit<HoneyPotTransaction, 'id' | 'created_at'>;
         Update: Partial<Omit<HoneyPotTransaction, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       events: {
         Row: Event;
         Insert: Omit<Event, 'id' | 'created_at'>;
         Update: Partial<Omit<Event, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      daily_question_answers: {
+        Row: DailyQuestionAnswer;
+        Insert: Omit<DailyQuestionAnswer, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<DailyQuestionAnswer, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      surveys: {
+        Row: Survey;
+        Insert: Omit<Survey, 'id' | 'created_at'>;
+        Update: Partial<Omit<Survey, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      survey_responses: {
+        Row: SurveyResponse;
+        Insert: Omit<SurveyResponse, 'id' | 'submitted_at'>;
+        Update: Partial<Omit<SurveyResponse, 'id' | 'submitted_at'>>;
+        Relationships: [];
       };
       notifications: {
         Row: Notification;
         Insert: Omit<Notification, 'id' | 'created_at'>;
         Update: Partial<Omit<Notification, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       chat_messages: {
         Row: ChatMessage;
         Insert: Omit<ChatMessage, 'id' | 'created_at'>;
         Update: Partial<Omit<ChatMessage, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       conversations: {
         Row: Conversation;
         Insert: Omit<Conversation, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<Conversation, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       conversation_projects: {
         Row: ConversationProject;
         Insert: Omit<ConversationProject, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<ConversationProject, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       context_summaries: {
         Row: ContextSummary;
         Insert: Omit<ContextSummary, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<ContextSummary, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       // Message Board tables
       board_categories: {
         Row: BoardCategory;
         Insert: Omit<BoardCategory, 'id' | 'created_at'>;
         Update: Partial<Omit<BoardCategory, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       board_posts: {
         Row: BoardPost;
         Insert: Omit<BoardPost, 'id' | 'created_at' | 'reply_count'>;
         Update: Partial<Omit<BoardPost, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       board_replies: {
         Row: BoardReply;
         Insert: Omit<BoardReply, 'id' | 'created_at'>;
         Update: Partial<Omit<BoardReply, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       board_reactions: {
         Row: BoardReaction;
         Insert: Omit<BoardReaction, 'id' | 'created_at'>;
         Update: Partial<Omit<BoardReaction, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      board_category_member_tags: {
+        Row: BoardCategoryMemberTag;
+        Insert: Omit<BoardCategoryMemberTag, 'id' | 'created_at'>;
+        Update: Partial<Omit<BoardCategoryMemberTag, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       // Intergroup Chat tables
       chat_rooms: {
         Row: ChatRoom;
         Insert: Omit<ChatRoom, 'id' | 'created_at'>;
         Update: Partial<Omit<ChatRoom, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       chat_room_members: {
         Row: ChatRoomMember;
         Insert: Omit<ChatRoomMember, 'id' | 'joined_at'>;
         Update: Partial<Omit<ChatRoomMember, 'id' | 'joined_at'>>;
+        Relationships: [];
       };
       room_messages: {
         Row: RoomMessage;
         Insert: Omit<RoomMessage, 'id' | 'created_at'>;
         Update: Partial<Omit<RoomMessage, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       message_reactions: {
         Row: MessageReaction;
         Insert: Omit<MessageReaction, 'id' | 'created_at'>;
         Update: Partial<Omit<MessageReaction, 'id' | 'created_at'>>;
+        Relationships: [];
       };
       typing_indicators: {
         Row: TypingIndicator;
         Insert: Omit<TypingIndicator, 'id' | 'updated_at'>;
         Update: Partial<Omit<TypingIndicator, 'id'>>;
+        Relationships: [];
       };
       user_insights: {
         Row: UserInsights;
         Insert: Omit<UserInsights, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<UserInsights, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      waitlist: {
+        Row: Waitlist;
+        Insert: Omit<Waitlist, 'id' | 'created_at'>;
+        Update: Partial<Omit<Waitlist, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+    };
+    Views: {};
+    Functions: {
+      is_genesis_state: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      get_or_create_dm_room: {
+        Args: {
+          p_community_id: string;
+          p_user1_id: string;
+          p_user2_id: string;
+        };
+        Returns: string;
+      };
+      get_or_create_group_dm_room: {
+        Args: {
+          p_community_id: string;
+          p_user_ids: string[];
+        };
+        Returns: string;
+      };
+      get_chat_rooms_with_data: {
+        Args: {
+          p_community_id: string;
+          p_user_id: string;
+        };
+        Returns: ChatRoomsWithDataRow[];
       };
     };
   };

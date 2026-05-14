@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
-import type { Skill, ActionItem } from '../../types';
+import type { Profile, Skill, ActionItem } from '../../types';
 
 export function useUser() {
   const { profile, communityId, refreshProfile } = useAuth();
@@ -45,7 +45,7 @@ export function useUser() {
     fetchUserData();
   }, [fetchUserData]);
 
-  const updateProfile = async (updates: Partial<typeof profile>) => {
+  const updateProfile = async (updates: Partial<Profile>) => {
     if (!profile) return { error: new Error('No profile') };
 
     const { error } = await supabase
@@ -77,11 +77,15 @@ export function useUser() {
   };
 
   const deleteSkill = async (skillId: string) => {
+    if (!profile || !communityId) {
+      return { error: new Error('Not authenticated') };
+    }
+
     const { error } = await supabase
       .from('skills')
       .delete()
       .eq('id', skillId)
-      .eq('user_id', profile?.id)
+      .eq('user_id', profile.id)
       .eq('community_id', communityId);
 
     if (!error) {

@@ -6,7 +6,7 @@ export type TypingUserWithProfile = TypingIndicator & { user?: Profile };
 
 export function useTypingIndicators(roomId: string, currentUserId?: string) {
   const [typingUsers, setTypingUsers] = useState<TypingUserWithProfile[]>([]);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchTypingUsers = useCallback(async () => {
     const { data } = await supabase

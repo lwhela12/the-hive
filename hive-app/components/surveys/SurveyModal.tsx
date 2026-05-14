@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Modal } from 'react-native';
 import { Image } from 'expo-image';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 
 const cliveIcon = require('../../assets/Clive_logo.png');
 import type { Survey, SurveyQuestion } from '../../lib/hooks/useSurveys';
@@ -59,7 +61,7 @@ function ChoiceInput({ options, value, onChange, multi }: { options: string[]; v
             }}
           >
             <View style={{
-              width: multi ? 18 : 18, height: multi ? 18 : 18,
+              width: 18, height: 18,
               borderRadius: multi ? 4 : 9,
               borderWidth: 2, borderColor: active ? '#bd9348' : '#d1d5db',
               backgroundColor: active ? '#bd9348' : 'transparent',
@@ -75,15 +77,32 @@ function ChoiceInput({ options, value, onChange, multi }: { options: string[]; v
   );
 }
 
+const DRAFT_KEY = (surveyId: string) => `survey-draft:${surveyId}`;
+
 export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draftLoaded, setDraftLoaded] = useState(false);
 
-  const setAnswer = (questionId: string, value: any) => {
-    setAnswers(prev => ({ ...prev, [questionId]: value }));
-  };
+  // Restore saved draft on open
+  useEffect(() => {
+    AsyncStorage.getItem(DRAFT_KEY(survey.id)).then(raw => {
+      if (raw) {
+        try { setAnswers(JSON.parse(raw)); } catch {}
+      }
+      setDraftLoaded(true);
+    });
+  }, [survey.id]);
+
+  const setAnswer = useCallback((questionId: string, value: any) => {
+    setAnswers(prev => {
+      const next = { ...prev, [questionId]: value };
+      AsyncStorage.setItem(DRAFT_KEY(survey.id), JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, [survey.id]);
 
   const handleSubmit = async () => {
     const missing = survey.questions.filter(q => q.required && !answers[q.id] && answers[q.id] !== 0);
@@ -98,9 +117,13 @@ export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
     if (submitError) {
       setError('Could not save your responses. Please try again.');
     } else {
+      AsyncStorage.removeItem(DRAFT_KEY(survey.id)).catch(() => {});
       setSubmitted(true);
     }
   };
+
+  const answeredCount = survey.questions.filter(q => answers[q.id] !== undefined && answers[q.id] !== '').length;
+  const hasDraft = answeredCount > 0;
 
   const renderQuestion = (q: SurveyQuestion, index: number) => {
     const val = answers[q.id];
@@ -147,14 +170,27 @@ export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-        <Pressable
-          onPress={(e: any) => e.stopPropagation()}
-          style={{ backgroundColor: '#faf8f3', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '94%' }}
-        >
-          {/* Handle */}
-          <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 8 }}>
+      {/* Non-interactive backdrop — no tap-to-close so users don't lose their work */}
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: '#faf8f3', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '94%' }}>
+          {/* Handle + close button */}
+          <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 8 }}>
+            {hasDraft ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="cloud-done-outline" size={13} color="#bd9348" />
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#bd9348' }}>Progress saved</Text>
+              </View>
+            ) : <View style={{ width: 80 }} />}
+            <Pressable
+              onPress={onClose}
+              hitSlop={12}
+              style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, padding: 4 })}
+            >
+              <Ionicons name="close" size={22} color="#9a8060" />
+            </Pressable>
           </View>
 
           {submitted ? (
@@ -186,7 +222,7 @@ export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
                 <View style={{ height: 1, backgroundColor: 'rgba(222,193,129,0.3)', marginTop: 20 }} />
               </View>
 
-              {survey.questions.map((q, i) => renderQuestion(q, i))}
+              {draftLoaded && survey.questions.map((q, i) => renderQuestion(q, i))}
 
               {error && (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#ef4444', marginBottom: 14 }}>{error}</Text>
@@ -203,8 +239,8 @@ export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
               </Pressable>
             </ScrollView>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

@@ -103,3 +103,13 @@ verify_jwt = false
 #   );
 [functions.meeting-reminder]
 verify_jwt = false
+
+# Import Gemini/Google Meet notes into Meeting Hub.
+# Auth and membership checks are handled in function code.
+[functions.import-meeting-notes]
+verify_jwt = false
+
+# Apply imported notes into action items, events, and board posts.
+# Auth and membership checks are handled in function code.
+[functions.apply-meeting-notes]
+verify_jwt = false

@@ -95,7 +95,7 @@ export function RoomChatView({ room, onBack }: RoomChatViewProps) {
   const [currentRoomName, setCurrentRoomName] = useState(room.name);
 
   const flatListRef = useRef<FlatList>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialLoadRef = useRef(true);
   const previousMessageCountRef = useRef(0);
   const isLoadingOlderRef = useRef(false);

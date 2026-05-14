@@ -75,7 +75,7 @@ export function useChat() {
         throw new Error('Missing Supabase functions URL');
       }
 
-      let accessToken = session?.access_token;
+      let accessToken: string | undefined = session.access_token;
       if (!accessToken) {
         const { data } = await supabase.auth.getSession();
         accessToken = data.session?.access_token ?? undefined;

@@ -15,6 +15,7 @@ import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { clearLastAppPath } from '../../lib/navigationState';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { ProfileHeaderSkeleton, ProfileInfoSkeleton, ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
+import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
@@ -340,6 +341,8 @@ export default function ProfileScreen() {
   };
 
   const toggleActionItem = async (item: ActionItem) => {
+    if (!communityId) return;
+
     const { error } = await supabase
       .from('action_items')
       .update({
@@ -355,6 +358,8 @@ export default function ProfileScreen() {
   };
 
   const handlePublishWish = (wish: Wish) => {
+    if (!profile || !communityId) return;
+
     Alert.alert(
       'Share with the HIVE?',
       `This will make your wish visible to all HIVE members:\n\n"${wish.description}"`,
@@ -367,7 +372,7 @@ export default function ProfileScreen() {
               .from('wishes')
               .update({ status: 'public', is_active: true })
               .eq('id', wish.id)
-              .eq('user_id', profile?.id)
+              .eq('user_id', profile.id)
               .eq('community_id', communityId);
 
             if (!error) {
@@ -454,7 +459,7 @@ export default function ProfileScreen() {
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       <AppHeader
         title="Profile"
-        onMenuPress={() => setDrawerOpen(true)}
+        onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
       />
 
       {/* Navigation Drawer */}
@@ -475,47 +480,8 @@ export default function ProfileScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#bd9348" />
         }
       >
-        {/* Profile Header */}
+        {/* Profile Header with Bee Progress Arc */}
         <FadeIn>
-        <View className="items-center mb-6">
-          <Pressable onPress={pickImage} disabled={isUploadingPhoto} className="relative active:opacity-80">
-            <Avatar name={profile.name} url={profile.avatar_url} size={80} />
-            {isUploadingPhoto ? (
-              <View className="absolute inset-0 bg-black/40 rounded-full items-center justify-center">
-                <ActivityIndicator color="#fff" size="small" />
-              </View>
-            ) : (
-              <View className="absolute bottom-0 right-0 bg-gold w-6 h-6 rounded-full items-center justify-center border-2 border-cream">
-                <Text className="text-white text-xs">+</Text>
-              </View>
-            )}
-          </Pressable>
-          <Pressable onPress={pickImage} disabled={isUploadingPhoto}>
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-gold text-sm mt-2">
-              Change Photo
-            </Text>
-          </Pressable>
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-charcoal mt-2">
-            {profile.name}
-          </Text>
-          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60">{profile.email}</Text>
-          {profile.occupation && (
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 mt-1">
-              {profile.occupation}
-            </Text>
-          )}
-          {communityRole && communityRole !== 'member' && (
-            <View className="bg-gold-light px-3 py-1 rounded-full mt-2">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold capitalize">
-                {communityRole}
-              </Text>
-            </View>
-          )}
-        </View>
-        </FadeIn>
-
-        {/* Profile Completion Bar */}
-        <FadeIn delay={50}>
         {(() => {
           const checks = [
             { label: 'Add a photo', done: !!profile.avatar_url },
@@ -527,41 +493,69 @@ export default function ProfileScreen() {
             { label: 'Share a wish', done: wishes.length > 0 },
           ];
           const done = checks.filter(c => c.done).length;
-          const pct = Math.round((done / checks.length) * 100);
+          const score = done / checks.length;
           const nextMissing = checks.find(c => !c.done);
           const isComplete = done === checks.length;
+
           return (
-            <View style={{ backgroundColor: '#fffdf5', borderRadius: 18, borderWidth: 1, borderColor: isComplete ? 'rgba(115,154,136,0.4)' : 'rgba(222,193,129,0.55)', padding: 14, marginBottom: 16, shadowColor: '#bd9348', shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: isComplete ? '#4f7f67' : '#2d2d2d' }}>
-                  {isComplete ? 'Profile is blooming' : `Profile ${pct}% complete`}
-                </Text>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: isComplete ? '#4f7f67' : '#bd9348' }}>{pct}%</Text>
-              </View>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Text style={{ fontSize: 24, width: 30, textAlign: 'center' }}>🌼</Text>
-                <View style={{ flex: 1, height: 34, justifyContent: 'center' }}>
-                  <View style={{ height: 8, backgroundColor: 'rgba(222,193,129,0.22)', borderRadius: 999, overflow: 'hidden' }}>
-                    <View style={{ height: '100%', width: `${pct}%`, backgroundColor: isComplete ? '#739a88' : '#bd9348', borderRadius: 999 }} />
-                  </View>
-                  <View style={{ position: 'absolute', left: `${pct}%`, top: 1, marginLeft: -12, width: 24, height: 24, borderRadius: 12, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.75)', alignItems: 'center', justifyContent: 'center', shadowColor: '#bd9348', shadowOpacity: 0.16, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
-                    <Text style={{ fontSize: 14 }}>🐝</Text>
-                  </View>
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              {/* Arc + avatar stacked */}
+              <View style={{ alignItems: 'center' }}>
+                <BeeProgressArc score={score} size={220} />
+                {/* Avatar overlaps the base of the arc */}
+                <View style={{ marginTop: -44, alignItems: 'center' }}>
+                  <Pressable onPress={pickImage} disabled={isUploadingPhoto} style={{ position: 'relative' }} className="active:opacity-80">
+                    <Avatar name={profile.name} url={profile.avatar_url} size={80} />
+                    {isUploadingPhoto ? (
+                      <View className="absolute inset-0 bg-black/40 rounded-full items-center justify-center">
+                        <ActivityIndicator color="#fff" size="small" />
+                      </View>
+                    ) : (
+                      <View className="absolute bottom-0 right-0 bg-gold w-6 h-6 rounded-full items-center justify-center border-2 border-cream">
+                        <Text className="text-white text-xs">+</Text>
+                      </View>
+                    )}
+                  </Pressable>
                 </View>
-                <Text style={{ fontSize: 24, width: 30, textAlign: 'center' }}>🍯</Text>
               </View>
 
-              {!isComplete && nextMissing && (
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 6 }}>
-                  Next: {nextMissing.label} to help your bee reach the hive.
+              {/* Change photo */}
+              <Pressable onPress={pickImage} disabled={isUploadingPhoto} style={{ marginTop: 8 }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>
+                  Change Photo
+                </Text>
+              </Pressable>
+
+              {/* Name & info */}
+              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginTop: 6 }}>
+                {profile.name}
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d99' }}>
+                {profile.email}
+              </Text>
+              {profile.occupation && (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#2d2d2d80', marginTop: 2 }}>
+                  {profile.occupation}
                 </Text>
               )}
-              {isComplete && (
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#6f8f7d', marginTop: 6 }}>
-                  Your bee made it from flower to hive.
-                </Text>
+              {communityRole && communityRole !== 'member' && (
+                <View style={{ backgroundColor: '#fdf3dc', borderRadius: 99, paddingHorizontal: 12, paddingVertical: 4, marginTop: 6 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', textTransform: 'capitalize' }}>
+                    {communityRole}
+                  </Text>
+                </View>
               )}
+
+              {/* Progress hint */}
+              {isComplete ? (
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#5ab85a', marginTop: 8 }}>
+                  🎉 Profile complete!
+                </Text>
+              ) : nextMissing ? (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 8 }}>
+                  Next: {nextMissing.label} to level up ✨
+                </Text>
+              ) : null}
             </View>
           );
         })()}

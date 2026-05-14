@@ -36,7 +36,7 @@ export function MemberPicker({
   }, [visible, communityId]);
 
   const fetchMembers = async () => {
-    if (!communityId) return;
+    if (!communityId || !profile) return;
 
     setLoading(true);
     try {
@@ -44,11 +44,11 @@ export function MemberPicker({
         .from('community_memberships')
         .select('user:profiles(*)')
         .eq('community_id', communityId)
-        .neq('user_id', profile?.id);
+        .neq('user_id', profile.id);
 
       if (!error && data) {
         const profiles = data
-          .map((m) => m.user as Profile)
+          .map((m) => m.user as unknown as Profile | null)
           .filter((p): p is Profile => p !== null);
         setMembers(profiles);
       }

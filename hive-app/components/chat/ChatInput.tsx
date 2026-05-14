@@ -4,19 +4,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { SelectedImage, pickMultipleImages } from '../../lib/imagePicker';
 import { takePendingAttachments } from '../../lib/pendingAttachments';
 import { VoiceMicButton } from '../ui/VoiceMicButton';
+import { getDraft, setDraft, clearDraft } from '../../lib/draftStore';
+
+const DRAFT_KEY = 'clive-message';
 
 interface ChatInputProps {
   onSend: (message: string, images?: SelectedImage[]) => void;
   isLoading: boolean;
   placeholder?: string;
+  /** Override the draft storage key (e.g. per-conversation) */
+  draftKey?: string;
 }
 
 export const ChatInput = memo(function ChatInput({
   onSend,
   isLoading,
   placeholder = 'Message...',
+  draftKey = DRAFT_KEY,
 }: ChatInputProps) {
-  const [inputText, setInputText] = useState('');
+  const [inputText, setInputText] = useState(() => getDraft(draftKey));
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const voiceBaseTextRef = useRef<string | null>(null);
 
@@ -54,8 +60,14 @@ export const ChatInput = memo(function ChatInput({
     if ((!inputText.trim() && selectedImages.length === 0) || isLoading) return;
     onSend(inputText.trim(), selectedImages.length > 0 ? selectedImages : undefined);
     setInputText('');
+    clearDraft(draftKey);
     setSelectedImages([]);
     voiceBaseTextRef.current = null;
+  };
+
+  const handleTextChange = (text: string) => {
+    setInputText(text);
+    setDraft(draftKey, text);
   };
 
   const handleKeyPress = (event: any) => {
@@ -122,7 +134,7 @@ export const ChatInput = memo(function ChatInput({
 
         <TextInput
           value={inputText}
-          onChangeText={setInputText}
+          onChangeText={handleTextChange}
           placeholder={placeholder}
           placeholderTextColor="#9CA3AF"
           selectionColor="#313130"
@@ -150,7 +162,9 @@ export const ChatInput = memo(function ChatInput({
           size={20}
           style={{ marginLeft: 6 }}
           onTranscript={(text) => {
-            setInputText((prev) => mergeTranscript(voiceBaseTextRef.current ?? prev, text));
+            const merged = mergeTranscript(voiceBaseTextRef.current ?? inputText, text);
+            setInputText(merged);
+            setDraft(draftKey, merged);
             voiceBaseTextRef.current = null;
           }}
           onInterimTranscript={(text) => {
@@ -158,11 +172,8 @@ export const ChatInput = memo(function ChatInput({
               voiceBaseTextRef.current = null;
               return;
             }
-
             setInputText((prev) => {
-              if (voiceBaseTextRef.current === null) {
-                voiceBaseTextRef.current = prev;
-              }
+              if (voiceBaseTextRef.current === null) voiceBaseTextRef.current = prev;
               return mergeTranscript(voiceBaseTextRef.current, text);
             });
           }}

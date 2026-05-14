@@ -1,12 +1,13 @@
-import { memo } from 'react';
-import { View, Text, Dimensions } from 'react-native';
+import { memo, useState, useCallback } from 'react';
+import { View, Text, Dimensions, Pressable } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { Ionicons } from '@expo/vector-icons';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { MarkdownContent } from './MarkdownContent';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import type { ChatMessage } from '../../types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-// Constrain image width for chat - max 250px or 60% of screen, whichever is smaller
 const MAX_IMAGE_WIDTH = Math.min(250, SCREEN_WIDTH * 0.6);
 
 interface MessageBubbleProps {
@@ -21,6 +22,14 @@ export const MessageBubble = memo(function MessageBubble({
   const isUser = message.role === 'user';
   const hasAttachments = message.attachments && message.attachments.length > 0;
   const hasContent = message.content && message.content.trim().length > 0;
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    if (!message.content) return;
+    await Clipboard.setStringAsync(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }, [message.content]);
 
   return (
     <View
@@ -38,7 +47,6 @@ export const MessageBubble = memo(function MessageBubble({
           }`}
         >
           {isUser ? (
-            // User messages: plain text with clickable links
             <LinkifiedText
               style={{ fontFamily: 'Lato_400Regular', fontSize: 16, lineHeight: 24, color: '#FFFFFF' }}
               linkStyle={{ color: '#f6f4e5' }}
@@ -46,7 +54,6 @@ export const MessageBubble = memo(function MessageBubble({
               {message.content}
             </LinkifiedText>
           ) : (
-            // Assistant messages: render with Markdown
             <View className="flex-shrink">
               <MarkdownContent content={message.content} isUser={false} />
               {isStreaming && (
@@ -57,7 +64,7 @@ export const MessageBubble = memo(function MessageBubble({
         </View>
       )}
 
-      {/* Attachments - floating outside bubble */}
+      {/* Attachments */}
       {hasAttachments && (
         <View className={hasContent ? 'mt-2' : ''}>
           <AttachmentGallery
@@ -67,19 +74,40 @@ export const MessageBubble = memo(function MessageBubble({
         </View>
       )}
 
-      {/* Timestamp - hide during streaming */}
+      {/* Timestamp + copy button row */}
       {!isStreaming && (
-        <Text
-          style={{ fontFamily: 'Lato_400Regular' }}
-          className={`text-xs text-charcoal/40 mt-1 ${
-            isUser ? 'text-right' : 'text-left'
-          }`}
+        <View
+          style={{
+            flexDirection: isUser ? 'row-reverse' : 'row',
+            alignItems: 'center',
+            gap: 6,
+            marginTop: 4,
+          }}
         >
-          {new Date(message.created_at).toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-          })}
-        </Text>
+          <Text
+            style={{ fontFamily: 'Lato_400Regular' }}
+            className={`text-xs text-charcoal/40 ${isUser ? 'text-right' : 'text-left'}`}
+          >
+            {new Date(message.created_at).toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+            })}
+          </Text>
+
+          {hasContent && (
+            <Pressable
+              onPress={handleCopy}
+              hitSlop={8}
+              style={{ opacity: copied ? 1 : 0.45 }}
+            >
+              <Ionicons
+                name={copied ? 'checkmark' : 'copy-outline'}
+                size={13}
+                color={copied ? '#bd9348' : '#2d2d2d'}
+              />
+            </Pressable>
+          )}
+        </View>
       )}
     </View>
   );

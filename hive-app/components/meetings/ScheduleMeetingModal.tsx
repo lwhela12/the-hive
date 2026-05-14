@@ -133,9 +133,6 @@ export function ScheduleMeetingModal({
       const minutes = date.getMinutes().toString().padStart(2, '0');
       const timeStr = `${hours}:${minutes}`; // HH:MM
 
-      // Debug: log what we're sending
-      console.log('Scheduling meeting:', { dateStr, timeStr, dateObject: date.toString() });
-
       // Get the user's timezone
       const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 

@@ -34,7 +34,7 @@ export default function BoardScreen() {
   const boardDirectOpenStorageKey = communityId ? `the-hive:board-direct-open:${communityId}` : null;
   const boardDraftStorageKey = selectedCategoryId ? `the-hive:board-draft:${selectedCategoryId}` : null;
 
-  const isAdmin = communityRole === 'admin';
+  const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const canManageCategories = isAdmin;
 
   const {

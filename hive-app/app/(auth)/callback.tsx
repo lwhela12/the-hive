@@ -23,7 +23,7 @@ export default function AuthCallbackScreen() {
       // Try code exchange flow first
       if (params.code) {
         await supabase.auth.exchangeCodeForSession(params.code);
-        router.replace(typeof params.returnTo === 'string' ? params.returnTo : '/');
+        router.replace((typeof params.returnTo === 'string' ? params.returnTo : '/') as any);
         return;
       }
 
@@ -41,7 +41,7 @@ export default function AuthCallbackScreen() {
               access_token: accessToken,
               refresh_token: refreshToken,
             });
-            router.replace(typeof params.returnTo === 'string' ? params.returnTo : '/');
+            router.replace((typeof params.returnTo === 'string' ? params.returnTo : '/') as any);
             return;
           }
         }

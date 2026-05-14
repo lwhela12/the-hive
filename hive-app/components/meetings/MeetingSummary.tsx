@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, Modal } from 'react-native';
+import { Alert, View, Text, ScrollView, Pressable, Modal } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { formatDateLong, formatDateShort } from '../../lib/dateUtils';
@@ -8,15 +8,35 @@ import type { Meeting, ActionItem, Profile } from '../../types';
 interface MeetingSummaryProps {
   meeting: Meeting;
   onBack: () => void;
+  onMeetingUpdated?: (meeting: Meeting) => void;
 }
 
 interface ParsedSummary {
+  title?: string;
+  source?: string;
+  import_status?: 'pending' | 'applied';
+  applied_at?: string;
   summary?: string;
+  decisions?: string[];
+  details?: string[];
   wishes_surfaced?: { person_name: string; description: string }[];
   queen_bee_highlights?: string[];
+  board_suggestions?: {
+    person_name?: string | null;
+    title: string;
+    content: string;
+    category_hint?: string | null;
+  }[];
+  board_posts_created?: {
+    id: string;
+    title: string;
+    category_id?: string;
+  }[];
+  action_items_created?: number;
+  events_created?: number;
 }
 
-export function MeetingSummary({ meeting: initialMeeting, onBack }: MeetingSummaryProps) {
+export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdated }: MeetingSummaryProps) {
   const { communityId } = useAuth();
   const [meeting, setMeeting] = useState(initialMeeting);
   const [actionItems, setActionItems] = useState<(ActionItem & { assigned_user?: Profile })[]>([]);
@@ -24,6 +44,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack }: MeetingSumma
   const [showAttributionModal, setShowAttributionModal] = useState(false);
   const [speakerAssignments, setSpeakerAssignments] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [applyingNotes, setApplyingNotes] = useState(false);
 
   // Extract unique speakers from transcript
   const speakers = useMemo(() => {
@@ -104,6 +125,9 @@ export function MeetingSummary({ meeting: initialMeeting, onBack }: MeetingSumma
   };
 
   const parsedSummary = parseSummary(meeting.summary);
+  const isImportedNotes = Boolean(parsedSummary.source?.includes('notes') || parsedSummary.source?.includes('upload'));
+  const sourceNotesLabel = isImportedNotes ? 'Imported Notes' : 'Transcript';
+  const notesNeedApplying = parsedSummary.import_status === 'pending';
 
   const loadActionItems = async () => {
     const { data } = await supabase
@@ -114,6 +138,57 @@ export function MeetingSummary({ meeting: initialMeeting, onBack }: MeetingSumma
 
     if (data) {
       setActionItems(data as (ActionItem & { assigned_user?: Profile })[]);
+    }
+  };
+
+  const reloadMeeting = async () => {
+    const { data } = await supabase
+      .from('meetings')
+      .select('*')
+      .eq('id', meeting.id)
+      .single();
+
+    if (data) {
+      setMeeting(data as Meeting);
+      onMeetingUpdated?.(data as Meeting);
+    }
+
+    return data as Meeting | null;
+  };
+
+  const applyNotes = async () => {
+    if (applyingNotes) return;
+
+    setApplyingNotes(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('apply-meeting-notes', {
+        body: { meetingId: meeting.id },
+      });
+
+      if (error) throw error;
+
+      if (data?.meeting) {
+        setMeeting(data.meeting as Meeting);
+        onMeetingUpdated?.(data.meeting as Meeting);
+      } else {
+        await reloadMeeting();
+      }
+
+      await loadActionItems();
+
+      const actionCount = data?.action_items_created ?? 0;
+      const eventCount = data?.events_created ?? 0;
+      const boardPostCount = data?.board_posts_created ?? 0;
+
+      Alert.alert(
+        'Notes Applied',
+        `Created ${actionCount} action item${actionCount === 1 ? '' : 's'}, ${eventCount} event${eventCount === 1 ? '' : 's'}, and ${boardPostCount} board post${boardPostCount === 1 ? '' : 's'}.`
+      );
+    } catch (error) {
+      console.error('Error applying meeting notes:', error);
+      Alert.alert('Apply Failed', 'Clive could not apply those notes yet. Please try again.');
+    } finally {
+      setApplyingNotes(false);
     }
   };
 
@@ -179,7 +254,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack }: MeetingSumma
         </Pressable>
         <View>
           <Text className="text-xl font-bold text-hive-dark">
-            Meeting Summary
+            {parsedSummary.title || 'Meeting Summary'}
           </Text>
           <Text className="text-gray-500">
             {formatDateLong(meeting.date)}
@@ -215,6 +290,38 @@ export function MeetingSummary({ meeting: initialMeeting, onBack }: MeetingSumma
           </View>
         )}
 
+        {/* Apply imported notes */}
+        {isImportedNotes && (
+          <View className="mb-6">
+            {notesNeedApplying ? (
+              <View className="bg-honey-50 border border-honey-200 rounded-xl p-4">
+                <Text className="text-honey-900 font-semibold">
+                  Notes imported
+                </Text>
+                <Text className="text-honey-800 mt-1">
+                  Apply them when you are ready to create action items, calendar events, and board posts.
+                </Text>
+                <Pressable
+                  onPress={applyNotes}
+                  disabled={applyingNotes}
+                  className={`mt-4 bg-honey-500 px-4 py-3 rounded-lg self-start active:bg-honey-600 ${applyingNotes ? 'opacity-60' : ''}`}
+                >
+                  <Text className="text-white font-semibold">
+                    {applyingNotes ? 'Applying...' : 'Apply Notes'}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : parsedSummary.import_status === 'applied' ? (
+              <View className="bg-green-50 border border-green-100 rounded-xl p-4">
+                <Text className="text-green-800 font-semibold">Applied to HIVE</Text>
+                <Text className="text-green-700 mt-1">
+                  {parsedSummary.action_items_created ?? 0} action item{(parsedSummary.action_items_created ?? 0) === 1 ? '' : 's'} · {parsedSummary.events_created ?? 0} event{(parsedSummary.events_created ?? 0) === 1 ? '' : 's'} · {parsedSummary.board_posts_created?.length ?? 0} board post{(parsedSummary.board_posts_created?.length ?? 0) === 1 ? '' : 's'}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        )}
+
         {/* Summary */}
         {parsedSummary.summary && (
           <View className="mb-6">
@@ -223,6 +330,23 @@ export function MeetingSummary({ meeting: initialMeeting, onBack }: MeetingSumma
             </Text>
             <View className="bg-gray-50 rounded-xl p-4">
               <Text className="text-gray-800 leading-6">{parsedSummary.summary}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Decisions */}
+        {parsedSummary.decisions && parsedSummary.decisions.length > 0 && (
+          <View className="mb-6">
+            <Text className="text-lg font-semibold text-gray-700 mb-2">
+              Decisions
+            </Text>
+            <View className="bg-gray-50 rounded-xl p-4">
+              {parsedSummary.decisions.map((decision, index) => (
+                <View key={index} className="flex-row mb-2 last:mb-0">
+                  <Text className="text-honey-600 mr-2">•</Text>
+                  <Text className="text-gray-700 flex-1">{decision}</Text>
+                </View>
+              ))}
             </View>
           </View>
         )}
@@ -256,6 +380,61 @@ export function MeetingSummary({ meeting: initialMeeting, onBack }: MeetingSumma
                   <Text className="text-purple-600 mr-2">•</Text>
                   <Text className="text-gray-700 flex-1">{highlight}</Text>
                 </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Suggested Board Updates */}
+        {parsedSummary.board_suggestions && parsedSummary.board_suggestions.length > 0 && (
+          <View className="mb-6">
+            <Text className="text-lg font-semibold text-gray-700 mb-2">
+              Suggested Board Updates
+            </Text>
+            <View className="bg-honey-50 rounded-xl p-4">
+              {parsedSummary.board_suggestions.map((suggestion, index) => (
+                <View key={index} className={index > 0 ? 'mt-4 pt-4 border-t border-honey-200' : ''}>
+                  <Text className="font-medium text-honey-800">{suggestion.title}</Text>
+                  {(suggestion.person_name || suggestion.category_hint) && (
+                    <Text className="text-xs text-honey-700 mt-1">
+                      {[suggestion.person_name, suggestion.category_hint].filter(Boolean).join(' · ')}
+                    </Text>
+                  )}
+                  <Text className="text-gray-700 mt-2">{suggestion.content}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Details */}
+        {parsedSummary.details && parsedSummary.details.length > 0 && (
+          <View className="mb-6">
+            <Text className="text-lg font-semibold text-gray-700 mb-2">
+              Details
+            </Text>
+            <View className="bg-gray-50 rounded-xl p-4">
+              {parsedSummary.details.map((detail, index) => (
+                <View key={index} className="flex-row mb-2 last:mb-0">
+                  <Text className="text-gray-500 mr-2">•</Text>
+                  <Text className="text-gray-700 flex-1">{detail}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Created Board Posts */}
+        {parsedSummary.board_posts_created && parsedSummary.board_posts_created.length > 0 && (
+          <View className="mb-6">
+            <Text className="text-lg font-semibold text-gray-700 mb-2">
+              Board Posts Created
+            </Text>
+            <View className="bg-gray-50 rounded-xl p-4">
+              {parsedSummary.board_posts_created.map((post) => (
+                <Text key={post.id} className="text-gray-700 mb-2 last:mb-0">
+                  {post.title}
+                </Text>
               ))}
             </View>
           </View>
@@ -317,7 +496,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack }: MeetingSumma
           <View className="mb-6">
             <View className="flex-row justify-between items-center mb-2">
               <Text className="text-lg font-semibold text-gray-700">
-                Transcript
+                {sourceNotesLabel}
               </Text>
               {speakers.length > 0 && !hasAttribution && (
                 <Pressable

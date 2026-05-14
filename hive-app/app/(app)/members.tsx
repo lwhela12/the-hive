@@ -8,15 +8,9 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import { SKILL_CATEGORIES } from '../../lib/skillsList';
-import { DAILY_QUESTIONS } from '../../lib/dailyQuestions';
 
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish>;
-type MemberDailyAnswer = {
-  questionIndex: number;
-  questionDate?: string | null;
-  answer: string;
-};
 
 interface MemberData {
   id: string;
@@ -39,13 +33,7 @@ interface MemberData {
   wishes: MemberWish[];
   introPost?: { title: string; content: string } | null;
   questionAnswerCount: number;
-  dailyAnswers: MemberDailyAnswer[];
 }
-
-type ConnectionInsight = {
-  title: string;
-  detail: string;
-};
 
 const ROLE_LABELS: Partial<Record<UserRole, string>> = {
   admin: 'Admin',
@@ -96,165 +84,6 @@ const PROFILE_PROMPT_LIMITS = {
   funFact: 220,
   skills: 700,
 };
-
-const STOP_WORDS = new Set([
-  'the', 'and', 'for', 'that', 'this', 'with', 'you', 'your', 'would', 'what', 'when', 'where',
-  'have', 'has', 'had', 'but', 'not', 'are', 'was', 'were', 'about', 'into', 'from', 'they',
-  'them', 'their', 'there', 'then', 'than', 'just', 'really', 'very', 'like', 'love', 'want',
-  'could', 'should', 'because', 'something', 'someone', 'anything', 'everything',
-]);
-
-const CONNECTION_THEMES = [
-  { label: 'outside time', words: ['outside', 'outdoors', 'garden', 'plants', 'hike', 'walk', 'beach', 'sun', 'weather', 'nature', 'forest', 'fresh'] },
-  { label: 'home and nesting', words: ['home', 'house', 'room', 'cozy', 'kitchen', 'workspace', 'closet', 'plants', 'decor', 'bed'] },
-  { label: 'making things', words: ['make', 'making', 'paint', 'write', 'design', 'build', 'craft', 'art', 'creative', 'project', 'resin', 'draw'] },
-  { label: 'books and stories', words: ['book', 'read', 'story', 'novel', 'library', 'movie', 'show', 'fictional', 'song', 'music'] },
-  { label: 'food and comfort', words: ['food', 'snack', 'eat', 'coffee', 'tea', 'dinner', 'popcorn', 'comfort', 'kitchen', 'treat'] },
-  { label: 'tech and systems', words: ['tech', 'app', 'code', 'system', 'computer', 'digital', 'calendar', 'workspace', 'tool'] },
-  { label: 'support and care', words: ['help', 'support', 'kind', 'care', 'people', 'friend', 'community', 'listen', 'useful'] },
-  { label: 'rest and freedom', words: ['rest', 'free', 'saturday', 'guilt', 'slow', 'nap', 'sleep', 'quiet', 'peace', 'nothing'] },
-];
-
-function tokenizeAnswer(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(word => word.length > 2 && !STOP_WORDS.has(word));
-}
-
-function answerSimilarity(a: string, b: string) {
-  const aWords = new Set(tokenizeAnswer(a));
-  const bWords = new Set(tokenizeAnswer(b));
-  if (aWords.size === 0 || bWords.size === 0) return 0;
-  const overlap = [...aWords].filter(word => bWords.has(word)).length;
-  const union = new Set([...aWords, ...bWords]).size;
-  return overlap / union;
-}
-
-function findAnswerThemes(answer: string) {
-  const words = new Set(tokenizeAnswer(answer));
-  return CONNECTION_THEMES
-    .filter(theme => theme.words.some(word => words.has(word)))
-    .map(theme => theme.label);
-}
-
-function buildConnectionInsights(currentMember: MemberData | null, member: MemberData): ConnectionInsight[] {
-  if (!currentMember || currentMember.id === member.id) {
-    if (member.dailyAnswers.length === 0) return [];
-    const themes = member.dailyAnswers.flatMap(answer => findAnswerThemes(answer.answer));
-    const topTheme = themes.find((theme, index) => themes.indexOf(theme) === index);
-    return [
-      {
-        title: 'Answer archive',
-        detail: topTheme
-          ? `${member.name.split(' ')[0]}'s answers often orbit ${topTheme}.`
-          : `${member.name.split(' ')[0]} has answered ${member.dailyAnswers.length} daily question${member.dailyAnswers.length === 1 ? '' : 's'}.`,
-      },
-    ];
-  }
-
-  const currentByQuestion = new Map<number, MemberDailyAnswer[]>();
-  currentMember.dailyAnswers.forEach(answer => {
-    const list = currentByQuestion.get(answer.questionIndex) ?? [];
-    list.push(answer);
-    currentByQuestion.set(answer.questionIndex, list);
-  });
-
-  const shared = member.dailyAnswers
-    .map(memberAnswer => {
-      const currentAnswers = currentByQuestion.get(memberAnswer.questionIndex) ?? [];
-      const bestCurrentAnswer = currentAnswers
-        .map(currentAnswer => ({ currentAnswer, score: answerSimilarity(currentAnswer.answer, memberAnswer.answer) }))
-        .sort((a, b) => b.score - a.score)[0];
-      if (!bestCurrentAnswer) return null;
-      return {
-        questionIndex: memberAnswer.questionIndex,
-        memberAnswer,
-        currentAnswer: bestCurrentAnswer.currentAnswer,
-        score: bestCurrentAnswer.score,
-      };
-    })
-    .filter(Boolean) as {
-      questionIndex: number;
-      memberAnswer: MemberDailyAnswer;
-      currentAnswer: MemberDailyAnswer;
-      score: number;
-    }[];
-
-  const insights: ConnectionInsight[] = [];
-  if (shared.length > 0) {
-    const average = shared.reduce((sum, item) => sum + item.score, 0) / shared.length;
-    const percent = Math.max(12, Math.min(92, Math.round((average * 100) + shared.length * 6)));
-    insights.push({
-      title: `${percent}% answer overlap`,
-      detail: `You and ${member.name.split(' ')[0]} have answered ${shared.length} of the same daily prompt${shared.length === 1 ? '' : 's'}.`,
-    });
-  }
-
-  const sharedTheme = shared.flatMap(item => {
-    const currentThemes = findAnswerThemes(item.currentAnswer.answer);
-    const memberThemes = findAnswerThemes(item.memberAnswer.answer);
-    return currentThemes.filter(theme => memberThemes.includes(theme));
-  })[0];
-  if (sharedTheme) {
-    insights.push({
-      title: `Shared ${sharedTheme}`,
-      detail: `Your answers both point toward ${sharedTheme} as a recurring thread.`,
-    });
-  }
-
-  const strongest = shared.sort((a, b) => b.score - a.score)[0];
-  if (strongest && strongest.score > 0.08) {
-    const question = DAILY_QUESTIONS[strongest.questionIndex]?.category ?? 'daily question';
-    insights.push({
-      title: 'Same wavelength',
-      detail: `Your closest match so far is on the ${question} prompt.`,
-    });
-  }
-
-  return insights.slice(0, 3);
-}
-
-function buildCommunityConnectionInsight(members: MemberData[], currentUserId?: string | null) {
-  const allAnswers = members.flatMap(member => member.dailyAnswers.map(answer => ({ member, answer })));
-  if (allAnswers.length < 3) return null;
-
-  const themeCounts = CONNECTION_THEMES
-    .map(theme => ({
-      theme: theme.label,
-      members: new Set(
-        allAnswers
-          .filter(item => findAnswerThemes(item.answer.answer).includes(theme.label))
-          .map(item => item.member.id)
-      ),
-    }))
-    .filter(item => item.members.size >= 2)
-    .sort((a, b) => b.members.size - a.members.size);
-
-  if (themeCounts.length > 0) {
-    const top = themeCounts[0];
-    return `${top.members.size} members have answers circling ${top.theme}. Tap profiles to spot who shares that thread.`;
-  }
-
-  const currentMember = members.find(member => member.id === currentUserId);
-  if (currentMember) {
-    const bestMatch = members
-      .filter(member => member.id !== currentMember.id)
-      .map(member => ({ member, insights: buildConnectionInsights(currentMember, member) }))
-      .filter(item => item.insights.length > 0)
-      .sort((a, b) => {
-        const aPercent = Number(a.insights[0].title.match(/\d+/)?.[0] ?? 0);
-        const bPercent = Number(b.insights[0].title.match(/\d+/)?.[0] ?? 0);
-        return bPercent - aPercent;
-      })[0];
-    if (bestMatch) {
-      return `You may be on a similar wavelength with ${bestMatch.member.name.split(' ')[0]} based on daily question answers.`;
-    }
-  }
-
-  return null;
-}
 
 function getHiveTitle(name: string) {
   const normalized = name.toLowerCase();
@@ -357,13 +186,11 @@ function ProfilePromptInput({
 
 function MemberDetailModal({
   member,
-  currentMember,
   onClose,
   onMemberUpdated,
   communityId,
 }: {
   member: MemberData;
-  currentMember: MemberData | null;
   onClose: () => void;
   onMemberUpdated: (member: MemberData) => void;
   communityId: string | null;
@@ -414,7 +241,6 @@ function MemberDetailModal({
   const visibleIntro = introExpanded || !introNeedsToggle
     ? introContent
     : `${introContent.slice(0, 320).trimEnd()}...`;
-  const connectionInsights = buildConnectionInsights(currentMember, member);
 
   useEffect(() => {
     setIntroExpanded(false);
@@ -531,12 +357,12 @@ function MemberDetailModal({
     ]);
   };
 
-  const saveNewWish = async () => {
+  const saveNewWish = async (makePublic = false) => {
     const desc = newWishInput.trim();
     if (!desc || !communityId) return;
     const { data } = await (supabase as any)
       .from('wishes')
-      .insert({ user_id: member.id, community_id: communityId, description: desc, raw_input: desc, status: 'private', is_active: false, extracted_from: 'manual' })
+      .insert({ user_id: member.id, community_id: communityId, description: desc, raw_input: desc, status: makePublic ? 'public' : 'private', is_active: makePublic, extracted_from: 'manual' })
       .select('id, description, status')
       .single();
     if (data) setMyWishes(prev => [data, ...prev]);
@@ -870,17 +696,20 @@ function MemberDetailModal({
                           autoFocus
                           style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', minHeight: 80, textAlignVertical: 'top', marginBottom: 10 }}
                         />
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                           <Pressable onPress={() => { setAddingWish(false); setNewWishInput(''); }} style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}>
                             <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
                           </Pressable>
-                          <Pressable onPress={saveNewWish} disabled={!newWishInput.trim()} style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Save as private</Text>
+                          <Pressable onPress={() => saveNewWish(false)} disabled={!newWishInput.trim()} style={{ flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.5)', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', textAlign: 'center', fontSize: 13 }}>Keep private</Text>
                           </Pressable>
-                          <Pressable onPress={() => refineWithClive(newWishInput)} style={{ flex: 2, backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 10, paddingVertical: 10 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', textAlign: 'center', fontSize: 13 }}>Refine with Clive ✨</Text>
+                          <Pressable onPress={() => saveNewWish(true)} disabled={!newWishInput.trim()} style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Share with HIVE 🐝</Text>
                           </Pressable>
                         </View>
+                        <Pressable onPress={() => refineWithClive(newWishInput)} disabled={!newWishInput.trim()} style={{ alignItems: 'center', paddingVertical: 6, opacity: newWishInput.trim() ? 1 : 0.4 }}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', fontSize: 13 }}>Refine with Clive ✨</Text>
+                        </Pressable>
                       </View>
                     )}
                   </>
@@ -1155,26 +984,6 @@ function MemberDetailModal({
               </View>
             )}
 
-            {/* Connection sparks */}
-            {connectionInsights.length > 0 && (
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>CONNECTION SPARKS</Text>
-                <View style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 16, padding: 14 }}>
-                  {connectionInsights.map((insight, index) => (
-                    <View key={`${insight.title}-${index}`} style={{ flexDirection: 'row', gap: 10, marginBottom: index < connectionInsights.length - 1 ? 12 : 0 }}>
-                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#f5ead1', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Text style={{ fontSize: 14 }}>✨</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginBottom: 2 }}>{insight.title}</Text>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#6b7280', lineHeight: 18 }}>{insight.detail}</Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
             {/* Bio */}
             {member.bio && (
               <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16, marginBottom: 20 }}>
@@ -1409,7 +1218,7 @@ function MemberDetailModal({
                           multiline
                           style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', paddingHorizontal: 12, paddingVertical: 10, minHeight: 80, marginBottom: 10, textAlignVertical: 'top' }}
                         />
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                           <Pressable
                             onPress={() => { setAddingWish(false); setNewWishInput(''); }}
                             style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}
@@ -1417,19 +1226,27 @@ function MemberDetailModal({
                             <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
                           </Pressable>
                           <Pressable
-                            onPress={saveNewWish}
+                            onPress={() => saveNewWish(false)}
+                            disabled={!newWishInput.trim()}
+                            style={{ flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.5)', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', textAlign: 'center', fontSize: 13 }}>Keep private</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => saveNewWish(true)}
                             disabled={!newWishInput.trim()}
                             style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}
                           >
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Save as private</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => refineWithClive(newWishInput)}
-                            style={{ flex: 2, backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 10, paddingVertical: 10 }}
-                          >
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', textAlign: 'center', fontSize: 13 }}>Refine with Clive ✨</Text>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Share with HIVE 🐝</Text>
                           </Pressable>
                         </View>
+                        <Pressable
+                          onPress={() => refineWithClive(newWishInput)}
+                          disabled={!newWishInput.trim()}
+                          style={{ alignItems: 'center', paddingVertical: 6, opacity: newWishInput.trim() ? 1 : 0.4 }}
+                        >
+                          <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', fontSize: 13 }}>Refine with Clive ✨</Text>
+                        </Pressable>
                       </View>
                     )}
                   </>
@@ -1449,7 +1266,6 @@ function MemberDetailModal({
 
 export default function MembersScreen() {
   const { communityId, profile, session } = useAuth();
-  const router = useRouter();
   const { memberId } = useLocalSearchParams<{ memberId?: string }>();
   const { width } = useWindowDimensions();
   const [members, setMembers] = useState<MemberData[]>([]);
@@ -1522,7 +1338,6 @@ export default function MembersScreen() {
           wishes: [],
           introPost: null,
           questionAnswerCount: 0,
-          dailyAnswers: [],
         };
       });
 
@@ -1537,7 +1352,7 @@ export default function MembersScreen() {
           .in('author_id', userIds),
         supabase
           .from('daily_question_answers')
-          .select('user_id, question_index, question_date, answer')
+          .select('user_id')
           .in('user_id', userIds),
       ]);
 
@@ -1566,16 +1381,8 @@ export default function MembersScreen() {
       });
 
       const answerCountByUser = new Map<string, number>();
-      const answersByUser = new Map<string, MemberDailyAnswer[]>();
       (answersRes.data ?? []).forEach((a: any) => {
         answerCountByUser.set(a.user_id, (answerCountByUser.get(a.user_id) ?? 0) + 1);
-        const list = answersByUser.get(a.user_id) ?? [];
-        list.push({
-          questionIndex: Number(a.question_index),
-          questionDate: a.question_date ?? null,
-          answer: a.answer ?? '',
-        });
-        answersByUser.set(a.user_id, list);
       });
 
       memberList.forEach(m => {
@@ -1583,7 +1390,6 @@ export default function MembersScreen() {
         m.wishes = wishesByUser.get(m.id) ?? [];
         m.introPost = introByUser.get(m.id) ?? null;
         m.questionAnswerCount = answerCountByUser.get(m.id) ?? 0;
-        m.dailyAnswers = answersByUser.get(m.id) ?? [];
       });
 
       memberList.sort((a, b) => {
@@ -1607,13 +1413,9 @@ export default function MembersScreen() {
   useEffect(() => {
     if (memberId && members.length > 0 && !selected) {
       const target = members.find(m => m.id === memberId);
-      if (target?.id === currentUserId) {
-        router.push('/profile');
-        return;
-      }
       if (target) setSelected(target);
     }
-  }, [currentUserId, memberId, members, router, selected]);
+  }, [memberId, members, selected]);
 
   const numCols = width >= 1100 ? 3 : width >= 720 ? 2 : 1;
   const avatarSize = width >= 768 ? 74 : 64;
@@ -1637,8 +1439,6 @@ export default function MembersScreen() {
         ].some(value => value?.toLowerCase().includes(query));
       })
     : members;
-  const currentMember = members.find(member => member.id === currentUserId) ?? null;
-  const communityConnectionInsight = buildCommunityConnectionInsight(members, currentUserId);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#faf8f3' }}>
@@ -1687,44 +1487,16 @@ export default function MembersScreen() {
           </View>
         ) : (
           <>
-            {communityConnectionInsight && (
-              <View style={{
-                backgroundColor: '#fffbf0',
-                borderWidth: 1,
-                borderColor: 'rgba(222,193,129,0.55)',
-                borderRadius: 18,
-                padding: 14,
-                marginBottom: 14,
-                shadowColor: '#bd9348',
-                shadowOpacity: 0.08,
-                shadowRadius: 10,
-                shadowOffset: { width: 0, height: 4 },
-                elevation: 2,
-              }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', letterSpacing: 0.6, marginBottom: 5 }}>HIVE CONNECTIONS</Text>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#4b5563', lineHeight: 20 }}>
-                  {communityConnectionInsight}
-                </Text>
-              </View>
-            )}
-
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 }}>
               {filtered.map(member => {
                 const isMe = member.id === currentUserId;
                 const roleLabel = member.hiveTitle ?? ROLE_LABELS[member.role];
                 const publicWishes = member.wishes.filter(w => w.status === 'public');
                 const spotlight = member.known_for || member.current_project || member.bio || member.skills[0]?.description || publicWishes[0]?.description;
-                const quickConnection = !isMe && currentMember ? buildConnectionInsights(currentMember, member)[0] : null;
                 return (
                   <Pressable
                     key={member.id}
-                    onPress={() => {
-                      if (isMe) {
-                        router.push('/profile');
-                      } else {
-                        setSelected(member);
-                      }
-                    }}
+                    onPress={() => setSelected(member)}
                     style={{ width: cellWidth as any, paddingHorizontal: 6, marginBottom: 12 }}
                   >
                     <View style={{
@@ -1772,17 +1544,6 @@ export default function MembersScreen() {
                         </Text>
                       )}
 
-                      {quickConnection && (
-                        <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: 'rgba(222,193,129,0.35)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, marginTop: 12 }}>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginBottom: 2 }} numberOfLines={1}>
-                            {quickConnection.title}
-                          </Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#7b6b59', lineHeight: 15 }} numberOfLines={2}>
-                            {quickConnection.detail}
-                          </Text>
-                        </View>
-                      )}
-
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 12 }}>
                         {member.skills.slice(0, 2).map(skill => (
                           <View key={skill.id} style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
@@ -1819,7 +1580,6 @@ export default function MembersScreen() {
       {selected && (
         <MemberDetailModal
           member={selected}
-          currentMember={currentMember}
           communityId={communityId}
           onClose={() => setSelected(null)}
           onMemberUpdated={(updatedMember) => {

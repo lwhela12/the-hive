@@ -1044,7 +1044,7 @@ export default function HiveScreen() {
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       <AppHeader
         title="H.I.V.E."
-        onMenuPress={() => setDrawerOpen(true)}
+        onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
       />
 
       {/* Navigation Drawer */}

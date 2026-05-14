@@ -192,8 +192,10 @@ export function useActivityFeed(communityId?: string) {
     try {
       const data = await fetchActivityItems(communityId);
       setItems(data);
+      return data;
     } catch (e) {
       console.error('Activity feed error:', e);
+      return [];
     } finally {
       setLoading(false);
     }

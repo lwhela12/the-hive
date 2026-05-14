@@ -47,11 +47,15 @@ export function useWishes() {
   }, [fetchWishes]);
 
   const publishWish = async (wishId: string) => {
+    if (!profile || !communityId) {
+      return { error: new Error('Not authenticated') };
+    }
+
     const { error } = await supabase
       .from('wishes')
       .update({ status: 'public', is_active: true })
       .eq('id', wishId)
-      .eq('user_id', profile?.id)
+      .eq('user_id', profile.id)
       .eq('community_id', communityId);
 
     if (!error) {
@@ -62,6 +66,10 @@ export function useWishes() {
   };
 
   const fulfillWish = async (wishId: string, fulfilledBy?: string) => {
+    if (!profile || !communityId) {
+      return { error: new Error('Not authenticated') };
+    }
+
     const { error } = await supabase
       .from('wishes')
       .update({
@@ -71,7 +79,7 @@ export function useWishes() {
         fulfilled_by: fulfilledBy,
       })
       .eq('id', wishId)
-      .eq('user_id', profile?.id)
+      .eq('user_id', profile.id)
       .eq('community_id', communityId);
 
     if (!error) {

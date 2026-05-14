@@ -23,7 +23,7 @@ type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardReaction[
 type ReplyWithAuthor = BoardReply & { author?: Profile; reactions?: BoardReaction[]; nested_replies?: ReplyWithAuthor[] };
 
 export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
-  const { profile, communityId } = useAuth();
+  const { profile, communityId, communityRole } = useAuth();
   const [post, setPost] = useState<PostWithAuthor | null>(null);
   const [replies, setReplies] = useState<ReplyWithAuthor[]>([]);
   const [newReply, setNewReply] = useState('');
@@ -36,6 +36,8 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const editDraftStorageKey = communityId ? `the-hive:board-edit-draft:${communityId}:${postId}` : null;
 
   const isAuthor = profile?.id === post?.author_id;
+  const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+  const canManagePost = isAuthor || isAdmin;
 
   const fetchPost = useCallback(async () => {
     const { data, error } = await supabase
@@ -137,7 +139,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   };
 
   const handlePickImages = async () => {
-    const images = await pickMultipleImages(5 - selectedImages.length);
+    const images = await pickMultipleImages({ maxImages: 5 - selectedImages.length });
     if (images.length > 0) {
       setSelectedImages((prev) => [...prev, ...images].slice(0, 5));
     }
@@ -363,7 +365,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg flex-1">
           Post
         </Text>
-        {isAuthor && (
+        {canManagePost && (
           <View className="flex-row items-center gap-2">
             <Pressable
               onPress={handleOpenEditComposer}
@@ -457,6 +459,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
                   onReply={handleSetReplyingTo}
                   onEdit={handleEditReply}
                   onDelete={handleDeleteReply}
+                  canModerate={isAdmin}
                 />
               </View>
             ))

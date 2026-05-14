@@ -37,13 +37,13 @@ export const NavigationDrawer = memo(function NavigationDrawer({
   const { profile, communityRole } = useAuth();
 
   // Navigation items for the app
-  const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
+  const isAdmin = communityRole === 'admin' || communityRole === 'treasurer' || profile?.role === 'admin' || profile?.role === 'treasurer';
   const navItems = [
     { icon: null, imageSource: cliveIcon, label: 'Clive', route: '/' },
     { icon: null, imageSource: beeIcon, label: 'HIVE Home', route: '/hive' },
     { icon: '📋', label: 'Message Board', route: '/board' },
     { icon: '💬', label: 'Chat', route: '/messages', badge: unreadDMCount },
-    { icon: null, customIcon: 'honeycomb', label: 'Meetings', route: '/meetings' },
+    { icon: null, customIcon: 'honeycomb', label: 'Meeting Hub', route: '/meetings' },
     { icon: '👤', imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined, label: 'Profile', route: '/profile', isCircular: true },
     ...(isAdmin ? [{ icon: '⚙️', label: 'Admin', route: '/admin' }] : []),
   ];
@@ -111,6 +111,7 @@ export const NavigationDrawer = memo(function NavigationDrawer({
         {navItems.map((item) => {
           const isActive = pathname === item.route ||
             (item.route === '/' && pathname === '/index');
+          const badge = item.badge ?? 0;
 
           return (
             <Pressable
@@ -140,10 +141,10 @@ export const NavigationDrawer = memo(function NavigationDrawer({
               >
                 {item.label}
               </Text>
-              {item.badge > 0 ? (
+              {badge > 0 ? (
                 <View className="ml-auto bg-gold rounded-full min-w-[20px] h-5 px-1.5 items-center justify-center">
                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-xs">
-                    {item.badge > 99 ? '99+' : item.badge}
+                    {badge > 99 ? '99+' : badge}
                   </Text>
                 </View>
               ) : isActive ? (

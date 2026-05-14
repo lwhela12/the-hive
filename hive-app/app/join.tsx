@@ -42,9 +42,6 @@ export default function JoinScreen() {
     // Need both userEmail and profile to check for invites
     if (userEmail && profile) {
       checkForInvite();
-    } else if (userEmail && !profile) {
-      // Profile not loaded yet — don't hang on loading forever
-      console.log('[Join] Waiting for profile to load...');
     }
   }, [session, authLoading, userEmail, profile, communityId]);
 
@@ -59,7 +56,6 @@ export default function JoinScreen() {
 
       if (isGenesis === true) {
         // GENESIS USER - First ever user becomes admin
-        console.log('Genesis user detected - bootstrapping community');
         await bootstrapGenesisCommunity();
         return;
       }
@@ -74,7 +70,6 @@ export default function JoinScreen() {
         .limit(1);
 
       if (error) {
-        console.log('Invite check error (may be RLS):', error.message);
         // RLS might block this - show waitlist option
         setShowWaitlist(true);
       } else if (invites && invites.length > 0) {
@@ -189,8 +184,6 @@ export default function JoinScreen() {
   };
 
   const handleAcceptInvite = async () => {
-    console.log('Accept invite clicked', { invite, profile });
-
     if (!invite) {
       Alert.alert('Error', 'No invite found. Please refresh and try again.');
       return;
@@ -202,8 +195,6 @@ export default function JoinScreen() {
 
     setSubmitting(true);
     try {
-      console.log('Creating membership...', { community_id: invite.community_id, user_id: profile.id, role: invite.role });
-
       // Create membership
       const { error: membershipError } = await supabase
         .from('community_memberships')
@@ -213,7 +204,6 @@ export default function JoinScreen() {
           role: invite.role,
         });
 
-      console.log('Membership result:', { error: membershipError });
       if (membershipError) throw membershipError;
 
       // Update profile with current community

@@ -80,7 +80,7 @@ async function fetchChatRoomsFallback(
   const allRooms: ChatRoom[] = [
     ...(communityRooms || []),
     ...((memberRooms || [])
-      .map((m) => m.room as ChatRoom)
+      .map((m) => m.room as unknown as ChatRoom)
       .filter((r) => r && (r.room_type === 'dm' || r.room_type === 'group_dm'))),
   ];
 
@@ -250,7 +250,7 @@ export function useChatRoomsQuery(communityId?: string, userId?: string) {
                   room.id === newMessage.room_id
                     ? {
                         ...room,
-                        last_message: { ...newMessage, sender: sender || undefined },
+                        last_message: { ...newMessage, sender: (sender as Profile | null) || undefined },
                         unread_count: (room.unread_count || 0) + 1,
                       }
                     : room

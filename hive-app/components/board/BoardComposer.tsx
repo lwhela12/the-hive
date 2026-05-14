@@ -60,9 +60,7 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
   }, [visible, draftStorageKey, title, content]);
 
   const handleSubmit = async () => {
-    console.log('BoardComposer handleSubmit called', { title: title.trim(), content: content.trim() });
     if (!title.trim() || !content.trim()) {
-      console.log('Empty title or content, returning');
       return;
     }
 
@@ -81,9 +79,7 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
       }
 
       setUploadStatus('');
-      console.log('Calling onSubmit...');
       const didPost = await onSubmit(title.trim(), content.trim(), attachments);
-      console.log('onSubmit returned:', didPost);
       if (didPost) {
         setTitle('');
         setContent('');

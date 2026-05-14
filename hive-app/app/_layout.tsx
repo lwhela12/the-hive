@@ -137,11 +137,10 @@ export default function RootLayout() {
     if (membershipsResult.error) {
       console.error('[Auth] Memberships fetch error:', membershipsResult.error.message);
     }
-    let memberships = (membershipsResult.data || []) as MembershipWithCommunity[];
+    let memberships = (membershipsResult.data || []) as unknown as MembershipWithCommunity[];
 
     // If the JOIN query failed (e.g., communities RLS issue), retry without the join
     if (memberships.length === 0 && membershipsResult.error) {
-      console.log('[Auth] Retrying memberships query without community join...');
       const { data: plainMemberships, error: retryError } = await supabase
         .from('community_memberships')
         .select('community_id, role')
@@ -151,7 +150,6 @@ export default function RootLayout() {
       if (retryError) {
         console.error('[Auth] Memberships retry error:', retryError.message);
       } else if (plainMemberships && plainMemberships.length > 0) {
-        console.log('[Auth] Retry found', plainMemberships.length, 'memberships');
         // Fetch the community separately
         const { data: communityData } = await supabase
           .from('communities')
@@ -164,8 +162,6 @@ export default function RootLayout() {
         })) as MembershipWithCommunity[];
       }
     }
-
-    console.log('[Auth] Found', memberships.length, 'memberships for user', userId);
 
     if (memberships.length === 0) {
       setCommunity(null);
