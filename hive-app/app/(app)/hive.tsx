@@ -44,6 +44,7 @@ type HomeTodo = {
   onPress?: () => void;
   onToggle?: () => void;
   onLongPress?: () => void;
+  onArchive?: () => void;
 };
 
 const INITIAL_EVENTS_SHOWN = 3;
@@ -639,6 +640,39 @@ export default function HiveScreen() {
     ]);
   }, []);
 
+  const archiveCompletedActionItems = useCallback(() => {
+    const completedItems = homeActionItems.filter(item => item.completed);
+    if (completedItems.length === 0) return;
+    const completedIds = completedItems.map(item => item.id);
+
+    const archive = async () => {
+      const previousItems = homeActionItems;
+      setHomeActionItems(prev => prev.filter(action => !completedIds.includes(action.id)));
+      const { error } = await supabase
+        .from('action_items')
+        .update({ archived_at: new Date().toISOString() } as any)
+        .in('id', completedIds);
+
+      if (error) {
+        console.warn('Could not archive completed action items', error);
+        setHomeActionItems(previousItems);
+        Alert.alert('Could not archive tasks', 'Please try again.');
+      }
+    };
+
+    const taskLabel = completedItems.length === 1 ? 'task' : 'tasks';
+    const message = `Archive ${completedItems.length} completed ${taskLabel} from your list?`;
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) archive();
+      return;
+    }
+
+    Alert.alert('Archive Completed Tasks', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Archive', style: 'destructive', onPress: archive },
+    ]);
+  }, [homeActionItems]);
+
   const handleAddTask = async () => {
     if (!newTaskText.trim() || !profile?.id || !communityId) return;
     setSavingTask(true);
@@ -1109,12 +1143,13 @@ export default function HiveScreen() {
       emoji: '✅',
       title: a.description,
       detail: a.completed
-        ? `Done${a.completed_at ? ` · ${formatDateShort(a.completed_at)}` : ''} · Hold to archive`
+        ? `Done${a.completed_at ? ` · ${formatDateShort(a.completed_at)}` : ''}`
         : a.due_date ? `Due ${formatDateShort(a.due_date)}` : undefined,
       isDone: a.completed,
       completedAt: a.completed_at,
       onToggle: () => toggleActionItem(a),
       onLongPress: () => archiveActionItem(a),
+      onArchive: a.completed ? () => archiveActionItem(a) : undefined,
     })),
     ...(() => {
       const nextMeeting = upcomingEvents.find(e => e.event_type === 'meeting');
@@ -1152,6 +1187,126 @@ export default function HiveScreen() {
     .filter(todo => todo.isDone)
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
   const sortedHomeTodos = [...openTodos, ...doneTodos];
+  const completedActionCount = homeActionItems.filter(action => action.completed).length;
+
+  const renderTodoRow = (todo: HomeTodo, isLast: boolean) => {
+    const isDone = !!todo.isDone;
+    const circleStyle = (pressed = false) => ({
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: isDone ? '#8e7a5e' : 'rgba(189,147,72,0.48)',
+      backgroundColor: isDone ? '#8e7a5e' : pressed ? '#fbf4e3' : 'rgba(255,255,255,0.62)',
+      flexShrink: 0,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    });
+
+    return (
+      <Pressable
+        key={todo.id}
+        onPress={todo.onPress}
+        onLongPress={todo.onLongPress}
+        delayLongPress={520}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          padding: 14,
+          borderBottomWidth: isLast ? 0 : 1,
+          borderBottomColor: 'rgba(222,193,129,0.28)',
+          backgroundColor: pressed && todo.onPress ? '#fbf4e3' : isDone ? '#f6eddc' : '#fffdf5',
+          gap: 10,
+        })}
+      >
+        {todo.onToggle ? (
+          <Pressable
+            onPress={todo.onToggle}
+            accessibilityRole="button"
+            accessibilityLabel={isDone ? 'Mark task open' : 'Mark task complete'}
+            hitSlop={8}
+            style={({ pressed }) => circleStyle(pressed)}
+          >
+            {isDone && <Text style={{ color: 'white', fontSize: 12, lineHeight: 14 }}>✓</Text>}
+          </Pressable>
+        ) : (
+          <View style={circleStyle(false)} />
+        )}
+        <Text style={{ fontSize: 18, flexShrink: 0 }}>{todo.emoji}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{
+            fontFamily: isDone ? 'Lato_400Regular' : 'Lato_700Bold',
+            fontSize: 13,
+            color: isDone ? '#7f715f' : '#2d2d2d',
+            lineHeight: 18,
+            fontStyle: isDone ? 'italic' : 'normal',
+            textDecorationLine: isDone ? 'line-through' : 'none',
+          }} numberOfLines={2}>
+            {todo.title}
+          </Text>
+          {todo.detail ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: isDone ? '#8e7a5e' : '#9a8060', marginTop: 2 }}>
+              {todo.detail}
+            </Text>
+          ) : null}
+        </View>
+        {isDone && todo.onArchive ? (
+          <Pressable
+            onPress={todo.onArchive}
+            accessibilityRole="button"
+            accessibilityLabel="Archive completed task"
+            hitSlop={8}
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? '#ead9b8' : '#fff8e8',
+              borderColor: 'rgba(189,147,72,0.36)',
+              borderWidth: 1,
+              borderRadius: 999,
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              flexShrink: 0,
+            })}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e6f35' }}>Archive</Text>
+          </Pressable>
+        ) : !isDone && todo.cta ? (
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', flexShrink: 0 }}>{todo.cta}</Text>
+        ) : null}
+      </Pressable>
+    );
+  };
+
+  const renderTodoList = () => (
+    <>
+      {openTodos.map((todo, index) => renderTodoRow(todo, doneTodos.length === 0 && index === openTodos.length - 1))}
+      {doneTodos.length > 0 ? (
+        <View
+          key="completed-divider"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            borderTopWidth: openTodos.length > 0 ? 1 : 0,
+            borderBottomWidth: 1,
+            borderColor: 'rgba(222,193,129,0.28)',
+            backgroundColor: '#fbf1dc',
+          }}
+        >
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e7a5e' }}>
+            Completed ({doneTodos.length})
+          </Text>
+          {completedActionCount > 0 ? (
+            <Pressable onPress={archiveCompletedActionItems} hitSlop={8}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Archive all</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      {doneTodos.map((todo, index) => renderTodoRow(todo, index === doneTodos.length - 1))}
+    </>
+  );
 
   // Show wish detail fullscreen
   if (selectedWish) {
@@ -1186,6 +1341,7 @@ export default function HiveScreen() {
       <ScrollView
         className="flex-1"
         contentContainerClassName="pb-4"
+        contentContainerStyle={{ paddingBottom: useMobileLayout ? 104 : 16 }}
         refreshControl={
           <RefreshControl refreshing={refreshing || isLoading} onRefresh={onRefresh} tintColor="#bd9348" />
         }
@@ -1634,7 +1790,8 @@ export default function HiveScreen() {
               shadowOffset: { width: 0, height: 5 },
               elevation: 3,
               overflow: 'hidden',
-              height: 280,
+              height: useMobileLayout ? undefined : 280,
+              minHeight: useMobileLayout ? 220 : undefined,
               position: 'relative',
             }}>
               <ConfettiBurst visible={showConfetti} onDone={() => setShowConfetti(false)} />
@@ -1652,74 +1809,15 @@ export default function HiveScreen() {
                   </Text>
                 </View>
               ) : (
-                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                  {sortedHomeTodos.map((todo, i, all) => {
-                    const isDone = !!todo.isDone;
-                    const circleStyle = (pressed = false) => ({
-                      width: 24,
-                      height: 24,
-                      borderRadius: 12,
-                      borderWidth: 2,
-                      borderColor: isDone ? '#8e7a5e' : 'rgba(189,147,72,0.48)',
-                      backgroundColor: isDone ? '#8e7a5e' : pressed ? '#fbf4e3' : 'rgba(255,255,255,0.62)',
-                      flexShrink: 0,
-                      alignItems: 'center' as const,
-                      justifyContent: 'center' as const,
-                    });
-                    return (
-                    <Pressable
-                      key={todo.id}
-                      onPress={todo.onPress}
-                      onLongPress={todo.onLongPress}
-                      delayLongPress={520}
-                      style={({ pressed }) => ({
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        padding: 14,
-                        borderBottomWidth: i < all.length - 1 ? 1 : 0,
-                        borderBottomColor: 'rgba(222,193,129,0.28)',
-                        backgroundColor: pressed && todo.onPress ? '#fbf4e3' : isDone ? '#f6eddc' : '#fffdf5',
-                        gap: 10,
-                      })}
-                    >
-                      {todo.onToggle ? (
-                        <Pressable
-                          onPress={todo.onToggle}
-                          accessibilityRole="button"
-                          accessibilityLabel={isDone ? 'Mark task open' : 'Mark task complete'}
-                          hitSlop={8}
-                          style={({ pressed }) => circleStyle(pressed)}
-                        >
-                          {isDone && <Text style={{ color: 'white', fontSize: 12, lineHeight: 14 }}>✓</Text>}
-                        </Pressable>
-                      ) : (
-                        <View style={circleStyle(false)} />
-                      )}
-                      <Text style={{ fontSize: 18, flexShrink: 0 }}>{todo.emoji}</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{
-                          fontFamily: isDone ? 'Lato_400Regular' : 'Lato_700Bold',
-                          fontSize: 13,
-                          color: isDone ? '#7f715f' : '#2d2d2d',
-                          lineHeight: 18,
-                          fontStyle: isDone ? 'italic' : 'normal',
-                          textDecorationLine: isDone ? 'line-through' : 'none',
-                        }} numberOfLines={2}>
-                          {todo.title}
-                        </Text>
-                        {todo.detail ? (
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: isDone ? '#8e7a5e' : '#9a8060', marginTop: 2 }}>
-                            {todo.detail}
-                          </Text>
-                        ) : null}
-                      </View>
-                      {!isDone && todo.cta ? (
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', flexShrink: 0 }}>{todo.cta}</Text>
-                      ) : null}
-                    </Pressable>
-                    );
-                  })}
-                </ScrollView>
+                useMobileLayout ? (
+                  <View>
+                    {renderTodoList()}
+                  </View>
+                ) : (
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                    {renderTodoList()}
+                  </ScrollView>
+                )
               )}
             </View>
           </View>
