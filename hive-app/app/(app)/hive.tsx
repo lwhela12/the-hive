@@ -750,8 +750,11 @@ export default function HiveScreen() {
         nextTop.timestamp > previousTop.timestamp ||
         (nextTop.timestamp === previousTop.timestamp && !previousIds.has(nextTop.id))
       );
+      const hasUnreadAfterRefresh = nextItems.some(
+        item => item.timestamp > sessionReadAt && !readItemIds.has(item.id)
+      );
 
-      if (!hasNewActivity && (nextItems.length > 0 || activityItems.length > 0)) {
+      if (!hasNewActivity && !hasUnreadAfterRefresh && (nextItems.length > 0 || activityItems.length > 0)) {
         triggerActivityCaughtUp('Nothing new since you last checked.');
       }
     } finally {
@@ -760,7 +763,7 @@ export default function HiveScreen() {
       setIsActivityChecking(false);
       setTimeout(() => setShowActivityPullSpace(false), 420);
     }
-  }, [activityItems, activityRefreshSpin, refetchActivity, triggerActivityCaughtUp]);
+  }, [activityItems, activityRefreshSpin, readItemIds, refetchActivity, sessionReadAt, triggerActivityCaughtUp]);
 
   // Member carousel state
   const [carouselMembers, setCarouselMembers] = useState<{ id: string; name: string; avatar_url?: string | null; role: string }[]>([]);
