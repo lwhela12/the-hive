@@ -578,8 +578,6 @@ export default function HiveScreen() {
   useEffect(() => { fetchMyActionItems(); }, [fetchMyActionItems]);
 
   const [showConfetti, setShowConfetti] = useState(false);
-  const [showGoodJob, setShowGoodJob] = useState(false);
-  const goodJobOpacity = useRef(new Animated.Value(0)).current;
   const [completedTodoIds, setCompletedTodoIds] = useState<Set<string>>(new Set());
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [newTaskText, setNewTaskText] = useState('');
@@ -588,14 +586,7 @@ export default function HiveScreen() {
 
   const triggerCompletion = useCallback(() => {
     setShowConfetti(true);
-    setShowGoodJob(true);
-    goodJobOpacity.setValue(0);
-    Animated.sequence([
-      Animated.timing(goodJobOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
-      Animated.delay(1400),
-      Animated.timing(goodJobOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
-    ]).start(() => setShowGoodJob(false));
-  }, [goodJobOpacity]);
+  }, []);
 
   const toggleActionItem = useCallback(async (item: ActionItem) => {
     const completed = !item.completed;
@@ -1647,22 +1638,6 @@ export default function HiveScreen() {
               position: 'relative',
             }}>
               <ConfettiBurst visible={showConfetti} onDone={() => setShowConfetti(false)} />
-              {showGoodJob && (
-                <Animated.View style={{
-                  position: 'absolute',
-                  top: 0, left: 0, right: 0, bottom: 0,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 10,
-                  opacity: goodJobOpacity,
-                  pointerEvents: 'none',
-                }}>
-                  <View style={{ backgroundColor: '#bd9348', borderRadius: 20, paddingHorizontal: 20, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 6, shadowColor: '#bd9348', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 }}>
-                    <Text style={{ fontSize: 18 }}>🎉</Text>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: 'white' }}>Good job!</Text>
-                  </View>
-                </Animated.View>
-              )}
               <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10 }} />
               {homeActionLoading ? (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
