@@ -2013,7 +2013,7 @@ export default function HiveScreen() {
       {/* Add/Edit/View Event Modal */}
       <Modal visible={showEventModal} animationType="slide" transparent onRequestClose={() => setShowEventModal(false)}>
         <Pressable className="flex-1 bg-black/50 justify-end" onPress={() => setShowEventModal(false)}>
-          <View className="bg-white rounded-t-3xl p-6">
+          <Pressable className="bg-white rounded-t-3xl p-6" onPress={(e) => e.stopPropagation()}>
             {(() => {
               const isCreator = !editingEvent || editingEvent.created_by === profile?.id;
               const isHistorian = communityRole === 'historian';
@@ -2159,7 +2159,7 @@ export default function HiveScreen() {
                 </>
               );
             })()}
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
 
