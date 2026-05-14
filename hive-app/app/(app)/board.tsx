@@ -10,7 +10,7 @@ import { BoardCategoryList } from '../../components/board/BoardCategoryList';
 import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
 import { BoardComposer } from '../../components/board/BoardComposer';
-import { BoardTopicComposer, type BoardTopicAudience } from '../../components/board/BoardTopicComposer';
+import { BoardTopicComposer, type BoardTopicAudience, type BoardTopicMetadata } from '../../components/board/BoardTopicComposer';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import type { BoardCategory, Attachment, Profile } from '../../types';
@@ -35,7 +35,11 @@ export default function BoardScreen() {
   const boardDraftStorageKey = selectedCategoryId ? `the-hive:board-draft:${selectedCategoryId}` : null;
 
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
-  const canManageCategories = isAdmin;
+  const canCreateCategories = !!profile && !!communityId;
+  const canManageCategory = useCallback((category: BoardCategory | null) => {
+    if (!category || category.is_system) return false;
+    return isAdmin || category.created_by === profile?.id;
+  }, [isAdmin, profile?.id]);
 
   const {
     data: categories = [],
@@ -291,7 +295,14 @@ export default function BoardScreen() {
     return true;
   };
 
-  const handleCreateTopic = async (name: string, description: string, icon: string, audience: BoardTopicAudience, taggedMemberIds: string[]) => {
+  const handleCreateTopic = async (
+    name: string,
+    description: string,
+    icon: string,
+    audience: BoardTopicAudience,
+    taggedMemberIds: string[],
+    metadata: BoardTopicMetadata
+  ) => {
     if (!profile || !communityId) {
       Alert.alert('Not ready', 'Your profile is still loading. Please try again in a moment.');
       return false;
@@ -314,6 +325,9 @@ export default function BoardScreen() {
         requires_admin: false,
         requires_approval: false,
         created_by: profile.id,
+        topic_kind: metadata.topicKind,
+        owner_user_id: metadata.ownerUserId,
+        goal_title: metadata.goalTitle,
       }).select().single();
 
       if (error) {
@@ -339,8 +353,15 @@ export default function BoardScreen() {
     }
   };
 
-  const handleUpdateTopic = async (name: string, description: string, icon: string, audience: BoardTopicAudience, taggedMemberIds: string[]) => {
-    if (!editingTopic || !profile || !communityId || !canManageCategories) {
+  const handleUpdateTopic = async (
+    name: string,
+    description: string,
+    icon: string,
+    audience: BoardTopicAudience,
+    taggedMemberIds: string[],
+    metadata: BoardTopicMetadata
+  ) => {
+    if (!editingTopic || !profile || !communityId || !canManageCategory(editingTopic)) {
       Alert.alert('Not ready', 'Your profile is still loading. Please try again in a moment.');
       return false;
     }
@@ -358,6 +379,9 @@ export default function BoardScreen() {
           description: description || null,
           icon,
           audience,
+          topic_kind: metadata.topicKind,
+          owner_user_id: metadata.ownerUserId,
+          goal_title: metadata.goalTitle,
         })
         .eq('id', editingTopic.id)
         .eq('community_id', communityId);
@@ -381,10 +405,10 @@ export default function BoardScreen() {
   };
 
   const openEditTopic = useCallback((category: BoardCategory) => {
-    if (!canManageCategories || category.is_system) return;
+    if (!canManageCategory(category)) return;
     setEditingTopic(category);
     setShowTopicComposer(true);
-  }, [canManageCategories]);
+  }, [canManageCategory]);
 
   const closeTopicComposer = useCallback(() => {
     setShowTopicComposer(false);
@@ -392,7 +416,7 @@ export default function BoardScreen() {
   }, []);
 
   const handleDeleteTopic = useCallback((category: BoardCategory) => {
-    if (!canManageCategories || category.is_system) return;
+    if (!canManageCategory(category)) return;
 
     const count = postCounts?.[category.id]?.count ?? 0;
     const message = count > 0
@@ -447,7 +471,7 @@ export default function BoardScreen() {
     boardCategoryStorageKey,
     boardComposerStorageKey,
     boardPostStorageKey,
-    canManageCategories,
+    canManageCategory,
     invalidateCategories,
     postCounts,
     selectedCategoryId,
@@ -465,7 +489,7 @@ export default function BoardScreen() {
 
   // Category list view
   if (!selectedCategory) {
-    const addTopicButton = isAdmin ? (
+    const addTopicButton = canCreateCategories ? (
       <Pressable
         onPress={() => setShowTopicComposer(true)}
         className="min-w-10 h-10 px-2 items-center justify-center rounded-full active:opacity-70"
@@ -489,7 +513,7 @@ export default function BoardScreen() {
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-base text-white">
               Message Board
             </Text>
-            {isAdmin ? (
+            {canCreateCategories ? (
               <Pressable onPress={() => setShowTopicComposer(true)} className="w-10 h-10 items-center justify-center active:opacity-70">
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">+ Topic</Text>
               </Pressable>
@@ -563,7 +587,7 @@ export default function BoardScreen() {
         >
           {selectedCategory.name}
         </Text>
-        {canManageCategories && !selectedCategory.is_system && (
+        {canManageCategory(selectedCategory) && (
           <View className="flex-row items-center ml-2">
             <Pressable
               onPress={() => openEditTopic(selectedCategory)}

@@ -355,6 +355,9 @@ export interface BoardCategory extends Record<string, unknown> {
   name: string;
   description?: string;
   category_type: BoardCategoryType;
+  topic_kind?: 'discussion' | 'hd_board' | 'helper_log';
+  goal_title?: string | null;
+  owner_user_id?: string | null;
   icon?: string;
   audience?: 'community' | 'members';
   display_order: number;

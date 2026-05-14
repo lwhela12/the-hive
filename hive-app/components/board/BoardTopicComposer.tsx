@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,11 +7,25 @@ import type { BoardCategory, Profile } from '../../types';
 
 const BOARD_DRAFT_KEY = 'board-topic-draft';
 export type BoardTopicAudience = 'community' | 'members';
+export type BoardTopicKind = 'discussion' | 'hd_board' | 'helper_log';
+
+export interface BoardTopicMetadata {
+  topicKind: BoardTopicKind;
+  ownerUserId: string | null;
+  goalTitle: string | null;
+}
 
 interface BoardTopicComposerProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (name: string, description: string, icon: string, audience: BoardTopicAudience, taggedMemberIds: string[]) => Promise<boolean>;
+  onSubmit: (
+    name: string,
+    description: string,
+    icon: string,
+    audience: BoardTopicAudience,
+    taggedMemberIds: string[],
+    metadata: BoardTopicMetadata
+  ) => Promise<boolean>;
   existingCategory?: BoardCategory | null;
   members?: Pick<Profile, 'id' | 'name' | 'avatar_url'>[];
 }
@@ -86,17 +100,35 @@ function getGraphemes(value: string) {
   return Array.from(trimmed);
 }
 
+function getFirstName(name?: string) {
+  return name?.trim().split(/\s+/)[0] || 'Someone';
+}
+
+function buildHdBoardName(memberName: string | undefined, goalTitle: string) {
+  return `${getFirstName(memberName)}'s HD: ${goalTitle.trim()}`;
+}
+
 export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategory, members = [] }: BoardTopicComposerProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState(EMOJI_CATEGORIES[0].emojis[0]);
   const [activeCategory, setActiveCategory] = useState(0);
   const [customEmoji, setCustomEmoji] = useState('');
+  const [topicKind, setTopicKind] = useState<BoardTopicKind>('discussion');
   const [audience, setAudience] = useState<BoardTopicAudience>('community');
   const [taggedMemberIds, setTaggedMemberIds] = useState<string[]>([]);
+  const [ownerUserId, setOwnerUserId] = useState('');
+  const [goalTitle, setGoalTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const customInputRef = useRef<TextInput>(null);
   const isEditMode = !!existingCategory;
+  const selectedOwner = useMemo(
+    () => members.find((member) => member.id === ownerUserId),
+    [members, ownerUserId]
+  );
+  const suggestedHdName = topicKind === 'hd_board' && goalTitle.trim()
+    ? buildHdBoardName(selectedOwner?.name, goalTitle)
+    : '';
 
   useEffect(() => {
     if (!visible) return;
@@ -106,8 +138,13 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
       setSelectedEmoji(getFirstEmoji(existingCategory.icon));
       setCustomEmoji('');
       setActiveCategory(0);
+      setTopicKind(existingCategory.topic_kind === 'hd_board' || existingCategory.topic_kind === 'helper_log'
+        ? existingCategory.topic_kind
+        : 'discussion');
       setAudience(existingCategory.audience === 'members' ? 'members' : 'community');
       setTaggedMemberIds((existingCategory.member_tags ?? []).map((tag) => tag.tagged_user_id));
+      setOwnerUserId(existingCategory.owner_user_id ?? existingCategory.member_tags?.[0]?.tagged_user_id ?? '');
+      setGoalTitle(existingCategory.goal_title ?? '');
     } else {
       // Restore draft for new topics
       AsyncStorage.getItem(BOARD_DRAFT_KEY).then(raw => {
@@ -117,11 +154,16 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
             setName(d.name ?? '');
             setDescription(d.description ?? '');
             setSelectedEmoji(d.emoji ?? EMOJI_CATEGORIES[0].emojis[0]);
+            setTopicKind(d.topicKind ?? 'discussion');
+            setOwnerUserId(d.ownerUserId ?? '');
+            setGoalTitle(d.goalTitle ?? '');
           } catch {
             setName(''); setDescription(''); setSelectedEmoji(EMOJI_CATEGORIES[0].emojis[0]);
+            setTopicKind('discussion'); setOwnerUserId(''); setGoalTitle('');
           }
         } else {
           setName(''); setDescription(''); setSelectedEmoji(EMOJI_CATEGORIES[0].emojis[0]);
+          setTopicKind('discussion'); setOwnerUserId(''); setGoalTitle('');
         }
       });
       setCustomEmoji('');
@@ -134,9 +176,16 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
   // Auto-save draft for new topics (not editing)
   useEffect(() => {
     if (!visible || existingCategory) return;
-    if (!name && !description) return;
-    AsyncStorage.setItem(BOARD_DRAFT_KEY, JSON.stringify({ name, description, emoji: selectedEmoji })).catch(() => {});
-  }, [visible, existingCategory, name, description, selectedEmoji]);
+    if (!name && !description && !goalTitle && !ownerUserId) return;
+    AsyncStorage.setItem(BOARD_DRAFT_KEY, JSON.stringify({
+      name,
+      description,
+      emoji: selectedEmoji,
+      topicKind,
+      ownerUserId,
+      goalTitle,
+    })).catch(() => {});
+  }, [visible, existingCategory, name, description, selectedEmoji, topicKind, ownerUserId, goalTitle]);
 
   const handleCustomEmojiChange = (text: string) => {
     // Grab only the last grapheme in case they type multiple.
@@ -151,16 +200,44 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
   };
 
   const handleSubmit = async () => {
-    if (!name.trim()) return;
+    const finalGoalTitle = topicKind === 'hd_board'
+      ? goalTitle.trim()
+      : topicKind === 'helper_log' ? '15min HIVE Helpers' : null;
+    const finalOwnerUserId = topicKind === 'hd_board' ? ownerUserId || null : null;
+    const finalName = topicKind === 'helper_log'
+      ? '15min HIVE Helpers'
+      : topicKind === 'hd_board'
+        ? (name.trim() || buildHdBoardName(selectedOwner?.name, finalGoalTitle || 'new project'))
+        : name.trim();
+
+    if (!finalName) return;
+    if (topicKind === 'hd_board' && (!finalOwnerUserId || !finalGoalTitle)) return;
+
     setSubmitting(true);
     try {
-      const finalAudience = audience === 'members' && taggedMemberIds.length > 0 ? 'members' : 'community';
+      const finalTaggedMemberIds = topicKind === 'hd_board' && finalOwnerUserId
+        ? [finalOwnerUserId]
+        : topicKind === 'helper_log'
+          ? []
+          : taggedMemberIds;
+      const finalAudience = topicKind === 'hd_board'
+        ? 'members'
+        : topicKind === 'helper_log'
+          ? 'community'
+          : audience === 'members' && finalTaggedMemberIds.length > 0 ? 'members' : 'community';
       const success = await onSubmit(
-        name.trim(),
-        description.trim(),
-        selectedEmoji,
+        finalName,
+        topicKind === 'helper_log'
+          ? (description.trim() || 'Log quick acts of help so Clive can include them in meeting recaps, slide decks, and newsletters.')
+          : description.trim(),
+        topicKind === 'helper_log' ? '🤝' : topicKind === 'hd_board' ? (selectedEmoji || '💎') : selectedEmoji,
         finalAudience,
-        finalAudience === 'members' ? taggedMemberIds : []
+        finalAudience === 'members' ? finalTaggedMemberIds : [],
+        {
+          topicKind,
+          ownerUserId: finalOwnerUserId,
+          goalTitle: finalGoalTitle,
+        }
       );
       if (success) {
         if (!existingCategory) AsyncStorage.removeItem(BOARD_DRAFT_KEY).catch(() => {});
@@ -168,8 +245,11 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
         setDescription('');
         setSelectedEmoji(EMOJI_CATEGORIES[0].emojis[0]);
         setCustomEmoji('');
+        setTopicKind('discussion');
         setAudience('community');
         setTaggedMemberIds([]);
+        setOwnerUserId('');
+        setGoalTitle('');
         onClose();
       }
     } finally {
@@ -184,12 +264,16 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
     setDescription('');
     setSelectedEmoji(EMOJI_CATEGORIES[0].emojis[0]);
     setCustomEmoji('');
+    setTopicKind('discussion');
     setAudience('community');
     setTaggedMemberIds([]);
+    setOwnerUserId('');
+    setGoalTitle('');
     onClose();
   };
 
-  const isValid = name.trim().length > 0;
+  const isValid = topicKind === 'helper_log'
+    || (topicKind === 'hd_board' ? ownerUserId.length > 0 && goalTitle.trim().length > 0 : name.trim().length > 0);
   const toggleMember = (memberId: string) => {
     setAudience('members');
     setTaggedMemberIds((current) => (
@@ -197,6 +281,13 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
         ? current.filter((id) => id !== memberId)
         : [...current, memberId]
     ));
+  };
+  const selectOwner = (memberId: string) => {
+    setTopicKind('hd_board');
+    setAudience('members');
+    setOwnerUserId(memberId);
+    setTaggedMemberIds([memberId]);
+    if (!selectedEmoji || selectedEmoji === EMOJI_CATEGORIES[0].emojis[0]) setSelectedEmoji('💎');
   };
 
   return (
@@ -236,6 +327,95 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
                 Preview
               </Text>
             </View>
+
+            {/* Board type */}
+            <View className="mb-4">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Board Type</Text>
+              <View className="bg-white rounded-xl p-3">
+                <View className="flex-row flex-wrap">
+                  {[
+                    { kind: 'discussion' as const, label: 'Discussion', icon: '💬' },
+                    { kind: 'hd_board' as const, label: 'HD Board', icon: '💎' },
+                    { kind: 'helper_log' as const, label: '15min Helpers', icon: '🤝' },
+                  ].map((option) => {
+                    const selected = topicKind === option.kind;
+                    return (
+                      <Pressable
+                        key={option.kind}
+                        onPress={() => {
+                          setTopicKind(option.kind);
+                          if (option.kind === 'helper_log') {
+                            setAudience('community');
+                            setTaggedMemberIds([]);
+                            setOwnerUserId('');
+                            setGoalTitle('15min HIVE Helpers');
+                            setSelectedEmoji('🤝');
+                          }
+                          if (option.kind === 'hd_board') {
+                            setAudience('members');
+                            if (!selectedEmoji || selectedEmoji === '💬') setSelectedEmoji('💎');
+                          }
+                        }}
+                        className={`px-4 py-2.5 rounded-full mr-2 mb-2 border ${
+                          selected ? 'bg-gold border-gold' : 'bg-cream border-gold/20'
+                        }`}
+                      >
+                        <Text
+                          style={{ fontFamily: 'Lato_700Bold' }}
+                          className={selected ? 'text-white' : 'text-charcoal'}
+                        >
+                          {option.icon} {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+
+            {topicKind === 'hd_board' && (
+              <View className="mb-4">
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Whose HD Board?</Text>
+                <View className="bg-white rounded-xl p-3">
+                  <View className="flex-row flex-wrap">
+                    {members.map((member) => {
+                      const selected = ownerUserId === member.id;
+                      return (
+                        <Pressable
+                          key={member.id}
+                          onPress={() => selectOwner(member.id)}
+                          className={`px-4 py-2.5 rounded-full mr-2 mb-2 border ${
+                            selected ? 'bg-gold border-gold' : 'bg-cream border-gold/20'
+                          }`}
+                        >
+                          <Text
+                            style={{ fontFamily: 'Lato_700Bold' }}
+                            className={selected ? 'text-white' : 'text-charcoal'}
+                            numberOfLines={1}
+                          >
+                            {member.name.split(' ')[0]}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <TextInput
+                    value={goalTitle}
+                    onChangeText={setGoalTitle}
+                    placeholder="Project or goal, e.g. PMU volunteers, fairy lights, beta readers..."
+                    placeholderTextColor="#9ca3af"
+                    maxLength={70}
+                    className="bg-cream rounded-xl px-4 py-3 text-charcoal mt-2"
+                    style={{ fontFamily: 'Lato_400Regular' }}
+                  />
+                  {!!suggestedHdName && (
+                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs mt-2">
+                      Will create: {suggestedHdName}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
 
             {/* Emoji picker */}
             <View className="mb-4">
@@ -332,6 +512,7 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
             </View>
 
             {/* Audience picker */}
+            {topicKind === 'discussion' && (
             <View className="mb-4">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Tag</Text>
               <View className="bg-white rounded-xl p-3">
@@ -379,21 +560,29 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
                 </Text>
               </View>
             </View>
+            )}
 
             {/* Name input */}
             <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Topic Name *</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
+                {topicKind === 'hd_board' ? 'Board Name' : 'Topic Name *'}
+              </Text>
               <TextInput
                 value={name}
                 onChangeText={setName}
-                placeholder="e.g., Book Club, Recipes, Travel Plans..."
+                placeholder={topicKind === 'hd_board'
+                  ? suggestedHdName || "e.g., Brit's HD: PMU volunteers"
+                  : topicKind === 'helper_log'
+                    ? '15min HIVE Helpers'
+                    : 'e.g., Book Club, Recipes, Travel Plans...'}
                 placeholderTextColor="#9ca3af"
-                maxLength={50}
+                maxLength={90}
+                editable={topicKind !== 'helper_log'}
                 className="bg-white rounded-xl px-4 py-3 text-charcoal"
                 style={{ fontFamily: 'Lato_400Regular' }}
               />
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40 text-xs mt-1 text-right">
-                {name.length}/50
+                {name.length}/90
               </Text>
             </View>
 

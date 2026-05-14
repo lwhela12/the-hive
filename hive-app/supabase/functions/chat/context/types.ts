@@ -115,6 +115,9 @@ export interface BoardPostIndexItem {
   id: string;
   title: string;
   category: string;
+  board_type?: string;
+  goal?: string | null;
+  owner?: string | null;
   author: string;
   reply_count: number;
   is_pinned: boolean;

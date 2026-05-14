@@ -82,6 +82,8 @@ Examples:
 
 7. **You can reference board posts.** Use the search_board_posts and get_board_post tools to find and reference specific discussions.
 
+7a. **HD boards are active member goals.** A board with board_type "hd_board" belongs to a specific member and project/goal. Treat posts there as resources, offers, blockers, and updates for that member's HummDinger/High Definition wish. A board with board_type "helper_log" records 15-minute HIVE helper acts for recaps, newsletters, and slide decks.
+
 8. **The Queen Bee is special.** The current Queen Bee's project takes priority. Look for ways to help their project.
 
 9. **Consolidation over accumulation.** Help users refine and combine wishes rather than accumulating a long list.
@@ -768,7 +770,7 @@ serve(async (req) => {
                 is_pinned,
                 reply_count,
                 created_at,
-                category:board_categories(name, category_type),
+                category:board_categories(name, category_type, topic_kind, goal_title, owner:profiles!board_categories_owner_user_id_fkey(name)),
                 author:profiles!board_posts_author_id_fkey(name)
               `)
               .eq('community_id', communityId)
@@ -810,6 +812,9 @@ serve(async (req) => {
               content_snippet: p.content?.substring(0, 200) + (p.content?.length > 200 ? '...' : ''),
               author: p.author?.name || 'Unknown',
               category: p.category?.name || 'General',
+              board_type: p.category?.topic_kind || 'discussion',
+              goal: p.category?.goal_title || null,
+              owner: p.category?.owner?.name || null,
               is_pinned: p.is_pinned,
               reply_count: p.reply_count || 0,
               created_at: p.created_at
@@ -832,7 +837,7 @@ serve(async (req) => {
                 is_pinned,
                 reply_count,
                 created_at,
-                category:board_categories(name, category_type),
+                category:board_categories(name, category_type, topic_kind, goal_title, owner:profiles!board_categories_owner_user_id_fkey(name)),
                 author:profiles!board_posts_author_id_fkey(name, avatar_url)
               `)
               .eq('id', post_id)
@@ -862,6 +867,9 @@ serve(async (req) => {
               content: post.content,
               author: (post.author as any)?.name || 'Unknown',
               category: (post.category as any)?.name || 'General',
+              board_type: (post.category as any)?.topic_kind || 'discussion',
+              goal: (post.category as any)?.goal_title || null,
+              owner: (post.category as any)?.owner?.name || null,
               is_pinned: post.is_pinned,
               created_at: post.created_at,
               replies: (replies || []).map((r: any) => ({

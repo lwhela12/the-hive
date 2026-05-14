@@ -35,6 +35,11 @@ interface MeetingAnalysis {
     person_name: string;
     description: string;
   }>;
+  hd_boards?: Array<{
+    person_name: string;
+    goal_title: string;
+    description?: string | null;
+  }>;
   queen_bee_highlights?: string[];
   board_suggestions?: Array<{
     person_name?: string | null;
@@ -110,6 +115,118 @@ function matchMemberByName(name: string | null | undefined, members: Member[]) {
   return partial?.id ?? null;
 }
 
+function firstName(name: string | null | undefined) {
+  return name?.trim().split(/\s+/)[0] || 'Someone';
+}
+
+function normalizeText(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+async function getNextBoardDisplayOrder(supabaseAdmin: any, communityId: string) {
+  const { data } = await supabaseAdmin
+    .from('board_categories')
+    .select('display_order')
+    .eq('community_id', communityId)
+    .order('display_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return (data?.display_order ?? 0) + 1;
+}
+
+async function ensureBoardMemberTag(
+  supabaseAdmin: any,
+  communityId: string,
+  categoryId: string,
+  taggedUserId: string,
+  taggedBy: string
+) {
+  const { data: existing } = await supabaseAdmin
+    .from('board_category_member_tags')
+    .select('id')
+    .eq('community_id', communityId)
+    .eq('category_id', categoryId)
+    .eq('tagged_user_id', taggedUserId)
+    .maybeSingle();
+
+  if (existing?.id) return;
+
+  const { error } = await supabaseAdmin.from('board_category_member_tags').insert({
+    community_id: communityId,
+    category_id: categoryId,
+    tagged_user_id: taggedUserId,
+    tagged_by: taggedBy,
+  });
+  if (error) console.error('Failed to tag HD board owner:', error);
+}
+
+async function findOrCreateHdBoard(
+  supabaseAdmin: any,
+  communityId: string,
+  board: { person_name?: string | null; goal_title?: string | null; description?: string | null },
+  members: Member[],
+  userId: string
+) {
+  const ownerId = matchMemberByName(board.person_name, members);
+  const goalTitle = board.goal_title?.trim();
+  if (!ownerId || !goalTitle) return null;
+
+  const owner = members.find((member) => member.id === ownerId);
+  const normalizedGoal = normalizeText(goalTitle);
+
+  const { data: existingBoards } = await supabaseAdmin
+    .from('board_categories')
+    .select('id, name, goal_title')
+    .eq('community_id', communityId)
+    .eq('topic_kind', 'hd_board')
+    .eq('owner_user_id', ownerId);
+
+  const existing = (existingBoards ?? []).find((category: any) => {
+    const existingGoal = normalizeText(category.goal_title);
+    const existingName = normalizeText(category.name);
+    return (existingGoal.length > 0 && (existingGoal.includes(normalizedGoal) || normalizedGoal.includes(existingGoal)))
+      || existingName.includes(normalizedGoal);
+  });
+  if (existing?.id) {
+    await ensureBoardMemberTag(supabaseAdmin, communityId, existing.id, ownerId, userId);
+    return existing.id;
+  }
+
+  const displayOrder = await getNextBoardDisplayOrder(supabaseAdmin, communityId);
+  const name = `${firstName(owner?.name)}'s HD: ${goalTitle}`;
+  const { data: created, error } = await supabaseAdmin
+    .from('board_categories')
+    .insert({
+      community_id: communityId,
+      name,
+      description: board.description?.trim() || `${firstName(owner?.name)}'s HummDinger/High Definition wish: ${goalTitle}`,
+      category_type: 'custom',
+      icon: '💎',
+      audience: 'members',
+      display_order: displayOrder,
+      is_system: false,
+      requires_admin: false,
+      requires_approval: false,
+      created_by: userId,
+      topic_kind: 'hd_board',
+      owner_user_id: ownerId,
+      goal_title: goalTitle,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('Failed to create HD board:', error);
+    return null;
+  }
+
+  if (created?.id) {
+    await ensureBoardMemberTag(supabaseAdmin, communityId, created.id, ownerId, userId);
+  }
+  return created?.id ?? null;
+}
+
 async function findBoardCategory(
   supabaseAdmin: any,
   communityId: string,
@@ -117,6 +234,20 @@ async function findBoardCategory(
   members: Member[]
 ) {
   const targetMemberId = matchMemberByName(suggestion.person_name, members);
+  const categoryHint = suggestion.category_hint?.trim();
+  const normalizedHint = normalizeText(categoryHint);
+
+  if (normalizedHint.includes('15min') || normalizedHint.includes('helper')) {
+    const { data: helperCategory } = await supabaseAdmin
+      .from('board_categories')
+      .select('id')
+      .eq('community_id', communityId)
+      .or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%')
+      .limit(1)
+      .maybeSingle();
+
+    if (helperCategory?.id) return helperCategory.id;
+  }
 
   if (targetMemberId) {
     const { data: tags } = await supabaseAdmin
@@ -129,17 +260,28 @@ async function findBoardCategory(
     if (categoryIds.length > 0) {
       const { data: categories } = await supabaseAdmin
         .from('board_categories')
-        .select('id, name, is_system')
+        .select('id, name, is_system, topic_kind, goal_title')
         .in('id', categoryIds)
         .eq('community_id', communityId)
         .order('is_system', { ascending: true })
         .order('created_at', { ascending: true });
 
-      if (categories?.[0]?.id) return categories[0].id;
+      if (categories?.length) {
+        const hint = normalizeText(suggestion.category_hint);
+        const matchingHdBoard = hint
+          ? categories.find((category: any) => category.topic_kind === 'hd_board'
+            && (normalizeText(category.goal_title).includes(hint) || normalizeText(category.name).includes(hint)))
+          : null;
+        if (matchingHdBoard?.id) return matchingHdBoard.id;
+
+        const firstHdBoard = categories.find((category: any) => category.topic_kind === 'hd_board');
+        if (firstHdBoard?.id) return firstHdBoard.id;
+
+        if (categories[0]?.id) return categories[0].id;
+      }
     }
   }
 
-  const categoryHint = suggestion.category_hint?.trim();
   if (categoryHint) {
     const { data: hintedCategory } = await supabaseAdmin
       .from('board_categories')
@@ -251,6 +393,19 @@ serve(async (req) => {
 
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
     const memberNames = (members ?? []).map((member: Member) => member.name).join(', ');
+    const { data: boardTopics } = await supabaseAdmin
+      .from('board_categories')
+      .select('name, topic_kind, goal_title, owner:profiles!board_categories_owner_user_id_fkey(name)')
+      .eq('community_id', communityId)
+      .order('display_order', { ascending: true });
+    const boardTopicList = (boardTopics ?? [])
+      .map((topic: any) => {
+        const kind = topic.topic_kind === 'hd_board'
+          ? `HD board for ${topic.owner?.name || 'member'}${topic.goal_title ? ` (${topic.goal_title})` : ''}`
+          : topic.topic_kind === 'helper_log' ? 'helper log' : 'discussion';
+        return `- ${topic.name}: ${kind}`;
+      })
+      .join('\n');
     const sourceFiles = getImportedFiles(existingSummary);
     const content: any[] = [
       {
@@ -258,8 +413,12 @@ serve(async (req) => {
         text: `Meeting date: ${meeting.date}
 Requested title: ${existingSummary.title || 'HIVE Meeting'}
 Known HIVE members: ${memberNames || 'No member list available'}
+Existing board topics:
+${boardTopicList || '- None yet'}
 
 Turn these meeting notes into app-ready structured data. Use only information supported by the notes. Do not invent dates, assignees, or commitments. Prefer exact member names when assigning work.
+
+HD boards are durable project boards for a member's current HummDinger/High Definition wish. Create one hd_boards entry for each distinct member goal that should get its own board. Reuse existing HD boards when the same person is still working on the same goal. Use the "15min HIVE Helpers" board for quick acts of help people completed or offered.
 
 Return strict JSON only:
 {
@@ -270,8 +429,9 @@ Return strict JSON only:
   "action_items": [{"description": "specific task", "assigned_to_name": "member name, The group, or null", "due_date": "YYYY-MM-DD or null"}],
   "events": [{"title": "event title", "event_date": "YYYY-MM-DD", "event_time": "HH:MM:SS or null", "event_type": "meeting or custom", "description": "optional", "location": "optional"}],
   "wishes_surfaced": [{"person_name": "member name", "description": "specific wish or need"}],
+  "hd_boards": [{"person_name": "member name", "goal_title": "short project/goal name", "description": "what help belongs on this board"}],
   "queen_bee_highlights": ["highlight"],
-  "board_suggestions": [{"person_name": "member name or null", "title": "suggested board post title", "content": "draft board update/resource note", "category_hint": "Resources, Announcements, or member/project area"}]
+  "board_suggestions": [{"person_name": "member name or null", "title": "suggested board post title", "content": "draft board update/resource note", "category_hint": "existing board name, HD goal title, 15min HIVE Helpers, Resources, Announcements, or member/project area"}]
 }`,
       },
     ];
@@ -376,6 +536,18 @@ ${meeting.transcript_attributed || meeting.transcript_raw || ''}`,
       }
     }
 
+    const createdHdBoards = [];
+    for (const board of analysis.hd_boards ?? []) {
+      const categoryId = await findOrCreateHdBoard(supabaseAdmin, communityId, board, members ?? [], userId);
+      if (categoryId) {
+        createdHdBoards.push({
+          category_id: categoryId,
+          person_name: board.person_name,
+          goal_title: board.goal_title,
+        });
+      }
+    }
+
     const createdBoardPosts = [];
     for (const suggestion of analysis.board_suggestions ?? []) {
       if (!suggestion.title?.trim() || !suggestion.content?.trim()) continue;
@@ -427,6 +599,8 @@ ${meeting.transcript_attributed || meeting.transcript_raw || ''}`,
       decisions: analysis.decisions ?? [],
       details: analysis.details ?? [],
       wishes_surfaced: analysis.wishes_surfaced ?? [],
+      hd_boards: analysis.hd_boards ?? [],
+      hd_boards_created: createdHdBoards,
       queen_bee_highlights: analysis.queen_bee_highlights ?? [],
       board_suggestions: analysis.board_suggestions ?? [],
       board_posts_created: createdBoardPosts,
@@ -453,13 +627,14 @@ ${meeting.transcript_attributed || meeting.transcript_raw || ''}`,
       .from('context_summaries')
       .delete()
       .eq('community_id', communityId)
-      .eq('summary_type', 'meetings');
+      .in('summary_type', ['meetings', 'board_activity']);
 
     return jsonResponse({
       success: true,
       meeting: updatedMeeting,
       action_items_created: actionItems.length,
       events_created: createdEvents.length,
+      hd_boards_created: createdHdBoards.length,
       board_posts_created: createdBoardPosts.length,
     });
   } catch (error) {

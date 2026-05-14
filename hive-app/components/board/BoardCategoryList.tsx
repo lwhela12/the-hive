@@ -56,10 +56,18 @@ export const BoardCategoryList = memo(function BoardCategoryList({
         const taggedNames = (item.member_tags ?? [])
           .map((tag) => tag.member?.name?.split(' ')[0])
           .filter(Boolean);
-        const audienceLabel = item.audience === 'members' && taggedNames.length > 0
-          ? `For ${taggedNames.join(', ')}`
-          : 'Everyone';
-        const subtitleParts = [audienceLabel, item.description, countLabel].filter(Boolean);
+        const ownerLabel = item.owner_user_id
+          ? taggedNames[0] ? `for ${taggedNames[0]}` : 'for a member'
+          : taggedNames.length > 0 ? `for ${taggedNames.join(', ')}` : '';
+        const boardKindLabel = item.topic_kind === 'hd_board'
+          ? `HD board ${ownerLabel}`.trim()
+          : item.topic_kind === 'helper_log'
+            ? '15min HIVE helper log'
+            : item.audience === 'members' && taggedNames.length > 0
+              ? `For ${taggedNames.join(', ')}`
+              : 'Everyone';
+        const goalLabel = item.topic_kind === 'hd_board' ? item.goal_title : null;
+        const subtitleParts = [boardKindLabel, goalLabel, item.description, countLabel].filter(Boolean);
         const subtitle = subtitleParts.join(' · ');
 
         return (

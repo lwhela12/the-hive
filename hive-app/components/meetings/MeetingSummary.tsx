@@ -32,6 +32,7 @@ interface ParsedSummary {
     title: string;
     category_id?: string;
   }[];
+  hd_boards_created?: { category_id: string; person_name?: string; goal_title?: string }[];
   action_items_created?: number;
   events_created?: number;
 }
@@ -180,11 +181,12 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
 
       const actionCount = data?.action_items_created ?? 0;
       const eventCount = data?.events_created ?? 0;
+      const hdBoardCount = data?.hd_boards_created ?? 0;
       const boardPostCount = data?.board_posts_created ?? 0;
 
       Alert.alert(
         'Notes Applied',
-        `Created ${actionCount} action item${actionCount === 1 ? '' : 's'}, ${eventCount} event${eventCount === 1 ? '' : 's'}, and ${boardPostCount} board post${boardPostCount === 1 ? '' : 's'}.`
+        `Created ${actionCount} action item${actionCount === 1 ? '' : 's'}, ${eventCount} event${eventCount === 1 ? '' : 's'}, ${hdBoardCount} HD board${hdBoardCount === 1 ? '' : 's'}, and ${boardPostCount} board post${boardPostCount === 1 ? '' : 's'}.`
       );
     } catch (error) {
       console.error('Error applying meeting notes:', error);
@@ -317,7 +319,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               <View className="bg-green-50 border border-green-100 rounded-xl p-4">
                 <Text className="text-green-800 font-semibold">Applied to HIVE</Text>
                 <Text className="text-green-700 mt-1">
-                  {parsedSummary.action_items_created ?? 0} action item{(parsedSummary.action_items_created ?? 0) === 1 ? '' : 's'} · {parsedSummary.events_created ?? 0} event{(parsedSummary.events_created ?? 0) === 1 ? '' : 's'} · {parsedSummary.board_posts_created?.length ?? 0} board post{(parsedSummary.board_posts_created?.length ?? 0) === 1 ? '' : 's'}
+                  {parsedSummary.action_items_created ?? 0} action item{(parsedSummary.action_items_created ?? 0) === 1 ? '' : 's'} · {parsedSummary.events_created ?? 0} event{(parsedSummary.events_created ?? 0) === 1 ? '' : 's'} · {parsedSummary.hd_boards_created?.length ?? 0} HD board{(parsedSummary.hd_boards_created?.length ?? 0) === 1 ? '' : 's'} · {parsedSummary.board_posts_created?.length ?? 0} board post{(parsedSummary.board_posts_created?.length ?? 0) === 1 ? '' : 's'}
                 </Text>
               </View>
             ) : null}

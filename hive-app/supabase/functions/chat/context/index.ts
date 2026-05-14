@@ -323,7 +323,7 @@ async function fetchBoardPostIndex(
       is_pinned,
       reply_count,
       created_at,
-      category:board_categories(name),
+      category:board_categories(name, topic_kind, goal_title, owner:profiles!board_categories_owner_user_id_fkey(name)),
       author:profiles!board_posts_author_id_fkey(name)
     `)
     .eq('community_id', communityId)
@@ -353,6 +353,9 @@ async function fetchBoardPostIndex(
     id: p.id,
     title: p.title,
     category: p.category?.name || 'General',
+    board_type: p.category?.topic_kind || 'discussion',
+    goal: p.category?.goal_title || null,
+    owner: p.category?.owner?.name || null,
     author: p.author?.name || 'Unknown',
     reply_count: p.reply_count || 0,
     is_pinned: p.is_pinned || false,
@@ -672,6 +675,9 @@ ${events}`);
         id: p.id,
         title: p.title,
         category: p.category,
+        board_type: p.board_type,
+        goal: p.goal,
+        owner: p.owner,
         author: p.author,
         replies: p.reply_count,
         pinned: p.is_pinned,
