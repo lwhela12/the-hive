@@ -84,6 +84,8 @@ Examples:
 
 7a. **HD boards are active member goals.** A board with board_type "hd_board" belongs to a specific member and project/goal. Treat posts there as resources, offers, blockers, and updates for that member's HummDinger/High Definition wish. A board with board_type "helper_log" records 15-minute HIVE helper acts for recaps, newsletters, and slide decks.
 
+7b. **You can steward the app, but use a two-step safety flow.** For requests that would change shared app state (create boards/posts/events, mark todos complete, mark wishes fulfilled, or complete/archive HD boards), first inspect anything you need with read tools, then call propose_app_actions with the exact changes. Tell the user what will happen and ask them to say "apply it" or "yes, do it." Only call apply_pending_actions when the user's latest message clearly approves a pending proposal from a previous assistant response. Never propose and apply in the same response. Never apply destructive or broad changes from vague approval.
+
 8. **The Queen Bee is special.** The current Queen Bee's project takes priority. Look for ways to help their project.
 
 9. **Consolidation over accumulation.** Help users refine and combine wishes rather than accumulating a long list.
@@ -403,11 +405,709 @@ const tools: Anthropic.Tool[] = [
       },
       required: ["post_id"]
     }
+  },
+  {
+    name: "get_board_categories",
+    description: "List HIVE message board categories, including HD board owner/goal/status metadata. Use before proposing board changes or checking whether a board already exists.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Optional text to match in board name, goal, or description" },
+        topic_kind: { type: "string", description: "Optional: discussion, hd_board, or helper_log" },
+        owner_name: { type: "string", description: "Optional member name for HD boards" },
+        status: { type: "string", description: "Optional: active, completed, or archived" },
+        limit: { type: "number", description: "Maximum categories to return (default 20, max 50)" }
+      }
+    }
+  },
+  {
+    name: "search_action_items",
+    description: "Search meeting/manual action items before proposing completion or cleanup.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Search text for the action item description" },
+        assignee_name: { type: "string", description: "Optional assigned member name" },
+        completed: { type: "boolean", description: "Optional completed filter" },
+        limit: { type: "number", description: "Maximum action items to return (default 20, max 50)" }
+      }
+    }
+  },
+  {
+    name: "search_wishes",
+    description: "Search visible wishes before proposing to mark one fulfilled. Private wishes remain private unless they belong to the current user.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Search text for wish description" },
+        member_name: { type: "string", description: "Optional wish owner name" },
+        status: { type: "string", description: "Optional wish status: private, public, fulfilled, or replaced" },
+        limit: { type: "number", description: "Maximum wishes to return (default 20, max 50)" }
+      }
+    }
+  },
+  {
+    name: "propose_app_actions",
+    description: "Create a pending, user-approved action plan for shared app changes. This does not apply changes. Use this for creating boards/posts/events, completing todos, fulfilling wishes, or completing HD boards.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        summary: { type: "string", description: "Plain-language summary of the proposed app changes" },
+        actions: {
+          type: "array",
+          description: "Ordered app actions to run after user approval",
+          items: {
+            type: "object",
+            properties: {
+              action_type: {
+                type: "string",
+                description: "One of: create_hd_board, create_discussion_board, create_board_post, mark_action_items_complete, mark_wishes_fulfilled, mark_hd_boards_complete, create_event"
+              },
+              owner_name: { type: "string", description: "Member who owns the HD board or wish" },
+              goal_title: { type: "string", description: "HD board goal/project title" },
+              board_name: { type: "string", description: "Board/category name or search text" },
+              title: { type: "string", description: "Post or event title" },
+              content: { type: "string", description: "Post content" },
+              description: { type: "string", description: "Board or event description" },
+              query: { type: "string", description: "Search text for todos, wishes, or boards to update" },
+              assignee_name: { type: "string", description: "Action item assignee name" },
+              completion_note: { type: "string", description: "Note explaining what was completed" },
+              event_date: { type: "string", description: "Event date in YYYY-MM-DD format" },
+              event_time: { type: "string", description: "Event time in HH:MM format" },
+              location: { type: "string", description: "Event location" },
+              icon: { type: "string", description: "Optional board icon emoji" }
+            },
+            required: ["action_type"]
+          }
+        }
+      },
+      required: ["summary", "actions"]
+    }
+  },
+  {
+    name: "apply_pending_actions",
+    description: "Apply the latest pending app action proposal after the user's latest message clearly approves it.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        request_id: { type: "string", description: "Optional pending action request ID. If omitted, applies the latest pending request in this conversation." }
+      }
+    }
   }
 ];
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+
+type AppActionType =
+  | 'create_hd_board'
+  | 'create_discussion_board'
+  | 'create_board_post'
+  | 'mark_action_items_complete'
+  | 'mark_wishes_fulfilled'
+  | 'mark_hd_boards_complete'
+  | 'create_event';
+
+type AppAction = {
+  action_type: AppActionType;
+  owner_name?: string;
+  goal_title?: string;
+  board_name?: string;
+  title?: string;
+  content?: string;
+  description?: string;
+  query?: string;
+  assignee_name?: string;
+  completion_note?: string;
+  event_date?: string;
+  event_time?: string;
+  location?: string;
+  icon?: string;
+};
+
+type MemberRecord = {
+  id: string;
+  name: string;
+};
+
+type BoardCategoryRecord = {
+  id: string;
+  name: string;
+  description?: string | null;
+  topic_kind?: string | null;
+  goal_title?: string | null;
+  owner_user_id?: string | null;
+  status?: string | null;
+  display_order?: number | null;
+  owner?: { name?: string | null } | null;
+};
+
+type ActionExecutionResult = {
+  action_type: AppActionType | string;
+  ok: boolean;
+  message: string;
+  ids?: string[];
+};
+
+const MEMBER_ALIASES: Record<string, string> = {
+  brit: 'brittany',
+  ollie: 'oliver',
+  izzy: 'isabelle',
+  fin: 'infiniti',
+  infinite: 'infiniti',
+  ems: 'emmeline',
+};
+
+const normalizeText = (value?: string | null) =>
+  (value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+const firstName = (name?: string | null) => {
+  const first = name?.trim().split(/\s+/)[0];
+  return first || 'Member';
+};
+
+const normalizedNameQuery = (name?: string | null) => {
+  const normalized = normalizeText(name);
+  return MEMBER_ALIASES[normalized] || normalized;
+};
+
+const hasExplicitApproval = (message?: string | null) => {
+  const normalized = normalizeText(message);
+  if (!normalized) return false;
+  if (/\b(no|nope|not yet|dont|don t|do not|wait|hold|stop|cancel)\b/.test(normalized)) {
+    return false;
+  }
+  return /\b(yes|yep|yeah|approved|approve|apply|do it|go ahead|make it happen|run it|looks good|confirmed)\b/.test(normalized);
+};
+
+const actionSummary = (action: AppAction) => {
+  switch (action.action_type) {
+    case 'create_hd_board':
+      return `Create HD board for ${action.owner_name || 'member'}: ${action.goal_title || action.board_name || 'Untitled goal'}`;
+    case 'create_discussion_board':
+      return `Create discussion board "${action.board_name || action.title || 'Untitled board'}"`;
+    case 'create_board_post':
+      return `Create board post "${action.title || 'Untitled post'}" in ${action.board_name || 'a board'}`;
+    case 'mark_action_items_complete':
+      return `Mark action items complete matching "${action.query || action.title || ''}"`;
+    case 'mark_wishes_fulfilled':
+      return `Mark wishes fulfilled matching "${action.query || action.goal_title || ''}"`;
+    case 'mark_hd_boards_complete':
+      return `Mark HD boards complete matching "${action.board_name || action.query || action.goal_title || ''}"`;
+    case 'create_event':
+      return `Create event "${action.title || 'Untitled event'}" on ${action.event_date || 'a date to confirm'}`;
+    default:
+      return action.action_type;
+  }
+};
+
+async function getCommunityMembers(
+  supabase: SupabaseClient,
+  communityId: string
+): Promise<MemberRecord[]> {
+  const { data: membershipRows } = await supabase
+    .from('community_memberships')
+    .select('user_id')
+    .eq('community_id', communityId);
+
+  const memberIds = membershipRows?.map((row: any) => row.user_id).filter(Boolean) || [];
+  if (memberIds.length === 0) return [];
+
+  const { data: members } = await supabase
+    .from('profiles')
+    .select('id, name')
+    .in('id', memberIds)
+    .order('name');
+
+  return (members || []) as MemberRecord[];
+}
+
+async function findMemberByName(
+  supabase: SupabaseClient,
+  communityId: string,
+  name?: string | null
+): Promise<MemberRecord | null> {
+  const target = normalizedNameQuery(name);
+  if (!target) return null;
+
+  const members = await getCommunityMembers(supabase, communityId);
+  return members.find((member) => {
+    const normalizedMemberName = normalizeText(member.name);
+    const normalizedFirst = normalizeText(firstName(member.name));
+    return (
+      normalizedMemberName === target ||
+      normalizedFirst === target ||
+      normalizedMemberName.includes(target) ||
+      target.includes(normalizedFirst)
+    );
+  }) || null;
+}
+
+async function getNextBoardDisplayOrder(
+  supabase: SupabaseClient,
+  communityId: string
+) {
+  const { data } = await supabase
+    .from('board_categories')
+    .select('display_order')
+    .eq('community_id', communityId)
+    .order('display_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return ((data?.display_order as number | undefined) ?? 0) + 1;
+}
+
+async function ensureBoardMemberTag(
+  supabase: SupabaseClient,
+  communityId: string,
+  categoryId: string,
+  memberId: string,
+  taggedBy: string
+) {
+  await supabase
+    .from('board_category_member_tags')
+    .upsert({
+      community_id: communityId,
+      category_id: categoryId,
+      tagged_user_id: memberId,
+      tagged_by: taggedBy,
+    }, { onConflict: 'category_id,tagged_user_id' });
+}
+
+async function listBoardCategories(
+  supabase: SupabaseClient,
+  communityId: string,
+  options: {
+    query?: string;
+    topic_kind?: string;
+    owner_name?: string;
+    status?: string;
+    limit?: number;
+  } = {}
+): Promise<BoardCategoryRecord[]> {
+  const limit = Math.min(options.limit || 50, 50);
+  let query = supabase
+    .from('board_categories')
+    .select('id, name, description, topic_kind, goal_title, owner_user_id, status, display_order, owner:profiles!board_categories_owner_user_id_fkey(name)')
+    .eq('community_id', communityId)
+    .order('display_order')
+    .limit(limit);
+
+  if (options.topic_kind) query = query.eq('topic_kind', options.topic_kind);
+  if (options.status) query = query.eq('status', options.status);
+
+  const { data } = await query;
+  let categories = (data || []) as BoardCategoryRecord[];
+
+  const textQuery = normalizeText(options.query);
+  if (textQuery) {
+    categories = categories.filter((category) =>
+      normalizeText(`${category.name} ${category.goal_title || ''} ${category.description || ''}`).includes(textQuery)
+    );
+  }
+
+  const ownerQuery = normalizedNameQuery(options.owner_name);
+  if (ownerQuery) {
+    categories = categories.filter((category) => {
+      const ownerName = normalizeText(category.owner?.name || '');
+      const ownerFirst = normalizeText(firstName(category.owner?.name));
+      return ownerName.includes(ownerQuery) || ownerFirst === ownerQuery || ownerQuery.includes(ownerFirst);
+    });
+  }
+
+  return categories;
+}
+
+async function findBoardCategory(
+  supabase: SupabaseClient,
+  communityId: string,
+  action: AppAction
+) {
+  const categories = await listBoardCategories(supabase, communityId, {
+    topic_kind: action.action_type === 'mark_hd_boards_complete' ? 'hd_board' : undefined,
+    owner_name: action.owner_name,
+    limit: 50,
+  });
+
+  const target = normalizeText(`${action.board_name || ''} ${action.goal_title || ''} ${action.query || ''}`);
+  if (!target && action.action_type !== 'create_board_post') return null;
+
+  if (action.action_type === 'create_board_post' && /15\s*min|helper/.test(target)) {
+    const helper = categories.find((category) => category.topic_kind === 'helper_log');
+    if (helper) return helper;
+  }
+
+  return categories.find((category) => {
+    const haystack = normalizeText(`${category.name} ${category.goal_title || ''} ${category.description || ''}`);
+    return target ? haystack.includes(target) || target.includes(normalizeText(category.goal_title || category.name)) : false;
+  }) || null;
+}
+
+async function createHdBoard(
+  supabase: SupabaseClient,
+  communityId: string,
+  userId: string,
+  action: AppAction
+): Promise<ActionExecutionResult> {
+  const owner = await findMemberByName(supabase, communityId, action.owner_name);
+  if (!owner) {
+    return { action_type: action.action_type, ok: false, message: `Could not find member "${action.owner_name || ''}".` };
+  }
+
+  const goalTitle = (action.goal_title || action.board_name || action.title || '').trim();
+  if (!goalTitle) {
+    return { action_type: action.action_type, ok: false, message: 'HD board needs a goal title.' };
+  }
+
+  const boardName = `${firstName(owner.name)}'s HD: ${goalTitle}`;
+  const displayOrder = await getNextBoardDisplayOrder(supabase, communityId);
+  const description = action.description || action.content || `${firstName(owner.name)} is looking for HIVE help with ${goalTitle}.`;
+
+  const { data: category, error } = await supabase
+    .from('board_categories')
+    .upsert({
+      community_id: communityId,
+      name: boardName,
+      description,
+      category_type: 'custom',
+      icon: action.icon || '💎',
+      display_order: displayOrder,
+      is_system: false,
+      requires_admin: false,
+      requires_approval: false,
+      created_by: userId,
+      topic_kind: 'hd_board',
+      goal_title: goalTitle,
+      owner_user_id: owner.id,
+      audience: 'members',
+      status: 'active',
+      completed_at: null,
+      completed_by: null,
+      completion_note: null,
+    }, { onConflict: 'community_id,name' })
+    .select('id, name')
+    .single();
+
+  if (error || !category) {
+    return { action_type: action.action_type, ok: false, message: `Could not create HD board: ${error?.message || 'unknown error'}` };
+  }
+
+  await ensureBoardMemberTag(supabase, communityId, category.id, owner.id, userId);
+
+  if (action.content || action.title) {
+    await supabase.from('board_posts').insert({
+      community_id: communityId,
+      category_id: category.id,
+      author_id: userId,
+      title: action.title || 'Clive-created starting point',
+      content: action.content || description,
+    });
+  }
+
+  return { action_type: action.action_type, ok: true, message: `Created or refreshed ${category.name}.`, ids: [category.id] };
+}
+
+async function createDiscussionBoard(
+  supabase: SupabaseClient,
+  communityId: string,
+  userId: string,
+  action: AppAction
+): Promise<ActionExecutionResult> {
+  const boardName = (action.board_name || action.title || action.goal_title || '').trim();
+  if (!boardName) {
+    return { action_type: action.action_type, ok: false, message: 'Discussion board needs a name.' };
+  }
+
+  const displayOrder = await getNextBoardDisplayOrder(supabase, communityId);
+  const description = action.description || action.content || null;
+  const { data: category, error } = await supabase
+    .from('board_categories')
+    .upsert({
+      community_id: communityId,
+      name: boardName,
+      description,
+      category_type: 'custom',
+      icon: action.icon || '1F4DD',
+      display_order: displayOrder,
+      is_system: false,
+      requires_admin: false,
+      requires_approval: false,
+      created_by: userId,
+      topic_kind: 'discussion',
+      goal_title: null,
+      owner_user_id: null,
+      audience: 'community',
+      status: 'active',
+      completed_at: null,
+      completed_by: null,
+      completion_note: null,
+    }, { onConflict: 'community_id,name' })
+    .select('id, name')
+    .single();
+
+  if (error || !category) {
+    return { action_type: action.action_type, ok: false, message: `Could not create discussion board: ${error?.message || 'unknown error'}` };
+  }
+
+  if (action.content) {
+    await supabase.from('board_posts').insert({
+      community_id: communityId,
+      category_id: category.id,
+      author_id: userId,
+      title: action.title && action.title !== boardName ? action.title : 'Starting point',
+      content: action.content,
+    });
+  }
+
+  return { action_type: action.action_type, ok: true, message: `Created or refreshed ${category.name}.`, ids: [category.id] };
+}
+
+async function createBoardPost(
+  supabase: SupabaseClient,
+  communityId: string,
+  userId: string,
+  action: AppAction
+): Promise<ActionExecutionResult> {
+  const category = await findBoardCategory(supabase, communityId, action);
+  if (!category) {
+    return { action_type: action.action_type, ok: false, message: `Could not find board "${action.board_name || action.query || ''}".` };
+  }
+
+  const title = (action.title || '').trim();
+  const content = (action.content || action.description || '').trim();
+  if (!title || !content) {
+    return { action_type: action.action_type, ok: false, message: 'Board post needs a title and content.' };
+  }
+
+  const { data, error } = await supabase
+    .from('board_posts')
+    .insert({
+      community_id: communityId,
+      category_id: category.id,
+      author_id: userId,
+      title,
+      content,
+    })
+    .select('id')
+    .single();
+
+  if (error || !data) {
+    return { action_type: action.action_type, ok: false, message: `Could not create board post: ${error?.message || 'unknown error'}` };
+  }
+
+  return { action_type: action.action_type, ok: true, message: `Posted "${title}" in ${category.name}.`, ids: [data.id] };
+}
+
+async function markActionItemsComplete(
+  supabase: SupabaseClient,
+  communityId: string,
+  action: AppAction
+): Promise<ActionExecutionResult> {
+  const textQuery = normalizeText(action.query || action.title || action.description);
+  if (!textQuery) {
+    return { action_type: action.action_type, ok: false, message: 'Need search text before marking action items complete.' };
+  }
+
+  const { data: items } = await supabase
+    .from('action_items')
+    .select('id, description, assigned_to, completed, assigned_user:profiles!action_items_assigned_to_fkey(name)')
+    .eq('community_id', communityId)
+    .eq('completed', false)
+    .limit(100);
+
+  const assigneeQuery = normalizedNameQuery(action.assignee_name || action.owner_name);
+  const tokens = textQuery.split(' ').filter((token) => token.length > 2);
+  const matches = (items || []).filter((item: any) => {
+    const haystack = normalizeText(`${item.description} ${item.assigned_user?.name || ''}`);
+    const textMatches = tokens.length === 0 || tokens.every((token) => haystack.includes(token));
+    const assigneeMatches = !assigneeQuery || normalizeText(item.assigned_user?.name || '').includes(assigneeQuery);
+    return textMatches && assigneeMatches;
+  });
+
+  if (matches.length === 0) {
+    return { action_type: action.action_type, ok: false, message: `No open action items matched "${action.query}".` };
+  }
+
+  const ids = matches.map((item: any) => item.id);
+  const { error } = await supabase
+    .from('action_items')
+    .update({ completed: true, completed_at: new Date().toISOString() })
+    .in('id', ids)
+    .eq('community_id', communityId);
+
+  if (error) {
+    return { action_type: action.action_type, ok: false, message: `Could not mark action items complete: ${error.message}` };
+  }
+
+  return { action_type: action.action_type, ok: true, message: `Marked ${ids.length} action item${ids.length === 1 ? '' : 's'} complete.`, ids };
+}
+
+async function markWishesFulfilled(
+  supabase: SupabaseClient,
+  communityId: string,
+  userId: string,
+  action: AppAction
+): Promise<ActionExecutionResult> {
+  const textQuery = normalizeText(action.query || action.goal_title || action.description);
+  if (!textQuery && !action.owner_name) {
+    return { action_type: action.action_type, ok: false, message: 'Need a member or search text before marking wishes fulfilled.' };
+  }
+
+  const { data: wishes } = await supabase
+    .from('wishes')
+    .select('id, description, status, user:profiles!wishes_user_id_fkey(name)')
+    .eq('community_id', communityId)
+    .neq('status', 'fulfilled')
+    .limit(100);
+
+  const ownerQuery = normalizedNameQuery(action.owner_name);
+  const tokens = textQuery.split(' ').filter((token) => token.length > 2);
+  const matches = (wishes || []).filter((wish: any) => {
+    const haystack = normalizeText(`${wish.description} ${wish.user?.name || ''}`);
+    const textMatches = tokens.length === 0 || tokens.every((token) => haystack.includes(token));
+    const ownerMatches = !ownerQuery || normalizeText(wish.user?.name || '').includes(ownerQuery);
+    return textMatches && ownerMatches;
+  });
+
+  if (matches.length === 0) {
+    return { action_type: action.action_type, ok: false, message: `No visible wishes matched "${action.query || action.owner_name || ''}".` };
+  }
+
+  const ids = matches.map((wish: any) => wish.id);
+  const { error } = await supabase
+    .from('wishes')
+    .update({
+      status: 'fulfilled',
+      is_active: false,
+      fulfilled_at: new Date().toISOString(),
+      fulfilled_by: userId,
+      thank_you_message: action.completion_note || null,
+    })
+    .in('id', ids)
+    .eq('community_id', communityId);
+
+  if (error) {
+    return { action_type: action.action_type, ok: false, message: `Could not mark wishes fulfilled: ${error.message}` };
+  }
+
+  return { action_type: action.action_type, ok: true, message: `Marked ${ids.length} wish${ids.length === 1 ? '' : 'es'} fulfilled.`, ids };
+}
+
+async function markHdBoardsComplete(
+  supabase: SupabaseClient,
+  communityId: string,
+  userId: string,
+  action: AppAction
+): Promise<ActionExecutionResult> {
+  const categories = await listBoardCategories(supabase, communityId, {
+    topic_kind: 'hd_board',
+    owner_name: action.owner_name,
+    status: 'active',
+    limit: 100,
+  });
+  const target = normalizeText(`${action.board_name || ''} ${action.goal_title || ''} ${action.query || ''}`);
+  const tokens = target.split(' ').filter((token) => token.length > 2);
+  const matches = categories.filter((category) => {
+    const haystack = normalizeText(`${category.name} ${category.goal_title || ''} ${category.description || ''}`);
+    return tokens.length === 0 ? !!action.owner_name : tokens.every((token) => haystack.includes(token));
+  });
+
+  if (matches.length === 0) {
+    return { action_type: action.action_type, ok: false, message: `No active HD boards matched "${action.board_name || action.query || action.owner_name || ''}".` };
+  }
+
+  const ids = matches.map((category) => category.id);
+  const { error } = await supabase
+    .from('board_categories')
+    .update({
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      completed_by: userId,
+      completion_note: action.completion_note || null,
+    })
+    .in('id', ids)
+    .eq('community_id', communityId);
+
+  if (error) {
+    return { action_type: action.action_type, ok: false, message: `Could not complete HD boards: ${error.message}` };
+  }
+
+  return { action_type: action.action_type, ok: true, message: `Marked ${ids.length} HD board${ids.length === 1 ? '' : 's'} complete.`, ids };
+}
+
+async function createEvent(
+  supabase: SupabaseClient,
+  communityId: string,
+  userId: string,
+  action: AppAction
+): Promise<ActionExecutionResult> {
+  const title = (action.title || '').trim();
+  const eventDate = (action.event_date || '').trim();
+  if (!title || !eventDate) {
+    return { action_type: action.action_type, ok: false, message: 'Event needs a title and YYYY-MM-DD date.' };
+  }
+
+  const { data, error } = await supabase
+    .from('events')
+    .insert({
+      community_id: communityId,
+      title,
+      description: action.description || action.content || null,
+      event_date: eventDate,
+      event_time: action.event_time || null,
+      location: action.location || null,
+      event_type: 'custom',
+      created_by: userId,
+    })
+    .select('id')
+    .single();
+
+  if (error || !data) {
+    return { action_type: action.action_type, ok: false, message: `Could not create event: ${error?.message || 'unknown error'}` };
+  }
+
+  return { action_type: action.action_type, ok: true, message: `Created event "${title}".`, ids: [data.id] };
+}
+
+async function executeAppAction(
+  supabase: SupabaseClient,
+  communityId: string,
+  userId: string,
+  action: AppAction
+): Promise<ActionExecutionResult> {
+  switch (action.action_type) {
+    case 'create_hd_board':
+      return createHdBoard(supabase, communityId, userId, action);
+    case 'create_discussion_board':
+      return createDiscussionBoard(supabase, communityId, userId, action);
+    case 'create_board_post':
+      return createBoardPost(supabase, communityId, userId, action);
+    case 'mark_action_items_complete':
+      return markActionItemsComplete(supabase, communityId, action);
+    case 'mark_wishes_fulfilled':
+      return markWishesFulfilled(supabase, communityId, userId, action);
+    case 'mark_hd_boards_complete':
+      return markHdBoardsComplete(supabase, communityId, userId, action);
+    case 'create_event':
+      return createEvent(supabase, communityId, userId, action);
+    default:
+      return { action_type: action.action_type, ok: false, message: `Unsupported action type: ${action.action_type}` };
+  }
+}
+
+async function invalidateActionContext(supabase: SupabaseClient, communityId: string) {
+  await supabase
+    .from('context_summaries')
+    .delete()
+    .eq('community_id', communityId)
+    .in('summary_type', ['board_activity', 'meetings', 'room_messages']);
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -530,6 +1230,7 @@ serve(async (req) => {
 
     let skillsAdded = 0;
     let onboardingComplete = false;
+    let proposedActionsThisTurn = false;
 
     // Handle tool use
     while (response.stop_reason === 'tool_use') {
@@ -881,6 +1582,225 @@ serve(async (req) => {
             };
 
             result = JSON.stringify(formattedPost);
+            break;
+          }
+
+          case 'get_board_categories': {
+            const input = toolUse.input as {
+              query?: string;
+              topic_kind?: string;
+              owner_name?: string;
+              status?: string;
+              limit?: number;
+            };
+            const categories = await listBoardCategories(supabaseClient, communityId, input);
+            result = JSON.stringify(categories.map((category) => ({
+              id: category.id,
+              name: category.name,
+              description: category.description,
+              board_type: category.topic_kind || 'discussion',
+              goal: category.goal_title || null,
+              owner: category.owner?.name || null,
+              status: category.status || 'active',
+            })));
+            break;
+          }
+
+          case 'search_action_items': {
+            const {
+              query,
+              assignee_name,
+              completed,
+              limit: requestedLimit,
+            } = toolUse.input as {
+              query?: string;
+              assignee_name?: string;
+              completed?: boolean;
+              limit?: number;
+            };
+            const itemLimit = Math.min(requestedLimit || 20, 50);
+            let itemQuery = supabaseClient
+              .from('action_items')
+              .select('id, description, due_date, completed, completed_at, assigned_user:profiles!action_items_assigned_to_fkey(name)')
+              .eq('community_id', communityId)
+              .order('created_at', { ascending: false })
+              .limit(itemLimit);
+            if (typeof completed === 'boolean') itemQuery = itemQuery.eq('completed', completed);
+            if (query) itemQuery = itemQuery.ilike('description', `%${query}%`);
+
+            const { data: actionItems, error: actionItemsError } = await itemQuery;
+            if (actionItemsError) {
+              result = `Error searching action items: ${actionItemsError.message}`;
+              break;
+            }
+
+            const assigneeQuery = normalizedNameQuery(assignee_name);
+            const filtered = assigneeQuery
+              ? (actionItems || []).filter((item: any) => normalizeText(item.assigned_user?.name || '').includes(assigneeQuery))
+              : (actionItems || []);
+            result = JSON.stringify(filtered.map((item: any) => ({
+              id: item.id,
+              description: item.description,
+              assignee: item.assigned_user?.name || null,
+              due_date: item.due_date || null,
+              completed: item.completed,
+              completed_at: item.completed_at || null,
+            })));
+            break;
+          }
+
+          case 'search_wishes': {
+            const {
+              query,
+              member_name,
+              status,
+              limit: requestedLimit,
+            } = toolUse.input as {
+              query?: string;
+              member_name?: string;
+              status?: string;
+              limit?: number;
+            };
+            const wishLimit = Math.min(requestedLimit || 20, 50);
+            let wishQuery = supabaseClient
+              .from('wishes')
+              .select('id, description, status, is_active, created_at, fulfilled_at, user:profiles!wishes_user_id_fkey(name)')
+              .eq('community_id', communityId)
+              .order('created_at', { ascending: false })
+              .limit(wishLimit);
+            if (status) wishQuery = wishQuery.eq('status', status);
+            if (query) wishQuery = wishQuery.ilike('description', `%${query}%`);
+
+            const { data: wishes, error: wishesError } = await wishQuery;
+            if (wishesError) {
+              result = `Error searching wishes: ${wishesError.message}`;
+              break;
+            }
+
+            const memberQuery = normalizedNameQuery(member_name);
+            const filtered = memberQuery
+              ? (wishes || []).filter((wish: any) => normalizeText(wish.user?.name || '').includes(memberQuery))
+              : (wishes || []);
+            result = JSON.stringify(filtered.map((wish: any) => ({
+              id: wish.id,
+              description: wish.description,
+              owner: wish.user?.name || null,
+              status: wish.status,
+              is_active: wish.is_active,
+              created_at: wish.created_at,
+              fulfilled_at: wish.fulfilled_at || null,
+            })));
+            break;
+          }
+
+          case 'propose_app_actions': {
+            const { summary, actions } = toolUse.input as {
+              summary: string;
+              actions: AppAction[];
+            };
+            const actionPlan = Array.isArray(actions) ? actions : [];
+            const { data: requestRow, error } = await supabaseClient
+              .from('agent_action_requests')
+              .insert({
+                community_id: communityId,
+                user_id: userId,
+                conversation_id: conversation_id || null,
+                summary,
+                action_plan: actionPlan,
+                status: 'pending',
+              })
+              .select('id, summary, action_plan')
+              .single();
+
+            if (error || !requestRow) {
+              result = `Error creating pending action proposal: ${error?.message || 'unknown error'}`;
+              break;
+            }
+
+            proposedActionsThisTurn = true;
+            result = JSON.stringify({
+              request_id: requestRow.id,
+              status: 'pending',
+              summary: requestRow.summary,
+              actions: actionPlan.map(actionSummary),
+              next_step: 'Ask the user to say "apply it" or "yes, do it" before applying these changes.',
+            });
+            break;
+          }
+
+          case 'apply_pending_actions': {
+            const { request_id } = toolUse.input as { request_id?: string };
+            if (proposedActionsThisTurn) {
+              result = 'Not applied: a proposal was created in this response. Ask the user to confirm in a new message before applying it.';
+              break;
+            }
+            if (!hasExplicitApproval(message)) {
+              result = 'Not applied: the latest user message did not clearly approve the pending app changes.';
+              break;
+            }
+
+            let requestQuery = supabaseClient
+              .from('agent_action_requests')
+              .select('id, summary, action_plan')
+              .eq('community_id', communityId)
+              .eq('user_id', userId)
+              .eq('status', 'pending')
+              .order('created_at', { ascending: false })
+              .limit(1);
+
+            if (request_id) {
+              requestQuery = requestQuery.eq('id', request_id);
+            } else if (conversation_id) {
+              requestQuery = requestQuery.eq('conversation_id', conversation_id);
+            }
+
+            let { data: pendingRows, error: pendingError } = await requestQuery;
+            if ((!pendingRows || pendingRows.length === 0) && !request_id && conversation_id) {
+              const fallback = await supabaseClient
+                .from('agent_action_requests')
+                .select('id, summary, action_plan')
+                .eq('community_id', communityId)
+                .eq('user_id', userId)
+                .eq('status', 'pending')
+                .order('created_at', { ascending: false })
+                .limit(1);
+              pendingRows = fallback.data;
+              pendingError = fallback.error;
+            }
+
+            const pending = pendingRows?.[0];
+            if (pendingError || !pending) {
+              result = pendingError
+                ? `Could not load pending action proposal: ${pendingError.message}`
+                : 'No pending action proposal found to apply.';
+              break;
+            }
+
+            const actionPlan = Array.isArray(pending.action_plan) ? pending.action_plan as AppAction[] : [];
+            const executionResults: ActionExecutionResult[] = [];
+            for (const action of actionPlan) {
+              executionResults.push(await executeAppAction(supabaseClient, communityId, userId, action));
+            }
+
+            await invalidateActionContext(supabaseClient, communityId);
+            const allOk = executionResults.every((executionResult) => executionResult.ok);
+            await supabaseClient
+              .from('agent_action_requests')
+              .update({
+                status: allOk ? 'applied' : 'failed',
+                result: executionResults,
+                applied_at: new Date().toISOString(),
+              })
+              .eq('id', pending.id)
+              .eq('user_id', userId)
+              .eq('community_id', communityId);
+
+            result = JSON.stringify({
+              request_id: pending.id,
+              status: allOk ? 'applied' : 'failed',
+              summary: pending.summary,
+              results: executionResults,
+            });
             break;
           }
 

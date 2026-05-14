@@ -67,20 +67,26 @@ export const BoardCategoryList = memo(function BoardCategoryList({
               ? `For ${taggedNames.join(', ')}`
               : 'Everyone';
         const goalLabel = item.topic_kind === 'hd_board' ? item.goal_title : null;
-        const subtitleParts = [boardKindLabel, goalLabel, item.description, countLabel].filter(Boolean);
+        const statusLabel = item.status === 'completed'
+          ? 'Completed'
+          : item.status === 'archived'
+            ? 'Archived'
+            : null;
+        const subtitleParts = [statusLabel, boardKindLabel, goalLabel, item.description, countLabel].filter(Boolean);
         const subtitle = subtitleParts.join(' · ');
+        const isCompleted = item.status === 'completed' || item.status === 'archived';
 
         return (
           <Pressable
             onPress={() => onSelect(item)}
-            className="bg-white active:opacity-70"
+            className={`bg-white active:opacity-70 ${isCompleted ? 'opacity-70' : ''}`}
           >
             <View className={`flex-row items-center px-4 py-4 ${!isLast ? 'border-b border-cream' : ''}`}>
               <Text className="text-3xl mr-4">{emoji}</Text>
               <View className="flex-1">
                 <Text
                   style={{ fontFamily: 'Lato_700Bold' }}
-                  className="text-charcoal text-base"
+                  className={`text-base ${isCompleted ? 'text-charcoal/60' : 'text-charcoal'}`}
                 >
                   {item.name}
                 </Text>

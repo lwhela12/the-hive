@@ -118,6 +118,7 @@ export interface BoardPostIndexItem {
   board_type?: string;
   goal?: string | null;
   owner?: string | null;
+  board_status?: string | null;
   author: string;
   reply_count: number;
   is_pinned: boolean;

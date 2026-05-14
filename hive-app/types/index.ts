@@ -358,6 +358,10 @@ export interface BoardCategory extends Record<string, unknown> {
   topic_kind?: 'discussion' | 'hd_board' | 'helper_log';
   goal_title?: string | null;
   owner_user_id?: string | null;
+  status?: 'active' | 'completed' | 'archived';
+  completed_at?: string | null;
+  completed_by?: string | null;
+  completion_note?: string | null;
   icon?: string;
   audience?: 'community' | 'members';
   display_order: number;
@@ -369,6 +373,20 @@ export interface BoardCategory extends Record<string, unknown> {
   created_by?: string;
   created_at: string;
   member_tags?: BoardCategoryMemberTag[];
+}
+
+export interface AgentActionRequest extends Record<string, unknown> {
+  id: string;
+  community_id: string;
+  user_id: string;
+  conversation_id?: string | null;
+  summary: string;
+  action_plan: Record<string, unknown>[];
+  status: 'pending' | 'applied' | 'cancelled' | 'failed';
+  result?: Record<string, unknown> | null;
+  created_at: string;
+  applied_at?: string | null;
+  cancelled_at?: string | null;
 }
 
 export interface BoardCategoryMemberTag extends Record<string, unknown> {

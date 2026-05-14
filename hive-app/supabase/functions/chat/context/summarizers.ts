@@ -83,7 +83,7 @@ export async function summarizeBoardActivity(
       is_pinned,
       reply_count,
       created_at,
-      category:board_categories(name, category_type, topic_kind, goal_title, owner:profiles!board_categories_owner_user_id_fkey(name)),
+      category:board_categories(name, category_type, topic_kind, goal_title, status, owner:profiles!board_categories_owner_user_id_fkey(name)),
       author:profiles!board_posts_author_id_fkey(name)
     `
     )
@@ -102,9 +102,12 @@ export async function summarizeBoardActivity(
     .map((p: any) => {
       const pinned = p.is_pinned ? '[PINNED] ' : '';
       const category = p.category?.name || 'General';
+      const status = p.category?.status && p.category.status !== 'active'
+        ? ` ${p.category.status}`
+        : '';
       const boardType = p.category?.topic_kind === 'hd_board'
-        ? ` HD for ${p.category?.owner?.name || 'member'}${p.category?.goal_title ? `: ${p.category.goal_title}` : ''}`
-        : p.category?.topic_kind === 'helper_log' ? ' Helper log' : '';
+        ? ` HD${status} for ${p.category?.owner?.name || 'member'}${p.category?.goal_title ? `: ${p.category.goal_title}` : ''}`
+        : p.category?.topic_kind === 'helper_log' ? ` Helper log${status}` : status;
       const replies = p.reply_count > 0 ? ` (${p.reply_count} replies)` : '';
       return `${pinned}[${category}${boardType}] "${p.title}" by ${p.author?.name || 'Unknown'}${replies}`;
     })
