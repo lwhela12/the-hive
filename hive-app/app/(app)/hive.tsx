@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, Platform, ActivityIndicator, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
 import Svg, { Polygon } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -1266,7 +1267,7 @@ export default function HiveScreen() {
               flexShrink: 0,
             })}
           >
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e6f35' }}>Archive</Text>
+            <Ionicons name="archive-outline" size={16} color="#8e6f35" />
           </Pressable>
         ) : !isDone && todo.cta ? (
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', flexShrink: 0 }}>{todo.cta}</Text>
@@ -1298,8 +1299,15 @@ export default function HiveScreen() {
             Completed ({doneTodos.length})
           </Text>
           {completedActionCount > 0 ? (
-            <Pressable onPress={archiveCompletedActionItems} hitSlop={8}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Archive all</Text>
+            <Pressable
+              onPress={archiveCompletedActionItems}
+              accessibilityRole="button"
+              accessibilityLabel="Archive all completed tasks"
+              hitSlop={8}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+            >
+              <Ionicons name="archive-outline" size={14} color="#bd9348" />
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>all</Text>
             </Pressable>
           ) : null}
         </View>
