@@ -9,7 +9,7 @@ import { useConversations } from '../../lib/hooks/useConversations';
 import type { Conversation } from '../../types';
 
 export default function ChatScreen() {
-  const { refineWish, message } = useLocalSearchParams<{ refineWish?: string; message?: string }>();
+  const { refineWish } = useLocalSearchParams<{ refineWish?: string }>();
 
   const {
     conversations,
@@ -113,7 +113,6 @@ export default function ChatScreen() {
             onConversationCreated={handleConversationCreated}
             onTitleGenerated={handleTitleGenerated}
             refineWishContext={refineWish}
-            pendingMessage={message}
           />
         </View>
       </View>

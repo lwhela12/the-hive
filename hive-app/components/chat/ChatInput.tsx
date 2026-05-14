@@ -1,8 +1,7 @@
-import { useState, memo, useEffect, useRef } from 'react';
+import { useState, memo, useRef } from 'react';
 import { View, TextInput, Pressable, Text, Image, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SelectedImage, pickMultipleImages } from '../../lib/imagePicker';
-import { takePendingAttachments } from '../../lib/pendingAttachments';
 import { VoiceMicButton } from '../ui/VoiceMicButton';
 import { getDraft, setDraft, clearDraft } from '../../lib/draftStore';
 
@@ -25,14 +24,6 @@ export const ChatInput = memo(function ChatInput({
   const [inputText, setInputText] = useState(() => getDraft(draftKey));
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const voiceBaseTextRef = useRef<string | null>(null);
-
-  // Pick up any images queued from the floating Clive bubble
-  useEffect(() => {
-    const pending = takePendingAttachments();
-    if (pending.length > 0) {
-      setSelectedImages(pending);
-    }
-  }, []);
 
   const handlePickImages = async () => {
     if (isLoading) return;
