@@ -84,7 +84,7 @@ serve(async (req) => {
       const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 2048,
-        system: `You are summarizing a Hive community meeting. The Hive is a group of 12 people who practice "high-definition wishing" - helping each other articulate specific needs and matching them with skills.
+        system: `You are summarizing a HIVE community meeting. H.I.V.E. (Human Insight Vision Execution) is a group of 12 people who practice "high-definition wishing" - helping each other articulate specific needs and matching them with skills.
 
 Available members: ${members?.map(m => m.name).join(', ')}
 

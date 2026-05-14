@@ -256,8 +256,8 @@ serve(async (req) => {
       {
         type: 'text',
         text: `Meeting date: ${meeting.date}
-Requested title: ${existingSummary.title || 'Hive Meeting'}
-Known Hive members: ${memberNames || 'No member list available'}
+Requested title: ${existingSummary.title || 'HIVE Meeting'}
+Known HIVE members: ${memberNames || 'No member list available'}
 
 Turn these meeting notes into app-ready structured data. Use only information supported by the notes. Do not invent dates, assignees, or commitments. Prefer exact member names when assigning work.
 
@@ -317,7 +317,7 @@ ${meeting.transcript_attributed || meeting.transcript_raw || ''}`,
 
     const textBlock = response.content.find((block: any) => block.type === 'text') as { text?: string } | undefined;
     const analysis = parseJsonText(textBlock?.text ?? '{}') as MeetingAnalysis;
-    const title = analysis.title?.trim() || existingSummary.title || 'Hive Meeting';
+    const title = analysis.title?.trim() || existingSummary.title || 'HIVE Meeting';
 
     await supabaseAdmin
       .from('action_items')

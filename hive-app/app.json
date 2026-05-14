@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "The HIVE",
+    "name": "H.I.V.E.",
     "slug": "the-hive",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/The Hive Logo_Low Res (1).png",
+    "icon": "./assets/HIVE Logo Low Res.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "thehive",
     "splash": {
-      "image": "./assets/The Hive Total transparent background (1).png",
+      "image": "./assets/HIVE Total transparent background.png",
       "resizeMode": "contain",
       "backgroundColor": "#bd9348"
     },
@@ -18,10 +18,10 @@
       "bundleIdentifier": "com.lucaswhelan.thehive",
       "buildNumber": "1",
       "infoPlist": {
-        "NSCameraUsageDescription": "The HIVE needs camera access to take profile photos and attach images to posts and messages.",
-        "NSMicrophoneUsageDescription": "The HIVE needs microphone access to record meetings.",
-        "NSPhotoLibraryAddUsageDescription": "The HIVE needs photo library access to save photos you create in the app.",
-        "NSPhotoLibraryUsageDescription": "The HIVE needs photo library access to upload profile photos and attach images to posts and messages.",
+        "NSCameraUsageDescription": "H.I.V.E. needs camera access to take profile photos and attach images to posts and messages.",
+        "NSMicrophoneUsageDescription": "H.I.V.E. needs microphone access to record meetings.",
+        "NSPhotoLibraryAddUsageDescription": "H.I.V.E. needs photo library access to save photos you create in the app.",
+        "NSPhotoLibraryUsageDescription": "H.I.V.E. needs photo library access to upload profile photos and attach images to posts and messages.",
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
           "audio"
@@ -29,12 +29,12 @@
       }
     },
     "notification": {
-      "icon": "./assets/Bee ( Hive) .png",
+      "icon": "./assets/HIVE Bee.png",
       "color": "#bd9348"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/Bee ( Hive) .png",
+        "foregroundImage": "./assets/HIVE Bee.png",
         "backgroundColor": "#bd9348"
       },
       "package": "com.lucaswhelan.thehive",
@@ -47,7 +47,7 @@
     "web": {
       "favicon": "./assets/BEE ONLY IN GOLD BG.png",
       "bundler": "metro",
-      "name": "The HIVE",
+      "name": "H.I.V.E.",
       "shortName": "HIVE",
       "themeColor": "#bd9348",
       "backgroundColor": "#bd9348"
@@ -58,21 +58,21 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Allow the HIVE to access your microphone for recording meetings."
+          "microphonePermission": "Allow H.I.V.E. to access your microphone for recording meetings."
         }
       ],
       [
         "expo-notifications",
         {
-          "icon": "./assets/Bee ( Hive) .png",
+          "icon": "./assets/HIVE Bee.png",
           "color": "#bd9348"
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "The HIVE needs photo library access to upload profile photos and attach images to posts and messages.",
-          "cameraPermission": "The HIVE needs camera access to take profile photos and attach images to posts and messages."
+          "photosPermission": "H.I.V.E. needs photo library access to upload profile photos and attach images to posts and messages.",
+          "cameraPermission": "H.I.V.E. needs camera access to take profile photos and attach images to posts and messages."
         }
       ],
       "@react-native-community/datetimepicker",

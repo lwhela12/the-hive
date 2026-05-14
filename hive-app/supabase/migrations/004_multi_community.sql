@@ -50,7 +50,7 @@ alter table public.chat_messages add column if not exists community_id uuid refe
 
 -- Default community for existing data
 insert into public.communities (name, slug)
-select 'The Hive', 'default'
+select 'H.I.V.E.', 'default'
 where not exists (select 1 from public.communities where slug = 'default');
 
 update public.profiles

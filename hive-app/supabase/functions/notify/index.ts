@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'The HIVE <hive@yourdomain.com>';
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@yourdomain.com>';
 
 interface NotificationPayload {
   type: 'wish_match' | 'meeting_summary' | 'queen_bee_update' | 'action_item' | 'general';

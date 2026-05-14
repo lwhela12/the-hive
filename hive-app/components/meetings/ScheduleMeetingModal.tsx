@@ -44,7 +44,7 @@ export function ScheduleMeetingModal({
   communityId,
   onSchedule,
 }: ScheduleMeetingModalProps) {
-  const [title, setTitle] = useState('Hive Meeting');
+  const [title, setTitle] = useState('HIVE Meeting');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [date, setDate] = useState(new Date());
@@ -148,7 +148,7 @@ export function ScheduleMeetingModal({
       });
 
       // Reset form
-      setTitle('Hive Meeting');
+      setTitle('HIVE Meeting');
       setDescription('');
       setLocation('');
       setDate(new Date());

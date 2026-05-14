@@ -29,7 +29,7 @@ export async function summarizeConversation(
 
   const prompt = `Summarize this conversation between a user and an AI assistant in the HIVE app.
 
-The HIVE helps a 12-person community practice "high-definition wishing" - refining vague desires into specific, actionable wishes, and matching them with community members' skills.
+H.I.V.E. (Human Insight Vision Execution) helps a 12-person community practice "high-definition wishing" - refining vague desires into specific, actionable wishes, and matching them with community members' skills.
 
 Summarize to preserve:
 1. Key topics discussed

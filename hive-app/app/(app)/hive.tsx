@@ -2231,7 +2231,7 @@ export default function HiveScreen() {
                 <TextInput
                   value={myAnswer}
                   onChangeText={setMyAnswer}
-                  placeholder={isVoiceListening ? '' : 'Share your answer with the Hive...'}
+                  placeholder={isVoiceListening ? '' : 'Share your answer with the HIVE...'}
                   placeholderTextColor="#9ca3af"
                   multiline
                   numberOfLines={4}
@@ -2316,7 +2316,7 @@ export default function HiveScreen() {
                   disabled={!myAnswer.trim() || isSubmittingAnswer}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white', textAlign: 'center' }}>
-                    {isSubmittingAnswer ? 'Saving...' : 'Share with Hive 🐝'}
+                    {isSubmittingAnswer ? 'Saving...' : 'Share with HIVE 🐝'}
                   </Text>
                 </Pressable>
               </View>

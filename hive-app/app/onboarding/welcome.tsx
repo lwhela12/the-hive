@@ -11,7 +11,7 @@ export default function WelcomeScreen() {
       <View className="flex-1 justify-center px-8">
         <View className="items-center mb-12">
           <Image
-            source={require('../../assets/Bee ( Hive) .png')}
+            source={require('../../assets/HIVE Bee.png')}
             style={{ width: 120, height: 120, marginBottom: 24 }}
             resizeMode="contain"
           />

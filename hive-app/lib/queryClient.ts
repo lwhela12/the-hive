@@ -22,7 +22,7 @@ export const queryKeys = {
   chatRoom: (roomId: string) => ['chatRoom', roomId] as const,
   roomMessages: (roomId: string) => ['roomMessages', roomId] as const,
 
-  // Hive data
+  // HIVE data
   queenBees: (communityId: string) => ['queenBees', communityId] as const,
   publicWishes: (communityId: string) => ['publicWishes', communityId] as const,
   grantedWishes: (communityId: string) => ['grantedWishes', communityId] as const,

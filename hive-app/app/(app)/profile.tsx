@@ -863,7 +863,7 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* Personality Notes - How the Hive Sees You */}
+        {/* Personality Notes - How the HIVE Sees You */}
         {!initialLoading && userInsights?.personality_notes && (
           <View className="mb-6">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
@@ -1017,7 +1017,7 @@ export default function ProfileScreen() {
                           className="bg-gold-light px-3 py-1 rounded-full active:bg-gold/30"
                         >
                           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                            Share with Hive
+                            Share with HIVE
                           </Text>
                         </Pressable>
                       )}

@@ -193,7 +193,7 @@ serve(async (req) => {
     const body = (await req.json()) as ImportMeetingNotesRequest;
     const communityId = body.communityId;
     const meetingDate = isIsoDate(body.date) ? body.date! : todayLocalDate();
-    const requestedTitle = body.title?.trim() || 'Hive Meeting';
+    const requestedTitle = body.title?.trim() || 'HIVE Meeting';
 
     if (!communityId) {
       return errorResponse('Missing communityId', 400);

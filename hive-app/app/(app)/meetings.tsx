@@ -264,7 +264,7 @@ export default function MeetingsScreen() {
 
     Alert.alert(
       'Meeting Scheduled',
-      'Your meeting has been created with a Google Meet link. All Hive members can see it.',
+      'Your meeting has been created with a Google Meet link. All HIVE members can see it.',
       [{ text: 'OK' }]
     );
 
@@ -387,7 +387,7 @@ export default function MeetingsScreen() {
   const openNotesImport = (event?: Event | null) => {
     const date = event?.event_date ?? getTodayIsoDate();
     setNotesImportForm({
-      title: event?.title ?? 'Hive Meeting',
+      title: event?.title ?? 'HIVE Meeting',
       date: toAmericanDate(date),
       notes: '',
       linkedEventId: event?.id ?? null,
@@ -539,7 +539,7 @@ export default function MeetingsScreen() {
     }
 
     const notes = notesImportForm.notes.trim();
-    const title = notesImportForm.title.trim() || 'Hive Meeting';
+    const title = notesImportForm.title.trim() || 'HIVE Meeting';
     const date = parseAmericanDate(notesImportForm.date) ?? notesImportForm.date;
     const hasFile = notesImportForm.files.length > 0;
     const hasPastedNotes = notes.length >= 40;
@@ -843,7 +843,7 @@ export default function MeetingsScreen() {
             <Text className="text-4xl mb-4">📝</Text>
             <Text className="text-gray-600 text-center">
               No meeting summaries yet.{'\n'}
-              Import Gemini notes after your next Hive gathering.
+              Import Gemini notes after your next HIVE gathering.
             </Text>
           </View>
         ) : (
@@ -1008,7 +1008,7 @@ export default function MeetingsScreen() {
                   value={notesImportForm.title}
                   onChangeText={(title) => setNotesImportForm((form) => ({ ...form, title }))}
                   className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                  placeholder="Hive Meeting"
+                  placeholder="HIVE Meeting"
                 />
               </View>
 

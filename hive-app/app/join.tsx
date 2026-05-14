@@ -115,7 +115,7 @@ export default function JoinScreen() {
         const { data: newCommunity, error: communityError } = await supabase
           .from('communities')
           .insert({
-            name: 'The Hive',
+            name: 'H.I.V.E.',
             slug: 'default',
             created_by: profile.id,
           })
@@ -350,7 +350,7 @@ export default function JoinScreen() {
               You're invited to join
             </Text>
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-gold text-center mb-4">
-              {invite.community?.name || 'the HIVE'}
+              {invite.community?.name || 'H.I.V.E.'}
             </Text>
 
             {invite.inviter && (
