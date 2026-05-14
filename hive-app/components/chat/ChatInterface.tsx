@@ -84,6 +84,9 @@ const STARTER_PROMPTS = [
   'Turn this idea into a wish',
   'Summarize my notes',
   'Plan a HIVE meetup',
+  'Tell me a joke',
+  'Give me a riddle',
+  'Surprise me',
 ];
 
 const getFirstName = (name?: string | null) => {
