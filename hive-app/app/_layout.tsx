@@ -64,7 +64,8 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in
       return;
     }
 
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+      .then((registration) => registration.update())
       .catch((err) => console.warn('Service worker registration failed:', err));
   });
 }
