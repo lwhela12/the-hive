@@ -108,8 +108,10 @@ export default function MeetingsScreen() {
     }
   };
   const [upcomingMeetings, setUpcomingMeetings] = useState<Event[]>([]);
+  const [meetingEvents, setMeetingEvents] = useState<Event[]>([]);
   const [showScheduler, setShowScheduler] = useState(false);
   const [showNotesImport, setShowNotesImport] = useState(false);
+  const [showMeetingPicker, setShowMeetingPicker] = useState(false);
   const [importingNotes, setImportingNotes] = useState(false);
   const [notesImportForm, setNotesImportForm] = useState({
     title: '',
@@ -164,15 +166,21 @@ export default function MeetingsScreen() {
       setUpcomingMeetings(events);
     }
 
+    const { data: allMeetingEvents, error: allMeetingEventsError } = await supabase
+      .from('events')
+      .select('*')
+      .eq('community_id', communityId)
+      .eq('event_type', 'meeting')
+      .order('event_date', { ascending: false })
+      .order('event_time', { ascending: false })
+      .limit(50);
+
+    if (!allMeetingEventsError && allMeetingEvents) {
+      setMeetingEvents(allMeetingEvents);
+    }
+
     setInitialLoading(false);
   }, [communityId, fetchLatestSlideDeckUrl]);
-
-  // Get today's scheduled meetings for pre-filling imported notes.
-  const todaysMeetings = upcomingMeetings.filter((event) => {
-    const now = new Date();
-    const today = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
-    return event.event_date === today;
-  });
 
   useEffect(() => {
     fetchMeetings();
@@ -385,7 +393,26 @@ export default function MeetingsScreen() {
       linkedEventId: event?.id ?? null,
       files: [],
     });
+    setShowMeetingPicker(false);
     setShowNotesImport(true);
+  };
+
+  const selectNotesImportMeeting = (event: Event | null) => {
+    if (event) {
+      setNotesImportForm((form) => ({
+        ...form,
+        title: event.title,
+        date: toAmericanDate(event.event_date),
+        linkedEventId: event.id,
+      }));
+    } else {
+      setNotesImportForm((form) => ({
+        ...form,
+        linkedEventId: null,
+      }));
+    }
+
+    setShowMeetingPicker(false);
   };
 
   const readAssetAsBase64 = async (asset: DocumentPicker.DocumentPickerAsset) => {
@@ -597,6 +624,9 @@ export default function MeetingsScreen() {
 
   const nextMeeting = upcomingMeetings[0] ?? null;
   const hasImportableNotes = notesImportForm.notes.trim().length >= 40 || notesImportForm.files.length > 0;
+  const selectedImportMeeting = notesImportForm.linkedEventId
+    ? meetingEvents.find((event) => event.id === notesImportForm.linkedEventId)
+    : null;
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
@@ -698,7 +728,7 @@ export default function MeetingsScreen() {
 
             {/* Import Notes */}
             <Pressable
-              onPress={() => openNotesImport(todaysMeetings[0] ?? nextMeeting)}
+              onPress={() => openNotesImport()}
               style={({ pressed }) => ({
                 flex: useCompactActions ? undefined : 1,
                 width: useCompactActions ? '48%' : undefined,
@@ -915,13 +945,62 @@ export default function MeetingsScreen() {
             </View>
 
             <ScrollView className="flex-1 p-4" keyboardShouldPersistTaps="handled">
-              {notesImportForm.linkedEventId && (
-                <View className="bg-honey-50 border border-honey-100 rounded-xl p-3 mb-4">
-                  <Text className="text-honey-800 font-medium">
-                    Linked to {notesImportForm.title}
-                  </Text>
+              <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-700 mb-1">Meeting</Text>
+                <View className="border border-gray-300 rounded-lg p-3 bg-white">
+                  <View className="flex-row items-start justify-between gap-3">
+                    <View className="flex-1">
+                      <Text className="font-semibold text-gray-800">
+                        {selectedImportMeeting ? selectedImportMeeting.title : 'Not linked to a scheduled meeting'}
+                      </Text>
+                      <Text className="text-sm text-gray-500 mt-1">
+                        {selectedImportMeeting
+                          ? `${formatDateLong(selectedImportMeeting.event_date)}${selectedImportMeeting.event_time ? ` at ${selectedImportMeeting.event_time}` : ''}`
+                          : 'Use this for older notes, hand notes, or anything not on the calendar.'}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => setShowMeetingPicker((showing) => !showing)}
+                      className="bg-gray-100 px-3 py-2 rounded-lg active:bg-gray-200"
+                    >
+                      <Text className="text-gray-700 font-semibold">
+                        {showMeetingPicker ? 'Done' : 'Choose'}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  {showMeetingPicker && (
+                    <View className="mt-3 pt-3 border-t border-gray-200">
+                      <Pressable
+                        onPress={() => selectNotesImportMeeting(null)}
+                        className={`rounded-lg p-3 mb-2 active:bg-gray-100 ${!notesImportForm.linkedEventId ? 'bg-honey-50 border border-honey-200' : 'bg-gray-50'}`}
+                      >
+                        <Text className="font-semibold text-gray-800">Standalone notes</Text>
+                        <Text className="text-sm text-gray-500 mt-1">Do not link to a scheduled meeting.</Text>
+                      </Pressable>
+
+                      {meetingEvents.length === 0 ? (
+                        <Text className="text-sm text-gray-500 p-3">
+                          No scheduled meetings found yet.
+                        </Text>
+                      ) : (
+                        meetingEvents.map((event) => (
+                          <Pressable
+                            key={event.id}
+                            onPress={() => selectNotesImportMeeting(event)}
+                            className={`rounded-lg p-3 mb-2 active:bg-gray-100 ${notesImportForm.linkedEventId === event.id ? 'bg-honey-50 border border-honey-200' : 'bg-gray-50'}`}
+                          >
+                            <Text className="font-semibold text-gray-800">{event.title}</Text>
+                            <Text className="text-sm text-gray-500 mt-1">
+                              {formatDateLong(event.event_date)}{event.event_time ? ` at ${event.event_time}` : ''}
+                            </Text>
+                          </Pressable>
+                        ))
+                      )}
+                    </View>
+                  )}
                 </View>
-              )}
+              </View>
 
               <View className="mb-4">
                 <Text className="text-sm font-medium text-gray-700 mb-1">Title</Text>
