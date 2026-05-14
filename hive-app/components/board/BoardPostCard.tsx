@@ -19,12 +19,35 @@ function getReactionCounts(reactions: BoardReaction[]): { emoji: string; count: 
   return Array.from(counts.entries()).map(([emoji, count]) => ({ emoji, count }));
 }
 
+function createContentPreview(content: string, maxLength = 120): string {
+  const plainText = content
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>\s?/gm, '')
+    .replace(/^[-*_]{3,}\s*$/gm, ' ')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(\*|_)(.*?)\1/g, '$2')
+    .replace(/~~(.*?)~~/g, '$1')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n+/g, ' ')
+    .trim();
+
+  if (plainText.length <= maxLength) return plainText;
+  return `${plainText.slice(0, maxLength).trim()}...`;
+}
+
 export function BoardPostCard({ post, onPress }: BoardPostCardProps) {
   const timeAgo = getTimeAgo(new Date(post.created_at));
   const hasAttachments = post.attachments && post.attachments.length > 0;
   const firstAttachment = hasAttachments ? post.attachments![0] : null;
   const extraCount = hasAttachments && post.attachments!.length > 1 ? post.attachments!.length - 1 : 0;
   const reactionCounts = getReactionCounts(post.reactions || []);
+  const contentPreview = createContentPreview(post.content);
 
   return (
     <Pressable
@@ -80,7 +103,7 @@ export function BoardPostCard({ post, onPress }: BoardPostCardProps) {
           style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: 'rgba(49, 49, 48, 0.7)', marginBottom: 8 }}
           linkStyle={{ color: '#bd9348' }}
         >
-          {post.content.length > 120 ? post.content.slice(0, 120) + '...' : post.content}
+          {contentPreview}
         </LinkifiedText>
         <View className="flex-row items-center justify-between">
           <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs">
