@@ -9,6 +9,7 @@ import Animated, {
   cancelAnimation,
   Easing,
 } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { HexagonIcon } from '../ui/HexagonIcon';
 import { useAuth } from '../../lib/hooks/useAuth';
 
@@ -41,7 +42,7 @@ export const NavigationDrawer = memo(function NavigationDrawer({
   const navItems = [
     { icon: null, imageSource: cliveIcon, label: 'Clive', route: '/' },
     { icon: null, imageSource: beeIcon, label: 'HIVE Home', route: '/hive' },
-    { icon: '📋', label: 'Message Board', route: '/board' },
+    { icon: null, customIcon: 'archive', label: 'Boards', route: '/board' },
     { icon: '💬', label: 'Chat', route: '/messages', badge: unreadDMCount },
     { icon: null, customIcon: 'honeycomb', label: 'Meeting Hub', route: '/meetings' },
     { icon: '👤', imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined, label: 'Profile', route: '/profile', isCircular: true },
@@ -124,6 +125,8 @@ export const NavigationDrawer = memo(function NavigationDrawer({
               <View className="w-10 items-center justify-center">
                 {item.customIcon === 'honeycomb' ? (
                   <HexagonIcon size={24} />
+                ) : item.customIcon === 'archive' ? (
+                  <Ionicons name="archive-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
                 ) : item.imageSource ? (
                   <Image
                     source={item.imageSource}

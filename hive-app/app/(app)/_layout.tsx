@@ -206,10 +206,21 @@ export default function AppLayout() {
         <Tabs.Screen
           name="board"
           options={{
-            title: 'Message Board',
-            tabBarAccessibilityLabel: 'Message Board',
+            title: 'Boards',
+            tabBarAccessibilityLabel: 'Boards',
             tabBarIcon: ({ focused }) => (
-              <TabIcon icon="📋" label="Message Board" focused={focused} compact={useMobileLayout} />
+              <TabIcon
+                customIcon={
+                  <Ionicons
+                    name="archive-outline"
+                    size={useMobileLayout ? 22 : 26}
+                    color={focused ? '#bd9348' : '#2d2d2d80'}
+                  />
+                }
+                label="Boards"
+                focused={focused}
+                compact={useMobileLayout}
+              />
             ),
           }}
         />
