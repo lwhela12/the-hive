@@ -1,5 +1,5 @@
 import { createElement, useMemo, memo, useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView, Image, useWindowDimensions, StyleSheet, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -10,13 +10,21 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { ConversationItem } from './ConversationItem';
-import { HexagonIcon } from '../ui/HexagonIcon';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import type { Conversation, ConversationProject } from '../../types';
 
 const beeIcon = require('../../assets/bee-gold-bg.png');
 const cliveIcon = require('../../assets/Clive_logo.png');
+
+type SidebarNavItem = {
+  iconName?: ComponentProps<typeof Ionicons>['name'];
+  imageSource?: any;
+  label: string;
+  route: '/hive' | '/board' | '/messages' | '/meetings' | '/profile' | '/admin';
+  badge?: number;
+  isCircular?: boolean;
+};
 
 interface ConversationSidebarProps {
   conversations: Conversation[];
@@ -151,13 +159,19 @@ export const ConversationSidebar = memo(function ConversationSidebar({
 
   // Navigation items for mobile sidebar
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer' || profile?.role === 'admin' || profile?.role === 'treasurer';
-  const navItems = [
-    { icon: null, imageSource: beeIcon, label: 'HIVE Home', route: '/hive' as const },
-    { icon: '📋', label: 'Message Board', route: '/board' as const },
-    { icon: '💬', label: 'Chat', route: '/messages' as const, badge: totalUnreadDMs },
-    { icon: null, customIcon: 'honeycomb', label: 'Meeting Hub', route: '/meetings' as const },
-    { icon: '👤', imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined, label: 'Profile', route: '/profile' as const, isCircular: true },
-    ...(isAdmin ? [{ icon: '⚙️', label: 'Admin', route: '/admin' as const }] : []),
+  const navItems: SidebarNavItem[] = [
+    { imageSource: beeIcon, label: 'Home', route: '/hive' },
+    { iconName: 'archive-outline', label: 'Boards', route: '/board' },
+    { iconName: 'chatbubble-ellipses-outline', label: 'Messages', route: '/messages', badge: totalUnreadDMs },
+    { iconName: 'calendar-outline', label: 'Meetings', route: '/meetings' },
+    {
+      iconName: 'person-circle-outline',
+      imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined,
+      label: 'Profile',
+      route: '/profile',
+      isCircular: true,
+    },
+    ...(isAdmin ? [{ iconName: 'settings-outline' as const, label: 'Admin', route: '/admin' as const }] : []),
   ];
 
   // Close with animation, then perform action
@@ -507,17 +521,15 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                   onPress={() => closeAndNavigate(item.route)}
                   className="flex-row items-center bg-gray-50 px-3 py-2.5 rounded-xl active:bg-gray-100"
                 >
-                  {item.customIcon === 'honeycomb' ? (
-                    <View style={{ marginRight: 8 }}>
-                      <HexagonIcon size={20} />
-                    </View>
-                  ) : item.imageSource ? (
+                  {item.imageSource ? (
                     <Image
                       source={item.imageSource}
                       style={{ width: 20, height: 20, borderRadius: item.isCircular ? 10 : 4, marginRight: 8 }}
                     />
+                  ) : item.iconName ? (
+                    <Ionicons name={item.iconName} size={20} color="#8F8F8F" style={{ marginRight: 8 }} />
                   ) : (
-                    <Text className="mr-2">{item.icon}</Text>
+                    <View style={{ width: 20, marginRight: 8 }} />
                   )}
                   <Text
                     style={{ fontFamily: 'Lato_400Regular' }}
