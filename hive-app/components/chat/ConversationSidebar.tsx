@@ -14,7 +14,6 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import type { Conversation, ConversationProject } from '../../types';
 
-const beeIcon = require('../../assets/bee-gold-bg.png');
 const cliveIcon = require('../../assets/Clive_logo.png');
 
 type SidebarNavItem = {
@@ -160,8 +159,8 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   // Navigation items for mobile sidebar
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer' || profile?.role === 'admin' || profile?.role === 'treasurer';
   const navItems: SidebarNavItem[] = [
-    { imageSource: beeIcon, label: 'Home', route: '/hive' },
-    { iconName: 'archive-outline', label: 'Boards', route: '/board' },
+    { iconName: 'home-outline', label: 'Home', route: '/hive' },
+    { iconName: 'grid-outline', label: 'Boards', route: '/board' },
     { iconName: 'chatbubble-ellipses-outline', label: 'Messages', route: '/messages', badge: totalUnreadDMs },
     { iconName: 'calendar-outline', label: 'Meetings', route: '/meetings' },
     {

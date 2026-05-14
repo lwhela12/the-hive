@@ -1,6 +1,5 @@
 import { memo, useEffect, useRef } from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
-import { Image } from 'expo-image';
 import { useRouter, usePathname } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -11,9 +10,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
-
-const beeIcon = require('../../assets/bee-gold-bg.png');
-const cliveIcon = require('../../assets/Clive_logo.png');
 
 interface NavigationDrawerProps {
   isOpen: boolean;
@@ -39,9 +35,9 @@ export const NavigationDrawer = memo(function NavigationDrawer({
   // Navigation items for the app
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer' || profile?.role === 'admin' || profile?.role === 'treasurer';
   const navItems = [
-    { icon: null, imageSource: cliveIcon, label: 'Clive', route: '/' },
-    { icon: null, imageSource: beeIcon, label: 'Home', route: '/hive' },
-    { icon: null, customIcon: 'archive', label: 'Boards', route: '/board' },
+    { icon: null, customIcon: 'clive', label: 'Clive', route: '/' },
+    { icon: null, customIcon: 'home', label: 'Home', route: '/hive' },
+    { icon: null, customIcon: 'boards', label: 'Boards', route: '/board' },
     { icon: null, customIcon: 'messages', label: 'Messages', route: '/messages', badge: unreadDMCount },
     { icon: null, customIcon: 'meetings', label: 'Meetings', route: '/meetings' },
     { icon: null, customIcon: 'profile', label: 'Profile', route: '/profile' },
@@ -122,8 +118,12 @@ export const NavigationDrawer = memo(function NavigationDrawer({
               }`}
             >
               <View className="w-10 items-center justify-center">
-                {item.customIcon === 'archive' ? (
-                  <Ionicons name="archive-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
+                {item.customIcon === 'clive' ? (
+                  <Ionicons name="sparkles-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
+                ) : item.customIcon === 'home' ? (
+                  <Ionicons name="home-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
+                ) : item.customIcon === 'boards' ? (
+                  <Ionicons name="grid-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
                 ) : item.customIcon === 'messages' ? (
                   <Ionicons name="chatbubble-ellipses-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
                 ) : item.customIcon === 'meetings' ? (
@@ -132,13 +132,6 @@ export const NavigationDrawer = memo(function NavigationDrawer({
                   <Ionicons name="settings-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
                 ) : item.customIcon === 'profile' ? (
                   <Ionicons name="person-circle-outline" size={24} color={isActive ? '#bd9348' : '#313130'} />
-                ) : item.imageSource ? (
-                  <Image
-                    source={item.imageSource}
-                    style={{ width: 40, height: 40, borderRadius: 'isCircular' in item && item.isCircular ? 20 : 8 }}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                  />
                 ) : (
                   <Text className="text-2xl">{item.icon}</Text>
                 )}

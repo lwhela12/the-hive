@@ -8,10 +8,6 @@ import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 
-const beeIcon = require('../../assets/bee-gold-bg.png');
-const cliveIcon = require('../../assets/Clive_logo.png');
-
-
 function TabIcon({
   icon,
   imageSource,
@@ -158,7 +154,18 @@ export default function AppLayout() {
             title: 'Home',
             tabBarAccessibilityLabel: 'Home',
             tabBarIcon: ({ focused }) => (
-              <TabIcon imageSource={beeIcon} label="Home" focused={focused} compact={useMobileLayout} />
+              <TabIcon
+                customIcon={
+                  <Ionicons
+                    name="home-outline"
+                    size={useMobileLayout ? 22 : 26}
+                    color={focused ? '#bd9348' : '#2d2d2d80'}
+                  />
+                }
+                label="Home"
+                focused={focused}
+                compact={useMobileLayout}
+              />
             ),
           }}
         />
@@ -170,10 +177,15 @@ export default function AppLayout() {
             tabBarAccessibilityLabel: 'Clive',
             tabBarIcon: ({ focused }) => (
               <TabIcon
-                imageSource={cliveIcon}
+                customIcon={
+                  <Ionicons
+                    name="sparkles-outline"
+                    size={useMobileLayout ? 22 : 26}
+                    color={focused ? '#bd9348' : '#2d2d2d80'}
+                  />
+                }
                 label="Clive"
                 focused={focused}
-                isCircular
                 compact={useMobileLayout}
               />
             ),
@@ -209,7 +221,7 @@ export default function AppLayout() {
               <TabIcon
                 customIcon={
                   <Ionicons
-                    name="archive-outline"
+                    name="grid-outline"
                     size={useMobileLayout ? 22 : 26}
                     color={focused ? '#bd9348' : '#2d2d2d80'}
                   />
