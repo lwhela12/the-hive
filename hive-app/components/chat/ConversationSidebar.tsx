@@ -24,6 +24,7 @@ interface ConversationSidebarProps {
   currentConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onNewConversation: () => void;
+  onNewConversationInProject?: (projectId: string) => void | Promise<void>;
   onCreateProject?: (name: string) => Promise<ConversationProject | null>;
   onMoveConversation?: (conversationId: string, projectId: string | null) => Promise<boolean>;
   onDelete?: (id: string) => void;
@@ -83,6 +84,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   currentConversationId,
   onSelectConversation,
   onNewConversation,
+  onNewConversationInProject,
   onCreateProject,
   onMoveConversation,
   onDelete,
@@ -172,6 +174,14 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   const closeAndNewConversation = () => {
     onClose?.();
     onNewConversation();
+  };
+
+  const startProjectConversation = (projectId: string) => {
+    setExpandedProjectIds((prev) => new Set(prev).add(projectId));
+    if (isMobile) {
+      onClose?.();
+    }
+    onNewConversationInProject?.(projectId);
   };
 
   const toggleProject = (projectId: string) => {
@@ -353,21 +363,25 @@ export const ConversationSidebar = memo(function ConversationSidebar({
             return (
               <View key={project.id}>
                 {wrapDropTarget(project.id, (
-                  <Pressable
-                    onPress={() => toggleProject(project.id)}
-                    className={`mx-3 px-3 py-2.5 rounded-xl flex-row items-center active:bg-gray-50 ${
+                  <View
+                    className={`mx-3 px-3 py-2.5 rounded-xl flex-row items-center ${
                       isDropTarget ? 'bg-gold/10 border border-gold/40' : ''
                     }`}
                   >
-                    <Ionicons
-                      name={isExpanded ? 'folder-open-outline' : 'folder-outline'}
-                      size={24}
-                      color={isDropTarget ? '#bd9348' : '#313130'}
-                      style={{ marginRight: 12 }}
-                    />
-                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="flex-1 text-charcoal text-base" numberOfLines={1}>
-                      {project.name}
-                    </Text>
+                    <Pressable
+                      onPress={() => toggleProject(project.id)}
+                      className="flex-1 flex-row items-center active:opacity-70"
+                    >
+                      <Ionicons
+                        name={isExpanded ? 'folder-open-outline' : 'folder-outline'}
+                        size={24}
+                        color={isDropTarget ? '#bd9348' : '#313130'}
+                        style={{ marginRight: 12 }}
+                      />
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="flex-1 text-charcoal text-base" numberOfLines={1}>
+                        {project.name}
+                      </Text>
+                    </Pressable>
                     {isDropTarget ? (
                       <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-gold ml-2">
                         Drop
@@ -378,8 +392,29 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                         {projectItems.length}
                       </Text>
                     ) : null}
-                  </Pressable>
+                    {onNewConversationInProject ? (
+                      <Pressable
+                        onPress={() => startProjectConversation(project.id)}
+                        className="ml-2 w-8 h-8 rounded-full items-center justify-center active:bg-gold/10"
+                        accessibilityLabel={`New chat in ${project.name}`}
+                        {...(Platform.OS === 'web' ? { title: `New chat in ${project.name}` } as any : {})}
+                      >
+                        <Ionicons name="add" size={19} color="#bd9348" />
+                      </Pressable>
+                    ) : null}
+                  </View>
                 ))}
+                {isExpanded && onNewConversationInProject ? (
+                  <Pressable
+                    onPress={() => startProjectConversation(project.id)}
+                    className="ml-8 mr-3 px-3 py-2 rounded-xl flex-row items-center active:bg-gray-50"
+                  >
+                    <Ionicons name="add-circle-outline" size={18} color="#bd9348" style={{ marginRight: 10 }} />
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+                      New chat
+                    </Text>
+                  </Pressable>
+                ) : null}
                 {isExpanded && projectItems.map((conversation) => (
                   <View key={conversation.id} className="ml-8 mr-3">
                     <ConversationItem

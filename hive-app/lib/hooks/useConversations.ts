@@ -205,7 +205,8 @@ export function useConversations() {
 
   const createConversation = useCallback(async (
     mode: ConversationMode = 'default',
-    title?: string
+    title?: string,
+    projectId?: string | null
   ): Promise<Conversation | null> => {
     if (!session?.user?.id || !communityId) {
       setError('Not authenticated');
@@ -219,6 +220,7 @@ export function useConversations() {
         community_id: communityId,
         mode,
         title: title || null,
+        project_id: projectId ?? null,
         is_active: true,
       })
       .select()

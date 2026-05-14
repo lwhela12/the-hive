@@ -38,6 +38,10 @@ export default function ChatScreen() {
     await createConversation('default');
   }, [createConversation]);
 
+  const handleNewConversationInProject = useCallback(async (projectId: string) => {
+    await createConversation('default', undefined, projectId);
+  }, [createConversation]);
+
   const handleSelectConversation = useCallback(async (id: string) => {
     await selectConversation(id);
   }, [selectConversation]);
@@ -77,6 +81,7 @@ export default function ChatScreen() {
             currentConversationId={currentConversation?.id || null}
             onSelectConversation={handleSelectConversation}
             onNewConversation={handleNewConversation}
+            onNewConversationInProject={handleNewConversationInProject}
             onCreateProject={createProject}
             onMoveConversation={moveConversationToProject}
             onDelete={handleDeleteConversation}
@@ -100,6 +105,7 @@ export default function ChatScreen() {
               currentConversationId={currentConversation?.id || null}
               onSelectConversation={handleSelectConversation}
               onNewConversation={handleNewConversation}
+              onNewConversationInProject={handleNewConversationInProject}
               onCreateProject={createProject}
               onMoveConversation={moveConversationToProject}
               onDelete={handleDeleteConversation}
