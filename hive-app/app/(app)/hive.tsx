@@ -39,8 +39,11 @@ type HomeTodo = {
   title: string;
   detail?: string;
   cta?: string;
+  isDone?: boolean;
+  completedAt?: string | null;
   onPress?: () => void;
-  onComplete?: () => void;
+  onToggle?: () => void;
+  onLongPress?: () => void;
 };
 
 const INITIAL_EVENTS_SHOWN = 3;
@@ -542,14 +545,33 @@ export default function HiveScreen() {
   const fetchMyActionItems = useCallback(async () => {
     if (!profile?.id || !communityId) return;
     setHomeActionLoading(true);
-    const { data } = await supabase
+    let { data, error } = await supabase
       .from('action_items')
       .select('*')
       .eq('assigned_to', profile.id)
       .eq('community_id', communityId)
-      .eq('completed', false)
-      .order('due_date', { ascending: true, nullsFirst: false });
-    setHomeActionItems((data ?? []) as ActionItem[]);
+      .is('archived_at', null)
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false });
+
+    if (error && String(error.message ?? '').includes('archived_at')) {
+      const fallback = await supabase
+        .from('action_items')
+        .select('*')
+        .eq('assigned_to', profile.id)
+        .eq('community_id', communityId)
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+      data = fallback.data;
+      error = fallback.error;
+    }
+
+    if (error) {
+      console.warn('Could not load action items', error);
+      setHomeActionItems([]);
+    } else {
+      setHomeActionItems((data ?? []) as ActionItem[]);
+    }
     setHomeActionLoading(false);
   }, [profile?.id, communityId]);
 
@@ -575,14 +597,56 @@ export default function HiveScreen() {
     ]).start(() => setShowGoodJob(false));
   }, [goodJobOpacity]);
 
-  const completeActionItem = useCallback(async (id: string) => {
-    triggerCompletion();
-    setCompletedTodoIds(prev => new Set([...prev, `action-${id}`]));
-    await supabase
+  const toggleActionItem = useCallback(async (item: ActionItem) => {
+    const completed = !item.completed;
+    const completedAt = completed ? new Date().toISOString() : null;
+    setHomeActionItems(prev => prev.map(action => (
+      action.id === item.id
+        ? { ...action, completed, completed_at: completedAt }
+        : action
+    )));
+    if (completed) triggerCompletion();
+
+    const { error } = await supabase
       .from('action_items')
-      .update({ completed: true, completed_at: new Date().toISOString() })
-      .eq('id', id);
+      .update({ completed, completed_at: completedAt } as any)
+      .eq('id', item.id);
+
+    if (error) {
+      console.warn('Could not update action item', error);
+      setHomeActionItems(prev => prev.map(action => (
+        action.id === item.id ? item : action
+      )));
+      Alert.alert('Could not update task', 'Please try again.');
+    }
   }, [triggerCompletion]);
+
+  const archiveActionItem = useCallback((item: ActionItem) => {
+    const archive = async () => {
+      setHomeActionItems(prev => prev.filter(action => action.id !== item.id));
+      const { error } = await supabase
+        .from('action_items')
+        .update({ archived_at: new Date().toISOString() } as any)
+        .eq('id', item.id);
+
+      if (error) {
+        console.warn('Could not archive action item', error);
+        setHomeActionItems(prev => [item, ...prev]);
+        Alert.alert('Could not archive task', 'Please try again.');
+      }
+    };
+
+    const message = `Archive this task from your list?\n\n"${item.description}"`;
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) archive();
+      return;
+    }
+
+    Alert.alert('Archive Task', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Archive', style: 'destructive', onPress: archive },
+    ]);
+  }, []);
 
   const handleAddTask = async () => {
     if (!newTaskText.trim() || !profile?.id || !communityId) return;
@@ -1053,8 +1117,13 @@ export default function HiveScreen() {
       id: `action-${a.id}`,
       emoji: '✅',
       title: a.description,
-      detail: a.due_date ? `Due ${formatDateShort(a.due_date)}` : undefined,
-      onComplete: () => completeActionItem(a.id),
+      detail: a.completed
+        ? `Done${a.completed_at ? ` · ${formatDateShort(a.completed_at)}` : ''} · Hold to archive`
+        : a.due_date ? `Due ${formatDateShort(a.due_date)}` : undefined,
+      isDone: a.completed,
+      completedAt: a.completed_at,
+      onToggle: () => toggleActionItem(a),
+      onLongPress: () => archiveActionItem(a),
     })),
     ...(() => {
       const nextMeeting = upcomingEvents.find(e => e.event_type === 'meeting');
@@ -1062,11 +1131,36 @@ export default function HiveScreen() {
       const start = getEventStartDate(nextMeeting);
       const msUntil = start.getTime() - Date.now();
       if (msUntil > 0 && msUntil < 7 * 24 * 60 * 60 * 1000) {
-        return [{ id: 'donation-reminder', emoji: '🍯', title: 'Bring your monthly donation', detail: `Meeting · ${formatDateShort(nextMeeting.event_date)}`, onComplete: () => { triggerCompletion(); setCompletedTodoIds(prev => new Set([...prev, 'donation-reminder'])); } }];
+        const isDone = completedTodoIds.has('donation-reminder');
+        return [{
+          id: 'donation-reminder',
+          emoji: '🍯',
+          title: 'Bring your monthly donation',
+          detail: isDone ? 'Done' : `Meeting · ${formatDateShort(nextMeeting.event_date)}`,
+          isDone,
+          completedAt: isDone ? new Date().toISOString() : null,
+          onToggle: () => {
+            setCompletedTodoIds(prev => {
+              const next = new Set(prev);
+              if (next.has('donation-reminder')) {
+                next.delete('donation-reminder');
+              } else {
+                next.add('donation-reminder');
+                triggerCompletion();
+              }
+              return next;
+            });
+          },
+        }];
       }
       return [];
     })(),
   ];
+  const openTodos = homeTodos.filter(todo => !todo.isDone);
+  const doneTodos = homeTodos
+    .filter(todo => todo.isDone)
+    .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
+  const sortedHomeTodos = [...openTodos, ...doneTodos];
 
   // Show wish detail fullscreen
   if (selectedWish) {
@@ -1529,7 +1623,7 @@ export default function HiveScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 0 }}>
               <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
                 <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-                  My To Do List{homeTodos.length > 0 ? ` (${homeTodos.length})` : ''}
+                  My To Do List{homeTodos.length > 0 ? ` (${openTodos.length})` : ''}
                 </Text>
               </View>
               <HeaderActionPill
@@ -1574,7 +1668,7 @@ export default function HiveScreen() {
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                   <ActivityIndicator size="small" color="#bd9348" />
                 </View>
-              ) : homeTodos.length === 0 ? (
+              ) : sortedHomeTodos.length === 0 ? (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
                   <Text style={{ fontSize: 32, marginBottom: 8 }}>✅</Text>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', marginBottom: 4, textAlign: 'center' }}>All clear!</Text>
@@ -1584,47 +1678,63 @@ export default function HiveScreen() {
                 </View>
               ) : (
                 <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                  {[
-                    ...homeTodos.filter(t => !completedTodoIds.has(t.id)),
-                    ...homeTodos.filter(t => completedTodoIds.has(t.id)),
-                  ].map((todo, i, all) => {
-                    const isDone = completedTodoIds.has(todo.id);
+                  {sortedHomeTodos.map((todo, i, all) => {
+                    const isDone = !!todo.isDone;
+                    const circleStyle = (pressed = false) => ({
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      borderWidth: 2,
+                      borderColor: isDone ? '#8e7a5e' : 'rgba(189,147,72,0.48)',
+                      backgroundColor: isDone ? '#8e7a5e' : pressed ? '#fbf4e3' : 'rgba(255,255,255,0.62)',
+                      flexShrink: 0,
+                      alignItems: 'center' as const,
+                      justifyContent: 'center' as const,
+                    });
                     return (
                     <Pressable
                       key={todo.id}
-                      onPress={isDone ? undefined : (todo.onPress ?? todo.onComplete)}
+                      onPress={todo.onPress}
+                      onLongPress={todo.onLongPress}
+                      delayLongPress={520}
                       style={({ pressed }) => ({
                         flexDirection: 'row',
                         alignItems: 'center',
                         padding: 14,
                         borderBottomWidth: i < all.length - 1 ? 1 : 0,
                         borderBottomColor: 'rgba(222,193,129,0.28)',
-                        backgroundColor: pressed && !isDone && (todo.onPress || todo.onComplete) ? '#fbf4e3' : '#fffdf5',
+                        backgroundColor: pressed && todo.onPress ? '#fbf4e3' : isDone ? '#f6eddc' : '#fffdf5',
                         gap: 10,
-                        opacity: isDone ? 0.45 : 1,
                       })}
                     >
-                      <View style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: 11,
-                        borderWidth: 2,
-                        borderColor: isDone ? '#bd9348' : 'rgba(189,147,72,0.48)',
-                        backgroundColor: isDone ? '#bd9348' : 'rgba(255,255,255,0.62)',
-                        flexShrink: 0,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}>
-                        {isDone && <Text style={{ color: 'white', fontSize: 12, lineHeight: 14 }}>✓</Text>}
-                      </View>
+                      {todo.onToggle ? (
+                        <Pressable
+                          onPress={todo.onToggle}
+                          accessibilityRole="button"
+                          accessibilityLabel={isDone ? 'Mark task open' : 'Mark task complete'}
+                          hitSlop={8}
+                          style={({ pressed }) => circleStyle(pressed)}
+                        >
+                          {isDone && <Text style={{ color: 'white', fontSize: 12, lineHeight: 14 }}>✓</Text>}
+                        </Pressable>
+                      ) : (
+                        <View style={circleStyle(false)} />
+                      )}
                       <Text style={{ fontSize: 18, flexShrink: 0 }}>{todo.emoji}</Text>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: isDone ? '#9a8060' : '#2d2d2d', lineHeight: 18, textDecorationLine: isDone ? 'line-through' : 'none' }} numberOfLines={2}>
+                        <Text style={{
+                          fontFamily: isDone ? 'Lato_400Regular' : 'Lato_700Bold',
+                          fontSize: 13,
+                          color: isDone ? '#7f715f' : '#2d2d2d',
+                          lineHeight: 18,
+                          fontStyle: isDone ? 'italic' : 'normal',
+                          textDecorationLine: isDone ? 'line-through' : 'none',
+                        }} numberOfLines={2}>
                           {todo.title}
                         </Text>
                         {todo.detail ? (
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 2 }}>
-                            {isDone ? 'Done' : todo.detail}
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: isDone ? '#8e7a5e' : '#9a8060', marginTop: 2 }}>
+                            {todo.detail}
                           </Text>
                         ) : null}
                       </View>

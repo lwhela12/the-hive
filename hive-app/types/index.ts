@@ -223,6 +223,7 @@ export interface ActionItem extends Record<string, unknown> {
   due_date?: string | null;
   completed: boolean;
   completed_at?: string | null;
+  archived_at?: string | null;
   created_at: string;
   assigned_user?: Profile;
 }
