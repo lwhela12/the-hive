@@ -5,6 +5,13 @@ import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const MAX_FILE_BASE64_LENGTH = 8_000_000;
+const MAX_TOTAL_FILE_BASE64_LENGTH = 20_000_000;
+
+interface ImportMeetingNotesFile {
+  fileName: string;
+  fileMimeType?: string | null;
+  fileBase64: string;
+}
 
 interface ImportMeetingNotesRequest {
   communityId: string;
@@ -12,6 +19,7 @@ interface ImportMeetingNotesRequest {
   title?: string;
   date?: string;
   linkedEventId?: string | null;
+  files?: ImportMeetingNotesFile[];
   fileName?: string | null;
   fileMimeType?: string | null;
   fileBase64?: string | null;
@@ -69,56 +77,101 @@ function extractPlainText(fileBase64: string) {
   return new TextDecoder().decode(decodeBase64(fileBase64)).trim();
 }
 
+function getRequestFiles(body: ImportMeetingNotesRequest) {
+  const files = [...(body.files ?? [])];
+  if (body.fileBase64 && body.fileName) {
+    files.push({
+      fileName: body.fileName,
+      fileMimeType: body.fileMimeType,
+      fileBase64: body.fileBase64,
+    });
+  }
+  return files.filter((file) => file.fileName && file.fileBase64);
+}
+
 async function getImportedNotesText(body: ImportMeetingNotesRequest) {
-  const pastedText = body.notesText?.trim();
-  if (pastedText) {
-    return {
-      notesText: pastedText,
-      source: 'pasted_notes',
-      importedFile: null,
-    };
+  const files = getRequestFiles(body);
+  const pastedTextParts = body.notesText?.trim() ? [body.notesText.trim()] : [];
+  const importedFiles = [];
+  const sourceKinds = new Set<string>();
+
+  if (pastedTextParts.length > 0) {
+    sourceKinds.add('pasted_notes');
   }
 
-  if (!body.fileBase64 || !body.fileName) {
+  if (files.length === 0 && pastedTextParts.length === 0) {
     throw new Error('Paste notes or upload a supported file.');
   }
 
-  if (body.fileBase64.length > MAX_FILE_BASE64_LENGTH) {
-    throw new Error('That file is too large. Try exporting a shorter notes file or paste the text.');
+  const totalBase64Length = files.reduce((total, file) => total + file.fileBase64.length, 0);
+  if (totalBase64Length > MAX_TOTAL_FILE_BASE64_LENGTH) {
+    throw new Error('Those files are too large together. Try fewer photos or paste the text.');
   }
 
-  const extension = getFileExtension(body.fileName);
-  const mimeType = body.fileMimeType ?? '';
+  for (const file of files) {
+    if (file.fileBase64.length > MAX_FILE_BASE64_LENGTH) {
+      throw new Error(`${file.fileName} is too large. Try fewer photos or paste the text.`);
+    }
 
-  if (extension === 'docx') {
-    return {
-      notesText: await extractDocxText(body.fileBase64),
-      source: 'docx_upload',
-      importedFile: { fileName: body.fileName, mimeType },
-    };
-  }
+    const extension = getFileExtension(file.fileName);
+    const mimeType = file.fileMimeType ?? '';
 
-  if (extension === 'txt' || extension === 'md' || mimeType.startsWith('text/')) {
-    return {
-      notesText: extractPlainText(body.fileBase64),
-      source: 'text_upload',
-      importedFile: { fileName: body.fileName, mimeType },
-    };
-  }
+    if (extension === 'docx') {
+      pastedTextParts.push(await extractDocxText(file.fileBase64));
+      sourceKinds.add('docx_upload');
+      importedFiles.push({ fileName: file.fileName, mimeType });
+      continue;
+    }
 
-  if (extension === 'pdf' || mimeType === 'application/pdf') {
-    return {
-      notesText: `PDF uploaded: ${body.fileName}. Tap Apply Notes to have Clive read and process the attached PDF.`,
-      source: 'pdf_upload',
-      importedFile: {
-        fileName: body.fileName,
+    if (extension === 'txt' || extension === 'md' || mimeType.startsWith('text/')) {
+      pastedTextParts.push(extractPlainText(file.fileBase64));
+      sourceKinds.add('text_upload');
+      importedFiles.push({ fileName: file.fileName, mimeType });
+      continue;
+    }
+
+    if (extension === 'pdf' || mimeType === 'application/pdf') {
+      pastedTextParts.push(`PDF uploaded: ${file.fileName}.`);
+      sourceKinds.add('pdf_upload');
+      importedFiles.push({
+        fileName: file.fileName,
         mimeType: 'application/pdf',
-        base64: body.fileBase64,
-      },
-    };
+        base64: file.fileBase64,
+      });
+      continue;
+    }
+
+    if (mimeType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension)) {
+      const imageMimeType = mimeType.startsWith('image/')
+        ? mimeType
+        : extension === 'png'
+        ? 'image/png'
+        : extension === 'gif'
+        ? 'image/gif'
+        : extension === 'webp'
+        ? 'image/webp'
+        : 'image/jpeg';
+
+      pastedTextParts.push(`Image uploaded: ${file.fileName}.`);
+      sourceKinds.add('image_upload');
+      importedFiles.push({
+        fileName: file.fileName,
+        mimeType: imageMimeType,
+        base64: file.fileBase64,
+      });
+      continue;
+    }
+
+    throw new Error('Unsupported file type. Upload .docx, .pdf, .txt, images, or paste the notes.');
   }
 
-  throw new Error('Unsupported file type. Upload .docx, .pdf, .txt, or paste the notes.');
+  const source = sourceKinds.size === 1 ? [...sourceKinds][0] : 'mixed_notes';
+  return {
+    notesText: pastedTextParts.join('\n\n').trim(),
+    source,
+    importedFile: importedFiles[0] ?? null,
+    importedFiles,
+  };
 }
 
 serve(async (req) => {
@@ -186,6 +239,7 @@ serve(async (req) => {
       title: requestedTitle,
       import_status: 'pending',
       imported_file: imported.importedFile,
+      imported_files: imported.importedFiles,
       summary: 'Notes imported. Apply them when you are ready for Clive to create tasks, events, and board updates.',
       decisions: [],
       details: [],

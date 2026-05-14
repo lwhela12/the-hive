@@ -81,6 +81,19 @@ function parseMeetingSummary(summary?: string | null): Record<string, any> {
   }
 }
 
+function getImportedFiles(summary: Record<string, any>) {
+  const files = Array.isArray(summary.imported_files) ? summary.imported_files : [];
+  if (files.length > 0) return files;
+  return summary.imported_file ? [summary.imported_file] : [];
+}
+
+function stripFileData(file: Record<string, any>) {
+  return {
+    fileName: file.fileName,
+    mimeType: file.mimeType,
+  };
+}
+
 function matchMemberByName(name: string | null | undefined, members: Member[]) {
   if (!name) return null;
   const normalized = name.toLowerCase().trim();
@@ -238,7 +251,7 @@ serve(async (req) => {
 
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
     const memberNames = (members ?? []).map((member: Member) => member.name).join(', ');
-    const sourceFile = existingSummary.imported_file;
+    const sourceFiles = getImportedFiles(existingSummary);
     const content: any[] = [
       {
         type: 'text',
@@ -263,21 +276,37 @@ Return strict JSON only:
       },
     ];
 
-    if (sourceFile?.base64 && sourceFile?.mimeType === 'application/pdf') {
-      content.push({
-        type: 'document',
-        source: {
-          type: 'base64',
-          media_type: 'application/pdf',
-          data: sourceFile.base64,
-        },
-      });
-    } else {
-      content.push({
-        type: 'text',
-        text: `Meeting notes:
+    content.push({
+      type: 'text',
+      text: `Meeting notes:
 ${meeting.transcript_attributed || meeting.transcript_raw || ''}`,
-      });
+    });
+
+    for (const file of sourceFiles) {
+      if (!file?.base64 || !file?.mimeType) continue;
+
+      if (file.mimeType === 'application/pdf') {
+        content.push({
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: file.base64,
+          },
+        });
+        continue;
+      }
+
+      if (String(file.mimeType).startsWith('image/')) {
+        content.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: file.mimeType,
+            data: file.base64,
+          },
+        });
+      }
     }
 
     const response = await anthropic.messages.create({
@@ -388,9 +417,8 @@ ${meeting.transcript_attributed || meeting.transcript_raw || ''}`,
 
     const summaryPayload = {
       ...existingSummary,
-      imported_file: sourceFile?.base64
-        ? { fileName: sourceFile.fileName, mimeType: sourceFile.mimeType }
-        : sourceFile ?? null,
+      imported_file: sourceFiles[0]?.base64 ? stripFileData(sourceFiles[0]) : sourceFiles[0] ?? null,
+      imported_files: sourceFiles.map((file: Record<string, any>) => file?.base64 ? stripFileData(file) : file),
       source: existingSummary.source || 'meeting_notes',
       import_status: 'applied',
       applied_at: new Date().toISOString(),

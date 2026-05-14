@@ -5,6 +5,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { pickMultipleImages, takePhoto, getImageExtension, getContentType } from '../../lib/imagePicker';
 import { MeetingSummary } from '../../components/meetings/MeetingSummary';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
 import { AppHeader } from '../../components/navigation';
@@ -21,6 +22,12 @@ interface MeetingSummaryPreview {
   summary?: string;
   decisions?: string[];
   board_suggestions?: unknown[];
+}
+
+interface NotesImportFile {
+  fileName: string;
+  fileMimeType: string | null;
+  fileBase64: string;
 }
 
 const toAmericanDate = (isoDate: string) => {
@@ -105,9 +112,7 @@ export default function MeetingsScreen() {
     date: toAmericanDate(getTodayIsoDate()),
     notes: '',
     linkedEventId: null as string | null,
-    fileName: null as string | null,
-    fileMimeType: null as string | null,
-    fileBase64: null as string | null,
+    files: [] as NotesImportFile[],
   });
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
@@ -374,9 +379,7 @@ export default function MeetingsScreen() {
       date: toAmericanDate(date),
       notes: '',
       linkedEventId: event?.id ?? null,
-      fileName: null,
-      fileMimeType: null,
-      fileBase64: null,
+      files: [],
     });
     setShowNotesImport(true);
   };
@@ -424,9 +427,14 @@ export default function MeetingsScreen() {
 
       setNotesImportForm((form) => ({
         ...form,
-        fileName: asset.name,
-        fileMimeType: asset.mimeType ?? null,
-        fileBase64,
+        files: [
+          ...form.files,
+          {
+            fileName: asset.name,
+            fileMimeType: asset.mimeType ?? null,
+            fileBase64,
+          },
+        ],
       }));
     } catch (error) {
       console.error('Error picking meeting notes file:', error);
@@ -434,12 +442,62 @@ export default function MeetingsScreen() {
     }
   };
 
-  const clearNotesFile = () => {
+  const addNotesPhotos = async () => {
+    try {
+      const photos = await pickMultipleImages({ maxImages: 5, quality: 0.85 });
+      if (photos.length === 0) return;
+
+      const photoFiles = await Promise.all(
+        photos.map(async (photo, index) => {
+          const extension = getImageExtension(photo.uri, photo.mimeType);
+          return {
+            fileName: photo.fileName ?? `handwritten-notes-${Date.now()}-${index + 1}.${extension}`,
+            fileMimeType: photo.mimeType ?? getContentType(extension),
+            fileBase64: await FileSystem.readAsStringAsync(photo.uri, {
+              encoding: FileSystem.EncodingType.Base64,
+            }),
+          };
+        })
+      );
+
+      setNotesImportForm((form) => ({
+        ...form,
+        files: [...form.files, ...photoFiles],
+      }));
+    } catch (error) {
+      console.error('Error picking notes photos:', error);
+      Alert.alert('Photos Not Added', 'Could not read those note photos. Please try again.');
+    }
+  };
+
+  const takeNotesPhoto = async () => {
+    try {
+      const photo = await takePhoto({ quality: 0.85 });
+      if (!photo) return;
+
+      const extension = getImageExtension(photo.uri, photo.mimeType);
+      const photoFile = {
+        fileName: photo.fileName ?? `handwritten-notes-${Date.now()}.${extension}`,
+        fileMimeType: photo.mimeType ?? getContentType(extension),
+        fileBase64: await FileSystem.readAsStringAsync(photo.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        }),
+      };
+
+      setNotesImportForm((form) => ({
+        ...form,
+        files: [...form.files, photoFile],
+      }));
+    } catch (error) {
+      console.error('Error taking notes photo:', error);
+      Alert.alert('Photo Not Added', 'Could not read that note photo. Please try again.');
+    }
+  };
+
+  const removeNotesFile = (fileIndex: number) => {
     setNotesImportForm((form) => ({
       ...form,
-      fileName: null,
-      fileMimeType: null,
-      fileBase64: null,
+      files: form.files.filter((_, index) => index !== fileIndex),
     }));
   };
 
@@ -452,7 +510,7 @@ export default function MeetingsScreen() {
     const notes = notesImportForm.notes.trim();
     const title = notesImportForm.title.trim() || 'Hive Meeting';
     const date = parseAmericanDate(notesImportForm.date) ?? notesImportForm.date;
-    const hasFile = Boolean(notesImportForm.fileBase64 && notesImportForm.fileName);
+    const hasFile = notesImportForm.files.length > 0;
     const hasPastedNotes = notes.length >= 40;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -474,9 +532,7 @@ export default function MeetingsScreen() {
           date,
           notesText: hasPastedNotes ? notes : undefined,
           linkedEventId: notesImportForm.linkedEventId,
-          fileName: notesImportForm.fileName,
-          fileMimeType: notesImportForm.fileMimeType,
-          fileBase64: notesImportForm.fileBase64,
+          files: notesImportForm.files,
         },
       });
 
@@ -488,9 +544,7 @@ export default function MeetingsScreen() {
         date: toAmericanDate(getTodayIsoDate()),
         notes: '',
         linkedEventId: null,
-        fileName: null,
-        fileMimeType: null,
-        fileBase64: null,
+        files: [],
       });
       await fetchMeetings();
 
@@ -538,7 +592,7 @@ export default function MeetingsScreen() {
   };
 
   const nextMeeting = upcomingMeetings[0] ?? null;
-  const hasImportableNotes = notesImportForm.notes.trim().length >= 40 || Boolean(notesImportForm.fileBase64);
+  const hasImportableNotes = notesImportForm.notes.trim().length >= 40 || notesImportForm.files.length > 0;
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
@@ -874,34 +928,48 @@ export default function MeetingsScreen() {
 
               <View className="mb-4">
                 <Text className="text-sm font-medium text-gray-700 mb-1">Notes File</Text>
-                {notesImportForm.fileName ? (
-                  <View className="border border-honey-200 bg-honey-50 rounded-lg p-3">
-                    <Text className="text-honey-900 font-medium">{notesImportForm.fileName}</Text>
-                    <View className="flex-row gap-3 mt-3">
-                      <Pressable
-                        onPress={handlePickNotesFile}
-                        className="bg-honey-500 px-4 py-2 rounded-lg active:bg-honey-600"
-                      >
-                        <Text className="text-white font-semibold">Replace</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={clearNotesFile}
-                        className="bg-gray-200 px-4 py-2 rounded-lg active:bg-gray-300"
-                      >
-                        <Text className="text-gray-700 font-semibold">Remove</Text>
-                      </Pressable>
-                    </View>
+                {notesImportForm.files.length > 0 && (
+                  <View className="border border-honey-200 bg-honey-50 rounded-lg p-3 mb-3">
+                    {notesImportForm.files.map((file, index) => (
+                      <View key={`${file.fileName}-${index}`} className={index > 0 ? 'mt-3 pt-3 border-t border-honey-200' : ''}>
+                        <Text className="text-honey-900 font-medium">{file.fileName}</Text>
+                        <Pressable
+                          onPress={() => removeNotesFile(index)}
+                          className="bg-gray-200 px-3 py-2 rounded-lg active:bg-gray-300 self-start mt-2"
+                        >
+                          <Text className="text-gray-700 font-semibold">Remove</Text>
+                        </Pressable>
+                      </View>
+                    ))}
                   </View>
-                ) : (
+                )}
+
+                <View className="flex-row flex-wrap gap-2">
                   <Pressable
                     onPress={handlePickNotesFile}
-                    className="border border-dashed border-gray-300 rounded-lg px-4 py-4 active:bg-gray-50"
+                    className="border border-dashed border-gray-300 rounded-lg px-4 py-3 active:bg-gray-50"
                   >
-                    <Text className="text-gray-700 font-semibold">Upload .docx, .pdf, .txt, or .md</Text>
-                    <Text className="text-gray-500 text-sm mt-1">
-                      Or paste the notes below.
-                    </Text>
+                    <Text className="text-gray-700 font-semibold">Upload file</Text>
                   </Pressable>
+                  <Pressable
+                    onPress={addNotesPhotos}
+                    className="border border-dashed border-gray-300 rounded-lg px-4 py-3 active:bg-gray-50"
+                  >
+                    <Text className="text-gray-700 font-semibold">Add photos</Text>
+                  </Pressable>
+                  {Platform.OS !== 'web' && (
+                    <Pressable
+                      onPress={takeNotesPhoto}
+                      className="border border-dashed border-gray-300 rounded-lg px-4 py-3 active:bg-gray-50"
+                    >
+                      <Text className="text-gray-700 font-semibold">Take photo</Text>
+                      </Pressable>
+                  )}
+                </View>
+                {notesImportForm.files.length === 0 && (
+                  <Text className="text-gray-500 text-sm mt-2">
+                    Upload .docx, .pdf, .txt, .md, or photos of handwritten notes. Or paste the notes below.
+                  </Text>
                 )}
               </View>
 
