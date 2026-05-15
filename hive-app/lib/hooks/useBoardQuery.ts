@@ -30,7 +30,7 @@ interface CategoryStats {
 async function fetchPostCounts(communityId: string): Promise<Record<string, CategoryStats>> {
   const { data, error } = await supabase
     .from('board_posts')
-    .select('category_id, created_at, last_reply_at')
+    .select('id, category_id, created_at, last_reply_at')
     .eq('community_id', communityId);
 
   if (error) {
@@ -39,7 +39,9 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
   }
 
   const stats: Record<string, CategoryStats> = {};
-  (data || []).forEach((row: { category_id: string; created_at: string; last_reply_at?: string | null }) => {
+  const postCategoryById = new Map<string, string>();
+  (data || []).forEach((row: { id: string; category_id: string; created_at: string; last_reply_at?: string | null }) => {
+    postCategoryById.set(row.id, row.category_id);
     if (!stats[row.category_id]) {
       stats[row.category_id] = { count: 0, latestActivity: null };
     }
@@ -50,6 +52,27 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
       stats[row.category_id].latestActivity = activity;
     }
   });
+
+  const { data: replies, error: repliesError } = await supabase
+    .from('board_replies')
+    .select('post_id, created_at')
+    .eq('community_id', communityId);
+
+  if (repliesError) {
+    console.warn('Error fetching board reply activity:', repliesError);
+  } else {
+    (replies || []).forEach((reply: { post_id: string; created_at: string }) => {
+      const categoryId = postCategoryById.get(reply.post_id);
+      if (!categoryId) return;
+      if (!stats[categoryId]) {
+        stats[categoryId] = { count: 0, latestActivity: null };
+      }
+      if (!stats[categoryId].latestActivity || reply.created_at > stats[categoryId].latestActivity!) {
+        stats[categoryId].latestActivity = reply.created_at;
+      }
+    });
+  }
+
   return stats;
 }
 
@@ -71,6 +94,32 @@ async function fetchPosts(
   }
 
   const posts = (data as PostWithAuthor[]) || [];
+  const latestReplyByPost = new Map<string, string>();
+  const postIds = posts.map((post) => post.id);
+
+  if (postIds.length > 0) {
+    const { data: replies, error: repliesError } = await supabase
+      .from('board_replies')
+      .select('post_id, created_at')
+      .in('post_id', postIds);
+
+    if (repliesError) {
+      console.warn('Error fetching board thread activity:', repliesError);
+    } else {
+      (replies || []).forEach((reply: { post_id: string; created_at: string }) => {
+        const current = latestReplyByPost.get(reply.post_id);
+        if (!current || reply.created_at > current) {
+          latestReplyByPost.set(reply.post_id, reply.created_at);
+        }
+      });
+    }
+  }
+
+  const getPostActivity = (post: PostWithAuthor) => {
+    const activity = post.last_reply_at || post.created_at;
+    const replyActivity = latestReplyByPost.get(post.id);
+    return replyActivity && replyActivity > activity ? replyActivity : activity;
+  };
 
   // Sort client-side: pinned first, then by most recent activity (reply or creation)
   posts.sort((a, b) => {
@@ -89,8 +138,8 @@ async function fetchPosts(
     if (!a.is_pinned && b.is_pinned) return 1;
 
     // Sort by most recent activity: last_reply_at or created_at, whichever is later
-    const aActivity = a.last_reply_at || a.created_at;
-    const bActivity = b.last_reply_at || b.created_at;
+    const aActivity = getPostActivity(a);
+    const bActivity = getPostActivity(b);
     return bActivity.localeCompare(aActivity);
   });
 

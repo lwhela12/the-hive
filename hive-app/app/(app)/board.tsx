@@ -24,6 +24,7 @@ import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types'
 
 type BoardListView = 'active' | 'archive';
 type BoardThreadListView = 'active' | 'archive';
+type BoardCategoryStats = { count: number; latestActivity: string | null };
 
 function isArchivedCategory(category: BoardCategory) {
   return category.status === 'archived' || category.status === 'completed';
@@ -42,10 +43,27 @@ function getCategorySortRank(category: BoardCategory) {
   return 5;
 }
 
-function sortCategoriesForBoard(a: BoardCategory, b: BoardCategory) {
+function sortCategoriesByBoardOrder(a: BoardCategory, b: BoardCategory) {
   const rankDelta = getCategorySortRank(a) - getCategorySortRank(b);
   if (rankDelta !== 0) return rankDelta;
   return a.display_order - b.display_order || a.name.localeCompare(b.name);
+}
+
+function sortCategoriesForBoard(
+  a: BoardCategory,
+  b: BoardCategory,
+  postCounts?: Record<string, BoardCategoryStats>
+) {
+  const aActivity = postCounts?.[a.id]?.latestActivity ?? null;
+  const bActivity = postCounts?.[b.id]?.latestActivity ?? null;
+
+  if (aActivity && bActivity && aActivity !== bActivity) {
+    return bActivity.localeCompare(aActivity);
+  }
+  if (aActivity && !bActivity) return -1;
+  if (!aActivity && bActivity) return 1;
+
+  return sortCategoriesByBoardOrder(a, b);
 }
 
 function getCategorySearchText(category: BoardCategory) {
@@ -124,19 +142,19 @@ export default function BoardScreen() {
     return isAdmin || post.author_id === profile.id;
   }, [isAdmin, profile, selectedCategory]);
 
-  const { data: postCounts } = useBoardPostCountsQuery(communityId ?? undefined);
+  const { data: postCounts, refetch: refetchPostCounts } = useBoardPostCountsQuery(communityId ?? undefined);
   const activeCategories = categories
     .filter((category) => !isArchivedCategory(category))
-    .sort(sortCategoriesForBoard);
+    .sort((a, b) => sortCategoriesForBoard(a, b, postCounts));
   const archivedCategories = categories
     .filter(isArchivedCategory)
-    .sort(sortCategoriesForBoard);
+    .sort((a, b) => sortCategoriesForBoard(a, b, postCounts));
   const boardSearchQuery = boardSearch.trim().toLowerCase();
   const listSourceCategories = boardListView === 'archive' ? archivedCategories : activeCategories;
   const visibleCategories = boardSearchQuery
     ? listSourceCategories
         .filter((category) => getCategorySearchText(category).includes(boardSearchQuery))
-        .sort(sortCategoriesForBoard)
+        .sort((a, b) => sortCategoriesForBoard(a, b, postCounts))
     : listSourceCategories;
 
   const {
@@ -170,6 +188,7 @@ export default function BoardScreen() {
     setRefreshing(true);
     await Promise.all([
       refetchCategories(),
+      refetchPostCounts(),
       ...(selectedCategory ? [refetchPosts()] : []),
       ...(selectedCategory ? [refetchLinkedWishes()] : []),
     ]);
@@ -340,10 +359,11 @@ export default function BoardScreen() {
   const handlePostBack = useCallback(() => {
     setSelectedPostId(null);
     invalidatePosts();
+    refetchPostCounts();
     if (boardPostStorageKey && typeof window !== 'undefined') {
       window.localStorage.removeItem(boardPostStorageKey);
     }
-  }, [boardPostStorageKey, invalidatePosts]);
+  }, [boardPostStorageKey, invalidatePosts, refetchPostCounts]);
 
   const handleCreatePost = async (title: string, content: string, attachments?: Attachment[]) => {
     if (!profile || !communityId || !selectedCategory) {
@@ -372,6 +392,7 @@ export default function BoardScreen() {
       }
 
       invalidatePosts();
+      await Promise.all([refetchPosts(), refetchPostCounts()]);
       const mentionableMembers = topicMembers.length > 0
         ? topicMembers
         : await fetchCommunityMentionableMembers(communityId);
@@ -421,7 +442,7 @@ export default function BoardScreen() {
 
       setEditingPost(null);
       invalidatePosts();
-      await refetchPosts();
+      await Promise.all([refetchPosts(), refetchPostCounts()]);
       return true;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -1221,6 +1242,7 @@ export default function BoardScreen() {
             onPress={() => handlePostSelect(item.id)}
             canEdit={canManageThread(item)}
             onEdit={handleEditThread}
+            compactImages={!useMobileLayout}
           />
         )}
         contentContainerStyle={{ padding: 16 }}
