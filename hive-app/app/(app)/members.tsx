@@ -1,15 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
+import { type ReactNode, useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowDimensions, TextInput, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import Svg, { Polygon } from 'react-native-svg';
 import type { Skill, UserRole, Wish } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import { SKILL_CATEGORIES } from '../../lib/skillsList';
+import { notifyWishMentions } from '../../lib/wishMentions';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileHoneycombCluster } from '../../components/profile/ProfileHoneycombCluster';
+import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
+import { LinkifiedText } from '../../components/ui/LinkifiedText';
 
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish>;
@@ -68,6 +74,11 @@ type DailyMatchStats = {
   similarCount: number;
   score: number;
   percent: number;
+};
+
+type HoneycombRow = {
+  items: MemberData[];
+  offset: boolean;
 };
 
 const ANSWER_STOP_WORDS = new Set([
@@ -139,6 +150,77 @@ function buildDailyMatchStats(userId: string | null, answers: DailyAnswerRow[]) 
   });
 
   return stats;
+}
+
+function buildHoneycombRows(items: MemberData[], numCols: number): HoneycombRow[] {
+  if (numCols <= 1) {
+    return items.map(item => ({ items: [item], offset: false }));
+  }
+
+  const rows: HoneycombRow[] = [];
+  let index = 0;
+  let rowIndex = 0;
+
+  while (index < items.length) {
+    const offset = rowIndex % 2 === 1;
+    const capacity = offset ? Math.max(1, numCols - 1) : numCols;
+    rows.push({
+      items: items.slice(index, index + capacity),
+      offset,
+    });
+    index += capacity;
+    rowIndex += 1;
+  }
+
+  return rows;
+}
+
+function HoneycombCardShell({
+  children,
+  isMe,
+  height,
+}: {
+  children: ReactNode;
+  isMe: boolean;
+  height: number;
+}) {
+  return (
+    <View
+      style={{
+        height,
+        position: 'relative',
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 2,
+      }}
+    >
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+      >
+        <Polygon
+          points="7,50 17,6 83,6 93,50 83,94 17,94"
+          fill={isMe ? '#fff8e8' : '#fffaf0'}
+          stroke={isMe ? '#bd9348' : '#dec181'}
+          strokeWidth={isMe ? 1.8 : 1.1}
+        />
+        <Polygon
+          points="10,50 19,10 81,10 90,50 81,90 19,90"
+          fill="none"
+          stroke="rgba(255,255,255,0.72)"
+          strokeWidth={0.7}
+        />
+      </Svg>
+      <View style={{ flex: 1, paddingHorizontal: 30, paddingVertical: 22, position: 'relative' }}>
+        {children}
+      </View>
+    </View>
+  );
 }
 
 function SilhouetteAvatar({ size }: { size: number }) {
@@ -278,6 +360,13 @@ function MemberDetailModal({
   const [addingWish, setAddingWish] = useState(false);
   const [newWishInput, setNewWishInput] = useState('');
   const [wishActionLoading, setWishActionLoading] = useState<string | null>(null);
+  const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
+  const wishMentionInput = useMentionInput({
+    value: newWishInput,
+    onChangeText: setNewWishInput,
+    members: mentionableMembers,
+    currentUserId: currentAuthId ?? undefined,
+  });
 
   const hasFavorites = member.favorite_book || member.favorite_food || member.favorite_hobby;
   const hasDetails = member.profile_title || member.bio || member.current_project || member.hometown || member.known_for || member.miq_experiences || member.miq_growth || member.miq_contribution || hasFavorites;
@@ -404,22 +493,68 @@ function MemberDetailModal({
     ]);
   };
 
+  const cancelNewWish = () => {
+    setAddingWish(false);
+    setNewWishInput('');
+    wishMentionInput.resetMentionSelection();
+  };
+
   const saveNewWish = async (makePublic = false) => {
     const desc = newWishInput.trim();
     if (!desc || !communityId) return;
-    const { data } = await (supabase as any)
+    const { data, error } = await (supabase as any)
       .from('wishes')
       .insert({ user_id: member.id, community_id: communityId, description: desc, raw_input: desc, status: makePublic ? 'public' : 'private', is_active: makePublic, extracted_from: 'manual' })
       .select('id, description, status')
       .single();
-    if (data) setMyWishes(prev => [data, ...prev]);
+    if (error) {
+      console.warn('[Members] wish save failed', error);
+      return;
+    }
+    if (data) {
+      setMyWishes(prev => [data, ...prev]);
+      if (makePublic) {
+        notifyWishMentions({
+          wishId: data.id,
+          senderId: currentAuthId ?? member.id,
+          communityId,
+          content: desc,
+          members: mentionableMembers,
+          wishOwnerName: member.name,
+        });
+      }
+    }
     setNewWishInput('');
+    wishMentionInput.resetMentionSelection();
     setAddingWish(false);
   };
 
   const refineWithClive = (description: string) => {
     router.push({ pathname: '/', params: { refineWish: description } });
   };
+
+  const renderNewWishMentions = () => (
+    <>
+      <MentionSuggestions
+        active={wishMentionInput.mentionQuery !== null}
+        query={wishMentionInput.mentionQuery}
+        loading={mentionMembersLoading}
+        suggestions={wishMentionInput.mentionSuggestions}
+        onSelect={wishMentionInput.selectMention}
+      />
+      {wishMentionInput.mentionedMembers.length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, marginBottom: 10 }}>
+          {wishMentionInput.mentionedMembers.map(mentionedMember => (
+            <View key={mentionedMember.id} style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: '#1d4ed8', fontSize: 11 }}>
+                Tagged {mentionedMember.name.split(/\s+/)[0]}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </>
+  );
 
   const saveProfilePrompts = async () => {
     setSaving(true);
@@ -691,9 +826,12 @@ function MemberDetailModal({
                             {wish.status === 'public' ? 'Shared with the HIVE' : 'Private'}
                           </Text>
                         </View>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', lineHeight: 21, marginBottom: 12 }}>
+                        <LinkifiedText
+                          style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', lineHeight: 21, marginBottom: 12 }}
+                          mentionStyle={{ color: '#1d4ed8', backgroundColor: 'rgba(37,99,235,0.1)' }}
+                        >
                           {wish.description}
-                        </Text>
+                        </LinkifiedText>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                           {wish.status === 'private' ? (
                             <Pressable
@@ -740,15 +878,18 @@ function MemberDetailModal({
                       <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16, marginBottom: 12 }}>
                         <TextInput
                           value={newWishInput}
-                          onChangeText={setNewWishInput}
+                          onChangeText={wishMentionInput.textInputMentionProps.onChangeText}
+                          onSelectionChange={wishMentionInput.textInputMentionProps.onSelectionChange}
+                          selection={wishMentionInput.textInputMentionProps.selection}
                           placeholder="Describe what you're wishing for..."
                           placeholderTextColor="#b5ad9f"
                           multiline
                           autoFocus
                           style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', minHeight: 80, textAlignVertical: 'top', marginBottom: 10 }}
                         />
+                        {renderNewWishMentions()}
                         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                          <Pressable onPress={() => { setAddingWish(false); setNewWishInput(''); }} style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}>
+                          <Pressable onPress={cancelNewWish} style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}>
                             <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
                           </Pressable>
                           <Pressable onPress={() => saveNewWish(false)} disabled={!newWishInput.trim()} style={{ flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.5)', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}>
@@ -1236,9 +1377,12 @@ function MemberDetailModal({
                             {wish.status === 'public' ? 'Shared with the HIVE' : 'Private'}
                           </Text>
                         </View>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', lineHeight: 20, marginBottom: 10 }}>
+                        <LinkifiedText
+                          style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', lineHeight: 20, marginBottom: 10 }}
+                          mentionStyle={{ color: '#1d4ed8', backgroundColor: 'rgba(37,99,235,0.1)' }}
+                        >
                           {wish.description}
-                        </Text>
+                        </LinkifiedText>
                         {/* Actions */}
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                           {wish.status === 'private' && (
@@ -1289,15 +1433,18 @@ function MemberDetailModal({
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginBottom: 8 }}>New wish</Text>
                         <TextInput
                           value={newWishInput}
-                          onChangeText={setNewWishInput}
+                          onChangeText={wishMentionInput.textInputMentionProps.onChangeText}
+                          onSelectionChange={wishMentionInput.textInputMentionProps.onSelectionChange}
+                          selection={wishMentionInput.textInputMentionProps.selection}
                           placeholder="What do you wish for? Describe it as specifically as you can..."
                           placeholderTextColor="#b5ad9f"
                           multiline
                           style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', paddingHorizontal: 12, paddingVertical: 10, minHeight: 80, marginBottom: 10, textAlignVertical: 'top' }}
                         />
+                        {renderNewWishMentions()}
                         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                           <Pressable
-                            onPress={() => { setAddingWish(false); setNewWishInput(''); }}
+                            onPress={cancelNewWish}
                             style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}
                           >
                             <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
@@ -1536,7 +1683,6 @@ export default function MembersScreen() {
 
   const numCols = width >= 1100 ? 3 : width >= 720 ? 2 : 1;
   const avatarSize = width >= 768 ? 74 : 64;
-  const cellWidth = `${100 / numCols}%`;
   const filtered = search.trim()
     ? members.filter(m => {
         const query = search.toLowerCase();
@@ -1560,6 +1706,11 @@ export default function MembersScreen() {
         ].some(value => value?.toLowerCase().includes(query));
       })
     : members;
+  const honeycombRows = buildHoneycombRows(filtered, numCols);
+  const honeycombCellWidth = `${100 / numCols}%`;
+  const honeycombOffset = numCols > 1 ? `${50 / numCols}%` : '0%';
+  const honeycombOverlap = numCols > 1 ? -26 : 0;
+  const honeycombCardHeight = width >= 1100 ? 214 : width >= 720 ? 218 : 204;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#faf8f3' }}>
@@ -1608,126 +1759,128 @@ export default function MembersScreen() {
           </View>
         ) : (
           <>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 }}>
-              {filtered.map(member => {
-                const isMe = member.id === currentUserId;
-                const titleLine = member.profile_title || member.occupation;
-                const publicWishes = member.wishes.filter(w => w.status === 'public');
-                const spotlight = member.known_for || member.miq_experiences || member.current_project || member.bio || member.skills[0]?.description || publicWishes[0]?.description;
-                const hasDailyMatch = !isMe && typeof member.dailyMatchPercent === 'number' && (member.dailyMatchSharedCount ?? 0) > 0;
-                return (
-                  <Pressable
-                    key={member.id}
-                    onPress={() => openMemberProfile(member, isMe)}
-                    style={{ width: cellWidth as any, paddingHorizontal: 6, marginBottom: 12 }}
-                  >
-                    <View style={{
-                      backgroundColor: '#fffaf0',
-                      borderWidth: 1,
-                      borderColor: 'rgba(222,193,129,0.55)',
-                      borderRadius: 18,
-                      padding: 14,
-                      minHeight: 174,
-                      shadowColor: '#000',
-                      shadowOpacity: 0.08,
-                      shadowRadius: 10,
-                      shadowOffset: { width: 0, height: 4 },
-                      elevation: 2,
-                      position: 'relative',
-                    }}>
-                      {hasDailyMatch && (
-                        <View
-                          accessible
-                          accessibilityLabel={`${member.dailyMatchPercent}% daily question match with ${member.name}`}
-                          style={{
-                            position: 'absolute',
-                            top: 12,
-                            right: 12,
-                            backgroundColor: '#f5ead1',
-                            borderWidth: 1,
-                            borderColor: 'rgba(189,147,72,0.35)',
-                            borderRadius: 999,
-                            paddingHorizontal: 9,
-                            paddingVertical: 5,
-                            alignItems: 'center',
-                            minWidth: 56,
-                          }}
-                        >
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', lineHeight: 14 }}>
-                            {member.dailyMatchPercent}%
-                          </Text>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 8, color: '#9a8060', textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 10 }}>
-                            match
-                          </Text>
-                        </View>
-                      )}
-                      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                        <View style={{
-                          borderRadius: (avatarSize + 8) / 2,
-                          borderWidth: isMe ? 2.5 : 1.5,
-                          borderColor: isMe ? '#bd9348' : 'rgba(222,193,129,0.7)',
-                          padding: 3,
-                          backgroundColor: 'white',
-                        }}>
-                          <Avatar uri={member.avatar_url} name={member.name} size={avatarSize} />
-                        </View>
+            <View style={{ marginHorizontal: -4 }}>
+              {honeycombRows.map((row, rowIndex) => (
+                <View
+                  key={`member-row-${rowIndex}`}
+                  style={{
+                    flexDirection: 'row',
+                    marginLeft: row.offset ? honeycombOffset as any : 0,
+                    marginTop: rowIndex === 0 ? 0 : honeycombOverlap,
+                  }}
+                >
+                  {row.items.map(member => {
+                    const isMe = member.id === currentUserId;
+                    const titleLine = member.profile_title || member.occupation;
+                    const publicWishes = member.wishes.filter(w => w.status === 'public');
+                    const spotlight = member.known_for || member.miq_experiences || member.current_project || member.bio || member.skills[0]?.description || publicWishes[0]?.description;
+                    const hasDailyMatch = !isMe && typeof member.dailyMatchPercent === 'number' && (member.dailyMatchSharedCount ?? 0) > 0;
+                    return (
+                      <Pressable
+                        key={member.id}
+                        onPress={() => openMemberProfile(member, isMe)}
+                        style={{
+                          width: honeycombCellWidth as any,
+                          paddingHorizontal: 4,
+                          marginBottom: numCols > 1 ? 0 : 10,
+                        }}
+                      >
+                        <HoneycombCardShell isMe={isMe} height={honeycombCardHeight}>
+                          {hasDailyMatch && (
+                            <View
+                              accessible
+                              accessibilityLabel={`${member.dailyMatchPercent}% daily question match with ${member.name}`}
+                              style={{
+                                position: 'absolute',
+                                top: 18,
+                                right: 24,
+                                backgroundColor: '#f5ead1',
+                                borderWidth: 1,
+                                borderColor: 'rgba(189,147,72,0.35)',
+                                borderRadius: 999,
+                                paddingHorizontal: 9,
+                                paddingVertical: 5,
+                                alignItems: 'center',
+                                minWidth: 56,
+                              }}
+                            >
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', lineHeight: 14 }}>
+                                {member.dailyMatchPercent}%
+                              </Text>
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 8, color: '#9a8060', textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 10 }}>
+                                match
+                              </Text>
+                            </View>
+                          )}
+                          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                            <View style={{
+                              borderRadius: (avatarSize + 8) / 2,
+                              borderWidth: isMe ? 2.5 : 1.5,
+                              borderColor: isMe ? '#bd9348' : 'rgba(222,193,129,0.7)',
+                              padding: 3,
+                              backgroundColor: 'white',
+                            }}>
+                              <Avatar uri={member.avatar_url} name={member.name} size={avatarSize} />
+                            </View>
 
-                        <View style={{ flex: 1, minWidth: 0, paddingRight: hasDailyMatch ? 58 : 0 }}>
-                          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: '#2d2d2d', lineHeight: 21 }} numberOfLines={2}>
-                            {isMe ? `${member.name.split(' ')[0]} (you)` : member.name}
-                          </Text>
-                          {titleLine && (
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginTop: 3 }} numberOfLines={1}>
-                              {titleLine}
+                            <View style={{ flex: 1, minWidth: 0, paddingRight: hasDailyMatch ? 58 : 0 }}>
+                              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: '#2d2d2d', lineHeight: 21 }} numberOfLines={2}>
+                                {isMe ? `${member.name.split(' ')[0]} (you)` : member.name}
+                              </Text>
+                              {titleLine && (
+                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginTop: 3 }} numberOfLines={1}>
+                                  {titleLine}
+                                </Text>
+                              )}
+                              {member.birthday && (
+                                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8a8173', marginTop: 3 }} numberOfLines={1}>
+                                  Birthday: {new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+
+                          {spotlight && (
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#4b5563', lineHeight: 18, marginTop: 10 }} numberOfLines={2}>
+                              {spotlight}
                             </Text>
                           )}
-                          {member.birthday && (
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8a8173', marginTop: 3 }} numberOfLines={1}>
-                              Birthday: {new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                            </Text>
-                          )}
-                        </View>
-                      </View>
 
-                      {spotlight && (
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#4b5563', lineHeight: 19, marginTop: 12 }} numberOfLines={3}>
-                          {spotlight}
-                        </Text>
-                      )}
-
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 12 }}>
-                        {member.skills.slice(0, 2).map(skill => (
-                          <View key={skill.id} style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#8a6a2f' }} numberOfLines={1}>
-                              {skill.description}
-                            </Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                            {member.skills.slice(0, 2).map(skill => (
+                              <View key={skill.id} style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
+                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }} numberOfLines={1}>
+                                  {skill.description}
+                                </Text>
+                              </View>
+                            ))}
+                            {publicWishes.length > 0 && (
+                              <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
+                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }}>
+                                  {publicWishes.length} wish{publicWishes.length === 1 ? '' : 'es'}
+                                </Text>
+                              </View>
+                            )}
+                            {hasDailyMatch ? (
+                              <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
+                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }}>
+                                  {member.dailyMatchSharedCount} shared question{member.dailyMatchSharedCount === 1 ? '' : 's'}
+                                </Text>
+                              </View>
+                            ) : member.questionAnswerCount > 0 && (
+                              <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
+                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }}>
+                                  {member.questionAnswerCount} answers
+                                </Text>
+                              </View>
+                            )}
                           </View>
-                        ))}
-                        {publicWishes.length > 0 && (
-                          <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#8a6a2f' }}>
-                              {publicWishes.length} wish{publicWishes.length === 1 ? '' : 'es'}
-                            </Text>
-                          </View>
-                        )}
-                        {hasDailyMatch ? (
-                          <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#8a6a2f' }}>
-                              {member.dailyMatchSharedCount} shared question{member.dailyMatchSharedCount === 1 ? '' : 's'}
-                            </Text>
-                          </View>
-                        ) : member.questionAnswerCount > 0 && (
-                          <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#8a6a2f' }}>
-                              {member.questionAnswerCount} answers
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  </Pressable>
-                );
-              })}
+                        </HoneycombCardShell>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ))}
             </View>
           </>
         )}
