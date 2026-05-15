@@ -1104,15 +1104,22 @@ export default function HiveScreen() {
   };
 
   const handleDeleteWish = (wish: Wish) => {
-    if (!profile || !communityId || wish.user_id !== profile.id) return;
+    if (!profile || !communityId) return;
+    const canDeleteWish = isAdmin || wish.user_id === profile.id;
+    if (!canDeleteWish) return;
 
     const deleteWish = async () => {
-      const { error } = await supabase
+      let query = supabase
         .from('wishes')
         .delete()
         .eq('id', wish.id)
-        .eq('user_id', profile.id)
         .eq('community_id', communityId);
+
+      if (!isAdmin) {
+        query = query.eq('user_id', profile.id);
+      }
+
+      const { error } = await query;
 
       if (error) {
         Alert.alert('Error', 'Failed to delete wish. Please try again.');
@@ -2084,7 +2091,7 @@ export default function HiveScreen() {
                         onPress={() => setSelectedWish(wish)}
                         canEdit={wish.user_id === profile?.id}
                         onEdit={() => setEditingWish(wish)}
-                        canDelete={wish.user_id === profile?.id}
+                        canDelete={isAdmin || wish.user_id === profile?.id}
                         onDelete={() => handleDeleteWish(wish)}
                       />
                     ))
@@ -2112,7 +2119,7 @@ export default function HiveScreen() {
                         onPress={() => setSelectedWish(wish)}
                         canEdit={wish.user_id === profile?.id}
                         onEdit={() => setEditingWish(wish)}
-                        canDelete={wish.user_id === profile?.id}
+                        canDelete={isAdmin || wish.user_id === profile?.id}
                         onDelete={() => handleDeleteWish(wish)}
                       />
                     ))
