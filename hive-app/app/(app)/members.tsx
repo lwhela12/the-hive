@@ -21,6 +21,7 @@ interface MemberData {
   hiveTitle?: string | null;
   queen_bee_month?: string | null;
   occupation?: string | null;
+  profile_title?: string | null;
   bio?: string | null;
   current_project?: string | null;
   hometown?: string | null;
@@ -28,6 +29,9 @@ interface MemberData {
   favorite_food?: string | null;
   favorite_hobby?: string | null;
   known_for?: string | null;
+  miq_experiences?: string | null;
+  miq_growth?: string | null;
+  miq_contribution?: string | null;
   fun_facts?: string[] | null;
   birthday?: string | null;
   skills: MemberSkill[];
@@ -214,11 +218,15 @@ function MemberDetailModal({
   const [showDeeper, setShowDeeper] = useState(false);
   const [draftName, setDraftName] = useState(member.name ?? '');
   const [draftOccupation, setDraftOccupation] = useState(member.occupation ?? '');
+  const [draftProfileTitle, setDraftProfileTitle] = useState(member.profile_title ?? '');
   const [draftBirthday, setDraftBirthday] = useState(member.birthday ? isoToAmerican(member.birthday) : '');
   const [draftBio, setDraftBio] = useState(member.bio ?? '');
   const [draftCurrentProject, setDraftCurrentProject] = useState(member.current_project ?? '');
   const [draftHometown, setDraftHometown] = useState(member.hometown ?? '');
   const [draftKnownFor, setDraftKnownFor] = useState(member.known_for ?? '');
+  const [draftMiqExperiences, setDraftMiqExperiences] = useState(member.miq_experiences ?? '');
+  const [draftMiqGrowth, setDraftMiqGrowth] = useState(member.miq_growth ?? '');
+  const [draftMiqContribution, setDraftMiqContribution] = useState(member.miq_contribution ?? '');
   const [draftFavBook, setDraftFavBook] = useState(member.favorite_book ?? '');
   const [draftFavFood, setDraftFavFood] = useState(member.favorite_food ?? '');
   const [draftFavHobby, setDraftFavHobby] = useState(member.favorite_hobby ?? '');
@@ -240,7 +248,7 @@ function MemberDetailModal({
   const [wishActionLoading, setWishActionLoading] = useState<string | null>(null);
 
   const hasFavorites = member.favorite_book || member.favorite_food || member.favorite_hobby;
-  const hasDetails = member.bio || member.current_project || member.hometown || member.known_for || hasFavorites;
+  const hasDetails = member.profile_title || member.bio || member.current_project || member.hometown || member.known_for || member.miq_experiences || member.miq_growth || member.miq_contribution || hasFavorites;
   const introContent = member.introPost?.content ?? '';
   const introNeedsToggle = introContent.length > 320;
   const visibleIntro = introExpanded || !introNeedsToggle
@@ -254,11 +262,15 @@ function MemberDetailModal({
     setShowDeeper(false);
     setDraftName(member.name ?? '');
     setDraftOccupation(member.occupation ?? '');
+    setDraftProfileTitle(member.profile_title ?? '');
     setDraftBirthday(member.birthday ? isoToAmerican(member.birthday) : '');
     setDraftBio(member.bio ?? '');
     setDraftCurrentProject(member.current_project ?? '');
     setDraftHometown(member.hometown ?? '');
     setDraftKnownFor(member.known_for ?? '');
+    setDraftMiqExperiences(member.miq_experiences ?? '');
+    setDraftMiqGrowth(member.miq_growth ?? '');
+    setDraftMiqContribution(member.miq_contribution ?? '');
     setDraftFavBook(member.favorite_book ?? '');
     setDraftFavFood(member.favorite_food ?? '');
     setDraftFavHobby(member.favorite_hobby ?? '');
@@ -410,11 +422,15 @@ function MemberDetailModal({
       const updates = {
         name: cleanName,
         occupation: draftOccupation.trim() || null,
+        profile_title: draftProfileTitle.trim() || null,
         birthday: birthdayIso,
         bio: draftBio.trim() || null,
         current_project: draftCurrentProject.trim() || null,
         hometown: draftHometown.trim() || null,
         known_for: draftKnownFor.trim() || null,
+        miq_experiences: draftMiqExperiences.trim() || null,
+        miq_growth: draftMiqGrowth.trim() || null,
+        miq_contribution: draftMiqContribution.trim() || null,
         favorite_book: draftFavBook.trim() || null,
         favorite_food: draftFavFood.trim() || null,
         favorite_hobby: draftFavHobby.trim() || null,
@@ -465,7 +481,7 @@ function MemberDetailModal({
       onMemberUpdated({
         ...member,
         ...updates,
-        hiveTitle: getHiveTitle(cleanName),
+        hiveTitle: null,
         skills: skillDescriptions.map((description, index) => ({
           id: member.skills[index]?.id ?? `draft-skill-${index}`,
           description,
@@ -739,15 +755,10 @@ function MemberDetailModal({
                 <Avatar uri={member.avatar_url} name={member.name} size={100} />
               </View>
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d' }}>{member.name}</Text>
-              {member.occupation && (
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', marginTop: 3 }}>{member.occupation}</Text>
+              {(member.profile_title || member.occupation) && (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', marginTop: 3 }}>{member.profile_title || member.occupation}</Text>
               )}
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-                {member.hiveTitle && (
-                  <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)' }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{getHiveTitleIcon(member.hiveTitle)} {member.hiveTitle}</Text>
-                  </View>
-                )}
                 {isCurrentUser && (
                   <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)' }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>You</Text>
@@ -817,7 +828,14 @@ function MemberDetailModal({
                       maxLength={PROFILE_PROMPT_LIMITS.name}
                     />
                     <ProfilePromptInput
-                      label="Title / what you do"
+                      label="Self-appointed title"
+                      placeholder="Founder, Tarot Reader, Spreadsheet Sorcerer..."
+                      value={draftProfileTitle}
+                      onChangeText={setDraftProfileTitle}
+                      maxLength={PROFILE_PROMPT_LIMITS.short}
+                    />
+                    <ProfilePromptInput
+                      label="Work / day job"
                       placeholder="Writer, artist, founder, coach..."
                       value={draftOccupation}
                       onChangeText={setDraftOccupation}
@@ -851,6 +869,30 @@ function MemberDetailModal({
                       value={draftKnownFor}
                       onChangeText={setDraftKnownFor}
                       maxLength={PROFILE_PROMPT_LIMITS.short}
+                    />
+                    <ProfilePromptInput
+                      label="3MIQ: Experiences"
+                      placeholder="What experiences would make life feel rich?"
+                      value={draftMiqExperiences}
+                      onChangeText={setDraftMiqExperiences}
+                      maxLength={PROFILE_PROMPT_LIMITS.bio}
+                      multiline
+                    />
+                    <ProfilePromptInput
+                      label="3MIQ: Growth"
+                      placeholder="Who do you want to become?"
+                      value={draftMiqGrowth}
+                      onChangeText={setDraftMiqGrowth}
+                      maxLength={PROFILE_PROMPT_LIMITS.bio}
+                      multiline
+                    />
+                    <ProfilePromptInput
+                      label="3MIQ: Contribution"
+                      placeholder="How do you want to help, serve, or create?"
+                      value={draftMiqContribution}
+                      onChangeText={setDraftMiqContribution}
+                      maxLength={PROFILE_PROMPT_LIMITS.bio}
+                      multiline
                     />
                     <ProfilePromptInput
                       label="Hometown"
@@ -996,11 +1038,22 @@ function MemberDetailModal({
               </View>
             )}
 
-            {/* Known for */}
+            {/* Ask me about */}
             {member.known_for && (
               <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 6 }}>KNOWN FOR</Text>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 6 }}>ASK ME ABOUT</Text>
                 <Text style={{ fontFamily: 'LibreBaskerville_400Regular', fontSize: 15, color: '#2d2d2d', fontStyle: 'italic', lineHeight: 22 }}>"{member.known_for}"</Text>
+              </View>
+            )}
+
+            {(member.miq_experiences || member.miq_growth || member.miq_contribution) && (
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 10 }}>3 MOST IMPORTANT QUESTIONS</Text>
+                <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16 }}>
+                  <InfoRow label="Experiences" value={member.miq_experiences} />
+                  <InfoRow label="Growth" value={member.miq_growth} />
+                  <InfoRow label="Contribution" value={member.miq_contribution} />
+                </View>
               </View>
             )}
 
@@ -1311,10 +1364,11 @@ export default function MembersScreen() {
           name: memberProfile?.name ?? 'Unknown member',
           avatar_url: memberProfile?.avatar_url ?? null,
           role: (m.role ?? memberProfile?.role ?? 'member') as UserRole,
-          hiveTitle: getHiveTitle(memberProfile?.name ?? ''),
+          hiveTitle: null,
           queen_bee_month: memberProfile?.queen_bee_month ?? null,
           birthday: memberProfile?.birthday ?? null,
           occupation: memberProfile?.occupation ?? null,
+          profile_title: memberProfile?.profile_title ?? null,
           bio: memberProfile?.bio ?? null,
           current_project: memberProfile?.current_project ?? null,
           hometown: memberProfile?.hometown ?? null,
@@ -1322,6 +1376,9 @@ export default function MembersScreen() {
           favorite_food: memberProfile?.favorite_food ?? null,
           favorite_hobby: memberProfile?.favorite_hobby ?? null,
           known_for: memberProfile?.known_for ?? null,
+          miq_experiences: memberProfile?.miq_experiences ?? null,
+          miq_growth: memberProfile?.miq_growth ?? null,
+          miq_contribution: memberProfile?.miq_contribution ?? null,
           fun_facts: Array.isArray(memberProfile?.fun_facts) ? memberProfile.fun_facts : null,
           skills: [],
           wishes: [],
@@ -1353,7 +1410,13 @@ export default function MembersScreen() {
       const skillsByUser = new Map<string, MemberSkill[]>();
       (skillsRes.data ?? []).forEach((s: any) => {
         if (!skillsByUser.has(s.user_id)) skillsByUser.set(s.user_id, []);
-        skillsByUser.get(s.user_id)!.push({ id: s.id, description: s.description });
+        skillsByUser.get(s.user_id)!.push({
+          id: s.id,
+          description: s.description,
+          enthusiasm_level: s.enthusiasm_level,
+          display_x: s.display_x,
+          display_y: s.display_y,
+        });
       });
 
       const wishesByUser = new Map<string, MemberWish[]>();
@@ -1384,9 +1447,6 @@ export default function MembersScreen() {
       memberList.sort((a, b) => {
         if (a.id === currentUserId) return -1;
         if (b.id === currentUserId) return 1;
-        const aCabinetRank = getHiveTitleRank(a.hiveTitle);
-        const bCabinetRank = getHiveTitleRank(b.hiveTitle);
-        if (aCabinetRank !== bCabinetRank) return aCabinetRank - bCabinetRank;
         return a.name.localeCompare(b.name);
       });
 
@@ -1439,11 +1499,15 @@ export default function MembersScreen() {
         return [
           m.name,
           m.hiveTitle,
+          m.profile_title,
           m.occupation,
           m.bio,
           m.current_project,
           m.hometown,
           m.known_for,
+          m.miq_experiences,
+          m.miq_growth,
+          m.miq_contribution,
           m.favorite_book,
           m.favorite_food,
           m.favorite_hobby,
@@ -1503,9 +1567,9 @@ export default function MembersScreen() {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 }}>
               {filtered.map(member => {
                 const isMe = member.id === currentUserId;
-                const roleLabel = member.hiveTitle ?? ROLE_LABELS[member.role];
+                const titleLine = member.profile_title || member.occupation;
                 const publicWishes = member.wishes.filter(w => w.status === 'public');
-                const spotlight = member.known_for || member.current_project || member.bio || member.skills[0]?.description || publicWishes[0]?.description;
+                const spotlight = member.known_for || member.miq_experiences || member.current_project || member.bio || member.skills[0]?.description || publicWishes[0]?.description;
                 return (
                   <Pressable
                     key={member.id}
@@ -1540,9 +1604,11 @@ export default function MembersScreen() {
                           <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: '#2d2d2d', lineHeight: 21 }} numberOfLines={2}>
                             {isMe ? `${member.name.split(' ')[0]} (you)` : member.name}
                           </Text>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: roleLabel ? '#bd9348' : '#8a8173', marginTop: 3 }} numberOfLines={1}>
-                            {member.hiveTitle ? `${getHiveTitleIcon(member.hiveTitle)} ${member.hiveTitle}` : roleLabel ?? member.occupation ?? 'HIVE member'}
-                          </Text>
+                          {titleLine && (
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginTop: 3 }} numberOfLines={1}>
+                              {titleLine}
+                            </Text>
+                          )}
                           {member.birthday && (
                             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8a8173', marginTop: 3 }} numberOfLines={1}>
                               Birthday: {new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}

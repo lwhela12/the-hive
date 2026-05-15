@@ -93,6 +93,7 @@ export interface Profile extends Record<string, unknown> {
   preferred_contact: string;
   birthday?: string;
   occupation?: string;
+  profile_title?: string | null;
   role: UserRole;
   queen_bee_month?: string;
   queen_bee_preference?: QueenBeePreference;
@@ -109,6 +110,9 @@ export interface Profile extends Record<string, unknown> {
   favorite_food?: string | null;
   favorite_hobby?: string | null;
   known_for?: string | null;
+  miq_experiences?: string | null;
+  miq_growth?: string | null;
+  miq_contribution?: string | null;
   fun_facts?: string[] | null;
   love_languages?: string[] | null;
   created_at: string;

@@ -68,6 +68,7 @@ export default function ProfileScreen() {
   const [editPhone, setEditPhone] = useState('');
   const [editBirthday, setEditBirthday] = useState('');
   const [editOccupation, setEditOccupation] = useState('');
+  const [editProfileTitle, setEditProfileTitle] = useState('');
   const [editPreferredContact, setEditPreferredContact] = useState('email');
   const [editBio, setEditBio] = useState('');
   const [editCurrentProject, setEditCurrentProject] = useState('');
@@ -76,6 +77,9 @@ export default function ProfileScreen() {
   const [editFavFood, setEditFavFood] = useState('');
   const [editFavHobby, setEditFavHobby] = useState('');
   const [editKnownFor, setEditKnownFor] = useState('');
+  const [editMiqExperiences, setEditMiqExperiences] = useState('');
+  const [editMiqGrowth, setEditMiqGrowth] = useState('');
+  const [editMiqContribution, setEditMiqContribution] = useState('');
   const [editFunFacts, setEditFunFacts] = useState(['', '', '']);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -136,6 +140,7 @@ export default function ProfileScreen() {
       // Convert ISO date to American format for editing
       setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
       setEditOccupation(profile.occupation || '');
+      setEditProfileTitle((profile as any).profile_title || '');
       setEditPreferredContact(profile.preferred_contact || 'email');
       setEditBio((profile as any).bio || '');
       setEditCurrentProject((profile as any).current_project || '');
@@ -144,6 +149,9 @@ export default function ProfileScreen() {
       setEditFavFood((profile as any).favorite_food || '');
       setEditFavHobby((profile as any).favorite_hobby || '');
       setEditKnownFor((profile as any).known_for || '');
+      setEditMiqExperiences((profile as any).miq_experiences || '');
+      setEditMiqGrowth((profile as any).miq_growth || '');
+      setEditMiqContribution((profile as any).miq_contribution || '');
       setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
     }
   }, [profile]);
@@ -155,6 +163,7 @@ export default function ProfileScreen() {
       // Convert ISO date to American format for editing
       setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
       setEditOccupation(profile.occupation || '');
+      setEditProfileTitle((profile as any).profile_title || '');
       setEditPreferredContact(profile.preferred_contact || 'email');
       setEditBio((profile as any).bio || '');
       setEditCurrentProject((profile as any).current_project || '');
@@ -163,6 +172,9 @@ export default function ProfileScreen() {
       setEditFavFood((profile as any).favorite_food || '');
       setEditFavHobby((profile as any).favorite_hobby || '');
       setEditKnownFor((profile as any).known_for || '');
+      setEditMiqExperiences((profile as any).miq_experiences || '');
+      setEditMiqGrowth((profile as any).miq_growth || '');
+      setEditMiqContribution((profile as any).miq_contribution || '');
       setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
     }
     setIsEditing(true);
@@ -177,6 +189,7 @@ export default function ProfileScreen() {
       // Convert ISO date to American format for editing
       setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
       setEditOccupation(profile.occupation || '');
+      setEditProfileTitle((profile as any).profile_title || '');
       setEditPreferredContact(profile.preferred_contact || 'email');
       setEditBio((profile as any).bio || '');
       setEditCurrentProject((profile as any).current_project || '');
@@ -185,6 +198,9 @@ export default function ProfileScreen() {
       setEditFavFood((profile as any).favorite_food || '');
       setEditFavHobby((profile as any).favorite_hobby || '');
       setEditKnownFor((profile as any).known_for || '');
+      setEditMiqExperiences((profile as any).miq_experiences || '');
+      setEditMiqGrowth((profile as any).miq_growth || '');
+      setEditMiqContribution((profile as any).miq_contribution || '');
       setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
     }
   };
@@ -203,6 +219,7 @@ export default function ProfileScreen() {
         phone: editPhone.trim() || null,
         birthday: birthdayIso,
         occupation: editOccupation.trim() || null,
+        profile_title: editProfileTitle.trim() || null,
         preferred_contact: editPreferredContact,
         bio: editBio.trim() || null,
         current_project: editCurrentProject.trim() || null,
@@ -211,6 +228,9 @@ export default function ProfileScreen() {
         favorite_food: editFavFood.trim() || null,
         favorite_hobby: editFavHobby.trim() || null,
         known_for: editKnownFor.trim() || null,
+        miq_experiences: editMiqExperiences.trim() || null,
+        miq_growth: editMiqGrowth.trim() || null,
+        miq_contribution: editMiqContribution.trim() || null,
         fun_facts: editFunFacts.map(f => f.trim()).filter(Boolean).length > 0
           ? editFunFacts.map(f => f.trim()).filter(Boolean)
           : null,
@@ -511,6 +531,15 @@ export default function ProfileScreen() {
     });
   };
 
+  const handleFind3MiqWithClive = () => {
+    router.push({
+      pathname: '/(app)',
+      params: {
+        prefill: 'Help me discover my 3 Most Important Questions. I want one for experiences, one for growth, and one for contribution.',
+      },
+    });
+  };
+
   if (!profile) return null;
 
   return (
@@ -591,9 +620,9 @@ export default function ProfileScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d99' }}>
                 {profile.email}
               </Text>
-              {profile.occupation && (
+              {((profile as any).profile_title || profile.occupation) && (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#2d2d2d80', marginTop: 2 }}>
-                  {profile.occupation}
+                  {(profile as any).profile_title || profile.occupation}
                 </Text>
               )}
               {communityRole && communityRole !== 'member' && (
@@ -709,6 +738,25 @@ export default function ProfileScreen() {
               )}
             </View>
 
+            {/* Self-appointed title */}
+            <View className="p-4 border-b border-cream">
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Self-appointed title</Text>
+              {isEditing ? (
+                <TextInput
+                  value={editProfileTitle}
+                  onChangeText={setEditProfileTitle}
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className="text-charcoal text-base p-0"
+                  placeholder="Founder, Tarot Reader, Spreadsheet Sorcerer..."
+                  placeholderTextColor="#9CA3AF"
+                />
+              ) : (
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                  {(profile as any).profile_title || 'Not set'}
+                </Text>
+              )}
+            </View>
+
             {/* Occupation */}
             <View className="p-4 border-b border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Occupation</Text>
@@ -787,22 +835,81 @@ export default function ProfileScreen() {
               )}
             </View>
 
-            {/* Known for */}
+            {/* Ask me about */}
             <View className="p-4 border-b border-cream">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Known for in the group</Text>
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Ask me about</Text>
               {isEditing ? (
                 <TextInput
                   value={editKnownFor}
                   onChangeText={setEditKnownFor}
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal text-base p-0"
-                  placeholder="e.g. best dinner party host, always has good book recs..."
+                  placeholder="What should people come to you for?"
                   placeholderTextColor="#9CA3AF"
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
                   {(profile as any).known_for || 'Not set'}
                 </Text>
+              )}
+            </View>
+
+            {/* 3MIQ */}
+            <View className="p-4 border-b border-cream">
+              <View className="flex-row items-center justify-between mb-3">
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/50">3 Most Important Questions</Text>
+                <Pressable onPress={handleFind3MiqWithClive} className="bg-gold-light px-3 py-1 rounded-full active:opacity-70">
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">Find with Clive</Text>
+                </Pressable>
+              </View>
+              {isEditing ? (
+                <View>
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">Experiences I want to have</Text>
+                  <TextInput
+                    value={editMiqExperiences}
+                    onChangeText={setEditMiqExperiences}
+                    style={{ fontFamily: 'Lato_400Regular' }}
+                    className="text-charcoal text-base p-0 mb-4"
+                    placeholder="What experiences would make life feel rich?"
+                    placeholderTextColor="#9CA3AF"
+                    multiline
+                  />
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">Ways I want to grow</Text>
+                  <TextInput
+                    value={editMiqGrowth}
+                    onChangeText={setEditMiqGrowth}
+                    style={{ fontFamily: 'Lato_400Regular' }}
+                    className="text-charcoal text-base p-0 mb-4"
+                    placeholder="Who do I want to become?"
+                    placeholderTextColor="#9CA3AF"
+                    multiline
+                  />
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">How I want to contribute</Text>
+                  <TextInput
+                    value={editMiqContribution}
+                    onChangeText={setEditMiqContribution}
+                    style={{ fontFamily: 'Lato_400Regular' }}
+                    className="text-charcoal text-base p-0"
+                    placeholder="How do I want to help, serve, or create?"
+                    placeholderTextColor="#9CA3AF"
+                    multiline
+                  />
+                </View>
+              ) : (
+                <View className="gap-3">
+                  {[
+                    ['Experiences', (profile as any).miq_experiences],
+                    ['Growth', (profile as any).miq_growth],
+                    ['Contribution', (profile as any).miq_contribution],
+                  ].map(([label, value]) => (
+                    <View key={label as string}>
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-gold mb-1">{label as string}</Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className={value ? 'text-charcoal leading-6' : 'text-charcoal/40'}>
+                        {(value as string) || 'Not set'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               )}
             </View>
 
