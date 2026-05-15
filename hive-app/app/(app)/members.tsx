@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowD
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import Svg, { Polygon } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
 import type { Skill, UserRole, Wish } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -179,21 +179,24 @@ function HoneycombCardShell({
   children,
   isMe,
   height,
+  width,
 }: {
   children: ReactNode;
   isMe: boolean;
   height: number;
+  width: number;
 }) {
   return (
     <View
       style={{
+        width,
         height,
         position: 'relative',
         shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 2,
+        shadowOpacity: isMe ? 0.12 : 0.07,
+        shadowRadius: isMe ? 18 : 14,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: isMe ? 3 : 2,
       }}
     >
       <Svg
@@ -203,20 +206,37 @@ function HoneycombCardShell({
         preserveAspectRatio="none"
         style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
       >
+        <Defs>
+          <LinearGradient id="memberCellFill" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor="#fffdf7" stopOpacity={0.98} />
+            <Stop offset="54%" stopColor={isMe ? '#fff8e8' : '#fffaf0'} stopOpacity={0.94} />
+            <Stop offset="100%" stopColor="#f5ead1" stopOpacity={0.5} />
+          </LinearGradient>
+        </Defs>
         <Polygon
-          points="7,50 17,6 83,6 93,50 83,94 17,94"
-          fill={isMe ? '#fff8e8' : '#fffaf0'}
-          stroke={isMe ? '#bd9348' : '#dec181'}
-          strokeWidth={isMe ? 1.8 : 1.1}
+          points="6,50 24,7 76,7 94,50 76,93 24,93"
+          fill="rgba(80,65,37,0.06)"
+          transform="translate(0 2)"
         />
         <Polygon
-          points="10,50 19,10 81,10 90,50 81,90 19,90"
+          points="6,50 24,7 76,7 94,50 76,93 24,93"
+          fill="url(#memberCellFill)"
+          stroke={isMe ? '#bd9348' : 'rgba(222,193,129,0.72)'}
+          strokeWidth={isMe ? 1.55 : 1}
+        />
+        <Polygon
+          points="10,50 26,12 74,12 90,50 74,88 26,88"
           fill="none"
           stroke="rgba(255,255,255,0.72)"
-          strokeWidth={0.7}
+          strokeWidth={0.85}
+        />
+        <Polygon
+          points="12,49 27,13 73,13 88,49 73,17 27,17"
+          fill="rgba(255,255,255,0.22)"
+          stroke="none"
         />
       </Svg>
-      <View style={{ flex: 1, paddingHorizontal: 30, paddingVertical: 22, position: 'relative' }}>
+      <View style={{ flex: 1, paddingHorizontal: 48, paddingTop: 30, paddingBottom: 34, position: 'relative' }}>
         {children}
       </View>
     </View>
@@ -1681,8 +1701,7 @@ export default function MembersScreen() {
     }
   }, [currentUserId, router, selected]);
 
-  const numCols = width >= 1100 ? 3 : width >= 720 ? 2 : 1;
-  const avatarSize = width >= 768 ? 74 : 64;
+  const numCols = width >= 1440 ? 4 : width >= 980 ? 3 : width >= 680 ? 2 : 1;
   const filtered = search.trim()
     ? members.filter(m => {
         const query = search.toLowerCase();
@@ -1707,10 +1726,14 @@ export default function MembersScreen() {
       })
     : members;
   const honeycombRows = buildHoneycombRows(filtered, numCols);
-  const honeycombCellWidth = `${100 / numCols}%`;
-  const honeycombOffset = numCols > 1 ? `${50 / numCols}%` : '0%';
-  const honeycombOverlap = numCols > 1 ? -26 : 0;
-  const honeycombCardHeight = width >= 1100 ? 214 : width >= 720 ? 218 : 204;
+  const honeycombMaxWidth = Math.min(width - 32, 1540);
+  const honeycombCellWidth = numCols === 1
+    ? Math.min(width - 32, 430)
+    : Math.min(honeycombMaxWidth / numCols, 385);
+  const honeycombGridWidth = honeycombCellWidth * numCols;
+  const honeycombCardHeight = Math.round(honeycombCellWidth * 0.88);
+  const honeycombOverlap = numCols > 1 ? -Math.round(honeycombCardHeight * 0.2) : 12;
+  const honeycombAvatarSize = width >= 720 ? 62 : 58;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#faf8f3' }}>
@@ -1759,14 +1782,17 @@ export default function MembersScreen() {
           </View>
         ) : (
           <>
-            <View style={{ marginHorizontal: -4 }}>
+            <View style={{ alignItems: 'center', paddingTop: 8 }}>
               {honeycombRows.map((row, rowIndex) => (
                 <View
                   key={`member-row-${rowIndex}`}
                   style={{
                     flexDirection: 'row',
-                    marginLeft: row.offset ? honeycombOffset as any : 0,
+                    width: honeycombGridWidth,
                     marginTop: rowIndex === 0 ? 0 : honeycombOverlap,
+                    paddingLeft: row.offset
+                      ? honeycombCellWidth / 2
+                      : Math.max(0, (numCols - row.items.length) * honeycombCellWidth / 2),
                   }}
                 >
                   {row.items.map(member => {
@@ -1780,31 +1806,30 @@ export default function MembersScreen() {
                         key={member.id}
                         onPress={() => openMemberProfile(member, isMe)}
                         style={{
-                          width: honeycombCellWidth as any,
-                          paddingHorizontal: 4,
-                          marginBottom: numCols > 1 ? 0 : 10,
+                          width: honeycombCellWidth,
+                          alignItems: 'center',
                         }}
                       >
-                        <HoneycombCardShell isMe={isMe} height={honeycombCardHeight}>
+                        <HoneycombCardShell isMe={isMe} height={honeycombCardHeight} width={honeycombCellWidth}>
                           {hasDailyMatch && (
                             <View
                               accessible
                               accessibilityLabel={`${member.dailyMatchPercent}% daily question match with ${member.name}`}
                               style={{
                                 position: 'absolute',
-                                top: 18,
-                                right: 24,
-                                backgroundColor: '#f5ead1',
+                                top: 24,
+                                right: 42,
+                                backgroundColor: 'rgba(245,234,209,0.88)',
                                 borderWidth: 1,
                                 borderColor: 'rgba(189,147,72,0.35)',
                                 borderRadius: 999,
-                                paddingHorizontal: 9,
-                                paddingVertical: 5,
+                                paddingHorizontal: 8,
+                                paddingVertical: 4,
                                 alignItems: 'center',
-                                minWidth: 56,
+                                minWidth: 50,
                               }}
                             >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', lineHeight: 14 }}>
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', lineHeight: 13 }}>
                                 {member.dailyMatchPercent}%
                               </Text>
                               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 8, color: '#9a8060', textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 10 }}>
@@ -1812,28 +1837,32 @@ export default function MembersScreen() {
                               </Text>
                             </View>
                           )}
-                          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                          <View style={{ alignItems: 'center' }}>
                             <View style={{
-                              borderRadius: (avatarSize + 8) / 2,
+                              borderRadius: (honeycombAvatarSize + 8) / 2,
                               borderWidth: isMe ? 2.5 : 1.5,
                               borderColor: isMe ? '#bd9348' : 'rgba(222,193,129,0.7)',
                               padding: 3,
                               backgroundColor: 'white',
+                              shadowColor: '#bd9348',
+                              shadowOpacity: 0.14,
+                              shadowRadius: 10,
+                              shadowOffset: { width: 0, height: 4 },
                             }}>
-                              <Avatar uri={member.avatar_url} name={member.name} size={avatarSize} />
+                              <Avatar uri={member.avatar_url} name={member.name} size={honeycombAvatarSize} />
                             </View>
 
-                            <View style={{ flex: 1, minWidth: 0, paddingRight: hasDailyMatch ? 58 : 0 }}>
-                              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: '#2d2d2d', lineHeight: 21 }} numberOfLines={2}>
+                            <View style={{ minWidth: 0, alignItems: 'center', marginTop: 8, maxWidth: honeycombCellWidth - 96 }}>
+                              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 20, textAlign: 'center' }} numberOfLines={2}>
                                 {isMe ? `${member.name.split(' ')[0]} (you)` : member.name}
                               </Text>
                               {titleLine && (
-                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginTop: 3 }} numberOfLines={1}>
+                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', marginTop: 3, textAlign: 'center' }} numberOfLines={1}>
                                   {titleLine}
                                 </Text>
                               )}
                               {member.birthday && (
-                                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8a8173', marginTop: 3 }} numberOfLines={1}>
+                                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#8a8173', marginTop: 2, textAlign: 'center' }} numberOfLines={1}>
                                   Birthday: {new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                 </Text>
                               )}
@@ -1841,34 +1870,34 @@ export default function MembersScreen() {
                           </View>
 
                           {spotlight && (
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#4b5563', lineHeight: 18, marginTop: 10 }} numberOfLines={2}>
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#4b5563', lineHeight: 16, marginTop: 8, textAlign: 'center' }} numberOfLines={2}>
                               {spotlight}
                             </Text>
                           )}
 
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 9, justifyContent: 'center' }}>
                             {member.skills.slice(0, 2).map(skill => (
-                              <View key={skill.id} style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
+                              <View key={skill.id} style={{ backgroundColor: 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 }}>
                                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }} numberOfLines={1}>
                                   {skill.description}
                                 </Text>
                               </View>
                             ))}
                             {publicWishes.length > 0 && (
-                              <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
+                              <View style={{ backgroundColor: 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 }}>
                                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }}>
                                   {publicWishes.length} wish{publicWishes.length === 1 ? '' : 'es'}
                                 </Text>
                               </View>
                             )}
                             {hasDailyMatch ? (
-                              <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
+                              <View style={{ backgroundColor: 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 }}>
                                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }}>
                                   {member.dailyMatchSharedCount} shared question{member.dailyMatchSharedCount === 1 ? '' : 's'}
                                 </Text>
                               </View>
                             ) : member.questionAnswerCount > 0 && (
-                              <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
+                              <View style={{ backgroundColor: 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 }}>
                                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }}>
                                   {member.questionAnswerCount} answers
                                 </Text>
