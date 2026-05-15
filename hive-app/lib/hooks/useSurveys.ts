@@ -30,6 +30,16 @@ export interface SurveyResponse {
   submitted_at: string;
 }
 
+const RETIRED_SURVEY_PATTERNS = [
+  /q1\s+exit/i,
+  /q1\s+review/i,
+];
+
+function isRetiredSurvey(survey: Survey) {
+  const label = `${survey.title} ${survey.description ?? ''}`;
+  return RETIRED_SURVEY_PATTERNS.some(pattern => pattern.test(label));
+}
+
 export function useSurveys(communityId?: string, userId?: string) {
   const [allSurveys, setAllSurveys] = useState<Survey[]>([]);
   const [myResponses, setMyResponses] = useState<Map<string, SurveyResponse>>(new Map());
@@ -70,7 +80,7 @@ export function useSurveys(communityId?: string, userId?: string) {
     load();
   }, [load]);
 
-  const activeSurveys = allSurveys.filter(s => s.is_active);
+  const activeSurveys = allSurveys.filter(s => s.is_active && !isRetiredSurvey(s));
   const pendingSurveys = activeSurveys.filter(s => !myResponses.has(s.id));
 
   const submitResponse = async (

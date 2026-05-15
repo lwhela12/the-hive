@@ -1797,7 +1797,7 @@ export default function HiveScreen() {
                   <Text style={{ fontSize: 32, marginBottom: 8 }}>✅</Text>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', marginBottom: 4, textAlign: 'center' }}>All clear!</Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center', lineHeight: 18 }}>
-                    No pending to-dos.{'\n'}Meeting action items and{'\n'}surveys will show up here.
+                    No pending to-dos.{'\n'}Meeting action items and{'\n'}monthly check-ins will show up here.
                   </Text>
                 </View>
               ) : (

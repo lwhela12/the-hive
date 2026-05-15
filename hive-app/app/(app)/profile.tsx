@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useWishes } from '../../lib/hooks/useWishes';
+import { useSurveys } from '../../lib/hooks/useSurveys';
 import { Avatar } from '../../components/ui/Avatar';
 import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { NavigationDrawer, AppHeader } from '../../components/navigation';
@@ -46,6 +47,7 @@ export default function ProfileScreen() {
   const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { permissionStatus, requestPermissions } = useNotifications({ enableListeners: false });
   const { grantWish } = useWishes();
+  const { pendingSurveys } = useSurveys(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
   const isNotificationEnabled =
     permissionStatus === 'granted' || permissionStatus === 'provisional';
@@ -60,6 +62,7 @@ export default function ProfileScreen() {
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
+  const [dailyAnswerCount, setDailyAnswerCount] = useState(0);
   const [initialLoading, setInitialLoading] = useState(true);
 
   // Editable profile fields
@@ -92,6 +95,7 @@ export default function ProfileScreen() {
       { data: wishesData },
       { data: actionItemsData },
       { data: insightsData },
+      { count: dailyAnswers },
     ] = await Promise.all([
       supabase
         .from('skills')
@@ -119,12 +123,18 @@ export default function ProfileScreen() {
         .eq('user_id', profile.id)
         .eq('community_id', communityId)
         .maybeSingle(),
+      supabase
+        .from('daily_question_answers')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', profile.id)
+        .eq('community_id', communityId),
     ]);
 
     if (skillsData) setSkills(skillsData);
     if (wishesData) setWishes(wishesData);
     if (actionItemsData) setActionItems(actionItemsData);
     setUserInsights(insightsData);
+    setDailyAnswerCount(dailyAnswers ?? 0);
     setInitialLoading(false);
   }, [profile?.id, communityId]);
 
@@ -578,6 +588,7 @@ export default function ProfileScreen() {
             { label: 'Write a bio', done: !!(profile as any).bio },
             { label: 'Share what people should ask you about', done: !!(profile as any).known_for },
             { label: 'Answer your 3MIQ', done: !!((profile as any).miq_experiences && (profile as any).miq_growth && (profile as any).miq_contribution) },
+            { label: "Complete this month's check-in", done: pendingSurveys.length === 0 },
             { label: 'Add a skill', done: skills.length > 0 },
             { label: 'Share a wish', done: wishes.length > 0 },
           ];
@@ -748,6 +759,68 @@ export default function ProfileScreen() {
                   </View>
                 </Pressable>
               )}
+
+              <View className="bg-white rounded-xl shadow-sm overflow-hidden">
+                <View className="p-4 border-b border-cream">
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/50 mb-1">Member Signals</Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 leading-5">
+                    These help Clive match members, shape HD boards, and feed newsletters without making the profile feel like homework.
+                  </Text>
+                </View>
+                {[
+                  {
+                    label: 'Core profile',
+                    value: (profile as any).bio && (profile as any).known_for ? 'Ready for members' : 'Add bio + ask-me-about',
+                    done: !!((profile as any).bio && (profile as any).known_for),
+                  },
+                  {
+                    label: 'Deeper profile',
+                    value: ((profile as any).fun_facts?.length || (profile as any).favorite_book || (profile as any).favorite_food || (profile as any).favorite_hobby)
+                      ? 'Optional details added'
+                      : 'Optional',
+                    done: !!(((profile as any).fun_facts?.length) || (profile as any).favorite_book || (profile as any).favorite_food || (profile as any).favorite_hobby),
+                  },
+                  {
+                    label: 'Monthly check-in',
+                    value: pendingSurveys.length === 0 ? 'Current' : pendingSurveys[0]?.title ?? 'Waiting for response',
+                    done: pendingSurveys.length === 0,
+                  },
+                  {
+                    label: '3MIQ',
+                    value: ((profile as any).miq_experiences && (profile as any).miq_growth && (profile as any).miq_contribution) ? 'Answered' : 'Ready for Clive',
+                    done: !!((profile as any).miq_experiences && (profile as any).miq_growth && (profile as any).miq_contribution),
+                  },
+                  {
+                    label: 'Daily questions',
+                    value: dailyAnswerCount > 0 ? `${dailyAnswerCount} answered` : 'Start with today',
+                    done: dailyAnswerCount > 0,
+                  },
+                ].map(item => (
+                  <View key={item.label} className="p-4 border-b border-cream last:border-b-0 flex-row items-center">
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12,
+                        backgroundColor: item.done ? '#eef6f0' : '#fffaf0',
+                        borderWidth: 1,
+                        borderColor: item.done ? 'rgba(115,154,136,0.45)' : 'rgba(222,193,129,0.55)',
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: item.done ? '#739a88' : '#bd9348' }}>
+                        {item.done ? 'OK' : '!'}
+                      </Text>
+                    </View>
+                    <View className="flex-1">
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{item.label}</Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 mt-1">{item.value}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
 
               {((profile as any).current_project || (profile as any).hometown || profile.birthday) && (
                 <View className="bg-white rounded-xl shadow-sm overflow-hidden">
