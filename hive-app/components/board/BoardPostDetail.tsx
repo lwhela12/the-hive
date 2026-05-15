@@ -35,11 +35,13 @@ function confirmBoardAction({
   title,
   message,
   confirmLabel,
+  destructive = false,
   onConfirm,
 }: {
   title: string;
   message: string;
   confirmLabel: string;
+  destructive?: boolean;
   onConfirm: () => Promise<void>;
 }) {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.confirm) {
@@ -56,7 +58,7 @@ function confirmBoardAction({
     { text: 'Cancel', style: 'cancel' },
     {
       text: confirmLabel,
-      style: 'destructive',
+      style: destructive ? 'destructive' : 'default',
       onPress: async () => {
         try {
           await onConfirm();
@@ -390,7 +392,10 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   };
 
   const handleArchivePost = async (onDone?: () => void) => {
-    if (!post || !profile || !communityId || !canManagePost) return;
+    if (!post || !profile || !communityId || !canManagePost) {
+      showBoardAlert('Not allowed', 'You do not have permission to archive this thread.');
+      return;
+    }
 
     const restore = !!post.archived_at;
     confirmBoardAction({
@@ -399,6 +404,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         ? `Restore "${post.title}" to this board?`
         : `Archive "${post.title}"? It will move out of the active thread list, but you can restore it from Archived.`,
       confirmLabel: restore ? 'Restore' : 'Archive',
+      destructive: false,
       onConfirm: async () => {
         const { error } = await (supabase as any)
           .from('board_posts')
@@ -417,20 +423,27 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   };
 
   const handleDeletePost = async (onDone?: () => void) => {
+    if (!post || !communityId || !canManagePost) {
+      showBoardAlert('Not allowed', 'You do not have permission to delete this thread.');
+      return;
+    }
+
     confirmBoardAction({
       title: 'Delete Thread',
       message: 'Delete this thread? This will also delete all replies.',
       confirmLabel: 'Delete',
+      destructive: true,
       onConfirm: async () => {
         const { data, error } = await supabase
           .from('board_posts')
           .delete()
           .eq('id', postId)
+          .eq('community_id', communityId)
           .select('id');
 
         if (error) throw error;
-        if (!data || data.length === 0) {
-          throw new Error('Thread was not deleted. You may not have permission to delete it.');
+        if (data.length === 0) {
+          throw new Error('Thread was not deleted. You may not have permission to delete it, or it may already be gone.');
         }
 
         onDone?.();
@@ -460,15 +473,32 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
           Thread
         </Text>
         {canManagePost && (
-          <Pressable
-            onPress={handleOpenEditComposer}
-            className="p-2"
-            accessibilityRole="button"
-            accessibilityLabel="Edit thread"
-            hitSlop={8}
-          >
-            <Ionicons name="pencil-outline" size={20} color="#4A4A4A" />
-          </Pressable>
+          <View className="flex-row items-center" style={{ gap: 4 }}>
+            <Pressable
+              onPress={() => handleArchivePost(() => {
+                if (!post.archived_at) onBack();
+              })}
+              className="p-2"
+              accessibilityRole="button"
+              accessibilityLabel={post.archived_at ? 'Restore thread' : 'Archive thread'}
+              hitSlop={8}
+            >
+              <Ionicons
+                name={post.archived_at ? 'arrow-undo-outline' : 'archive-outline'}
+                size={20}
+                color="#4A4A4A"
+              />
+            </Pressable>
+            <Pressable
+              onPress={handleOpenEditComposer}
+              className="p-2"
+              accessibilityRole="button"
+              accessibilityLabel="Edit thread"
+              hitSlop={8}
+            >
+              <Ionicons name="pencil-outline" size={20} color="#4A4A4A" />
+            </Pressable>
+          </View>
         )}
       </View>
 
