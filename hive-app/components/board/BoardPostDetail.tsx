@@ -502,32 +502,15 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
           Thread
         </Text>
         {canManagePost && (
-          <View className="flex-row items-center" style={{ gap: 4 }}>
-            <Pressable
-              onPress={() => handleArchivePost(() => {
-                if (!post.archived_at) onBack();
-              })}
-              className="p-2"
-              accessibilityRole="button"
-              accessibilityLabel={post.archived_at ? 'Restore thread' : 'Archive thread'}
-              hitSlop={8}
-            >
-              <Ionicons
-                name={post.archived_at ? 'arrow-undo-outline' : 'archive-outline'}
-                size={20}
-                color="#4A4A4A"
-              />
-            </Pressable>
-            <Pressable
-              onPress={handleOpenEditComposer}
-              className="p-2"
-              accessibilityRole="button"
-              accessibilityLabel="Edit thread"
-              hitSlop={8}
-            >
-              <Ionicons name="pencil-outline" size={20} color="#4A4A4A" />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={handleOpenEditComposer}
+            className="p-2"
+            accessibilityRole="button"
+            accessibilityLabel="Edit thread"
+            hitSlop={8}
+          >
+            <Ionicons name="pencil-outline" size={20} color="#4A4A4A" />
+          </Pressable>
         )}
       </View>
 
