@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   LayoutChangeEvent,
@@ -33,6 +33,45 @@ const PALETTES = [
   { seed: '#fff0f0', edge: '#ca8f8f', text: '#713f3f', leaf: '#78977d', petal: '#fae3e3', center: '#cf9a61' },
 ];
 
+const SEED_GROUPS = [
+  {
+    label: 'Wonder & Weird',
+    skills: ['Ocean Boiling', 'Starship Navigation', 'Time Travel Planning', 'Dragon Taming', 'Professional Napping', 'Cloud Watching', 'Parallel Universe Hopping'],
+  },
+  {
+    label: 'Care & Connection',
+    skills: ['Sex Therapy', 'Couples Counseling', 'Intimacy Coaching', 'Hype Person', 'Deep Listening', 'Tough Love Delivery', 'Pep Talks', 'Wingman Services'],
+  },
+  {
+    label: 'Movement',
+    skills: ['Aerial Acrobatics', 'Pole Dancing', 'Contortion', 'Trapeze', 'Aerial Silks', 'Handstands', 'Rock Climbing', 'Surfing', 'Skateboarding', 'Camping', 'Trail Finding'],
+  },
+  {
+    label: 'Making',
+    skills: ['Crocheting', 'Knitting', 'Embroidery', 'Macramé', 'Sewing', 'Photography', 'Video Editing', 'Graphic Design', 'Writing', 'Storytelling', 'Poetry', 'Painting', 'Pottery'],
+  },
+  {
+    label: 'Home & Hosting',
+    skills: ['Cooking', 'Meal Prep', 'Baking', 'Fermentation', 'Cocktail Crafting', 'Coffee Snobbery', 'Tea Ceremony', 'Home Repairs', 'Furniture Building', 'Painting Walls'],
+  },
+  {
+    label: 'Nature & Body',
+    skills: ['Gardening', 'Composting', 'Beekeeping', 'Plant Parenting', 'Foraging', 'Massage', 'Reiki', 'Sound Healing', 'Yoga', 'Meditation', 'Breathwork'],
+  },
+  {
+    label: 'Practical Magic',
+    skills: ['Tax Wizardry', 'Spreadsheet Sorcery', 'Budget Magic', 'Moving Heavy Things', 'Assembling IKEA', 'Parallel Parking', 'Gift Wrapping', 'Party Planning', 'Surprise Orchestration'],
+  },
+  {
+    label: 'Creatures & Mystical',
+    skills: ['Dog Whispering', 'Cat Herding', 'Pet Photography', 'Animal Training', 'Tarot Reading', 'Astrology', 'Dream Interpretation', 'Crystal Collecting'],
+  },
+  {
+    label: 'Work & Tech',
+    skills: ['Coding', 'Web Design', 'App Building', 'Resume Polishing', 'Interview Prep', 'Salary Negotiation', 'Language Teaching', 'Accent Coaching', 'Proofreading', 'DJing', 'Guitar Playing', 'Singing', 'Voice Acting', 'Stand-up Comedy'],
+  },
+];
+
 const GRASS_BLADES = Array.from({ length: 68 }, (_, index) => ({
   leftRatio: ((index * 1.47) % 100) / 100,
   height: 8 + ((index * 7) % 16),
@@ -56,6 +95,17 @@ function getPlantSize(level: number, width: number) {
   return sizes[level - 1];
 }
 
+function getPlantMetrics(skill: GardenSkill, width: number) {
+  const level = getLevel(skill);
+  const size = getPlantSize(level, width);
+  const bloomSize = level >= 4 ? size * (level === 5 ? 0.56 : 0.5) : size * 0.36;
+  const stemHeight = size * (0.24 + level * 0.055);
+  const labelFont = clamp(size / (skill.description.length > 22 ? 12.5 : 10.2), 10, 18);
+  const plantHeight = stemHeight + bloomSize + labelFont * 2.8;
+
+  return { level, size, bloomSize, stemHeight, labelFont, plantHeight };
+}
+
 function getDefaultPosition(index: number, count: number) {
   const cols = Math.max(2, Math.ceil(Math.sqrt(count * 1.7)));
   const col = index % cols;
@@ -69,10 +119,60 @@ function getDefaultPosition(index: number, count: number) {
   };
 }
 
+function getAutoPlantFrames(skills: GardenSkill[], width: number, height: number) {
+  const frames = new Map<string, { left: number; top: number }>();
+  if (width <= 0) return frames;
+
+  const sidePadding = width < 420 ? 8 : 18;
+  const gap = width < 420 ? 8 : 18;
+  const grassTop = height - 44;
+  let row: Array<{ skill: GardenSkill; width: number; height: number }> = [];
+  let rowWidth = 0;
+  const rows: Array<typeof row> = [];
+  const flushRow = () => {
+    if (row.length > 0) {
+      rows.push(row);
+      row = [];
+      rowWidth = 0;
+    }
+  };
+
+  skills.forEach(skill => {
+    const metrics = getPlantMetrics(skill, width);
+    const itemWidth = Math.min(metrics.size + gap, Math.max(96, width - sidePadding * 2));
+    const itemHeight = metrics.plantHeight + 18;
+    if (row.length > 0 && rowWidth + itemWidth > width - sidePadding * 2) {
+      flushRow();
+    }
+    row.push({ skill, width: itemWidth, height: itemHeight });
+    rowWidth += itemWidth;
+  });
+  flushRow();
+
+  let rowBottom = grassTop - 6;
+  rows.forEach(rowItems => {
+    const maxHeight = Math.max(...rowItems.map(item => item.height));
+    const totalWidth = rowItems.reduce((sum, item) => sum + item.width, 0);
+    let x = Math.max(sidePadding, (width - totalWidth) / 2);
+    rowItems.forEach(item => {
+      const metrics = getPlantMetrics(item.skill, width);
+      frames.set(item.skill.id, {
+        left: clamp(x + item.width / 2 - metrics.size / 2, 4, Math.max(4, width - metrics.size - 4)),
+        top: clamp(rowBottom - metrics.plantHeight, 10, Math.max(10, height - metrics.plantHeight - 56)),
+      });
+      x += item.width;
+    });
+    rowBottom -= maxHeight + 10;
+  });
+
+  return frames;
+}
+
 function getMeadowHeight(skillCount: number, width: number) {
-  const base = skillCount === 0 ? (width < 420 ? 150 : 175) : (width < 420 ? 270 : 310);
-  const extraRows = Math.max(0, Math.ceil(skillCount / (width < 620 ? 4 : 7)) - 1);
-  return clamp(base + extraRows * 72, base, 560);
+  const base = skillCount === 0 ? (width < 420 ? 150 : 175) : (width < 420 ? 300 : 330);
+  const perRow = width < 420 ? 2 : width < 720 ? 4 : 7;
+  const extraRows = Math.max(0, Math.ceil(skillCount / perRow) - 1);
+  return clamp(base + extraRows * (width < 420 ? 118 : 96), base, 760);
 }
 
 function Petal({
@@ -116,37 +216,46 @@ function SkillPlant({
   editable,
   onUpdateSkill,
   onDeleteSkill,
+  autoFrame,
 }: SkillBubbleGardenProps & {
   skill: GardenSkill;
   index: number;
   count: number;
   width: number;
   height: number;
+  autoFrame?: { left: number; top: number };
 }) {
-  const level = getLevel(skill);
-  const size = getPlantSize(level, width);
+  const { level, size, bloomSize, stemHeight, labelFont, plantHeight } = getPlantMetrics(skill, width);
   const palette = PALETTES[index % PALETTES.length];
   const fallback = getDefaultPosition(index, count);
   const storedX = typeof skill.display_x === 'number' ? skill.display_x : fallback.x;
   const storedY = typeof skill.display_y === 'number' ? skill.display_y : fallback.y;
   const x = clamp(storedX, 0.08, 0.92);
   const y = clamp(storedY < 0.5 ? fallback.y : storedY, 0.58, 0.91);
-  const bloomSize = level >= 4 ? size * (level === 5 ? 0.56 : 0.5) : size * 0.36;
-  const stemHeight = size * (0.24 + level * 0.055);
-  const labelFont = clamp(size / (skill.description.length > 22 ? 12.5 : 10.2), 10, 18);
-  const plantHeight = stemHeight + bloomSize + labelFont * 2.8;
-  const left = clamp(x * width - size / 2, 0, Math.max(0, width - size));
-  const top = clamp(y * height - plantHeight, 12, Math.max(12, height - plantHeight - 20));
+  const left = autoFrame?.left ?? clamp(x * width - size / 2, 0, Math.max(0, width - size));
+  const top = autoFrame?.top ?? clamp(y * height - plantHeight, 12, Math.max(12, height - plantHeight - 20));
   const pan = useRef(new Animated.ValueXY()).current;
+  const grow = useRef(new Animated.Value(0)).current;
   const dragStart = useRef({ left, top });
   const didDrag = useRef(false);
+  const canDrag = editable && !autoFrame;
+
+  useEffect(() => {
+    grow.setValue(0);
+    Animated.spring(grow, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 58,
+      friction: 9,
+    }).start();
+  }, [grow, skill.id]);
 
   const responder = useMemo(
     () => PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesture) =>
-        !!editable && Math.abs(gesture.dx) + Math.abs(gesture.dy) > 3,
+        !!canDrag && Math.abs(gesture.dx) + Math.abs(gesture.dy) > 3,
       onMoveShouldSetPanResponderCapture: (_, gesture) =>
-        !!editable && Math.abs(gesture.dx) + Math.abs(gesture.dy) > 3,
+        !!canDrag && Math.abs(gesture.dx) + Math.abs(gesture.dy) > 3,
       onPanResponderGrant: () => {
         didDrag.current = false;
         dragStart.current = { left, top };
@@ -158,7 +267,7 @@ function SkillPlant({
         pan.setValue({ x: gesture.dx, y: gesture.dy });
       },
       onPanResponderRelease: (_, gesture) => {
-        if (!editable || !onUpdateSkill) return;
+        if (!canDrag || !onUpdateSkill) return;
         const nextLeft = clamp(dragStart.current.left + gesture.dx, 0, Math.max(0, width - size));
         const nextTop = clamp(dragStart.current.top + gesture.dy, 0, Math.max(0, height - plantHeight - 20));
         pan.setValue({ x: 0, y: 0 });
@@ -176,7 +285,7 @@ function SkillPlant({
       },
       onPanResponderTerminationRequest: () => false,
     }),
-    [editable, height, left, onUpdateSkill, pan, plantHeight, size, skill, top, width]
+    [canDrag, height, left, onUpdateSkill, pan, plantHeight, size, skill, top, width]
   );
 
   const cycleLevel = () => {
@@ -197,10 +306,15 @@ function SkillPlant({
         position: 'absolute',
         left,
         top,
-        transform: [{ translateX: pan.x }, { translateY: pan.y }],
+        transform: [
+          { translateX: pan.x },
+          { translateY: Animated.add(pan.y, grow.interpolate({ inputRange: [0, 1], outputRange: [24, 0] })) },
+          { scale: grow.interpolate({ inputRange: [0, 1], outputRange: [0.84, 1] }) },
+        ],
+        opacity: grow.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] }),
         ...(Platform.OS === 'web'
           ? ({
-              cursor: editable ? 'grab' : 'default',
+              cursor: canDrag ? 'grab' : editable ? 'pointer' : 'default',
               userSelect: 'none',
               WebkitUserSelect: 'none',
               touchAction: 'none',
@@ -417,32 +531,37 @@ function SeedButton({
   skill,
   index,
   onPlantSkill,
+  planted = false,
 }: {
   skill: string;
   index: number;
   onPlantSkill?: (skillDescription: string) => void;
+  planted?: boolean;
 }) {
   const palette = PALETTES[index % PALETTES.length];
 
   return (
     <Pressable
-      onPress={() => onPlantSkill?.(skill)}
-      disabled={!onPlantSkill}
+      onPress={() => {
+        if (!planted) onPlantSkill?.(skill);
+      }}
+      disabled={!onPlantSkill || planted}
       style={{
         minHeight: 28,
         maxWidth: 178,
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: 'rgba(189,147,72,0.28)',
-        backgroundColor: '#fbf7ed',
+        borderColor: planted ? 'rgba(115,154,136,0.2)' : 'rgba(189,147,72,0.28)',
+        backgroundColor: planted ? 'rgba(238,246,240,0.42)' : '#fbf7ed',
         paddingHorizontal: 10,
         paddingVertical: 5,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
+        opacity: planted ? 0.58 : 1,
         ...(Platform.OS === 'web'
           ? ({
-              cursor: onPlantSkill ? 'pointer' : 'default',
+              cursor: onPlantSkill && !planted ? 'pointer' : 'default',
               userSelect: 'none',
               WebkitUserSelect: 'none',
               touchAction: 'manipulation',
@@ -455,9 +574,9 @@ function SeedButton({
           width: 9,
           height: 13,
           borderRadius: 9,
-          backgroundColor: palette.seed,
+          backgroundColor: planted ? '#eef6f0' : palette.seed,
           borderWidth: 1,
-          borderColor: palette.edge,
+          borderColor: planted ? '#739a88' : palette.edge,
           transform: [{ rotate: '-24deg' }],
         }}
       />
@@ -533,21 +652,52 @@ export function SkillBubbleGarden({
   onAddCustomSkill,
 }: SkillBubbleGardenProps) {
   const [width, setWidth] = useState(0);
+  const [openSeedGroups, setOpenSeedGroups] = useState<Record<string, boolean>>({});
   const displaySkills = useMemo(() => [...skills], [skills]);
   const plantedNames = useMemo(
     () => new Set(displaySkills.map((skill) => skill.description.trim().toLowerCase())),
     [displaySkills]
   );
-  const dormantSeeds = useMemo(
-    () => editable
-      ? seedSkills.filter((skill) => !plantedNames.has(skill.trim().toLowerCase()))
-      : [],
-    [editable, plantedNames, seedSkills]
+  const seedGroups = useMemo(
+    () => {
+      if (!editable) return [];
+      const seedSet = new Set(seedSkills.map(skill => skill.trim()));
+      const grouped = SEED_GROUPS
+        .map(group => ({
+          label: group.label,
+          skills: group.skills.filter(skill => seedSet.has(skill)),
+        }))
+        .filter(group => group.skills.length > 0);
+      const groupedSkills = new Set(grouped.flatMap(group => group.skills));
+      const uncategorized = seedSkills.filter(skill => !groupedSkills.has(skill));
+      if (uncategorized.length > 0) {
+        grouped.push({ label: 'More Seeds', skills: uncategorized });
+      }
+      return grouped;
+    },
+    [editable, seedSkills]
+  );
+  const availableSeedCount = useMemo(
+    () => seedSkills.filter((skill) => !plantedNames.has(skill.trim().toLowerCase())).length,
+    [plantedNames, seedSkills]
   );
   const meadowHeight = getMeadowHeight(displaySkills.length, width || 680);
+  const autoFrames = useMemo(
+    () => getAutoPlantFrames(displaySkills, width, meadowHeight),
+    [displaySkills, meadowHeight, width]
+  );
+  const isCompactSeedBank = width > 0 && width < 620;
 
   const handleLayout = (event: LayoutChangeEvent) => {
     setWidth(event.nativeEvent.layout.width);
+  };
+
+  const isSeedGroupOpen = (label: string, index: number) =>
+    openSeedGroups[label] ?? (!isCompactSeedBank || index === 0);
+
+  const toggleSeedGroup = (label: string, index: number) => {
+    const current = isSeedGroupOpen(label, index);
+    setOpenSeedGroups(prev => ({ ...prev, [label]: !current }));
   };
 
   return (
@@ -608,6 +758,7 @@ export function SkillBubbleGarden({
             onUpdateSkill={onUpdateSkill}
             onDeleteSkill={onDeleteSkill}
             skills={skills}
+            autoFrame={autoFrames.get(skill.id)}
           />
         ))}
         {displaySkills.length === 0 && (
@@ -633,7 +784,7 @@ export function SkillBubbleGarden({
           </View>
         )}
       </View>
-      {(dormantSeeds.length > 0 || (editable && onAddCustomSkill)) && (
+      {(seedGroups.length > 0 || (editable && onAddCustomSkill)) && (
         <View
           style={{
             borderTopWidth: 1,
@@ -653,21 +804,65 @@ export function SkillBubbleGarden({
               letterSpacing: 0.2,
             }}
           >
-            Seed Bank
+            Seed Bank{availableSeedCount !== seedSkills.length ? ` · ${availableSeedCount} ready` : ''}
           </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-            {dormantSeeds.map((skill, index) => (
-              <SeedButton
-                key={skill}
-                skill={skill}
-                index={index}
-                onPlantSkill={onPlantSkill}
-              />
-            ))}
-            {editable && onAddCustomSkill ? (
-              <CustomSeedButton onPress={onAddCustomSkill} />
-            ) : null}
-          </View>
+          {seedGroups.map((group, groupIndex) => {
+            const open = isSeedGroupOpen(group.label, groupIndex);
+            const readyCount = group.skills.filter(skill => !plantedNames.has(skill.trim().toLowerCase())).length;
+            return (
+              <View key={group.label} style={{ marginBottom: 8 }}>
+                <Pressable
+                  onPress={() => toggleSeedGroup(group.label, groupIndex)}
+                  style={{
+                    minHeight: 34,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: 'rgba(222,193,129,0.3)',
+                    backgroundColor: open ? '#fffaf0' : 'rgba(255,250,240,0.62)',
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    ...(Platform.OS === 'web'
+                      ? ({
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                          WebkitUserSelect: 'none',
+                        } as any)
+                      : {}),
+                  }}
+                >
+                  <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#6d5b3b', fontSize: 12 }}>
+                    {group.label}
+                  </Text>
+                  <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', fontSize: 11 }}>
+                    {readyCount}/{group.skills.length} {open ? '−' : '+'}
+                  </Text>
+                </Pressable>
+                {open && (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center', paddingTop: 8 }}>
+                    {group.skills.map((skill, index) => (
+                      <SeedButton
+                        key={skill}
+                        skill={skill}
+                        index={index + groupIndex * 11}
+                        onPlantSkill={onPlantSkill}
+                        planted={plantedNames.has(skill.trim().toLowerCase())}
+                      />
+                    ))}
+                    {groupIndex === seedGroups.length - 1 && editable && onAddCustomSkill ? (
+                      <CustomSeedButton onPress={onAddCustomSkill} />
+                    ) : null}
+                  </View>
+                )}
+              </View>
+            );
+          })}
+          {seedGroups.length === 0 && editable && onAddCustomSkill ? (
+            <CustomSeedButton onPress={onAddCustomSkill} />
+          ) : null}
         </View>
       )}
     </View>

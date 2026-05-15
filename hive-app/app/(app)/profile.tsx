@@ -131,7 +131,7 @@ export default function ProfileScreen() {
         .select('*')
         .eq('user_id', profile.id)
         .eq('community_id', communityId)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: true }),
       supabase
         .from('wishes')
         .select('*, board_category:board_categories(id,name,topic_kind)')
@@ -592,9 +592,9 @@ export default function ProfileScreen() {
     );
     if (alreadyPlanted) return;
 
-    const seedIndex = skills.length + skillDescription.length;
-    const displayX = Number((0.16 + (((seedIndex * 37) % 68) / 100)).toFixed(4));
-    const displayY = Number((0.68 + (((seedIndex * 29) % 18) / 100)).toFixed(4));
+    const seedIndex = skills.length + 1;
+    const displayX = Number((0.12 + (((seedIndex * 17) % 76) / 100)).toFixed(4));
+    const displayY = 0.9;
 
     const { data, error } = await supabase
       .from('skills')
@@ -617,7 +617,7 @@ export default function ProfileScreen() {
     }
 
     if (data) {
-      setSkills((current) => [data as Skill, ...current]);
+      setSkills((current) => [...current, data as Skill]);
     }
   };
 
