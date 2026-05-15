@@ -26,6 +26,122 @@ import type { Skill, Wish, ActionItem, UserInsights, Profile } from '../../types
 
 const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
 
+type DailyQuestionMatch = {
+  userId: string;
+  name: string;
+  avatarUrl?: string | null;
+  sharedCount: number;
+  similarCount: number;
+  score: number;
+  percent: number;
+};
+
+type DailyAnswerRow = {
+  user_id: string;
+  question_date: string;
+  answer: string;
+};
+
+const ANSWER_STOP_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'for', 'i', 'im', 'in', 'is',
+  'it', 'me', 'my', 'of', 'on', 'or', 'so', 'that', 'the', 'to', 'was', 'with',
+  'would', 'you',
+]);
+
+function answerWords(answer: string) {
+  return new Set(
+    answer
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 2 && !ANSWER_STOP_WORDS.has(word))
+  );
+}
+
+function answerSimilarity(a: string, b: string) {
+  const wordsA = answerWords(a);
+  const wordsB = answerWords(b);
+  if (wordsA.size === 0 || wordsB.size === 0) {
+    return a.trim().toLowerCase() === b.trim().toLowerCase() ? 1 : 0;
+  }
+
+  let shared = 0;
+  wordsA.forEach(word => {
+    if (wordsB.has(word)) shared += 1;
+  });
+
+  return shared / Math.max(1, Math.min(wordsA.size, wordsB.size));
+}
+
+function buildDailyQuestionMatches(
+  userId: string,
+  answers: DailyAnswerRow[],
+  members: any[]
+): DailyQuestionMatch[] {
+  const memberById = new Map<string, { name: string; avatar_url?: string | null }>();
+  members.forEach((row: any) => {
+    const member = row.profiles;
+    if (member?.name) {
+      memberById.set(row.user_id, {
+        name: member.name,
+        avatar_url: member.avatar_url ?? null,
+      });
+    }
+  });
+
+  const myAnswers = new Map<string, string>();
+  answers.forEach(row => {
+    if (row.user_id === userId && row.question_date && row.answer) {
+      myAnswers.set(row.question_date, row.answer);
+    }
+  });
+
+  const stats = new Map<string, DailyQuestionMatch>();
+  answers.forEach(row => {
+    if (row.user_id === userId || !row.question_date || !row.answer) return;
+    const mine = myAnswers.get(row.question_date);
+    if (!mine) return;
+
+    const member = memberById.get(row.user_id);
+    if (!member) return;
+
+    const existing = stats.get(row.user_id) ?? {
+      userId: row.user_id,
+      name: member.name,
+      avatarUrl: member.avatar_url,
+      sharedCount: 0,
+      similarCount: 0,
+      score: 0,
+      percent: 0,
+    };
+    const similarity = answerSimilarity(mine, row.answer);
+    existing.sharedCount += 1;
+    existing.score += similarity;
+    if (similarity >= 0.24 || mine.trim().toLowerCase() === row.answer.trim().toLowerCase()) {
+      existing.similarCount += 1;
+    }
+    stats.set(row.user_id, existing);
+  });
+
+  return [...stats.values()]
+    .map(match => {
+      const averageSimilarity = match.score / Math.max(1, match.sharedCount);
+      const overlapStrength = match.sharedCount / Math.max(1, myAnswers.size);
+      return {
+        ...match,
+        percent: Math.round((overlapStrength * 0.45 + averageSimilarity * 0.55) * 100),
+      };
+    })
+    .sort((a, b) =>
+      b.percent - a.percent ||
+      b.similarCount - a.similarCount ||
+      b.score - a.score ||
+      b.sharedCount - a.sharedCount ||
+      a.name.localeCompare(b.name)
+    )
+    .slice(0, 5);
+}
+
 // Format phone number as (XXX) XXX-XXXX
 const formatPhoneNumber = (value: string): string => {
   // Remove all non-digits
@@ -58,6 +174,7 @@ export default function ProfileScreen() {
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
   const [dailyAnswerCount, setDailyAnswerCount] = useState(0);
+  const [dailyQuestionMatches, setDailyQuestionMatches] = useState<DailyQuestionMatch[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
 
   // Editable profile fields
@@ -91,6 +208,8 @@ export default function ProfileScreen() {
       { data: actionItemsData },
       { data: insightsData },
       { count: dailyAnswers },
+      { data: dailyAnswerRows },
+      { data: memberRows },
     ] = await Promise.all([
       supabase
         .from('skills')
@@ -123,6 +242,16 @@ export default function ProfileScreen() {
         .select('id', { count: 'exact', head: true })
         .eq('user_id', profile.id)
         .eq('community_id', communityId),
+      supabase
+        .from('daily_question_answers')
+        .select('user_id, question_date, answer')
+        .eq('community_id', communityId)
+        .order('question_date', { ascending: false })
+        .limit(600),
+      supabase
+        .from('community_memberships')
+        .select('user_id, profiles(name, avatar_url)')
+        .eq('community_id', communityId),
     ]);
 
     if (skillsData) setSkills(skillsData);
@@ -130,6 +259,11 @@ export default function ProfileScreen() {
     if (actionItemsData) setActionItems(actionItemsData);
     setUserInsights(insightsData);
     setDailyAnswerCount(dailyAnswers ?? 0);
+    setDailyQuestionMatches(buildDailyQuestionMatches(
+      profile.id,
+      (dailyAnswerRows ?? []) as DailyAnswerRow[],
+      memberRows ?? []
+    ));
     setInitialLoading(false);
   }, [profile?.id, communityId]);
 
@@ -843,6 +977,47 @@ export default function ProfileScreen() {
                   </View>
                 ))}
               </View>
+
+              {dailyAnswerCount > 0 && (
+                <View className="bg-white rounded-xl shadow-sm overflow-hidden">
+                  <View className="p-4 border-b border-cream">
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/50 mb-1">Daily Question Matches</Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 leading-5">
+                      Based on the daily questions you have both answered.
+                    </Text>
+                  </View>
+                  {dailyQuestionMatches.length > 0 ? (
+                    dailyQuestionMatches.map(match => (
+                      <Pressable
+                        key={match.userId}
+                        onPress={() => router.push({ pathname: '/(app)/members', params: { memberId: match.userId } })}
+                        className="p-4 border-b border-cream last:border-b-0 flex-row items-center active:bg-cream"
+                      >
+                        <Avatar name={match.name} url={match.avatarUrl} size={44} />
+                        <View className="flex-1 ml-3">
+                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{match.name}</Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 mt-1">
+                            {match.similarCount > 0
+                              ? `${match.similarCount} similar answer${match.similarCount === 1 ? '' : 's'}`
+                              : `${match.sharedCount} shared question${match.sharedCount === 1 ? '' : 's'}`}
+                          </Text>
+                        </View>
+                        <View className="bg-gold-light px-3 py-1 rounded-full">
+                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
+                            {match.percent}%
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ))
+                  ) : (
+                    <View className="p-4">
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 leading-5">
+                        You have answered {dailyAnswerCount} question{dailyAnswerCount === 1 ? '' : 's'}. Once more members answer the same ones, your matches will show up here.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
 
               {((profile as any).current_project || (profile as any).hometown || profile.birthday) && (
                 <View className="bg-white rounded-xl shadow-sm overflow-hidden">
