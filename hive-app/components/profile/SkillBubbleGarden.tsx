@@ -25,52 +25,88 @@ type SkillBubbleGardenProps = {
   onAddCustomSkill?: () => void;
 };
 
-const PALETTES = [
-  { seed: '#fff8e6', edge: '#c6953f', text: '#5f4b22', leaf: '#789883', petal: '#f7edd4', center: '#d4a447' },
-  { seed: '#eef6f0', edge: '#6f9584', text: '#315d4e', leaf: '#6f9584', petal: '#edf5ef', center: '#c8a24f' },
-  { seed: '#f8eee2', edge: '#bd8f5d', text: '#694321', leaf: '#80936f', petal: '#f4e3d0', center: '#c99a55' },
-  { seed: '#f3f0fb', edge: '#a28bc9', text: '#4b3a68', leaf: '#778f7a', petal: '#eee8f8', center: '#c7aa68' },
-  { seed: '#fff0f0', edge: '#ca8f8f', text: '#713f3f', leaf: '#78977d', petal: '#fae3e3', center: '#cf9a61' },
-];
+type SkillCategoryDef = {
+  label: string;
+  species: 'wonder' | 'movement' | 'creative' | 'care' | 'practical' | 'tech';
+  color: string;
+  pale: string;
+  edge: string;
+  text: string;
+  leaf: string;
+  center: string;
+  skills: string[];
+};
 
-const SEED_GROUPS = [
+const CATEGORY_DEFS: SkillCategoryDef[] = [
   {
-    label: 'Wonder & Weird',
-    skills: ['Ocean Boiling', 'Starship Navigation', 'Time Travel Planning', 'Dragon Taming', 'Professional Napping', 'Cloud Watching', 'Parallel Universe Hopping'],
-  },
-  {
-    label: 'Care & Connection',
-    skills: ['Sex Therapy', 'Couples Counseling', 'Intimacy Coaching', 'Hype Person', 'Deep Listening', 'Tough Love Delivery', 'Pep Talks', 'Wingman Services'],
+    label: 'Wonder',
+    species: 'wonder',
+    color: '#c9b7f2',
+    pale: '#f3f0fb',
+    edge: '#9b84cf',
+    text: '#4b3a68',
+    leaf: '#778f7a',
+    center: '#dfc76d',
+    skills: ['Ocean Boiling', 'Starship Navigation', 'Time Travel Planning', 'Dragon Taming', 'Professional Napping', 'Cloud Watching', 'Parallel Universe Hopping', 'Tarot Reading', 'Astrology', 'Dream Interpretation', 'Crystal Collecting'],
   },
   {
     label: 'Movement',
-    skills: ['Aerial Acrobatics', 'Pole Dancing', 'Contortion', 'Trapeze', 'Aerial Silks', 'Handstands', 'Rock Climbing', 'Surfing', 'Skateboarding', 'Camping', 'Trail Finding'],
+    species: 'movement',
+    color: '#d9be68',
+    pale: '#fff8e6',
+    edge: '#c6953f',
+    text: '#5f4b22',
+    leaf: '#789883',
+    center: '#d4a447',
+    skills: ['Aerial Acrobatics', 'Pole Dancing', 'Contortion', 'Trapeze', 'Aerial Silks', 'Handstands', 'Rock Climbing', 'Surfing', 'Skateboarding', 'Camping', 'Trail Finding', 'Yoga', 'Meditation', 'Breathwork'],
   },
   {
-    label: 'Making',
-    skills: ['Crocheting', 'Knitting', 'Embroidery', 'Macramé', 'Sewing', 'Photography', 'Video Editing', 'Graphic Design', 'Writing', 'Storytelling', 'Poetry', 'Painting', 'Pottery'],
+    label: 'Creative',
+    species: 'creative',
+    color: '#d99a9d',
+    pale: '#fff0f0',
+    edge: '#ca8f8f',
+    text: '#713f3f',
+    leaf: '#78977d',
+    center: '#cf9a61',
+    skills: ['Crocheting', 'Knitting', 'Embroidery', 'Macramé', 'Sewing', 'Photography', 'Video Editing', 'Graphic Design', 'Writing', 'Storytelling', 'Poetry', 'Painting', 'Pottery', 'DJing', 'Guitar Playing', 'Singing', 'Voice Acting', 'Stand-up Comedy', 'Karaoke Domination', 'Dance Floor Presence'],
   },
   {
-    label: 'Home & Hosting',
-    skills: ['Cooking', 'Meal Prep', 'Baking', 'Fermentation', 'Cocktail Crafting', 'Coffee Snobbery', 'Tea Ceremony', 'Home Repairs', 'Furniture Building', 'Painting Walls'],
+    label: 'Care',
+    species: 'care',
+    color: '#f0bfd0',
+    pale: '#fff2f6',
+    edge: '#cf8fa7',
+    text: '#70445a',
+    leaf: '#78977d',
+    center: '#d2a35a',
+    skills: ['Sex Therapy', 'Couples Counseling', 'Intimacy Coaching', 'Massage', 'Reiki', 'Sound Healing', 'Hype Person', 'Deep Listening', 'Tough Love Delivery', 'Pep Talks', 'Wingman Services'],
   },
   {
-    label: 'Nature & Body',
-    skills: ['Gardening', 'Composting', 'Beekeeping', 'Plant Parenting', 'Foraging', 'Massage', 'Reiki', 'Sound Healing', 'Yoga', 'Meditation', 'Breathwork'],
+    label: 'Home & Life',
+    species: 'practical',
+    color: '#b98f5e',
+    pale: '#f8eee2',
+    edge: '#bd8f5d',
+    text: '#694321',
+    leaf: '#80936f',
+    center: '#c99a55',
+    skills: ['Cooking', 'Meal Prep', 'Baking', 'Fermentation', 'Cocktail Crafting', 'Coffee Snobbery', 'Tea Ceremony', 'Gardening', 'Composting', 'Beekeeping', 'Plant Parenting', 'Foraging', 'Home Repairs', 'Furniture Building', 'Painting Walls', 'Moving Heavy Things', 'Assembling IKEA', 'Parallel Parking', 'Gift Wrapping', 'Party Planning', 'Surprise Orchestration', 'Dog Whispering', 'Cat Herding', 'Pet Photography', 'Animal Training'],
   },
   {
-    label: 'Practical Magic',
-    skills: ['Tax Wizardry', 'Spreadsheet Sorcery', 'Budget Magic', 'Moving Heavy Things', 'Assembling IKEA', 'Parallel Parking', 'Gift Wrapping', 'Party Planning', 'Surprise Orchestration'],
-  },
-  {
-    label: 'Creatures & Mystical',
-    skills: ['Dog Whispering', 'Cat Herding', 'Pet Photography', 'Animal Training', 'Tarot Reading', 'Astrology', 'Dream Interpretation', 'Crystal Collecting'],
-  },
-  {
-    label: 'Work & Tech',
-    skills: ['Coding', 'Web Design', 'App Building', 'Resume Polishing', 'Interview Prep', 'Salary Negotiation', 'Language Teaching', 'Accent Coaching', 'Proofreading', 'DJing', 'Guitar Playing', 'Singing', 'Voice Acting', 'Stand-up Comedy'],
+    label: 'Tech & Work',
+    species: 'tech',
+    color: '#9dbdb0',
+    pale: '#eef6f0',
+    edge: '#6f9584',
+    text: '#315d4e',
+    leaf: '#6f9584',
+    center: '#c8a24f',
+    skills: ['Coding', 'Web Design', 'App Building', 'Tax Wizardry', 'Spreadsheet Sorcery', 'Budget Magic', 'Resume Polishing', 'Interview Prep', 'Salary Negotiation', 'Language Teaching', 'Accent Coaching', 'Proofreading'],
   },
 ];
+
+const FALLBACK_CATEGORY = CATEGORY_DEFS[CATEGORY_DEFS.length - 1];
 
 const GRASS_BLADES = Array.from({ length: 68 }, (_, index) => ({
   leftRatio: ((index * 1.47) % 100) / 100,
@@ -81,6 +117,13 @@ const GRASS_BLADES = Array.from({ length: 68 }, (_, index) => ({
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function getCategoryForSkill(description: string) {
+  const normalized = description.trim().toLowerCase();
+  return CATEGORY_DEFS.find(category =>
+    category.skills.some(skill => skill.trim().toLowerCase() === normalized)
+  ) ?? FALLBACK_CATEGORY;
 }
 
 function getLevel(skill: Partial<Skill>) {
@@ -207,6 +250,217 @@ function Petal({
   );
 }
 
+function Leaf({
+  size,
+  color,
+  side,
+  bottom,
+  rotate,
+  opacity = 0.7,
+}: {
+  size: number;
+  color: string;
+  side: 'left' | 'right';
+  bottom: number;
+  rotate: number;
+  opacity?: number;
+}) {
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        bottom,
+        [side]: size * 0.1,
+        width: size,
+        height: size * 0.42,
+        borderTopLeftRadius: size,
+        borderBottomRightRadius: size,
+        borderTopRightRadius: size * 0.45,
+        borderBottomLeftRadius: size * 0.45,
+        backgroundColor: color,
+        opacity,
+        transform: [{ rotate: `${rotate}deg` }],
+      }}
+    />
+  );
+}
+
+function PlantHead({
+  level,
+  category,
+  bloomSize,
+  stemHeight,
+}: {
+  level: number;
+  category: SkillCategoryDef;
+  bloomSize: number;
+  stemHeight: number;
+}) {
+  const baseBottom = stemHeight - bloomSize * 0.12;
+
+  if (level <= 2) {
+    return (
+      <View
+        style={{
+          position: 'absolute',
+          bottom: stemHeight - bloomSize * 0.04,
+          width: bloomSize * (level === 1 ? 0.38 : 0.48),
+          height: bloomSize * (level === 1 ? 0.3 : 0.44),
+          borderRadius: bloomSize,
+          backgroundColor: category.pale,
+          borderWidth: 1.4,
+          borderColor: category.edge,
+          transform: [{ rotate: level === 1 ? '-7deg' : '5deg' }],
+        }}
+      />
+    );
+  }
+
+  if (level === 3) {
+    return (
+      <View
+        style={{
+          position: 'absolute',
+          bottom: stemHeight - bloomSize * 0.14,
+          width: bloomSize * 0.46,
+          height: bloomSize * 0.76,
+          borderTopLeftRadius: bloomSize * 0.5,
+          borderTopRightRadius: bloomSize * 0.5,
+          borderBottomLeftRadius: bloomSize * 0.22,
+          borderBottomRightRadius: bloomSize * 0.22,
+          borderWidth: 1.5,
+          borderColor: category.edge,
+          backgroundColor: category.pale,
+          transform: [{ rotate: '-4deg' }],
+        }}
+      />
+    );
+  }
+
+  if (category.species === 'wonder') {
+    return (
+      <View style={{ position: 'absolute', bottom: baseBottom, alignItems: 'center', width: bloomSize, height: bloomSize }}>
+        <View
+          style={{
+            position: 'absolute',
+            bottom: bloomSize * 0.24,
+            width: bloomSize * (level === 5 ? 0.9 : 0.76),
+            height: bloomSize * (level === 5 ? 0.48 : 0.4),
+            borderTopLeftRadius: bloomSize,
+            borderTopRightRadius: bloomSize,
+            borderBottomLeftRadius: bloomSize * 0.22,
+            borderBottomRightRadius: bloomSize * 0.22,
+            backgroundColor: category.pale,
+            borderWidth: 1.6,
+            borderColor: category.edge,
+            shadowColor: category.color,
+            shadowOpacity: 0.22,
+            shadowRadius: level === 5 ? 14 : 9,
+            shadowOffset: { width: 0, height: 3 },
+          }}
+        />
+        {[0.28, 0.5, 0.72].map((left, dot) => (
+          <View
+            key={dot}
+            style={{
+              position: 'absolute',
+              left: bloomSize * left,
+              bottom: bloomSize * (dot === 1 ? 0.5 : 0.44),
+              width: bloomSize * 0.08,
+              height: bloomSize * 0.08,
+              borderRadius: bloomSize,
+              backgroundColor: '#fffdf7',
+              opacity: 0.85,
+            }}
+          />
+        ))}
+      </View>
+    );
+  }
+
+  if (category.species === 'movement') {
+    return (
+      <View style={{ position: 'absolute', bottom: baseBottom, alignItems: 'center', width: bloomSize, height: bloomSize }}>
+        {[0, 1, 2].map(petal => (
+          <View
+            key={petal}
+            style={{
+              position: 'absolute',
+              bottom: bloomSize * 0.22,
+              width: bloomSize * 0.28,
+              height: bloomSize * (level === 5 ? 0.78 : 0.66),
+              borderTopLeftRadius: bloomSize,
+              borderTopRightRadius: bloomSize,
+              borderBottomLeftRadius: bloomSize * 0.22,
+              borderBottomRightRadius: bloomSize * 0.22,
+              backgroundColor: category.pale,
+              borderWidth: 1.4,
+              borderColor: category.edge,
+              transform: [{ rotate: `${(petal - 1) * 18}deg` }, { translateY: petal === 1 ? -bloomSize * 0.05 : 0 }],
+            }}
+          />
+        ))}
+      </View>
+    );
+  }
+
+  if (category.species === 'tech') {
+    return (
+      <View style={{ position: 'absolute', bottom: baseBottom, width: bloomSize, height: bloomSize, alignItems: 'center', justifyContent: 'center' }}>
+        {Array.from({ length: level === 5 ? 6 : 5 }, (_, petal) => (
+          <View
+            key={petal}
+            style={{
+              position: 'absolute',
+              width: bloomSize * 0.34,
+              height: bloomSize * 0.34,
+              borderRadius: bloomSize * 0.08,
+              backgroundColor: category.pale,
+              borderWidth: 1.3,
+              borderColor: category.edge,
+              transform: [
+                { rotate: `${45 + petal * (level === 5 ? 60 : 72)}deg` },
+                { translateY: -bloomSize * (level === 5 ? 0.25 : 0.21) },
+              ],
+            }}
+          />
+        ))}
+        <View style={{ width: bloomSize * 0.28, height: bloomSize * 0.28, borderRadius: bloomSize, backgroundColor: category.center, borderWidth: 1.2, borderColor: category.edge }} />
+      </View>
+    );
+  }
+
+  const petalCount = category.species === 'creative' ? (level === 5 ? 7 : 5) : category.species === 'care' ? 7 : 6;
+  return (
+    <View style={{ position: 'absolute', bottom: baseBottom, width: bloomSize, height: bloomSize, alignItems: 'center', justifyContent: 'center' }}>
+      {Array.from({ length: petalCount }, (_, petal) => {
+        const creativeShift = category.species === 'creative' ? (petal % 2) * bloomSize * 0.04 : 0;
+        const petalSize = bloomSize * (category.species === 'care' ? 0.34 : 0.38);
+        return (
+          <Petal
+            key={petal}
+            size={petalSize}
+            color={category.pale}
+            borderColor={category.edge}
+            rotation={petal * (360 / petalCount) + (category.species === 'creative' ? 9 : 0)}
+            distance={bloomSize * (level === 5 ? 0.24 : 0.2) + creativeShift}
+          />
+        );
+      })}
+      <View
+        style={{
+          width: bloomSize * (level === 5 ? 0.4 : 0.34),
+          height: bloomSize * (level === 5 ? 0.4 : 0.34),
+          borderRadius: bloomSize,
+          backgroundColor: category.center,
+          borderWidth: 1.3,
+          borderColor: category.edge,
+        }}
+      />
+    </View>
+  );
+}
+
 function SkillPlant({
   skill,
   index,
@@ -226,7 +480,7 @@ function SkillPlant({
   autoFrame?: { left: number; top: number };
 }) {
   const { level, size, bloomSize, stemHeight, labelFont, plantHeight } = getPlantMetrics(skill, width);
-  const palette = PALETTES[index % PALETTES.length];
+  const category = getCategoryForSkill(skill.description);
   const fallback = getDefaultPosition(index, count);
   const storedX = typeof skill.display_x === 'number' ? skill.display_x : fallback.x;
   const storedY = typeof skill.display_y === 'number' ? skill.display_y : fallback.y;
@@ -380,138 +634,55 @@ function SkillPlant({
         >
           <View
             style={{
-              width: 2,
+              width: level >= 4 ? 2.4 : 2,
               height: stemHeight,
-              backgroundColor: palette.leaf,
+              backgroundColor: category.leaf,
               opacity: 0.88,
               borderRadius: 1,
+              transform: [{ rotate: category.species === 'movement' ? '-2deg' : category.species === 'creative' ? '3deg' : '0deg' }],
             }}
           />
-          <View
-            style={{
-              position: 'absolute',
-              bottom: stemHeight * 0.2,
-              left: bloomSize * 0.25,
-              width: bloomSize * (level === 1 ? 0.32 : 0.42),
-              height: bloomSize * 0.18,
-              borderRadius: bloomSize * 0.2,
-              backgroundColor: palette.leaf,
-              opacity: 0.72,
-              transform: [{ rotate: '-30deg' }],
-            }}
+          <Leaf
+            size={bloomSize * (level === 1 ? 0.28 : 0.36)}
+            color={category.leaf}
+            side="left"
+            bottom={stemHeight * 0.18}
+            rotate={-32}
+            opacity={0.7}
           />
-          <View
-            style={{
-              position: 'absolute',
-              bottom: stemHeight * 0.34,
-              right: bloomSize * 0.22,
-              width: bloomSize * (level === 1 ? 0.28 : 0.38),
-              height: bloomSize * 0.16,
-              borderRadius: bloomSize * 0.2,
-              backgroundColor: palette.leaf,
-              opacity: 0.66,
-              transform: [{ rotate: '28deg' }],
-            }}
+          <Leaf
+            size={bloomSize * (level === 1 ? 0.24 : 0.32)}
+            color={category.leaf}
+            side="right"
+            bottom={stemHeight * 0.34}
+            rotate={28}
+            opacity={0.66}
           />
           {level >= 3 && (
-            <View
-              style={{
-                position: 'absolute',
-                bottom: stemHeight * 0.62,
-                left: bloomSize * 0.14,
-                width: bloomSize * 0.34,
-                height: bloomSize * 0.14,
-                borderRadius: bloomSize * 0.16,
-                backgroundColor: palette.leaf,
-                opacity: 0.56,
-                transform: [{ rotate: '-18deg' }],
-              }}
+            <Leaf
+              size={bloomSize * 0.28}
+              color={category.leaf}
+              side={category.species === 'creative' ? 'right' : 'left'}
+              bottom={stemHeight * 0.62}
+              rotate={category.species === 'creative' ? 18 : -18}
+              opacity={0.52}
             />
           )}
 
-          {level <= 2 && (
-            <View
-              style={{
-                position: 'absolute',
-                bottom: stemHeight - bloomSize * 0.05,
-                width: bloomSize * (level === 1 ? 0.68 : 0.84),
-                height: bloomSize * (level === 1 ? 0.2 : 0.26),
-                borderRadius: bloomSize,
-                borderWidth: 1.4,
-                borderColor: palette.edge,
-                backgroundColor: level === 1 ? '#fbf7ec' : palette.seed,
-              }}
-            />
-          )}
-
-          {level === 3 && (
-            <View
-              style={{
-                position: 'absolute',
-                bottom: stemHeight - bloomSize * 0.1,
-                width: bloomSize * 0.5,
-                height: bloomSize * 0.82,
-                borderTopLeftRadius: bloomSize * 0.4,
-                borderTopRightRadius: bloomSize * 0.4,
-                borderBottomLeftRadius: bloomSize * 0.18,
-                borderBottomRightRadius: bloomSize * 0.18,
-                borderWidth: 1.6,
-                borderColor: palette.edge,
-                backgroundColor: palette.seed,
-                transform: [{ rotate: '-3deg' }],
-              }}
-            />
-          )}
-
-          {level >= 4 && (
-            <View
-              style={{
-                position: 'absolute',
-                bottom: stemHeight - bloomSize * 0.28,
-                width: bloomSize,
-                height: bloomSize,
-                alignItems: 'center',
-                justifyContent: 'center',
-                shadowColor: '#000',
-                shadowOpacity: 0.08 + level * 0.015,
-                shadowRadius: 8 + level,
-                shadowOffset: { width: 0, height: 4 },
-              }}
-            >
-              {Array.from({ length: level === 5 ? 6 : 5 }, (_, petal) => (
-                <Petal
-                  key={petal}
-                  size={bloomSize * (level === 5 ? 0.44 : 0.4)}
-                  color={palette.petal}
-                  borderColor={palette.edge}
-                  rotation={petal * (level === 5 ? 60 : 72)}
-                  distance={bloomSize * (level === 5 ? 0.24 : 0.2)}
-                />
-              ))}
-              <View
-                style={{
-                  width: bloomSize * (level === 5 ? 0.42 : 0.36),
-                  height: bloomSize * (level === 5 ? 0.42 : 0.36),
-                  borderRadius: bloomSize,
-                  backgroundColor: palette.center,
-                  borderWidth: 1.3,
-                  borderColor: palette.edge,
-                }}
-              />
-            </View>
-          )}
+          <PlantHead level={level} category={category} bloomSize={bloomSize} stemHeight={stemHeight} />
         </View>
 
         <Text
           selectable={false}
-          numberOfLines={level >= 4 ? 4 : 3}
+          numberOfLines={2}
           style={{
             fontFamily: 'Lato_700Bold',
-            color: palette.text,
-            fontSize: labelFont,
-            lineHeight: labelFont * 1.12,
+            color: category.text,
+            fontSize: Math.min(labelFont * 0.72, 12),
+            lineHeight: Math.min(labelFont * 0.72, 12) * 1.12,
             textAlign: 'center',
-            maxWidth: size * 0.96,
+            maxWidth: size * 0.82,
+            opacity: 0.82,
             ...(Platform.OS === 'web'
               ? ({
                   userSelect: 'none',
@@ -538,7 +709,7 @@ function SeedButton({
   onPlantSkill?: (skillDescription: string) => void;
   planted?: boolean;
 }) {
-  const palette = PALETTES[index % PALETTES.length];
+  const category = getCategoryForSkill(skill);
 
   return (
     <Pressable
@@ -551,8 +722,8 @@ function SeedButton({
         maxWidth: 178,
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: planted ? 'rgba(115,154,136,0.2)' : 'rgba(189,147,72,0.28)',
-        backgroundColor: planted ? 'rgba(238,246,240,0.42)' : '#fbf7ed',
+        borderColor: planted ? 'rgba(115,154,136,0.2)' : `${category.edge}55`,
+        backgroundColor: planted ? 'rgba(238,246,240,0.42)' : category.pale,
         paddingHorizontal: 10,
         paddingVertical: 5,
         flexDirection: 'row',
@@ -574,9 +745,9 @@ function SeedButton({
           width: 9,
           height: 13,
           borderRadius: 9,
-          backgroundColor: planted ? '#eef6f0' : palette.seed,
+          backgroundColor: planted ? '#eef6f0' : category.color,
           borderWidth: 1,
-          borderColor: planted ? '#739a88' : palette.edge,
+          borderColor: planted ? '#739a88' : category.edge,
           transform: [{ rotate: '-24deg' }],
         }}
       />
@@ -585,7 +756,7 @@ function SeedButton({
         numberOfLines={1}
         style={{
           fontFamily: 'Lato_700Bold',
-          color: '#6d5b3b',
+          color: planted ? '#8f8a7f' : category.text,
           fontSize: 11,
           lineHeight: 14,
           flexShrink: 1,
@@ -662,7 +833,7 @@ export function SkillBubbleGarden({
     () => {
       if (!editable) return [];
       const seedSet = new Set(seedSkills.map(skill => skill.trim()));
-      const grouped = SEED_GROUPS
+      const grouped = CATEGORY_DEFS
         .map(group => ({
           label: group.label,
           skills: group.skills.filter(skill => seedSet.has(skill)),
@@ -809,6 +980,7 @@ export function SkillBubbleGarden({
           {seedGroups.map((group, groupIndex) => {
             const open = isSeedGroupOpen(group.label, groupIndex);
             const readyCount = group.skills.filter(skill => !plantedNames.has(skill.trim().toLowerCase())).length;
+            const category = getCategoryForSkill(group.skills[0] ?? group.label);
             return (
               <View key={group.label} style={{ marginBottom: 8 }}>
                 <Pressable
@@ -817,8 +989,8 @@ export function SkillBubbleGarden({
                     minHeight: 34,
                     borderRadius: 12,
                     borderWidth: 1,
-                    borderColor: 'rgba(222,193,129,0.3)',
-                    backgroundColor: open ? '#fffaf0' : 'rgba(255,250,240,0.62)',
+                    borderColor: open ? `${category.edge}66` : 'rgba(222,193,129,0.3)',
+                    backgroundColor: open ? category.pale : 'rgba(255,250,240,0.62)',
                     paddingHorizontal: 10,
                     paddingVertical: 7,
                     flexDirection: 'row',
@@ -834,9 +1006,21 @@ export function SkillBubbleGarden({
                       : {}),
                   }}
                 >
-                  <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#6d5b3b', fontSize: 12 }}>
-                    {group.label}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 5,
+                        backgroundColor: category.color,
+                        borderWidth: 1,
+                        borderColor: category.edge,
+                      }}
+                    />
+                    <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: category.text, fontSize: 12 }}>
+                      {group.label}
+                    </Text>
+                  </View>
                   <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', fontSize: 11 }}>
                     {readyCount}/{group.skills.length} {open ? '−' : '+'}
                   </Text>
