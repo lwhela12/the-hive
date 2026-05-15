@@ -636,7 +636,7 @@ export default function MeetingsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <AppHeader
-        title="Meeting Hub"
+        title="Meetings"
         onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
       />
 
@@ -1177,9 +1177,17 @@ export default function MeetingsScreen() {
 
       {/* Admin: edit slide deck URL */}
       <Modal visible={showDeckEdit} animationType="slide" transparent onRequestClose={() => setShowDeckEdit(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-            <View style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <Pressable
+            accessibilityLabel="Close slide deck editor"
+            onPress={() => setShowDeckEdit(false)}
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+          />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }} pointerEvents="box-none">
+            <Pressable
+              onPress={(event) => event.stopPropagation()}
+              style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}
+            >
               <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 4 }}>Slide Deck URL</Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 16, lineHeight: 18 }}>
@@ -1222,9 +1230,9 @@ export default function MeetingsScreen() {
                   </Text>
                 </Pressable>
               </View>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
     </SafeAreaView>
   );
