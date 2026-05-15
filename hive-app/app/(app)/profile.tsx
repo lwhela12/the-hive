@@ -19,6 +19,7 @@ import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
+import { PREDEFINED_SKILLS } from '../../components/skills/constants';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
@@ -590,6 +591,43 @@ export default function ProfileScreen() {
     if (error) {
       Alert.alert('Error', 'Failed to update that skill bubble. Please try again.');
       await fetchData();
+    }
+  };
+
+  const handlePlantSkill = async (skillDescription: string) => {
+    if (!profile || !communityId) return;
+
+    const alreadyPlanted = skills.some(
+      (skill) => skill.description.trim().toLowerCase() === skillDescription.trim().toLowerCase()
+    );
+    if (alreadyPlanted) return;
+
+    const seedIndex = skills.length + skillDescription.length;
+    const displayX = Number((0.16 + (((seedIndex * 37) % 68) / 100)).toFixed(4));
+    const displayY = Number((0.2 + (((seedIndex * 29) % 52) / 100)).toFixed(4));
+
+    const { data, error } = await supabase
+      .from('skills')
+      .insert({
+        user_id: profile.id,
+        community_id: communityId,
+        description: skillDescription,
+        raw_input: skillDescription,
+        extracted_from: 'manual',
+        enthusiasm_level: 1,
+        display_x: displayX,
+        display_y: displayY,
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      Alert.alert('Error', 'Failed to plant that skill. Please try again.');
+      return;
+    }
+
+    if (data) {
+      setSkills((current) => [data as Skill, ...current]);
     }
   };
 
@@ -1484,20 +1522,14 @@ export default function ProfileScreen() {
               <Ionicons name="add" size={20} color="white" />
             </Pressable>
           </View>
-          {skills.length === 0 ? (
-            <View className="bg-white rounded-xl p-4 shadow-sm">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
-                No skills recorded yet. Ask Clive to add some!
-              </Text>
-            </View>
-          ) : (
-            <SkillBubbleGarden
-              skills={skills}
-              editable
-              onUpdateSkill={handleSkillBubbleUpdate}
-              onDeleteSkill={handleDeleteSkill}
-            />
-          )}
+          <SkillBubbleGarden
+            skills={skills}
+            editable
+            onUpdateSkill={handleSkillBubbleUpdate}
+            onDeleteSkill={handleDeleteSkill}
+            seedSkills={PREDEFINED_SKILLS}
+            onPlantSkill={handlePlantSkill}
+          />
         </View>
 
         {/* Wishes */}
