@@ -11,7 +11,7 @@ import { BoardReplyItem } from './BoardReplyItem';
 import { BoardComposer } from './BoardComposer';
 import { BoardReplyComposer } from './BoardReplyComposer';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
-import { LinkifiedText } from '../ui/LinkifiedText';
+import { MarkdownContent } from '../chat/MarkdownContent';
 import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment, BoardCategory } from '../../types';
 
 interface BoardPostDetailProps {
@@ -549,12 +549,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
               {post.edited_at && ' (edited)'}
             </Text>
           </View>
-          <LinkifiedText
-            style={{ fontFamily: 'Lato_400Regular', fontSize: 16, lineHeight: 24, color: '#313130' }}
-            linkStyle={{ color: '#bd9348' }}
-          >
-            {post.content}
-          </LinkifiedText>
+          <MarkdownContent content={post.content} />
           <View className="mb-4" />
 
           {post.attachments && post.attachments.length > 0 && (

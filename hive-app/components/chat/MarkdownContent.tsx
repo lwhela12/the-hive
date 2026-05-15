@@ -1,11 +1,17 @@
 import { memo } from 'react';
 import { Platform, StyleSheet, Linking } from 'react-native';
-import Markdown from 'react-native-markdown-display';
+import Markdown, { MarkdownIt } from 'react-native-markdown-display';
+import { LinkifiedText } from '../ui/LinkifiedText';
 
 interface MarkdownContentProps {
   content: string;
   isUser?: boolean;
 }
+
+const markdownIt = MarkdownIt({
+  typographer: true,
+  linkify: true,
+});
 
 /**
  * Renders markdown content with custom styling that matches the app's design.
@@ -215,7 +221,22 @@ export const MarkdownContent = memo(function MarkdownContent({
   };
 
   return (
-    <Markdown style={markdownStyles} onLinkPress={handleLinkPress}>
+    <Markdown
+      style={markdownStyles}
+      markdownit={markdownIt}
+      onLinkPress={handleLinkPress}
+      rules={{
+        text: (node, _children, _parent, styles, inheritedStyles = {}) => (
+          <LinkifiedText
+            key={node.key}
+            style={[inheritedStyles, styles.text]}
+            linkStyle={styles.link}
+          >
+            {node.content}
+          </LinkifiedText>
+        ),
+      }}
+    >
       {content}
     </Markdown>
   );
