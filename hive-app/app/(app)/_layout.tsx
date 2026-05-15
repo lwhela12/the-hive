@@ -264,8 +264,8 @@ export default function AppLayout() {
         <Tabs.Screen
           name="meetings"
           options={{
-            title: 'Meeting Hub',
-            tabBarAccessibilityLabel: 'Meeting Hub',
+            title: 'Meetings',
+            tabBarAccessibilityLabel: 'Meetings',
             tabBarIcon: ({ focused }) => (
               <TabIcon
                 customIcon={
@@ -275,7 +275,7 @@ export default function AppLayout() {
                     color={focused ? '#bd9348' : '#2d2d2d80'}
                   />
                 }
-                label="Meeting Hub"
+                label="Meetings"
                 focused={focused}
                 compact={useMobileLayout}
               />

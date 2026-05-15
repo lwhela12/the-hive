@@ -637,7 +637,7 @@ export default function MeetingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <AppHeader title="Meeting Hub" />
+      <AppHeader title="Meetings" />
 
       <ScrollView
         className="flex-1"
@@ -646,7 +646,7 @@ export default function MeetingsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Meeting Hub Actions */}
+        {/* Meetings actions */}
         <View
           style={{
             backgroundColor: '#2b2b2a',
