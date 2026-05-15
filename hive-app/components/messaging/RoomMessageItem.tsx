@@ -1,15 +1,10 @@
 import { useState, memo } from 'react';
-import { View, Text, Pressable, Modal, Dimensions, Image } from 'react-native';
+import { View, Text, Pressable, Modal, Image, useWindowDimensions } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../ui/Avatar';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import type { RoomMessage, Profile, MessageReaction, Attachment } from '../../types';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const SCREEN_HEIGHT = Dimensions.get('window').height;
-// Constrain image width for chat - max 250px or 60% of screen, whichever is smaller
-const MAX_IMAGE_WIDTH = Math.min(250, SCREEN_WIDTH * 0.6);
 
 interface RoomMessageItemProps {
   message: RoomMessage & { sender?: Profile; reactions?: MessageReaction[] };
@@ -38,6 +33,9 @@ export const RoomMessageItem = memo(function RoomMessageItem({
 }: RoomMessageItemProps) {
   const [showActions, setShowActions] = useState(false);
   const [fullscreenImageIndex, setFullscreenImageIndex] = useState<number | null>(null);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  // Constrain image width for chat - max 250px or 60% of screen, whichever is smaller
+  const maxImageWidth = Math.min(250, screenWidth * 0.6);
 
   const isOwnMessage = message.sender_id === currentUserId;
   const isDeleted = !!message.deleted_at;
@@ -108,7 +106,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
     const attachments = message.attachments;
     const count = attachments.length;
     const gap = 4;
-    const maxWidth = MAX_IMAGE_WIDTH;
+    const maxWidth = maxImageWidth;
 
     if (count === 1) {
       const itemWidth = maxWidth;
@@ -354,8 +352,8 @@ export const RoomMessageItem = memo(function RoomMessageItem({
                 <Image
                   source={{ uri: message.attachments[fullscreenImageIndex].url }}
                   style={{
-                    width: SCREEN_WIDTH,
-                    height: SCREEN_HEIGHT * 0.8,
+                    width: screenWidth,
+                    height: screenHeight * 0.8,
                   }}
                   resizeMode="contain"
                 />

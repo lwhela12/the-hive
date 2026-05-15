@@ -20,6 +20,7 @@ import { getMentionedMembers } from '../../lib/mentions';
 import { fetchCommunityMentionableMembers } from '../../lib/mentionableMembers';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
 import { BOARD_HOME_EVENT } from '../../lib/boardNavigation';
+import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 
 type BoardListView = 'active' | 'archive';
@@ -204,12 +205,10 @@ export default function BoardScreen() {
     setEditingTopic(null);
     setShowAddLinkedWishModal(false);
     setSelectedLinkedWish(null);
-    if (typeof window !== 'undefined') {
-      if (boardCategoryStorageKey) window.localStorage.removeItem(boardCategoryStorageKey);
-      if (boardPostStorageKey) window.localStorage.removeItem(boardPostStorageKey);
-      if (boardComposerStorageKey) window.localStorage.removeItem(boardComposerStorageKey);
-      if (boardDirectOpenStorageKey) window.localStorage.removeItem(boardDirectOpenStorageKey);
-    }
+    if (boardCategoryStorageKey) removeStoredItem(boardCategoryStorageKey);
+    if (boardPostStorageKey) removeStoredItem(boardPostStorageKey);
+    if (boardComposerStorageKey) removeStoredItem(boardComposerStorageKey);
+    if (boardDirectOpenStorageKey) removeStoredItem(boardDirectOpenStorageKey);
   }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey]);
 
   useEffect(() => {
@@ -228,22 +227,20 @@ export default function BoardScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (typeof window === 'undefined') return;
-
       const isDirectOpen = boardDirectOpenStorageKey
-        ? window.localStorage.getItem(boardDirectOpenStorageKey) === 'true'
+        ? getStoredItem(boardDirectOpenStorageKey) === 'true'
         : false;
       if (isDirectOpen) {
-        window.localStorage.removeItem(boardDirectOpenStorageKey!);
-        const savedCategoryId = boardCategoryStorageKey ? window.localStorage.getItem(boardCategoryStorageKey) : null;
-        const savedPostId = boardPostStorageKey ? window.localStorage.getItem(boardPostStorageKey) : null;
+        removeStoredItem(boardDirectOpenStorageKey!);
+        const savedCategoryId = boardCategoryStorageKey ? getStoredItem(boardCategoryStorageKey) : null;
+        const savedPostId = boardPostStorageKey ? getStoredItem(boardPostStorageKey) : null;
         if (savedCategoryId) setSelectedCategoryId(savedCategoryId);
         if (savedPostId) setSelectedPostId(savedPostId);
         return;
       }
 
       const isComposing = boardComposerStorageKey
-        ? window.localStorage.getItem(boardComposerStorageKey) === 'true'
+        ? getStoredItem(boardComposerStorageKey) === 'true'
         : false;
       if (!isComposing) {
         resetBoardToList();
@@ -253,9 +250,8 @@ export default function BoardScreen() {
 
   useEffect(() => {
     if (!boardCategoryStorageKey || selectedCategoryId || categories.length === 0) return;
-    if (typeof window === 'undefined') return;
 
-    const savedCategoryId = window.localStorage.getItem(boardCategoryStorageKey);
+    const savedCategoryId = getStoredItem(boardCategoryStorageKey);
     if (savedCategoryId && categories.some((category) => category.id === savedCategoryId)) {
       setSelectedCategoryId(savedCategoryId);
     }
@@ -263,16 +259,14 @@ export default function BoardScreen() {
 
   useEffect(() => {
     if (!boardComposerStorageKey || !selectedCategoryId) return;
-    if (typeof window === 'undefined') return;
 
-    setShowComposer(window.localStorage.getItem(boardComposerStorageKey) === 'true');
+    setShowComposer(getStoredItem(boardComposerStorageKey) === 'true');
   }, [boardComposerStorageKey, selectedCategoryId]);
 
   useEffect(() => {
     if (!boardPostStorageKey || selectedPostId) return;
-    if (typeof window === 'undefined') return;
 
-    const savedPostId = window.localStorage.getItem(boardPostStorageKey);
+    const savedPostId = getStoredItem(boardPostStorageKey);
     if (savedPostId) {
       setSelectedPostId(savedPostId);
     }
@@ -324,8 +318,8 @@ export default function BoardScreen() {
   const handleCategorySelect = useCallback((category: BoardCategory) => {
     setSelectedCategoryId(category.id);
     setThreadListView('active');
-    if (boardCategoryStorageKey && typeof window !== 'undefined') {
-      window.localStorage.setItem(boardCategoryStorageKey, category.id);
+    if (boardCategoryStorageKey) {
+      setStoredItem(boardCategoryStorageKey, category.id);
     }
   }, [boardCategoryStorageKey]);
 
@@ -336,23 +330,23 @@ export default function BoardScreen() {
   const handleOpenComposer = useCallback(() => {
     setEditingPost(null);
     setShowComposer(true);
-    if (boardComposerStorageKey && typeof window !== 'undefined') {
-      window.localStorage.setItem(boardComposerStorageKey, 'true');
+    if (boardComposerStorageKey) {
+      setStoredItem(boardComposerStorageKey, 'true');
     }
   }, [boardComposerStorageKey]);
 
   const handleCloseComposer = useCallback(() => {
     setShowComposer(false);
     setEditingPost(null);
-    if (boardComposerStorageKey && typeof window !== 'undefined') {
-      window.localStorage.removeItem(boardComposerStorageKey);
+    if (boardComposerStorageKey) {
+      removeStoredItem(boardComposerStorageKey);
     }
   }, [boardComposerStorageKey]);
 
   const handlePostSelect = useCallback((postId: string) => {
     setSelectedPostId(postId);
-    if (boardPostStorageKey && typeof window !== 'undefined') {
-      window.localStorage.setItem(boardPostStorageKey, postId);
+    if (boardPostStorageKey) {
+      setStoredItem(boardPostStorageKey, postId);
     }
   }, [boardPostStorageKey]);
 
@@ -360,8 +354,8 @@ export default function BoardScreen() {
     setSelectedPostId(null);
     invalidatePosts();
     refetchPostCounts();
-    if (boardPostStorageKey && typeof window !== 'undefined') {
-      window.localStorage.removeItem(boardPostStorageKey);
+    if (boardPostStorageKey) {
+      removeStoredItem(boardPostStorageKey);
     }
   }, [boardPostStorageKey, invalidatePosts, refetchPostCounts]);
 
@@ -639,14 +633,14 @@ export default function BoardScreen() {
         if (selectedCategoryId === category.id) {
           setSelectedCategoryId(null);
         }
-        if (boardCategoryStorageKey && typeof window !== 'undefined') {
-          window.localStorage.removeItem(boardCategoryStorageKey);
+        if (boardCategoryStorageKey) {
+          removeStoredItem(boardCategoryStorageKey);
         }
-        if (boardComposerStorageKey && typeof window !== 'undefined') {
-          window.localStorage.removeItem(boardComposerStorageKey);
+        if (boardComposerStorageKey) {
+          removeStoredItem(boardComposerStorageKey);
         }
-        if (boardPostStorageKey && typeof window !== 'undefined') {
-          window.localStorage.removeItem(boardPostStorageKey);
+        if (boardPostStorageKey) {
+          removeStoredItem(boardPostStorageKey);
         }
         invalidateCategories();
         onDone?.();
@@ -706,8 +700,8 @@ export default function BoardScreen() {
 
         if (!restore) {
           setSelectedCategoryId(null);
-          if (boardCategoryStorageKey && typeof window !== 'undefined') {
-            window.localStorage.removeItem(boardCategoryStorageKey);
+          if (boardCategoryStorageKey) {
+            removeStoredItem(boardCategoryStorageKey);
           }
         }
         invalidateCategories();
@@ -774,8 +768,8 @@ export default function BoardScreen() {
         }
 
         setSelectedCategoryId(null);
-        if (boardCategoryStorageKey && typeof window !== 'undefined') {
-          window.localStorage.removeItem(boardCategoryStorageKey);
+        if (boardCategoryStorageKey) {
+          removeStoredItem(boardCategoryStorageKey);
         }
         invalidateCategories();
         invalidateLinkedWishes();

@@ -8,6 +8,7 @@ import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentU
 import { getActiveMentionQuery, getMentionedMembers, getMentionSuggestions, insertMention } from '../../lib/mentions';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { submitOnEnter } from '../../lib/submitOnEnter';
+import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
 import { MentionSuggestions } from './MentionSuggestions';
 
@@ -60,8 +61,8 @@ export function BoardComposer({
 
   // Pre-fill fields when editing
   useEffect(() => {
-    if (visible && draftStorageKey && typeof window !== 'undefined') {
-      const savedDraft = window.localStorage.getItem(draftStorageKey);
+    if (visible && draftStorageKey) {
+      const savedDraft = getStoredItem(draftStorageKey);
       if (savedDraft) {
         try {
           const draft = JSON.parse(savedDraft) as { title?: string; content?: string };
@@ -69,7 +70,7 @@ export function BoardComposer({
           setContent(draft.content || '');
           return;
         } catch {
-          window.localStorage.removeItem(draftStorageKey);
+          removeStoredItem(draftStorageKey);
         }
       }
     }
@@ -97,9 +98,9 @@ export function BoardComposer({
   }, [contentSelectionOverride]);
 
   useEffect(() => {
-    if (!visible || !draftStorageKey || typeof window === 'undefined') return;
+    if (!visible || !draftStorageKey) return;
 
-    window.localStorage.setItem(draftStorageKey, JSON.stringify({ title, content }));
+    setStoredItem(draftStorageKey, JSON.stringify({ title, content }));
   }, [visible, draftStorageKey, title, content]);
 
   const handleSubmit = async () => {
@@ -140,8 +141,8 @@ export function BoardComposer({
         setContentSelectionOverride(null);
         setSelectedImages([]);
         setSelectedFiles([]);
-        if (draftStorageKey && typeof window !== 'undefined') {
-          window.localStorage.removeItem(draftStorageKey);
+        if (draftStorageKey) {
+          removeStoredItem(draftStorageKey);
         }
         onClose();
       }
@@ -159,8 +160,8 @@ export function BoardComposer({
     setContentSelectionOverride(null);
     setSelectedImages([]);
     setSelectedFiles([]);
-    if (draftStorageKey && typeof window !== 'undefined') {
-      window.localStorage.removeItem(draftStorageKey);
+    if (draftStorageKey) {
+      removeStoredItem(draftStorageKey);
     }
     onClose();
   };

@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { formatDateMedium } from '../../lib/dateUtils';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
+import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { BoardReactionBar } from './BoardReactionBar';
 import { BoardReplyItem } from './BoardReplyItem';
 import { BoardComposer } from './BoardComposer';
@@ -220,25 +221,25 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   }, [communityId]);
 
   useEffect(() => {
-    if (!editComposerStorageKey || typeof window === 'undefined') return;
+    if (!editComposerStorageKey) return;
 
-    setShowEditComposer(window.localStorage.getItem(editComposerStorageKey) === 'true');
+    setShowEditComposer(getStoredItem(editComposerStorageKey) === 'true');
   }, [editComposerStorageKey]);
 
   const handleOpenEditComposer = useCallback(() => {
     setShowEditComposer(true);
-    if (editComposerStorageKey && typeof window !== 'undefined') {
-      window.localStorage.setItem(editComposerStorageKey, 'true');
+    if (editComposerStorageKey) {
+      setStoredItem(editComposerStorageKey, 'true');
     }
   }, [editComposerStorageKey]);
 
   const handleCloseEditComposer = useCallback(() => {
     setShowEditComposer(false);
-    if (editComposerStorageKey && typeof window !== 'undefined') {
-      window.localStorage.removeItem(editComposerStorageKey);
+    if (editComposerStorageKey) {
+      removeStoredItem(editComposerStorageKey);
     }
-    if (editDraftStorageKey && typeof window !== 'undefined') {
-      window.localStorage.removeItem(editDraftStorageKey);
+    if (editDraftStorageKey) {
+      removeStoredItem(editDraftStorageKey);
     }
   }, [editComposerStorageKey, editDraftStorageKey]);
 
@@ -369,11 +370,11 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
       if (error) throw error;
 
       await fetchPost();
-      if (editComposerStorageKey && typeof window !== 'undefined') {
-        window.localStorage.removeItem(editComposerStorageKey);
+      if (editComposerStorageKey) {
+        removeStoredItem(editComposerStorageKey);
       }
-      if (editDraftStorageKey && typeof window !== 'undefined') {
-        window.localStorage.removeItem(editDraftStorageKey);
+      if (editDraftStorageKey) {
+        removeStoredItem(editDraftStorageKey);
       }
       return true;
     } catch (error) {

@@ -1,5 +1,5 @@
 import { useState, memo, useRef } from 'react';
-import { View, TextInput, Pressable, Text, Image, ScrollView, Platform } from 'react-native';
+import { View, TextInput, Pressable, Text, Image as RNImage, ScrollView, Platform } from 'react-native';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { VoiceMicButton } from '../ui/VoiceMicButton';
@@ -9,6 +9,53 @@ import { AttachmentPicker } from '../ui/AttachmentPicker';
 import { Ionicons } from '@expo/vector-icons';
 
 const DRAFT_KEY = 'clive-message';
+const MAX_IMAGES = 5;
+const MAX_FILES = 5;
+
+const isImageFile = (file: File) =>
+  file.type.startsWith('image/') || /\.(gif|jpe?g|png|webp)$/i.test(file.name);
+
+const getFallbackImageMimeType = (file: File) => {
+  if (file.type) return file.type;
+  if (/\.png$/i.test(file.name)) return 'image/png';
+  if (/\.gif$/i.test(file.name)) return 'image/gif';
+  if (/\.webp$/i.test(file.name)) return 'image/webp';
+  return 'image/jpeg';
+};
+
+const readImageSize = (uri: string): Promise<{ width: number; height: number }> => {
+  if (Platform.OS !== 'web' || typeof globalThis.Image === 'undefined') {
+    return Promise.resolve({ width: 0, height: 0 });
+  }
+
+  return new Promise((resolve) => {
+    const image = new globalThis.Image();
+    image.onload = () => resolve({ width: image.naturalWidth || image.width || 0, height: image.naturalHeight || image.height || 0 });
+    image.onerror = () => resolve({ width: 0, height: 0 });
+    image.src = uri;
+  });
+};
+
+const fileToSelectedImage = async (file: File): Promise<SelectedImage> => {
+  const uri = URL.createObjectURL(file);
+  const { width, height } = await readImageSize(uri);
+  return {
+    uri,
+    width,
+    height,
+    fileName: file.name,
+    fileSize: file.size,
+    mimeType: getFallbackImageMimeType(file),
+  };
+};
+
+const fileToSelectedFile = (file: File): SelectedFile => ({
+  uri: URL.createObjectURL(file),
+  name: file.name || 'attachment',
+  size: file.size,
+  mimeType: file.type || 'application/octet-stream',
+  file,
+});
 
 export interface ChatInputAttachments {
   images?: SelectedImage[];
@@ -32,7 +79,9 @@ export const ChatInput = memo(function ChatInput({
   const [inputText, setInputText] = useState(() => getDraft(draftKey));
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
+  const [isDragActive, setIsDragActive] = useState(false);
   const voiceBaseTextRef = useRef<string | null>(null);
+  const dragDepthRef = useRef(0);
 
   const handleRemoveImage = (index: number) => {
     setSelectedImages((prev) => prev.filter((_, i) => i !== index));
@@ -73,10 +122,63 @@ export const ChatInput = memo(function ChatInput({
     ? ({ onKeyDownCapture: submitOnEnter(handleSend) } as any)
     : {};
 
+  const attachDroppedFiles = async (files: File[]) => {
+    if (isLoading || files.length === 0) return;
+
+    const imageSlots = Math.max(0, MAX_IMAGES - selectedImages.length);
+    const fileSlots = Math.max(0, MAX_FILES - selectedFiles.length);
+    const droppedImages = files.filter(isImageFile).slice(0, imageSlots);
+    const droppedFiles = files.filter((file) => !isImageFile(file)).slice(0, fileSlots);
+
+    if (droppedImages.length > 0) {
+      const images = await Promise.all(droppedImages.map(fileToSelectedImage));
+      setSelectedImages((prev) => [...prev, ...images].slice(0, MAX_IMAGES));
+    }
+
+    if (droppedFiles.length > 0) {
+      const fileAttachments = droppedFiles.map(fileToSelectedFile);
+      setSelectedFiles((prev) => [...prev, ...fileAttachments].slice(0, MAX_FILES));
+    }
+  };
+
+  const dragDropProps = Platform.OS === 'web'
+    ? ({
+        onDragEnter: (event: any) => {
+          if (isLoading) return;
+          event.preventDefault?.();
+          event.stopPropagation?.();
+          dragDepthRef.current += 1;
+          setIsDragActive(true);
+        },
+        onDragOver: (event: any) => {
+          if (isLoading) return;
+          event.preventDefault?.();
+          event.stopPropagation?.();
+          if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+          setIsDragActive(true);
+        },
+        onDragLeave: (event: any) => {
+          event.preventDefault?.();
+          event.stopPropagation?.();
+          dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+          if (dragDepthRef.current === 0) {
+            setIsDragActive(false);
+          }
+        },
+        onDrop: async (event: any) => {
+          event.preventDefault?.();
+          event.stopPropagation?.();
+          dragDepthRef.current = 0;
+          setIsDragActive(false);
+          await attachDroppedFiles(Array.from(event.dataTransfer?.files ?? []));
+        },
+      } as any)
+    : {};
+
   const hasContent = inputText.trim().length > 0 || selectedImages.length > 0 || selectedFiles.length > 0;
 
   return (
-    <View className="px-4 py-3 bg-white">
+    <View className="px-4 py-3 bg-white" {...dragDropProps}>
       {/* Attachment previews */}
       {(selectedImages.length > 0 || selectedFiles.length > 0) && (
         <ScrollView
@@ -87,7 +189,7 @@ export const ChatInput = memo(function ChatInput({
         >
           {selectedImages.map((image, index) => (
             <View key={image.uri} className="relative">
-              <Image
+              <RNImage
                 source={{ uri: image.uri }}
                 className="w-14 h-14 rounded-lg bg-gray-100"
                 resizeMode="cover"
@@ -132,7 +234,20 @@ export const ChatInput = memo(function ChatInput({
         </ScrollView>
       )}
 
-      <View className="flex-row items-end bg-cream rounded-2xl px-3 py-2" {...enterToSubmitCaptureProps}>
+      {isDragActive && (
+        <View className="mb-2 rounded-xl border border-gold/30 bg-gold/10 px-3 py-2">
+          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+            Drop images or files to attach
+          </Text>
+        </View>
+      )}
+
+      <View
+        className={`flex-row items-end rounded-2xl px-3 py-2 border ${
+          isDragActive ? 'bg-gold/10 border-gold' : 'bg-cream border-transparent'
+        }`}
+        {...enterToSubmitCaptureProps}
+      >
         <AttachmentPicker
           compact
           selectedImages={selectedImages}

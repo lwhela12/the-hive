@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { getStoredItem, removeStoredItem, setStoredItem } from './webStorage';
 
 export const LAST_APP_PATH_KEY = 'the-hive:last-app-path';
 
@@ -16,28 +16,20 @@ export function isAppPath(pathname: string | null | undefined): pathname is stri
 }
 
 export function getLastAppPath(fallback = '/hive') {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') {
-    return fallback;
-  }
-
-  const savedPath = window.localStorage.getItem(LAST_APP_PATH_KEY);
+  const savedPath = getStoredItem(LAST_APP_PATH_KEY);
   return isAppPath(savedPath) ? savedPath : fallback;
 }
 
 export function saveLastAppPath(pathname: string | null | undefined) {
-  if (Platform.OS !== 'web' || typeof window === 'undefined' || !isAppPath(pathname)) {
+  if (!isAppPath(pathname)) {
     return;
   }
 
-  window.localStorage.setItem(LAST_APP_PATH_KEY, pathname);
+  setStoredItem(LAST_APP_PATH_KEY, pathname);
 }
 
 export function clearLastAppPath() {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.removeItem(LAST_APP_PATH_KEY);
+  removeStoredItem(LAST_APP_PATH_KEY);
 }
 
 export function getLastAppTabName(fallback = 'hive') {

@@ -22,6 +22,7 @@ import {
   getDuesAmountForCoverage,
   type DuesCoverage,
 } from '../../lib/dues';
+import { getHoneyPotErrorMessage, recordHoneyPotTransaction } from '../../lib/honeyPot';
 import { Avatar } from '../../components/ui/Avatar';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
@@ -47,6 +48,8 @@ const ROLE_LABELS: Record<UserRole, string> = {
   treasurer: 'Treasurer',
   admin: 'Admin',
 };
+
+const DUES_QUARTERS = [1, 2, 3, 4] as const;
 
 export default function AdminScreen() {
   const { profile, communityId, communityRole } = useAuth();
@@ -90,6 +93,7 @@ export default function AdminScreen() {
   const [honeyPotAmount, setHoneyPotAmount] = useState('');
   const [honeyPotNote, setHoneyPotNote] = useState('');
   const [honeyPotType, setHoneyPotType] = useState<'deposit' | 'withdrawal'>('deposit');
+  const [recordingHoneyPot, setRecordingHoneyPot] = useState(false);
   const [duesCoverage, setDuesCoverage] = useState<DuesCoverage>('none');
   const [duesMemberId, setDuesMemberId] = useState('');
   const [duesYear, setDuesYear] = useState(String(currentDuesPeriod.year));
@@ -446,6 +450,7 @@ export default function AdminScreen() {
   };
 
   const updateHoneyPot = async () => {
+    if (recordingHoneyPot) return;
     const amount = parseFloat(honeyPotAmount);
     if (isNaN(amount) || amount <= 0) {
       Alert.alert('Error', 'Please enter a valid amount');
@@ -472,19 +477,24 @@ export default function AdminScreen() {
     const signedAmount = honeyPotType === 'withdrawal' ? -amount : amount;
 
     try {
-      const { data: balanceData, error } = await (supabase as any).rpc('record_honey_pot_transaction', {
-        p_community_id: communityId,
-        p_amount: signedAmount,
-        p_transaction_type: honeyPotType,
-        p_note: honeyPotNote.trim() || null,
-        p_related_user_id: taggedAsDues ? duesMemberId : null,
-        p_dues_year: taggedAsDues ? duesYearValue : null,
-        p_dues_quarter: duesCoverage === 'quarter' ? duesQuarterValue : null,
-        p_dues_covered_quarters: duesCoverage === 'year' ? 4 : duesCoverage === 'quarter' ? 1 : null,
+      setRecordingHoneyPot(true);
+      const result = await recordHoneyPotTransaction({
+        communityId,
+        signedAmount,
+        transactionType: honeyPotType,
+        note: honeyPotNote,
+        recordedBy: profile?.id ?? null,
+        relatedUserId: taggedAsDues ? duesMemberId : null,
+        duesYear: taggedAsDues ? duesYearValue : null,
+        duesQuarter: duesCoverage === 'quarter' ? duesQuarterValue : null,
+        duesCoveredQuarters: duesCoverage === 'year' ? 4 : duesCoverage === 'quarter' ? 1 : null,
+        fallbackDuesLabel: taggedAsDues
+          ? `${selectedDuesMember?.name ?? 'Member'} · ${duesCoverage === 'year' ? `${duesYearValue} full year` : `Q${duesQuarterValue} ${duesYearValue}`}`
+          : null,
       });
-      if (error) throw error;
+      const savedBalance = result.balance;
+      const savedStructuredDues = taggedAsDues && result.savedStructuredDues;
 
-      const savedBalance = Number(balanceData ?? 0);
       setHoneyPotBalance(savedBalance);
       queryClient.setQueryData(queryKeys.honeyPot(communityId), savedBalance);
       await queryClient.invalidateQueries({ queryKey: queryKeys.honeyPot(communityId) });
@@ -493,10 +503,17 @@ export default function AdminScreen() {
       if (duesCoverage !== 'none') {
         setDuesMemberId('');
       }
-      Alert.alert('Success', `Honey Pot ${honeyPotType === 'deposit' ? 'deposit' : 'withdrawal'} recorded`);
+      Alert.alert(
+        'Success',
+        savedStructuredDues || !taggedAsDues
+          ? `Honey Pot ${honeyPotType === 'deposit' ? 'deposit' : 'withdrawal'} recorded`
+          : 'Deposit recorded. The dues tag was saved in the note, but reminder tracking needs the latest database migration.'
+      );
     } catch (err) {
       console.error('Honey pot update error:', err);
-      Alert.alert('Error', 'Failed to update Honey Pot');
+      Alert.alert('Honey Pot update failed', getHoneyPotErrorMessage(err));
+    } finally {
+      setRecordingHoneyPot(false);
     }
   };
 
@@ -578,25 +595,51 @@ export default function AdminScreen() {
                       Dues tag (optional)
                     </Text>
                     <View className="flex-row flex-wrap mb-2">
-                      {([
-                        { value: 'none', label: 'No dues tag' },
-                        { value: 'quarter', label: `Q${duesQuarter || currentDuesPeriod.quarter} · $${QUARTERLY_DUES_AMOUNT}` },
-                        { value: 'year', label: `Full year · $${ANNUAL_DUES_AMOUNT}` },
-                      ] as { value: DuesCoverage; label: string }[]).map((option) => (
-                        <Pressable
-                          key={option.value}
-                          onPress={() => setDuesCoverage(option.value)}
-                          className={`px-3 py-2 rounded-lg mr-2 mb-2 ${
-                            duesCoverage === option.value ? 'bg-honey-500' : 'bg-gray-100'
-                          }`}
-                        >
-                          <Text className={`text-xs font-medium ${
-                            duesCoverage === option.value ? 'text-white' : 'text-gray-600'
-                          }`}>
-                            {option.label}
-                          </Text>
-                        </Pressable>
-                      ))}
+                      <Pressable
+                        onPress={() => setDuesCoverage('none')}
+                        className={`px-3 py-2 rounded-lg mr-2 mb-2 ${
+                          duesCoverage === 'none' ? 'bg-honey-500' : 'bg-gray-100'
+                        }`}
+                      >
+                        <Text className={`text-xs font-medium ${
+                          duesCoverage === 'none' ? 'text-white' : 'text-gray-600'
+                        }`}>
+                          No dues tag
+                        </Text>
+                      </Pressable>
+                      {DUES_QUARTERS.map((quarter) => {
+                        const isSelected = duesCoverage === 'quarter' && duesQuarter === String(quarter);
+                        return (
+                          <Pressable
+                            key={quarter}
+                            onPress={() => {
+                              setDuesCoverage('quarter');
+                              setDuesQuarter(String(quarter));
+                            }}
+                            className={`px-3 py-2 rounded-lg mr-2 mb-2 ${
+                              isSelected ? 'bg-honey-500' : 'bg-gray-100'
+                            }`}
+                          >
+                            <Text className={`text-xs font-medium ${
+                              isSelected ? 'text-white' : 'text-gray-600'
+                            }`}>
+                              Q{quarter} · ${QUARTERLY_DUES_AMOUNT}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                      <Pressable
+                        onPress={() => setDuesCoverage('year')}
+                        className={`px-3 py-2 rounded-lg mr-2 mb-2 ${
+                          duesCoverage === 'year' ? 'bg-honey-500' : 'bg-gray-100'
+                        }`}
+                      >
+                        <Text className={`text-xs font-medium ${
+                          duesCoverage === 'year' ? 'text-white' : 'text-gray-600'
+                        }`}>
+                          Full year · ${ANNUAL_DUES_AMOUNT}
+                        </Text>
+                      </Pressable>
                     </View>
 
                     {duesCoverage !== 'none' && (
@@ -611,22 +654,17 @@ export default function AdminScreen() {
                             style={{ width: 92 }}
                           />
                           {duesCoverage === 'quarter' && (
-                            <View className="flex-row flex-1">
-                              {[1, 2, 3, 4].map((quarter) => (
-                                <Pressable
-                                  key={quarter}
-                                  onPress={() => setDuesQuarter(String(quarter))}
-                                  className={`flex-1 py-2 rounded-lg mr-1 last:mr-0 ${
-                                    duesQuarter === String(quarter) ? 'bg-honey-500' : 'bg-white'
-                                  }`}
-                                >
-                                  <Text className={`text-center text-xs font-semibold ${
-                                    duesQuarter === String(quarter) ? 'text-white' : 'text-gray-600'
-                                  }`}>
-                                    Q{quarter}
-                                  </Text>
-                                </Pressable>
-                              ))}
+                            <View className="flex-1 bg-white rounded-lg px-3 py-2 border border-honey-100">
+                              <Text className="text-xs font-semibold text-gray-600">
+                                Q{duesQuarter} selected
+                              </Text>
+                            </View>
+                          )}
+                          {duesCoverage === 'year' && (
+                            <View className="flex-1 bg-white rounded-lg px-3 py-2 border border-honey-100">
+                              <Text className="text-xs font-semibold text-gray-600">
+                                Covers Q1-Q4
+                              </Text>
                             </View>
                           )}
                         </View>
@@ -661,10 +699,14 @@ export default function AdminScreen() {
                 )}
                 <Pressable
                   onPress={updateHoneyPot}
+                  disabled={recordingHoneyPot}
                   className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
+                  style={{ opacity: recordingHoneyPot ? 0.6 : 1 }}
                 >
                   <Text className="text-center font-semibold text-white">
-                    Record {honeyPotType === 'deposit' ? 'Deposit' : 'Withdrawal'}
+                    {recordingHoneyPot
+                      ? 'Recording...'
+                      : `Record ${honeyPotType === 'deposit' ? 'Deposit' : 'Withdrawal'}`}
                   </Text>
                 </Pressable>
               </>

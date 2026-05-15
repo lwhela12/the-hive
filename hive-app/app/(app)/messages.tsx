@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useChatRooms, RoomWithData } from '../../lib/hooks/useChatRooms';
 import { prefetchRoomMessages } from '../../lib/hooks/useRoomMessagesQuery';
+import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { ChatRoomItem } from '../../components/messaging/ChatRoomItem';
 import { RoomChatView } from '../../components/messaging/RoomChatView';
 import { MemberPicker } from '../../components/messaging/MemberPicker';
@@ -49,8 +50,8 @@ export default function MessagesScreen() {
   useEffect(() => {
     if (selectedRoom || rooms.length === 0) return;
 
-    const savedRoomId = selectedRoomStorageKey && typeof window !== 'undefined'
-      ? window.localStorage.getItem(selectedRoomStorageKey)
+    const savedRoomId = selectedRoomStorageKey
+      ? getStoredItem(selectedRoomStorageKey)
       : null;
     const roomToRestore = rooms.find((room) => room.id === (roomId || savedRoomId));
 
@@ -65,8 +66,8 @@ export default function MessagesScreen() {
     setSelectedRoom(room);
     setCustomizeRoomOnOpen(false);
 
-    if (selectedRoomStorageKey && typeof window !== 'undefined') {
-      window.localStorage.setItem(selectedRoomStorageKey, room.id);
+    if (selectedRoomStorageKey) {
+      setStoredItem(selectedRoomStorageKey, room.id);
     }
   }, [markRoomAsRead, selectedRoomStorageKey]);
 
@@ -75,8 +76,8 @@ export default function MessagesScreen() {
     setCustomizeRoomOnOpen(true);
     setSelectedRoom(room);
 
-    if (selectedRoomStorageKey && typeof window !== 'undefined') {
-      window.localStorage.setItem(selectedRoomStorageKey, room.id);
+    if (selectedRoomStorageKey) {
+      setStoredItem(selectedRoomStorageKey, room.id);
     }
   }, [markRoomAsRead, selectedRoomStorageKey]);
 
@@ -125,8 +126,8 @@ export default function MessagesScreen() {
           markRoomAsRead(selectedRoom.id);
           setSelectedRoom(null);
           setCustomizeRoomOnOpen(false);
-          if (selectedRoomStorageKey && typeof window !== 'undefined') {
-            window.localStorage.removeItem(selectedRoomStorageKey);
+          if (selectedRoomStorageKey) {
+            removeStoredItem(selectedRoomStorageKey);
           }
         }}
       />

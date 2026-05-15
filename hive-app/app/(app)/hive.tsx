@@ -27,6 +27,7 @@ import { formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUt
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getBoardNameForWish, getWishGoalTitle } from '../../lib/boardWishLinks';
+import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import {
   QUARTERLY_DUES_AMOUNT,
   duesTransactionCoversQuarter,
@@ -734,8 +735,8 @@ export default function HiveScreen() {
   const activityReadIdsKey = communityId ? `the-hive:activity-read-ids:${communityId}` : null;
 
   const [sessionReadAt, setSessionReadAt] = useState<string>(() => {
-    if (typeof window !== 'undefined' && activityReadKey) {
-      return window.localStorage.getItem(activityReadKey) ?? new Date(0).toISOString();
+    if (activityReadKey) {
+      return getStoredItem(activityReadKey) ?? new Date(0).toISOString();
     }
     return new Date(0).toISOString();
   });
@@ -756,9 +757,9 @@ export default function HiveScreen() {
 
   // Load per-item read IDs from localStorage once communityId is known
   useEffect(() => {
-    if (!activityReadIdsKey || typeof window === 'undefined') return;
+    if (!activityReadIdsKey) return;
     try {
-      const stored = window.localStorage.getItem(activityReadIdsKey);
+      const stored = getStoredItem(activityReadIdsKey);
       if (stored) setReadItemIds(new Set(JSON.parse(stored)));
     } catch {}
   }, [activityReadIdsKey]);
@@ -767,8 +768,8 @@ export default function HiveScreen() {
     setReadItemIds(prev => {
       const next = new Set(prev);
       next.add(itemId);
-      if (activityReadIdsKey && typeof window !== 'undefined') {
-        window.localStorage.setItem(activityReadIdsKey, JSON.stringify([...next]));
+      if (activityReadIdsKey) {
+        setStoredItem(activityReadIdsKey, JSON.stringify([...next]));
       }
       return next;
     });
@@ -787,21 +788,19 @@ export default function HiveScreen() {
     if (hasUnreadActivity) {
       triggerActivityConfetti();
     }
-    if (typeof window !== 'undefined') {
-      if (activityReadKey) window.localStorage.setItem(activityReadKey, now);
-      if (activityReadIdsKey) window.localStorage.removeItem(activityReadIdsKey);
-    }
+    if (activityReadKey) setStoredItem(activityReadKey, now);
+    if (activityReadIdsKey) removeStoredItem(activityReadIdsKey);
   }, [activityReadKey, activityReadIdsKey, hasUnreadActivity, triggerActivityConfetti]);
 
   const navigateFromActivityItem = useCallback((item: import('../../lib/hooks/useActivityFeed').ActivityItem) => {
     if (item.navigatesTo === 'board') {
       // Pre-set the board's localStorage keys so it opens directly to the right post
-      if (communityId && typeof window !== 'undefined') {
+      if (communityId) {
         if (item.categoryId) {
-          window.localStorage.setItem(`the-hive:last-board-category:${communityId}`, item.categoryId);
+          setStoredItem(`the-hive:last-board-category:${communityId}`, item.categoryId);
         }
-        window.localStorage.setItem(`the-hive:last-board-post:${communityId}`, item.sourceId);
-        window.localStorage.setItem(`the-hive:board-direct-open:${communityId}`, 'true');
+        setStoredItem(`the-hive:last-board-post:${communityId}`, item.sourceId);
+        setStoredItem(`the-hive:board-direct-open:${communityId}`, 'true');
       }
       router.push('/board');
     } else if (item.navigatesTo === 'members') {
@@ -1214,11 +1213,9 @@ export default function HiveScreen() {
 
   const openBoardFromWish = useCallback((categoryId: string) => {
     if (!communityId) return;
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(`the-hive:last-board-category:${communityId}`, categoryId);
-      window.localStorage.removeItem(`the-hive:last-board-post:${communityId}`);
-      window.localStorage.setItem(`the-hive:board-direct-open:${communityId}`, 'true');
-    }
+    setStoredItem(`the-hive:last-board-category:${communityId}`, categoryId);
+    removeStoredItem(`the-hive:last-board-post:${communityId}`);
+    setStoredItem(`the-hive:board-direct-open:${communityId}`, 'true');
     setSelectedWish(null);
     router.push('/board');
   }, [communityId, router]);

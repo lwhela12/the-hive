@@ -9,9 +9,10 @@ import {
   SSEWriter,
 } from '../_shared/streaming.ts';
 
-const SYSTEM_PROMPT = `You are the HIVE Assistant, an AI helper for H.I.V.E. (Human Insight Vision Execution), a close-knit community of 12 people practicing "high-definition wishing."
+const SYSTEM_PROMPT = `You are Clive, the HIVE Assistant, an AI helper for H.I.V.E. (Human Insight Vision Execution), a close-knit community of 12 people practicing "high-definition wishing."
 
 **IMPORTANT: Use "H.I.V.E." for the formal brand name and "the HIVE" in prose. Avoid mixed-case brand variants.**
+**Identity: Your name is Clive. The signed-in user's name appears in context; that is the human you are helping, not you. If the user addresses "Clive," they are talking to you. Never claim to be the signed-in user.**
 **Speed posture: respond quickly and concisely by default. Prefer 1-3 short paragraphs, ask one clear next question, and only go deep when the user asks for depth or the task truly requires it.**
 
 ## Your Core Purpose
@@ -85,7 +86,7 @@ Examples:
 
 7a. **HD boards are active member goals.** A board with board_type "hd_board" belongs to a specific member and project/goal. Treat posts there as resources, offers, blockers, and updates for that member's HummDinger/High Definition wish. A board with board_type "helper_log" records 15-minute HIVE helper acts for recaps, newsletters, and slide decks.
 
-7b. **You can steward the app, but use a two-step safety flow.** For requests that would change shared app state (create boards/posts/events, mark todos complete, mark wishes fulfilled, or complete/archive HD boards), first inspect anything you need with read tools, then call propose_app_actions with the exact changes. Tell the user what will happen and ask them to say "apply it" or "yes, do it." Only call apply_pending_actions when the user's latest message clearly approves a pending proposal from a previous assistant response. Never propose and apply in the same response. Never apply destructive or broad changes from vague approval.
+7b. **You can steward the app, but use a two-step safety flow.** For requests that would change shared app state (create boards/posts/events/action items, mark todos complete, fulfill wishes, or complete/archive HD boards), first inspect anything you need with read tools, then call propose_app_actions with the exact changes. Tell the user what will happen and ask them to say "apply it" or "yes, do it." Only call apply_pending_actions when the user's latest message clearly approves a pending proposal from a previous assistant response. Never propose and apply in the same response. Never apply destructive or broad changes from vague approval.
 
 8. **The Queen Bee is special.** The current Queen Bee's project takes priority. Look for ways to help their project.
 
@@ -191,6 +192,16 @@ const QUICK_SURPRISE_RESPONSES = [
   "Surprise prompt: what is one tiny luxury you could make repeatable, not occasional?",
   "Two-minute reset: unclench your jaw, drop your shoulders, and name one thing you want help making lighter.",
 ];
+const QUICK_JOKE_RESPONSES = [
+  "Why did the bee bring a notebook to the meeting? Because it wanted to keep its buzz-ness in order.",
+  "I tried to organize a HIVE pun contest, but everyone said the jokes were too swarm.",
+  "Why did the wish go to the gym? It wanted to become more actionable.",
+];
+const QUICK_RIDDLE_RESPONSES = [
+  "Riddle me this: I get clearer when people ask questions, and stronger when people help carry me. What am I? A high-definition wish.",
+  "I can be tiny, but I move a whole project forward. I often take 15 minutes and make someone feel less alone. What am I? A HIVE helper act.",
+  "I am not a task, but I can turn into one. I am not a dream, but I point toward one. What am I? A wish.",
+];
 
 const FAST_CHAT_MODEL = 'claude-haiku-4-5';
 const DEEP_CHAT_MODEL = 'claude-sonnet-4-5-20250929';
@@ -200,7 +211,7 @@ function selectChatModel(message: unknown, refineWish?: unknown) {
   if (typeof message !== 'string') return FAST_CHAT_MODEL;
   const text = message.toLowerCase();
   const needsDeepAppStewardship =
-    /\b(apply it|yes, do it|create board|create event|delete|archive|mark .* complete|complete .* board|move .* wish|clean up|bulk|all of them)\b/.test(text);
+    /\b(apply it|yes, do it|create board|create event|action item|to do|todo|task|wish|duplicate|duplicates|dedupe|delete|archive|mark .* complete|complete .* board|move .* wish|clean up|bulk|all of them)\b/.test(text);
 
   return refineWish || needsDeepAppStewardship ? DEEP_CHAT_MODEL : FAST_CHAT_MODEL;
 }
@@ -217,6 +228,26 @@ function isQuickSurpriseRequest(message: unknown, mode?: string, refineWish?: un
 
 function getQuickSurpriseResponse(): string {
   return QUICK_SURPRISE_RESPONSES[Math.floor(Math.random() * QUICK_SURPRISE_RESPONSES.length)];
+}
+
+function getQuickPlayfulResponse(message: unknown, mode?: string, refineWish?: unknown, attachments?: unknown[]): string | null {
+  if (
+    typeof message !== 'string' ||
+    (mode || 'default') !== 'default' ||
+    refineWish ||
+    (attachments && attachments.length > 0)
+  ) {
+    return null;
+  }
+
+  const normalized = message.trim().toLowerCase();
+  const responses = normalized === 'tell me a joke'
+    ? QUICK_JOKE_RESPONSES
+    : normalized === 'give me a riddle'
+      ? QUICK_RIDDLE_RESPONSES
+      : null;
+
+  return responses ? responses[Math.floor(Math.random() * responses.length)] : null;
 }
 
 function quickContextMetadata() {
@@ -533,7 +564,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "propose_app_actions",
-    description: "Create a pending, user-approved action plan for shared app changes. This does not apply changes. Use this for creating boards/posts/events, completing todos, fulfilling wishes, or completing HD boards.",
+    description: "Create a pending, user-approved action plan for shared app changes. This does not apply changes. Use this for creating boards/posts/events/action items, completing todos, fulfilling wishes, or completing HD boards.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -546,17 +577,18 @@ const tools: Anthropic.Tool[] = [
             properties: {
               action_type: {
                 type: "string",
-                description: "One of: create_hd_board, create_discussion_board, create_board_post, mark_action_items_complete, mark_wishes_fulfilled, mark_hd_boards_complete, create_event"
+                description: "One of: create_action_item, create_hd_board, create_discussion_board, create_board_post, mark_action_items_complete, mark_wishes_fulfilled, mark_hd_boards_complete, create_event"
               },
               owner_name: { type: "string", description: "Member who owns the HD board or wish" },
               goal_title: { type: "string", description: "HD board goal/project title" },
               board_name: { type: "string", description: "Board/category name or search text" },
-              title: { type: "string", description: "Post or event title" },
+              title: { type: "string", description: "Post, event, or short task title" },
               content: { type: "string", description: "Post content" },
-              description: { type: "string", description: "Board or event description" },
+              description: { type: "string", description: "Board, event, or action item description" },
               query: { type: "string", description: "Search text for todos, wishes, or boards to update" },
-              assignee_name: { type: "string", description: "Action item assignee name" },
+              assignee_name: { type: "string", description: "Action item assignee name; omit to assign the task to the signed-in user" },
               completion_note: { type: "string", description: "Note explaining what was completed" },
+              due_date: { type: "string", description: "Optional action item due date in YYYY-MM-DD format" },
               event_date: { type: "string", description: "Event date in YYYY-MM-DD format" },
               event_time: { type: "string", description: "Event time in HH:MM format" },
               location: { type: "string", description: "Event location" },
@@ -585,6 +617,7 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
 type AppActionType =
+  | 'create_action_item'
   | 'create_hd_board'
   | 'create_discussion_board'
   | 'create_board_post'
@@ -604,6 +637,7 @@ type AppAction = {
   query?: string;
   assignee_name?: string;
   completion_note?: string;
+  due_date?: string;
   event_date?: string;
   event_time?: string;
   location?: string;
@@ -672,6 +706,8 @@ const hasExplicitApproval = (message?: string | null) => {
 
 const actionSummary = (action: AppAction) => {
   switch (action.action_type) {
+    case 'create_action_item':
+      return `Create action item "${action.description || action.title || 'Untitled task'}"${action.assignee_name ? ` for ${action.assignee_name}` : ''}`;
     case 'create_hd_board':
       return `Create HD board for ${action.owner_name || 'member'}: ${action.goal_title || action.board_name || 'Untitled goal'}`;
     case 'create_discussion_board':
@@ -989,6 +1025,47 @@ async function createBoardPost(
   return { action_type: action.action_type, ok: true, message: `Posted "${title}" in ${category.name}.`, ids: [data.id] };
 }
 
+async function createActionItem(
+  supabase: SupabaseClient,
+  communityId: string,
+  userId: string,
+  action: AppAction
+): Promise<ActionExecutionResult> {
+  const description = (action.description || action.title || action.content || '').trim();
+  if (!description) {
+    return { action_type: action.action_type, ok: false, message: 'Action item needs a description.' };
+  }
+
+  let assignedTo = userId;
+  if (action.assignee_name || action.owner_name) {
+    const assignee = await findMemberByName(supabase, communityId, action.assignee_name || action.owner_name);
+    if (!assignee) {
+      return { action_type: action.action_type, ok: false, message: `Could not find assignee "${action.assignee_name || action.owner_name || ''}".` };
+    }
+    assignedTo = assignee.id;
+  }
+
+  const dueDate = action.due_date || action.event_date || null;
+  const { data, error } = await supabase
+    .from('action_items')
+    .insert({
+      meeting_id: null,
+      community_id: communityId,
+      description,
+      assigned_to: assignedTo,
+      due_date: dueDate,
+      completed: false,
+    })
+    .select('id')
+    .single();
+
+  if (error || !data) {
+    return { action_type: action.action_type, ok: false, message: `Could not create action item: ${error?.message || 'unknown error'}` };
+  }
+
+  return { action_type: action.action_type, ok: true, message: `Created action item "${description}".`, ids: [data.id] };
+}
+
 async function markActionItemsComplete(
   supabase: SupabaseClient,
   communityId: string,
@@ -1167,6 +1244,8 @@ async function executeAppAction(
   action: AppAction
 ): Promise<ActionExecutionResult> {
   switch (action.action_type) {
+    case 'create_action_item':
+      return createActionItem(supabase, communityId, userId, action);
     case 'create_hd_board':
       return createHdBoard(supabase, communityId, userId, action);
     case 'create_discussion_board':
@@ -1240,6 +1319,10 @@ serve(async (req) => {
     if (isQuickSurpriseRequest(message, mode, refine_wish, attachments)) {
       const quickResponse = getQuickSurpriseResponse();
       return stream ? quickStreamResponse(quickResponse) : quickJsonResponse(quickResponse);
+    }
+    const quickPlayfulResponse = getQuickPlayfulResponse(message, mode, refine_wish, attachments);
+    if (quickPlayfulResponse) {
+      return stream ? quickStreamResponse(quickPlayfulResponse) : quickJsonResponse(quickPlayfulResponse);
     }
 
     // Build comprehensive context using the smart context builder

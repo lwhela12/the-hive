@@ -45,36 +45,6 @@ const ROLE_LABELS: Partial<Record<UserRole, string>> = {
   treasurer: 'Treasurer',
 };
 
-const HIVE_CABINET = [
-  {
-    title: 'Founder & Apiarist',
-    memberName: 'Nat',
-    aliases: ['Natalie'],
-    icon: '👑',
-    description: 'Guides the HIVE vision, culture, and creative abundance.',
-  },
-  {
-    title: 'Treasurer',
-    memberName: 'Ollie',
-    aliases: ['Oliver'],
-    icon: '🍯',
-    description: 'Helps steward the Honey Pot and money flow.',
-  },
-  {
-    title: 'Bee Keeper',
-    memberName: 'Lucas',
-    icon: '🐝',
-    description: 'Tends the app, systems, and tech infrastructure.',
-  },
-  {
-    title: 'People & Culture',
-    memberName: 'Izzy',
-    aliases: ['Isabelle'],
-    icon: '🤝',
-    description: 'Helps make sure every HIVE member is heard, welcomed, and connected.',
-  },
-];
-
 const PROFILE_PROMPT_LIMITS = {
   name: 80,
   bio: 1000,
@@ -82,25 +52,6 @@ const PROFILE_PROMPT_LIMITS = {
   funFact: 220,
   skills: 700,
 };
-
-function getHiveTitle(name: string) {
-  const normalized = name.toLowerCase();
-  const match = HIVE_CABINET.find(role => {
-    const names = [role.memberName, ...(role.aliases ?? [])];
-    return names.some(alias => normalized.includes(alias.toLowerCase()));
-  });
-  return match?.title ?? null;
-}
-
-function getHiveTitleIcon(title?: string | null) {
-  return HIVE_CABINET.find(role => role.title === title)?.icon ?? '✨';
-}
-
-function getHiveTitleRank(title?: string | null) {
-  const index = HIVE_CABINET.findIndex(role => role.title === title);
-  return index === -1 ? Number.POSITIVE_INFINITY : index;
-}
-
 
 function SilhouetteAvatar({ size }: { size: number }) {
   return (

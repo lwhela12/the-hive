@@ -1,7 +1,6 @@
 import { createElement, useMemo, memo, useEffect, useState } from 'react';
-import type { ComponentProps, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView, Image, useWindowDimensions, StyleSheet, Alert, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -10,21 +9,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { ConversationItem } from './ConversationItem';
-import { useAuth } from '../../lib/hooks/useAuth';
-import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
-import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import type { Conversation, ConversationProject } from '../../types';
 
 const cliveIcon = require('../../assets/Clive_logo.png');
-
-type SidebarNavItem = {
-  iconName?: ComponentProps<typeof Ionicons>['name'];
-  imageSource?: any;
-  label: string;
-  route: '/hive' | '/board' | '/messages' | '/meetings' | '/profile' | '/admin';
-  badge?: number;
-  isCircular?: boolean;
-};
 
 interface ConversationSidebarProps {
   conversations: Conversation[];
@@ -101,12 +88,9 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   isCollapsed = false,
   onToggleCollapse,
 }: ConversationSidebarProps) {
-  const router = useRouter();
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set());
   const [draggingConversationId, setDraggingConversationId] = useState<string | null>(null);
   const [dropTargetProjectId, setDropTargetProjectId] = useState<string | null>(null);
-  const { profile, communityId, communityRole } = useAuth();
-  const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width: screenWidth } = useWindowDimensions();
   const drawerWidth = screenWidth * DRAWER_WIDTH_PERCENT;
 
@@ -156,32 +140,6 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   const backdropAnimatedStyle = useAnimatedStyle(() => ({
     opacity: backdropOpacity.value,
   }));
-
-  // Navigation items for mobile sidebar
-  const isAdmin = communityRole === 'admin' || communityRole === 'treasurer' || profile?.role === 'admin' || profile?.role === 'treasurer';
-  const navItems: SidebarNavItem[] = [
-    { iconName: 'home-outline', label: 'Home', route: '/hive' },
-    { iconName: 'grid-outline', label: 'Boards', route: '/board' },
-    { iconName: 'chatbubble-ellipses-outline', label: 'Messages', route: '/messages', badge: totalUnreadDMs },
-    { iconName: 'calendar-outline', label: 'Meeting', route: '/meetings' },
-    {
-      iconName: 'person-circle-outline',
-      imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined,
-      label: 'Profile',
-      route: '/profile',
-      isCircular: true,
-    },
-    ...(isAdmin ? [{ iconName: 'settings-outline' as const, label: 'Admin', route: '/admin' as const }] : []),
-  ];
-
-  // Close with animation, then perform action
-  const closeAndNavigate = (route: string) => {
-    if (route === '/board') {
-      clearBoardNavigationState(communityId);
-    }
-    onClose?.();
-    router.push(route as any);
-  };
 
   const closeAndSelectConversation = (id: string) => {
     onClose?.();
@@ -506,53 +464,6 @@ export const ConversationSidebar = memo(function ConversationSidebar({
         )}
       </ScrollView>
 
-      {/* Mobile Navigation */}
-      {isMobile && (
-        <View className="border-t border-gray-100 pt-3 pb-4 px-4">
-          <Text
-            style={{ fontFamily: 'Lato_700Bold' }}
-            className="text-xs text-gray-400 uppercase tracking-wide mb-3"
-          >
-            Navigate
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {navItems.map((item) => {
-              const badge = item.badge ?? 0;
-              return (
-                <Pressable
-                  key={item.route}
-                  onPress={() => closeAndNavigate(item.route)}
-                  className="flex-row items-center bg-gray-50 px-3 py-2.5 rounded-xl active:bg-gray-100"
-                >
-                  {item.imageSource ? (
-                    <Image
-                      source={item.imageSource}
-                      style={{ width: 20, height: 20, borderRadius: item.isCircular ? 10 : 4, marginRight: 8 }}
-                    />
-                  ) : item.iconName ? (
-                    <Ionicons name={item.iconName} size={20} color="#8F8F8F" style={{ marginRight: 8 }} />
-                  ) : (
-                    <View style={{ width: 20, marginRight: 8 }} />
-                  )}
-                  <Text
-                    style={{ fontFamily: 'Lato_400Regular' }}
-                    className="text-charcoal text-sm"
-                  >
-                    {item.label}
-                  </Text>
-                  {badge > 0 ? (
-                    <View className="ml-1.5 bg-gold rounded-full min-w-[18px] h-[18px] px-1 items-center justify-center">
-                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-[10px]">
-                        {badge > 99 ? '99+' : badge}
-                      </Text>
-                    </View>
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      )}
     </View>
   );
 

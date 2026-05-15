@@ -14,12 +14,6 @@ import type {
   BoardPostIndexItem,
   RecentRoomMessage,
 } from './types.ts';
-import {
-  summarizeConversation,
-  summarizeBoardActivity,
-  summarizeRoomMessages,
-  summarizeMeetings,
-} from './summarizers.ts';
 
 // Rough token estimation (1 token ~= 4 characters)
 function estimateTokens(text: string): number {
@@ -78,7 +72,8 @@ export async function buildContext(params: BuildContextParams): Promise<ContextR
   let recentRoomMessages: RecentRoomMessage[] = [];
 
   if (mode === 'default') {
-    // Fetch summaries, board post index, and recent room messages in parallel
+    // Fetch cached summaries, board post index, and recent room messages in parallel.
+    // Keep live chat fast: never generate LLM summaries on the request path.
     const [boardSummaryResult, messagesSummaryResult, meetingsSummaryResult, boardIndexResult, roomMessagesResult] = await Promise.all([
       getOrGenerateSummary(supabase, communityId, userId, 'board_activity', metadata),
       getOrGenerateSummary(supabase, communityId, userId, 'room_messages', metadata),
@@ -462,45 +457,7 @@ async function getOrGenerateConversationSummary(
   }
 
   metadata.cacheMisses.push('conversation');
-
-  // Need to generate summary - get older messages (exclude last 10)
-  const { data: olderMessages } = await supabase
-    .from('chat_messages')
-    .select('role, content')
-    .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true })
-    .limit(messageCount - 10);
-
-  if (!olderMessages || olderMessages.length === 0) {
-    return '';
-  }
-
-  // Generate summary using Claude
-  const summary = await summarizeConversation(olderMessages);
-  metadata.summariesUsed.push('conversation');
-
-  // Cache the summary (expires when new message added via trigger)
-  const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + 24); // 24 hour fallback
-
-  await supabase.from('context_summaries').upsert(
-    {
-      community_id: communityId,
-      user_id: userId,
-      conversation_id: conversationId,
-      summary_type: 'conversation',
-      summary_content: summary,
-      source_count: olderMessages.length,
-      last_source_timestamp: new Date().toISOString(),
-      estimated_tokens: estimateTokens(summary),
-      expires_at: expiresAt.toISOString(),
-    },
-    {
-      onConflict: 'community_id,user_id,summary_type,conversation_id',
-    }
-  );
-
-  return summary;
+  return '';
 }
 
 /**
@@ -529,62 +486,7 @@ async function getOrGenerateSummary(
   }
 
   metadata.cacheMisses.push(summaryType);
-
-  // Generate new summary
-  let summary = '';
-  let sourceCount = 0;
-
-  switch (summaryType) {
-    case 'board_activity': {
-      const result = await summarizeBoardActivity(supabase, communityId);
-      summary = result.summary;
-      sourceCount = result.count;
-      break;
-    }
-    case 'room_messages': {
-      const result = await summarizeRoomMessages(supabase, communityId, userId);
-      summary = result.summary;
-      sourceCount = result.count;
-      break;
-    }
-    case 'meetings': {
-      const result = await summarizeMeetings(supabase, communityId, userId);
-      summary = result.summary;
-      sourceCount = result.count;
-      break;
-    }
-  }
-
-  if (summary) {
-    metadata.summariesUsed.push(summaryType);
-
-    // Cache expiration: 1 hour for board/messages, 24 hours for meetings
-    const expiresAt = new Date();
-    if (summaryType === 'meetings') {
-      expiresAt.setHours(expiresAt.getHours() + 24);
-    } else {
-      expiresAt.setHours(expiresAt.getHours() + 1);
-    }
-
-    await supabase.from('context_summaries').upsert(
-      {
-        community_id: communityId,
-        user_id: summaryType === 'room_messages' ? userId : null,
-        summary_type: summaryType,
-        conversation_id: null,
-        summary_content: summary,
-        source_count: sourceCount,
-        last_source_timestamp: new Date().toISOString(),
-        estimated_tokens: estimateTokens(summary),
-        expires_at: expiresAt.toISOString(),
-      },
-      {
-        onConflict: 'community_id,user_id,summary_type,conversation_id',
-      }
-    );
-  }
-
-  return summary;
+  return '';
 }
 
 /**
@@ -615,16 +517,16 @@ function assembleContext(data: {
       .map((a) => `- ${a.completed ? '[DONE]' : '[TODO]'} ${a.description}${a.due_date ? ` (due: ${a.due_date})` : ''}`)
       .join('\n') || 'None';
 
-  sections.push(`## About You
+  sections.push(`## Signed-in User (the human Clive is helping, not Clive)
 Name: ${data.userContext.profile.name}
 
-### Your Skills
+### User's Skills
 ${userSkills}
 
-### Your Wishes
+### User's Wishes
 ${userWishes}
 
-### Your Action Items
+### User's Action Items
 ${actionItems}`);
 
   // Community Context (skip for onboarding)

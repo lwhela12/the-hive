@@ -40,7 +40,7 @@ export const NavigationDrawer = memo(function NavigationDrawer({
     { icon: null, customIcon: 'home', label: 'Home', route: '/hive' },
     { icon: null, customIcon: 'boards', label: 'Boards', route: '/board' },
     { icon: null, customIcon: 'messages', label: 'Messages', route: '/messages', badge: unreadDMCount },
-    { icon: null, customIcon: 'meetings', label: 'Meeting', route: '/meetings' },
+    { icon: null, customIcon: 'meetings', label: 'Meeting Hub', route: '/meetings' },
     { icon: null, customIcon: 'profile', label: 'Profile', route: '/profile' },
     ...(isAdmin ? [{ icon: null, customIcon: 'admin', label: 'Admin', route: '/admin' }] : []),
   ];

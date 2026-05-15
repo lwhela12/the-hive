@@ -3,15 +3,13 @@ import {
   View,
   Pressable,
   Modal,
-  Dimensions,
   Text,
   Linking,
+  useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Attachment } from '../../types';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface AttachmentGalleryProps {
   attachments: Attachment[];
@@ -20,9 +18,11 @@ interface AttachmentGalleryProps {
 
 export function AttachmentGallery({
   attachments,
-  maxWidth = SCREEN_WIDTH * 0.8,
+  maxWidth,
 }: AttachmentGalleryProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const galleryMaxWidth = maxWidth ?? screenWidth * 0.8;
   const safeAttachments = attachments ?? [];
   const imageAttachments = safeAttachments.filter((attachment) => attachment.mime_type?.startsWith('image/'));
   const fileAttachments = safeAttachments.filter((attachment) => !attachment.mime_type?.startsWith('image/'));
@@ -41,7 +41,7 @@ export function AttachmentGallery({
   const getGridLayout = () => {
     const count = imageAttachments.length;
     const gap = 4;
-    const imageWidth = maxWidth;
+    const imageWidth = galleryMaxWidth;
 
     switch (count) {
       case 1:
@@ -120,8 +120,8 @@ export function AttachmentGallery({
     if (count === 3) {
       // First image full width, then 2 below
       return (
-        <View style={{ width: maxWidth, gap }}>
-          {renderImage(imageAttachments[0], 0, maxWidth, maxWidth * 0.5)}
+        <View style={{ width: galleryMaxWidth, gap }}>
+          {renderImage(imageAttachments[0], 0, galleryMaxWidth, galleryMaxWidth * 0.5)}
           <View style={{ flexDirection: 'row', gap }}>
             {renderImage(imageAttachments[1], 1, layout.itemWidth, layout.itemHeight)}
             {renderImage(imageAttachments[2], 2, layout.itemWidth, layout.itemHeight)}
@@ -132,10 +132,10 @@ export function AttachmentGallery({
 
     if (count === 5) {
       // 2 on top, 3 on bottom
-      const topWidth = (maxWidth - gap) / 2;
-      const bottomWidth = (maxWidth - gap * 2) / 3;
+      const topWidth = (galleryMaxWidth - gap) / 2;
+      const bottomWidth = (galleryMaxWidth - gap * 2) / 3;
       return (
-        <View style={{ width: maxWidth, gap }}>
+        <View style={{ width: galleryMaxWidth, gap }}>
           <View style={{ flexDirection: 'row', gap }}>
             {renderImage(imageAttachments[0], 0, topWidth, topWidth * 0.75)}
             {renderImage(imageAttachments[1], 1, topWidth, topWidth * 0.75)}
@@ -153,7 +153,7 @@ export function AttachmentGallery({
     return (
       <View
         style={{
-          width: maxWidth,
+          width: galleryMaxWidth,
           flexDirection: 'row',
           flexWrap: 'wrap',
           gap,
@@ -170,7 +170,7 @@ export function AttachmentGallery({
     if (fileAttachments.length === 0) return null;
 
     return (
-      <View className="mt-2" style={{ gap: 6, maxWidth }}>
+      <View className="mt-2" style={{ gap: 6, maxWidth: galleryMaxWidth }}>
         {fileAttachments.map((attachment) => (
           <Pressable
             key={attachment.id}
@@ -222,7 +222,7 @@ export function AttachmentGallery({
             <View className="flex-1 items-center justify-center">
               <Image
                 source={{ uri: selectedImage.url }}
-                style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT * 0.8 }}
+                style={{ width: screenWidth, height: screenHeight * 0.8 }}
                 contentFit="contain"
                 cachePolicy="memory-disk"
               />

@@ -1,14 +1,11 @@
 import { memo, useState, useCallback } from 'react';
-import { View, Text, Dimensions, Pressable } from 'react-native';
+import { View, Text, Pressable, useWindowDimensions } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { MarkdownContent } from './MarkdownContent';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import type { ChatMessage } from '../../types';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const MAX_IMAGE_WIDTH = Math.min(250, SCREEN_WIDTH * 0.6);
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -23,6 +20,8 @@ export const MessageBubble = memo(function MessageBubble({
   const hasAttachments = message.attachments && message.attachments.length > 0;
   const hasContent = message.content && message.content.trim().length > 0;
   const [copied, setCopied] = useState(false);
+  const { width } = useWindowDimensions();
+  const maxImageWidth = Math.min(250, width * 0.6);
 
   const handleCopy = useCallback(async () => {
     if (!message.content) return;
@@ -69,7 +68,7 @@ export const MessageBubble = memo(function MessageBubble({
         <View className={hasContent ? 'mt-2' : ''}>
           <AttachmentGallery
             attachments={message.attachments!}
-            maxWidth={MAX_IMAGE_WIDTH}
+            maxWidth={maxImageWidth}
           />
         </View>
       )}

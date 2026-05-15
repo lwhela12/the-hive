@@ -637,7 +637,7 @@ export default function MeetingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <AppHeader title="Meetings" />
+      <AppHeader title="Meeting Hub" />
 
       <ScrollView
         className="flex-1"
