@@ -545,6 +545,30 @@ export default function ProfileScreen() {
     });
   };
 
+  const handleProfileStepPress = (label: string) => {
+    if (label === 'Answer your 3MIQ') {
+      handleFind3MiqWithClive();
+      return;
+    }
+    if (label === 'Add a photo') {
+      void pickImage();
+      return;
+    }
+    if (label === 'Add a skill') {
+      setSkillsModalVisible(true);
+      return;
+    }
+    if (label === 'Share a wish') {
+      setAddWishModalVisible(true);
+      return;
+    }
+    if (label === "Complete this month's check-in") {
+      router.push('/(app)/hive');
+      return;
+    }
+    startEditing();
+  };
+
   if (!profile) return null;
 
   return (
@@ -645,9 +669,25 @@ export default function ProfileScreen() {
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 8 }}>
                     {missing.map(item => (
-                      <View key={item.label} style={{ backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
+                      <Pressable
+                        key={item.label}
+                        onPress={() => handleProfileStepPress(item.label)}
+                        className="active:opacity-70"
+                        style={{
+                          backgroundColor: '#fffaf0',
+                          borderWidth: 1,
+                          borderColor: 'rgba(222,193,129,0.65)',
+                          borderRadius: 999,
+                          paddingHorizontal: 14,
+                          paddingVertical: 7,
+                          shadowColor: '#bd9348',
+                          shadowOpacity: 0.08,
+                          shadowRadius: 8,
+                          shadowOffset: { width: 0, height: 3 },
+                        }}
+                      >
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348' }}>{item.label}</Text>
-                      </View>
+                      </Pressable>
                     ))}
                   </View>
                 </>
