@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import { SKILL_CATEGORIES } from '../../lib/skillsList';
+import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish>;
@@ -121,10 +122,15 @@ function Avatar({ uri, name, size }: { uri?: string | null; name: string; size: 
         style={{ width: size, height: size, borderRadius: size / 2 }}
         contentFit="cover"
         cachePolicy="memory-disk"
+        accessibilityLabel={`${name} profile photo`}
       />
     );
   }
-  return <SilhouetteAvatar size={size} />;
+  return (
+    <View accessible accessibilityLabel={`${name} profile placeholder`}>
+      <SilhouetteAvatar size={size} />
+    </View>
+  );
 }
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
@@ -222,7 +228,6 @@ function MemberDetailModal({
   // Skill bubbles — array-based so we can add/remove individual chips
   const [draftSkillList, setDraftSkillList] = useState<string[]>(member.skills.map(s => s.description));
   const [newSkillInput, setNewSkillInput] = useState('');
-  const [editingSkills, setEditingSkills] = useState(false);
   const [savingSkills, setSavingSkills] = useState(false);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
   const [skillSearch, setSkillSearch] = useState('');
@@ -262,7 +267,6 @@ function MemberDetailModal({
     setDraftFunFact3(member.fun_facts?.[2] ?? '');
     setDraftSkillList(member.skills.map(s => s.description));
     setNewSkillInput('');
-    setEditingSkills(false);
     setShowSkillPicker(false);
     setSkillSearch('');
     setShowWishesSheet(false);
@@ -322,7 +326,6 @@ function MemberDetailModal({
           description,
         })),
       });
-      setEditingSkills(false);
     } catch (e) {
       console.warn('[Members] skills save failed', e);
     } finally {
@@ -1036,7 +1039,7 @@ function MemberDetailModal({
               </View>
             )}
 
-            {/* Skills — inline editable for current user */}
+            {/* Skills */}
             {(member.skills.length > 0 || isCurrentUser) && (
               <View style={{ marginBottom: 20 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -1051,33 +1054,18 @@ function MemberDetailModal({
                   )}
                 </View>
 
-                {false ? null : (
-                  /* View mode */
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {member.skills.length === 0 && isCurrentUser ? (
-                      <Pressable
-                        onPress={() => setEditingSkills(true)}
-                        style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed' }}
-                      >
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Add your skills</Text>
-                      </Pressable>
-                    ) : (
-                      member.skills.map((s) => {
-                        const len = s.description.length;
-                        const size = len <= 12 ? 'large' : len <= 22 ? 'medium' : 'small';
-                        const st = {
-                          large:  { px: 18, py: 10, fontSize: 15, bg: '#fdf3dc', border: 'rgba(222,193,129,0.5)' },
-                          medium: { px: 14, py: 8,  fontSize: 13, bg: '#faf8f3', border: 'rgba(222,193,129,0.3)' },
-                          small:  { px: 10, py: 6,  fontSize: 11, bg: '#f5f3ee', border: 'rgba(200,190,170,0.3)' },
-                        }[size];
-                        return (
-                          <View key={s.id} style={{ backgroundColor: st.bg, borderWidth: 1, borderColor: st.border, borderRadius: 24, paddingHorizontal: st.px, paddingVertical: st.py }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: st.fontSize, color: '#2d2d2d' }}>{s.description}</Text>
-                          </View>
-                        );
-                      })
-                    )}
-                  </View>
+                {member.skills.length === 0 && isCurrentUser ? (
+                  <Pressable
+                    onPress={() => {
+                      setDraftSkillList(member.skills.map(s => s.description));
+                      setShowSkillPicker(true);
+                    }}
+                    style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed', alignSelf: 'flex-start' }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Add your skills</Text>
+                  </Pressable>
+                ) : (
+                  <SkillBubbleGarden skills={member.skills} />
                 )}
               </View>
             )}
@@ -1343,7 +1331,7 @@ export default function MembersScreen() {
       });
 
       const [skillsRes, wishesRes, introRes, answersRes] = await Promise.all([
-        supabase.from('skills').select('user_id, id, description').in('user_id', userIds),
+        supabase.from('skills').select('user_id, id, description, enthusiasm_level, display_x, display_y').in('user_id', userIds),
         supabase.from('wishes').select('user_id, id, description, status').in('user_id', userIds).eq('status', 'public'),
         supabase
           .from('board_posts')

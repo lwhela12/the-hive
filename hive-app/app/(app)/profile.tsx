@@ -14,8 +14,9 @@ import { NavigationDrawer, AppHeader } from '../../components/navigation';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { clearLastAppPath } from '../../lib/navigationState';
 import { FadeIn } from '../../components/ui/FadeIn';
-import { ProfileHeaderSkeleton, ProfileInfoSkeleton, ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
+import { ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
+import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
@@ -408,6 +409,63 @@ export default function ProfileScreen() {
   const handleWishSaved = async () => {
     await fetchData();
     setEditingWish(null);
+  };
+
+  const handleSkillBubbleUpdate = async (
+    skill: Pick<Skill, 'id' | 'description'> & Partial<Skill>,
+    updates: Pick<Skill, 'enthusiasm_level' | 'display_x' | 'display_y'>
+  ) => {
+    if (!profile || !communityId) return;
+
+    setSkills((current) =>
+      current.map((item) => item.id === skill.id ? { ...item, ...updates } : item)
+    );
+
+    const { error } = await supabase
+      .from('skills')
+      .update(updates)
+      .eq('id', skill.id)
+      .eq('user_id', profile.id)
+      .eq('community_id', communityId);
+
+    if (error) {
+      Alert.alert('Error', 'Failed to update that skill bubble. Please try again.');
+      await fetchData();
+    }
+  };
+
+  const handleDeleteSkill = (skill: Pick<Skill, 'id' | 'description'> & Partial<Skill>) => {
+    if (!profile || !communityId) return;
+
+    const deleteSkill = async () => {
+      const { error } = await supabase
+        .from('skills')
+        .delete()
+        .eq('id', skill.id)
+        .eq('user_id', profile.id)
+        .eq('community_id', communityId);
+
+      if (error) {
+        Alert.alert('Error', 'Failed to remove that skill. Please try again.');
+        return;
+      }
+
+      setSkills((current) => current.filter((item) => item.id !== skill.id));
+    };
+
+    const message = `Remove "${skill.description}" from your skills?`;
+
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) {
+        deleteSkill();
+      }
+      return;
+    }
+
+    Alert.alert('Remove skill', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: deleteSkill },
+    ]);
   };
 
   const handleDeleteWish = (wish: Wish) => {
@@ -925,20 +983,16 @@ export default function ProfileScreen() {
           {skills.length === 0 ? (
             <View className="bg-white rounded-xl p-4 shadow-sm">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
-                No skills recorded yet. Chat with the HIVE assistant to add some!
+                No skills recorded yet. Ask Clive to add some!
               </Text>
             </View>
           ) : (
-            <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-              {skills.map((skill) => (
-                <View
-                  key={skill.id}
-                  className="p-4 border-b border-cream last:border-b-0"
-                >
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{skill.description}</Text>
-                </View>
-              ))}
-            </View>
+            <SkillBubbleGarden
+              skills={skills}
+              editable
+              onUpdateSkill={handleSkillBubbleUpdate}
+              onDeleteSkill={handleDeleteSkill}
+            />
           )}
         </View>
 

@@ -122,6 +122,9 @@ export interface Skill extends Record<string, unknown> {
   description: string;
   raw_input?: string;
   extracted_from: ExtractionSource;
+  enthusiasm_level?: number | null;
+  display_x?: number | null;
+  display_y?: number | null;
   created_at: string;
   user?: Profile;
 }
