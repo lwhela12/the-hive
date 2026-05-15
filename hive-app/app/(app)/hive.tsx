@@ -19,9 +19,8 @@ import {
   EventsListSkeleton,
   WishSectionSkeleton,
 } from '../../components/hive/skeletons';
-import { NavigationDrawer, AppHeader } from '../../components/navigation';
+import { AppHeader } from '../../components/navigation';
 import { getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
-import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
@@ -350,9 +349,7 @@ function HeaderActionPill({ label, onPress }: { label: string; onPress: () => vo
 export default function HiveScreen() {
   const { profile, communityId, communityRole } = useAuth();
   const router = useRouter();
-  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const useMobileLayout = width < 768;
 
   const [refreshing, setRefreshing] = useState(false);
@@ -1315,20 +1312,7 @@ export default function HiveScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
-      <AppHeader
-        title="H.I.V.E."
-        onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
-      />
-
-      {/* Navigation Drawer */}
-      {useMobileLayout && (
-        <NavigationDrawer
-          isOpen={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          mode="navigation"
-          unreadDMCount={unreadDMCount}
-        />
-      )}
+      <AppHeader title="H.I.V.E." />
 
       <ScrollView
         className="flex-1"

@@ -11,15 +11,12 @@ import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
 import { BoardComposer } from '../../components/board/BoardComposer';
 import { BoardTopicComposer, type BoardTopicAudience, type BoardTopicMetadata } from '../../components/board/BoardTopicComposer';
-import { NavigationDrawer, AppHeader } from '../../components/navigation';
-import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
+import { AppHeader } from '../../components/navigation';
 import type { BoardCategory, Attachment, Profile } from '../../types';
 
 export default function BoardScreen() {
   const { profile, communityId, communityRole } = useAuth();
-  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const useMobileLayout = width < 768;
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -216,7 +213,6 @@ export default function BoardScreen() {
     }
   }, [boardPostStorageKey, invalidatePosts]);
 
-  const handleDrawerClose = useCallback(() => setDrawerOpen(false), []);
 
   const handleCreatePost = async (title: string, content: string, attachments?: Attachment[]) => {
     if (!profile || !communityId || !selectedCategory) {
@@ -504,7 +500,6 @@ export default function BoardScreen() {
         {useMobileLayout ? (
           <AppHeader
             title="Boards"
-            onMenuPress={() => setDrawerOpen(true)}
             rightElement={addTopicButton}
           />
         ) : (
@@ -523,14 +518,6 @@ export default function BoardScreen() {
           </View>
         )}
 
-        {useMobileLayout && (
-          <NavigationDrawer
-            isOpen={drawerOpen}
-            onClose={handleDrawerClose}
-            mode="navigation"
-            unreadDMCount={unreadDMCount}
-          />
-        )}
 
         {categoriesLoading && categories.length === 0 ? (
           <View className="mt-2">
@@ -607,13 +594,6 @@ export default function BoardScreen() {
         )}
       </View>
 
-      {useMobileLayout && (
-        <NavigationDrawer
-          isOpen={drawerOpen}
-          onClose={handleDrawerClose}
-          mode="navigation"
-        />
-      )}
 
       <FlatList
         data={posts}

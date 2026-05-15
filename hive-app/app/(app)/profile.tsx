@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, useWindowDimensions, KeyboardAvoidingView } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,8 +11,7 @@ import { useWishes } from '../../lib/hooks/useWishes';
 import { useSurveys } from '../../lib/hooks/useSurveys';
 import { Avatar } from '../../components/ui/Avatar';
 import { BirthdayPicker } from '../../components/ui/DatePicker';
-import { NavigationDrawer, AppHeader } from '../../components/navigation';
-import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
+import { AppHeader } from '../../components/navigation';
 import { clearLastAppPath } from '../../lib/navigationState';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
@@ -44,15 +43,11 @@ const formatPhoneNumber = (value: string): string => {
 
 export default function ProfileScreen() {
   const { profile, communityId, communityRole, refreshProfile } = useAuth();
-  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { permissionStatus, requestPermissions } = useNotifications({ enableListeners: false });
   const { grantWish } = useWishes();
   const { pendingSurveys } = useSurveys(communityId ?? undefined, profile?.id);
-  const { width } = useWindowDimensions();
   const isNotificationEnabled =
     permissionStatus === 'granted' || permissionStatus === 'provisional';
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const useMobileLayout = width < 768;
   const [refreshing, setRefreshing] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [wishes, setWishes] = useState<Wish[]>([]);
@@ -554,20 +549,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
-      <AppHeader
-        title="Profile"
-        onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
-      />
-
-      {/* Navigation Drawer */}
-      {useMobileLayout && (
-        <NavigationDrawer
-          isOpen={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          mode="navigation"
-          unreadDMCount={unreadDMCount}
-        />
-      )}
+      <AppHeader title="Profile" />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <ScrollView

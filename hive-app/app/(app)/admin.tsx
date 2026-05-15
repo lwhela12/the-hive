@@ -8,15 +8,13 @@ import {
   Alert,
   RefreshControl,
   Modal,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../../components/ui/Avatar';
 import { EventDatePicker } from '../../components/ui/DatePicker';
-import { NavigationDrawer, AppHeader } from '../../components/navigation';
-import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
+import { AppHeader } from '../../components/navigation';
 import { useSurveys } from '../../lib/hooks/useSurveys';
 import type { Survey } from '../../lib/hooks/useSurveys';
 import { formatDateMedium, parseAmericanDate, isoToAmerican } from '../../lib/dateUtils';
@@ -43,10 +41,6 @@ const ROLE_LABELS: Record<UserRole, string> = {
 
 export default function AdminScreen() {
   const { profile, communityId, communityRole } = useAuth();
-  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
-  const { width } = useWindowDimensions();
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const useMobileLayout = width < 768;
   const [refreshing, setRefreshing] = useState(false);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [queenBees, setQueenBees] = useState<QueenBee[]>([]);
@@ -642,20 +636,7 @@ export default function AdminScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <AppHeader
-        title="Admin"
-        onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
-      />
-
-      {/* Navigation Drawer */}
-      {useMobileLayout && (
-        <NavigationDrawer
-          isOpen={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          mode="navigation"
-          unreadDMCount={unreadDMCount}
-        />
-      )}
+      <AppHeader title="Admin" />
 
       <ScrollView
         className="flex-1"
