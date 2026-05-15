@@ -16,16 +16,18 @@ interface WishCardProps {
   onPress?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onManage?: () => void;
   canEdit?: boolean;
   canDelete?: boolean;
 }
 
-export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, canEdit, canDelete }: WishCardProps) {
+export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, canEdit, canDelete }: WishCardProps) {
   const isGranted = wish.status === 'fulfilled';
   const granters = wish.granters || [];
   const displayGranters = granters.filter((g) => g.granter).slice(0, 3);
   const extraGranters = granters.length - 3;
   const linkedBoardLabel = getLinkedBoardLabel(wish.board_category);
+  const showManageButton = !!onManage && (canEdit || canDelete);
 
   return (
     <Pressable
@@ -57,7 +59,20 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, canEdit, can
                 </View>
               )}
             </View>
-            {((!isGranted && canEdit) || canDelete) && (
+            {showManageButton ? (
+              <Pressable
+                onPress={(event) => {
+                  event.stopPropagation();
+                  onManage?.();
+                }}
+                className="w-8 h-8 rounded-full items-center justify-center active:bg-cream ml-2"
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Manage wish"
+              >
+                <Ionicons name="pencil-outline" size={17} color="#4A4A4A" />
+              </Pressable>
+            ) : ((!isGranted && canEdit) || canDelete) && (
               <View className="flex-row items-center ml-2">
                 {canEdit && onEdit && (
                   <Pressable

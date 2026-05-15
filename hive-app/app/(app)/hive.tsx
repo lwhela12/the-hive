@@ -14,6 +14,7 @@ import { useSurveys } from '../../lib/hooks/useSurveys';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { WishCard } from '../../components/hive/WishCard';
 import { WishDetail } from '../../components/hive/WishDetail';
+import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import {
   EventsListSkeleton,
@@ -519,6 +520,8 @@ export default function HiveScreen() {
   };
   const [selectedWish, setSelectedWish] = useState<WishWithGranters | null>(null);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
+  const [managingWish, setManagingWish] = useState<WishWithGranters | null>(null);
+  const [wishToGrant, setWishToGrant] = useState<WishWithGranters | null>(null);
   const [showAddWishModal, setShowAddWishModal] = useState(false);
   const [wishTab, setWishTab] = useState<WishTab>('open');
 
@@ -1105,10 +1108,67 @@ export default function HiveScreen() {
     setSelectedWish(null);
   };
 
+  const canEditWish = useCallback((wish: Wish) => wish.user_id === profile?.id, [profile?.id]);
+  const canDeleteWish = useCallback((wish: Wish) => !!profile && (isAdmin || wish.user_id === profile.id), [isAdmin, profile]);
+  const canGrantWish = useCallback((wish: Wish) => wish.user_id === profile?.id && wish.status === 'public', [profile?.id]);
+  const canArchiveWish = useCallback((wish: Wish) => (
+    !!profile
+    && wish.status === 'public'
+    && wish.is_active !== false
+    && (isAdmin || wish.user_id === profile.id)
+  ), [isAdmin, profile]);
+  const canOpenWishActions = useCallback((wish: Wish) => (
+    canGrantWish(wish) || canEditWish(wish) || canArchiveWish(wish) || canDeleteWish(wish)
+  ), [canArchiveWish, canDeleteWish, canEditWish, canGrantWish]);
+
+  const handleArchiveWish = useCallback((wish: Wish) => {
+    if (!profile || !communityId || !canArchiveWish(wish)) return;
+
+    const archiveWish = async () => {
+      let query = supabase
+        .from('wishes')
+        .update({ status: 'private', is_active: false } as any)
+        .eq('id', wish.id)
+        .eq('community_id', communityId);
+
+      if (!isAdmin) {
+        query = query.eq('user_id', profile.id);
+      }
+
+      const { error } = await query;
+
+      if (error) {
+        Alert.alert('Error', 'Failed to archive wish. Please try again.');
+        return;
+      }
+
+      await refetch();
+      if (selectedWish?.id === wish.id) {
+        setSelectedWish(null);
+      }
+      if (managingWish?.id === wish.id) {
+        setManagingWish(null);
+      }
+    };
+
+    const message = `Archive this wish from Community Wishes?\n\n"${wish.description}"`;
+
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) {
+        archiveWish();
+      }
+      return;
+    }
+
+    Alert.alert('Archive Wish', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Archive', onPress: archiveWish },
+    ]);
+  }, [canArchiveWish, communityId, isAdmin, managingWish?.id, profile, refetch, selectedWish?.id]);
+
   const handleDeleteWish = (wish: Wish) => {
     if (!profile || !communityId) return;
-    const canDeleteWish = isAdmin || wish.user_id === profile.id;
-    if (!canDeleteWish) return;
+    if (!canDeleteWish(wish)) return;
 
     const deleteWish = async () => {
       let query = supabase
@@ -1131,6 +1191,9 @@ export default function HiveScreen() {
       await refetch();
       if (selectedWish?.id === wish.id) {
         setSelectedWish(null);
+      }
+      if (managingWish?.id === wish.id) {
+        setManagingWish(null);
       }
     };
 
@@ -1468,6 +1531,30 @@ export default function HiveScreen() {
       ) : null}
       {doneTodos.map((todo, index) => renderTodoRow(todo, index === doneTodos.length - 1))}
     </>
+  );
+
+  const manageWishActionStyle = (tone: 'gold' | 'neutral' | 'danger' = 'neutral') => ({
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: tone === 'danger'
+      ? 'rgba(239,68,68,0.18)'
+      : tone === 'gold'
+        ? 'rgba(189,147,72,0.28)'
+        : 'rgba(49,49,48,0.10)',
+    backgroundColor: tone === 'danger'
+      ? '#fff1f2'
+      : tone === 'gold'
+        ? '#fff8e8'
+        : '#fffdf5',
+    marginTop: 8,
+  });
+  const manageWishToneColor = (tone: 'gold' | 'neutral' | 'danger' = 'neutral') => (
+    tone === 'danger' ? '#ef4444' : tone === 'gold' ? '#bd9348' : 'rgba(49,49,48,0.66)'
   );
 
   // Show wish detail fullscreen
@@ -2095,10 +2182,9 @@ export default function HiveScreen() {
                         key={wish.id}
                         wish={wish}
                         onPress={() => setSelectedWish(wish)}
-                        canEdit={wish.user_id === profile?.id}
-                        onEdit={() => setEditingWish(wish)}
-                        canDelete={isAdmin || wish.user_id === profile?.id}
-                        onDelete={() => handleDeleteWish(wish)}
+                        canEdit={canOpenWishActions(wish)}
+                        canDelete={canDeleteWish(wish)}
+                        onManage={() => setManagingWish(wish)}
                       />
                     ))
                   )}
@@ -2123,10 +2209,9 @@ export default function HiveScreen() {
                         key={wish.id}
                         wish={wish}
                         onPress={() => setSelectedWish(wish)}
-                        canEdit={wish.user_id === profile?.id}
-                        onEdit={() => setEditingWish(wish)}
-                        canDelete={isAdmin || wish.user_id === profile?.id}
-                        onDelete={() => handleDeleteWish(wish)}
+                        canEdit={canOpenWishActions(wish)}
+                        canDelete={canDeleteWish(wish)}
+                        onManage={() => setManagingWish(wish)}
                       />
                     ))
                   )}
@@ -2297,6 +2382,128 @@ export default function HiveScreen() {
         </Pressable>
       </Modal>
 
+      <Modal visible={!!managingWish} animationType="fade" transparent onRequestClose={() => setManagingWish(null)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.38)', justifyContent: 'flex-end' }}
+          onPress={() => setManagingWish(null)}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              backgroundColor: '#fffdf5',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 22,
+              paddingBottom: 34,
+              borderTopWidth: 1,
+              borderColor: 'rgba(222,193,129,0.5)',
+            }}
+          >
+            <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.28)', borderRadius: 2, alignSelf: 'center', marginBottom: 18 }} />
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d' }}>
+                  Manage Wish
+                </Text>
+                {managingWish ? (
+                  <Text
+                    numberOfLines={2}
+                    style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 18, color: '#8a7760', marginTop: 4 }}
+                  >
+                    {managingWish.description}
+                  </Text>
+                ) : null}
+              </View>
+              <Pressable
+                onPress={() => setManagingWish(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Close wish actions"
+                hitSlop={8}
+                style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff8e8' }}
+              >
+                <Ionicons name="close-outline" size={22} color="#8e7a5e" />
+              </Pressable>
+            </View>
+
+            {managingWish && canGrantWish(managingWish) ? (
+              <Pressable
+                onPress={() => {
+                  const wish = managingWish;
+                  setManagingWish(null);
+                  setWishToGrant(wish);
+                }}
+                style={manageWishActionStyle('gold')}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color={manageWishToneColor('gold')} />
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('gold') }}>
+                    Grant
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
+              </Pressable>
+            ) : null}
+
+            {managingWish && canEditWish(managingWish) ? (
+              <Pressable
+                onPress={() => {
+                  const wish = managingWish;
+                  setManagingWish(null);
+                  setEditingWish(wish);
+                }}
+                style={manageWishActionStyle('neutral')}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons name="pencil-outline" size={18} color={manageWishToneColor('neutral')} />
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('neutral') }}>
+                    Edit
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
+              </Pressable>
+            ) : null}
+
+            {managingWish && canArchiveWish(managingWish) ? (
+              <Pressable
+                onPress={() => {
+                  const wish = managingWish;
+                  setManagingWish(null);
+                  handleArchiveWish(wish);
+                }}
+                style={manageWishActionStyle('neutral')}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons name="archive-outline" size={18} color={manageWishToneColor('neutral')} />
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('neutral') }}>
+                    Archive
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
+              </Pressable>
+            ) : null}
+
+            {managingWish && canDeleteWish(managingWish) ? (
+              <Pressable
+                onPress={() => {
+                  const wish = managingWish;
+                  setManagingWish(null);
+                  handleDeleteWish(wish);
+                }}
+                style={manageWishActionStyle('danger')}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons name="trash-outline" size={18} color={manageWishToneColor('danger')} />
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('danger') }}>
+                    Delete
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="rgba(239,68,68,0.45)" />
+              </Pressable>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <AddWishModal
         visible={!!editingWish}
         onClose={() => setEditingWish(null)}
@@ -2317,6 +2524,16 @@ export default function HiveScreen() {
           router.push({ pathname: '/', params: { prefill: `I want to wish for: ${roughWish}` } });
         }}
       />
+
+      {wishToGrant && (
+        <GrantWishModal
+          visible={!!wishToGrant}
+          onClose={() => setWishToGrant(null)}
+          wish={wishToGrant}
+          communityId={communityId}
+          onGrant={handleGrantWish}
+        />
+      )}
 
       {/* Add Task Modal */}
       <Modal visible={showAddTaskModal} animationType="slide" transparent onRequestClose={() => setShowAddTaskModal(false)}>
