@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
+import { clearBoardNavigationState } from '../../lib/boardNavigation';
 
 function TabIcon({
   icon,
@@ -214,6 +215,11 @@ export default function AppLayout() {
         />
         <Tabs.Screen
           name="board"
+          listeners={{
+            tabPress: () => {
+              clearBoardNavigationState(communityId);
+            },
+          }}
           options={{
             title: 'Boards',
             tabBarAccessibilityLabel: 'Boards',

@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { clearBoardNavigationState } from '../../lib/boardNavigation';
 
 interface NavigationDrawerProps {
   isOpen: boolean;
@@ -30,7 +31,7 @@ export const NavigationDrawer = memo(function NavigationDrawer({
 }: NavigationDrawerProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { profile, communityRole } = useAuth();
+  const { profile, communityRole, communityId } = useAuth();
 
   // Navigation items for the app
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer' || profile?.role === 'admin' || profile?.role === 'treasurer';
@@ -78,6 +79,9 @@ export const NavigationDrawer = memo(function NavigationDrawer({
   }));
 
   const handleNavigation = (route: string) => {
+    if (route === '/board') {
+      clearBoardNavigationState(communityId);
+    }
     onClose();
     router.push(route as any);
   };

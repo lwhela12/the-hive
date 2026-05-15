@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ConversationItem } from './ConversationItem';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
+import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import type { Conversation, ConversationProject } from '../../types';
 
 const cliveIcon = require('../../assets/Clive_logo.png');
@@ -175,6 +176,9 @@ export const ConversationSidebar = memo(function ConversationSidebar({
 
   // Close with animation, then perform action
   const closeAndNavigate = (route: string) => {
+    if (route === '/board') {
+      clearBoardNavigationState(communityId);
+    }
     onClose?.();
     router.push(route as any);
   };

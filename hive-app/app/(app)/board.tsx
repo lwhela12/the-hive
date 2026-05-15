@@ -19,6 +19,7 @@ import { useBoardLinkedWishes, type LinkedWish } from '../../lib/hooks/useBoardL
 import { getMentionedMembers } from '../../lib/mentions';
 import { fetchCommunityMentionableMembers } from '../../lib/mentionableMembers';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
+import { BOARD_HOME_EVENT } from '../../lib/boardNavigation';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 
 type BoardListView = 'active' | 'archive';
@@ -179,12 +180,32 @@ export default function BoardScreen() {
     setSelectedCategoryId(null);
     setSelectedPostId(null);
     setShowComposer(false);
+    setEditingPost(null);
+    setShowTopicComposer(false);
+    setEditingTopic(null);
+    setShowAddLinkedWishModal(false);
+    setSelectedLinkedWish(null);
     if (typeof window !== 'undefined') {
       if (boardCategoryStorageKey) window.localStorage.removeItem(boardCategoryStorageKey);
       if (boardPostStorageKey) window.localStorage.removeItem(boardPostStorageKey);
       if (boardComposerStorageKey) window.localStorage.removeItem(boardComposerStorageKey);
+      if (boardDirectOpenStorageKey) window.localStorage.removeItem(boardDirectOpenStorageKey);
     }
-  }, [boardCategoryStorageKey, boardComposerStorageKey, boardPostStorageKey]);
+  }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+
+    const handleBoardsHome = () => {
+      setBoardSearch('');
+      setBoardListView('active');
+      setThreadListView('active');
+      resetBoardToList();
+    };
+
+    window.addEventListener(BOARD_HOME_EVENT, handleBoardsHome);
+    return () => window.removeEventListener(BOARD_HOME_EVENT, handleBoardsHome);
+  }, [resetBoardToList]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1030,6 +1051,55 @@ export default function BoardScreen() {
         <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">+ Topic</Text>
       </Pressable>
     ) : undefined;
+    const boardListToolbar = (
+      <View className="bg-white border-b border-cream">
+        <View className="flex-row items-center px-4 py-3">
+          <View className="flex-1 flex-row items-center bg-cream rounded-full px-3 py-2 border border-gold/20">
+            <Ionicons name="search" size={17} color="rgba(49,49,48,0.38)" />
+            <TextInput
+              value={boardSearch}
+              onChangeText={setBoardSearch}
+              placeholder="Search boards"
+              placeholderTextColor="rgba(49,49,48,0.38)"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              className="flex-1 ml-2 text-charcoal"
+              style={{ fontFamily: 'Lato_400Regular', fontSize: 14, outlineStyle: 'none' } as any}
+            />
+            {boardSearch.length > 0 && (
+              <Pressable onPress={() => setBoardSearch('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={17} color="rgba(49,49,48,0.34)" />
+              </Pressable>
+            )}
+          </View>
+        </View>
+        <View className="flex-row items-center justify-between px-4 pb-2">
+          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/50 text-xs uppercase tracking-wide">
+            {boardSearchQuery
+              ? `${boardListView === 'archive' ? 'Archived' : 'Active'} Results (${visibleCategories.length})`
+              : boardListView === 'archive' ? 'Archived Boards' : 'Boards'}
+          </Text>
+          {archivedCategories.length > 0 && (
+            <Pressable
+              onPress={() => setBoardListView(boardListView === 'archive' ? 'active' : 'archive')}
+              className="flex-row items-center rounded-full px-3 py-1.5 active:opacity-70"
+              hitSlop={8}
+            >
+              <Ionicons
+                name={boardListView === 'archive' ? 'arrow-back-outline' : 'archive-outline'}
+                size={15}
+                color="rgba(49,49,48,0.48)"
+                style={{ marginRight: 4 }}
+              />
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/50 text-xs">
+                {boardListView === 'archive' ? 'Active' : `Archive (${archivedCategories.length})`}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    );
 
     return (
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
@@ -1054,6 +1124,8 @@ export default function BoardScreen() {
           </View>
         )}
 
+        {boardListToolbar}
+
         {categoriesLoading && categories.length === 0 ? (
           <View className="mt-2">
             {[...Array(5)].map((_, i) => (
@@ -1069,53 +1141,6 @@ export default function BoardScreen() {
           </View>
         ) : (
           <View className="flex-1">
-            <View className="bg-white border-b border-cream">
-              <View className="flex-row items-center px-4 py-3">
-                <View className="flex-1 flex-row items-center bg-cream rounded-full px-3 py-2 border border-gold/20">
-                  <Ionicons name="search" size={17} color="rgba(49,49,48,0.38)" />
-                  <TextInput
-                    value={boardSearch}
-                    onChangeText={setBoardSearch}
-                    placeholder="Search boards"
-                    placeholderTextColor="rgba(49,49,48,0.38)"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="search"
-                    className="flex-1 ml-2 text-charcoal"
-                    style={{ fontFamily: 'Lato_400Regular', fontSize: 14, outlineStyle: 'none' } as any}
-                  />
-                  {boardSearch.length > 0 && (
-                    <Pressable onPress={() => setBoardSearch('')} hitSlop={8}>
-                      <Ionicons name="close-circle" size={17} color="rgba(49,49,48,0.34)" />
-                    </Pressable>
-                  )}
-                </View>
-              </View>
-              <View className="flex-row items-center justify-between px-4 pb-2">
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/50 text-xs uppercase tracking-wide">
-                  {boardSearchQuery
-                    ? `${boardListView === 'archive' ? 'Archived' : 'Active'} Results (${visibleCategories.length})`
-                    : boardListView === 'archive' ? 'Archived Boards' : 'Boards'}
-                </Text>
-                {archivedCategories.length > 0 && (
-                  <Pressable
-                    onPress={() => setBoardListView(boardListView === 'archive' ? 'active' : 'archive')}
-                    className="flex-row items-center rounded-full px-3 py-1.5 active:opacity-70"
-                    hitSlop={8}
-                  >
-                    <Ionicons
-                      name={boardListView === 'archive' ? 'arrow-back-outline' : 'archive-outline'}
-                      size={15}
-                      color="rgba(49,49,48,0.48)"
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/50 text-xs">
-                      {boardListView === 'archive' ? 'Active' : `Archive (${archivedCategories.length})`}
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
             <BoardCategoryList
               categories={visibleCategories}
               onSelect={handleCategorySelect}
