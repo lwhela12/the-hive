@@ -169,6 +169,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         router.push('/meetings');
         break;
       case 'board_reply':
+      case 'board_mention':
         router.push('/board');
         break;
       case 'meeting_reminder':

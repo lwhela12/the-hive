@@ -74,6 +74,16 @@ async function fetchPosts(
 
   // Sort client-side: pinned first, then by most recent activity (reply or creation)
   posts.sort((a, b) => {
+    const aArchived = !!a.archived_at;
+    const bArchived = !!b.archived_at;
+    if (aArchived && !bArchived) return 1;
+    if (!aArchived && bArchived) return -1;
+
+    const aCompleted = a.status === 'completed';
+    const bCompleted = b.status === 'completed';
+    if (aCompleted && !bCompleted) return 1;
+    if (!aCompleted && bCompleted) return -1;
+
     // Pinned posts always first
     if (a.is_pinned && !b.is_pinned) return -1;
     if (!a.is_pinned && b.is_pinned) return 1;

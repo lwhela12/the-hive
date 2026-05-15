@@ -8,17 +8,20 @@ import {
   Alert,
   RefreshControl,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { queryKeys } from '../../lib/queryClient';
 import { Avatar } from '../../components/ui/Avatar';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { useSurveys } from '../../lib/hooks/useSurveys';
 import type { Survey } from '../../lib/hooks/useSurveys';
-import { formatDateMedium, parseAmericanDate, isoToAmerican } from '../../lib/dateUtils';
-import type { Profile, QueenBee, Event, UserRole, CommunityInvite } from '../../types';
+import { parseAmericanDate } from '../../lib/dateUtils';
+import type { Profile, QueenBee, UserRole, CommunityInvite } from '../../types';
 
 type MemberRow = {
   id: string;
@@ -30,21 +33,36 @@ type InviteRow = CommunityInvite & {
   inviter: Pick<Profile, 'name'> | null;
 };
 
-const ROLE_OPTIONS: UserRole[] = ['member', 'treasurer', 'historian', 'admin'];
+const ROLE_OPTIONS: UserRole[] = ['member', 'treasurer', 'admin'];
 
 const ROLE_LABELS: Record<UserRole, string> = {
   member: 'Member',
   treasurer: 'Treasurer',
-  historian: 'Historian',
   admin: 'Admin',
+};
+
+const QUARTERLY_DUES_AMOUNT = 25;
+const ANNUAL_DUES_AMOUNT = QUARTERLY_DUES_AMOUNT * 4;
+
+type DuesCoverage = 'none' | 'quarter' | 'year';
+
+const getCurrentDuesPeriod = () => {
+  const now = new Date();
+  return {
+    year: now.getFullYear(),
+    quarter: Math.floor(now.getMonth() / 3) + 1,
+  };
 };
 
 export default function AdminScreen() {
   const { profile, communityId, communityRole } = useAuth();
+  const { width } = useWindowDimensions();
+  const queryClient = useQueryClient();
+  const useMobileLayout = width < 768;
+  const currentDuesPeriod = getCurrentDuesPeriod();
   const [refreshing, setRefreshing] = useState(false);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [queenBees, setQueenBees] = useState<QueenBee[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
   const [pendingInvites, setPendingInvites] = useState<InviteRow[]>([]);
 
   // Modal states
@@ -78,6 +96,19 @@ export default function AdminScreen() {
   const [honeyPotAmount, setHoneyPotAmount] = useState('');
   const [honeyPotNote, setHoneyPotNote] = useState('');
   const [honeyPotType, setHoneyPotType] = useState<'deposit' | 'withdrawal'>('deposit');
+  const [duesCoverage, setDuesCoverage] = useState<DuesCoverage>('none');
+  const [duesMemberId, setDuesMemberId] = useState('');
+  const [duesYear, setDuesYear] = useState(String(currentDuesPeriod.year));
+  const [duesQuarter, setDuesQuarter] = useState(String(currentDuesPeriod.quarter));
+
+  useEffect(() => {
+    if (honeyPotType !== 'deposit') return;
+    if (duesCoverage === 'quarter') {
+      setHoneyPotAmount(String(QUARTERLY_DUES_AMOUNT));
+    } else if (duesCoverage === 'year') {
+      setHoneyPotAmount(String(ANNUAL_DUES_AMOUNT));
+    }
+  }, [duesCoverage, honeyPotType]);
 
   const fetchData = useCallback(async () => {
     if (!communityId) return;
@@ -99,18 +130,6 @@ export default function AdminScreen() {
       .limit(12);
     if (qbData) setQueenBees(qbData);
 
-    // Fetch events (today and future only)
-    const now = new Date();
-    const today = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
-    const { data: eventsData } = await supabase
-      .from('events')
-      .select('*')
-      .eq('community_id', communityId)
-      .gte('event_date', today)
-      .order('event_date', { ascending: true })
-      .limit(50);
-    if (eventsData) setEvents(eventsData);
-
     // Fetch pending invites
     const { data: invitesData } = await supabase
       .from('community_invites')
@@ -121,12 +140,15 @@ export default function AdminScreen() {
     if (invitesData) setPendingInvites(invitesData as InviteRow[]);
 
     // Fetch honey pot balance
-    const { data: honeyPotData } = await supabase
+    const { data: honeyPotData, error: honeyPotError } = await supabase
       .from('honey_pot')
       .select('balance')
       .eq('community_id', communityId)
-      .single();
-    if (honeyPotData) setHoneyPotBalance(honeyPotData.balance || 0);
+      .maybeSingle();
+    if (honeyPotError) {
+      console.warn('Could not load honey pot balance', honeyPotError);
+    }
+    setHoneyPotBalance(Number(honeyPotData?.balance ?? 0));
   }, [communityId]);
 
   useEffect(() => {
@@ -326,17 +348,6 @@ export default function AdminScreen() {
     }
   };
 
-  const openEditQueenBee = (qb: QueenBee) => {
-    const member = members.find(m => m.profiles.id === qb.user_id);
-    setEditingQueenBee(qb);
-    setSelectedMember(member?.profiles || null);
-    setQbMonth(qb.month);
-    setQbTitle(qb.project_title);
-    setQbDescription(qb.project_description || '');
-    setQbStatus(qb.status);
-    setShowQueenBeeModal(true);
-  };
-
   const closeQueenBeeModal = () => {
     setShowQueenBeeModal(false);
     setEditingQueenBee(null);
@@ -345,146 +356,6 @@ export default function AdminScreen() {
     setQbTitle('');
     setQbDescription('');
     setQbStatus('upcoming');
-  };
-
-  const moveQueenBee = async (qbId: string, direction: 'up' | 'down') => {
-    const currentIndex = queenBees.findIndex(qb => qb.id === qbId);
-    if (currentIndex === -1) return;
-
-    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= queenBees.length) return;
-
-    const currentQB = queenBees[currentIndex];
-    const targetQB = queenBees[targetIndex];
-
-    // Swap display_order values
-    const currentOrder = (currentQB as any).display_order ?? currentIndex + 1;
-    const targetOrder = (targetQB as any).display_order ?? targetIndex + 1;
-
-    try {
-      await Promise.all([
-        supabase
-          .from('queen_bees')
-          .update({ display_order: targetOrder })
-          .eq('id', currentQB.id),
-        supabase
-          .from('queen_bees')
-          .update({ display_order: currentOrder })
-          .eq('id', targetQB.id),
-      ]);
-
-      await fetchData();
-    } catch (err) {
-      console.error('Reorder error:', err);
-      Alert.alert('Error', 'Failed to reorder');
-    }
-  };
-
-  const rotateQueenBee = async () => {
-    // Find current active QB
-    const activeQB = queenBees.find(qb => qb.status === 'active');
-
-    // Find next upcoming QB (by display_order, fallback to month)
-    let upcomingQBs = queenBees
-      .filter(qb => qb.status === 'upcoming')
-      .sort((a, b) => {
-        const orderA = (a as any).display_order ?? 999;
-        const orderB = (b as any).display_order ?? 999;
-        if (orderA !== orderB) return orderA - orderB;
-        return a.month.localeCompare(b.month);
-      });
-
-    let nextQB = upcomingQBs[0];
-    let isNewCycle = false;
-
-    // CIRCULAR: If no upcoming, reset all completed to upcoming
-    if (!nextQB) {
-      const completedQBs = queenBees.filter(qb => qb.status === 'completed');
-      if (completedQBs.length === 0) {
-        Alert.alert('No Queen Bees', 'There are no Queen Bees in the queue. Add some first.');
-        return;
-      }
-
-      isNewCycle = true;
-      // Sort completed by display_order to find who's next in the new cycle
-      upcomingQBs = completedQBs.sort((a, b) => {
-        const orderA = (a as any).display_order ?? 999;
-        const orderB = (b as any).display_order ?? 999;
-        if (orderA !== orderB) return orderA - orderB;
-        return a.month.localeCompare(b.month);
-      });
-      nextQB = upcomingQBs[0];
-    }
-
-    const activeQBName = activeQB
-      ? members.find(m => m.profiles.id === activeQB.user_id)?.profiles.name
-      : null;
-    const nextQBName = members.find(m => m.profiles.id === nextQB.user_id)?.profiles.name;
-
-    const confirmMessage = isNewCycle
-      ? `Starting a new cycle!\n\nAll Queen Bees will be reset to upcoming.\n${nextQBName} will be the first Queen Bee of the new cycle.\n\nProceed?`
-      : activeQB
-        ? `This will:\n• Mark ${activeQBName}'s turn as completed\n• Make ${nextQBName} the active Queen Bee\n\nProceed?`
-        : `This will make ${nextQBName} the active Queen Bee. Proceed?`;
-
-    const doRotation = async () => {
-      try {
-        if (isNewCycle) {
-          // Reset all completed to upcoming for new cycle
-          const completedIds = queenBees
-            .filter(qb => qb.status === 'completed')
-            .map(qb => qb.id);
-
-          if (completedIds.length > 0) {
-            await supabase
-              .from('queen_bees')
-              .update({ status: 'upcoming' })
-              .in('id', completedIds);
-          }
-        }
-
-        // Mark current active as completed (if exists and not already being reset)
-        if (activeQB && !isNewCycle) {
-          await supabase
-            .from('queen_bees')
-            .update({ status: 'completed' })
-            .eq('id', activeQB.id);
-        } else if (activeQB && isNewCycle) {
-          // In new cycle, mark current active as upcoming too (it was the last one)
-          await supabase
-            .from('queen_bees')
-            .update({ status: 'upcoming' })
-            .eq('id', activeQB.id);
-        }
-
-        // Mark next as active
-        await supabase
-          .from('queen_bees')
-          .update({ status: 'active' })
-          .eq('id', nextQB.id);
-
-        await fetchData();
-        const message = isNewCycle
-          ? `New cycle started! ${nextQBName} is now the active Queen Bee!`
-          : `${nextQBName} is now the active Queen Bee!`;
-        Alert.alert('Success', message);
-      } catch (err) {
-        console.error('Rotation error:', err);
-        Alert.alert('Error', 'Failed to rotate Queen Bee');
-      }
-    };
-
-    // Use window.confirm on web, Alert.alert on native
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(confirmMessage)) {
-        await doRotation();
-      }
-    } else {
-      Alert.alert('Rotate Queen Bee', confirmMessage, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Rotate', onPress: doRotation },
-      ]);
-    }
   };
 
   const createEvent = async () => {
@@ -590,31 +461,72 @@ export default function AdminScreen() {
       return;
     }
     if (!communityId) return;
+    const taggedAsDues = honeyPotType === 'deposit' && duesCoverage !== 'none';
+    const duesYearValue = Number(duesYear);
+    const duesQuarterValue = Number(duesQuarter);
+
+    if (taggedAsDues && !duesMemberId) {
+      Alert.alert('Error', 'Please choose who this dues payment is for.');
+      return;
+    }
+    if (taggedAsDues && (!duesYearValue || duesYearValue < 2020)) {
+      Alert.alert('Error', 'Please enter a valid dues year.');
+      return;
+    }
+    if (duesCoverage === 'quarter' && (!duesQuarterValue || duesQuarterValue < 1 || duesQuarterValue > 4)) {
+      Alert.alert('Error', 'Please choose a valid quarter.');
+      return;
+    }
 
     const signedAmount = honeyPotType === 'withdrawal' ? -amount : amount;
-    const newBalance = honeyPotBalance + signedAmount;
 
     try {
+      const { data: currentPot, error: currentPotError } = await supabase
+        .from('honey_pot')
+        .select('balance')
+        .eq('community_id', communityId)
+        .maybeSingle();
+      if (currentPotError) throw currentPotError;
+
+      const currentBalance = Number(currentPot?.balance ?? honeyPotBalance ?? 0);
+      const newBalance = currentBalance + signedAmount;
+
       // Record the transaction
-      const { error: txError } = await supabase.from('honey_pot_transactions').insert({
+      const { error: txError } = await (supabase as any).from('honey_pot_transactions').insert({
         community_id: communityId,
         amount: signedAmount,
         transaction_type: honeyPotType,
         note: honeyPotNote || null,
         recorded_by: profile?.id,
+        related_user_id: taggedAsDues ? duesMemberId : null,
+        dues_year: taggedAsDues ? duesYearValue : null,
+        dues_quarter: duesCoverage === 'quarter' ? duesQuarterValue : null,
+        dues_covered_quarters: duesCoverage === 'year' ? 4 : duesCoverage === 'quarter' ? 1 : null,
       });
       if (txError) throw txError;
 
       // Update the balance
-      const { error: balError } = await supabase
+      const { data: balanceData, error: balError } = await (supabase as any)
         .from('honey_pot')
-        .update({ balance: newBalance, updated_by: profile?.id })
-        .eq('community_id', communityId);
+        .upsert({
+          community_id: communityId,
+          balance: newBalance,
+          updated_by: profile?.id,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'community_id' })
+        .select('balance')
+        .single();
       if (balError) throw balError;
 
-      setHoneyPotBalance(newBalance);
+      const savedBalance = Number(balanceData?.balance ?? newBalance);
+      setHoneyPotBalance(savedBalance);
+      queryClient.setQueryData(queryKeys.honeyPot(communityId), savedBalance);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.honeyPot(communityId) });
       setHoneyPotAmount('');
       setHoneyPotNote('');
+      if (duesCoverage !== 'none') {
+        setDuesMemberId('');
+      }
       Alert.alert('Success', `Honey Pot ${honeyPotType === 'deposit' ? 'deposit' : 'withdrawal'} recorded`);
     } catch (err) {
       console.error('Honey pot update error:', err);
@@ -625,6 +537,7 @@ export default function AdminScreen() {
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
   const canEditHoneyPot = isTreasurer || isAdmin;
+  const selectedDuesMember = members.find((member) => member.profiles.id === duesMemberId)?.profiles;
 
   if (!isAdmin && !isTreasurer) {
     return (
@@ -661,7 +574,10 @@ export default function AdminScreen() {
                   {(['deposit', 'withdrawal'] as const).map((type) => (
                     <Pressable
                       key={type}
-                      onPress={() => setHoneyPotType(type)}
+                      onPress={() => {
+                        setHoneyPotType(type);
+                        if (type === 'withdrawal') setDuesCoverage('none');
+                      }}
                       className={`flex-1 py-2 rounded-lg mr-2 last:mr-0 ${
                         honeyPotType === type
                           ? type === 'deposit' ? 'bg-green-500' : 'bg-red-400'
@@ -690,6 +606,93 @@ export default function AdminScreen() {
                   onChangeText={setHoneyPotNote}
                   className="border border-gray-300 rounded-lg p-3 mb-3"
                 />
+                {honeyPotType === 'deposit' && (
+                  <View className="mb-3">
+                    <Text className="text-xs font-semibold text-gray-500 mb-2">
+                      Dues tag (optional)
+                    </Text>
+                    <View className="flex-row flex-wrap mb-2">
+                      {([
+                        { value: 'none', label: 'No dues tag' },
+                        { value: 'quarter', label: `Q${duesQuarter || currentDuesPeriod.quarter} · $${QUARTERLY_DUES_AMOUNT}` },
+                        { value: 'year', label: `Full year · $${ANNUAL_DUES_AMOUNT}` },
+                      ] as { value: DuesCoverage; label: string }[]).map((option) => (
+                        <Pressable
+                          key={option.value}
+                          onPress={() => setDuesCoverage(option.value)}
+                          className={`px-3 py-2 rounded-lg mr-2 mb-2 ${
+                            duesCoverage === option.value ? 'bg-honey-500' : 'bg-gray-100'
+                          }`}
+                        >
+                          <Text className={`text-xs font-medium ${
+                            duesCoverage === option.value ? 'text-white' : 'text-gray-600'
+                          }`}>
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    {duesCoverage !== 'none' && (
+                      <View className="bg-honey-50 border border-honey-100 rounded-lg p-3">
+                        <View className="flex-row mb-2">
+                          <TextInput
+                            placeholder="Year"
+                            value={duesYear}
+                            onChangeText={setDuesYear}
+                            keyboardType="number-pad"
+                            className="border border-honey-200 rounded-lg px-3 py-2 mr-2 bg-white"
+                            style={{ width: 92 }}
+                          />
+                          {duesCoverage === 'quarter' && (
+                            <View className="flex-row flex-1">
+                              {[1, 2, 3, 4].map((quarter) => (
+                                <Pressable
+                                  key={quarter}
+                                  onPress={() => setDuesQuarter(String(quarter))}
+                                  className={`flex-1 py-2 rounded-lg mr-1 last:mr-0 ${
+                                    duesQuarter === String(quarter) ? 'bg-honey-500' : 'bg-white'
+                                  }`}
+                                >
+                                  <Text className={`text-center text-xs font-semibold ${
+                                    duesQuarter === String(quarter) ? 'text-white' : 'text-gray-600'
+                                  }`}>
+                                    Q{quarter}
+                                  </Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          {members.map((member) => (
+                            <Pressable
+                              key={member.profiles.id}
+                              onPress={() => setDuesMemberId(member.profiles.id)}
+                              className={`mr-2 px-3 py-2 rounded-lg border ${
+                                duesMemberId === member.profiles.id
+                                  ? 'bg-honey-500 border-honey-500'
+                                  : 'bg-white border-honey-100'
+                              }`}
+                            >
+                              <Text className={`text-xs font-semibold ${
+                                duesMemberId === member.profiles.id ? 'text-white' : 'text-gray-700'
+                              }`}>
+                                {member.profiles.name}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+                        {selectedDuesMember && (
+                          <Text className="text-xs text-gray-500 mt-2">
+                            Tagging this deposit as dues for {selectedDuesMember.name}.
+                          </Text>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                )}
                 <Pressable
                   onPress={updateHoneyPot}
                   className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
@@ -715,53 +718,83 @@ export default function AdminScreen() {
             Members ({members.length})
           </Text>
           <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-            {members.map((member) => (
-              <View
-                key={member.id}
-                className="flex-row items-center p-4 border-b border-gray-100 last:border-b-0"
-              >
-                <Avatar name={member.profiles.name} url={member.profiles.avatar_url} size={40} />
-                <View className="flex-1 ml-3">
-                  <Text className="font-medium text-gray-800">
-                    {member.profiles.name}
-                  </Text>
-                  <Text className="text-sm text-gray-500">{member.profiles.email}</Text>
-                </View>
-                <View className="flex-row items-center">
-                  {ROLE_OPTIONS.map(
-                    (role) => (
-                      <Pressable
-                        key={role}
-                        onPress={() => updateMemberRole(member.id, role)}
-                        className={`px-3 py-1 rounded mr-1 ${
-                          member.role === role
-                            ? 'bg-honey-500'
-                            : 'bg-gray-100'
-                        }`}
-                      >
-                        <Text
-                          className={`text-xs capitalize ${
-                            member.role === role
-                              ? 'text-white'
-                              : 'text-gray-600'
-                          }`}
-                        >
-                          {ROLE_LABELS[role]}
-                        </Text>
-                      </Pressable>
-                    )
-                  )}
-                  {member.profiles.id !== profile?.id && (
+            {members.map((member, index) => {
+              const roleButtons = (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    justifyContent: useMobileLayout ? 'flex-start' : 'flex-end',
+                    flexShrink: 0,
+                  }}
+                >
+                  {ROLE_OPTIONS.map((role) => (
                     <Pressable
-                      onPress={() => removeMember(member.id, member.profiles.name, member.profiles.id)}
-                      className="px-2 py-1 ml-2 bg-red-100 rounded active:bg-red-200"
+                      key={role}
+                      onPress={() => updateMemberRole(member.id, role)}
+                      style={({ pressed }) => ({
+                        backgroundColor: member.role === role ? '#bd9348' : pressed ? '#eceff3' : '#f3f4f6',
+                        borderRadius: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        marginRight: 6,
+                        marginBottom: useMobileLayout ? 6 : 0,
+                      })}
                     >
-                      <Text className="text-red-600 text-xs">✕</Text>
+                      <Text
+                        style={{
+                          color: member.role === role ? 'white' : '#4b5563',
+                          fontSize: 12,
+                          fontWeight: '600',
+                        }}
+                      >
+                        {ROLE_LABELS[role]}
+                      </Text>
                     </Pressable>
+                  ))}
+                </View>
+              );
+
+              return (
+                <View
+                  key={member.id}
+                  style={{
+                    padding: 16,
+                    borderBottomWidth: index < members.length - 1 ? 1 : 0,
+                    borderBottomColor: '#f3f4f6',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Avatar name={member.profiles.name} url={member.profiles.avatar_url} size={40} />
+                    <View style={{ flex: 1, minWidth: 0, marginLeft: 12, marginRight: 12 }}>
+                      <Text className="font-medium text-gray-800" numberOfLines={2}>
+                        {member.profiles.name}
+                      </Text>
+                      <Text className="text-sm text-gray-500" numberOfLines={1}>
+                        {member.profiles.email}
+                      </Text>
+                    </View>
+
+                    {!useMobileLayout && roleButtons}
+                    {member.profiles.id !== profile?.id && (
+                      <Pressable
+                        onPress={() => removeMember(member.id, member.profiles.name, member.profiles.id)}
+                        className="px-2 py-1 bg-red-100 rounded active:bg-red-200"
+                        style={{ marginLeft: useMobileLayout ? 0 : 8 }}
+                      >
+                        <Text className="text-red-600 text-xs">✕</Text>
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {useMobileLayout && (
+                    <View style={{ marginTop: 12, marginLeft: 52 }}>
+                      {roleButtons}
+                    </View>
                   )}
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         </View>
 

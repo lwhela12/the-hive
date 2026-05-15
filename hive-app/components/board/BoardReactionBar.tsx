@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text, Pressable, Modal } from 'react-native';
-import type { BoardReaction, Profile } from '../../types';
+import { Ionicons } from '@expo/vector-icons';
+import type { BoardReaction } from '../../types';
 
 interface ReactionCount {
   emoji: string;
@@ -76,9 +77,11 @@ export function BoardReactionBar({
 
       <Pressable
         onPress={() => setShowPicker(true)}
-        className="px-2 py-1 rounded-full bg-cream"
+        className="px-2 py-1 rounded-full bg-cream flex-row items-center"
+        accessibilityRole="button"
+        accessibilityLabel="Add reaction"
       >
-        <Text className="text-sm">+</Text>
+        <Ionicons name="happy-outline" size={16} color="#bd9348" />
       </Pressable>
 
       <Modal visible={showPicker} transparent animationType="fade">

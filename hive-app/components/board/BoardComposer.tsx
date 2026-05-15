@@ -1,10 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { View, Text, TextInput, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { BoardCategory, BoardPost, Attachment } from '../../types';
+import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 import { SelectedImage } from '../../lib/imagePicker';
-import { uploadMultipleImages } from '../../lib/attachmentUpload';
+import { SelectedFile } from '../../lib/filePicker';
+import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
+import { getActiveMentionQuery, getMentionedMembers, getMentionSuggestions, insertMention } from '../../lib/mentions';
+import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { submitOnEnter } from '../../lib/submitOnEnter';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
+import { MentionSuggestions } from './MentionSuggestions';
 
 interface BoardComposerProps {
   visible: boolean;
@@ -14,16 +19,44 @@ interface BoardComposerProps {
   onSubmit: (title: string, content: string, attachments?: Attachment[]) => Promise<boolean>;
   existingPost?: BoardPost | null; // For edit mode
   draftStorageKey?: string | null;
+  mentionableMembers?: Pick<Profile, 'id' | 'name'>[];
+  managementActions?: ReactNode;
 }
 
-export function BoardComposer({ visible, category, userId, onClose, onSubmit, existingPost, draftStorageKey }: BoardComposerProps) {
+export function BoardComposer({
+  visible,
+  category,
+  userId,
+  onClose,
+  onSubmit,
+  existingPost,
+  draftStorageKey,
+  mentionableMembers = [],
+  managementActions,
+}: BoardComposerProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [contentSelection, setContentSelection] = useState({ start: 0, end: 0 });
+  const [contentSelectionOverride, setContentSelectionOverride] = useState<{ start: number; end: number } | null>(null);
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const submittingRef = useRef(false);
+  const { members: activeMentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(
+    category?.community_id,
+    mentionableMembers
+  );
 
   const isEditMode = !!existingPost;
+  const contentCursorIndex = contentSelection.start === 0 && contentSelection.end === 0 && content.length > 0
+    ? content.length
+    : contentSelection.start;
+  const mentionQuery = getActiveMentionQuery(content, contentCursorIndex);
+  const mentionSuggestions = mentionQuery === null
+    ? []
+    : getMentionSuggestions(mentionQuery, activeMentionableMembers, userId);
+  const selectedMentionMembers = getMentionedMembers(content, activeMentionableMembers, userId);
 
   // Pre-fill fields when editing
   useEffect(() => {
@@ -49,9 +82,19 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
       // Reset when modal closes
       setTitle('');
       setContent('');
+      setContentSelection({ start: 0, end: 0 });
+      setContentSelectionOverride(null);
       setSelectedImages([]);
+      setSelectedFiles([]);
     }
   }, [visible, existingPost, draftStorageKey]);
+
+  useEffect(() => {
+    if (!contentSelectionOverride) return;
+
+    const timeout = setTimeout(() => setContentSelectionOverride(null), 0);
+    return () => clearTimeout(timeout);
+  }, [contentSelectionOverride]);
 
   useEffect(() => {
     if (!visible || !draftStorageKey || typeof window === 'undefined') return;
@@ -60,13 +103,14 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
   }, [visible, draftStorageKey, title, content]);
 
   const handleSubmit = async () => {
-    if (!title.trim() || !content.trim()) {
+    if (!title.trim() || !content.trim() || submittingRef.current) {
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     try {
-      // Upload images first if any are selected
+      // Upload attachments first if any are selected
       let attachments: Attachment[] | undefined;
       if (selectedImages.length > 0) {
         setUploadStatus('Uploading images...');
@@ -77,19 +121,32 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
           attachments = result.attachments;
         }
       }
+      if (selectedFiles.length > 0) {
+        setUploadStatus('Uploading files...');
+        const result = await uploadMultipleFiles(userId, selectedFiles, (progress) => {
+          setUploadStatus(`Uploading file ${progress.current}/${progress.total}...`);
+        });
+        if (result.attachments.length > 0) {
+          attachments = [...(attachments ?? []), ...result.attachments];
+        }
+      }
 
       setUploadStatus('');
       const didPost = await onSubmit(title.trim(), content.trim(), attachments);
       if (didPost) {
         setTitle('');
         setContent('');
+        setContentSelection({ start: 0, end: 0 });
+        setContentSelectionOverride(null);
         setSelectedImages([]);
+        setSelectedFiles([]);
         if (draftStorageKey && typeof window !== 'undefined') {
           window.localStorage.removeItem(draftStorageKey);
         }
         onClose();
       }
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
       setUploadStatus('');
     }
@@ -98,7 +155,10 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
   const handleClose = () => {
     setTitle('');
     setContent('');
+    setContentSelection({ start: 0, end: 0 });
+    setContentSelectionOverride(null);
     setSelectedImages([]);
+    setSelectedFiles([]);
     if (draftStorageKey && typeof window !== 'undefined') {
       window.localStorage.removeItem(draftStorageKey);
     }
@@ -106,6 +166,33 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
   };
 
   const isValid = title.trim().length > 0 && content.trim().length > 0;
+
+  const handleSelectMention = (member: Pick<Profile, 'id' | 'name'>) => {
+    const inserted = insertMention(content, contentCursorIndex, member);
+    setContent(inserted.text);
+    const nextSelection = { start: inserted.cursorIndex, end: inserted.cursorIndex };
+    setContentSelection(nextSelection);
+    setContentSelectionOverride(nextSelection);
+  };
+
+  const handleContentChange = (text: string) => {
+    setContent(text);
+    setContentSelection((previousSelection) => {
+      const wasAtTextEnd = previousSelection.start === content.length && previousSelection.end === content.length;
+      const lookedUnreported = previousSelection.start === 0 && previousSelection.end === 0 && text.length > 0;
+      if (wasAtTextEnd || lookedUnreported) {
+        return { start: text.length, end: text.length };
+      }
+      return previousSelection;
+    });
+  };
+
+  const titleEnterToSubmitCaptureProps = Platform.OS === 'web'
+    ? ({ onKeyDownCapture: submitOnEnter(handleSubmit) } as any)
+    : {};
+  const contentEnterToSubmitCaptureProps = Platform.OS === 'web'
+    ? ({ onKeyDownCapture: submitOnEnter(handleSubmit) } as any)
+    : {};
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
@@ -122,7 +209,7 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
               </Text>
             </Pressable>
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg">
-              {isEditMode ? 'Edit Post' : 'New Post'}
+              {isEditMode ? 'Edit Thread' : 'New Thread'}
             </Text>
             <Pressable
               onPress={handleSubmit}
@@ -153,17 +240,25 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
               </View>
             )}
 
+            {isEditMode && managementActions && (
+              <View className="flex-row flex-wrap mb-4" style={{ gap: 8 }}>
+                {managementActions}
+              </View>
+            )}
+
             {/* Title input */}
-            <View className="mb-4">
+            <View className="mb-4" {...titleEnterToSubmitCaptureProps}>
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
                 Title
               </Text>
               <TextInput
                 value={title}
                 onChangeText={setTitle}
-                placeholder="Give your post a title..."
+                placeholder="Give this thread a title..."
                 placeholderTextColor="#9ca3af"
                 maxLength={150}
+                returnKeyType="send"
+                onSubmitEditing={handleSubmit}
                 className="bg-white rounded-xl px-4 py-3 text-charcoal"
                 style={{ fontFamily: 'Lato_400Regular' }}
               />
@@ -177,26 +272,56 @@ export function BoardComposer({ visible, category, userId, onClose, onSubmit, ex
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
                 Content
               </Text>
-              <TextInput
-                value={content}
-                onChangeText={setContent}
-                placeholder="What would you like to share?"
-                placeholderTextColor="#9ca3af"
-                multiline
-                textAlignVertical="top"
-                className="bg-white rounded-xl px-4 py-3 text-charcoal min-h-[200px]"
-                style={{ fontFamily: 'Lato_400Regular' }}
+              <View {...contentEnterToSubmitCaptureProps}>
+                <TextInput
+                  value={content}
+                  onChangeText={handleContentChange}
+                  onSelectionChange={(event) => setContentSelection(event.nativeEvent.selection)}
+                  selection={contentSelectionOverride ?? undefined}
+                  placeholder="What would you like to share?"
+                  placeholderTextColor="#9ca3af"
+                  multiline
+                  blurOnSubmit={Platform.OS === 'web'}
+                  submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
+                  returnKeyType="send"
+                  enterKeyHint="send"
+                  onSubmitEditing={handleSubmit}
+                  onKeyPress={submitOnEnter(handleSubmit)}
+                  textAlignVertical="top"
+                  className="bg-white rounded-xl px-4 py-3 text-charcoal min-h-[200px]"
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                />
+              </View>
+              <MentionSuggestions
+                active={mentionQuery !== null}
+                query={mentionQuery}
+                loading={mentionMembersLoading}
+                suggestions={mentionSuggestions}
+                onSelect={handleSelectMention}
               />
+              {selectedMentionMembers.length > 0 && (
+                <View className="flex-row flex-wrap mt-2" style={{ gap: 6 }}>
+                  {selectedMentionMembers.map((member) => (
+                    <View key={member.id} className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
+                        Tagged {member.name.split(/\s+/)[0]}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
 
             {/* Attachments */}
             <View className="mb-4">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
-                Photos
+                Attachments
               </Text>
               <AttachmentPicker
                 selectedImages={selectedImages}
                 onImagesChange={setSelectedImages}
+                selectedFiles={selectedFiles}
+                onFilesChange={setSelectedFiles}
                 disabled={submitting}
               />
             </View>

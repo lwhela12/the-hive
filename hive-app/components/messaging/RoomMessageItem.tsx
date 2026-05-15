@@ -18,6 +18,9 @@ interface RoomMessageItemProps {
   onRemoveReaction: (emoji: string) => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  ownBubbleColor?: string;
+  ownBubbleTextColor?: string;
+  reactionAccentColor?: string;
 }
 
 const REACTIONS = ['👍', '❤️', '😂', '🐝', '🎉', '👀'];
@@ -29,6 +32,9 @@ export const RoomMessageItem = memo(function RoomMessageItem({
   onRemoveReaction,
   onEdit,
   onDelete,
+  ownBubbleColor = '#bd9348',
+  ownBubbleTextColor = '#FFFFFF',
+  reactionAccentColor = '#bd9348',
 }: RoomMessageItemProps) {
   const [showActions, setShowActions] = useState(false);
   const [fullscreenImageIndex, setFullscreenImageIndex] = useState<number | null>(null);
@@ -183,11 +189,8 @@ export const RoomMessageItem = memo(function RoomMessageItem({
           {/* Text bubble - only show if there's content or deleted */}
           {(hasContent || isDeleted) && (
             <View
-              className={`px-4 py-3 rounded-2xl ${
-                isOwnMessage
-                  ? 'bg-gold rounded-br-md'
-                  : 'bg-white rounded-bl-md'
-              }`}
+              className={`px-4 py-3 rounded-2xl ${isOwnMessage ? 'rounded-br-md' : 'rounded-bl-md'}`}
+              style={{ backgroundColor: isOwnMessage ? ownBubbleColor : '#FFFFFF' }}
             >
               {/* Message content */}
               {(!isDeleted && hasContent) && (
@@ -196,9 +199,9 @@ export const RoomMessageItem = memo(function RoomMessageItem({
                     fontFamily: 'Lato_400Regular',
                     fontSize: 16,
                     lineHeight: 24,
-                    color: isOwnMessage ? '#FFFFFF' : '#313130',
+                    color: isOwnMessage ? ownBubbleTextColor : '#313130',
                   }}
-                  linkStyle={{ color: isOwnMessage ? '#f6f4e5' : '#bd9348' }}
+                  linkStyle={{ color: isOwnMessage ? 'rgba(255,255,255,0.86)' : reactionAccentColor }}
                 >
                   {message.content}
                 </LinkifiedText>
@@ -242,14 +245,13 @@ export const RoomMessageItem = memo(function RoomMessageItem({
             <Pressable
               key={emoji}
               onPress={() => handleReactionPress(emoji, hasReacted)}
-              className={`flex-row items-center px-2 py-0.5 rounded-full ${
-                hasReacted ? 'bg-gold/20' : 'bg-white'
-              }`}
+              className="flex-row items-center px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: hasReacted ? `${reactionAccentColor}22` : '#FFFFFF' }}
             >
               <Text className="text-xs">{emoji}</Text>
               <Text
-                style={{ fontFamily: 'Lato_700Bold' }}
-                className={`text-xs ml-1 ${hasReacted ? 'text-gold' : 'text-charcoal'}`}
+                className="text-xs ml-1"
+                style={{ fontFamily: 'Lato_700Bold', color: hasReacted ? reactionAccentColor : '#313130' }}
               >
                 {count}
               </Text>

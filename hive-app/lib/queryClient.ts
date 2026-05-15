@@ -44,4 +44,6 @@ export const queryKeys = {
   boardPosts: (communityId: string, categoryId: string) =>
     ['boardPosts', communityId, categoryId] as const,
   boardPostCounts: (communityId: string) => ['boardPostCounts', communityId] as const,
+  boardLinkedWishes: (communityId: string, categoryId: string) =>
+    ['boardLinkedWishes', communityId, categoryId] as const,
 };

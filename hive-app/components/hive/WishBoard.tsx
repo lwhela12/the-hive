@@ -1,4 +1,4 @@
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text } from 'react-native';
 import { WishCard } from './WishCard';
 import type { Wish, Profile } from '../../types';
 

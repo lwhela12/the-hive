@@ -3,26 +3,24 @@ import { View, Text, FlatList, RefreshControl, Pressable, Alert, useWindowDimens
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useChatRooms, RoomWithData } from '../../lib/hooks/useChatRooms';
 import { prefetchRoomMessages } from '../../lib/hooks/useRoomMessagesQuery';
 import { ChatRoomItem } from '../../components/messaging/ChatRoomItem';
 import { RoomChatView } from '../../components/messaging/RoomChatView';
 import { MemberPicker } from '../../components/messaging/MemberPicker';
-import { NavigationDrawer, AppHeader } from '../../components/navigation';
-import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import type { Profile } from '../../types';
 
 export default function MessagesScreen() {
   const { roomId } = useLocalSearchParams<{ roomId?: string }>();
   const { profile, communityId } = useAuth();
-  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
   const queryClient = useQueryClient();
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const useMobileLayout = width < 768;
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<RoomWithData | null>(null);
+  const [customizeRoomOnOpen, setCustomizeRoomOnOpen] = useState(false);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
   const hasPrefetchedRef = useRef(false);
   const selectedRoomStorageKey = communityId ? `the-hive:last-chat-room:${communityId}` : null;
@@ -64,6 +62,17 @@ export default function MessagesScreen() {
 
   const openRoom = useCallback((room: RoomWithData) => {
     markRoomAsRead(room.id);
+    setSelectedRoom(room);
+    setCustomizeRoomOnOpen(false);
+
+    if (selectedRoomStorageKey && typeof window !== 'undefined') {
+      window.localStorage.setItem(selectedRoomStorageKey, room.id);
+    }
+  }, [markRoomAsRead, selectedRoomStorageKey]);
+
+  const openRoomCustomizer = useCallback((room: RoomWithData) => {
+    markRoomAsRead(room.id);
+    setCustomizeRoomOnOpen(true);
     setSelectedRoom(room);
 
     if (selectedRoomStorageKey && typeof window !== 'undefined') {
@@ -110,10 +119,12 @@ export default function MessagesScreen() {
     return (
       <RoomChatView
         room={selectedRoom}
+        startCustomizing={customizeRoomOnOpen}
         onBack={() => {
           // Mark room as read when leaving
           markRoomAsRead(selectedRoom.id);
           setSelectedRoom(null);
+          setCustomizeRoomOnOpen(false);
           if (selectedRoomStorageKey && typeof window !== 'undefined') {
             window.localStorage.removeItem(selectedRoomStorageKey);
           }
@@ -126,23 +137,23 @@ export default function MessagesScreen() {
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       {/* Mobile Header */}
       {useMobileLayout ? (
-        <AppHeader
-          title="Chat"
-          onMenuPress={() => setDrawerOpen(true)}
-          rightElement={
-            <Pressable
-              onPress={() => setShowMemberPicker(true)}
-              className="w-10 h-10 bg-gold rounded-full items-center justify-center"
-            >
-              <Text className="text-white text-xl">+</Text>
-            </Pressable>
-          }
-        />
+        <View className="flex-row items-center justify-between bg-cream px-5 pt-2 pb-3">
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-charcoal text-3xl">
+            Messages
+          </Text>
+          <Pressable
+            onPress={() => setShowMemberPicker(true)}
+            className="w-10 h-10 bg-gold rounded-full items-center justify-center active:opacity-80"
+            hitSlop={8}
+          >
+            <Ionicons name="add" size={25} color="white" />
+          </Pressable>
+        </View>
       ) : (
         <View className="flex-row items-center justify-between bg-gold px-4 py-3">
           <View className="w-10 h-10" />
           <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-base text-white">
-            Chat
+            Messages
           </Text>
           <Pressable
             onPress={() => setShowMemberPicker(true)}
@@ -153,26 +164,17 @@ export default function MessagesScreen() {
         </View>
       )}
 
-      {/* Navigation Drawer */}
-      {useMobileLayout && (
-        <NavigationDrawer
-          isOpen={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          mode="navigation"
-          unreadDMCount={unreadDMCount}
-        />
-      )}
-
       {/* Room list — FlatList keeps JS thread free during load */}
       <FlatList
         data={rooms}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingVertical: 8, paddingBottom: 24 }}
+        contentContainerStyle={{ paddingVertical: 8, paddingBottom: useMobileLayout ? 96 : 24 }}
         renderItem={({ item }) => (
           <ChatRoomItem
             room={item}
             currentUserId={profile?.id}
             onPress={() => openRoom(item)}
+            onCustomize={() => openRoomCustomizer(item)}
           />
         )}
         refreshControl={

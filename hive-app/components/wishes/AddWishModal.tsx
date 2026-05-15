@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
-import type { Wish } from '../../types';
+import type { BoardCategory, Wish } from '../../types';
 
 const WISH_DRAFT_KEY = 'add-wish-draft';
 
@@ -26,6 +26,9 @@ interface AddWishModalProps {
   onSave: () => void;
   onRefineWithClive?: (roughWish: string) => void;
   existingWish?: Wish | null;
+  linkedBoardCategory?: Pick<BoardCategory, 'id' | 'name'> | null;
+  wishOwnerUserId?: string;
+  wishOwnerName?: string;
 }
 
 export function AddWishModal({
@@ -36,11 +39,15 @@ export function AddWishModal({
   onSave,
   onRefineWithClive,
   existingWish,
+  linkedBoardCategory,
+  wishOwnerUserId,
+  wishOwnerName,
 }: AddWishModalProps) {
   const [wishText, setWishText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const isEditMode = !!existingWish;
+  const isLinkedWish = !!linkedBoardCategory && !existingWish;
 
   useEffect(() => {
     if (visible && existingWish) {
@@ -60,6 +67,7 @@ export function AddWishModal({
 
   const handleSave = async (makePublic: boolean) => {
     if (!userId || !communityId || !wishText.trim()) return;
+    const ownerUserId = wishOwnerUserId || userId;
 
     setSaving(true);
     setError('');
@@ -78,15 +86,21 @@ export function AddWishModal({
 
         if (updateError) throw updateError;
       } else {
-        const { error: insertError } = await supabase.from('wishes').insert({
-          user_id: userId,
+        const insertPayload: Record<string, unknown> = {
+          user_id: ownerUserId,
           community_id: communityId,
           description: wishText.trim(),
           raw_input: wishText.trim(),
           status: makePublic ? 'public' : 'private',
           is_active: makePublic, // Only active if public
           extracted_from: 'manual',
-        });
+        };
+
+        if (linkedBoardCategory?.id) {
+          insertPayload.board_category_id = linkedBoardCategory.id;
+        }
+
+        const { error: insertError } = await supabase.from('wishes').insert(insertPayload);
 
         if (insertError) throw insertError;
       }
@@ -141,7 +155,7 @@ export function AddWishModal({
                   style={{ fontFamily: 'Lato_700Bold' }}
                   className="text-xl text-charcoal"
                 >
-                  {isEditMode ? 'Edit Wish' : 'Add a Wish'}
+                  {isEditMode ? 'Edit Wish' : isLinkedWish ? 'Add Board Wish' : 'Add a Wish'}
                 </Text>
                 <View style={{ width: 50 }} />
               </View>
@@ -154,11 +168,28 @@ export function AddWishModal({
                 >
                   What do you wish for?
                 </Text>
+                {isLinkedWish && (
+                  <View className="bg-gold/10 border border-gold/20 rounded-xl px-4 py-3 mb-3">
+                    <Text
+                      style={{ fontFamily: 'Lato_700Bold' }}
+                      className="text-gold text-sm"
+                    >
+                      Linked to {linkedBoardCategory.name}
+                    </Text>
+                    <Text
+                      style={{ fontFamily: 'Lato_400Regular' }}
+                      className="text-charcoal/60 text-sm mt-1"
+                    >
+                      This wish will show up here and in Community Wishes.
+                      {wishOwnerName ? ` It will belong to ${wishOwnerName}.` : ''}
+                    </Text>
+                  </View>
+                )}
                 <Text
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal/60 text-sm mb-3"
                 >
-                  Describe what you need help with
+                  {isLinkedWish ? 'Make this one clear, claimable ask from the board.' : 'Describe what you need help with'}
                 </Text>
                 <TextInput
                   value={wishText}
@@ -194,7 +225,9 @@ export function AddWishModal({
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal/70 text-sm"
                 >
-                  Be specific about what you need. "Help cooking" becomes "Teach me 3 easy weeknight meals I can prep on Sundays."
+                  {isLinkedWish
+                    ? 'Board wishes work best as concrete next steps: "Help hang the mirror" or "Send Iceland travel tips."'
+                    : 'Be specific about what you need. "Help cooking" becomes "Teach me 3 easy weeknight meals I can prep on Sundays."'}
                 </Text>
               </View>
 
@@ -233,7 +266,7 @@ export function AddWishModal({
                   </View>
                   <View className="flex-1">
                     <Button
-                      title="Make Public"
+                      title={isLinkedWish ? 'Add Linked Wish' : 'Make Public'}
                       onPress={() => handleSave(true)}
                       loading={saving}
                       disabled={saving || !canSubmit}

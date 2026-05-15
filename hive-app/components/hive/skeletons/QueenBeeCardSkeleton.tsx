@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { Skeleton, SkeletonCircle, SkeletonText } from '../../ui/Skeleton';
+import { Skeleton, SkeletonCircle } from '../../ui/Skeleton';
 
 /**
  * Skeleton for the Queen Bee card (collapsed state)

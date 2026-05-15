@@ -14,9 +14,9 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
-import { ChatInput } from './ChatInput';
+import { ChatInput, type ChatInputAttachments } from './ChatInput';
 import { SelectedImage } from '../../lib/imagePicker';
-import { uploadMultipleImages } from '../../lib/attachmentUpload';
+import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
 import type { ChatMessage, Conversation, ConversationMode, Attachment } from '../../types';
 
 const cliveIcon = require('../../assets/Clive_logo.png');
@@ -93,6 +93,17 @@ const STARTER_PROMPTS = [
 const getFirstName = (name?: string | null) => {
   const firstName = name?.trim().split(/\s+/)[0];
   return firstName || 'there';
+};
+
+const normalizeChatAttachments = (attachments?: ChatInputAttachments | SelectedImage[]) => {
+  if (Array.isArray(attachments)) {
+    return { images: attachments, files: [] };
+  }
+
+  return {
+    images: attachments?.images ?? [],
+    files: attachments?.files ?? [],
+  };
 };
 
 const WelcomeState = memo(function WelcomeState({
@@ -634,7 +645,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
   // Main send message handler
   const handleSendMessage = useCallback(async (
     userMessage: string,
-    images?: SelectedImage[],
+    selectedAttachments?: ChatInputAttachments | SelectedImage[],
     refineWish?: string // The rough wish being refined (triggers REFINE_WISH flow)
   ) => {
     if (!SUPABASE_FUNCTIONS_URL) {
@@ -650,12 +661,20 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     setIsLoading(true);
     setStreamingContent(null);
 
-    // Upload images if any
+    const { images, files } = normalizeChatAttachments(selectedAttachments);
+
+    // Upload attachments if any
     let attachments: Attachment[] | undefined;
     if (images && images.length > 0) {
       const result = await uploadMultipleImages(session.user.id, images);
       if (result.attachments.length > 0) {
         attachments = result.attachments;
+      }
+    }
+    if (files && files.length > 0) {
+      const result = await uploadMultipleFiles(session.user.id, files);
+      if (result.attachments.length > 0) {
+        attachments = [...(attachments ?? []), ...result.attachments];
       }
     }
 

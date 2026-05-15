@@ -43,7 +43,6 @@ interface MemberData {
 const ROLE_LABELS: Partial<Record<UserRole, string>> = {
   admin: 'Admin',
   treasurer: 'Treasurer',
-  historian: 'Historian',
 };
 
 const HIVE_CABINET = [
@@ -53,12 +52,6 @@ const HIVE_CABINET = [
     aliases: ['Natalie'],
     icon: '👑',
     description: 'Guides the HIVE vision, culture, and creative abundance.',
-  },
-  {
-    title: 'Historian',
-    memberName: 'Charlee',
-    icon: '📚',
-    description: 'Keeps the HIVE story, highlights, photos, and memory alive.',
   },
   {
     title: 'Treasurer',

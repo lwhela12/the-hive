@@ -1,5 +1,5 @@
 import { View, useWindowDimensions } from 'react-native';
-import { Skeleton, SkeletonCircle, SkeletonText } from '../../ui/Skeleton';
+import { Skeleton, SkeletonCircle } from '../../ui/Skeleton';
 
 /**
  * Skeleton for the three Queen Bee seals (Last Month, Current, Next Month)

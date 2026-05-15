@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { View, Text, Pressable, TextInput } from 'react-native';
+import { View, Text, Pressable, TextInput, Platform } from 'react-native';
 import { formatDateShort } from '../../lib/dateUtils';
 import type { BoardReply, Profile } from '../../types';
 import { BoardReactionBar } from './BoardReactionBar';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { LinkifiedText } from '../ui/LinkifiedText';
+import { submitOnEnter } from '../../lib/submitOnEnter';
 
 interface BoardReplyItemProps {
   reply: BoardReply & { author?: Profile };
@@ -72,6 +73,12 @@ export function BoardReplyItem({
                 value={editContent}
                 onChangeText={setEditContent}
                 multiline
+                blurOnSubmit={Platform.OS === 'web'}
+                submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
+                returnKeyType="send"
+                enterKeyHint="send"
+                onSubmitEditing={handleSaveEdit}
+                onKeyPress={submitOnEnter(handleSaveEdit)}
                 className="bg-cream rounded-lg p-3 text-charcoal mb-2"
                 style={{ fontFamily: 'Lato_400Regular' }}
               />

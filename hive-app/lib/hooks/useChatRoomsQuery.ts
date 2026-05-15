@@ -18,6 +18,11 @@ interface RpcChatRoomRow {
   room_description: string | null;
   room_created_by: string | null;
   room_created_at: string;
+  custom_title: string | null;
+  custom_emoji: string | null;
+  custom_image_url: string | null;
+  custom_background: string | null;
+  custom_background_image_url: string | null;
   members: Array<ChatRoomMember & { user?: Profile }>;
   last_message: (RoomMessage & { sender?: Profile }) | null;
   unread_count: number;
@@ -52,6 +57,11 @@ async function fetchChatRooms(
     description: row.room_description ?? undefined,
     created_by: row.room_created_by ?? undefined,
     created_at: row.room_created_at,
+    custom_title: row.custom_title ?? undefined,
+    custom_emoji: row.custom_emoji ?? undefined,
+    custom_image_url: row.custom_image_url ?? undefined,
+    custom_background: row.custom_background ?? undefined,
+    custom_background_image_url: row.custom_background_image_url ?? undefined,
     members: row.members || [],
     last_message: row.last_message ?? undefined,
     unread_count: Number(row.unread_count),
@@ -113,7 +123,7 @@ async function fetchChatRoomsFallback(
       // Get unread count
       const { data: membershipData } = await supabase
         .from('chat_room_members')
-        .select('last_read_at')
+        .select('last_read_at, custom_title, custom_emoji, custom_image_url, custom_background, custom_background_image_url')
         .eq('room_id', room.id)
         .eq('user_id', userId)
         .maybeSingle();
@@ -131,6 +141,11 @@ async function fetchChatRoomsFallback(
 
       return {
         ...room,
+        custom_title: membershipData?.custom_title ?? undefined,
+        custom_emoji: membershipData?.custom_emoji ?? undefined,
+        custom_image_url: membershipData?.custom_image_url ?? undefined,
+        custom_background: membershipData?.custom_background ?? undefined,
+        custom_background_image_url: membershipData?.custom_background_image_url ?? undefined,
         members,
         last_message: lastMsgData as (RoomMessage & { sender?: Profile }) | undefined,
         unread_count: unreadCount,

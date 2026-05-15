@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Pressable,
   Modal,
   Dimensions,
+  Text,
+  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,13 +23,23 @@ export function AttachmentGallery({
   maxWidth = SCREEN_WIDTH * 0.8,
 }: AttachmentGalleryProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const safeAttachments = attachments ?? [];
+  const imageAttachments = safeAttachments.filter((attachment) => attachment.mime_type?.startsWith('image/'));
+  const fileAttachments = safeAttachments.filter((attachment) => !attachment.mime_type?.startsWith('image/'));
+  const selectedImage = selectedIndex !== null ? imageAttachments[selectedIndex] : null;
 
-  if (!attachments || attachments.length === 0) {
+  useEffect(() => {
+    if (selectedIndex !== null && selectedIndex >= imageAttachments.length) {
+      setSelectedIndex(null);
+    }
+  }, [imageAttachments.length, selectedIndex]);
+
+  if (safeAttachments.length === 0) {
     return null;
   }
 
   const getGridLayout = () => {
-    const count = attachments.length;
+    const count = imageAttachments.length;
     const gap = 4;
     const imageWidth = maxWidth;
 
@@ -93,12 +105,12 @@ export function AttachmentGallery({
   };
 
   const renderGrid = () => {
-    const count = attachments.length;
+    const count = imageAttachments.length;
     const gap = 4;
 
     if (count === 1) {
       return renderImage(
-        attachments[0],
+        imageAttachments[0],
         0,
         layout.itemWidth,
         layout.itemHeight
@@ -109,10 +121,10 @@ export function AttachmentGallery({
       // First image full width, then 2 below
       return (
         <View style={{ width: maxWidth, gap }}>
-          {renderImage(attachments[0], 0, maxWidth, maxWidth * 0.5)}
+          {renderImage(imageAttachments[0], 0, maxWidth, maxWidth * 0.5)}
           <View style={{ flexDirection: 'row', gap }}>
-            {renderImage(attachments[1], 1, layout.itemWidth, layout.itemHeight)}
-            {renderImage(attachments[2], 2, layout.itemWidth, layout.itemHeight)}
+            {renderImage(imageAttachments[1], 1, layout.itemWidth, layout.itemHeight)}
+            {renderImage(imageAttachments[2], 2, layout.itemWidth, layout.itemHeight)}
           </View>
         </View>
       );
@@ -125,13 +137,13 @@ export function AttachmentGallery({
       return (
         <View style={{ width: maxWidth, gap }}>
           <View style={{ flexDirection: 'row', gap }}>
-            {renderImage(attachments[0], 0, topWidth, topWidth * 0.75)}
-            {renderImage(attachments[1], 1, topWidth, topWidth * 0.75)}
+            {renderImage(imageAttachments[0], 0, topWidth, topWidth * 0.75)}
+            {renderImage(imageAttachments[1], 1, topWidth, topWidth * 0.75)}
           </View>
           <View style={{ flexDirection: 'row', gap }}>
-            {renderImage(attachments[2], 2, bottomWidth, bottomWidth)}
-            {renderImage(attachments[3], 3, bottomWidth, bottomWidth)}
-            {renderImage(attachments[4], 4, bottomWidth, bottomWidth)}
+            {renderImage(imageAttachments[2], 2, bottomWidth, bottomWidth)}
+            {renderImage(imageAttachments[3], 3, bottomWidth, bottomWidth)}
+            {renderImage(imageAttachments[4], 4, bottomWidth, bottomWidth)}
           </View>
         </View>
       );
@@ -147,20 +159,51 @@ export function AttachmentGallery({
           gap,
         }}
       >
-        {attachments.map((attachment, index) =>
+        {imageAttachments.map((attachment, index) =>
           renderImage(attachment, index, layout.itemWidth, layout.itemHeight)
         )}
       </View>
     );
   };
 
+  const renderFiles = () => {
+    if (fileAttachments.length === 0) return null;
+
+    return (
+      <View className="mt-2" style={{ gap: 6, maxWidth }}>
+        {fileAttachments.map((attachment) => (
+          <Pressable
+            key={attachment.id}
+            onPress={() => Linking.openURL(attachment.url)}
+            className="flex-row items-center bg-cream border border-gold/20 rounded-lg px-3 py-2 active:opacity-70"
+          >
+            <Ionicons name="document-attach-outline" size={18} color="#bd9348" />
+            <View className="ml-2 flex-1">
+              <Text
+                style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#313130' }}
+                numberOfLines={1}
+              >
+                {attachment.filename}
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(49,49,48,0.5)' }}>
+                {attachment.mime_type || 'File'}
+              </Text>
+            </View>
+            <Ionicons name="open-outline" size={16} color="rgba(49,49,48,0.42)" />
+          </Pressable>
+        ))}
+      </View>
+    );
+  };
+
   return (
     <>
-      <View className="mt-2">{renderGrid()}</View>
+      {imageAttachments.length > 0 && <View className="mt-2">{renderGrid()}</View>}
+      {renderFiles()}
 
       {/* Full-screen modal */}
       <Modal
-        visible={selectedIndex !== null}
+        visible={!!selectedImage}
         transparent
         animationType="fade"
         onRequestClose={() => setSelectedIndex(null)}
@@ -175,10 +218,10 @@ export function AttachmentGallery({
           </Pressable>
 
           {/* Image */}
-          {selectedIndex !== null && (
+          {selectedImage && (
             <View className="flex-1 items-center justify-center">
               <Image
-                source={{ uri: attachments[selectedIndex].url }}
+                source={{ uri: selectedImage.url }}
                 style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT * 0.8 }}
                 contentFit="contain"
                 cachePolicy="memory-disk"
@@ -187,9 +230,9 @@ export function AttachmentGallery({
           )}
 
           {/* Navigation dots */}
-          {attachments.length > 1 && (
+          {imageAttachments.length > 1 && (
             <View className="absolute bottom-12 left-0 right-0 flex-row justify-center gap-2">
-              {attachments.map((_, index) => (
+              {imageAttachments.map((_, index) => (
                 <Pressable
                   key={index}
                   onPress={() => setSelectedIndex(index)}

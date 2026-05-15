@@ -1,4 +1,4 @@
-export type UserRole = 'member' | 'treasurer' | 'historian' | 'admin';
+export type UserRole = 'member' | 'treasurer' | 'admin';
 
 // Board types
 export type BoardCategoryType =
@@ -13,6 +13,7 @@ export type BoardCategoryType =
 export type ChatRoomType = 'community' | 'dm' | 'group_dm';
 export type WishStatus = 'private' | 'public' | 'fulfilled' | 'replaced';
 export type QueenBeeStatus = 'upcoming' | 'active' | 'completed';
+export type BoardPostStatus = 'active' | 'completed';
 
 export interface QueenBeePreference extends Record<string, unknown> {
   preferred_month?: string;
@@ -144,11 +145,14 @@ export interface Wish extends Record<string, unknown> {
   extracted_from: ExtractionSource;
   fulfilled_by?: string;
   thank_you_message?: string;
+  board_category_id?: string | null;
+  source_board_post_id?: string | null;
   created_at: string;
   fulfilled_at?: string;
   replaced_at?: string;
   user?: Profile;
   granters?: WishGranter[];
+  board_category?: BoardCategory | null;
 }
 
 export interface WishComment extends Record<string, unknown> {
@@ -248,8 +252,12 @@ export interface HoneyPotTransaction extends Record<string, unknown> {
   community_id: string;
   amount: number;
   transaction_type: 'deposit' | 'withdrawal' | 'adjustment';
-  note?: string;
-  recorded_by?: string;
+  note?: string | null;
+  recorded_by?: string | null;
+  related_user_id?: string | null;
+  dues_year?: number | null;
+  dues_quarter?: number | null;
+  dues_covered_quarters?: number | null;
   created_at: string;
 }
 
@@ -370,6 +378,7 @@ export interface BoardCategory extends Record<string, unknown> {
   completed_at?: string | null;
   completed_by?: string | null;
   completion_note?: string | null;
+  source_wish_id?: string | null;
   icon?: string;
   audience?: 'community' | 'members';
   display_order: number;
@@ -414,6 +423,13 @@ export interface BoardPost extends Record<string, unknown> {
   author_id: string;
   title: string;
   content: string;
+  status?: BoardPostStatus;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  completed_at?: string | null;
+  completed_by?: string | null;
+  completion_note?: string | null;
+  granted_wish_id?: string | null;
   attachments?: Attachment[] | null;
   is_pinned: boolean;
   is_locked: boolean;
@@ -467,6 +483,11 @@ export interface ChatRoom extends Record<string, unknown> {
   description?: string;
   created_by?: string;
   created_at: string;
+  custom_title?: string | null;
+  custom_emoji?: string | null;
+  custom_image_url?: string | null;
+  custom_background?: string | null;
+  custom_background_image_url?: string | null;
   // Computed/joined
   members?: ChatRoomMember[];
   last_message?: RoomMessage;
@@ -479,6 +500,11 @@ export interface ChatRoomMember extends Record<string, unknown> {
   user_id: string;
   last_read_at: string;
   muted: boolean;
+  custom_title?: string | null;
+  custom_emoji?: string | null;
+  custom_image_url?: string | null;
+  custom_background?: string | null;
+  custom_background_image_url?: string | null;
   joined_at: string;
   user?: Profile;
 }
@@ -539,6 +565,11 @@ export interface ChatRoomsWithDataRow extends Record<string, unknown> {
   room_description: string | null;
   room_created_by: string | null;
   room_created_at: string;
+  custom_title?: string | null;
+  custom_emoji?: string | null;
+  custom_image_url?: string | null;
+  custom_background?: string | null;
+  custom_background_image_url?: string | null;
   members: ChatRoomMember[];
   last_message: RoomMessage | null;
   unread_count: number;

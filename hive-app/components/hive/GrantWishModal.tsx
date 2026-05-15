@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
 import { supabase } from '../../lib/supabase';
+import { submitOnEnter } from '../../lib/submitOnEnter';
 import type { Wish, Profile } from '../../types';
 
 interface GrantWishModalProps {
@@ -294,6 +295,8 @@ export function GrantWishModal({
                   placeholder="Thank you so much for helping me with..."
                   placeholderTextColor="#9ca3af"
                   multiline
+                  blurOnSubmit={false}
+                  onKeyPress={submitOnEnter(handleGrant)}
                   numberOfLines={4}
                   maxLength={500}
                   className="bg-white rounded-xl px-4 py-3 text-charcoal min-h-[100px]"

@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { BoardCategory } from '../../types';
 
 const EMOJI_MAP: Record<string, string> = {
@@ -37,12 +38,14 @@ interface BoardCategoryListProps {
   categories: BoardCategory[];
   onSelect: (category: BoardCategory) => void;
   postCounts?: Record<string, CategoryStats>;
+  emptyLabel?: string;
 }
 
 export const BoardCategoryList = memo(function BoardCategoryList({
   categories,
   onSelect,
   postCounts,
+  emptyLabel = 'No boards here yet.',
 }: BoardCategoryListProps) {
   return (
     <FlatList
@@ -52,7 +55,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
         const emoji = item.icon ? EMOJI_MAP[item.icon] || item.icon : '📁';
         const isLast = index === categories.length - 1;
         const count = postCounts?.[item.id]?.count ?? 0;
-        const countLabel = `${count} ${count === 1 ? 'post' : 'posts'}`;
+        const countLabel = `${count} ${count === 1 ? 'thread' : 'threads'}`;
         const taggedNames = (item.member_tags ?? [])
           .map((tag) => tag.member?.name?.split(' ')[0])
           .filter(Boolean);
@@ -60,7 +63,9 @@ export const BoardCategoryList = memo(function BoardCategoryList({
           ? taggedNames[0] ? `for ${taggedNames[0]}` : 'for a member'
           : taggedNames.length > 0 ? `for ${taggedNames.join(', ')}` : '';
         const boardKindLabel = item.topic_kind === 'hd_board'
-          ? `HD board ${ownerLabel}`.trim()
+          ? item.goal_title
+            ? `HD ask ${ownerLabel}`.trim()
+            : `Member HD board ${ownerLabel}`.trim()
           : item.topic_kind === 'helper_log'
             ? '15min HIVE helper log'
             : item.audience === 'members' && taggedNames.length > 0
@@ -103,7 +108,18 @@ export const BoardCategoryList = memo(function BoardCategoryList({
           </Pressable>
         );
       }}
-      contentContainerStyle={{ paddingVertical: 8 }}
+      ListEmptyComponent={
+        <View className="items-center justify-center px-8 py-16">
+          <Ionicons name="search-outline" size={28} color="rgba(49,49,48,0.28)" />
+          <Text
+            style={{ fontFamily: 'Lato_400Regular' }}
+            className="text-charcoal/50 text-sm text-center mt-3"
+          >
+            {emptyLabel}
+          </Text>
+        </View>
+      }
+      contentContainerStyle={{ paddingVertical: 8, flexGrow: 1 }}
     />
   );
 });

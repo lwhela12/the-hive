@@ -1,4 +1,4 @@
-import { useQuery, useQueries } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
 import type {
@@ -18,11 +18,6 @@ type QueenBeeWithHighlights = QueenBee & {
 };
 
 type BirthdayMember = Pick<Profile, 'id' | 'name' | 'birthday'>;
-
-interface RpcQueenBeeRow {
-  queen_bee: QueenBee & { user: Profile };
-  highlights: MonthlyHighlight[];
-}
 
 // Fetch queen bees by STATUS (order-based model, not calendar-based)
 // - lastMonth = most recent 'completed' QB
@@ -157,13 +152,28 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
       {
         queryKey: queryKeys.publicWishes(communityId || ''),
         queryFn: async () => {
-          const { data, error } = await supabase
+          let { data, error } = await (supabase as any)
             .from('wishes')
-            .select('*, user:profiles!user_id(*)')
+            .select('*, user:profiles!user_id(*), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status)')
             .eq('status', 'public')
             .eq('is_active', true)
             .eq('community_id', communityId!)
             .order('created_at', { ascending: false });
+          if (
+            error &&
+            (String(error.message ?? '').includes('wishes_board_category_id_fkey') ||
+              String(error.message ?? '').includes('board_category'))
+          ) {
+            const fallback = await (supabase as any)
+              .from('wishes')
+              .select('*, user:profiles!user_id(*)')
+              .eq('status', 'public')
+              .eq('is_active', true)
+              .eq('community_id', communityId!)
+              .order('created_at', { ascending: false });
+            data = fallback.data;
+            error = fallback.error;
+          }
           if (error) {
             console.error('Error fetching public wishes:', error);
           }
@@ -176,15 +186,32 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
       {
         queryKey: queryKeys.grantedWishes(communityId || ''),
         queryFn: async () => {
-          const { data, error } = await supabase
+          let { data, error } = await (supabase as any)
             .from('wishes')
             .select(
-              '*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))'
+              '*, user:profiles!user_id(*), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status), granters:wish_granters(*, granter:profiles!granter_id(*))'
             )
             .eq('status', 'fulfilled')
             .eq('community_id', communityId!)
             .order('fulfilled_at', { ascending: false })
             .limit(20);
+          if (
+            error &&
+            (String(error.message ?? '').includes('wishes_board_category_id_fkey') ||
+              String(error.message ?? '').includes('board_category'))
+          ) {
+            const fallback = await (supabase as any)
+              .from('wishes')
+              .select(
+                '*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))'
+              )
+              .eq('status', 'fulfilled')
+              .eq('community_id', communityId!)
+              .order('fulfilled_at', { ascending: false })
+              .limit(20);
+            data = fallback.data;
+            error = fallback.error;
+          }
           if (error) {
             console.error('Error fetching granted wishes:', error);
           }
@@ -251,11 +278,11 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
             .from('honey_pot')
             .select('balance')
             .eq('community_id', communityId!)
-            .single()) as { data: { balance: number } | null };
-          return data?.balance || 0;
+            .maybeSingle()) as { data: { balance: number } | null };
+          return Number(data?.balance ?? 0);
         },
         enabled: !!communityId,
-        staleTime: 10 * 60 * 1000,
+        staleTime: 60 * 1000,
       },
       // Recent meetings
       {

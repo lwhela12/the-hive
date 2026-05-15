@@ -15,6 +15,8 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../ui/Avatar';
 import { formatDateShort } from '../../lib/dateUtils';
 import { GrantWishModal } from './GrantWishModal';
+import { submitOnEnter } from '../../lib/submitOnEnter';
+import { getLinkedBoardLabel } from '../../lib/boardWishLinks';
 import type { Wish, Profile, WishComment, WishGranter } from '../../types';
 
 type WishWithGranters = Wish & {
@@ -30,9 +32,11 @@ interface WishDetailProps {
     granterIds: string[];
     thankYouMessage?: string;
   }) => Promise<{ error: Error | null }>;
+  onOpenBoard?: (categoryId: string) => void;
+  onCreateBoard?: (wish: WishWithGranters) => Promise<void>;
 }
 
-export function WishDetail({ wish, onClose, onGrant }: WishDetailProps) {
+export function WishDetail({ wish, onClose, onGrant, onOpenBoard, onCreateBoard }: WishDetailProps) {
   const { profile, communityId } = useAuth();
   const [comments, setComments] = useState<(WishComment & { user: Profile })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +48,8 @@ export function WishDetail({ wish, onClose, onGrant }: WishDetailProps) {
   const isOwnWish = profile?.id === wish.user_id;
   const canGrant = isOwnWish && wish.status === 'public' && onGrant;
   const isGranted = wish.status === 'fulfilled';
+  const linkedBoardLabel = getLinkedBoardLabel(wish.board_category);
+  const canCreateBoard = isOwnWish && !wish.board_category_id && !isGranted && !!onCreateBoard;
 
   useEffect(() => {
     fetchComments();
@@ -143,6 +149,47 @@ export function WishDetail({ wish, onClose, onGrant }: WishDetailProps) {
             </View>
           </View>
         </View>
+
+        {(linkedBoardLabel || canCreateBoard) && (
+          <View className="mb-6">
+            {linkedBoardLabel && wish.board_category_id ? (
+              <Pressable
+                onPress={() => onOpenBoard?.(wish.board_category_id!)}
+                className="bg-white rounded-xl p-4 border border-gold/20 flex-row items-center active:bg-cream/50"
+              >
+                <View className="w-10 h-10 rounded-full bg-gold/10 items-center justify-center mr-3">
+                  <Ionicons name="albums-outline" size={20} color="#bd9348" />
+                </View>
+                <View className="flex-1">
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
+                    {linkedBoardLabel}
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mt-0.5">
+                    Open the working board for this wish.
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="rgba(49,49,48,0.35)" />
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => onCreateBoard?.(wish)}
+                className="bg-white rounded-xl p-4 border border-gold/20 flex-row items-center active:bg-cream/50"
+              >
+                <View className="w-10 h-10 rounded-full bg-gold/10 items-center justify-center mr-3">
+                  <Ionicons name="add-circle-outline" size={21} color="#bd9348" />
+                </View>
+                <View className="flex-1">
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
+                    Add this to an HD board
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mt-0.5">
+                    Keep the wish, and start a thread inside the member's HD board.
+                  </Text>
+                </View>
+              </Pressable>
+            )}
+          </View>
+        )}
 
         {/* Granted Info Section */}
         {isGranted && (
@@ -266,6 +313,8 @@ export function WishDetail({ wish, onClose, onGrant }: WishDetailProps) {
             value={newComment}
             onChangeText={setNewComment}
             multiline
+            blurOnSubmit={false}
+            onKeyPress={submitOnEnter(handleSubmitComment)}
             editable={!submitting}
           />
           <Pressable

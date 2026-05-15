@@ -2,6 +2,7 @@ import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../ui/Avatar';
 import { formatDateShort } from '../../lib/dateUtils';
+import { getLinkedBoardLabel } from '../../lib/boardWishLinks';
 import type { Wish, Profile, WishGranter } from '../../types';
 
 type WishWithGranters = Wish & {
@@ -24,6 +25,7 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, canEdit, can
   const granters = wish.granters || [];
   const displayGranters = granters.filter((g) => g.granter).slice(0, 3);
   const extraGranters = granters.length - 3;
+  const linkedBoardLabel = getLinkedBoardLabel(wish.board_category);
 
   return (
     <Pressable
@@ -87,6 +89,14 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, canEdit, can
           <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/80 mt-1">
             {wish.description}
           </Text>
+          {linkedBoardLabel && (
+            <View className="self-start flex-row items-center bg-white/70 border border-gold/20 rounded-full px-2 py-1 mt-2">
+              <Ionicons name="albums-outline" size={12} color="#bd9348" />
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
+                {linkedBoardLabel}
+              </Text>
+            </View>
+          )}
 
           <View className="flex-row items-center mt-3">
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40">

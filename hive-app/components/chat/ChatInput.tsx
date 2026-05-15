@@ -1,14 +1,22 @@
 import { useState, memo, useRef } from 'react';
 import { View, TextInput, Pressable, Text, Image, ScrollView, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { SelectedImage, pickMultipleImages } from '../../lib/imagePicker';
+import { SelectedImage } from '../../lib/imagePicker';
+import { SelectedFile } from '../../lib/filePicker';
 import { VoiceMicButton } from '../ui/VoiceMicButton';
 import { getDraft, setDraft, clearDraft } from '../../lib/draftStore';
+import { submitOnEnter } from '../../lib/submitOnEnter';
+import { AttachmentPicker } from '../ui/AttachmentPicker';
+import { Ionicons } from '@expo/vector-icons';
 
 const DRAFT_KEY = 'clive-message';
 
+export interface ChatInputAttachments {
+  images?: SelectedImage[];
+  files?: SelectedFile[];
+}
+
 interface ChatInputProps {
-  onSend: (message: string, images?: SelectedImage[]) => void;
+  onSend: (message: string, attachments?: ChatInputAttachments) => void;
   isLoading: boolean;
   placeholder?: string;
   /** Override the draft storage key (e.g. per-conversation) */
@@ -23,21 +31,15 @@ export const ChatInput = memo(function ChatInput({
 }: ChatInputProps) {
   const [inputText, setInputText] = useState(() => getDraft(draftKey));
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const voiceBaseTextRef = useRef<string | null>(null);
-
-  const handlePickImages = async () => {
-    if (isLoading) return;
-    const remainingSlots = 5 - selectedImages.length;
-    if (remainingSlots <= 0) return;
-
-    const images = await pickMultipleImages({ maxImages: remainingSlots });
-    if (images.length > 0) {
-      setSelectedImages((prev) => [...prev, ...images]);
-    }
-  };
 
   const handleRemoveImage = (index: number) => {
     setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const mergeTranscript = (baseText: string, transcript: string) => {
@@ -48,11 +50,16 @@ export const ChatInput = memo(function ChatInput({
   };
 
   const handleSend = () => {
-    if ((!inputText.trim() && selectedImages.length === 0) || isLoading) return;
-    onSend(inputText.trim(), selectedImages.length > 0 ? selectedImages : undefined);
+    if ((!inputText.trim() && selectedImages.length === 0 && selectedFiles.length === 0) || isLoading) return;
+    const attachments =
+      selectedImages.length > 0 || selectedFiles.length > 0
+        ? { images: selectedImages, files: selectedFiles }
+        : undefined;
+    onSend(inputText.trim(), attachments);
     setInputText('');
     clearDraft(draftKey);
     setSelectedImages([]);
+    setSelectedFiles([]);
     voiceBaseTextRef.current = null;
   };
 
@@ -61,23 +68,17 @@ export const ChatInput = memo(function ChatInput({
     setDraft(draftKey, text);
   };
 
-  const handleKeyPress = (event: any) => {
-    const key = event.nativeEvent?.key ?? event.key;
-    const shiftKey = event.nativeEvent?.shiftKey ?? event.shiftKey;
+  const handleKeyPress = submitOnEnter(handleSend);
+  const enterToSubmitCaptureProps = Platform.OS === 'web'
+    ? ({ onKeyDownCapture: submitOnEnter(handleSend) } as any)
+    : {};
 
-    if (Platform.OS === 'web' && key === 'Enter' && !shiftKey) {
-      event.preventDefault?.();
-      event.stopPropagation?.();
-      handleSend();
-    }
-  };
-
-  const hasContent = inputText.trim().length > 0 || selectedImages.length > 0;
+  const hasContent = inputText.trim().length > 0 || selectedImages.length > 0 || selectedFiles.length > 0;
 
   return (
     <View className="px-4 py-3 bg-white">
-      {/* Image previews */}
-      {selectedImages.length > 0 && (
+      {/* Attachment previews */}
+      {(selectedImages.length > 0 || selectedFiles.length > 0) && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -99,30 +100,47 @@ export const ChatInput = memo(function ChatInput({
               </Pressable>
             </View>
           ))}
+          {selectedFiles.map((file, index) => (
+            <View key={`${file.uri}-${index}`} className="relative bg-cream border border-gold/20 rounded-lg px-3 py-2 w-48">
+              <View className="flex-row items-center">
+                <Ionicons name="document-attach-outline" size={20} color="#bd9348" />
+                <View className="ml-2 flex-1">
+                  <Text
+                    className="text-charcoal text-xs"
+                    style={{ fontFamily: 'Lato_700Bold' }}
+                    numberOfLines={1}
+                  >
+                    {file.name}
+                  </Text>
+                  <Text
+                    className="text-charcoal/45 text-[10px]"
+                    style={{ fontFamily: 'Lato_400Regular' }}
+                    numberOfLines={1}
+                  >
+                    {file.mimeType || 'File'}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => handleRemoveFile(index)}
+                className="absolute -top-1 -right-1 bg-charcoal rounded-full w-5 h-5 items-center justify-center"
+              >
+                <Ionicons name="close" size={12} color="white" />
+              </Pressable>
+            </View>
+          ))}
         </ScrollView>
       )}
 
-      <View className="flex-row items-end bg-cream rounded-2xl px-3 py-2">
-        {/* Attachment button */}
-        <Pressable
-          onPress={handlePickImages}
-          disabled={selectedImages.length >= 5 || isLoading}
-          className="p-1 mr-1"
-          accessibilityRole="button"
-          accessibilityLabel="Add photos"
-        >
-          <Ionicons
-            name="attach-outline"
-            size={22}
-            color={selectedImages.length >= 5 || isLoading ? '#ccc' : '#666'}
-          />
-          {selectedImages.length > 0 && (
-            <View className="absolute -top-1 -right-1 bg-gold rounded-full w-4 h-4 items-center justify-center">
-              <Text className="text-white text-xs font-bold">{selectedImages.length}</Text>
-            </View>
-          )}
-        </Pressable>
-
+      <View className="flex-row items-end bg-cream rounded-2xl px-3 py-2" {...enterToSubmitCaptureProps}>
+        <AttachmentPicker
+          compact
+          selectedImages={selectedImages}
+          onImagesChange={setSelectedImages}
+          selectedFiles={selectedFiles}
+          onFilesChange={setSelectedFiles}
+          disabled={isLoading}
+        />
         <TextInput
           value={inputText}
           onChangeText={handleTextChange}
@@ -130,7 +148,10 @@ export const ChatInput = memo(function ChatInput({
           placeholderTextColor="#9CA3AF"
           selectionColor="#313130"
           multiline
-          blurOnSubmit={false}
+          blurOnSubmit={Platform.OS === 'web'}
+          submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
+          returnKeyType="send"
+          enterKeyHint="send"
           onKeyPress={handleKeyPress}
           maxLength={2000}
           className="flex-1 max-h-32 text-base text-charcoal py-1 px-1"

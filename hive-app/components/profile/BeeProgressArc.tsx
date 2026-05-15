@@ -40,11 +40,11 @@ export function BeeProgressArc({ score, size = 220 }: BeeProgressArcProps) {
   const radius = (width - strokeWidth - 28) / 2;
   const startAngle = 238;
   const endAngle = 122;
-  const totalSweep = 244;
+  const totalSweep = 360 - startAngle + endAngle;
   const progressEndAngle = startAngle + totalSweep * progress;
   const marker = polarToCartesian(cx, cy, radius, progressEndAngle);
   const startMarker = polarToCartesian(cx, cy, radius, startAngle);
-  const endMarker = polarToCartesian(cx, cy, radius, startAngle + totalSweep);
+  const endMarker = polarToCartesian(cx, cy, radius, endAngle);
 
   return (
     <View style={{ width, height }}>

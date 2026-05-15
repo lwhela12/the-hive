@@ -115,6 +115,22 @@ export function useWishes() {
       return { error: wishError };
     }
 
+    // If this wish was turned into a board, completing either side completes the shared dream.
+    const { error: boardError } = await (supabase as any)
+      .from('board_categories')
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        completed_by: profile.id,
+        completion_note: thankYouMessage || 'Completed from linked wish.',
+      })
+      .eq('source_wish_id', wishId)
+      .eq('community_id', communityId);
+
+    if (boardError) {
+      console.log('Linked board completion skipped (non-blocking):', boardError);
+    }
+
     // 2. Insert granters into junction table
     if (granterIds.length > 0) {
       const granterInserts = granterIds.map((granterId) => ({

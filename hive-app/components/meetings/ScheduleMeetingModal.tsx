@@ -7,11 +7,11 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
-  TextInput,
 } from 'react-native';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
+import { submitOnEnter } from '../../lib/submitOnEnter';
 import type { Profile } from '../../types';
 
 const DEFAULT_MEETING_DURATION_MINUTES = '150';
@@ -264,6 +264,8 @@ export function ScheduleMeetingModal({
               value={title}
               onChangeText={(text) => setTitle(normalizeHiveBrandText(text))}
               placeholder="e.g., Weekly Check-in"
+              returnKeyType="send"
+              onSubmitEditing={handleSchedule}
             />
 
             <Input
@@ -272,6 +274,8 @@ export function ScheduleMeetingModal({
               onChangeText={setDescription}
               placeholder="What's this meeting about?"
               multiline
+              blurOnSubmit={false}
+              onKeyPress={submitOnEnter(handleSchedule)}
               numberOfLines={3}
             />
 
@@ -280,6 +284,8 @@ export function ScheduleMeetingModal({
               value={location}
               onChangeText={setLocation}
               placeholder="Physical address for in-person meetings"
+              returnKeyType="send"
+              onSubmitEditing={handleSchedule}
             />
 
             {/* Date Picker */}

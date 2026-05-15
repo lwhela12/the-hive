@@ -1,11 +1,8 @@
 import { View, Text, Pressable, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { useAuth } from '../../lib/hooks/useAuth';
 
 export default function WelcomeScreen() {
-  const { session } = useAuth();
-
   return (
     <SafeAreaView className="flex-1 bg-cream">
       <View className="flex-1 justify-center px-8">

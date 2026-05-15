@@ -65,7 +65,28 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in
     }
 
     navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
-      .then((registration) => registration.update())
+      .then((registration) => {
+        let reloadingForWorker = false;
+        const refreshForNewWorker = () => {
+          if (reloadingForWorker) return;
+          reloadingForWorker = true;
+          window.location.reload();
+        };
+
+        navigator.serviceWorker.addEventListener('controllerchange', refreshForNewWorker, { once: true });
+
+        registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
+        registration.addEventListener('updatefound', () => {
+          const installingWorker = registration.installing;
+          installingWorker?.addEventListener('statechange', () => {
+            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              installingWorker.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
+
+        return registration.update();
+      })
       .catch((err) => console.warn('Service worker registration failed:', err));
   });
 }

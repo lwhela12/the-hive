@@ -15,7 +15,6 @@ export default function JoinScreen() {
   const { session, profile, communityId, refreshProfile, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [invite, setInvite] = useState<InviteWithDetails | null>(null);
-  const [showWaitlist, setShowWaitlist] = useState(false);
   const [waitlistName, setWaitlistName] = useState('');
   const [waitlistMessage, setWaitlistMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -71,11 +70,9 @@ export default function JoinScreen() {
 
       if (error) {
         // RLS might block this - show waitlist option
-        setShowWaitlist(true);
       } else if (invites && invites.length > 0) {
         setInvite(invites[0] as InviteWithDetails);
       } else {
-        setShowWaitlist(true);
         // Check if already on waitlist
         const { data: waitlistEntry } = await supabase
           .from('waitlist')
@@ -89,7 +86,6 @@ export default function JoinScreen() {
       }
     } catch (err) {
       console.error('Error checking invite:', err);
-      setShowWaitlist(true);
     } finally {
       setLoading(false);
     }
@@ -178,7 +174,6 @@ export default function JoinScreen() {
     } catch (err) {
       console.error('Error bootstrapping genesis community:', err);
       Alert.alert('Error', 'Failed to set up community. Please try again.');
-      setShowWaitlist(true);
       setLoading(false);
     }
   };
@@ -280,7 +275,6 @@ export default function JoinScreen() {
           onPress: async () => {
             // Just show waitlist instead
             setInvite(null);
-            setShowWaitlist(true);
           },
         },
       ]

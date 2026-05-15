@@ -120,10 +120,10 @@ export function usePrefetchAppData(
           .from('honey_pot')
           .select('balance')
           .eq('community_id', communityId)
-          .single();
-        return (data as { balance: number } | null)?.balance || 0;
+          .maybeSingle();
+        return Number((data as { balance: number } | null)?.balance ?? 0);
       },
-      staleTime: 10 * 60 * 1000,
+      staleTime: 60 * 1000,
     });
     }); // end InteractionManager.runAfterInteractions
 

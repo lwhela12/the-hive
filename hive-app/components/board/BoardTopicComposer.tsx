@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { View, Text, TextInput, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { submitOnEnter } from '../../lib/submitOnEnter';
+import { getMemberBoardDisplayName, getMemberHdBoardName } from '../../lib/boardWishLinks';
 import type { BoardCategory, Profile } from '../../types';
 
 const BOARD_DRAFT_KEY = 'board-topic-draft';
@@ -28,6 +30,7 @@ interface BoardTopicComposerProps {
   ) => Promise<boolean>;
   existingCategory?: BoardCategory | null;
   members?: Pick<Profile, 'id' | 'name' | 'avatar_url'>[];
+  managementActions?: ReactNode;
 }
 
 // Icon is now stored as the emoji character directly (not a code)
@@ -100,15 +103,14 @@ function getGraphemes(value: string) {
   return Array.from(trimmed);
 }
 
-function getFirstName(name?: string) {
-  return name?.trim().split(/\s+/)[0] || 'Someone';
-}
-
-function buildHdBoardName(memberName: string | undefined, goalTitle: string) {
-  return `${getFirstName(memberName)}'s HD: ${goalTitle.trim()}`;
-}
-
-export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategory, members = [] }: BoardTopicComposerProps) {
+export function BoardTopicComposer({
+  visible,
+  onClose,
+  onSubmit,
+  existingCategory,
+  members = [],
+  managementActions,
+}: BoardTopicComposerProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState(EMOJI_CATEGORIES[0].emojis[0]);
@@ -126,8 +128,10 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
     () => members.find((member) => member.id === ownerUserId),
     [members, ownerUserId]
   );
-  const suggestedHdName = topicKind === 'hd_board' && goalTitle.trim()
-    ? buildHdBoardName(selectedOwner?.name, goalTitle)
+  const selectedOwnerName = selectedOwner?.name
+    || existingCategory?.member_tags?.find((tag) => tag.tagged_user_id === ownerUserId)?.member?.name;
+  const suggestedHdName = topicKind === 'hd_board' && ownerUserId
+    ? getMemberHdBoardName(selectedOwnerName)
     : '';
 
   useEffect(() => {
@@ -200,18 +204,21 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
   };
 
   const handleSubmit = async () => {
-    const finalGoalTitle = topicKind === 'hd_board'
-      ? goalTitle.trim()
-      : topicKind === 'helper_log' ? '15min HIVE Helpers' : null;
+    const finalGoalTitle = topicKind === 'helper_log' ? '15min HIVE Helpers' : null;
     const finalOwnerUserId = topicKind === 'hd_board' ? ownerUserId || null : null;
     const finalName = topicKind === 'helper_log'
       ? '15min HIVE Helpers'
       : topicKind === 'hd_board'
-        ? (name.trim() || buildHdBoardName(selectedOwner?.name, finalGoalTitle || 'new project'))
+        ? (name.trim() || getMemberHdBoardName(selectedOwnerName))
         : name.trim();
+    const finalDescription = topicKind === 'hd_board'
+      ? (description.trim() || `${getMemberBoardDisplayName(selectedOwnerName)}'s home base for HD wishes, asks, updates, recommendations, and helper threads.`)
+      : topicKind === 'helper_log'
+        ? (description.trim() || 'Log quick acts of help so Clive can include them in meeting recaps, slide decks, and newsletters.')
+        : description.trim();
 
     if (!finalName) return;
-    if (topicKind === 'hd_board' && (!finalOwnerUserId || !finalGoalTitle)) return;
+    if (topicKind === 'hd_board' && !finalOwnerUserId) return;
 
     setSubmitting(true);
     try {
@@ -227,9 +234,7 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
           : audience === 'members' && finalTaggedMemberIds.length > 0 ? 'members' : 'community';
       const success = await onSubmit(
         finalName,
-        topicKind === 'helper_log'
-          ? (description.trim() || 'Log quick acts of help so Clive can include them in meeting recaps, slide decks, and newsletters.')
-          : description.trim(),
+        finalDescription,
         topicKind === 'helper_log' ? '🤝' : topicKind === 'hd_board' ? (selectedEmoji || '💎') : selectedEmoji,
         finalAudience,
         finalAudience === 'members' ? finalTaggedMemberIds : [],
@@ -273,7 +278,7 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
   };
 
   const isValid = topicKind === 'helper_log'
-    || (topicKind === 'hd_board' ? ownerUserId.length > 0 && goalTitle.trim().length > 0 : name.trim().length > 0);
+    || (topicKind === 'hd_board' ? ownerUserId.length > 0 : name.trim().length > 0);
   const toggleMember = (memberId: string) => {
     setAudience('members');
     setTaggedMemberIds((current) => (
@@ -328,6 +333,12 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
               </Text>
             </View>
 
+            {isEditMode && managementActions && (
+              <View className="flex-row flex-wrap mb-4" style={{ gap: 8 }}>
+                {managementActions}
+              </View>
+            )}
+
             {/* Board type */}
             <View className="mb-4">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Board Type</Text>
@@ -335,7 +346,7 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
                 <View className="flex-row flex-wrap">
                   {[
                     { kind: 'discussion' as const, label: 'Discussion', icon: '💬' },
-                    { kind: 'hd_board' as const, label: 'HD Board', icon: '💎' },
+                    { kind: 'hd_board' as const, label: 'Member HD', icon: '💎' },
                     { kind: 'helper_log' as const, label: '15min Helpers', icon: '🤝' },
                   ].map((option) => {
                     const selected = topicKind === option.kind;
@@ -399,15 +410,6 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
                       );
                     })}
                   </View>
-                  <TextInput
-                    value={goalTitle}
-                    onChangeText={setGoalTitle}
-                    placeholder="Project or goal, e.g. PMU volunteers, fairy lights, beta readers..."
-                    placeholderTextColor="#9ca3af"
-                    maxLength={70}
-                    className="bg-cream rounded-xl px-4 py-3 text-charcoal mt-2"
-                    style={{ fontFamily: 'Lato_400Regular' }}
-                  />
                   {!!suggestedHdName && (
                     <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs mt-2">
                       Will create: {suggestedHdName}
@@ -571,13 +573,15 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
                 value={name}
                 onChangeText={setName}
                 placeholder={topicKind === 'hd_board'
-                  ? suggestedHdName || "e.g., Brit's HD: PMU volunteers"
+                  ? suggestedHdName || "e.g., Brit's HD Board"
                   : topicKind === 'helper_log'
                     ? '15min HIVE Helpers'
                     : 'e.g., Book Club, Recipes, Travel Plans...'}
                 placeholderTextColor="#9ca3af"
                 maxLength={90}
                 editable={topicKind !== 'helper_log'}
+                returnKeyType="send"
+                onSubmitEditing={handleSubmit}
                 className="bg-white rounded-xl px-4 py-3 text-charcoal"
                 style={{ fontFamily: 'Lato_400Regular' }}
               />
@@ -595,6 +599,12 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
                 placeholder="What is this topic about? (optional)"
                 placeholderTextColor="#9ca3af"
                 multiline
+                blurOnSubmit={Platform.OS === 'web'}
+                submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
+                returnKeyType="send"
+                enterKeyHint="send"
+                onSubmitEditing={handleSubmit}
+                onKeyPress={submitOnEnter(handleSubmit)}
                 textAlignVertical="top"
                 maxLength={200}
                 className="bg-white rounded-xl px-4 py-3 text-charcoal min-h-[100px]"
@@ -608,8 +618,7 @@ export function BoardTopicComposer({ visible, onClose, onSubmit, existingCategor
             {/* Info note */}
             <View className="bg-gold/10 rounded-xl p-4 mb-4">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/70 text-sm">
-                Custom topics allow the community to organize discussions around specific interests or projects.
-                All members will be able to post in your new topic.
+                Use top-level boards for big containers. Put the specific asks, recommendations, recipes, or project threads inside the board.
               </Text>
             </View>
           </ScrollView>

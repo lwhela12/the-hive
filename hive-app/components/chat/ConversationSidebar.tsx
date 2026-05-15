@@ -332,7 +332,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
         </View>
       </View>
 
-      {/* New Chat Button */}
+      {/* New Clive conversation button */}
       <Pressable
         onPress={isMobile ? closeAndNewConversation : onNewConversation}
         className="mx-4 mt-4 mb-2 bg-gold py-3 px-4 rounded-xl flex-row items-center justify-center active:opacity-80"
@@ -342,7 +342,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
           style={{ fontFamily: 'Lato_700Bold' }}
           className="text-white text-base"
         >
-          New Chat
+          New Clive Chat
         </Text>
       </Pressable>
 

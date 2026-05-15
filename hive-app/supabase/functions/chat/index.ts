@@ -183,6 +183,77 @@ const UNIFIED_ONBOARDING_PROMPT = `You are welcoming a new member to the HIVE. G
 - Don't announce tool usage - just use them and continue naturally
 - After completing all goals, call complete_onboarding and give a warm wrap-up message`;
 
+const QUICK_SURPRISE_RESPONSES = [
+  "Tiny HIVE spark: text someone, \"What's one thing that would make this week 10% easier?\" If it takes 15 minutes or less, offer to help.",
+  "Quick riddle: I get bigger the more you share me, but smaller when you keep me secret. What am I? A wish.",
+  "Micro-adventure: pick one ordinary object near you and imagine it belongs in your future dream room. What changed about the room?",
+  "Surprise prompt: what is one tiny luxury you could make repeatable, not occasional?",
+  "Two-minute reset: unclench your jaw, drop your shoulders, and name one thing you want help making lighter.",
+];
+
+function isQuickSurpriseRequest(message: unknown, mode?: string, refineWish?: unknown, attachments?: unknown[]): boolean {
+  return (
+    typeof message === 'string' &&
+    (mode || 'default') === 'default' &&
+    !refineWish &&
+    (!attachments || attachments.length === 0) &&
+    message.trim().toLowerCase() === 'surprise me'
+  );
+}
+
+function getQuickSurpriseResponse(): string {
+  return QUICK_SURPRISE_RESPONSES[Math.floor(Math.random() * QUICK_SURPRISE_RESPONSES.length)];
+}
+
+function quickContextMetadata() {
+  return {
+    tokensUsed: 0,
+    messageCount: 0,
+    summariesUsed: 0,
+    cacheHits: 0,
+    quickPath: true,
+  };
+}
+
+function quickJsonResponse(response: string): Response {
+  return new Response(
+    JSON.stringify({
+      response,
+      skillsAdded: 0,
+      onboardingComplete: false,
+      contextMetadata: quickContextMetadata(),
+    }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
+
+function quickStreamResponse(response: string): Response {
+  const { readable, writable } = new TransformStream();
+  const sseWriter = new SSEWriter(writable);
+
+  (async () => {
+    try {
+      await sseWriter.write({ type: 'start' });
+      await sseWriter.write({ type: 'content_start' });
+      await sseWriter.write({ type: 'content_delta', data: { text: response } });
+      await sseWriter.write({ type: 'content_done', data: response });
+      await sseWriter.write({
+        type: 'metadata',
+        data: {
+          skillsAdded: 0,
+          onboardingComplete: false,
+          contextMetadata: quickContextMetadata(),
+        },
+      });
+      await sseWriter.write({ type: 'done' });
+    } finally {
+      await sseWriter.close();
+    }
+  })();
+
+  return new Response(readable, { headers: getSSEHeaders() });
+}
+
 const REFINE_WISH_PROMPT = `You are helping a HIVE member refine their wish into a "high-definition" version.
 
 **IMPORTANT: Use "H.I.V.E." for the formal brand name and "the HIVE" in prose. Avoid mixed-case brand variants.**
@@ -379,7 +450,7 @@ const tools: Anthropic.Tool[] = [
         },
         category: {
           type: "string",
-          description: "Filter by category name (e.g., 'Announcements', 'Queen Bee Updates', 'Resources')"
+          description: "Filter by category name (e.g., 'Announcements', 'HIVE Approved', '15min HIVE Helpers')"
         },
         author_name: {
           type: "string",
@@ -1152,6 +1223,11 @@ serve(async (req) => {
       });
     }
 
+    if (isQuickSurpriseRequest(message, mode, refine_wish, attachments)) {
+      const quickResponse = getQuickSurpriseResponse();
+      return stream ? quickStreamResponse(quickResponse) : quickJsonResponse(quickResponse);
+    }
+
     // Build comprehensive context using the smart context builder
     const contextResult = await buildContext({
       supabase: supabaseClient,
@@ -1193,24 +1269,41 @@ serve(async (req) => {
     if (attachments && attachments.length > 0) {
       // Create content blocks with images first, then text
       const contentBlocks: Array<Anthropic.ImageBlockParam | Anthropic.TextBlockParam> = [];
+      const imageAttachments = attachments.filter((attachment: any) => attachment.mime_type?.startsWith('image/'));
+      const fileAttachments = attachments.filter((attachment: any) => !attachment.mime_type?.startsWith('image/'));
 
       // Add image blocks
-      for (const attachment of attachments) {
-        if (attachment.mime_type?.startsWith('image/')) {
-          contentBlocks.push({
-            type: 'image' as const,
-            source: {
-              type: 'url' as const,
-              url: attachment.url,
-            },
-          });
-        }
+      for (const attachment of imageAttachments) {
+        contentBlocks.push({
+          type: 'image' as const,
+          source: {
+            type: 'url' as const,
+            url: attachment.url,
+          },
+        });
       }
+
+      const fileSummary = fileAttachments
+        .map((attachment: any, index: number) => {
+          const name = attachment.filename || `File ${index + 1}`;
+          const type = attachment.mime_type || 'unknown type';
+          const preview = typeof attachment.text_preview === 'string' && attachment.text_preview.trim()
+            ? `\nPreview:\n${attachment.text_preview}${attachment.text_preview_truncated ? '\n[Preview truncated]' : ''}`
+            : '';
+          return `${index + 1}. ${name} (${type}) - ${attachment.url}${preview}`;
+        })
+        .join('\n');
+      const fallbackMessage = imageAttachments.length > 0
+        ? 'What do you see in this image?'
+        : 'Please review the attached file.';
+      const messageWithFileContext = fileSummary
+        ? `${message || fallbackMessage}\n\nAttached files:\n${fileSummary}`
+        : (message || fallbackMessage);
 
       // Add text block (even if empty, Claude needs at least the text block)
       contentBlocks.push({
         type: 'text' as const,
-        text: message || 'What do you see in this image?',
+        text: messageWithFileContext,
       });
 
       messages.push({ role: 'user' as const, content: contentBlocks });

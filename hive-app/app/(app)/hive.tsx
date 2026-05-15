@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, Platform, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, ActivityIndicator, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
@@ -22,9 +22,11 @@ import {
 import { AppHeader } from '../../components/navigation';
 import { getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
 import { EventDatePicker } from '../../components/ui/DatePicker';
-import { formatDateShort, formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
+import { formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
-import type { Profile, Wish, WishGranter, Event, ActionItem } from '../../types';
+import { submitOnEnter } from '../../lib/submitOnEnter';
+import { getBoardNameForWish, getWishGoalTitle } from '../../lib/boardWishLinks';
+import type { Profile, Wish, WishGranter, Event, ActionItem, BoardCategory } from '../../types';
 
 type WishTab = 'open' | 'granted';
 
@@ -48,6 +50,32 @@ type HomeTodo = {
 };
 
 const CALENDAR_DURATION_MS = 2.5 * 60 * 60 * 1000; // 30-min arrival + 2-hour meeting
+const QUARTERLY_DUES_AMOUNT = 25;
+
+const getCurrentDuesPeriod = () => {
+  const now = new Date();
+  return {
+    year: now.getFullYear(),
+    quarter: Math.floor(now.getMonth() / 3) + 1,
+  };
+};
+
+const duesTransactionCoversQuarter = (
+  row: {
+    dues_year?: number | null;
+    dues_quarter?: number | null;
+    dues_covered_quarters?: number | null;
+  },
+  year: number,
+  quarter: number
+) => {
+  if (row.dues_year !== year) return false;
+  if ((row.dues_covered_quarters ?? 0) >= 4) return true;
+  if (!row.dues_quarter) return false;
+
+  const coveredQuarters = row.dues_covered_quarters ?? 1;
+  return quarter >= row.dues_quarter && quarter < row.dues_quarter + coveredQuarters;
+};
 
 const getRecentDailyQuestions = (days = 7) => {
   return Array.from({ length: days }, (_, offset) => {
@@ -351,6 +379,8 @@ export default function HiveScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
+  const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+  const canManageDues = isAdmin || communityRole === 'treasurer' || profile?.role === 'treasurer';
 
   const [refreshing, setRefreshing] = useState(false);
   const [showAnswerModal, setShowAnswerModal] = useState(false);
@@ -524,6 +554,9 @@ export default function HiveScreen() {
   const [eventError, setEventError] = useState<string | null>(null);
   const [homeActionItems, setHomeActionItems] = useState<ActionItem[]>([]);
   const [homeActionLoading, setHomeActionLoading] = useState(false);
+  const [duesCoveredThisQuarter, setDuesCoveredThisQuarter] = useState(false);
+  const [duesStatusLoading, setDuesStatusLoading] = useState(false);
+  const [duesStatusChecked, setDuesStatusChecked] = useState(false);
 
   const fetchMyActionItems = useCallback(async () => {
     if (!profile?.id || !communityId) return;
@@ -560,8 +593,39 @@ export default function HiveScreen() {
 
   useEffect(() => { fetchMyActionItems(); }, [fetchMyActionItems]);
 
+  const fetchMyDuesStatus = useCallback(async () => {
+    if (!profile?.id || !communityId) {
+      setDuesStatusLoading(false);
+      setDuesStatusChecked(false);
+      return;
+    }
+    const { year, quarter } = getCurrentDuesPeriod();
+    setDuesStatusLoading(true);
+    setDuesStatusChecked(false);
+
+    const { data, error } = await (supabase as any)
+      .from('honey_pot_transactions')
+      .select('dues_year, dues_quarter, dues_covered_quarters, transaction_type, amount')
+      .eq('community_id', communityId)
+      .eq('related_user_id', profile.id)
+      .eq('dues_year', year)
+      .eq('transaction_type', 'deposit');
+
+    if (error) {
+      console.warn('Could not load dues status', error);
+      setDuesCoveredThisQuarter(false);
+    } else {
+      setDuesCoveredThisQuarter(
+        (data ?? []).some((row: any) => duesTransactionCoversQuarter(row, year, quarter))
+      );
+    }
+    setDuesStatusChecked(true);
+    setDuesStatusLoading(false);
+  }, [profile?.id, communityId]);
+
+  useEffect(() => { fetchMyDuesStatus(); }, [fetchMyDuesStatus]);
+
   const [showConfetti, setShowConfetti] = useState(false);
-  const [completedTodoIds, setCompletedTodoIds] = useState<Set<string>>(new Set());
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [newTaskText, setNewTaskText] = useState('');
   const [savingTask, setSavingTask] = useState(false);
@@ -695,28 +759,17 @@ export default function HiveScreen() {
 
   const [readItemIds, setReadItemIds] = useState<Set<string>>(new Set());
   const [showActivityConfetti, setShowActivityConfetti] = useState(false);
-  const [showActivityCaughtUp, setShowActivityCaughtUp] = useState(false);
   const [isActivityChecking, setIsActivityChecking] = useState(false);
   const [showActivityPullSpace, setShowActivityPullSpace] = useState(false);
-  const [activityCaughtUpDetail, setActivityCaughtUpDetail] = useState('Nothing new needs you right now.');
-  const activityCaughtUpOpacity = useRef(new Animated.Value(0)).current;
   const activityRefreshSpin = useRef(new Animated.Value(0)).current;
   const activityRefreshRotation = activityRefreshSpin.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
-  const triggerActivityCaughtUp = useCallback((detail = 'Nothing new needs you right now.') => {
-    setActivityCaughtUpDetail(detail);
+  const triggerActivityConfetti = useCallback(() => {
     setShowActivityConfetti(true);
-    setShowActivityCaughtUp(true);
-    activityCaughtUpOpacity.setValue(0);
-    Animated.sequence([
-      Animated.timing(activityCaughtUpOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.delay(1500),
-      Animated.timing(activityCaughtUpOpacity, { toValue: 0, duration: 360, useNativeDriver: true }),
-    ]).start(() => setShowActivityCaughtUp(false));
-  }, [activityCaughtUpOpacity]);
+  }, []);
 
   // Load per-item read IDs from localStorage once communityId is known
   useEffect(() => {
@@ -749,13 +802,13 @@ export default function HiveScreen() {
     setSessionReadAt(now);
     setReadItemIds(new Set());
     if (hasUnreadActivity) {
-      triggerActivityCaughtUp('Everything is read.');
+      triggerActivityConfetti();
     }
     if (typeof window !== 'undefined') {
       if (activityReadKey) window.localStorage.setItem(activityReadKey, now);
       if (activityReadIdsKey) window.localStorage.removeItem(activityReadIdsKey);
     }
-  }, [activityReadKey, activityReadIdsKey, hasUnreadActivity, triggerActivityCaughtUp]);
+  }, [activityReadKey, activityReadIdsKey, hasUnreadActivity, triggerActivityConfetti]);
 
   const navigateFromActivityItem = useCallback((item: import('../../lib/hooks/useActivityFeed').ActivityItem) => {
     if (item.navigatesTo === 'board') {
@@ -782,7 +835,7 @@ export default function HiveScreen() {
     }
 
     if (clearsLastUnread) {
-      triggerActivityCaughtUp('You cleared the activity stack.');
+      triggerActivityConfetti();
       if (item.navigatesTo) {
         setTimeout(() => navigateFromActivityItem(item), 700);
         return;
@@ -790,7 +843,7 @@ export default function HiveScreen() {
     }
 
     navigateFromActivityItem(item);
-  }, [markItemRead, navigateFromActivityItem, readItemIds, sessionReadAt, triggerActivityCaughtUp, unreadActivityCount]);
+  }, [markItemRead, navigateFromActivityItem, readItemIds, sessionReadAt, triggerActivityConfetti, unreadActivityCount]);
 
   const handleActivityScroll = useCallback((event: any) => {
     const y = event.nativeEvent?.contentOffset?.y ?? 0;
@@ -826,7 +879,7 @@ export default function HiveScreen() {
       );
 
       if (!hasNewActivity && !hasUnreadAfterRefresh && (nextItems.length > 0 || activityItems.length > 0)) {
-        triggerActivityCaughtUp('Nothing new since you last checked.');
+        triggerActivityConfetti();
       }
     } finally {
       spin.stop();
@@ -834,7 +887,7 @@ export default function HiveScreen() {
       setIsActivityChecking(false);
       setTimeout(() => setShowActivityPullSpace(false), 420);
     }
-  }, [activityItems, activityRefreshSpin, readItemIds, refetchActivity, sessionReadAt, triggerActivityCaughtUp]);
+  }, [activityItems, activityRefreshSpin, readItemIds, refetchActivity, sessionReadAt, triggerActivityConfetti]);
 
   // Member carousel state
   const [carouselMembers, setCarouselMembers] = useState<{ id: string; name: string; avatar_url?: string | null; role: string }[]>([]);
@@ -881,7 +934,7 @@ export default function HiveScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetch(), handleActivityRefresh(), fetchTodayAnswers(), fetchRecentAnswers(), fetchMyActionItems()]);
+      await Promise.all([refetch(), handleActivityRefresh(), fetchTodayAnswers(), fetchRecentAnswers(), fetchMyActionItems(), fetchMyDuesStatus()]);
     } finally {
       setRefreshing(false);
     }
@@ -891,7 +944,7 @@ export default function HiveScreen() {
     setShowAddHomeGuide(true);
   }, []);
 
-  const homeIsUpdating = refreshing || isLoading || activityLoading || homeActionLoading;
+  const homeIsUpdating = refreshing || isLoading || activityLoading || homeActionLoading || duesStatusLoading;
 
   // Helper to format ISO date to MM-DD-YYYY for display in input
   const formatDateForInput = (isoDate: string) => {
@@ -1109,6 +1162,151 @@ export default function HiveScreen() {
     ]);
   };
 
+  const openBoardFromWish = useCallback((categoryId: string) => {
+    if (!communityId) return;
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(`the-hive:last-board-category:${communityId}`, categoryId);
+      window.localStorage.removeItem(`the-hive:last-board-post:${communityId}`);
+      window.localStorage.setItem(`the-hive:board-direct-open:${communityId}`, 'true');
+    }
+    setSelectedWish(null);
+    router.push('/board');
+  }, [communityId, router]);
+
+  const createBoardFromWish = useCallback(async (wish: WishWithGranters) => {
+    if (!profile || !communityId) return;
+
+    try {
+      if (wish.board_category_id) {
+        openBoardFromWish(wish.board_category_id);
+        return;
+      }
+
+      const boardName = getBoardNameForWish(wish);
+      const { data: existingHdBoards, error: existingBoardError } = await (supabase as any)
+        .from('board_categories')
+        .select('*')
+        .eq('community_id', communityId)
+        .eq('topic_kind', 'hd_board')
+        .eq('owner_user_id', wish.user_id)
+        .is('goal_title', null)
+        .limit(1);
+
+      if (existingBoardError) {
+        Alert.alert('Error', `Failed to find the HD board: ${existingBoardError.message}`);
+        return;
+      }
+
+      let category = existingHdBoards?.[0] as BoardCategory | undefined;
+
+      if (!category) {
+        const { data: existingCategories } = await (supabase as any)
+          .from('board_categories')
+          .select('display_order')
+          .eq('community_id', communityId);
+        const maxOrder = (existingCategories ?? []).reduce(
+          (max: number, existingCategory: Pick<BoardCategory, 'display_order'>) =>
+            Math.max(max, existingCategory.display_order ?? 0),
+          0
+        );
+
+        const { data: createdCategory, error } = await (supabase as any)
+          .from('board_categories')
+          .insert({
+            community_id: communityId,
+            name: boardName,
+            description: `${boardName.replace(/'s HD Board$/, '')}'s home base for HD wishes, asks, updates, recommendations, and helper threads.`,
+            category_type: 'custom',
+            icon: '💎',
+            display_order: maxOrder + 1,
+            is_system: false,
+            requires_admin: false,
+            requires_approval: false,
+            created_by: profile.id,
+            topic_kind: 'hd_board',
+            owner_user_id: wish.user_id,
+            goal_title: null,
+            audience: 'members',
+          })
+          .select()
+          .single();
+
+        if (error) {
+          Alert.alert('Error', `Failed to create board: ${error.message}`);
+          return;
+        }
+
+        category = createdCategory as BoardCategory;
+      }
+
+      await (supabase as any)
+        .from('board_category_member_tags')
+        .upsert({
+          community_id: communityId,
+          category_id: category.id,
+          tagged_user_id: wish.user_id,
+          tagged_by: profile.id,
+        }, { onConflict: 'category_id,tagged_user_id' });
+
+      const threadTitle = getWishGoalTitle(wish.description, 70);
+      let sourceBoardPostId = wish.source_board_post_id ?? null;
+
+      if (!sourceBoardPostId) {
+        const { data: existingPosts } = await (supabase as any)
+          .from('board_posts')
+          .select('id')
+          .eq('community_id', communityId)
+          .eq('category_id', category.id)
+          .eq('title', threadTitle)
+          .limit(1);
+
+        sourceBoardPostId = existingPosts?.[0]?.id ?? null;
+      }
+
+      if (!sourceBoardPostId) {
+        const { data: createdPost, error: postError } = await (supabase as any)
+          .from('board_posts')
+          .insert({
+            community_id: communityId,
+            category_id: category.id,
+            author_id: profile.id,
+            title: threadTitle,
+            content: wish.description,
+          })
+          .select('id')
+          .single();
+
+        if (postError) {
+          Alert.alert('Error', `Failed to create the HD thread: ${postError.message}`);
+          return;
+        }
+
+        sourceBoardPostId = createdPost?.id ?? null;
+      }
+
+      const { error: wishError } = await (supabase as any)
+        .from('wishes')
+        .update({
+          board_category_id: category.id,
+          source_board_post_id: sourceBoardPostId,
+          status: wish.status === 'private' ? 'public' : wish.status,
+          is_active: wish.status === 'fulfilled' ? false : true,
+        })
+        .eq('id', wish.id)
+        .eq('community_id', communityId);
+
+      if (wishError) {
+        Alert.alert('Board created', 'The board thread was created, but the wish could not be linked. You may need to refresh and try again.');
+      }
+
+      await refetch();
+      openBoardFromWish(category.id);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Error', `Failed to create board: ${message}`);
+    }
+  }, [communityId, openBoardFromWish, profile, refetch]);
+
   const homeTodos: HomeTodo[] = [
     ...pendingSurveys.map(s => ({
       id: `survey-${s.id}`,
@@ -1134,34 +1332,18 @@ export default function HiveScreen() {
       onArchive: a.completed ? () => archiveActionItem(a) : undefined,
     })),
     ...(() => {
-      const nextMeeting = upcomingEvents.find(e => e.event_type === 'meeting');
-      if (!nextMeeting) return [];
-      const start = getEventStartDate(nextMeeting);
-      const msUntil = start.getTime() - Date.now();
-      if (msUntil > 0 && msUntil < 7 * 24 * 60 * 60 * 1000) {
-        const isDone = completedTodoIds.has('donation-reminder');
-        return [{
-          id: 'donation-reminder',
-          emoji: '🍯',
-          title: 'Bring your monthly donation',
-          detail: isDone ? 'Done' : `Meeting · ${formatDateShort(nextMeeting.event_date)}`,
-          isDone,
-          completedAt: isDone ? new Date().toISOString() : null,
-          onToggle: () => {
-            setCompletedTodoIds(prev => {
-              const next = new Set(prev);
-              if (next.has('donation-reminder')) {
-                next.delete('donation-reminder');
-              } else {
-                next.add('donation-reminder');
-                triggerCompletion();
-              }
-              return next;
-            });
-          },
-        }];
-      }
-      return [];
+      if (!duesStatusChecked || duesCoveredThisQuarter) return [];
+      const { year, quarter } = getCurrentDuesPeriod();
+      return [{
+        id: `quarterly-dues-${year}-q${quarter}`,
+        emoji: '🍯',
+        title: 'Quarterly dues are due today!',
+        detail: duesStatusLoading
+          ? 'Checking payment status...'
+          : `$${QUARTERLY_DUES_AMOUNT} for Q${quarter} ${year}`,
+        cta: canManageDues ? 'Admin →' : undefined,
+        onPress: canManageDues ? () => router.push('/admin') : undefined,
+      }];
     })(),
   ];
   const openTodos = homeTodos.filter(todo => !todo.isDone);
@@ -1305,6 +1487,8 @@ export default function HiveScreen() {
           wish={selectedWish}
           onClose={() => setSelectedWish(null)}
           onGrant={handleGrantWish}
+          onOpenBoard={openBoardFromWish}
+          onCreateBoard={createBoardFromWish}
         />
       </SafeAreaView>
     );
@@ -1627,36 +1811,6 @@ export default function HiveScreen() {
               position: 'relative',
             }}>
               <ConfettiBurst visible={showActivityConfetti} onDone={() => setShowActivityConfetti(false)} />
-              {showActivityCaughtUp && (
-                <Animated.View style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 12,
-                  opacity: activityCaughtUpOpacity,
-                  pointerEvents: 'none',
-                }}>
-                  <View style={{
-                    backgroundColor: '#bd9348',
-                    borderRadius: 18,
-                    paddingHorizontal: 18,
-                    paddingVertical: 11,
-                    alignItems: 'center',
-                    shadowColor: '#bd9348',
-                    shadowOpacity: 0.36,
-                    shadowRadius: 12,
-                    shadowOffset: { width: 0, height: 4 },
-                    elevation: 7,
-                  }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>You're all caught up!</Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.82)', marginTop: 2 }}>{activityCaughtUpDetail}</Text>
-                  </View>
-                </Animated.View>
-              )}
               {/* Inner top highlight — liquid glass gloss */}
               <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10, marginTop: 0 }} />
               {activityLoading && activityItems.length === 0 ? (
@@ -1999,10 +2153,7 @@ export default function HiveScreen() {
         <Pressable className="flex-1 bg-black/50 justify-end" onPress={() => setShowEventModal(false)}>
           <Pressable className="bg-white rounded-t-3xl p-6" onPress={(e) => e.stopPropagation()}>
             {(() => {
-              const isCreator = !editingEvent || editingEvent.created_by === profile?.id;
-              const isHistorian = communityRole === 'historian';
-              const isAdminRole = communityRole === 'admin';
-              const canEdit = isCreator || isHistorian || isAdminRole;
+              const canEdit = !!profile && !!communityId;
               const isViewOnly = editingEvent && !canEdit;
 
               return (
@@ -2077,6 +2228,8 @@ export default function HiveScreen() {
                         placeholder="Event Title"
                         value={eventTitle}
                         onChangeText={setEventTitle}
+                        returnKeyType="send"
+                        onSubmitEditing={saveEvent}
                         className="border border-gray-300 rounded-lg px-4 py-3 text-base mb-3"
                       />
                       <View className="mb-3">
@@ -2091,6 +2244,8 @@ export default function HiveScreen() {
                           placeholder="7:30 PM"
                           value={eventTime}
                           onChangeText={setEventTime}
+                          returnKeyType="send"
+                          onSubmitEditing={saveEvent}
                           className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-cream"
                         />
                         <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-1">
@@ -2101,6 +2256,8 @@ export default function HiveScreen() {
                         placeholder="Location (optional)"
                         value={eventLocation}
                         onChangeText={setEventLocation}
+                        returnKeyType="send"
+                        onSubmitEditing={saveEvent}
                         className="border border-gray-300 rounded-lg px-4 py-3 text-base mb-3"
                       />
                       <TextInput
@@ -2108,6 +2265,8 @@ export default function HiveScreen() {
                         value={eventDescription}
                         onChangeText={setEventDescription}
                         multiline
+                        blurOnSubmit={false}
+                        onKeyPress={submitOnEnter(saveEvent)}
                         numberOfLines={3}
                         className="border border-gray-300 rounded-lg px-4 py-3 text-base mb-4"
                         style={{ textAlignVertical: 'top', minHeight: 80 }}
@@ -2184,6 +2343,8 @@ export default function HiveScreen() {
               placeholder="What do you need to do?"
               placeholderTextColor="#9ca3af"
               multiline
+              blurOnSubmit={false}
+              onKeyPress={submitOnEnter(handleAddTask)}
               autoFocus
               maxLength={300}
               style={{
@@ -2420,12 +2581,7 @@ export default function HiveScreen() {
                   multiline
                   numberOfLines={4}
                   blurOnSubmit={false}
-                  onKeyPress={(e: any) => {
-                    if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
-                      e.preventDefault?.();
-                      handleSubmitAnswer();
-                    }
-                  }}
+                  onKeyPress={submitOnEnter(handleSubmitAnswer)}
                   style={{
                     fontFamily: 'Lato_400Regular',
                     fontSize: 15,

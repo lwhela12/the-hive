@@ -8,12 +8,12 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { pickMultipleImages, takePhoto, getImageExtension, getContentType } from '../../lib/imagePicker';
 import { MeetingSummary } from '../../components/meetings/MeetingSummary';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
-import { NavigationDrawer, AppHeader } from '../../components/navigation';
-import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
+import { AppHeader } from '../../components/navigation';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
 import { formatDateLong, parseAmericanDate } from '../../lib/dateUtils';
 import { EventDatePicker } from '../../components/ui/DatePicker';
+import { submitOnEnter } from '../../lib/submitOnEnter';
 import type { Meeting, Event } from '../../types';
 
 interface MeetingSummaryPreview {
@@ -57,12 +57,9 @@ const parseMeetingSummaryPreview = (summary?: string): MeetingSummaryPreview => 
 
 export default function MeetingsScreen() {
   const { profile, communityId, session, communityRole, community, refreshProfile } = useAuth();
-  const { totalUnread: unreadDMCount } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const { width } = useWindowDimensions();
-  const useMobileLayout = width < 768;
   const useCompactActions = width < 640;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -635,19 +632,7 @@ export default function MeetingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <AppHeader
-        title="Meetings"
-        onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
-      />
-
-      {useMobileLayout && (
-        <NavigationDrawer
-          isOpen={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          mode="navigation"
-          unreadDMCount={unreadDMCount}
-        />
-      )}
+      <AppHeader title="Meetings" />
 
       <ScrollView
         className="flex-1"
@@ -1079,6 +1064,8 @@ export default function MeetingsScreen() {
                   className="border border-gray-300 rounded-lg px-4 py-3 text-base"
                   placeholder="Paste Google Meet notes here"
                   multiline
+                  blurOnSubmit={false}
+                  onKeyPress={submitOnEnter(handleImportNotes)}
                   textAlignVertical="top"
                   style={{ minHeight: 260 }}
                 />
@@ -1121,6 +1108,8 @@ export default function MeetingsScreen() {
                 onChangeText={(text) => setEditForm((f) => ({ ...f, title: normalizeHiveBrandText(text) }))}
                 className="border border-gray-300 rounded-lg px-4 py-3 text-base"
                 placeholder="HIVE Meeting"
+                returnKeyType="send"
+                onSubmitEditing={handleSaveEdit}
               />
             </View>
 
@@ -1132,6 +1121,8 @@ export default function MeetingsScreen() {
                 className="border border-gray-300 rounded-lg px-4 py-3 text-base"
                 placeholder="Optional description"
                 multiline
+                blurOnSubmit={false}
+                onKeyPress={submitOnEnter(handleSaveEdit)}
                 numberOfLines={3}
               />
             </View>
@@ -1143,6 +1134,8 @@ export default function MeetingsScreen() {
                 onChangeText={(text) => setEditForm((f) => ({ ...f, location: text }))}
                 className="border border-gray-300 rounded-lg px-4 py-3 text-base"
                 placeholder="e.g., 123 Main St or Joe's Coffee"
+                returnKeyType="send"
+                onSubmitEditing={handleSaveEdit}
               />
             </View>
 
@@ -1160,6 +1153,8 @@ export default function MeetingsScreen() {
                 onChangeText={(text) => setEditForm((f) => ({ ...f, event_time: text }))}
                 className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-cream"
                 placeholder="e.g. 6:00 PM"
+                returnKeyType="send"
+                onSubmitEditing={handleSaveEdit}
               />
             </View>
 
@@ -1201,6 +1196,8 @@ export default function MeetingsScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 autoFocus
+                returnKeyType="send"
+                onSubmitEditing={handleSaveDeckUrl}
                 style={{
                   fontFamily: 'Lato_400Regular',
                   fontSize: 14,

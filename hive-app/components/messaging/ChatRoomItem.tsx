@@ -1,7 +1,14 @@
 import { memo } from 'react';
 import { View, Text, Pressable, Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../ui/Avatar';
 import { formatDateShort } from '../../lib/dateUtils';
+import {
+  getChatRoomTheme,
+  getOtherRoomMembers,
+  getRoomCustomization,
+  getRoomDisplayName,
+} from '../../lib/chatRoomDisplay';
 
 const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 import type { ChatRoom, Profile, RoomMessage } from '../../types';
@@ -13,30 +20,20 @@ interface ChatRoomItemProps {
   };
   currentUserId?: string;
   onPress: () => void;
+  onCustomize?: () => void;
 }
 
-export const ChatRoomItem = memo(function ChatRoomItem({ room, currentUserId, onPress }: ChatRoomItemProps) {
-  // For DMs, get the other person's info
-  const otherMember = room.members?.find((m) => m.user?.id !== currentUserId)?.user;
-
-  // For group DMs, get all other members
-  const otherMembers = room.members
-    ?.filter((m) => m.user?.id !== currentUserId)
-    .map((m) => m.user)
-    .filter((u): u is Profile => !!u) || [];
-
-  const getRoomName = () => {
-    if (room.room_type === 'community') {
-      return room.name || 'General';
-    }
-    if (room.room_type === 'group_dm') {
-      // Use custom name if set, otherwise show member names
-      if (room.name) return room.name;
-      if (otherMembers.length === 0) return 'Group';
-      return otherMembers.map((m) => m.name.split(' ')[0]).join(', ');
-    }
-    return otherMember?.name || 'Direct Message';
-  };
+export const ChatRoomItem = memo(function ChatRoomItem({
+  room,
+  currentUserId,
+  onPress,
+  onCustomize,
+}: ChatRoomItemProps) {
+  const otherMembers = getOtherRoomMembers(room, currentUserId);
+  const otherMember = otherMembers[0];
+  const customization = getRoomCustomization(room, currentUserId);
+  const theme = getChatRoomTheme(room, currentUserId);
+  const roomName = getRoomDisplayName(room, currentUserId);
 
   const getTimeAgo = (date: Date): string => {
     const now = new Date();
@@ -57,6 +54,28 @@ export const ChatRoomItem = memo(function ChatRoomItem({ room, currentUserId, on
 
   // Render avatar based on room type
   const renderAvatar = () => {
+    if (customization.imageUrl) {
+      return (
+        <View
+          className="w-12 h-12 rounded-full mr-3 overflow-hidden"
+          style={{ backgroundColor: theme.surface }}
+        >
+          <Image source={{ uri: customization.imageUrl }} style={{ width: 48, height: 48 }} resizeMode="cover" />
+        </View>
+      );
+    }
+
+    if (customization.emoji) {
+      return (
+        <View
+          className="w-12 h-12 rounded-full mr-3 items-center justify-center"
+          style={{ backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }}
+        >
+          <Text style={{ fontSize: 24, lineHeight: 30 }}>{customization.emoji}</Text>
+        </View>
+      );
+    }
+
     if (room.room_type === 'community') {
       return (
         <View className="w-12 h-12 rounded-full mr-3 overflow-hidden">
@@ -129,15 +148,20 @@ export const ChatRoomItem = memo(function ChatRoomItem({ room, currentUserId, on
         minHeight: 76,
         borderRadius: 20,
         borderWidth: hasUnread ? 1.5 : 1,
-        borderColor: hasUnread ? 'rgba(189,147,72,0.58)' : 'rgba(222,193,129,0.48)',
-        backgroundColor: hasUnread ? 'rgba(255,248,232,0.92)' : 'rgba(255,255,255,0.78)',
-        shadowColor: '#bd9348',
+        borderColor: hasUnread ? theme.accent : theme.border,
+        backgroundColor: hasUnread ? theme.unreadBackground : theme.listBackground,
+        shadowColor: theme.accent,
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: hasUnread ? 0.16 : 0.09,
         shadowRadius: 18,
         elevation: hasUnread ? 4 : 2,
       }}
     >
+      <View
+        className="absolute left-0 top-4 bottom-4 rounded-r-full"
+        style={{ width: 3, backgroundColor: theme.accent, opacity: customization.themeKey === 'honey' ? 0.28 : 0.7 }}
+      />
+
       {/* Avatar */}
       {renderAvatar()}
 
@@ -149,7 +173,7 @@ export const ChatRoomItem = memo(function ChatRoomItem({ room, currentUserId, on
             className="text-charcoal flex-1 mr-2"
             numberOfLines={1}
           >
-            {getRoomName()}
+            {roomName}
           </Text>
           {lastMessage && (
             <Text
@@ -174,12 +198,26 @@ export const ChatRoomItem = memo(function ChatRoomItem({ room, currentUserId, on
 
       {/* Unread badge */}
       {hasUnread && (
-        <View className="bg-gold rounded-full px-2 py-1 ml-2">
+        <View className="rounded-full px-2 py-1 ml-2" style={{ backgroundColor: theme.accent }}>
           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-xs">
             {room.unread_count}
           </Text>
         </View>
       )}
+
+      {onCustomize ? (
+        <Pressable
+          onPress={(event) => {
+            event.stopPropagation();
+            onCustomize();
+          }}
+          className="ml-2 w-9 h-9 rounded-full items-center justify-center active:opacity-70"
+          style={{ backgroundColor: theme.accentSoft }}
+          hitSlop={8}
+        >
+          <Ionicons name="color-palette-outline" size={17} color={theme.accent} />
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 });

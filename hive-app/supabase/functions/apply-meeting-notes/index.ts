@@ -298,7 +298,8 @@ async function findBoardCategory(
     .from('board_categories')
     .select('id')
     .eq('community_id', communityId)
-    .ilike('name', 'Resources')
+    .in('name', ['HIVE Approved', 'Resources'])
+    .order('name', { ascending: true })
     .limit(1)
     .maybeSingle();
 
@@ -418,7 +419,7 @@ ${boardTopicList || '- None yet'}
 
 Turn these meeting notes into app-ready structured data. Use only information supported by the notes. Do not invent dates, assignees, or commitments. Prefer exact member names when assigning work.
 
-HD boards are durable project boards for a member's current HummDinger/High Definition wish. Create one hd_boards entry for each distinct member goal that should get its own board. Reuse existing HD boards when the same person is still working on the same goal. Use the "15min HIVE Helpers" board for quick acts of help people completed or offered.
+HD boards are durable project boards for a member's current HummDinger/High Definition wish. Create one hd_boards entry for each distinct member goal that should get its own board. Reuse existing HD boards when the same person is still working on the same goal. Use the "15min HIVE Helpers" board for quick acts of help people completed or offered. Use "HIVE Approved" for trusted recommendations, favorite providers, brands, places, and community-approved resources.
 
 Return strict JSON only:
 {
@@ -431,7 +432,7 @@ Return strict JSON only:
   "wishes_surfaced": [{"person_name": "member name", "description": "specific wish or need"}],
   "hd_boards": [{"person_name": "member name", "goal_title": "short project/goal name", "description": "what help belongs on this board"}],
   "queen_bee_highlights": ["highlight"],
-  "board_suggestions": [{"person_name": "member name or null", "title": "suggested board post title", "content": "draft board update/resource note", "category_hint": "existing board name, HD goal title, 15min HIVE Helpers, Resources, Announcements, or member/project area"}]
+  "board_suggestions": [{"person_name": "member name or null", "title": "suggested board post title", "content": "draft board update/resource note", "category_hint": "existing board name, HD goal title, 15min HIVE Helpers, HIVE Approved, Announcements, or member/project area"}]
 }`,
       },
     ];

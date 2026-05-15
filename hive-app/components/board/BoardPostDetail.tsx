@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Alert, RefreshControl, Image } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { formatDateMedium } from '../../lib/dateUtils';
+import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
 import { BoardReactionBar } from './BoardReactionBar';
 import { BoardReplyItem } from './BoardReplyItem';
 import { BoardComposer } from './BoardComposer';
+import { BoardReplyComposer } from './BoardReplyComposer';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
-import { MarkdownContent } from '../chat/MarkdownContent';
-import { pickMultipleImages, SelectedImage } from '../../lib/imagePicker';
-import { uploadMultipleImages } from '../../lib/attachmentUpload';
+import { LinkifiedText } from '../ui/LinkifiedText';
 import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment, BoardCategory } from '../../types';
 
 interface BoardPostDetailProps {
@@ -22,22 +22,72 @@ interface BoardPostDetailProps {
 type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardReaction[]; category?: BoardCategory };
 type ReplyWithAuthor = BoardReply & { author?: Profile; reactions?: BoardReaction[]; nested_replies?: ReplyWithAuthor[] };
 
+function showBoardAlert(title: string, message: string) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
+    window.alert(`${title}\n\n${message}`);
+    return;
+  }
+
+  Alert.alert(title, message);
+}
+
+function confirmBoardAction({
+  title,
+  message,
+  confirmLabel,
+  onConfirm,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => Promise<void>;
+}) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.confirm) {
+    if (window.confirm(message)) {
+      onConfirm().catch((error) => {
+        console.error(`[BoardPostDetail] ${title} failed`, error);
+        showBoardAlert('Error', error instanceof Error ? error.message : 'Something went wrong.');
+      });
+    }
+    return;
+  }
+
+  Alert.alert(title, message, [
+    { text: 'Cancel', style: 'cancel' },
+    {
+      text: confirmLabel,
+      style: 'destructive',
+      onPress: async () => {
+        try {
+          await onConfirm();
+        } catch (error) {
+          console.error(`[BoardPostDetail] ${title} failed`, error);
+          showBoardAlert('Error', error instanceof Error ? error.message : 'Something went wrong.');
+        }
+      },
+    },
+  ]);
+}
+
 export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const { profile, communityId, communityRole } = useAuth();
   const [post, setPost] = useState<PostWithAuthor | null>(null);
   const [replies, setReplies] = useState<ReplyWithAuthor[]>([]);
-  const [newReply, setNewReply] = useState('');
-  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const [mentionableMembers, setMentionableMembers] = useState<Pick<Profile, 'id' | 'name'>[]>([]);
   const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [showEditComposer, setShowEditComposer] = useState(false);
   const editComposerStorageKey = communityId ? `the-hive:board-edit-open:${communityId}:${postId}` : null;
   const editDraftStorageKey = communityId ? `the-hive:board-edit-draft:${communityId}:${postId}` : null;
 
   const isAuthor = profile?.id === post?.author_id;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
-  const canManagePost = isAuthor || isAdmin;
+  const isBoardOwner = !!post?.category?.owner_user_id && post.category.owner_user_id === profile?.id;
+  const canManagePost = !!post && (isAuthor || isAdmin || isBoardOwner);
+  const canCompletePost = !!post
+    && post.status !== 'completed'
+    && !post.archived_at
+    && (isAdmin || (post.category?.owner_user_id ? post.category.owner_user_id === profile?.id : isAuthor));
 
   const fetchPost = useCallback(async () => {
     const { data, error } = await supabase
@@ -110,6 +160,51 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   }, [fetchPost, fetchReplies]);
 
   useEffect(() => {
+    if (!communityId) return;
+
+    let cancelled = false;
+    const loadMembers = async () => {
+      const { data: memberships, error: membershipError } = await supabase
+        .from('community_memberships')
+        .select('user_id')
+        .eq('community_id', communityId);
+
+      if (membershipError) {
+        console.warn('[BoardPostDetail] mention memberships load failed', membershipError);
+        return;
+      }
+
+      const userIds = (memberships ?? []).map((row: any) => row.user_id).filter(Boolean);
+      if (userIds.length === 0) {
+        if (!cancelled) setMentionableMembers([]);
+        return;
+      }
+
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', userIds);
+
+      if (profilesError) {
+        console.warn('[BoardPostDetail] mention profiles load failed', profilesError);
+        return;
+      }
+
+      if (!cancelled) {
+        setMentionableMembers(
+          (profilesData || [])
+            .filter((user: any): user is Pick<Profile, 'id' | 'name'> => !!user?.id && !!user?.name)
+        );
+      }
+    };
+
+    loadMembers();
+    return () => {
+      cancelled = true;
+    };
+  }, [communityId]);
+
+  useEffect(() => {
     if (!editComposerStorageKey || typeof window === 'undefined') return;
 
     setShowEditComposer(window.localStorage.getItem(editComposerStorageKey) === 'true');
@@ -136,64 +231,6 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     setRefreshing(true);
     await Promise.all([fetchPost(), fetchReplies()]);
     setRefreshing(false);
-  };
-
-  const handlePickImages = async () => {
-    const images = await pickMultipleImages({ maxImages: 5 - selectedImages.length });
-    if (images.length > 0) {
-      setSelectedImages((prev) => [...prev, ...images].slice(0, 5));
-    }
-  };
-
-  const handleRemoveImage = (index: number) => {
-    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleSubmitReply = async () => {
-    if ((!newReply.trim() && selectedImages.length === 0) || !profile || !communityId) return;
-
-    setSubmitting(true);
-    try {
-      // Upload images if any
-      let attachments: Attachment[] | undefined;
-      if (selectedImages.length > 0) {
-        const result = await uploadMultipleImages(profile.id, selectedImages);
-        if (result.attachments.length > 0) {
-          attachments = result.attachments;
-        }
-      }
-
-      const { error } = await supabase.from('board_replies').insert({
-        community_id: communityId,
-        post_id: postId,
-        parent_reply_id: replyingTo?.id || null,
-        author_id: profile.id,
-        content: newReply.trim(),
-        attachments: attachments && attachments.length > 0 ? attachments : null,
-      });
-
-      if (error) throw error;
-
-      // Fire and forget - don't block on notification
-      supabase.functions.invoke('notify-board-reply', {
-        body: {
-          post_id: postId,
-          reply_author_id: profile.id,
-          reply_preview: newReply.trim() || 'Sent an image',
-          community_id: communityId,
-        },
-      }).catch((err) => console.log('Board reply notification error (non-blocking):', err));
-
-      setNewReply('');
-      setSelectedImages([]);
-      setReplyingTo(null);
-      await Promise.all([fetchPost(), fetchReplies()]);
-    } catch (error) {
-      console.error('Error submitting reply:', error);
-      Alert.alert('Error', 'Failed to post reply.');
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   const handleSetReplyingTo = (replyId: string, authorName: string) => {
@@ -266,34 +303,39 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
 
   const handleEditReply = async (replyId: string, content: string) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('board_replies')
         .update({ content, edited_at: new Date().toISOString() })
         .eq('id', replyId);
+
+      if (error) throw error;
       await fetchReplies();
     } catch (error) {
       console.error('Error editing reply:', error);
-      Alert.alert('Error', 'Failed to edit reply.');
+      showBoardAlert('Error', 'Failed to edit reply.');
     }
   };
 
   const handleDeleteReply = async (replyId: string) => {
-    Alert.alert('Delete Reply', 'Are you sure you want to delete this reply?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await supabase.from('board_replies').delete().eq('id', replyId);
-            await fetchReplies();
-          } catch (error) {
-            console.error('Error deleting reply:', error);
-            Alert.alert('Error', 'Failed to delete reply.');
-          }
-        },
+    confirmBoardAction({
+      title: 'Delete Reply',
+      message: 'Are you sure you want to delete this reply?',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        const { data, error } = await supabase
+          .from('board_replies')
+          .delete()
+          .eq('id', replyId)
+          .select('id');
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          throw new Error('Reply was not deleted. You may not have permission to delete it.');
+        }
+
+        await fetchReplies();
       },
-    ]);
+    });
   };
 
   const handleEditPost = async (title: string, content: string, attachments?: Attachment[]) => {
@@ -321,28 +363,80 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
       return true;
     } catch (error) {
       console.error('Error editing post:', error);
-      Alert.alert('Error', 'Failed to edit post.');
+      showBoardAlert('Error', 'Failed to edit post.');
       return false;
     }
   };
 
-  const handleDeletePost = async () => {
-    Alert.alert('Delete Post', 'Are you sure you want to delete this post? This will also delete all replies.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await supabase.from('board_posts').delete().eq('id', postId);
-            onBack(); // Navigate back after deletion
-          } catch (error) {
-            console.error('Error deleting post:', error);
-            Alert.alert('Error', 'Failed to delete post.');
-          }
-        },
+  const handleCompletePost = async (onDone?: () => void) => {
+    if (!post || !profile || !communityId || !canCompletePost) return;
+
+    confirmBoardAction({
+      title: 'Wish Granted',
+      message: `Mark "${post.title}" as granted? It will show as Granted here and be added to Completed Community Wishes.`,
+      confirmLabel: 'Mark Granted',
+      onConfirm: async () => {
+        await markBoardThreadGranted({
+          post,
+          category: post.category || null,
+          communityId,
+          completedBy: profile.id,
+          completionNote: `Granted from ${post.category?.name || 'Boards'}.`,
+        });
+        await fetchPost();
+        onDone?.();
       },
-    ]);
+    });
+  };
+
+  const handleArchivePost = async (onDone?: () => void) => {
+    if (!post || !profile || !communityId || !canManagePost) return;
+
+    const restore = !!post.archived_at;
+    confirmBoardAction({
+      title: restore ? 'Restore Thread' : 'Archive Thread',
+      message: restore
+        ? `Restore "${post.title}" to this board?`
+        : `Archive "${post.title}"? It will move out of the active thread list, but you can restore it from Archived.`,
+      confirmLabel: restore ? 'Restore' : 'Archive',
+      onConfirm: async () => {
+        const { error } = await (supabase as any)
+          .from('board_posts')
+          .update({
+            archived_at: restore ? null : new Date().toISOString(),
+            archived_by: restore ? null : profile.id,
+          })
+          .eq('id', postId)
+          .eq('community_id', communityId);
+
+        if (error) throw error;
+        await fetchPost();
+        onDone?.();
+      },
+    });
+  };
+
+  const handleDeletePost = async (onDone?: () => void) => {
+    confirmBoardAction({
+      title: 'Delete Thread',
+      message: 'Delete this thread? This will also delete all replies.',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        const { data, error } = await supabase
+          .from('board_posts')
+          .delete()
+          .eq('id', postId)
+          .select('id');
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          throw new Error('Thread was not deleted. You may not have permission to delete it.');
+        }
+
+        onDone?.();
+        onBack();
+      },
+    });
   };
 
   if (!post) {
@@ -363,25 +457,18 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
           <Text className="text-2xl">←</Text>
         </Pressable>
         <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg flex-1">
-          Post
+          Thread
         </Text>
         {canManagePost && (
-          <View className="flex-row items-center gap-2">
-            <Pressable
-              onPress={handleOpenEditComposer}
-              className="p-2"
-              hitSlop={8}
-            >
-              <Ionicons name="pencil-outline" size={20} color="#4A4A4A" />
-            </Pressable>
-            <Pressable
-              onPress={handleDeletePost}
-              className="p-2"
-              hitSlop={8}
-            >
-              <Ionicons name="trash-outline" size={20} color="#ef4444" />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={handleOpenEditComposer}
+            className="p-2"
+            accessibilityRole="button"
+            accessibilityLabel="Edit thread"
+            hitSlop={8}
+          >
+            <Ionicons name="pencil-outline" size={20} color="#4A4A4A" />
+          </Pressable>
         )}
       </View>
 
@@ -397,6 +484,22 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
           {post.is_pinned && (
             <View className="flex-row items-center mb-2">
               <Text className="text-xs text-gold">📌 Pinned</Text>
+            </View>
+          )}
+          {post.status === 'completed' && (
+            <View className="flex-row items-center self-start bg-gold/10 border border-gold/20 rounded-full px-3 py-1 mb-3">
+              <Ionicons name="checkmark-circle-outline" size={15} color="#bd9348" />
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
+                Wish Granted
+              </Text>
+            </View>
+          )}
+          {post.archived_at && (
+            <View className="flex-row items-center self-start bg-charcoal/10 border border-charcoal/10 rounded-full px-3 py-1 mb-3">
+              <Ionicons name="archive-outline" size={15} color="rgba(49,49,48,0.58)" />
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60 text-xs ml-1">
+                Archived
+              </Text>
             </View>
           )}
           <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-charcoal text-xl mb-2">
@@ -416,7 +519,12 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
               {post.edited_at && ' (edited)'}
             </Text>
           </View>
-          <MarkdownContent content={post.content} />
+          <LinkifiedText
+            style={{ fontFamily: 'Lato_400Regular', fontSize: 16, lineHeight: 24, color: '#313130' }}
+            linkStyle={{ color: '#bd9348' }}
+          >
+            {post.content}
+          </LinkifiedText>
           <View className="mb-4" />
 
           {post.attachments && post.attachments.length > 0 && (
@@ -465,84 +573,20 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
       {/* Reply input */}
       {!post.is_locked && (
         <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-cream">
-          {/* Replying to context */}
-          {replyingTo && (
-            <View className="flex-row items-center bg-cream/50 px-4 py-2">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal">
-                Replying to{' '}
-              </Text>
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal">
-                {replyingTo.authorName}
-              </Text>
-              <Pressable onPress={() => setReplyingTo(null)} className="ml-auto p-1">
-                <Ionicons name="close" size={18} color="#4A4A4A" />
-              </Pressable>
-            </View>
-          )}
-
           <View className="p-4">
-          {/* Image previews */}
-          {selectedImages.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              className="mb-3"
-              contentContainerStyle={{ gap: 8 }}
-            >
-              {selectedImages.map((image, index) => (
-                <View key={index} className="relative">
-                  <Image
-                    source={{ uri: image.uri }}
-                    className="w-16 h-16 rounded-lg"
-                    resizeMode="cover"
-                  />
-                  <Pressable
-                    onPress={() => handleRemoveImage(index)}
-                    className="absolute -top-2 -right-2 bg-charcoal rounded-full w-5 h-5 items-center justify-center"
-                  >
-                    <Ionicons name="close" size={12} color="white" />
-                  </Pressable>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-
-          <View className="flex-row items-center">
-            <Pressable
-              onPress={handlePickImages}
-              disabled={selectedImages.length >= 5 || submitting}
-              className="mr-2 p-2"
-            >
-              <Ionicons
-                name="image-outline"
-                size={24}
-                color={selectedImages.length >= 5 ? '#9ca3af' : '#bd9348'}
-              />
-            </Pressable>
-            <TextInput
-              value={newReply}
-              onChangeText={setNewReply}
-              placeholder="Write a reply..."
-              placeholderTextColor="#9ca3af"
-              multiline
-              className="flex-1 bg-cream rounded-xl px-4 py-3 mr-2 max-h-24"
-              style={{ fontFamily: 'Lato_400Regular' }}
+            <BoardReplyComposer
+              postId={postId}
+              postAuthorId={post.author_id}
+              boardName={post.category?.name || post.title}
+              mentionableMembers={mentionableMembers}
+              parentReplyId={replyingTo?.id || null}
+              replyingToName={replyingTo?.authorName || null}
+              onCancelReplyingTo={() => setReplyingTo(null)}
+              onSubmitted={async () => {
+                setReplyingTo(null);
+                await Promise.all([fetchPost(), fetchReplies()]);
+              }}
             />
-            <Pressable
-              onPress={handleSubmitReply}
-              disabled={(!newReply.trim() && selectedImages.length === 0) || submitting}
-              className={`px-4 py-3 rounded-xl ${
-                (newReply.trim() || selectedImages.length > 0) && !submitting ? 'bg-gold' : 'bg-cream'
-              }`}
-            >
-              <Text
-                style={{ fontFamily: 'Lato_700Bold' }}
-                className={(newReply.trim() || selectedImages.length > 0) && !submitting ? 'text-white' : 'text-charcoal/30'}
-              >
-                Send
-              </Text>
-            </Pressable>
-          </View>
           </View>
         </View>
       )}
@@ -556,6 +600,48 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         onSubmit={handleEditPost}
         existingPost={post}
         draftStorageKey={editDraftStorageKey}
+        mentionableMembers={mentionableMembers}
+        managementActions={(
+          <>
+            {canCompletePost && (
+              <Pressable
+                onPress={() => handleCompletePost(handleCloseEditComposer)}
+                className="flex-row items-center bg-gold/10 border border-gold/20 rounded-full px-3 py-2 active:opacity-75"
+              >
+                <Ionicons name="checkmark-circle-outline" size={16} color="#bd9348" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
+                  Granted
+                </Text>
+              </Pressable>
+            )}
+            {canManagePost && (
+              <Pressable
+                onPress={() => handleArchivePost(handleCloseEditComposer)}
+                className="flex-row items-center bg-charcoal/5 border border-charcoal/10 rounded-full px-3 py-2 active:opacity-75"
+              >
+                <Ionicons
+                  name={post.archived_at ? 'arrow-undo-outline' : 'archive-outline'}
+                  size={16}
+                  color="rgba(49,49,48,0.62)"
+                />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60 text-xs ml-1">
+                  {post.archived_at ? 'Restore' : 'Archive'}
+                </Text>
+              </Pressable>
+            )}
+            {canManagePost && (
+              <Pressable
+                onPress={() => handleDeletePost(handleCloseEditComposer)}
+                className="flex-row items-center bg-red-50 border border-red-100 rounded-full px-3 py-2 active:opacity-75"
+              >
+                <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-500 text-xs ml-1">
+                  Delete
+                </Text>
+              </Pressable>
+            )}
+          </>
+        )}
       />
     </SafeAreaView>
   );

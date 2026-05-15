@@ -1,14 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SelectedImage, pickMultipleImages } from '../../lib/imagePicker';
+import { SelectedImage, pickMultipleImages, takePhoto } from '../../lib/imagePicker';
+import { SelectedFile, pickMultipleFiles } from '../../lib/filePicker';
 
 const MAX_IMAGES = 5;
+const MAX_FILES = 5;
 
 interface AttachmentPickerProps {
   selectedImages: SelectedImage[];
   onImagesChange: (images: SelectedImage[]) => void;
+  selectedFiles?: SelectedFile[];
+  onFilesChange?: (files: SelectedFile[]) => void;
   maxImages?: number;
+  maxFiles?: number;
   disabled?: boolean;
   compact?: boolean;
 }
@@ -16,12 +21,18 @@ interface AttachmentPickerProps {
 export function AttachmentPicker({
   selectedImages,
   onImagesChange,
+  selectedFiles = [],
+  onFilesChange,
   maxImages = MAX_IMAGES,
+  maxFiles = MAX_FILES,
   disabled = false,
   compact = false,
 }: AttachmentPickerProps) {
+  const [showCompactMenu, setShowCompactMenu] = useState(false);
   const remainingSlots = maxImages - selectedImages.length;
   const canAddMore = remainingSlots > 0 && !disabled;
+  const remainingFileSlots = maxFiles - selectedFiles.length;
+  const canAddFiles = remainingFileSlots > 0 && !disabled && !!onFilesChange;
 
   const handlePickImages = async () => {
     if (!canAddMore) return;
@@ -35,65 +46,144 @@ export function AttachmentPicker({
     }
   };
 
+  const handlePickFiles = async () => {
+    if (!canAddFiles || !onFilesChange) return;
+
+    const newFiles = await pickMultipleFiles(remainingFileSlots);
+    if (newFiles.length > 0) {
+      onFilesChange([...selectedFiles, ...newFiles].slice(0, maxFiles));
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    if (!canAddMore) return;
+
+    const newImage = await takePhoto();
+    if (newImage) {
+      onImagesChange([...selectedImages, newImage].slice(0, maxImages));
+    }
+  };
+
   const handleRemoveImage = (index: number) => {
     const updated = [...selectedImages];
     updated.splice(index, 1);
     onImagesChange(updated);
   };
 
+  const handleRemoveFile = (index: number) => {
+    if (!onFilesChange) return;
+    const updated = [...selectedFiles];
+    updated.splice(index, 1);
+    onFilesChange(updated);
+  };
+
+  const totalCount = selectedImages.length + selectedFiles.length;
+
   if (compact) {
-    // Compact mode: just a button, used in chat input
+    const compactDisabled = !canAddMore && !canAddFiles;
+
     return (
-      <Pressable
-        onPress={handlePickImages}
-        disabled={!canAddMore}
-        className={`p-2 rounded-full ${
-          canAddMore ? 'bg-gray-100' : 'bg-gray-50'
-        }`}
-      >
-        <Ionicons
-          name="image-outline"
-          size={22}
-          color={canAddMore ? '#666' : '#ccc'}
-        />
-        {selectedImages.length > 0 && (
-          <View className="absolute -top-1 -right-1 bg-gold rounded-full w-4 h-4 items-center justify-center">
-            <Text className="text-white text-xs font-bold">
-              {selectedImages.length}
-            </Text>
+      <View className="relative flex-row items-center">
+        {showCompactMenu && (
+          <View
+            className="absolute left-0 bottom-10 bg-white border border-gold/20 rounded-2xl shadow-lg overflow-hidden"
+            style={{ minWidth: 178, zIndex: 50, elevation: 10 }}
+          >
+            <Pressable
+              onPress={async () => {
+                setShowCompactMenu(false);
+                await handleTakePhoto();
+              }}
+              disabled={!canAddMore}
+              className="flex-row items-center px-3 py-3 active:bg-cream"
+            >
+              <Ionicons name="camera-outline" size={18} color={canAddMore ? '#bd9348' : '#ccc'} />
+              <Text className={`ml-2 text-sm ${canAddMore ? 'text-charcoal' : 'text-gray-400'}`} style={{ fontFamily: 'Lato_700Bold' }}>
+                Take photo
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={async () => {
+                setShowCompactMenu(false);
+                await handlePickImages();
+              }}
+              disabled={!canAddMore}
+              className="flex-row items-center px-3 py-3 active:bg-cream border-t border-cream"
+            >
+              <Ionicons name="images-outline" size={18} color={canAddMore ? '#bd9348' : '#ccc'} />
+              <Text className={`ml-2 text-sm ${canAddMore ? 'text-charcoal' : 'text-gray-400'}`} style={{ fontFamily: 'Lato_700Bold' }}>
+                Photo library
+              </Text>
+            </Pressable>
+            {onFilesChange && (
+              <Pressable
+                onPress={async () => {
+                  setShowCompactMenu(false);
+                  await handlePickFiles();
+                }}
+                disabled={!canAddFiles}
+                className="flex-row items-center px-3 py-3 active:bg-cream border-t border-cream"
+              >
+                <Ionicons name="document-attach-outline" size={18} color={canAddFiles ? '#bd9348' : '#ccc'} />
+                <Text className={`ml-2 text-sm ${canAddFiles ? 'text-charcoal' : 'text-gray-400'}`} style={{ fontFamily: 'Lato_700Bold' }}>
+                  Doc
+                </Text>
+              </Pressable>
+            )}
           </View>
         )}
-      </Pressable>
+        <Pressable
+          onPress={() => setShowCompactMenu((current) => !current)}
+          disabled={compactDisabled}
+          className="p-1 mr-1 rounded-full"
+          accessibilityRole="button"
+          accessibilityLabel="Add attachment"
+        >
+          <Ionicons name="attach-outline" size={22} color={!compactDisabled ? '#bd9348' : '#ccc'} />
+          {totalCount > 0 && (
+            <View className="absolute -top-1 -right-1 bg-gold rounded-full w-4 h-4 items-center justify-center">
+              <Text className="text-white text-xs font-bold">{totalCount}</Text>
+            </View>
+          )}
+        </Pressable>
+      </View>
     );
   }
 
-  // Full mode: button + image previews
+  // Full mode: buttons + previews
   return (
     <View>
-      {/* Add images button */}
-      <Pressable
-        onPress={handlePickImages}
-        disabled={!canAddMore}
-        className={`flex-row items-center gap-2 px-3 py-2 rounded-lg ${
-          canAddMore ? 'bg-gray-100' : 'bg-gray-50'
-        }`}
-      >
-        <Ionicons
-          name="images-outline"
-          size={20}
-          color={canAddMore ? '#666' : '#ccc'}
-        />
-        <Text
-          className={`text-sm ${canAddMore ? 'text-gray-600' : 'text-gray-400'}`}
+      <View className="flex-row gap-2">
+        <Pressable
+          onPress={handlePickImages}
+          disabled={!canAddMore}
+          className={`flex-row items-center gap-2 px-3 py-2 rounded-lg ${
+            canAddMore ? 'bg-gray-100' : 'bg-gray-50'
+          }`}
         >
-          {selectedImages.length === 0
-            ? 'Add photos'
-            : `${selectedImages.length}/${maxImages} photos`}
-        </Text>
-      </Pressable>
+          <Ionicons name="images-outline" size={20} color={canAddMore ? '#666' : '#ccc'} />
+          <Text className={`text-sm ${canAddMore ? 'text-gray-600' : 'text-gray-400'}`}>
+            {selectedImages.length === 0 ? 'Photos' : `${selectedImages.length}/${maxImages}`}
+          </Text>
+        </Pressable>
+        {onFilesChange && (
+          <Pressable
+            onPress={handlePickFiles}
+            disabled={!canAddFiles}
+            className={`flex-row items-center gap-2 px-3 py-2 rounded-lg ${
+              canAddFiles ? 'bg-gray-100' : 'bg-gray-50'
+            }`}
+          >
+            <Ionicons name="attach-outline" size={20} color={canAddFiles ? '#666' : '#ccc'} />
+            <Text className={`text-sm ${canAddFiles ? 'text-gray-600' : 'text-gray-400'}`}>
+              {selectedFiles.length === 0 ? 'Files' : `${selectedFiles.length}/${maxFiles}`}
+            </Text>
+          </Pressable>
+        )}
+      </View>
 
-      {/* Image previews */}
-      {selectedImages.length > 0 && (
+      {/* Image/file previews */}
+      {totalCount > 0 && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -109,6 +199,26 @@ export function AttachmentPicker({
               />
               <Pressable
                 onPress={() => handleRemoveImage(index)}
+                className="absolute -top-2 -right-2 bg-charcoal rounded-full w-6 h-6 items-center justify-center"
+              >
+                <Ionicons name="close" size={14} color="white" />
+              </Pressable>
+            </View>
+          ))}
+          {selectedFiles.map((file, index) => (
+            <View key={`${file.uri}-${index}`} className="relative bg-white border border-gray-200 rounded-lg px-3 py-2 w-44">
+              <View className="flex-row items-center">
+                <Ionicons name="document-attach-outline" size={20} color="#bd9348" />
+                <Text
+                  className="text-charcoal text-xs ml-2 flex-1"
+                  style={{ fontFamily: 'Lato_700Bold' }}
+                  numberOfLines={2}
+                >
+                  {file.name}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => handleRemoveFile(index)}
                 className="absolute -top-2 -right-2 bg-charcoal rounded-full w-6 h-6 items-center justify-center"
               >
                 <Ionicons name="close" size={14} color="white" />
@@ -144,7 +254,7 @@ export function AttachmentButton({
       }`}
     >
       <Ionicons
-        name="image-outline"
+        name="attach-outline"
         size={size}
         color={disabled ? '#ccc' : '#666'}
       />

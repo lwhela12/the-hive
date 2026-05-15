@@ -1,27 +1,51 @@
-// Cache names — bump APP_CACHE version when you want to force a full refresh
-const APP_CACHE = 'hive-app-v5';
-const STATIC_CACHE = 'hive-static-v5';
+// Cache names: bump these when a deployed app shell must replace old clients.
+const APP_CACHE = 'hive-app-v6-chat-customizer';
+const STATIC_CACHE = 'hive-static-v6-chat-customizer';
+const REFRESH_PARAM = 'hive_refresh';
+const REFRESH_TOKEN = 'chat-customizer-v6';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(APP_CACHE).then((cache) => cache.add('/'))
+    caches.open(APP_CACHE).then((cache) => cache.add(new Request('/', { cache: 'reload' })))
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // ─── Activate ───────────────────────────────────────────────────────────────
 // Remove any old cache versions so stale assets don't linger
 self.addEventListener('activate', (event) => {
   const current = [APP_CACHE, STATIC_CACHE];
-  event.waitUntil(
-    caches.keys()
-      .then((keys) =>
-        Promise.all(keys.filter((k) => !current.includes(k)).map((k) => caches.delete(k)))
-      )
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    const staleHiveCaches = keys.filter((key) => key.startsWith('hive-') && !current.includes(key));
+
+    await Promise.all(keys.filter((key) => !current.includes(key)).map((key) => caches.delete(key)));
+    await self.clients.claim();
+
+    if (staleHiveCaches.length === 0) return;
+
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    await Promise.all(clients.map((client) => {
+      if (!client.url || typeof client.navigate !== 'function') return undefined;
+
+      const url = new URL(client.url);
+      if (url.origin !== self.location.origin) return undefined;
+      if (url.searchParams.get(REFRESH_PARAM) === REFRESH_TOKEN) return undefined;
+
+      url.searchParams.set(REFRESH_PARAM, REFRESH_TOKEN);
+      return client.navigate(url.href).catch(() => {
+        client.postMessage({ type: 'HIVE_SW_UPDATED' });
+      });
+    }));
+  })());
 });
 
 // ─── Fetch ──────────────────────────────────────────────────────────────────
@@ -64,7 +88,8 @@ self.addEventListener('fetch', (event) => {
     caches.open(APP_CACHE).then(async (cache) => {
       const cached = await cache.match(request);
 
-      return fetch(request)
+      const freshRequest = new Request(request, { cache: 'reload' });
+      return fetch(freshRequest)
         .then((response) => {
           if (response.ok) cache.put(request, response.clone());
           return response;
