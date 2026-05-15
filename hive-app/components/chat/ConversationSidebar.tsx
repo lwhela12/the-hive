@@ -162,7 +162,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
     { iconName: 'home-outline', label: 'Home', route: '/hive' },
     { iconName: 'grid-outline', label: 'Boards', route: '/board' },
     { iconName: 'chatbubble-ellipses-outline', label: 'Messages', route: '/messages', badge: totalUnreadDMs },
-    { iconName: 'calendar-outline', label: 'Meetings', route: '/meetings' },
+    { iconName: 'calendar-outline', label: 'Meeting', route: '/meetings' },
     {
       iconName: 'person-circle-outline',
       imageSource: profile?.avatar_url ? { uri: profile.avatar_url } : undefined,
