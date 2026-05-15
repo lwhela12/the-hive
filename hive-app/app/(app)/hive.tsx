@@ -26,6 +26,11 @@ import { formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUt
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getBoardNameForWish, getWishGoalTitle } from '../../lib/boardWishLinks';
+import {
+  QUARTERLY_DUES_AMOUNT,
+  duesTransactionCoversQuarter,
+  getCurrentDuesPeriod,
+} from '../../lib/dues';
 import type { Profile, Wish, WishGranter, Event, ActionItem, BoardCategory } from '../../types';
 
 type WishTab = 'open' | 'granted';
@@ -50,33 +55,6 @@ type HomeTodo = {
 };
 
 const CALENDAR_DURATION_MS = 2.5 * 60 * 60 * 1000; // 30-min arrival + 2-hour meeting
-const QUARTERLY_DUES_AMOUNT = 25;
-
-const getCurrentDuesPeriod = () => {
-  const now = new Date();
-  return {
-    year: now.getFullYear(),
-    quarter: Math.floor(now.getMonth() / 3) + 1,
-  };
-};
-
-const duesTransactionCoversQuarter = (
-  row: {
-    dues_year?: number | null;
-    dues_quarter?: number | null;
-    dues_covered_quarters?: number | null;
-  },
-  year: number,
-  quarter: number
-) => {
-  if (row.dues_year !== year) return false;
-  if ((row.dues_covered_quarters ?? 0) >= 4) return true;
-  if (!row.dues_quarter) return false;
-
-  const coveredQuarters = row.dues_covered_quarters ?? 1;
-  return quarter >= row.dues_quarter && quarter < row.dues_quarter + coveredQuarters;
-};
-
 const getRecentDailyQuestions = (days = 7) => {
   return Array.from({ length: days }, (_, offset) => {
     const date = new Date();
@@ -616,7 +594,7 @@ export default function HiveScreen() {
       setDuesCoveredThisQuarter(false);
     } else {
       setDuesCoveredThisQuarter(
-        (data ?? []).some((row: any) => duesTransactionCoversQuarter(row, year, quarter))
+        (data ?? []).some((row: any) => duesTransactionCoversQuarter(row, { year, quarter }))
       );
     }
     setDuesStatusChecked(true);

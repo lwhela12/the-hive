@@ -15,6 +15,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { queryKeys } from '../../lib/queryClient';
+import {
+  ANNUAL_DUES_AMOUNT,
+  QUARTERLY_DUES_AMOUNT,
+  getCurrentDuesPeriod,
+  getDuesAmountForCoverage,
+  type DuesCoverage,
+} from '../../lib/dues';
 import { Avatar } from '../../components/ui/Avatar';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
@@ -39,19 +46,6 @@ const ROLE_LABELS: Record<UserRole, string> = {
   member: 'Member',
   treasurer: 'Treasurer',
   admin: 'Admin',
-};
-
-const QUARTERLY_DUES_AMOUNT = 25;
-const ANNUAL_DUES_AMOUNT = QUARTERLY_DUES_AMOUNT * 4;
-
-type DuesCoverage = 'none' | 'quarter' | 'year';
-
-const getCurrentDuesPeriod = () => {
-  const now = new Date();
-  return {
-    year: now.getFullYear(),
-    quarter: Math.floor(now.getMonth() / 3) + 1,
-  };
 };
 
 export default function AdminScreen() {
@@ -103,11 +97,8 @@ export default function AdminScreen() {
 
   useEffect(() => {
     if (honeyPotType !== 'deposit') return;
-    if (duesCoverage === 'quarter') {
-      setHoneyPotAmount(String(QUARTERLY_DUES_AMOUNT));
-    } else if (duesCoverage === 'year') {
-      setHoneyPotAmount(String(ANNUAL_DUES_AMOUNT));
-    }
+    const duesAmount = getDuesAmountForCoverage(duesCoverage);
+    if (duesAmount) setHoneyPotAmount(String(duesAmount));
   }, [duesCoverage, honeyPotType]);
 
   const fetchData = useCallback(async () => {
@@ -481,44 +472,19 @@ export default function AdminScreen() {
     const signedAmount = honeyPotType === 'withdrawal' ? -amount : amount;
 
     try {
-      const { data: currentPot, error: currentPotError } = await supabase
-        .from('honey_pot')
-        .select('balance')
-        .eq('community_id', communityId)
-        .maybeSingle();
-      if (currentPotError) throw currentPotError;
-
-      const currentBalance = Number(currentPot?.balance ?? honeyPotBalance ?? 0);
-      const newBalance = currentBalance + signedAmount;
-
-      // Record the transaction
-      const { error: txError } = await (supabase as any).from('honey_pot_transactions').insert({
-        community_id: communityId,
-        amount: signedAmount,
-        transaction_type: honeyPotType,
-        note: honeyPotNote || null,
-        recorded_by: profile?.id,
-        related_user_id: taggedAsDues ? duesMemberId : null,
-        dues_year: taggedAsDues ? duesYearValue : null,
-        dues_quarter: duesCoverage === 'quarter' ? duesQuarterValue : null,
-        dues_covered_quarters: duesCoverage === 'year' ? 4 : duesCoverage === 'quarter' ? 1 : null,
+      const { data: balanceData, error } = await (supabase as any).rpc('record_honey_pot_transaction', {
+        p_community_id: communityId,
+        p_amount: signedAmount,
+        p_transaction_type: honeyPotType,
+        p_note: honeyPotNote.trim() || null,
+        p_related_user_id: taggedAsDues ? duesMemberId : null,
+        p_dues_year: taggedAsDues ? duesYearValue : null,
+        p_dues_quarter: duesCoverage === 'quarter' ? duesQuarterValue : null,
+        p_dues_covered_quarters: duesCoverage === 'year' ? 4 : duesCoverage === 'quarter' ? 1 : null,
       });
-      if (txError) throw txError;
+      if (error) throw error;
 
-      // Update the balance
-      const { data: balanceData, error: balError } = await (supabase as any)
-        .from('honey_pot')
-        .upsert({
-          community_id: communityId,
-          balance: newBalance,
-          updated_by: profile?.id,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'community_id' })
-        .select('balance')
-        .single();
-      if (balError) throw balError;
-
-      const savedBalance = Number(balanceData?.balance ?? newBalance);
+      const savedBalance = Number(balanceData ?? 0);
       setHoneyPotBalance(savedBalance);
       queryClient.setQueryData(queryKeys.honeyPot(communityId), savedBalance);
       await queryClient.invalidateQueries({ queryKey: queryKeys.honeyPot(communityId) });

@@ -855,6 +855,19 @@ export interface Database {
         };
         Returns: ChatRoomsWithDataRow[];
       };
+      record_honey_pot_transaction: {
+        Args: {
+          p_community_id: string;
+          p_amount: number;
+          p_transaction_type: 'deposit' | 'withdrawal' | 'adjustment';
+          p_note?: string | null;
+          p_related_user_id?: string | null;
+          p_dues_year?: number | null;
+          p_dues_quarter?: number | null;
+          p_dues_covered_quarters?: number | null;
+        };
+        Returns: number;
+      };
     };
   };
 }
