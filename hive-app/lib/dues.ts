@@ -19,6 +19,19 @@ export const getCurrentDuesPeriod = (date = new Date()): DuesPeriod => ({
   quarter: Math.floor(date.getMonth() / 3) + 1,
 });
 
+export const getDuesPeriodStartDate = (period: DuesPeriod): Date =>
+  new Date(period.year, (period.quarter - 1) * 3, 1);
+
+export const isDuesPeriodStartDay = (
+  date = new Date(),
+  period = getCurrentDuesPeriod(date)
+): boolean => {
+  const startDate = getDuesPeriodStartDate(period);
+  return date.getFullYear() === startDate.getFullYear()
+    && date.getMonth() === startDate.getMonth()
+    && date.getDate() === startDate.getDate();
+};
+
 export const getDuesAmountForCoverage = (coverage: DuesCoverage) => {
   if (coverage === 'quarter') return QUARTERLY_DUES_AMOUNT;
   if (coverage === 'year') return ANNUAL_DUES_AMOUNT;

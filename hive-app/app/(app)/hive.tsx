@@ -30,6 +30,8 @@ import {
   QUARTERLY_DUES_AMOUNT,
   duesTransactionCoversQuarter,
   getCurrentDuesPeriod,
+  getDuesPeriodStartDate,
+  isDuesPeriodStartDay,
 } from '../../lib/dues';
 import type { Profile, Wish, WishGranter, Event, ActionItem, BoardCategory } from '../../types';
 
@@ -1318,14 +1320,18 @@ export default function HiveScreen() {
     })),
     ...(() => {
       if (!duesStatusChecked || duesCoveredThisQuarter) return [];
-      const { year, quarter } = getCurrentDuesPeriod();
+      const today = new Date();
+      const { year, quarter } = getCurrentDuesPeriod(today);
+      const dueDate = getDuesPeriodStartDate({ year, quarter });
+      const dueDateLabel = formatDateShort(dueDate);
+      const isDueToday = isDuesPeriodStartDay(today, { year, quarter });
       return [{
         id: `quarterly-dues-${year}-q${quarter}`,
         emoji: '🍯',
-        title: 'Quarterly dues are due today!',
+        title: isDueToday ? 'Quarterly dues are due today!' : 'Quarterly dues are still due',
         detail: duesStatusLoading
           ? 'Checking payment status...'
-          : `$${QUARTERLY_DUES_AMOUNT} for Q${quarter} ${year}`,
+          : `Due ${dueDateLabel} · $${QUARTERLY_DUES_AMOUNT} for Q${quarter} ${year}`,
         cta: canManageDues ? 'Admin →' : undefined,
         onPress: canManageDues ? () => router.push('/admin') : undefined,
       }];
