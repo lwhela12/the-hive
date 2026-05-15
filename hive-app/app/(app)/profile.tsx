@@ -207,13 +207,13 @@ export default function ProfileScreen() {
     if (!profile || !communityId) return;
 
     const [
-      { data: skillsData },
-      { data: wishesData },
-      { data: actionItemsData },
-      { data: insightsData },
-      { count: dailyAnswers },
-      { data: dailyAnswerRows },
-      { data: memberRows },
+      skillsResult,
+      wishesResult,
+      actionItemsResult,
+      insightsResult,
+      dailyAnswerCountResult,
+      dailyAnswerRowsResult,
+      memberRowsResult,
     ] = await Promise.all([
       supabase
         .from('skills')
@@ -258,15 +258,34 @@ export default function ProfileScreen() {
         .eq('community_id', communityId),
     ]);
 
-    if (skillsData) setSkills(skillsData);
+    let wishesData: Wish[] | null = (wishesResult.data as unknown as Wish[] | null) ?? null;
+    let wishesError = wishesResult.error;
+    if (
+      wishesError &&
+      (String(wishesError.message ?? '').includes('board_categories') ||
+        String(wishesError.message ?? '').includes('relationship') ||
+        String(wishesError.message ?? '').includes('schema cache'))
+    ) {
+      const fallback = await supabase
+        .from('wishes')
+        .select('*')
+        .eq('user_id', profile.id)
+        .eq('community_id', communityId)
+        .order('created_at', { ascending: false });
+      wishesData = (fallback.data as unknown as Wish[] | null) ?? null;
+      wishesError = fallback.error;
+    }
+
+    if (skillsResult.data) setSkills(skillsResult.data);
     if (wishesData) setWishes(wishesData);
-    if (actionItemsData) setActionItems(actionItemsData);
-    setUserInsights(insightsData);
-    setDailyAnswerCount(dailyAnswers ?? 0);
+    if (wishesError) console.error('Error fetching profile wishes:', wishesError);
+    if (actionItemsResult.data) setActionItems(actionItemsResult.data);
+    setUserInsights(insightsResult.data);
+    setDailyAnswerCount(dailyAnswerCountResult.count ?? 0);
     setDailyQuestionMatches(buildDailyQuestionMatches(
       profile.id,
-      (dailyAnswerRows ?? []) as DailyAnswerRow[],
-      memberRows ?? []
+      (dailyAnswerRowsResult.data ?? []) as DailyAnswerRow[],
+      memberRowsResult.data ?? []
     ));
     setInitialLoading(false);
   }, [profile?.id, communityId]);
@@ -679,7 +698,7 @@ export default function ProfileScreen() {
 
     const seedIndex = skills.length + skillDescription.length;
     const displayX = Number((0.16 + (((seedIndex * 37) % 68) / 100)).toFixed(4));
-    const displayY = Number((0.2 + (((seedIndex * 29) % 52) / 100)).toFixed(4));
+    const displayY = Number((0.68 + (((seedIndex * 29) % 18) / 100)).toFixed(4));
 
     const { data, error } = await supabase
       .from('skills')
@@ -1745,12 +1764,6 @@ export default function ProfileScreen() {
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
               Your Skills ({skills.length})
             </Text>
-            <Pressable
-              onPress={() => setSkillsModalVisible(true)}
-              className="w-8 h-8 rounded-full bg-gold items-center justify-center active:opacity-80"
-            >
-              <Ionicons name="add" size={20} color="white" />
-            </Pressable>
           </View>
           <SkillBubbleGarden
             skills={skills}
@@ -1759,6 +1772,7 @@ export default function ProfileScreen() {
             onDeleteSkill={handleDeleteSkill}
             seedSkills={PREDEFINED_SKILLS}
             onPlantSkill={handlePlantSkill}
+            onAddCustomSkill={() => setSkillsModalVisible(true)}
           />
         </View>
 
