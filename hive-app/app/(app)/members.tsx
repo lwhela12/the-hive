@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowD
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import Svg, { Polygon } from 'react-native-svg';
 import type { Skill, UserRole, Wish } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -38,6 +39,9 @@ interface MemberData {
   wishes: MemberWish[];
   introPost?: { title: string; content: string } | null;
   questionAnswerCount: number;
+  dailyMatchPercent?: number;
+  dailyMatchSharedCount?: number;
+  dailyMatchSimilarCount?: number;
 }
 
 const ROLE_LABELS: Partial<Record<UserRole, string>> = {
@@ -52,6 +56,90 @@ const PROFILE_PROMPT_LIMITS = {
   funFact: 220,
   skills: 700,
 };
+
+type DailyAnswerRow = {
+  user_id: string;
+  question_date: string;
+  answer: string;
+};
+
+type DailyMatchStats = {
+  sharedCount: number;
+  similarCount: number;
+  score: number;
+  percent: number;
+};
+
+const ANSWER_STOP_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'for', 'i', 'im', 'in', 'is',
+  'it', 'me', 'my', 'of', 'on', 'or', 'so', 'that', 'the', 'to', 'was', 'with',
+  'would', 'you',
+]);
+
+function answerWords(answer: string) {
+  return new Set(
+    answer
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 2 && !ANSWER_STOP_WORDS.has(word))
+  );
+}
+
+function answerSimilarity(a: string, b: string) {
+  const wordsA = answerWords(a);
+  const wordsB = answerWords(b);
+  if (wordsA.size === 0 || wordsB.size === 0) {
+    return a.trim().toLowerCase() === b.trim().toLowerCase() ? 1 : 0;
+  }
+
+  let shared = 0;
+  wordsA.forEach(word => {
+    if (wordsB.has(word)) shared += 1;
+  });
+
+  return shared / Math.max(1, Math.min(wordsA.size, wordsB.size));
+}
+
+function buildDailyMatchStats(userId: string | null, answers: DailyAnswerRow[]) {
+  const stats = new Map<string, DailyMatchStats>();
+  if (!userId) return stats;
+
+  const myAnswers = new Map<string, string>();
+  answers.forEach(row => {
+    if (row.user_id === userId && row.question_date && row.answer) {
+      myAnswers.set(row.question_date, row.answer);
+    }
+  });
+
+  answers.forEach(row => {
+    if (row.user_id === userId || !row.question_date || !row.answer) return;
+    const mine = myAnswers.get(row.question_date);
+    if (!mine) return;
+
+    const existing = stats.get(row.user_id) ?? {
+      sharedCount: 0,
+      similarCount: 0,
+      score: 0,
+      percent: 0,
+    };
+    const similarity = answerSimilarity(mine, row.answer);
+    existing.sharedCount += 1;
+    existing.score += similarity;
+    if (similarity >= 0.24 || mine.trim().toLowerCase() === row.answer.trim().toLowerCase()) {
+      existing.similarCount += 1;
+    }
+    stats.set(row.user_id, existing);
+  });
+
+  stats.forEach(match => {
+    const averageSimilarity = match.score / Math.max(1, match.sharedCount);
+    const overlapStrength = match.sharedCount / Math.max(1, myAnswers.size);
+    match.percent = Math.round((overlapStrength * 0.45 + averageSimilarity * 0.55) * 100);
+  });
+
+  return stats;
+}
 
 function SilhouetteAvatar({ size }: { size: number }) {
   return (
@@ -87,6 +175,29 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', width: 92 }}>{label}</Text>
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#2d2d2d', flex: 1, lineHeight: 18 }}>{value}</Text>
+    </View>
+  );
+}
+
+function MemberHexFactTile({ fact, index }: { fact: string; index: number }) {
+  return (
+    <View style={{ width: 204, minHeight: 140, marginRight: 10, marginBottom: 10, position: 'relative' }}>
+      <Svg width="100%" height="100%" viewBox="0 0 204 140" preserveAspectRatio="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
+        <Polygon
+          points="52,3 152,3 201,70 152,137 52,137 3,70"
+          fill="#fffaf0"
+          stroke="#dec181"
+          strokeWidth={2}
+        />
+      </Svg>
+      <View style={{ minHeight: 140, paddingHorizontal: 24, paddingVertical: 18, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#bd9348', letterSpacing: 0.6, marginBottom: 7 }}>
+          FUN FACT {index + 1}
+        </Text>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: '#2d2d2d', textAlign: 'center' }}>
+          {fact}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -1015,12 +1126,11 @@ function MemberDetailModal({
             {member.fun_facts && member.fun_facts.length > 0 && (
               <View style={{ marginBottom: 20 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>FUN FACTS</Text>
-                {member.fun_facts.map((fact, i) => (
-                  <View key={i} style={{ flexDirection: 'row', marginBottom: 6 }}>
-                    <Text style={{ color: '#bd9348', marginRight: 8, fontSize: 14 }}>✦</Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', flex: 1, lineHeight: 20 }}>{fact}</Text>
-                  </View>
-                ))}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  {member.fun_facts.map((fact, i) => (
+                    <MemberHexFactTile key={i} fact={fact} index={i} />
+                  ))}
+                </View>
               </View>
             )}
 
@@ -1342,7 +1452,8 @@ export default function MembersScreen() {
           .in('author_id', userIds),
         supabase
           .from('daily_question_answers')
-          .select('user_id')
+          .select('user_id, question_date, answer')
+          .eq('community_id', communityId)
           .in('user_id', userIds),
       ]);
 
@@ -1380,12 +1491,19 @@ export default function MembersScreen() {
       (answersRes.data ?? []).forEach((a: any) => {
         answerCountByUser.set(a.user_id, (answerCountByUser.get(a.user_id) ?? 0) + 1);
       });
+      const dailyMatches = buildDailyMatchStats(currentUserId, (answersRes.data ?? []) as DailyAnswerRow[]);
 
       memberList.forEach(m => {
         m.skills = skillsByUser.get(m.id) ?? [];
         m.wishes = wishesByUser.get(m.id) ?? [];
         m.introPost = introByUser.get(m.id) ?? null;
         m.questionAnswerCount = answerCountByUser.get(m.id) ?? 0;
+        const match = dailyMatches.get(m.id);
+        if (match && match.sharedCount > 0) {
+          m.dailyMatchPercent = match.percent;
+          m.dailyMatchSharedCount = match.sharedCount;
+          m.dailyMatchSimilarCount = match.similarCount;
+        }
       });
 
       memberList.sort((a, b) => {
@@ -1514,6 +1632,7 @@ export default function MembersScreen() {
                 const titleLine = member.profile_title || member.occupation;
                 const publicWishes = member.wishes.filter(w => w.status === 'public');
                 const spotlight = member.known_for || member.miq_experiences || member.current_project || member.bio || member.skills[0]?.description || publicWishes[0]?.description;
+                const hasDailyMatch = !isMe && typeof member.dailyMatchPercent === 'number' && (member.dailyMatchSharedCount ?? 0) > 0;
                 return (
                   <Pressable
                     key={member.id}
@@ -1532,7 +1651,34 @@ export default function MembersScreen() {
                       shadowRadius: 10,
                       shadowOffset: { width: 0, height: 4 },
                       elevation: 2,
+                      position: 'relative',
                     }}>
+                      {hasDailyMatch && (
+                        <View
+                          accessible
+                          accessibilityLabel={`${member.dailyMatchPercent}% daily question match with ${member.name}`}
+                          style={{
+                            position: 'absolute',
+                            top: 12,
+                            right: 12,
+                            backgroundColor: '#f5ead1',
+                            borderWidth: 1,
+                            borderColor: 'rgba(189,147,72,0.35)',
+                            borderRadius: 999,
+                            paddingHorizontal: 9,
+                            paddingVertical: 5,
+                            alignItems: 'center',
+                            minWidth: 56,
+                          }}
+                        >
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', lineHeight: 14 }}>
+                            {member.dailyMatchPercent}%
+                          </Text>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 8, color: '#9a8060', textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 10 }}>
+                            match
+                          </Text>
+                        </View>
+                      )}
                       <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
                         <View style={{
                           borderRadius: (avatarSize + 8) / 2,
@@ -1544,7 +1690,7 @@ export default function MembersScreen() {
                           <Avatar uri={member.avatar_url} name={member.name} size={avatarSize} />
                         </View>
 
-                        <View style={{ flex: 1, minWidth: 0 }}>
+                        <View style={{ flex: 1, minWidth: 0, paddingRight: hasDailyMatch ? 58 : 0 }}>
                           <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: '#2d2d2d', lineHeight: 21 }} numberOfLines={2}>
                             {isMe ? `${member.name.split(' ')[0]} (you)` : member.name}
                           </Text>
@@ -1582,7 +1728,13 @@ export default function MembersScreen() {
                             </Text>
                           </View>
                         )}
-                        {member.questionAnswerCount > 0 && (
+                        {hasDailyMatch ? (
+                          <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#8a6a2f' }}>
+                              {member.dailyMatchSharedCount} shared question{member.dailyMatchSharedCount === 1 ? '' : 's'}
+                            </Text>
+                          </View>
+                        ) : member.questionAnswerCount > 0 && (
                           <View style={{ backgroundColor: '#f5ead1', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 }}>
                             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#8a6a2f' }}>
                               {member.questionAnswerCount} answers

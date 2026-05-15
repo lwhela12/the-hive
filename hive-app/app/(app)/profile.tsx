@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView, Modal } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView, Modal, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -24,125 +24,39 @@ import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { PREDEFINED_SKILLS } from '../../components/skills/constants';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Polygon } from 'react-native-svg';
 import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import type { Skill, Wish, ActionItem, UserInsights, Profile } from '../../types';
 
 const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
 
-type DailyQuestionMatch = {
-  userId: string;
-  name: string;
-  avatarUrl?: string | null;
-  sharedCount: number;
-  similarCount: number;
-  score: number;
-  percent: number;
-};
-
-type DailyAnswerRow = {
-  user_id: string;
-  question_date: string;
-  answer: string;
-};
-
-const ANSWER_STOP_WORDS = new Set([
-  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'for', 'i', 'im', 'in', 'is',
-  'it', 'me', 'my', 'of', 'on', 'or', 'so', 'that', 'the', 'to', 'was', 'with',
-  'would', 'you',
-]);
-
-function answerWords(answer: string) {
-  return new Set(
-    answer
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter(word => word.length > 2 && !ANSWER_STOP_WORDS.has(word))
+function HexFactTile({ fact, index }: { fact: string; index: number }) {
+  return (
+    <View style={{ width: 228, minHeight: 156, marginRight: 12, marginBottom: 12, position: 'relative' }}>
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 228 156"
+        preserveAspectRatio="none"
+        style={StyleSheet.absoluteFill}
+      >
+        <Polygon
+          points="58,3 170,3 225,78 170,153 58,153 3,78"
+          fill="#fffaf0"
+          stroke="#dec181"
+          strokeWidth={2}
+        />
+      </Svg>
+      <View style={{ minHeight: 156, paddingHorizontal: 28, paddingVertical: 22, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', letterSpacing: 0.6, marginBottom: 8 }}>
+          FUN FACT {index + 1}
+        </Text>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#2d2d2d', textAlign: 'center' }}>
+          {fact}
+        </Text>
+      </View>
+    </View>
   );
-}
-
-function answerSimilarity(a: string, b: string) {
-  const wordsA = answerWords(a);
-  const wordsB = answerWords(b);
-  if (wordsA.size === 0 || wordsB.size === 0) {
-    return a.trim().toLowerCase() === b.trim().toLowerCase() ? 1 : 0;
-  }
-
-  let shared = 0;
-  wordsA.forEach(word => {
-    if (wordsB.has(word)) shared += 1;
-  });
-
-  return shared / Math.max(1, Math.min(wordsA.size, wordsB.size));
-}
-
-function buildDailyQuestionMatches(
-  userId: string,
-  answers: DailyAnswerRow[],
-  members: any[]
-): DailyQuestionMatch[] {
-  const memberById = new Map<string, { name: string; avatar_url?: string | null }>();
-  members.forEach((row: any) => {
-    const member = row.profiles;
-    if (member?.name) {
-      memberById.set(row.user_id, {
-        name: member.name,
-        avatar_url: member.avatar_url ?? null,
-      });
-    }
-  });
-
-  const myAnswers = new Map<string, string>();
-  answers.forEach(row => {
-    if (row.user_id === userId && row.question_date && row.answer) {
-      myAnswers.set(row.question_date, row.answer);
-    }
-  });
-
-  const stats = new Map<string, DailyQuestionMatch>();
-  answers.forEach(row => {
-    if (row.user_id === userId || !row.question_date || !row.answer) return;
-    const mine = myAnswers.get(row.question_date);
-    if (!mine) return;
-
-    const member = memberById.get(row.user_id);
-    if (!member) return;
-
-    const existing = stats.get(row.user_id) ?? {
-      userId: row.user_id,
-      name: member.name,
-      avatarUrl: member.avatar_url,
-      sharedCount: 0,
-      similarCount: 0,
-      score: 0,
-      percent: 0,
-    };
-    const similarity = answerSimilarity(mine, row.answer);
-    existing.sharedCount += 1;
-    existing.score += similarity;
-    if (similarity >= 0.24 || mine.trim().toLowerCase() === row.answer.trim().toLowerCase()) {
-      existing.similarCount += 1;
-    }
-    stats.set(row.user_id, existing);
-  });
-
-  return [...stats.values()]
-    .map(match => {
-      const averageSimilarity = match.score / Math.max(1, match.sharedCount);
-      const overlapStrength = match.sharedCount / Math.max(1, myAnswers.size);
-      return {
-        ...match,
-        percent: Math.round((overlapStrength * 0.45 + averageSimilarity * 0.55) * 100),
-      };
-    })
-    .sort((a, b) =>
-      b.percent - a.percent ||
-      b.similarCount - a.similarCount ||
-      b.score - a.score ||
-      b.sharedCount - a.sharedCount ||
-      a.name.localeCompare(b.name)
-    )
-    .slice(0, 5);
 }
 
 // Format phone number as (XXX) XXX-XXXX
@@ -178,7 +92,6 @@ export default function ProfileScreen() {
   const [managingWish, setManagingWish] = useState<Wish | null>(null);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
   const [dailyAnswerCount, setDailyAnswerCount] = useState(0);
-  const [dailyQuestionMatches, setDailyQuestionMatches] = useState<DailyQuestionMatch[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
 
   // Editable profile fields
@@ -212,8 +125,6 @@ export default function ProfileScreen() {
       actionItemsResult,
       insightsResult,
       dailyAnswerCountResult,
-      dailyAnswerRowsResult,
-      memberRowsResult,
     ] = await Promise.all([
       supabase
         .from('skills')
@@ -246,16 +157,6 @@ export default function ProfileScreen() {
         .select('id', { count: 'exact', head: true })
         .eq('user_id', profile.id)
         .eq('community_id', communityId),
-      supabase
-        .from('daily_question_answers')
-        .select('user_id, question_date, answer')
-        .eq('community_id', communityId)
-        .order('question_date', { ascending: false })
-        .limit(600),
-      supabase
-        .from('community_memberships')
-        .select('user_id, profiles(name, avatar_url)')
-        .eq('community_id', communityId),
     ]);
 
     let wishesData: Wish[] | null = (wishesResult.data as unknown as Wish[] | null) ?? null;
@@ -282,11 +183,6 @@ export default function ProfileScreen() {
     if (actionItemsResult.data) setActionItems(actionItemsResult.data);
     setUserInsights(insightsResult.data);
     setDailyAnswerCount(dailyAnswerCountResult.count ?? 0);
-    setDailyQuestionMatches(buildDailyQuestionMatches(
-      profile.id,
-      (dailyAnswerRowsResult.data ?? []) as DailyAnswerRow[],
-      memberRowsResult.data ?? []
-    ));
     setInitialLoading(false);
   }, [profile?.id, communityId]);
 
@@ -744,19 +640,7 @@ export default function ProfileScreen() {
       setSkills((current) => current.filter((item) => item.id !== skill.id));
     };
 
-    const message = `Remove "${skill.description}" from your skills?`;
-
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) {
-        deleteSkill();
-      }
-      return;
-    }
-
-    Alert.alert('Remove skill', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: deleteSkill },
-    ]);
+    deleteSkill();
   };
 
   const handleDeleteWish = (wish: Wish) => {
@@ -1024,7 +908,7 @@ export default function ProfileScreen() {
           const nextMissing = checks.find(c => !c.done);
           const isComplete = done === checks.length;
           const percent = Math.round(score * 100);
-          const missing = checks.filter(c => !c.done).slice(0, 3);
+          const missing = checks.filter(c => !c.done);
 
           return (
             <View style={{ alignItems: 'center', marginBottom: 20 }}>
@@ -1203,109 +1087,6 @@ export default function ProfileScreen() {
                 </Pressable>
               )}
 
-              <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-                <View className="p-4 border-b border-cream">
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/50 mb-1">Member Signals</Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 leading-5">
-                    These help Clive match members, shape HD boards, and feed newsletters without making the profile feel like homework.
-                  </Text>
-                </View>
-                {[
-                  {
-                    label: 'Core profile',
-                    value: (profile as any).bio && (profile as any).known_for ? 'Ready for members' : 'Add bio + ask-me-about',
-                    done: !!((profile as any).bio && (profile as any).known_for),
-                  },
-                  {
-                    label: 'Deeper profile',
-                    value: ((profile as any).fun_facts?.length || (profile as any).favorite_book || (profile as any).favorite_food || (profile as any).favorite_hobby)
-                      ? 'Optional details added'
-                      : 'Optional',
-                    done: !!(((profile as any).fun_facts?.length) || (profile as any).favorite_book || (profile as any).favorite_food || (profile as any).favorite_hobby),
-                  },
-                  {
-                    label: 'Monthly check-in',
-                    value: pendingSurveys.length === 0 ? 'Current' : pendingSurveys[0]?.title ?? 'Waiting for response',
-                    done: pendingSurveys.length === 0,
-                  },
-                  {
-                    label: '3MIQ',
-                    value: ((profile as any).miq_experiences && (profile as any).miq_growth && (profile as any).miq_contribution) ? 'Answered' : 'Ready for Clive',
-                    done: !!((profile as any).miq_experiences && (profile as any).miq_growth && (profile as any).miq_contribution),
-                  },
-                  {
-                    label: 'Daily questions',
-                    value: dailyAnswerCount > 0 ? `${dailyAnswerCount} answered` : 'Start with today',
-                    done: dailyAnswerCount > 0,
-                  },
-                ].map(item => (
-                  <View key={item.label} className="p-4 border-b border-cream last:border-b-0 flex-row items-center">
-                    <View
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: 12,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginRight: 12,
-                        backgroundColor: item.done ? '#eef6f0' : '#fffaf0',
-                        borderWidth: 1,
-                        borderColor: item.done ? 'rgba(115,154,136,0.45)' : 'rgba(222,193,129,0.55)',
-                      }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: item.done ? '#739a88' : '#bd9348' }}>
-                        {item.done ? 'OK' : '!'}
-                      </Text>
-                    </View>
-                    <View className="flex-1">
-                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{item.label}</Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 mt-1">{item.value}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-
-              {dailyAnswerCount > 0 && (
-                <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-                  <View className="p-4 border-b border-cream">
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/50 mb-1">Daily Question Matches</Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 leading-5">
-                      Based on the daily questions you have both answered.
-                    </Text>
-                  </View>
-                  {dailyQuestionMatches.length > 0 ? (
-                    dailyQuestionMatches.map(match => (
-                      <Pressable
-                        key={match.userId}
-                        onPress={() => router.push({ pathname: '/(app)/members', params: { memberId: match.userId } })}
-                        className="p-4 border-b border-cream last:border-b-0 flex-row items-center active:bg-cream"
-                      >
-                        <Avatar name={match.name} url={match.avatarUrl} size={44} />
-                        <View className="flex-1 ml-3">
-                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{match.name}</Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 mt-1">
-                            {match.similarCount > 0
-                              ? `${match.similarCount} similar answer${match.similarCount === 1 ? '' : 's'}`
-                              : `${match.sharedCount} shared question${match.sharedCount === 1 ? '' : 's'}`}
-                          </Text>
-                        </View>
-                        <View className="bg-gold-light px-3 py-1 rounded-full">
-                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                            {match.percent}%
-                          </Text>
-                        </View>
-                      </Pressable>
-                    ))
-                  ) : (
-                    <View className="p-4">
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 leading-5">
-                        You have answered {dailyAnswerCount} question{dailyAnswerCount === 1 ? '' : 's'}. Once more members answer the same ones, your matches will show up here.
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
               {((profile as any).current_project || (profile as any).hometown || profile.birthday) && (
                 <View className="bg-white rounded-xl shadow-sm overflow-hidden">
                   {(profile as any).current_project && (
@@ -1332,12 +1113,9 @@ export default function ProfileScreen() {
               {(((profile as any).fun_facts as string[] | null) ?? []).length > 0 && (
                 <View>
                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-2 tracking-wide">FUN FACTS</Text>
-                  <View className="gap-2">
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                     {((profile as any).fun_facts as string[]).map((fact: string, idx: number) => (
-                      <View key={idx} className="flex-row items-start">
-                        <Text className="text-gold mr-2">✦</Text>
-                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal flex-1 leading-5">{fact}</Text>
-                      </View>
+                      <HexFactTile key={idx} fact={fact} index={idx} />
                     ))}
                   </View>
                 </View>
