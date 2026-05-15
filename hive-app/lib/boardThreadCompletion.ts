@@ -20,27 +20,35 @@ export async function markBoardThreadGranted({
   communityId,
   completedBy,
   completionNote,
+  wishId,
+  granterIds = [],
 }: {
   post: Pick<BoardPost, 'id' | 'title' | 'content' | 'author_id' | 'category_id'>;
   category?: Pick<BoardCategory, 'id' | 'owner_user_id' | 'topic_kind'> | null;
   communityId: string;
   completedBy: string;
   completionNote?: string | null;
+  wishId?: string | null;
+  granterIds?: string[];
 }) {
   const completedAt = new Date().toISOString();
   const wishOwnerId = category?.owner_user_id || post.author_id;
   const note = completionNote?.trim() || 'Granted from Boards.';
 
-  const { data: existingWishes, error: existingWishError } = await supabase
-    .from('wishes')
-    .select('id')
-    .eq('community_id', communityId)
-    .eq('source_board_post_id', post.id)
-    .limit(1);
+  let grantedWishId = wishId ?? null;
 
-  if (existingWishError) throw existingWishError;
+  if (!grantedWishId) {
+    const { data: existingWishes, error: existingWishError } = await supabase
+      .from('wishes')
+      .select('id')
+      .eq('community_id', communityId)
+      .eq('source_board_post_id', post.id)
+      .limit(1);
 
-  let grantedWishId = existingWishes?.[0]?.id;
+    if (existingWishError) throw existingWishError;
+    grantedWishId = existingWishes?.[0]?.id ?? null;
+  }
+
   const wishUpdate = {
     status: 'fulfilled',
     is_active: false,
@@ -81,6 +89,20 @@ export async function markBoardThreadGranted({
 
     if (error) throw error;
     grantedWishId = data.id;
+  }
+
+  if (grantedWishId && granterIds.length > 0) {
+    const granterRows = Array.from(new Set(granterIds)).map((granterId) => ({
+      wish_id: grantedWishId,
+      granter_id: granterId,
+      community_id: communityId,
+    }));
+
+    const { error } = await supabase
+      .from('wish_granters')
+      .upsert(granterRows, { onConflict: 'wish_id,granter_id' });
+
+    if (error) throw error;
   }
 
   const { error: postError } = await (supabase as any)

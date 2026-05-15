@@ -98,13 +98,23 @@ export function useWishes() {
       return { error: new Error('Not authenticated') };
     }
 
+    const fulfilledAt = new Date().toISOString();
+
+    const { data: wishLink } = await (supabase as any)
+      .from('wishes')
+      .select('source_board_post_id')
+      .eq('id', wishId)
+      .eq('community_id', communityId)
+      .maybeSingle();
+
     // 1. Update wish status and thank you message
     const { error: wishError } = await supabase
       .from('wishes')
       .update({
         status: 'fulfilled',
         is_active: false,
-        fulfilled_at: new Date().toISOString(),
+        fulfilled_at: fulfilledAt,
+        fulfilled_by: profile.id,
         thank_you_message: thankYouMessage || null,
       })
       .eq('id', wishId)
@@ -120,7 +130,7 @@ export function useWishes() {
       .from('board_categories')
       .update({
         status: 'completed',
-        completed_at: new Date().toISOString(),
+        completed_at: fulfilledAt,
         completed_by: profile.id,
         completion_note: thankYouMessage || 'Completed from linked wish.',
       })
@@ -129,6 +139,24 @@ export function useWishes() {
 
     if (boardError) {
       console.log('Linked board completion skipped (non-blocking):', boardError);
+    }
+
+    if (wishLink?.source_board_post_id) {
+      const { error: postError } = await (supabase as any)
+        .from('board_posts')
+        .update({
+          status: 'completed',
+          completed_at: fulfilledAt,
+          completed_by: profile.id,
+          completion_note: thankYouMessage || 'Completed from linked wish.',
+          granted_wish_id: wishId,
+        })
+        .eq('id', wishLink.source_board_post_id)
+        .eq('community_id', communityId);
+
+      if (postError) {
+        console.log('Linked thread completion skipped (non-blocking):', postError);
+      }
     }
 
     // 2. Insert granters into junction table
@@ -141,7 +169,7 @@ export function useWishes() {
 
       const { error: granterError } = await supabase
         .from('wish_granters')
-        .insert(granterInserts);
+        .upsert(granterInserts, { onConflict: 'wish_id,granter_id' });
 
       if (granterError) {
         return { error: granterError };

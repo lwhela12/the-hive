@@ -26,7 +26,7 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { submitOnEnter } from '../../lib/submitOnEnter';
-import { getBoardNameForWish, getWishGoalTitle } from '../../lib/boardWishLinks';
+import { linkWishToHdBoard, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import {
   QUARTERLY_DUES_AMOUNT,
@@ -35,7 +35,7 @@ import {
   getDuesPeriodStartDate,
   isDuesPeriodStartDay,
 } from '../../lib/dues';
-import type { Profile, Wish, WishGranter, Event, ActionItem, BoardCategory } from '../../types';
+import type { Profile, Wish, WishGranter, Event, ActionItem } from '../../types';
 
 type WishTab = 'open' | 'granted';
 
@@ -1110,6 +1110,11 @@ export default function HiveScreen() {
   const canEditWish = useCallback((wish: Wish) => wish.user_id === profile?.id, [profile?.id]);
   const canDeleteWish = useCallback((wish: Wish) => !!profile && (isAdmin || wish.user_id === profile.id), [isAdmin, profile]);
   const canGrantWish = useCallback((wish: Wish) => wish.user_id === profile?.id && wish.status === 'public', [profile?.id]);
+  const canLinkWishBoard = useCallback((wish: Wish) => (
+    !!profile
+    && (wish.status !== 'fulfilled' || !!wish.board_category_id || !!wish.source_board_post_id)
+    && (isAdmin || wish.user_id === profile.id)
+  ), [isAdmin, profile]);
   const canArchiveWish = useCallback((wish: Wish) => (
     !!profile
     && wish.status === 'public'
@@ -1117,8 +1122,8 @@ export default function HiveScreen() {
     && (isAdmin || wish.user_id === profile.id)
   ), [isAdmin, profile]);
   const canOpenWishActions = useCallback((wish: Wish) => (
-    canGrantWish(wish) || canEditWish(wish) || canArchiveWish(wish) || canDeleteWish(wish)
-  ), [canArchiveWish, canDeleteWish, canEditWish, canGrantWish]);
+    canGrantWish(wish) || canLinkWishBoard(wish) || canEditWish(wish) || canArchiveWish(wish) || canDeleteWish(wish)
+  ), [canArchiveWish, canDeleteWish, canEditWish, canGrantWish, canLinkWishBoard]);
 
   const handleArchiveWish = useCallback((wish: Wish) => {
     if (!profile || !communityId || !canArchiveWish(wish)) return;
@@ -1229,122 +1234,11 @@ export default function HiveScreen() {
         return;
       }
 
-      const boardName = getBoardNameForWish(wish);
-      const { data: existingHdBoards, error: existingBoardError } = await (supabase as any)
-        .from('board_categories')
-        .select('*')
-        .eq('community_id', communityId)
-        .eq('topic_kind', 'hd_board')
-        .eq('owner_user_id', wish.user_id)
-        .is('goal_title', null)
-        .limit(1);
-
-      if (existingBoardError) {
-        Alert.alert('Error', `Failed to find the HD board: ${existingBoardError.message}`);
-        return;
-      }
-
-      let category = existingHdBoards?.[0] as BoardCategory | undefined;
-
-      if (!category) {
-        const { data: existingCategories } = await (supabase as any)
-          .from('board_categories')
-          .select('display_order')
-          .eq('community_id', communityId);
-        const maxOrder = (existingCategories ?? []).reduce(
-          (max: number, existingCategory: Pick<BoardCategory, 'display_order'>) =>
-            Math.max(max, existingCategory.display_order ?? 0),
-          0
-        );
-
-        const { data: createdCategory, error } = await (supabase as any)
-          .from('board_categories')
-          .insert({
-            community_id: communityId,
-            name: boardName,
-            description: `${boardName.replace(/'s HD Board$/, '')}'s home base for HD wishes, asks, updates, recommendations, and helper threads.`,
-            category_type: 'custom',
-            icon: '💎',
-            display_order: maxOrder + 1,
-            is_system: false,
-            requires_admin: false,
-            requires_approval: false,
-            created_by: profile.id,
-            topic_kind: 'hd_board',
-            owner_user_id: wish.user_id,
-            goal_title: null,
-            audience: 'members',
-          })
-          .select()
-          .single();
-
-        if (error) {
-          Alert.alert('Error', `Failed to create board: ${error.message}`);
-          return;
-        }
-
-        category = createdCategory as BoardCategory;
-      }
-
-      await (supabase as any)
-        .from('board_category_member_tags')
-        .upsert({
-          community_id: communityId,
-          category_id: category.id,
-          tagged_user_id: wish.user_id,
-          tagged_by: profile.id,
-        }, { onConflict: 'category_id,tagged_user_id' });
-
-      const threadTitle = getWishGoalTitle(wish.description, 70);
-      let sourceBoardPostId = wish.source_board_post_id ?? null;
-
-      if (!sourceBoardPostId) {
-        const { data: existingPosts } = await (supabase as any)
-          .from('board_posts')
-          .select('id')
-          .eq('community_id', communityId)
-          .eq('category_id', category.id)
-          .eq('title', threadTitle)
-          .limit(1);
-
-        sourceBoardPostId = existingPosts?.[0]?.id ?? null;
-      }
-
-      if (!sourceBoardPostId) {
-        const { data: createdPost, error: postError } = await (supabase as any)
-          .from('board_posts')
-          .insert({
-            community_id: communityId,
-            category_id: category.id,
-            author_id: profile.id,
-            title: threadTitle,
-            content: wish.description,
-          })
-          .select('id')
-          .single();
-
-        if (postError) {
-          Alert.alert('Error', `Failed to create the HD thread: ${postError.message}`);
-          return;
-        }
-
-        sourceBoardPostId = createdPost?.id ?? null;
-      }
-
-      const { error: wishError } = await (supabase as any)
-        .from('wishes')
-        .update({
-          board_category_id: category.id,
-          source_board_post_id: sourceBoardPostId,
-          status: wish.status === 'private' ? 'public' : wish.status,
-          is_active: wish.status === 'fulfilled' ? false : true,
-        })
-        .eq('id', wish.id)
-        .eq('community_id', communityId);
-
-      if (wishError) {
-        Alert.alert('Board created', 'The board thread was created, but the wish could not be linked. You may need to refresh and try again.');
-      }
+      const category = await linkWishToHdBoard({
+        wish,
+        communityId,
+        actorId: profile.id,
+      });
 
       await refetch();
       openBoardFromWish(category.id);
@@ -1353,6 +1247,35 @@ export default function HiveScreen() {
       Alert.alert('Error', `Failed to create board: ${message}`);
     }
   }, [communityId, openBoardFromWish, profile, refetch]);
+
+  const handleUnlinkWishFromBoard = useCallback((wish: WishWithGranters) => {
+    if (!profile || !communityId) return;
+
+    const unlink = async () => {
+      try {
+        await unlinkWishFromBoard({ wishId: wish.id, communityId });
+        await refetch();
+        setManagingWish(null);
+        if (selectedWish?.id === wish.id) {
+          setSelectedWish(null);
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        Alert.alert('Error', `Failed to unlink wish: ${message}`);
+      }
+    };
+
+    const message = `Unlink this wish from its HD board?\n\n"${wish.description}"`;
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) unlink();
+      return;
+    }
+
+    Alert.alert('Unlink Wish', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Unlink', onPress: unlink },
+    ]);
+  }, [communityId, profile, refetch, selectedWish?.id]);
 
   const homeTodos: HomeTodo[] = [
     ...pendingSurveys.map(s => ({
@@ -1562,6 +1485,12 @@ export default function HiveScreen() {
           wish={selectedWish}
           onClose={() => setSelectedWish(null)}
           onGrant={handleGrantWish}
+          canManage={canOpenWishActions(selectedWish)}
+          onManage={() => {
+            const wish = selectedWish;
+            setSelectedWish(null);
+            setManagingWish(wish);
+          }}
           onOpenBoard={openBoardFromWish}
           onCreateBoard={createBoardFromWish}
         />
@@ -2435,6 +2364,35 @@ export default function HiveScreen() {
                   <Ionicons name="checkmark-circle-outline" size={18} color={manageWishToneColor('gold')} />
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('gold') }}>
                     Grant
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
+              </Pressable>
+            ) : null}
+
+            {managingWish && canLinkWishBoard(managingWish) ? (
+              <Pressable
+                onPress={() => {
+                  const wish = managingWish;
+                  setManagingWish(null);
+                  if (wish.board_category_id || wish.source_board_post_id) {
+                    handleUnlinkWishFromBoard(wish);
+                  } else {
+                    createBoardFromWish(wish);
+                  }
+                }}
+                style={manageWishActionStyle('gold')}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons
+                    name={managingWish.board_category_id || managingWish.source_board_post_id ? 'unlink-outline' : 'albums-outline'}
+                    size={18}
+                    color={manageWishToneColor('gold')}
+                  />
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('gold') }}>
+                    {managingWish.board_category_id || managingWish.source_board_post_id
+                      ? 'Unlink HD board'
+                      : 'Link to my HD board'}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />

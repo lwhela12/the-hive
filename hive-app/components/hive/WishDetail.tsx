@@ -32,11 +32,21 @@ interface WishDetailProps {
     granterIds: string[];
     thankYouMessage?: string;
   }) => Promise<{ error: Error | null }>;
+  canManage?: boolean;
+  onManage?: () => void;
   onOpenBoard?: (categoryId: string) => void;
   onCreateBoard?: (wish: WishWithGranters) => Promise<void>;
 }
 
-export function WishDetail({ wish, onClose, onGrant, onOpenBoard, onCreateBoard }: WishDetailProps) {
+export function WishDetail({
+  wish,
+  onClose,
+  onGrant,
+  canManage = false,
+  onManage,
+  onOpenBoard,
+  onCreateBoard,
+}: WishDetailProps) {
   const { profile, communityId } = useAuth();
   const [comments, setComments] = useState<(WishComment & { user: Profile })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,7 +122,19 @@ export function WishDetail({ wish, onClose, onGrant, onOpenBoard, onCreateBoard 
         <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
           Wish Details
         </Text>
-        <View className="w-10" />
+        {canManage && onManage ? (
+          <Pressable
+            onPress={onManage}
+            className="w-10 h-10 items-center justify-center rounded-full active:bg-cream"
+            accessibilityRole="button"
+            accessibilityLabel="Manage wish"
+            hitSlop={8}
+          >
+            <Ionicons name="pencil-outline" size={19} color="#4A4A4A" />
+          </Pressable>
+        ) : (
+          <View className="w-10" />
+        )}
       </View>
 
       <ScrollView className="flex-1" contentContainerClassName="p-4">

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, Text, FlatList, RefreshControl, Pressable, Alert, ActivityIndicator, TextInput, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Pressable, Alert, ActivityIndicator, TextInput, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -13,6 +13,7 @@ import { BoardComposer } from '../../components/board/BoardComposer';
 import { BoardTopicComposer, type BoardTopicAudience, type BoardTopicMetadata } from '../../components/board/BoardTopicComposer';
 import { BoardLinkedWishes } from '../../components/board/BoardLinkedWishes';
 import { WishDetail } from '../../components/hive/WishDetail';
+import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { AppHeader } from '../../components/navigation';
 import { useBoardLinkedWishes, type LinkedWish } from '../../lib/hooks/useBoardLinkedWishes';
@@ -21,11 +22,17 @@ import { fetchCommunityMentionableMembers } from '../../lib/mentionableMembers';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
 import { BOARD_HOME_EVENT } from '../../lib/boardNavigation';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+import { linkThreadToCommunityWish, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 
 type BoardListView = 'active' | 'archive';
 type BoardThreadListView = 'active' | 'archive';
 type BoardCategoryStats = { count: number; latestActivity: string | null };
+type GrantThreadContext = {
+  post: BoardPost;
+  wish: LinkedWish;
+  onDone?: () => void;
+};
 
 function isArchivedCategory(category: BoardCategory) {
   return category.status === 'archived' || category.status === 'completed';
@@ -99,6 +106,10 @@ export default function BoardScreen() {
   const [boardSearch, setBoardSearch] = useState('');
   const [showAddLinkedWishModal, setShowAddLinkedWishModal] = useState(false);
   const [selectedLinkedWish, setSelectedLinkedWish] = useState<LinkedWish | null>(null);
+  const [managingLinkedWish, setManagingLinkedWish] = useState<LinkedWish | null>(null);
+  const [editingLinkedWish, setEditingLinkedWish] = useState<LinkedWish | null>(null);
+  const [linkedWishToGrant, setLinkedWishToGrant] = useState<LinkedWish | null>(null);
+  const [grantThreadContext, setGrantThreadContext] = useState<GrantThreadContext | null>(null);
   const [topicMembers, setTopicMembers] = useState<Pick<Profile, 'id' | 'name' | 'avatar_url'>[]>([]);
   const boardCategoryStorageKey = communityId ? `the-hive:last-board-category:${communityId}` : null;
   const boardComposerStorageKey = communityId ? `the-hive:board-composer-open:${communityId}` : null;
@@ -205,6 +216,10 @@ export default function BoardScreen() {
     setEditingTopic(null);
     setShowAddLinkedWishModal(false);
     setSelectedLinkedWish(null);
+    setManagingLinkedWish(null);
+    setEditingLinkedWish(null);
+    setLinkedWishToGrant(null);
+    setGrantThreadContext(null);
     if (boardCategoryStorageKey) removeStoredItem(boardCategoryStorageKey);
     if (boardPostStorageKey) removeStoredItem(boardPostStorageKey);
     if (boardComposerStorageKey) removeStoredItem(boardComposerStorageKey);
@@ -451,6 +466,40 @@ export default function BoardScreen() {
     return true;
   };
   const canAddLinkedWish = !!selectedCategory && !isArchivedCategory(selectedCategory) && canPost();
+  const canManageLinkedWish = useCallback((wish: LinkedWish | null) => {
+    if (!wish || !profile || !selectedCategory) return false;
+    return isAdmin
+      || wish.user_id === profile.id
+      || selectedCategory.owner_user_id === profile.id
+      || selectedCategory.created_by === profile.id;
+  }, [isAdmin, profile, selectedCategory]);
+  const canEditLinkedWish = useCallback((wish: LinkedWish | null) => (
+    !!wish && !!profile && wish.user_id === profile.id
+  ), [profile]);
+  const canModerateLinkedWish = useCallback((wish: LinkedWish | null) => (
+    !!wish && !!profile && (isAdmin || wish.user_id === profile.id)
+  ), [isAdmin, profile]);
+
+  const getLinkedWishForPost = useCallback((post: Pick<BoardPost, 'id' | 'granted_wish_id'>) => (
+    linkedWishes.find((wish) => (
+      wish.source_board_post_id === post.id || (!!post.granted_wish_id && wish.id === post.granted_wish_id)
+    )) || null
+  ), [linkedWishes]);
+
+  const fetchLinkedWishById = useCallback(async (wishId: string): Promise<LinkedWish | null> => {
+    if (!communityId) return null;
+
+    const { data, error } = await (supabase as any)
+      .from('wishes')
+      .select('*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))')
+      .eq('id', wishId)
+      .eq('community_id', communityId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return (data as LinkedWish | null) ?? null;
+  }, [communityId]);
+  const editingPostLinkedWish = editingPost ? getLinkedWishForPost(editingPost) : null;
 
   const saveTopicMemberTags = async (categoryId: string, audience: BoardTopicAudience, taggedMemberIds: string[]) => {
     if (!profile || !communityId) return true;
@@ -801,6 +850,13 @@ export default function BoardScreen() {
     }
 
     const fulfilledAt = new Date().toISOString();
+    const { data: wishLink } = await (supabase as any)
+      .from('wishes')
+      .select('source_board_post_id')
+      .eq('id', data.wishId)
+      .eq('community_id', communityId)
+      .maybeSingle();
+
     const { error: wishError } = await (supabase as any)
       .from('wishes')
       .update({
@@ -843,47 +899,51 @@ export default function BoardScreen() {
       console.log('Linked board completion skipped (non-blocking):', boardError);
     }
 
+    if (wishLink?.source_board_post_id) {
+      const { error: postError } = await (supabase as any)
+        .from('board_posts')
+        .update({
+          status: 'completed',
+          completed_at: fulfilledAt,
+          completed_by: profile.id,
+          completion_note: data.thankYouMessage || 'Completed from linked wish.',
+          granted_wish_id: data.wishId,
+        })
+        .eq('id', wishLink.source_board_post_id)
+        .eq('community_id', communityId);
+
+      if (postError) {
+        console.log('Linked thread completion skipped (non-blocking):', postError);
+      }
+    }
+
+    invalidatePosts();
     invalidateLinkedWishes();
     invalidateCategories();
     return { error: null };
   };
 
-  const handleCompleteThread = useCallback((post: BoardPost, onDone?: () => void) => {
-    if (!profile || !communityId || !selectedCategory || !canCompleteThread(post)) return;
+  const handleLinkThreadWish = useCallback(async (post: BoardPost, onDone?: () => void) => {
+    if (!profile || !communityId || !selectedCategory || !canManageThread(post)) return;
 
-    const message = `Mark "${post.title}" as granted? It will show as Granted here and be added to Completed Community Wishes.`;
+    try {
+      await linkThreadToCommunityWish({
+        post,
+        category: selectedCategory,
+        communityId,
+        actorId: profile.id,
+      });
 
-    const completeThread = async () => {
-      try {
-        await markBoardThreadGranted({
-          post,
-          category: selectedCategory,
-          communityId,
-          completedBy: profile.id,
-          completionNote: `Granted from ${selectedCategory.name}.`,
-        });
-
-        invalidatePosts();
-        invalidateLinkedWishes();
-        await Promise.all([refetchPosts(), refetchLinkedWishes()]);
-        onDone?.();
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        Alert.alert('Error', `Failed to mark thread granted: ${errorMessage}`);
-      }
-    };
-
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) completeThread();
-      return;
+      invalidatePosts();
+      invalidateLinkedWishes();
+      await Promise.all([refetchPosts(), refetchLinkedWishes()]);
+      onDone?.();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Error', `Failed to link wish: ${message}`);
     }
-
-    Alert.alert('Wish Granted', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Mark Granted', onPress: completeThread },
-    ]);
   }, [
-    canCompleteThread,
+    canManageThread,
     communityId,
     invalidateLinkedWishes,
     invalidatePosts,
@@ -892,6 +952,185 @@ export default function BoardScreen() {
     refetchPosts,
     selectedCategory,
   ]);
+
+  const handleUnlinkLinkedWish = useCallback((wish: LinkedWish, onDone?: () => void) => {
+    if (!communityId || !canManageLinkedWish(wish)) return;
+
+    const unlink = async () => {
+      try {
+        await unlinkWishFromBoard({ wishId: wish.id, communityId });
+        invalidateLinkedWishes();
+        invalidatePosts();
+        await Promise.all([refetchLinkedWishes(), refetchPosts()]);
+        setManagingLinkedWish(null);
+        if (selectedLinkedWish?.id === wish.id) {
+          setSelectedLinkedWish(null);
+        }
+        onDone?.();
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        Alert.alert('Error', `Failed to unlink wish: ${message}`);
+      }
+    };
+
+    const message = `Unlink this wish from this board?\n\n"${wish.description}"`;
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) unlink();
+      return;
+    }
+
+    Alert.alert('Unlink Wish', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Unlink', onPress: unlink },
+    ]);
+  }, [
+    canManageLinkedWish,
+    communityId,
+    invalidateLinkedWishes,
+    invalidatePosts,
+    refetchLinkedWishes,
+    refetchPosts,
+    selectedLinkedWish?.id,
+  ]);
+
+  const handleArchiveLinkedWish = useCallback((wish: LinkedWish) => {
+    if (!communityId || !canModerateLinkedWish(wish)) return;
+
+    const archive = async () => {
+      try {
+        const { error } = await (supabase as any)
+          .from('wishes')
+          .update({ status: 'private', is_active: false })
+          .eq('id', wish.id)
+          .eq('community_id', communityId);
+
+        if (error) throw error;
+
+        invalidateLinkedWishes();
+        await refetchLinkedWishes();
+        setManagingLinkedWish(null);
+        setSelectedLinkedWish(null);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        Alert.alert('Error', `Failed to archive wish: ${message}`);
+      }
+    };
+
+    const message = `Archive this wish from Community Wishes?\n\n"${wish.description}"`;
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) archive();
+      return;
+    }
+
+    Alert.alert('Archive Wish', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Archive', onPress: archive },
+    ]);
+  }, [canModerateLinkedWish, communityId, invalidateLinkedWishes, refetchLinkedWishes]);
+
+  const handleDeleteLinkedWish = useCallback((wish: LinkedWish) => {
+    if (!communityId || !canModerateLinkedWish(wish)) return;
+
+    const deleteWish = async () => {
+      try {
+        const { error } = await (supabase as any)
+          .from('wishes')
+          .delete()
+          .eq('id', wish.id)
+          .eq('community_id', communityId);
+
+        if (error) throw error;
+
+        invalidateLinkedWishes();
+        await refetchLinkedWishes();
+        setManagingLinkedWish(null);
+        setSelectedLinkedWish(null);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        Alert.alert('Error', `Failed to delete wish: ${message}`);
+      }
+    };
+
+    const message = `Delete this wish?\n\n"${wish.description}"`;
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) deleteWish();
+      return;
+    }
+
+    Alert.alert('Delete Wish', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: deleteWish },
+    ]);
+  }, [canModerateLinkedWish, communityId, invalidateLinkedWishes, refetchLinkedWishes]);
+
+  const handleUnlinkThreadWish = useCallback((post: BoardPost, onDone?: () => void) => {
+    const linkedWish = getLinkedWishForPost(post);
+    if (!linkedWish) return;
+    handleUnlinkLinkedWish(linkedWish, onDone);
+  }, [getLinkedWishForPost, handleUnlinkLinkedWish]);
+
+  const handlePrepareGrantThread = useCallback(async (post: BoardPost, onDone?: () => void) => {
+    if (!profile || !communityId || !selectedCategory || !canCompleteThread(post)) return;
+
+    try {
+      const linkedWish = getLinkedWishForPost(post);
+      const wishId = linkedWish?.id ?? await linkThreadToCommunityWish({
+        post,
+        category: selectedCategory,
+        communityId,
+        actorId: profile.id,
+      });
+      const wish = linkedWish ?? await fetchLinkedWishById(wishId);
+
+      if (!wish) {
+        Alert.alert('Error', 'The linked wish was created, but could not be opened. Please refresh and try again.');
+        return;
+      }
+
+      setGrantThreadContext({ post, wish, onDone });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Error', `Failed to prepare granted wish: ${message}`);
+    }
+  }, [
+    canCompleteThread,
+    communityId,
+    fetchLinkedWishById,
+    getLinkedWishForPost,
+    profile,
+    selectedCategory,
+  ]);
+
+  const handleGrantThreadWish = async (data: {
+    wishId: string;
+    granterIds: string[];
+    thankYouMessage?: string;
+  }) => {
+    if (!profile || !communityId || !selectedCategory || !grantThreadContext) {
+      return { error: new Error('Not ready') };
+    }
+
+    try {
+      await markBoardThreadGranted({
+        post: grantThreadContext.post,
+        category: selectedCategory,
+        communityId,
+        completedBy: profile.id,
+        completionNote: data.thankYouMessage || `Granted from ${selectedCategory.name}.`,
+        wishId: data.wishId,
+        granterIds: data.granterIds,
+      });
+
+      invalidatePosts();
+      invalidateLinkedWishes();
+      await Promise.all([refetchPosts(), refetchLinkedWishes()]);
+      grantThreadContext.onDone?.();
+      setGrantThreadContext(null);
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error : new Error('Failed to mark thread granted') };
+    }
+  };
 
   const handleEditThread = useCallback((post: BoardPost) => {
     if (!canManageThread(post)) return;
@@ -1050,17 +1289,169 @@ export default function BoardScreen() {
     </>
   ) : null;
 
+  const linkedWishManageModal = (
+    <Modal visible={!!managingLinkedWish} animationType="fade" transparent onRequestClose={() => setManagingLinkedWish(null)}>
+      <Pressable
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.38)', justifyContent: 'flex-end' }}
+        onPress={() => setManagingLinkedWish(null)}
+      >
+        <Pressable
+          onPress={(event) => event.stopPropagation()}
+          style={{
+            backgroundColor: '#fffdf5',
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            padding: 22,
+            paddingBottom: 34,
+            borderTopWidth: 1,
+            borderColor: 'rgba(222,193,129,0.5)',
+          }}
+        >
+          <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.28)', borderRadius: 2, alignSelf: 'center', marginBottom: 18 }} />
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d' }}>
+            Manage Wish
+          </Text>
+          {managingLinkedWish ? (
+            <Text
+              numberOfLines={2}
+              style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 18, color: '#8a7760', marginTop: 4, marginBottom: 10 }}
+            >
+              {managingLinkedWish.description}
+            </Text>
+          ) : null}
+
+          {managingLinkedWish && managingLinkedWish.status === 'public' && canManageLinkedWish(managingLinkedWish) ? (
+            <Pressable
+              onPress={() => {
+                const wish = managingLinkedWish;
+                setManagingLinkedWish(null);
+                setLinkedWishToGrant(wish);
+              }}
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-gold/25 bg-gold/10 active:opacity-75"
+            >
+              <View className="flex-row items-center">
+                <Ionicons name="checkmark-circle-outline" size={18} color="#bd9348" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm ml-2">
+                  Granted
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
+            </Pressable>
+          ) : null}
+
+          {managingLinkedWish && canEditLinkedWish(managingLinkedWish) ? (
+            <Pressable
+              onPress={() => {
+                const wish = managingLinkedWish;
+                setManagingLinkedWish(null);
+                setSelectedLinkedWish(null);
+                setEditingLinkedWish(wish);
+              }}
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
+            >
+              <View className="flex-row items-center">
+                <Ionicons name="pencil-outline" size={18} color="rgba(49,49,48,0.66)" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
+                  Edit
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
+            </Pressable>
+          ) : null}
+
+          {managingLinkedWish && canManageLinkedWish(managingLinkedWish) ? (
+            <Pressable
+              onPress={() => {
+                const wish = managingLinkedWish;
+                setManagingLinkedWish(null);
+                handleUnlinkLinkedWish(wish);
+              }}
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
+            >
+              <View className="flex-row items-center">
+                <Ionicons name="unlink-outline" size={18} color="rgba(49,49,48,0.66)" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
+                  Unlink from board
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
+            </Pressable>
+          ) : null}
+
+          {managingLinkedWish && canModerateLinkedWish(managingLinkedWish) && managingLinkedWish.status === 'public' ? (
+            <Pressable
+              onPress={() => {
+                const wish = managingLinkedWish;
+                setManagingLinkedWish(null);
+                handleArchiveLinkedWish(wish);
+              }}
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
+            >
+              <View className="flex-row items-center">
+                <Ionicons name="archive-outline" size={18} color="rgba(49,49,48,0.66)" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
+                  Archive
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
+            </Pressable>
+          ) : null}
+
+          {managingLinkedWish && canModerateLinkedWish(managingLinkedWish) ? (
+            <Pressable
+              onPress={() => {
+                const wish = managingLinkedWish;
+                setManagingLinkedWish(null);
+                handleDeleteLinkedWish(wish);
+              }}
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-red-100 bg-red-50 active:opacity-75"
+            >
+              <View className="flex-row items-center">
+                <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-500 text-sm ml-2">
+                  Delete
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(239,68,68,0.45)" />
+            </Pressable>
+          ) : null}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+
   // Post detail view
   if (selectedLinkedWish) {
     return (
-      <WishDetail
-        wish={selectedLinkedWish}
-        onClose={() => {
-          setSelectedLinkedWish(null);
-          invalidateLinkedWishes();
-        }}
-        onGrant={handleGrantLinkedWish}
-      />
+      <>
+        <WishDetail
+          wish={selectedLinkedWish}
+          onClose={() => {
+            setSelectedLinkedWish(null);
+            invalidateLinkedWishes();
+          }}
+          onGrant={handleGrantLinkedWish}
+          canManage={canManageLinkedWish(selectedLinkedWish) || canEditLinkedWish(selectedLinkedWish)}
+          onManage={() => setManagingLinkedWish(selectedLinkedWish)}
+        />
+        {linkedWishManageModal}
+        {linkedWishToGrant && (
+          <GrantWishModal
+            visible={!!linkedWishToGrant}
+            onClose={() => setLinkedWishToGrant(null)}
+            wish={linkedWishToGrant}
+            communityId={communityId}
+            onGrant={async (data) => {
+              const result = await handleGrantLinkedWish(data);
+              if (!result.error) {
+                setLinkedWishToGrant(null);
+                setSelectedLinkedWish(null);
+              }
+              return result;
+            }}
+          />
+        )}
+      </>
     );
   }
 
@@ -1352,9 +1743,28 @@ export default function BoardScreen() {
         mentionableMembers={topicMembers}
         managementActions={editingPost ? (
           <>
+            {canManageThread(editingPost) && (
+              <Pressable
+                onPress={() => (
+                  editingPostLinkedWish
+                    ? handleUnlinkThreadWish(editingPost, handleCloseComposer)
+                    : handleLinkThreadWish(editingPost, handleCloseComposer)
+                )}
+                className="flex-row items-center bg-gold/10 border border-gold/20 rounded-full px-3 py-2 active:opacity-75"
+              >
+                <Ionicons
+                  name={editingPostLinkedWish ? 'unlink-outline' : 'link-outline'}
+                  size={16}
+                  color="#bd9348"
+                />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
+                  {editingPostLinkedWish ? 'Unlink Wish' : 'Link Wish'}
+                </Text>
+              </Pressable>
+            )}
             {canCompleteThread(editingPost) && (
               <Pressable
-                onPress={() => handleCompleteThread(editingPost, handleCloseComposer)}
+                onPress={() => handlePrepareGrantThread(editingPost, handleCloseComposer)}
                 className="flex-row items-center bg-gold/10 border border-gold/20 rounded-full px-3 py-2 active:opacity-75"
               >
                 <Ionicons name="checkmark-circle-outline" size={16} color="#bd9348" />
@@ -1393,6 +1803,16 @@ export default function BoardScreen() {
         ) : null}
       />
 
+      {grantThreadContext && (
+        <GrantWishModal
+          visible={!!grantThreadContext}
+          onClose={() => setGrantThreadContext(null)}
+          wish={grantThreadContext.wish}
+          communityId={communityId}
+          onGrant={handleGrantThreadWish}
+        />
+      )}
+
       <AddWishModal
         visible={showAddLinkedWishModal}
         onClose={() => setShowAddLinkedWishModal(false)}
@@ -1403,6 +1823,19 @@ export default function BoardScreen() {
         linkedBoardCategory={selectedCategory}
         onSave={async () => {
           setShowAddLinkedWishModal(false);
+          await refetchLinkedWishes();
+          invalidateLinkedWishes();
+        }}
+      />
+
+      <AddWishModal
+        visible={!!editingLinkedWish}
+        onClose={() => setEditingLinkedWish(null)}
+        communityId={communityId}
+        userId={profile?.id}
+        existingWish={editingLinkedWish}
+        onSave={async () => {
+          setEditingLinkedWish(null);
           await refetchLinkedWishes();
           invalidateLinkedWishes();
         }}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -13,6 +13,8 @@ import { Avatar } from '../../components/ui/Avatar';
 import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { clearLastAppPath } from '../../lib/navigationState';
+import { getLinkedBoardLabel } from '../../lib/boardWishLinks';
+import { linkWishToHdBoard, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
@@ -173,6 +175,7 @@ export default function ProfileScreen() {
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
+  const [managingWish, setManagingWish] = useState<Wish | null>(null);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
   const [dailyAnswerCount, setDailyAnswerCount] = useState(0);
   const [dailyQuestionMatches, setDailyQuestionMatches] = useState<DailyQuestionMatch[]>([]);
@@ -220,7 +223,7 @@ export default function ProfileScreen() {
         .order('created_at', { ascending: false }),
       supabase
         .from('wishes')
-        .select('*')
+        .select('*, board_category:board_categories(id,name,topic_kind)')
         .eq('user_id', profile.id)
         .eq('community_id', communityId)
         .order('created_at', { ascending: false }),
@@ -538,11 +541,83 @@ export default function ProfileScreen() {
 
             if (!error) {
               await fetchData();
+              setManagingWish(null);
             } else {
               Alert.alert('Error', 'Failed to share wish. Please try again.');
             }
           },
         },
+      ]
+    );
+  };
+
+  const handleArchiveWish = (wish: Wish) => {
+    if (!profile || !communityId) return;
+
+    const archiveWish = async () => {
+      const { error } = await supabase
+        .from('wishes')
+        .update({ status: 'private', is_active: false } as any)
+        .eq('id', wish.id)
+        .eq('user_id', profile.id)
+        .eq('community_id', communityId);
+
+      if (error) {
+        Alert.alert('Error', 'Failed to archive wish. Please try again.');
+        return;
+      }
+
+      await fetchData();
+      setManagingWish(null);
+    };
+
+    Alert.alert(
+      'Archive Wish',
+      `Archive this wish from Community Wishes?\n\n"${wish.description}"`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Archive', onPress: archiveWish },
+      ]
+    );
+  };
+
+  const handleLinkWishToBoard = async (wish: Wish) => {
+    if (!profile || !communityId) return;
+
+    try {
+      await linkWishToHdBoard({
+        wish: { ...wish, user: profile },
+        communityId,
+        actorId: profile.id,
+      });
+      await fetchData();
+      setManagingWish(null);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Error', `Failed to link wish: ${message}`);
+    }
+  };
+
+  const handleUnlinkWishBoard = (wish: Wish) => {
+    if (!communityId) return;
+
+    const unlink = async () => {
+      try {
+        await unlinkWishFromBoard({ wishId: wish.id, communityId });
+        await fetchData();
+        setManagingWish(null);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        Alert.alert('Error', `Failed to unlink wish: ${message}`);
+      }
+    };
+
+    Alert.alert(
+      'Unlink Wish',
+      `Unlink this wish from its HD board?\n\n"${wish.description}"`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Unlink', onPress: unlink },
       ]
     );
   };
@@ -682,6 +757,7 @@ export default function ProfileScreen() {
       }
 
       await fetchData();
+      setManagingWish(null);
     };
 
     const message = `Delete this wish?\n\n"${wish.description}"`;
@@ -742,6 +818,160 @@ export default function ProfileScreen() {
   };
 
   if (!profile) return null;
+
+  const managingWishIsLinked = !!(managingWish?.board_category_id || managingWish?.source_board_post_id);
+  const wishManageModal = (
+    <Modal visible={!!managingWish} animationType="fade" transparent onRequestClose={() => setManagingWish(null)}>
+      <Pressable
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.38)', justifyContent: 'flex-end' }}
+        onPress={() => setManagingWish(null)}
+      >
+        <Pressable
+          onPress={(event) => event.stopPropagation()}
+          style={{
+            backgroundColor: '#fffdf5',
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            padding: 22,
+            paddingBottom: 34,
+            borderTopWidth: 1,
+            borderColor: 'rgba(222,193,129,0.5)',
+          }}
+        >
+          <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.28)', borderRadius: 2, alignSelf: 'center', marginBottom: 18 }} />
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d' }}>
+            Manage Wish
+          </Text>
+          {managingWish ? (
+            <Text
+              numberOfLines={2}
+              style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 18, color: '#8a7760', marginTop: 4, marginBottom: 10 }}
+            >
+              {managingWish.description}
+            </Text>
+          ) : null}
+
+          {managingWish?.status === 'public' ? (
+            <Pressable
+              onPress={() => {
+                const wish = managingWish;
+                setManagingWish(null);
+                if (wish) openGrantModal(wish);
+              }}
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-gold/25 bg-gold/10 active:opacity-75"
+            >
+              <View className="flex-row items-center">
+                <Ionicons name="checkmark-circle-outline" size={18} color="#bd9348" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm ml-2">
+                  Granted
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
+            </Pressable>
+          ) : null}
+
+          {managingWish?.status === 'private' ? (
+            <Pressable
+              onPress={() => {
+                const wish = managingWish;
+                setManagingWish(null);
+                if (wish) handlePublishWish(wish);
+              }}
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-gold/25 bg-gold/10 active:opacity-75"
+            >
+              <View className="flex-row items-center">
+                <Ionicons name="megaphone-outline" size={18} color="#bd9348" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm ml-2">
+                  Share with HIVE
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
+            </Pressable>
+          ) : null}
+
+          {managingWish && (managingWish.status !== 'fulfilled' || managingWishIsLinked) ? (
+            <Pressable
+              onPress={() => {
+                const wish = managingWish;
+                if (!wish) return;
+                if (managingWishIsLinked) {
+                  handleUnlinkWishBoard(wish);
+                } else {
+                  void handleLinkWishToBoard(wish);
+                }
+              }}
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
+            >
+              <View className="flex-row items-center">
+                <Ionicons name={managingWishIsLinked ? 'unlink-outline' : 'albums-outline'} size={18} color="rgba(49,49,48,0.66)" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
+                  {managingWishIsLinked ? 'Unlink HD board' : 'Link to my HD board'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
+            </Pressable>
+          ) : null}
+
+          {managingWish?.status !== 'fulfilled' ? (
+            <Pressable
+              onPress={() => {
+                const wish = managingWish;
+                setManagingWish(null);
+                if (wish) setEditingWish(wish);
+              }}
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
+            >
+              <View className="flex-row items-center">
+                <Ionicons name="pencil-outline" size={18} color="rgba(49,49,48,0.66)" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
+                  Edit
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
+            </Pressable>
+          ) : null}
+
+          {managingWish?.status === 'public' ? (
+            <Pressable
+              onPress={() => {
+                const wish = managingWish;
+                setManagingWish(null);
+                if (wish) handleArchiveWish(wish);
+              }}
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
+            >
+              <View className="flex-row items-center">
+                <Ionicons name="archive-outline" size={18} color="rgba(49,49,48,0.66)" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
+                  Archive
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
+            </Pressable>
+          ) : null}
+
+          {managingWish ? (
+            <Pressable
+              onPress={() => {
+                const wish = managingWish;
+                setManagingWish(null);
+                if (wish) handleDeleteWish(wish);
+              }}
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-red-100 bg-red-50 active:opacity-75"
+            >
+              <View className="flex-row items-center">
+                <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-500 text-sm ml-2">
+                  Delete
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(239,68,68,0.45)" />
+            </Pressable>
+          ) : null}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
@@ -1574,56 +1804,26 @@ export default function ProfileScreen() {
                       </Text>
                     </View>
                     <View className="flex-row items-center">
-                      {wish.status !== 'fulfilled' && (
-                        <>
-                          <Pressable
-                            onPress={() => setEditingWish(wish)}
-                            className="w-8 h-8 rounded-full items-center justify-center active:bg-cream mr-1"
-                            hitSlop={8}
-                          >
-                            <Ionicons name="pencil-outline" size={17} color="#4A4A4A" />
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleDeleteWish(wish)}
-                            className="w-8 h-8 rounded-full items-center justify-center active:bg-red-50 mr-1"
-                            hitSlop={8}
-                          >
-                            <Ionicons name="trash-outline" size={17} color="#ef4444" />
-                          </Pressable>
-                        </>
-                      )}
-                      {wish.status === 'fulfilled' && (
-                        <Pressable
-                          onPress={() => handleDeleteWish(wish)}
-                          className="w-8 h-8 rounded-full items-center justify-center active:bg-red-50 mr-1"
-                          hitSlop={8}
-                        >
-                          <Ionicons name="trash-outline" size={17} color="#ef4444" />
-                        </Pressable>
-                      )}
-                      {wish.status === 'private' && (
-                        <Pressable
-                          onPress={() => handlePublishWish(wish)}
-                          className="bg-gold-light px-3 py-1 rounded-full active:bg-gold/30"
-                        >
-                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                            Share with HIVE
-                          </Text>
-                        </Pressable>
-                      )}
-                      {wish.status === 'public' && (
-                        <Pressable
-                          onPress={() => openGrantModal(wish)}
-                          className="bg-gold px-3 py-1 rounded-full active:bg-gold/80"
-                        >
-                          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-xs">
-                            Mark as Granted
-                          </Text>
-                        </Pressable>
-                      )}
+                      <Pressable
+                        onPress={() => setManagingWish(wish)}
+                        className="w-8 h-8 rounded-full items-center justify-center active:bg-cream"
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Manage wish"
+                      >
+                        <Ionicons name="pencil-outline" size={17} color="#4A4A4A" />
+                      </Pressable>
                     </View>
                   </View>
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{wish.description}</Text>
+                  {(wish.board_category_id || wish.source_board_post_id) && (
+                    <View className="self-start flex-row items-center mt-2 px-3 py-1 rounded-full border border-gold/25 bg-gold/10">
+                      <Ionicons name="folder-open-outline" size={13} color="#bd9348" />
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
+                        {getLinkedBoardLabel(wish.board_category) || 'Linked HD board'}
+                      </Text>
+                    </View>
+                  )}
                   {wish.status === 'fulfilled' && wish.thank_you_message && (
                     <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-sm mt-1 italic">
                       "{wish.thank_you_message}"
@@ -1705,6 +1905,8 @@ export default function ProfileScreen() {
           onGrant={handleGrantWish}
         />
       )}
+
+      {wishManageModal}
 
       {/* Skills Manage Modal */}
       <SkillsManageModal
