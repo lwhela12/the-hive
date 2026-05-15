@@ -9,19 +9,45 @@ export type LinkedWish = Wish & {
   granters?: (WishGranter & { granter?: Profile })[];
 };
 
+const linkedWishSelect = '*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))';
+
+function sortLinkedWishes(wishes: LinkedWish[]) {
+  return wishes.sort((a, b) => {
+    const aGranted = a.status === 'fulfilled';
+    const bGranted = b.status === 'fulfilled';
+    if (aGranted && !bGranted) return 1;
+    if (!aGranted && bGranted) return -1;
+    return (b.created_at ?? '').localeCompare(a.created_at ?? '');
+  });
+}
+
 async function fetchBoardLinkedWishes(
   communityId: string,
   categoryId: string
 ): Promise<LinkedWish[]> {
-  const { data, error } = await supabase
+  const linkedByBoardQuery = supabase
     .from('wishes')
-    .select('*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))')
+    .select(linkedWishSelect)
     .eq('community_id', communityId)
-    .eq('board_category_id', categoryId)
-    .order('status', { ascending: false })
-    .order('created_at', { ascending: false });
+    .eq('board_category_id', categoryId);
 
-  if (error) {
+  const [linkedByBoard, categoryResult, postsResult] = await Promise.all([
+    linkedByBoardQuery,
+    (supabase as any)
+      .from('board_categories')
+      .select('source_wish_id')
+      .eq('community_id', communityId)
+      .eq('id', categoryId)
+      .maybeSingle(),
+    supabase
+      .from('board_posts')
+      .select('id')
+      .eq('community_id', communityId)
+      .eq('category_id', categoryId),
+  ]);
+
+  if (linkedByBoard.error) {
+    const error = linkedByBoard.error;
     if (String(error.message ?? '').includes('board_category_id')) {
       return [];
     }
@@ -29,7 +55,54 @@ async function fetchBoardLinkedWishes(
     throw error;
   }
 
-  return (data as LinkedWish[]) || [];
+  if (categoryResult.error) {
+    console.warn('Error fetching board source wish:', categoryResult.error);
+  }
+
+  if (postsResult.error) {
+    console.warn('Error fetching board thread wish links:', postsResult.error);
+  }
+
+  const sourceWishId = categoryResult.data?.source_wish_id;
+  const postIds = (postsResult.data ?? [])
+    .map((post: { id?: string | null }) => post.id)
+    .filter((id: string | null | undefined): id is string => !!id);
+  const extraQueries: PromiseLike<{ data: unknown[] | null; error: unknown }>[] = [];
+
+  if (sourceWishId) {
+    extraQueries.push(
+      supabase
+        .from('wishes')
+        .select(linkedWishSelect)
+        .eq('community_id', communityId)
+        .eq('id', sourceWishId)
+    );
+  }
+
+  if (postIds.length > 0) {
+    extraQueries.push(
+      supabase
+        .from('wishes')
+        .select(linkedWishSelect)
+        .eq('community_id', communityId)
+        .in('source_board_post_id', postIds)
+    );
+  }
+
+  const extraResults = await Promise.all(extraQueries);
+  const byId = new Map<string, LinkedWish>();
+  ((linkedByBoard.data as LinkedWish[]) || []).forEach((wish) => byId.set(wish.id, wish));
+
+  extraResults.forEach((result) => {
+    if (result.error) {
+      console.warn('Error fetching extra board wish links:', result.error);
+      return;
+    }
+
+    ((result.data as LinkedWish[]) || []).forEach((wish) => byId.set(wish.id, wish));
+  });
+
+  return sortLinkedWishes(Array.from(byId.values()));
 }
 
 export function useBoardLinkedWishes(communityId?: string, categoryId?: string) {
