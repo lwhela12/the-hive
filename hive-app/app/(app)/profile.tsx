@@ -572,10 +572,12 @@ export default function ProfileScreen() {
         {(() => {
           const checks = [
             { label: 'Add a photo', done: !!profile.avatar_url },
+            { label: 'Choose your title', done: !!(profile as any).profile_title },
             { label: 'Add your birthday', done: !!profile.birthday },
             { label: 'Add your phone', done: !!profile.phone },
             { label: 'Write a bio', done: !!(profile as any).bio },
-            { label: 'Add your occupation', done: !!(profile as any).occupation },
+            { label: 'Share what people should ask you about', done: !!(profile as any).known_for },
+            { label: 'Answer your 3MIQ', done: !!((profile as any).miq_experiences && (profile as any).miq_growth && (profile as any).miq_contribution) },
             { label: 'Add a skill', done: skills.length > 0 },
             { label: 'Share a wish', done: wishes.length > 0 },
           ];
@@ -583,6 +585,8 @@ export default function ProfileScreen() {
           const score = done / checks.length;
           const nextMissing = checks.find(c => !c.done);
           const isComplete = done === checks.length;
+          const percent = Math.round(score * 100);
+          const missing = checks.filter(c => !c.done).slice(0, 3);
 
           return (
             <View style={{ alignItems: 'center', marginBottom: 20 }}>
@@ -639,9 +643,21 @@ export default function ProfileScreen() {
                   🎉 Profile complete!
                 </Text>
               ) : nextMissing ? (
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 8 }}>
-                  Next: {nextMissing.label} to level up ✨
-                </Text>
+                <>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', marginTop: 8 }}>
+                    {percent}% filled out
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 3 }}>
+                    Next: {nextMissing.label} to move your bee closer to the hive ✨
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+                    {missing.map(item => (
+                      <View key={item.label} style={{ backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348' }}>{item.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
               ) : null}
             </View>
           );
@@ -653,7 +669,7 @@ export default function ProfileScreen() {
         <View className="mb-6">
           <View className="flex-row items-center justify-between mb-2">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
-              Profile Information
+              {isEditing ? 'Edit Profile' : 'Profile'}
             </Text>
             {!isEditing ? (
               <Pressable onPress={startEditing} className="px-3 py-1 active:opacity-70">
@@ -677,6 +693,116 @@ export default function ProfileScreen() {
             )}
           </View>
 
+          {!isEditing ? (
+            <View className="gap-4">
+              {(profile as any).bio && (
+                <View className="bg-white rounded-xl shadow-sm p-4">
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
+                    {(profile as any).bio}
+                  </Text>
+                </View>
+              )}
+
+              {(profile as any).known_for && (
+                <View>
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-2 tracking-wide">ASK ME ABOUT</Text>
+                  <Text style={{ fontFamily: 'LibreBaskerville_400Regular' }} className="text-charcoal italic leading-6">
+                    "{(profile as any).known_for}"
+                  </Text>
+                </View>
+              )}
+
+              {((profile as any).miq_experiences || (profile as any).miq_growth || (profile as any).miq_contribution) ? (
+                <View className="bg-white rounded-xl shadow-sm p-4">
+                  <View className="flex-row items-center justify-between mb-3">
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/50">3 Most Important Questions</Text>
+                    <Pressable onPress={handleFind3MiqWithClive} className="bg-gold-light px-3 py-1 rounded-full active:opacity-70">
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">Find with Clive</Text>
+                    </Pressable>
+                  </View>
+                  {[
+                    ['Experiences', (profile as any).miq_experiences],
+                    ['Growth', (profile as any).miq_growth],
+                    ['Contribution', (profile as any).miq_contribution],
+                  ].map(([label, value]) => (
+                    <View key={label as string} className="mb-3 last:mb-0">
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-gold mb-1">{label as string}</Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className={value ? 'text-charcoal leading-6' : 'text-charcoal/40'}>
+                        {(value as string) || 'Not set'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Pressable onPress={handleFind3MiqWithClive} className="bg-white rounded-xl shadow-sm p-4 active:opacity-80">
+                  <View className="flex-row items-center justify-between">
+                    <View className="flex-1 pr-3">
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-1">Answer your 3MIQ</Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 leading-5">
+                        Experiences, growth, and contribution are still open. Clive can walk you through them.
+                      </Text>
+                    </View>
+                    <View className="bg-gold-light px-3 py-2 rounded-full">
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">Start</Text>
+                    </View>
+                  </View>
+                </Pressable>
+              )}
+
+              {((profile as any).current_project || (profile as any).hometown || profile.birthday) && (
+                <View className="bg-white rounded-xl shadow-sm overflow-hidden">
+                  {(profile as any).current_project && (
+                    <View className="p-4 border-b border-cream">
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-1">CURRENTLY WORKING ON</Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{(profile as any).current_project}</Text>
+                    </View>
+                  )}
+                  {(profile as any).hometown && (
+                    <View className="p-4 border-b border-cream">
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-1">FROM</Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{(profile as any).hometown}</Text>
+                    </View>
+                  )}
+                  {profile.birthday && (
+                    <View className="p-4">
+                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-1">BIRTHDAY</Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{formatBirthdayForDisplay(profile.birthday)}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {(((profile as any).fun_facts as string[] | null) ?? []).length > 0 && (
+                <View>
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-2 tracking-wide">FUN FACTS</Text>
+                  <View className="gap-2">
+                    {((profile as any).fun_facts as string[]).map((fact: string, idx: number) => (
+                      <View key={idx} className="flex-row items-start">
+                        <Text className="text-gold mr-2">✦</Text>
+                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal flex-1 leading-5">{fact}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {((profile as any).favorite_book || (profile as any).favorite_food || (profile as any).favorite_hobby) && (
+                <View className="bg-white rounded-xl shadow-sm overflow-hidden">
+                  {(['favorite_book', 'favorite_food', 'favorite_hobby'] as const).map((field, idx) => {
+                    const labels = ['Book', 'Food', 'Hobby'];
+                    const value = (profile as any)[field];
+                    if (!value) return null;
+                    return (
+                      <View key={field} className="p-4 border-b border-cream last:border-b-0">
+                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-1">{labels[idx]}</Text>
+                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{value}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          ) : (
           <View className="bg-white rounded-xl shadow-sm overflow-hidden">
             {/* Name */}
             <View className="p-4 border-b border-cream">
@@ -1017,6 +1143,7 @@ export default function ProfileScreen() {
               )}
             </View>
           </View>
+          )}
         </View>
         </FadeIn>
 

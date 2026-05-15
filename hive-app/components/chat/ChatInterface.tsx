@@ -52,6 +52,7 @@ interface ChatInterfaceProps {
   onTitleGenerated?: (conversationId: string, title: string) => void;
   skipLoadHistory?: boolean;
   refineWishContext?: string; // Rough wish to refine with Clive
+  initialPrompt?: string;
 }
 
 const SUPABASE_FUNCTIONS_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.functions.supabase.co');
@@ -193,6 +194,7 @@ export function ChatInterface({
   onTitleGenerated,
   skipLoadHistory = false,
   refineWishContext,
+  initialPrompt,
 }: ChatInterfaceProps) {
   const { session, profile, communityId } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -208,6 +210,7 @@ export function ChatInterface({
   const hasLoadedForConversationRef = useRef<string | null>(null);
   const hasGeneratedTitleRef = useRef<Set<string>>(new Set());
   const hasInitiatedRefineRef = useRef(false);
+  const hasInitiatedInitialPromptRef = useRef(false);
 
   // Update activeConversationId when prop changes
   useEffect(() => {
@@ -798,23 +801,29 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
 
       hasInitiatedRefineRef.current = true;
 
-      // Create a new conversation for the refinement
-      const newConversationId = await createConversation();
-      if (!newConversationId) {
-        console.error('Failed to create conversation for wish refinement');
-        return;
-      }
-
-      // Send the wish as the user message, with refineWish flag to trigger the REFINE_WISH flow
-      // Small delay to ensure conversation is set up
+      // Send the wish as the user message, with refineWish flag to trigger the REFINE_WISH flow.
       setTimeout(() => {
-        // The user sees their wish as the message, the backend gets the refineWish flag
         handleSendMessage(refineWishContext, undefined, refineWishContext);
       }, 100);
     };
 
-    initiateRefineWish();
-  }, [refineWishContext, session?.user?.id, communityId, createConversation, handleSendMessage]);
+    void initiateRefineWish();
+  }, [refineWishContext, session?.user?.id, communityId, handleSendMessage]);
+
+  // Handle deep links that should open Clive already doing the work.
+  useEffect(() => {
+    const initiatePrompt = async () => {
+      if (!initialPrompt || hasInitiatedInitialPromptRef.current || refineWishContext) return;
+      if (!session?.user?.id || !communityId) return;
+
+      hasInitiatedInitialPromptRef.current = true;
+      setTimeout(() => {
+        handleSendMessage(initialPrompt);
+      }, 100);
+    };
+
+    void initiatePrompt();
+  }, [initialPrompt, refineWishContext, session?.user?.id, communityId, handleSendMessage]);
 
   // Reverse messages for inverted FlatList (newest first)
   const invertedMessages = useMemo(() => [...messages].reverse(), [messages]);
@@ -862,7 +871,8 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     mode === 'default' &&
     messages.length === 0 &&
     !streamingContent &&
-    !refineWishContext;
+    !refineWishContext &&
+    !initialPrompt;
 
   return (
     <KeyboardAvoidingView

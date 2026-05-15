@@ -3,6 +3,7 @@ import {
   Animated,
   LayoutChangeEvent,
   PanResponder,
+  Platform,
   Pressable,
   Text,
   View,
@@ -91,6 +92,7 @@ function SkillBubble({
   const float = useRef(new Animated.Value(0)).current;
   const pan = useRef(new Animated.ValueXY()).current;
   const dragStart = useRef({ left, top });
+  const didDrag = useRef(false);
 
   useEffect(() => {
     const animation = Animated.loop(
@@ -119,11 +121,17 @@ function SkillBubble({
   const responder = useMemo(
     () => PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesture) =>
-        !!editable && Math.abs(gesture.dx) + Math.abs(gesture.dy) > 7,
+        !!editable && Math.abs(gesture.dx) + Math.abs(gesture.dy) > 3,
+      onMoveShouldSetPanResponderCapture: (_, gesture) =>
+        !!editable && Math.abs(gesture.dx) + Math.abs(gesture.dy) > 3,
       onPanResponderGrant: () => {
+        didDrag.current = false;
         dragStart.current = { left, top };
       },
       onPanResponderMove: (_, gesture) => {
+        if (Math.abs(gesture.dx) + Math.abs(gesture.dy) > 3) {
+          didDrag.current = true;
+        }
         pan.setValue({ x: gesture.dx, y: gesture.dy });
       },
       onPanResponderRelease: (_, gesture) => {
@@ -135,10 +143,15 @@ function SkillBubble({
           display_x: Number(((nextLeft + size / 2) / width).toFixed(4)),
           display_y: Number(((nextTop + size / 2) / height).toFixed(4)),
         });
+        setTimeout(() => {
+          didDrag.current = false;
+        }, 0);
       },
       onPanResponderTerminate: () => {
         pan.setValue({ x: 0, y: 0 });
+        didDrag.current = false;
       },
+      onPanResponderTerminationRequest: () => false,
     }),
     [editable, height, left, onUpdateSkill, pan, size, skill, top, width]
   );
@@ -154,6 +167,10 @@ function SkillBubble({
 
   const cycleLevel = () => {
     if (!editable || !onUpdateSkill) return;
+    if (didDrag.current) {
+      didDrag.current = false;
+      return;
+    }
     onUpdateSkill(skill, {
       enthusiasm_level: level === 5 ? 1 : level + 1,
     });
@@ -170,6 +187,14 @@ function SkillBubble({
           { translateX: Animated.add(pan.x, floatX) },
           { translateY: Animated.add(pan.y, floatY) },
         ],
+        ...(Platform.OS === 'web'
+          ? ({
+              cursor: editable ? 'grab' : 'default',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              touchAction: 'none',
+            } as any)
+          : {}),
       }}
     >
       <Pressable
@@ -190,6 +215,13 @@ function SkillBubble({
           shadowRadius: 8 + level * 1.5,
           shadowOffset: { width: 0, height: 4 },
           elevation: 1 + level,
+          ...(Platform.OS === 'web'
+            ? ({
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                touchAction: 'none',
+              } as any)
+            : {}),
         }}
       >
         {editable && onDeleteSkill && (
@@ -219,6 +251,7 @@ function SkillBubble({
           </Pressable>
         )}
         <Text
+          selectable={false}
           numberOfLines={level >= 4 ? 4 : 3}
           style={{
             fontFamily: 'Lato_700Bold',
@@ -226,6 +259,12 @@ function SkillBubble({
             fontSize: clamp(size / (skill.description.length > 24 ? 9.5 : 7.8), 11, 23),
             lineHeight: clamp(size / (skill.description.length > 24 ? 7.8 : 6.6), 15, 28),
             textAlign: 'center',
+            ...(Platform.OS === 'web'
+              ? ({
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                } as any)
+              : {}),
           }}
         >
           {skill.description}

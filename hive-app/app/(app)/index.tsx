@@ -9,7 +9,7 @@ import { useConversations } from '../../lib/hooks/useConversations';
 import type { Conversation } from '../../types';
 
 export default function ChatScreen() {
-  const { refineWish } = useLocalSearchParams<{ refineWish?: string }>();
+  const { refineWish, prefill } = useLocalSearchParams<{ refineWish?: string; prefill?: string }>();
 
   const {
     conversations,
@@ -119,6 +119,7 @@ export default function ChatScreen() {
             onConversationCreated={handleConversationCreated}
             onTitleGenerated={handleTitleGenerated}
             refineWishContext={refineWish}
+            initialPrompt={prefill}
           />
         </View>
       </View>
