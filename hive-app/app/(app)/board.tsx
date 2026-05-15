@@ -894,17 +894,35 @@ export default function BoardScreen() {
 
     const updateArchiveState = async () => {
       try {
-        const { error } = await (supabase as any)
+        if (!Object.prototype.hasOwnProperty.call(post, 'archived_at')) {
+          Alert.alert('Archive unavailable', 'Board thread archiving needs the latest Supabase migration before it can work here.');
+          return;
+        }
+
+        const nextArchivedAt = restore ? null : new Date().toISOString();
+        const archiveUpdate: Record<string, string | null> = {
+          archived_at: nextArchivedAt,
+        };
+
+        if (Object.prototype.hasOwnProperty.call(post, 'archived_by')) {
+          archiveUpdate.archived_by = restore ? null : profile.id;
+        }
+
+        const { data, error } = await (supabase as any)
           .from('board_posts')
-          .update({
-            archived_at: restore ? null : new Date().toISOString(),
-            archived_by: restore ? null : profile.id,
-          })
+          .update(archiveUpdate)
           .eq('id', post.id)
-          .eq('community_id', communityId);
+          .eq('community_id', communityId)
+          .select('id, archived_at')
+          .maybeSingle();
 
         if (error) {
           Alert.alert('Error', `Failed to ${restore ? 'restore' : 'archive'} thread: ${error.message}`);
+          return;
+        }
+
+        if (!data) {
+          Alert.alert('Not archived', 'This thread was not archived. You may not have permission to manage it.');
           return;
         }
 

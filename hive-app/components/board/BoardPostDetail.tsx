@@ -22,6 +22,19 @@ interface BoardPostDetailProps {
 type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardReaction[]; category?: BoardCategory };
 type ReplyWithAuthor = BoardReply & { author?: Profile; reactions?: BoardReaction[]; nested_replies?: ReplyWithAuthor[] };
 
+function getBoardErrorMessage(error: unknown, fallback = 'Something went wrong.') {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const details = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const message = typeof details.message === 'string' ? details.message : fallback;
+    const extra = [details.details, details.hint, details.code]
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .join('\n');
+    return extra ? `${message}\n${extra}` : message;
+  }
+  return fallback;
+}
+
 function showBoardAlert(title: string, message: string) {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
     window.alert(`${title}\n\n${message}`);
@@ -48,7 +61,7 @@ function confirmBoardAction({
     if (window.confirm(message)) {
       onConfirm().catch((error) => {
         console.error(`[BoardPostDetail] ${title} failed`, error);
-        showBoardAlert('Error', error instanceof Error ? error.message : 'Something went wrong.');
+        showBoardAlert('Error', getBoardErrorMessage(error));
       });
     }
     return;
@@ -64,7 +77,7 @@ function confirmBoardAction({
           await onConfirm();
         } catch (error) {
           console.error(`[BoardPostDetail] ${title} failed`, error);
-          showBoardAlert('Error', error instanceof Error ? error.message : 'Something went wrong.');
+          showBoardAlert('Error', getBoardErrorMessage(error));
         }
       },
     },
@@ -406,16 +419,32 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
       confirmLabel: restore ? 'Restore' : 'Archive',
       destructive: false,
       onConfirm: async () => {
-        const { error } = await (supabase as any)
+        if (!Object.prototype.hasOwnProperty.call(post, 'archived_at')) {
+          throw new Error('Board thread archiving needs the latest Supabase migration before it can work here.');
+        }
+
+        const nextArchivedAt = restore ? null : new Date().toISOString();
+        const archiveUpdate: Record<string, string | null> = {
+          archived_at: nextArchivedAt,
+        };
+
+        if (Object.prototype.hasOwnProperty.call(post, 'archived_by')) {
+          archiveUpdate.archived_by = restore ? null : profile.id;
+        }
+
+        const { data, error } = await (supabase as any)
           .from('board_posts')
-          .update({
-            archived_at: restore ? null : new Date().toISOString(),
-            archived_by: restore ? null : profile.id,
-          })
+          .update(archiveUpdate)
           .eq('id', postId)
-          .eq('community_id', communityId);
+          .eq('community_id', communityId)
+          .select('id, archived_at')
+          .maybeSingle();
 
         if (error) throw error;
+        if (!data) {
+          throw new Error('Thread was not archived. You may not have permission to manage this thread.');
+        }
+
         await fetchPost();
         onDone?.();
       },
