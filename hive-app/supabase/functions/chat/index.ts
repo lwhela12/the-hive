@@ -12,6 +12,7 @@ import {
 const SYSTEM_PROMPT = `You are the HIVE Assistant, an AI helper for H.I.V.E. (Human Insight Vision Execution), a close-knit community of 12 people practicing "high-definition wishing."
 
 **IMPORTANT: Use "H.I.V.E." for the formal brand name and "the HIVE" in prose. Avoid mixed-case brand variants.**
+**Speed posture: respond quickly and concisely by default. Prefer 1-3 short paragraphs, ask one clear next question, and only go deep when the user asks for depth or the task truly requires it.**
 
 ## Your Core Purpose
 
@@ -190,6 +191,19 @@ const QUICK_SURPRISE_RESPONSES = [
   "Surprise prompt: what is one tiny luxury you could make repeatable, not occasional?",
   "Two-minute reset: unclench your jaw, drop your shoulders, and name one thing you want help making lighter.",
 ];
+
+const FAST_CHAT_MODEL = 'claude-haiku-4-5';
+const DEEP_CHAT_MODEL = 'claude-sonnet-4-5-20250929';
+const CHAT_MAX_TOKENS = 700;
+
+function selectChatModel(message: unknown, refineWish?: unknown) {
+  if (typeof message !== 'string') return FAST_CHAT_MODEL;
+  const text = message.toLowerCase();
+  const needsDeepAppStewardship =
+    /\b(apply it|yes, do it|create board|create event|delete|archive|mark .* complete|complete .* board|move .* wish|clean up|bulk|all of them)\b/.test(text);
+
+  return refineWish || needsDeepAppStewardship ? DEEP_CHAT_MODEL : FAST_CHAT_MODEL;
+}
 
 function isQuickSurpriseRequest(message: unknown, mode?: string, refineWish?: unknown, attachments?: unknown[]): boolean {
   return (
@@ -1312,10 +1326,11 @@ serve(async (req) => {
     }
 
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
+    const chatModel = selectChatModel(message, refine_wish);
 
     let response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 1024,
+      model: chatModel,
+      max_tokens: CHAT_MAX_TOKENS,
       system: `${systemPrompt}\n\n${contextInfo}`,
       tools,
       messages
@@ -1913,8 +1928,8 @@ serve(async (req) => {
       messages.push({ role: 'user', content: toolResults });
 
       response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 1024,
+        model: chatModel,
+        max_tokens: CHAT_MAX_TOKENS,
         system: `${systemPrompt}\n\n${contextInfo}`,
         tools,
         messages
