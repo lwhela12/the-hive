@@ -3,13 +3,13 @@ import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowD
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import Svg, { Polygon } from 'react-native-svg';
 import type { Skill, UserRole, Wish } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import { SKILL_CATEGORIES } from '../../lib/skillsList';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
+import { ProfileHoneycombCluster } from '../../components/profile/ProfileHoneycombCluster';
 
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish>;
@@ -175,29 +175,6 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', width: 92 }}>{label}</Text>
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#2d2d2d', flex: 1, lineHeight: 18 }}>{value}</Text>
-    </View>
-  );
-}
-
-function MemberHexFactTile({ fact, index }: { fact: string; index: number }) {
-  return (
-    <View style={{ width: 204, minHeight: 140, marginRight: 10, marginBottom: 10, position: 'relative' }}>
-      <Svg width="100%" height="100%" viewBox="0 0 204 140" preserveAspectRatio="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
-        <Polygon
-          points="52,3 152,3 201,70 152,137 52,137 3,70"
-          fill="#fffaf0"
-          stroke="#dec181"
-          strokeWidth={2}
-        />
-      </Svg>
-      <View style={{ minHeight: 140, paddingHorizontal: 24, paddingVertical: 18, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#bd9348', letterSpacing: 0.6, marginBottom: 7 }}>
-          FUN FACT {index + 1}
-        </Text>
-        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: '#2d2d2d', textAlign: 'center' }}>
-          {fact}
-        </Text>
-      </View>
     </View>
   );
 }
@@ -1112,38 +1089,43 @@ function MemberDetailModal({
               </View>
             )}
 
-            {/* Current project */}
+            <ProfileHoneycombCluster
+              title="PROFILE SNAPSHOT"
+              size="compact"
+              items={[
+                { label: 'Title', value: member.profile_title || member.occupation },
+                { label: 'From', value: member.hometown },
+                { label: 'Birthday', value: member.birthday ? new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric' }) : null },
+              ]}
+            />
+
             {member.current_project && (
               <View style={{ marginBottom: 20 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 6 }}>CURRENTLY WORKING ON</Text>
-                <View style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.3)', borderRadius: 12, padding: 12 }}>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', lineHeight: 20 }}>🚀 {member.current_project}</Text>
-                </View>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', lineHeight: 20 }}>
+                  {member.current_project}
+                </Text>
               </View>
             )}
 
-            {/* Fun facts */}
-            {member.fun_facts && member.fun_facts.length > 0 && (
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>FUN FACTS</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                  {member.fun_facts.map((fact, i) => (
-                    <MemberHexFactTile key={i} fact={fact} index={i} />
-                  ))}
-                </View>
-              </View>
-            )}
+            <ProfileHoneycombCluster
+              title="FUN FACTS"
+              items={(member.fun_facts ?? []).map((fact, i) => ({
+                label: `Fun Fact ${i + 1}`,
+                value: fact,
+              }))}
+            />
 
-            {/* Favorites */}
             {hasFavorites && (
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 10 }}>FAVORITES</Text>
-                <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16 }}>
-                  <InfoRow label="📚 Book" value={member.favorite_book} />
-                  <InfoRow label="🍽️ Food" value={member.favorite_food} />
-                  <InfoRow label="🎯 Hobby" value={member.favorite_hobby} />
-                </View>
-              </View>
+              <ProfileHoneycombCluster
+                title="FAVORITES"
+                size="compact"
+                items={[
+                  { label: 'Book', value: member.favorite_book },
+                  { label: 'Food', value: member.favorite_food },
+                  { label: 'Hobby', value: member.favorite_hobby },
+                ]}
+              />
             )}
 
             {/* Skills */}

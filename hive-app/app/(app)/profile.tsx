@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView, Modal, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -19,45 +19,16 @@ import { FadeIn } from '../../components/ui/FadeIn';
 import { ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
+import { ProfileHoneycombCluster } from '../../components/profile/ProfileHoneycombCluster';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { PREDEFINED_SKILLS } from '../../components/skills/constants';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Polygon } from 'react-native-svg';
 import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import type { Skill, Wish, ActionItem, UserInsights, Profile } from '../../types';
 
 const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
-
-function HexFactTile({ fact, index }: { fact: string; index: number }) {
-  return (
-    <View style={{ width: 228, minHeight: 156, marginRight: 12, marginBottom: 12, position: 'relative' }}>
-      <Svg
-        width="100%"
-        height="100%"
-        viewBox="0 0 228 156"
-        preserveAspectRatio="none"
-        style={StyleSheet.absoluteFill}
-      >
-        <Polygon
-          points="58,3 170,3 225,78 170,153 58,153 3,78"
-          fill="#fffaf0"
-          stroke="#dec181"
-          strokeWidth={2}
-        />
-      </Svg>
-      <View style={{ minHeight: 156, paddingHorizontal: 28, paddingVertical: 22, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', letterSpacing: 0.6, marginBottom: 8 }}>
-          FUN FACT {index + 1}
-        </Text>
-        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#2d2d2d', textAlign: 'center' }}>
-          {fact}
-        </Text>
-      </View>
-    </View>
-  );
-}
 
 // Format phone number as (XXX) XXX-XXXX
 const formatPhoneNumber = (value: string): string => {
@@ -1087,55 +1058,42 @@ export default function ProfileScreen() {
                 </Pressable>
               )}
 
-              {((profile as any).current_project || (profile as any).hometown || profile.birthday) && (
-                <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-                  {(profile as any).current_project && (
-                    <View className="p-4 border-b border-cream">
-                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-1">CURRENTLY WORKING ON</Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{(profile as any).current_project}</Text>
-                    </View>
-                  )}
-                  {(profile as any).hometown && (
-                    <View className="p-4 border-b border-cream">
-                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-1">FROM</Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{(profile as any).hometown}</Text>
-                    </View>
-                  )}
-                  {profile.birthday && (
-                    <View className="p-4">
-                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-1">BIRTHDAY</Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{formatBirthdayForDisplay(profile.birthday)}</Text>
-                    </View>
-                  )}
-                </View>
-              )}
+              <ProfileHoneycombCluster
+                title="PROFILE SNAPSHOT"
+                size="compact"
+                items={[
+                  { label: 'Title', value: (profile as any).profile_title || profile.occupation },
+                  { label: 'From', value: (profile as any).hometown },
+                  { label: 'Birthday', value: formatBirthdayForDisplay(profile.birthday) },
+                ]}
+              />
 
-              {(((profile as any).fun_facts as string[] | null) ?? []).length > 0 && (
+              {(profile as any).current_project && (
                 <View>
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-2 tracking-wide">FUN FACTS</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                    {((profile as any).fun_facts as string[]).map((fact: string, idx: number) => (
-                      <HexFactTile key={idx} fact={fact} index={idx} />
-                    ))}
-                  </View>
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-2 tracking-wide">CURRENTLY WORKING ON</Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
+                    {(profile as any).current_project}
+                  </Text>
                 </View>
               )}
 
-              {((profile as any).favorite_book || (profile as any).favorite_food || (profile as any).favorite_hobby) && (
-                <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-                  {(['favorite_book', 'favorite_food', 'favorite_hobby'] as const).map((field, idx) => {
-                    const labels = ['Book', 'Food', 'Hobby'];
-                    const value = (profile as any)[field];
-                    if (!value) return null;
-                    return (
-                      <View key={field} className="p-4 border-b border-cream last:border-b-0">
-                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-1">{labels[idx]}</Text>
-                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{value}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
+              <ProfileHoneycombCluster
+                title="FUN FACTS"
+                items={(((profile as any).fun_facts as string[] | null) ?? []).map((fact: string, idx: number) => ({
+                  label: `Fun Fact ${idx + 1}`,
+                  value: fact,
+                }))}
+              />
+
+              <ProfileHoneycombCluster
+                title="FAVORITES"
+                size="compact"
+                items={[
+                  { label: 'Book', value: (profile as any).favorite_book },
+                  { label: 'Food', value: (profile as any).favorite_food },
+                  { label: 'Hobby', value: (profile as any).favorite_hobby },
+                ]}
+              />
             </View>
           ) : (
           <View className="bg-white rounded-xl shadow-sm overflow-hidden">
