@@ -31,6 +31,9 @@ interface NotesImportFile {
   fileBase64: string;
 }
 
+const DEFAULT_HIVE_DECK_VIEW_URL = 'https://www.canva.com/d/CQkVqOMhwuO06qe';
+const DEFAULT_HIVE_DECK_EDIT_URL = 'https://www.canva.com/d/QPpy59P1sGtp6Al';
+
 const toAmericanDate = (isoDate: string) => {
   const [year, month, day] = isoDate.split('-');
   return month && day && year ? `${month}-${day}-${year}` : isoDate;
@@ -66,9 +69,11 @@ export default function MeetingsScreen() {
 
   // Slide deck URL — pulled from community record, editable by admin
   const [slideDeckUrl, setSlideDeckUrl] = useState(community?.slide_deck_url ?? '');
+  const [showDeckActions, setShowDeckActions] = useState(false);
   const [showDeckEdit, setShowDeckEdit] = useState(false);
   const [deckUrlDraft, setDeckUrlDraft] = useState('');
   const [savingDeckUrl, setSavingDeckUrl] = useState(false);
+  const effectiveSlideDeckUrl = slideDeckUrl.trim() || DEFAULT_HIVE_DECK_VIEW_URL;
 
   useEffect(() => {
     if (community?.slide_deck_url !== undefined) setSlideDeckUrl(community.slide_deck_url ?? '');
@@ -685,20 +690,22 @@ export default function MeetingsScreen() {
             <Pressable
               onPress={async () => {
                 const latestUrl = await fetchLatestSlideDeckUrl();
-                if (latestUrl) {
-                  Linking.openURL(latestUrl);
-                } else if (isAdmin) {
-                  setDeckUrlDraft('');
-                  setShowDeckEdit(true);
+                const deckUrl = latestUrl || DEFAULT_HIVE_DECK_VIEW_URL;
+                if (isAdmin) {
+                  setShowDeckActions(true);
+                } else if (deckUrl) {
+                  Linking.openURL(deckUrl);
                 }
               }}
               onLongPress={() => {
-                if (isAdmin) { setDeckUrlDraft(slideDeckUrl); setShowDeckEdit(true); }
+                if (isAdmin) {
+                  setShowDeckActions(true);
+                }
               }}
               style={({ pressed }) => ({
                 flex: useCompactActions ? undefined : 1,
                 width: useCompactActions ? '48%' : undefined,
-                backgroundColor: slideDeckUrl ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
+                backgroundColor: effectiveSlideDeckUrl ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
                 borderRadius: 14,
                 paddingVertical: 16,
                 alignItems: 'center',
@@ -706,12 +713,12 @@ export default function MeetingsScreen() {
               })}
             >
               <Text style={{ fontSize: 22, marginBottom: 4 }}>🎞️</Text>
-              <Text style={{ fontFamily: 'Lato_700Bold', color: slideDeckUrl ? '#fff' : 'rgba(255,255,255,0.35)', fontSize: 13 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: effectiveSlideDeckUrl ? '#fff' : 'rgba(255,255,255,0.35)', fontSize: 13 }}>
                 Slide Deck
               </Text>
               {isAdmin && (
                 <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 2 }}>
-                  {slideDeckUrl ? 'hold to edit' : 'tap to set'}
+                  view / edit
                 </Text>
               )}
             </Pressable>
@@ -1168,6 +1175,61 @@ export default function MeetingsScreen() {
           </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
+      </Modal>
+
+      {/* Slide deck actions */}
+      <Modal visible={showDeckActions} animationType="fade" transparent onRequestClose={() => setShowDeckActions(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}>
+          <Pressable
+            accessibilityLabel="Close slide deck actions"
+            onPress={() => setShowDeckActions(false)}
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+          />
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}
+          >
+            <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 4 }}>HIVE Slide Deck</Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 16, lineHeight: 18 }}>
+              Open the view-only deck for the group, or jump into Canva to keep editing the staple deck.
+            </Text>
+            <View style={{ gap: 10 }}>
+              <Pressable
+                onPress={() => {
+                  setShowDeckActions(false);
+                  Linking.openURL(effectiveSlideDeckUrl);
+                }}
+                style={{ backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>View Deck</Text>
+              </Pressable>
+              {isAdmin && (
+                <Pressable
+                  onPress={() => {
+                    setShowDeckActions(false);
+                    Linking.openURL(DEFAULT_HIVE_DECK_EDIT_URL);
+                  }}
+                  style={{ backgroundColor: '#2d2d2d', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>Edit in Canva</Text>
+                </Pressable>
+              )}
+              {isAdmin && (
+                <Pressable
+                  onPress={() => {
+                    setShowDeckActions(false);
+                    setDeckUrlDraft(slideDeckUrl.trim() || DEFAULT_HIVE_DECK_VIEW_URL);
+                    setShowDeckEdit(true);
+                  }}
+                  style={{ backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#6b7280' }}>Change View Link</Text>
+                </Pressable>
+              )}
+            </View>
+          </Pressable>
+        </View>
       </Modal>
 
       {/* Admin: edit slide deck URL */}
