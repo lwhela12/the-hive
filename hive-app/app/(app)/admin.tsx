@@ -12,6 +12,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
@@ -174,12 +175,133 @@ function AdminHeaderAction({
   );
 }
 
+function LockedAdminScreen({
+  onHomePress,
+  onLedgerPress,
+}: {
+  onHomePress: () => void;
+  onLedgerPress: () => void;
+}) {
+  return (
+    <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
+      <AppHeader title="Admin" />
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          flexGrow: 1,
+          padding: 20,
+          paddingBottom: 96,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <View
+          style={{
+            width: '100%',
+            maxWidth: 560,
+            borderRadius: 28,
+            borderWidth: 1,
+            borderColor: 'rgba(222,193,129,0.78)',
+            backgroundColor: '#fffdf5',
+            padding: 24,
+            alignItems: 'center',
+            shadowColor: '#bd9348',
+            shadowOpacity: 0.18,
+            shadowRadius: 24,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 4,
+          }}
+        >
+          <View style={{ width: 112, height: 100, alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+            <Text style={{ fontSize: 58, lineHeight: 66 }}>🐝</Text>
+            <View
+              style={{
+                position: 'absolute',
+                width: 106,
+                height: 92,
+                borderWidth: 2,
+                borderColor: 'rgba(189,147,72,0.42)',
+                backgroundColor: 'rgba(253,243,220,0.72)',
+                transform: [{ rotate: '30deg' }],
+                zIndex: -1,
+              }}
+            />
+          </View>
+
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 26, color: '#2d2d2d', textAlign: 'center', marginBottom: 8 }}>
+            Oops, this comb is Admin-only
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, color: '#6b5b42', lineHeight: 22, textAlign: 'center', maxWidth: 430 }}>
+            Not for you, honey bunny. Members can see the transparent Honey Pot ledger, but only Treasurers and Admins can manage money, members, and surveys here.
+          </Text>
+
+          <View
+            style={{
+              width: '100%',
+              marginTop: 22,
+              padding: 16,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: 'rgba(222,193,129,0.42)',
+              backgroundColor: '#fff8e8',
+            }}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', textTransform: 'uppercase', marginBottom: 6, textAlign: 'center' }}>
+              Still transparent
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#76654a', lineHeight: 20, textAlign: 'center' }}>
+              Every Honey Pot entry stays visible to the community. This locked door only protects the editing tools.
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginTop: 22 }}>
+            <Pressable
+              onPress={onHomePress}
+              accessibilityRole="button"
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? '#a77f38' : '#bd9348',
+                borderRadius: 999,
+                paddingHorizontal: 18,
+                paddingVertical: 11,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'white' }}>
+                Back to Home
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={onLedgerPress}
+              accessibilityRole="button"
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: 'rgba(222,193,129,0.72)',
+                paddingHorizontal: 18,
+                paddingVertical: 11,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#8a6b30' }}>
+                View Honey Pot Ledger
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 export default function AdminScreen() {
   const { profile, communityId, communityRole } = useAuth();
   const { width, height } = useWindowDimensions();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const useMobileLayout = width < 768;
   const currentDuesPeriod = getCurrentDuesPeriod();
+  const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+  const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
+  const canEditHoneyPot = isTreasurer || isAdmin;
   const [refreshing, setRefreshing] = useState(false);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [queenBees, setQueenBees] = useState<QueenBee[]>([]);
@@ -191,7 +313,10 @@ export default function AdminScreen() {
   const [showSurveyModal, setShowSurveyModal] = useState(false);
 
   // Survey management
-  const { allSurveys, refetch: refetchSurveys } = useSurveys(communityId ?? undefined, profile?.id);
+  const { allSurveys, refetch: refetchSurveys } = useSurveys(
+    canEditHoneyPot ? communityId ?? undefined : undefined,
+    canEditHoneyPot ? profile?.id : undefined
+  );
   const [surveyTitle, setSurveyTitle] = useState('');
   const [surveyDescription, setSurveyDescription] = useState('');
   const [surveyDueDate, setSurveyDueDate] = useState('');
@@ -235,7 +360,7 @@ export default function AdminScreen() {
   }, [duesCoverage, honeyPotType]);
 
   const fetchData = useCallback(async () => {
-    if (!communityId) return;
+    if (!communityId || !canEditHoneyPot) return;
     // Fetch members
     const { data: membersData } = await supabase
       .from('community_memberships')
@@ -276,7 +401,7 @@ export default function AdminScreen() {
     } finally {
       setHoneyPotLedgerLoading(false);
     }
-  }, [communityId]);
+  }, [canEditHoneyPot, communityId]);
 
   useEffect(() => {
     fetchData();
@@ -680,9 +805,6 @@ export default function AdminScreen() {
     }
   };
 
-  const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
-  const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
-  const canEditHoneyPot = isTreasurer || isAdmin;
   const selectedDuesMember = members.find((member) => member.profiles.id === duesMemberId)?.profiles;
   const desktopPanelHeight = Math.max(320, Math.floor((height - 180) / 2));
   const mobilePanelHeight = Math.min(430, Math.max(340, Math.floor(height * 0.46)));
@@ -706,9 +828,10 @@ export default function AdminScreen() {
 
   if (!isAdmin && !isTreasurer) {
     return (
-      <SafeAreaView className="flex-1 bg-honey-50 justify-center items-center">
-        <Text className="text-gray-600">Admin or Treasurer access required</Text>
-      </SafeAreaView>
+      <LockedAdminScreen
+        onHomePress={() => router.push('/hive')}
+        onLedgerPress={() => router.push('/honey-pot')}
+      />
     );
   }
 
