@@ -103,25 +103,42 @@ function AdminPanel({
 }) {
   return (
     <View style={[{ marginBottom: 0 }, style]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-          {title}
-        </Text>
-        {action}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
+        <View
+          style={{
+            flexShrink: 1,
+            backgroundColor: '#fdf3dc',
+            borderColor: 'rgba(222,193,129,0.7)',
+            borderWidth: 1,
+            borderBottomWidth: 0,
+            borderTopLeftRadius: 14,
+            borderTopRightRadius: 14,
+            paddingHorizontal: 14,
+            paddingVertical: 7,
+          }}
+        >
+          <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+            {title}
+          </Text>
+        </View>
+        {action ? <View style={{ paddingBottom: 4, marginLeft: 8 }}>{action}</View> : null}
       </View>
       <View
         style={[{
-          backgroundColor: '#fff',
-          borderRadius: 16,
+          backgroundColor: '#fffdf5',
+          borderRadius: 20,
+          borderTopLeftRadius: 0,
           borderWidth: 1,
-          borderColor: 'rgba(222,193,129,0.35)',
-          shadowColor: '#000',
-          shadowOpacity: 0.04,
-          shadowRadius: 12,
+          borderColor: 'rgba(222,193,129,0.7)',
+          shadowColor: '#bd9348',
+          shadowOpacity: 0.14,
+          shadowRadius: 18,
           shadowOffset: { width: 0, height: 5 },
+          elevation: 3,
           overflow: 'hidden',
         }, bodyStyle]}
       >
+        <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10 }} />
         {children}
       </View>
     </View>
@@ -130,7 +147,7 @@ function AdminPanel({
 
 export default function AdminScreen() {
   const { profile, communityId, communityRole } = useAuth();
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const queryClient = useQueryClient();
   const useMobileLayout = width < 768;
   const currentDuesPeriod = getCurrentDuesPeriod();
@@ -636,21 +653,26 @@ export default function AdminScreen() {
   const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
   const canEditHoneyPot = isTreasurer || isAdmin;
   const selectedDuesMember = members.find((member) => member.profiles.id === duesMemberId)?.profiles;
-  const desktopPanelHeight = Math.max(220, Math.floor((height - 300) / 2));
-  const dashboardPanelStyle = useMobileLayout ? undefined : { height: desktopPanelHeight };
+  const dashboardOuterContentStyle: ViewStyle = useMobileLayout
+    ? { padding: 16 }
+    : { flexGrow: 1, padding: 16, paddingBottom: 8 };
+  const dashboardPanelStyle = useMobileLayout ? undefined : { flex: 1 };
   const dashboardPanelBodyStyle = useMobileLayout ? undefined : { flex: 1 };
   const panelScrollStyle = useMobileLayout ? undefined : { flex: 1 };
   const panelOrderStyle = (order: number) => ({ order } as unknown as ViewStyle);
-  const dashboardWrapStyle = {
+  const dashboardWrapStyle: ViewStyle = {
     flexDirection: useMobileLayout ? 'column' : 'row',
     flexWrap: 'wrap',
     marginHorizontal: useMobileLayout ? 0 : -8,
-  } as const;
-  const dashboardCellStyle = {
+    ...(useMobileLayout ? {} : { flex: 1 }),
+  };
+  const dashboardCellStyle: ViewStyle = {
     width: useMobileLayout ? '100%' : '50%',
+    height: useMobileLayout ? undefined : '50%',
     paddingHorizontal: useMobileLayout ? 0 : 8,
-    marginBottom: useMobileLayout ? 18 : 16,
-  } as const;
+    marginBottom: useMobileLayout ? 18 : 0,
+    paddingBottom: useMobileLayout ? 0 : 14,
+  };
 
   if (!isAdmin && !isTreasurer) {
     return (
@@ -666,10 +688,11 @@ export default function AdminScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerClassName="p-4"
-        refreshControl={
+        scrollEnabled={useMobileLayout}
+        contentContainerStyle={dashboardOuterContentStyle}
+        refreshControl={useMobileLayout ? (
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        ) : undefined}
       >
         <View style={dashboardWrapStyle}>
           <View style={[dashboardCellStyle, panelOrderStyle(3)]}>
@@ -678,7 +701,7 @@ export default function AdminScreen() {
                 style={panelScrollStyle}
                 contentContainerStyle={{ padding: 16 }}
                 nestedScrollEnabled
-                showsVerticalScrollIndicator={!useMobileLayout}
+                showsVerticalScrollIndicator={false}
               >
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 28, color: '#bd9348', textAlign: 'center', marginBottom: 16 }}>
                   ${honeyPotBalance.toFixed(2)}
@@ -928,7 +951,7 @@ export default function AdminScreen() {
                 style={panelScrollStyle}
                 contentContainerStyle={{ padding: 14 }}
                 nestedScrollEnabled
-                showsVerticalScrollIndicator={!useMobileLayout}
+                showsVerticalScrollIndicator={false}
               >
                 <HoneyPotLedger
                   balance={honeyPotBalance}
@@ -947,7 +970,7 @@ export default function AdminScreen() {
                 <ScrollView
                   style={panelScrollStyle}
                   nestedScrollEnabled
-                  showsVerticalScrollIndicator={!useMobileLayout}
+                  showsVerticalScrollIndicator={false}
                 >
                   <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 10 }}>
@@ -1124,7 +1147,7 @@ export default function AdminScreen() {
                 <ScrollView
                   style={panelScrollStyle}
                   nestedScrollEnabled
-                  showsVerticalScrollIndicator={!useMobileLayout}
+                  showsVerticalScrollIndicator={false}
                 >
                   {allSurveys.length === 0 ? (
                     <View style={{ padding: 20, alignItems: 'center' }}>
