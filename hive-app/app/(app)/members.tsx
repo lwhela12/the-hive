@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useEffect, useCallback } from 'react';
+import { type ReactNode, useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowDimensions, TextInput, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -85,6 +85,8 @@ type HoneycombPlacement = {
   left: number;
   top: number;
 };
+
+type MemberViewMode = 'directory' | 'swarm';
 
 const ANSWER_STOP_WORDS = new Set([
   'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'for', 'i', 'im', 'in', 'is',
@@ -1570,6 +1572,7 @@ export default function MembersScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<MemberData | null>(null);
   const [search, setSearch] = useState('');
+  const [memberViewMode, setMemberViewMode] = useState<MemberViewMode>('directory');
   const currentUserId = profile?.id ?? session?.user?.id ?? null;
 
   const loadMembers = useCallback(async (isRefresh = false) => {
@@ -1760,32 +1763,59 @@ export default function MembersScreen() {
     }
   }, [currentUserId, router, selected]);
 
-  const filtered = search.trim()
-    ? members.filter(m => {
-        const query = search.toLowerCase();
-        return [
-          m.name,
-          m.role,
-          ROLE_LABELS[m.role],
-          m.profile_title,
-          m.occupation,
-          m.bio,
-          m.current_project,
-          m.hometown,
-          m.known_for,
-          m.miq_experiences,
-          m.miq_growth,
-          m.miq_contribution,
-          m.favorite_book,
-          m.favorite_food,
-          m.favorite_hobby,
-          ...m.skills.map(s => s.description),
-          ...m.wishes.map(w => w.description),
-        ].some(value => value?.toLowerCase().includes(query));
-      })
-    : members;
+  const filtered = useMemo(() => {
+    if (!search.trim()) return members;
+    return members.filter(m => {
+      const query = search.trim().toLowerCase();
+      return [
+        m.name,
+        m.role,
+        ROLE_LABELS[m.role],
+        m.profile_title,
+        m.occupation,
+        m.bio,
+        m.current_project,
+        m.hometown,
+        m.known_for,
+        m.miq_experiences,
+        m.miq_growth,
+        m.miq_contribution,
+        m.favorite_book,
+        m.favorite_food,
+        m.favorite_hobby,
+        ...m.skills.map(s => s.description),
+        ...m.wishes.map(w => w.description),
+      ].some(value => value?.toLowerCase().includes(query));
+    });
+  }, [members, search]);
+  const matchedMemberCount = filtered.filter(member =>
+    member.id !== currentUserId &&
+    typeof member.dailyMatchPercent === 'number' &&
+    (member.dailyMatchSharedCount ?? 0) > 0
+  ).length;
+  const visibleMembers = useMemo(() => {
+    if (memberViewMode === 'directory') return filtered;
+
+    return [...filtered].sort((a, b) => {
+      if (a.id === currentUserId) return -1;
+      if (b.id === currentUserId) return 1;
+
+      const aHasMatch = typeof a.dailyMatchPercent === 'number' && (a.dailyMatchSharedCount ?? 0) > 0;
+      const bHasMatch = typeof b.dailyMatchPercent === 'number' && (b.dailyMatchSharedCount ?? 0) > 0;
+
+      if (aHasMatch !== bHasMatch) return aHasMatch ? -1 : 1;
+      if (aHasMatch && bHasMatch) {
+        const percentDiff = (b.dailyMatchPercent ?? 0) - (a.dailyMatchPercent ?? 0);
+        if (percentDiff !== 0) return percentDiff;
+        const sharedDiff = (b.dailyMatchSharedCount ?? 0) - (a.dailyMatchSharedCount ?? 0);
+        if (sharedDiff !== 0) return sharedDiff;
+      }
+
+      return a.name.localeCompare(b.name);
+    });
+  }, [currentUserId, filtered, memberViewMode]);
   const desiredHoneycombColumns = width >= 1500 ? 5 : width >= 1120 ? 4 : width >= 760 ? 3 : width >= 360 ? 2 : 1;
-  const honeycombColumns = Math.max(1, Math.min(desiredHoneycombColumns, Math.max(1, filtered.length)));
+  const honeycombColumns = Math.max(1, Math.min(desiredHoneycombColumns, Math.max(1, visibleMembers.length)));
   const honeycombOuterGutter = width < 520 ? 12 : 32;
   const honeycombMaxWidth = Math.max(280, Math.min(width - honeycombOuterGutter, 1680));
   const honeycombCellWidth = honeycombColumns === 1
@@ -1794,7 +1824,7 @@ export default function MembersScreen() {
   const honeycombCardHeight = Math.round(honeycombCellWidth * 0.866);
   const honeycombStepX = honeycombCellWidth * 0.75;
   const honeycombGridWidth = honeycombCellWidth + honeycombStepX * (honeycombColumns - 1);
-  const honeycombPlacements = buildHoneycombPlacements(filtered, honeycombColumns, honeycombCellWidth, honeycombCardHeight);
+  const honeycombPlacements = buildHoneycombPlacements(visibleMembers, honeycombColumns, honeycombCellWidth, honeycombCardHeight);
   const honeycombGridHeight = honeycombPlacements.length === 0
     ? 0
     : Math.max(...honeycombPlacements.map(placement => placement.top + honeycombCardHeight));
@@ -1834,6 +1864,64 @@ export default function MembersScreen() {
               </Pressable>
             )}
           </View>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignSelf: 'center',
+              backgroundColor: 'rgba(255,255,255,0.78)',
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: 'rgba(222,193,129,0.45)',
+              padding: 3,
+              marginTop: 10,
+              gap: 3,
+            }}
+          >
+            {([
+              { mode: 'directory' as const, label: 'Directory' },
+              { mode: 'swarm' as const, label: "Today's Swarm" },
+            ]).map(option => {
+              const active = memberViewMode === option.mode;
+              return (
+                <Pressable
+                  key={option.mode}
+                  onPress={() => setMemberViewMode(option.mode)}
+                  style={{
+                    borderRadius: 999,
+                    backgroundColor: active ? '#bd9348' : 'transparent',
+                    paddingHorizontal: 14,
+                    paddingVertical: 7,
+                    minWidth: width < 420 ? 108 : 128,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Lato_700Bold',
+                      fontSize: 12,
+                      color: active ? '#fffdf7' : '#8f7b55',
+                    }}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {memberViewMode === 'swarm' && matchedMemberCount > 0 && (
+            <Text
+              style={{
+                fontFamily: 'Lato_700Bold',
+                fontSize: 10,
+                color: '#9a8060',
+                textAlign: 'center',
+                marginTop: 6,
+                letterSpacing: 0.2,
+              }}
+            >
+              {matchedMemberCount} match{matchedMemberCount === 1 ? '' : 'es'} today
+            </Text>
+          )}
         </View>
       )}
 
@@ -1901,7 +1989,7 @@ export default function MembersScreen() {
                           top,
                           width: honeycombCellWidth,
                           alignItems: 'center',
-                          zIndex: isMe ? filtered.length + 10 : filtered.length - index,
+                          zIndex: isMe ? visibleMembers.length + 10 : visibleMembers.length - index,
                         }}
                       >
                         <HoneycombCardShell isMe={isMe} height={honeycombCardHeight} width={honeycombCellWidth}>
