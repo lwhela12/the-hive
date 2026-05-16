@@ -3,7 +3,6 @@ import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowD
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import Svg, { Polygon } from 'react-native-svg';
 import type { Skill, UserRole, Wish } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';

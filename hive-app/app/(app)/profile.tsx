@@ -20,6 +20,7 @@ import { ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileHoneycombCluster } from '../../components/profile/ProfileHoneycombCluster';
+import { WishCombCard } from '../../components/profile/WishCombCard';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { PREDEFINED_SKILLS } from '../../components/skills/constants';
@@ -61,8 +62,8 @@ export default function ProfileScreen() {
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [managingWish, setManagingWish] = useState<Wish | null>(null);
+  const [expandedWishId, setExpandedWishId] = useState<string | null>(null);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
-  const [dailyAnswerCount, setDailyAnswerCount] = useState(0);
   const [initialLoading, setInitialLoading] = useState(true);
 
   // Editable profile fields
@@ -94,7 +95,6 @@ export default function ProfileScreen() {
       skillsResult,
       wishesResult,
       insightsResult,
-      dailyAnswerCountResult,
     ] = await Promise.all([
       supabase
         .from('skills')
@@ -115,11 +115,6 @@ export default function ProfileScreen() {
         .eq('user_id', profile.id)
         .eq('community_id', communityId)
         .maybeSingle(),
-      supabase
-        .from('daily_question_answers')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', profile.id)
-        .eq('community_id', communityId),
     ]);
 
     let wishesData: Wish[] | null = (wishesResult.data as unknown as Wish[] | null) ?? null;
@@ -144,7 +139,6 @@ export default function ProfileScreen() {
     if (wishesData) setWishes(wishesData);
     if (wishesError) console.error('Error fetching profile wishes:', wishesError);
     setUserInsights(insightsResult.data);
-    setDailyAnswerCount(dailyAnswerCountResult.count ?? 0);
     setInitialLoading(false);
   }, [profile?.id, communityId]);
 
@@ -529,7 +523,42 @@ export default function ProfileScreen() {
     }
   };
 
-  const handlePlantSkill = async (skillDescription: string) => {
+  const getSkillPlantPosition = (
+    skillDescription: string,
+    seedIndex: number,
+    groupIndex = 0,
+    groupSize = 1
+  ) => {
+    const seedValue = Array.from(skillDescription).reduce(
+      (sum, character) => sum + character.charCodeAt(0),
+      seedIndex * 31
+    );
+
+    if (groupSize > 1) {
+      const columns = Math.min(groupSize, Math.max(groupSize <= 5 ? groupSize : 3, Math.ceil(Math.sqrt(groupSize * 1.45))));
+      const rows = Math.ceil(groupSize / columns);
+      const row = Math.floor(groupIndex / columns);
+      const column = groupIndex % columns;
+      const rowOffset = rows > 1 && row % 2 === 1 ? 0.32 / columns : 0;
+      const xJitter = (((seedValue * 17) % 100) / 100 - 0.5) * (0.2 / columns);
+      const yJitter = (((seedValue * 29) % 100) / 100 - 0.5) * 0.045;
+
+      return {
+        display_x: Number(Math.min(0.92, Math.max(0.08, (column + 0.5) / columns + rowOffset + xJitter)).toFixed(4)),
+        display_y: Number(Math.min(0.9, Math.max(0.52, 0.55 + (row / Math.max(1, rows - 1)) * 0.3 + yJitter)).toFixed(4)),
+      };
+    }
+
+    return {
+      display_x: Number((0.08 + ((seedValue * 17) % 84) / 100).toFixed(4)),
+      display_y: Number((0.52 + ((seedValue * 29) % 36) / 100).toFixed(4)),
+    };
+  };
+
+  const handlePlantSkill = async (
+    skillDescription: string,
+    options?: { enthusiasmLevel?: number }
+  ) => {
     if (!profile || !communityId) return;
 
     const alreadyPlanted = skills.some(
@@ -538,12 +567,7 @@ export default function ProfileScreen() {
     if (alreadyPlanted) return;
 
     const seedIndex = skills.length + 1;
-    const seedValue = Array.from(skillDescription).reduce(
-      (sum, character) => sum + character.charCodeAt(0),
-      seedIndex * 31
-    );
-    const displayX = Number((0.08 + ((seedValue * 17) % 84) / 100).toFixed(4));
-    const displayY = Number((0.8 + ((seedValue * 29) % 15) / 100).toFixed(4));
+    const position = getSkillPlantPosition(skillDescription, seedIndex);
 
     const { data, error } = await supabase
       .from('skills')
@@ -553,9 +577,9 @@ export default function ProfileScreen() {
         description: skillDescription,
         raw_input: skillDescription,
         extracted_from: 'manual',
-        enthusiasm_level: 0,
-        display_x: displayX,
-        display_y: displayY,
+        enthusiasm_level: options?.enthusiasmLevel ?? 0,
+        display_x: position.display_x,
+        display_y: position.display_y,
       })
       .select('*')
       .single();
@@ -567,6 +591,54 @@ export default function ProfileScreen() {
 
     if (data) {
       setSkills((current) => [...current, data as Skill]);
+    }
+  };
+
+  const handlePlantSkills = async (
+    seeds: Array<{ description: string; enthusiasmLevel?: number }>
+  ) => {
+    if (!profile || !communityId || seeds.length === 0) return;
+
+    const existingNames = new Set(skills.map(skill => skill.description.trim().toLowerCase()));
+    const uniqueSeeds = seeds.filter((seed, index, all) => {
+      const normalized = seed.description.trim().toLowerCase();
+      return !existingNames.has(normalized) &&
+        all.findIndex(item => item.description.trim().toLowerCase() === normalized) === index;
+    });
+
+    if (uniqueSeeds.length === 0) return;
+
+    const rows = uniqueSeeds.map((seed, index) => {
+      const position = getSkillPlantPosition(
+        seed.description,
+        skills.length + index + 1,
+        index,
+        uniqueSeeds.length
+      );
+      return {
+        user_id: profile.id,
+        community_id: communityId,
+        description: seed.description,
+        raw_input: seed.description,
+        extracted_from: 'manual' as const,
+        enthusiasm_level: seed.enthusiasmLevel ?? 4,
+        display_x: position.display_x,
+        display_y: position.display_y,
+      };
+    });
+
+    const { data, error } = await supabase
+      .from('skills')
+      .insert(rows)
+      .select('*');
+
+    if (error) {
+      Alert.alert('Error', 'Failed to plant that garden. Please try again.');
+      return;
+    }
+
+    if (data) {
+      setSkills((current) => [...current, ...(data as Skill[])]);
     }
   };
 
@@ -971,10 +1043,7 @@ export default function ProfileScreen() {
         {/* Profile Information */}
         <FadeIn delay={100}>
         <View className="mb-6">
-          <View className="flex-row items-center justify-between mb-2">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
-              {isEditing ? 'Edit Profile' : 'Profile'}
-            </Text>
+          <View className="flex-row items-center justify-end mb-2">
             {!isEditing ? (
               <Pressable onPress={startEditing} className="px-3 py-1 active:opacity-70">
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">Edit</Text>
@@ -1032,7 +1101,7 @@ export default function ProfileScreen() {
 
                   <View style={{ width: 540, alignSelf: 'center' }}>
                     <ProfileHoneycombCluster
-                      title="PROFILE HONEYCOMB"
+                      title="HONEYCOMB"
                       size="roomy"
                       preferredColumns={3}
                       items={profileHoneycombItems}
@@ -1057,10 +1126,10 @@ export default function ProfileScreen() {
                     }}
                   >
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.9, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 12 }}>
-                      Longer profile
+                      Bio
                     </Text>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 24, color: '#2d2d2d' }}>
-                      {profileBio || 'Add the longer version of your story here.'}
+                      {profileBio || 'Add your bio here.'}
                     </Text>
                   </View>
                 </View>
@@ -1076,7 +1145,7 @@ export default function ProfileScreen() {
                   </View>
 
                   <ProfileHoneycombCluster
-                    title="PROFILE HONEYCOMB"
+                    title="HONEYCOMB"
                     size="compact"
                     preferredColumns={isProfilePhone ? 3 : undefined}
                     items={profileHoneycombItems}
@@ -1096,10 +1165,10 @@ export default function ProfileScreen() {
                     }}
                   >
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 8 }}>
-                      Longer profile
+                      Bio
                     </Text>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14.5, lineHeight: 23, color: '#2d2d2d' }}>
-                      {profileBio || 'Add the longer version of your story here.'}
+                      {profileBio || 'Add your bio here.'}
                     </Text>
                   </View>
                 </>
@@ -1521,7 +1590,7 @@ export default function ProfileScreen() {
                 Wildflower Meadow 🌸
               </Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-                {skills.length > 0 ? `${skills.length} skill${skills.length !== 1 ? 's' : ''} · tap a flower to grow it` : 'Plant your skills below'}
+                {skills.length > 0 ? `${skills.length} skill${skills.length !== 1 ? 's' : ''} in bloom` : 'Seed your garden'}
               </Text>
             </View>
           </View>
@@ -1532,6 +1601,7 @@ export default function ProfileScreen() {
             onDeleteSkill={handleDeleteSkill}
             seedSkills={PREDEFINED_SKILLS}
             onPlantSkill={handlePlantSkill}
+            onPlantSkills={handlePlantSkills}
             onAddCustomSkill={() => setSkillsModalVisible(true)}
           />
         </View>
@@ -1556,54 +1626,22 @@ export default function ProfileScreen() {
               </Text>
             </View>
           ) : (
-            <View className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <View style={{ gap: 12 }}>
               {wishes.map((wish) => (
-                <View
+                <WishCombCard
                   key={wish.id}
-                  className="p-4 border-b border-cream last:border-b-0"
-                >
-                  <View className="flex-row items-center justify-between mb-1">
-                    <View className="flex-row items-center">
-                      <View
-                        className={`w-2 h-2 rounded-full mr-2 ${
-                          wish.status === 'public'
-                            ? 'bg-green-500'
-                            : wish.status === 'fulfilled'
-                            ? 'bg-gold'
-                            : 'bg-charcoal/40'
-                        }`}
-                      />
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60 capitalize">
-                        {wish.status === 'fulfilled' ? 'Granted' : wish.status}
-                      </Text>
-                    </View>
-                    <View className="flex-row items-center">
-                      <Pressable
-                        onPress={() => setManagingWish(wish)}
-                        className="w-8 h-8 rounded-full items-center justify-center active:bg-cream"
-                        hitSlop={8}
-                        accessibilityRole="button"
-                        accessibilityLabel="Manage wish"
-                      >
-                        <Ionicons name="pencil-outline" size={17} color="#4A4A4A" />
-                      </Pressable>
-                    </View>
-                  </View>
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{wish.description}</Text>
-                  {(wish.board_category_id || wish.source_board_post_id) && (
-                    <View className="self-start flex-row items-center mt-2 px-3 py-1 rounded-full border border-gold/25 bg-gold/10">
-                      <Ionicons name="folder-open-outline" size={13} color="#bd9348" />
-                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
-                        {getLinkedBoardLabel(wish.board_category) || 'Linked HD board'}
-                      </Text>
-                    </View>
-                  )}
-                  {wish.status === 'fulfilled' && wish.thank_you_message && (
-                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-sm mt-1 italic">
-                      "{wish.thank_you_message}"
-                    </Text>
-                  )}
-                </View>
+                  wish={wish}
+                  expanded={expandedWishId === wish.id}
+                  linkedBoardLabel={
+                    wish.board_category_id || wish.source_board_post_id
+                      ? getLinkedBoardLabel(wish.board_category) || 'Linked HD board'
+                      : null
+                  }
+                  onToggle={(selectedWish) => {
+                    setExpandedWishId(current => current === selectedWish.id ? null : selectedWish.id);
+                  }}
+                  onManage={setManagingWish}
+                />
               ))}
             </View>
           )}

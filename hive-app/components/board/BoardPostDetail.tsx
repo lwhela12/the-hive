@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { formatDateMedium } from '../../lib/dateUtils';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
+import { setBoardThreadArchiveState } from '../../lib/boardThreadArchive';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { BoardReactionBar } from './BoardReactionBar';
 import { BoardReplyItem } from './BoardReplyItem';
@@ -420,32 +421,18 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
       confirmLabel: restore ? 'Restore' : 'Archive',
       destructive: false,
       onConfirm: async () => {
-        if (!Object.prototype.hasOwnProperty.call(post, 'archived_at')) {
-          throw new Error('Board thread archiving needs the latest Supabase migration before it can work here.');
-        }
+        const updatedThread = await setBoardThreadArchiveState({
+          post,
+          postId,
+          communityId,
+          restore,
+        });
 
-        const nextArchivedAt = restore ? null : new Date().toISOString();
-        const archiveUpdate: Record<string, string | null> = {
-          archived_at: nextArchivedAt,
-        };
-
-        if (Object.prototype.hasOwnProperty.call(post, 'archived_by')) {
-          archiveUpdate.archived_by = restore ? null : profile.id;
-        }
-
-        const { data, error } = await (supabase as any)
-          .from('board_posts')
-          .update(archiveUpdate)
-          .eq('id', postId)
-          .eq('community_id', communityId)
-          .select('id, archived_at')
-          .maybeSingle();
-
-        if (error) throw error;
-        if (!data) {
-          throw new Error('Thread was not archived. You may not have permission to manage this thread.');
-        }
-
+        setPost((current) => (
+          current
+            ? { ...current, archived_at: updatedThread.archived_at, archived_by: updatedThread.archived_by }
+            : current
+        ));
         await fetchPost();
         onDone?.();
       },

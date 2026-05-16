@@ -20,6 +20,7 @@ import { useBoardLinkedWishes, type LinkedWish } from '../../lib/hooks/useBoardL
 import { getMentionedMembers } from '../../lib/mentions';
 import { fetchCommunityMentionableMembers } from '../../lib/mentionableMembers';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
+import { setBoardThreadArchiveState } from '../../lib/boardThreadArchive';
 import { BOARD_HOME_EVENT } from '../../lib/boardNavigation';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { linkThreadToCommunityWish, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
@@ -36,6 +37,28 @@ type GrantThreadContext = {
 
 function isArchivedCategory(category: BoardCategory) {
   return category.status === 'archived' || category.status === 'completed';
+}
+
+function getBoardErrorMessage(error: unknown, fallback = 'Something went wrong.') {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const details = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const message = typeof details.message === 'string' ? details.message : fallback;
+    const extra = [details.details, details.hint, details.code]
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .join('\n');
+    return extra ? `${message}\n${extra}` : message;
+  }
+  return fallback;
+}
+
+function showBoardAlert(title: string, message: string) {
+  if (typeof window !== 'undefined' && window.alert) {
+    window.alert(`${title}\n\n${message}`);
+    return;
+  }
+
+  Alert.alert(title, message);
 }
 
 function isCompletableHdAsk(category: BoardCategory) {
@@ -173,6 +196,7 @@ export default function BoardScreen() {
     posts,
     loading: postsLoading,
     refetch: refetchPosts,
+    updatePostInCache,
     invalidatePosts,
   } = useBoardPostsQuery(communityId ?? undefined, selectedCategory?.id);
   const activePosts = posts.filter((post) => !post.archived_at);
@@ -1148,37 +1172,21 @@ export default function BoardScreen() {
 
     const updateArchiveState = async () => {
       try {
-        if (!Object.prototype.hasOwnProperty.call(post, 'archived_at')) {
-          Alert.alert('Archive unavailable', 'Board thread archiving needs the latest Supabase migration before it can work here.');
-          return;
-        }
+        const updatedThread = await setBoardThreadArchiveState({
+          post,
+          communityId,
+          restore,
+        });
 
-        const nextArchivedAt = restore ? null : new Date().toISOString();
-        const archiveUpdate: Record<string, string | null> = {
-          archived_at: nextArchivedAt,
-        };
-
-        if (Object.prototype.hasOwnProperty.call(post, 'archived_by')) {
-          archiveUpdate.archived_by = restore ? null : profile.id;
-        }
-
-        const { data, error } = await (supabase as any)
-          .from('board_posts')
-          .update(archiveUpdate)
-          .eq('id', post.id)
-          .eq('community_id', communityId)
-          .select('id, archived_at')
-          .maybeSingle();
-
-        if (error) {
-          Alert.alert('Error', `Failed to ${restore ? 'restore' : 'archive'} thread: ${error.message}`);
-          return;
-        }
-
-        if (!data) {
-          Alert.alert('Not archived', 'This thread was not archived. You may not have permission to manage it.');
-          return;
-        }
+        updatePostInCache(post.id, {
+          archived_at: updatedThread.archived_at,
+          archived_by: updatedThread.archived_by,
+        });
+        setEditingPost((current) => (
+          current?.id === post.id
+            ? { ...current, archived_at: updatedThread.archived_at, archived_by: updatedThread.archived_by }
+            : current
+        ));
 
         if (!restore && threadListView === 'active') {
           setThreadListView('active');
@@ -1187,8 +1195,7 @@ export default function BoardScreen() {
         await refetchPosts();
         onDone?.();
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        Alert.alert('Error', `Failed to ${restore ? 'restore' : 'archive'} thread: ${errorMessage}`);
+        showBoardAlert('Error', `Failed to ${restore ? 'restore' : 'archive'} thread: ${getBoardErrorMessage(error, 'Unknown error')}`);
       }
     };
 
@@ -1201,7 +1208,7 @@ export default function BoardScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: restore ? 'Restore' : 'Archive', onPress: updateArchiveState },
     ]);
-  }, [canManageThread, communityId, invalidatePosts, profile, refetchPosts, threadListView]);
+  }, [canManageThread, communityId, invalidatePosts, profile, refetchPosts, threadListView, updatePostInCache]);
 
   const handleDeleteThread = useCallback((post: BoardPost, onDone?: () => void) => {
     if (!communityId || !canManageThread(post)) return;

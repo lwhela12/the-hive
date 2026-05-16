@@ -208,6 +208,16 @@ export function useBoardPostsQuery(communityId?: string, categoryId?: string) {
     [communityId, categoryId, queryClient]
   );
 
+  const updatePostInCache = useCallback(
+    (postId: string, updates: Partial<PostWithAuthor>) => {
+      queryClient.setQueryData<PostWithAuthor[]>(
+        queryKeys.boardPosts(communityId || '', categoryId || ''),
+        (old) => old?.map((post) => (post.id === postId ? { ...post, ...updates } : post)) ?? old
+      );
+    },
+    [communityId, categoryId, queryClient]
+  );
+
   // Invalidate posts cache (e.g., after creating a post)
   const invalidatePosts = useCallback(() => {
     queryClient.invalidateQueries({
@@ -221,6 +231,7 @@ export function useBoardPostsQuery(communityId?: string, categoryId?: string) {
     error: query.error,
     refetch: query.refetch,
     addPostToCache,
+    updatePostInCache,
     invalidatePosts,
   };
 }

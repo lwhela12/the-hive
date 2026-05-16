@@ -8,12 +8,13 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
-import Svg, { Circle, Ellipse, G, Line, Path } from 'react-native-svg';
+import Svg, { Circle, Ellipse, G, Line, Path, Rect, Text as SvgText, TSpan } from 'react-native-svg';
 import type { Skill } from '../../types';
 
 type GardenSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type WildflowerSpecies = 'poppy' | 'daisy' | 'lavender' | 'sunflower';
+type PlantSkillOptions = { enthusiasmLevel?: number };
+type PlantSkillSelection = { description: string; enthusiasmLevel?: number };
 
 type SkillBubbleGardenProps = {
   skills: GardenSkill[];
@@ -24,7 +25,8 @@ type SkillBubbleGardenProps = {
   ) => void;
   onDeleteSkill?: (skill: GardenSkill) => void;
   seedSkills?: string[];
-  onPlantSkill?: (skillDescription: string) => void;
+  onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
+  onPlantSkills?: (skills: PlantSkillSelection[]) => void;
   onAddCustomSkill?: () => void;
 };
 
@@ -51,121 +53,165 @@ const CATEGORY_DEFS: SkillCategoryDef[] = [
   {
     label: 'Wonder',
     species: 'wonder',
-    color: '#c9b7f2',
-    pale: '#f3f0fb',
-    edge: '#9b84cf',
-    text: '#4b3a68',
-    leaf: '#778f7a',
-    center: '#dfc76d',
+    color: '#b789f6',
+    pale: '#f0e8ff',
+    edge: '#7252be',
+    text: '#4b3178',
+    leaf: '#45875e',
+    center: '#ffd85a',
     skills: ['Ocean Boiling', 'Starship Navigation', 'Time Travel Planning', 'Dragon Taming', 'Professional Napping', 'Cloud Watching', 'Parallel Universe Hopping', 'Tarot Reading', 'Astrology', 'Dream Interpretation', 'Crystal Collecting'],
   },
   {
     label: 'Movement',
     species: 'movement',
-    color: '#d9be68',
-    pale: '#fff8e6',
-    edge: '#c6953f',
-    text: '#5f4b22',
-    leaf: '#789883',
-    center: '#d4a447',
+    color: '#f4c247',
+    pale: '#fff5ce',
+    edge: '#c9871f',
+    text: '#604217',
+    leaf: '#3f8f61',
+    center: '#f0a43c',
     skills: ['Aerial Acrobatics', 'Pole Dancing', 'Contortion', 'Trapeze', 'Aerial Silks', 'Handstands', 'Rock Climbing', 'Surfing', 'Skateboarding', 'Camping', 'Trail Finding', 'Yoga', 'Meditation', 'Breathwork'],
   },
   {
     label: 'Creative',
     species: 'creative',
-    color: '#d99a9d',
-    pale: '#fff0f0',
-    edge: '#ca8f8f',
-    text: '#713f3f',
-    leaf: '#78977d',
-    center: '#cf9a61',
+    color: '#f37a8c',
+    pale: '#ffe8ec',
+    edge: '#c74d64',
+    text: '#713344',
+    leaf: '#3f8f61',
+    center: '#ffbf52',
     skills: ['Crocheting', 'Knitting', 'Embroidery', 'Macramé', 'Sewing', 'Photography', 'Video Editing', 'Graphic Design', 'Writing', 'Storytelling', 'Poetry', 'Painting', 'Pottery', 'DJing', 'Guitar Playing', 'Singing', 'Voice Acting', 'Stand-up Comedy', 'Karaoke Domination', 'Dance Floor Presence'],
   },
   {
     label: 'Care',
     species: 'care',
-    color: '#f0bfd0',
-    pale: '#fff2f6',
-    edge: '#cf8fa7',
-    text: '#70445a',
-    leaf: '#78977d',
-    center: '#d2a35a',
+    color: '#f5a5cc',
+    pale: '#fff0f6',
+    edge: '#ca6794',
+    text: '#6f3550',
+    leaf: '#438c5e',
+    center: '#ffd86b',
     skills: ['Sex Therapy', 'Couples Counseling', 'Intimacy Coaching', 'Massage', 'Reiki', 'Sound Healing', 'Hype Person', 'Deep Listening', 'Tough Love Delivery', 'Pep Talks', 'Wingman Services'],
   },
   {
     label: 'Home & Life',
     species: 'practical',
-    color: '#b98f5e',
-    pale: '#f8eee2',
-    edge: '#bd8f5d',
+    color: '#f29b4a',
+    pale: '#fff0dd',
+    edge: '#bd7440',
     text: '#694321',
-    leaf: '#80936f',
-    center: '#c99a55',
+    leaf: '#4a8f59',
+    center: '#ffc45c',
     skills: ['Cooking', 'Meal Prep', 'Baking', 'Fermentation', 'Cocktail Crafting', 'Coffee Snobbery', 'Tea Ceremony', 'Gardening', 'Composting', 'Beekeeping', 'Plant Parenting', 'Foraging', 'Home Repairs', 'Furniture Building', 'Painting Walls', 'Moving Heavy Things', 'Assembling IKEA', 'Parallel Parking', 'Gift Wrapping', 'Party Planning', 'Surprise Orchestration', 'Dog Whispering', 'Cat Herding', 'Pet Photography', 'Animal Training'],
   },
   {
     label: 'Tech & Work',
     species: 'tech',
-    color: '#9dbdb0',
-    pale: '#eef6f0',
-    edge: '#6f9584',
-    text: '#315d4e',
-    leaf: '#6f9584',
-    center: '#c8a24f',
+    color: '#72c7bb',
+    pale: '#e9f8f3',
+    edge: '#4d9588',
+    text: '#275c52',
+    leaf: '#458e65',
+    center: '#ffd15b',
     skills: ['Coding', 'Web Design', 'App Building', 'Tax Wizardry', 'Spreadsheet Sorcery', 'Budget Magic', 'Resume Polishing', 'Interview Prep', 'Salary Negotiation', 'Language Teaching', 'Accent Coaching', 'Proofreading'],
   },
 ];
 
-const MEADOW_BACKGROUND = require('../../assets/generated/skill-meadow-bg.png');
-const FLOWER_ASSETS: Record<SkillCategoryDef['species'], Record<number, any>> = {
-  wonder: {
-    1: require('../../assets/generated/skill-wonder-1.png'),
-    2: require('../../assets/generated/skill-wonder-2.png'),
-    3: require('../../assets/generated/skill-wonder-3.png'),
-    4: require('../../assets/generated/skill-wonder-4.png'),
-    5: require('../../assets/generated/skill-wonder-5.png'),
-  },
-  movement: {
-    1: require('../../assets/generated/skill-movement-1.png'),
-    2: require('../../assets/generated/skill-movement-2.png'),
-    3: require('../../assets/generated/skill-movement-3.png'),
-    4: require('../../assets/generated/skill-movement-4.png'),
-    5: require('../../assets/generated/skill-movement-5.png'),
-  },
-  creative: {
-    1: require('../../assets/generated/skill-creative-1.png'),
-    2: require('../../assets/generated/skill-creative-2.png'),
-    3: require('../../assets/generated/skill-creative-3.png'),
-    4: require('../../assets/generated/skill-creative-4.png'),
-    5: require('../../assets/generated/skill-creative-5.png'),
-  },
-  care: {
-    1: require('../../assets/generated/skill-care-1.png'),
-    2: require('../../assets/generated/skill-care-2.png'),
-    3: require('../../assets/generated/skill-care-3.png'),
-    4: require('../../assets/generated/skill-care-4.png'),
-    5: require('../../assets/generated/skill-care-5.png'),
-  },
-  practical: {
-    1: require('../../assets/generated/skill-practical-1.png'),
-    2: require('../../assets/generated/skill-practical-2.png'),
-    3: require('../../assets/generated/skill-practical-3.png'),
-    4: require('../../assets/generated/skill-practical-4.png'),
-    5: require('../../assets/generated/skill-practical-5.png'),
-  },
-  tech: {
-    1: require('../../assets/generated/skill-tech-1.png'),
-    2: require('../../assets/generated/skill-tech-2.png'),
-    3: require('../../assets/generated/skill-tech-3.png'),
-    4: require('../../assets/generated/skill-tech-4.png'),
-    5: require('../../assets/generated/skill-tech-5.png'),
-  },
-};
-
 const FALLBACK_CATEGORY = CATEGORY_DEFS[CATEGORY_DEFS.length - 1];
-const GROUND_HEIGHT = 88;
+const GROUND_HEIGHT = 108;
 const LABEL_HEIGHT = 30;
 const FIELD_SIDE_PADDING = 10;
+const SEED_TRAY_SIZE = 10;
+const VISIBLE_BLOOM_LIMIT = 12;
+const MOBILE_VISIBLE_BLOOM_LIMIT = 8;
+
+type SurveyChoice = {
+  icon: string;
+  label: string;
+  detail: string;
+  seeds: string[];
+};
+
+type SurveyQuestion = {
+  prompt: string;
+  choices: SurveyChoice[];
+};
+
+const SEED_SURVEY: SurveyQuestion[] = [
+  {
+    prompt: 'Which sounds most fulfilling?',
+    choices: [
+      { icon: '🌸', label: 'Teaching something life-changing', detail: 'Passing on what only you know', seeds: ['Language Teaching', 'Accent Coaching', 'Deep Listening', 'Writing', 'Storytelling'] },
+      { icon: '🔥', label: 'Building something ambitious', detail: 'Turning raw chaos into momentum', seeds: ['App Building', 'Coding', 'Budget Magic', 'Furniture Building', 'Web Design'] },
+      { icon: '🌙', label: 'Deep talks at 2am', detail: 'Finding the real thing under the thing', seeds: ['Deep Listening', 'Tarot Reading', 'Dream Interpretation', 'Couples Counseling', 'Pep Talks'] },
+      { icon: '🪴', label: 'Quietly mastering a craft', detail: 'Patient hands, beautiful repetition', seeds: ['Knitting', 'Embroidery', 'Pottery', 'Tea Ceremony', 'Plant Parenting'] },
+    ],
+  },
+  {
+    prompt: 'Pick a Saturday.',
+    choices: [
+      { icon: '🎨', label: 'Making something messy', detail: 'Paint, sound, edits, scraps everywhere', seeds: ['Painting', 'Graphic Design', 'Video Editing', 'Crocheting', 'Photography'] },
+      { icon: '⛰️', label: 'Climbing toward air', detail: 'Movement, effort, a little altitude', seeds: ['Rock Climbing', 'Trail Finding', 'Aerial Silks', 'Handstands', 'Camping'] },
+      { icon: '📚', label: 'A research rabbit hole', detail: 'Tabs open, notes everywhere', seeds: ['Proofreading', 'Spreadsheet Sorcery', 'Tax Wizardry', 'Astrology', 'Time Travel Planning'] },
+      { icon: '🍷', label: 'Dinner party orbit', detail: 'Food, people, warmth, timing', seeds: ['Cooking', 'Cocktail Crafting', 'Party Planning', 'Meal Prep', 'Gift Wrapping'] },
+    ],
+  },
+  {
+    prompt: 'Your friends come to you for...',
+    choices: [
+      { icon: '🫶', label: 'Comfort', detail: 'Soft landing, steady presence', seeds: ['Massage', 'Reiki', 'Sound Healing', 'Deep Listening', 'Breathwork'] },
+      { icon: '⚡', label: 'Momentum', detail: 'A plan, a push, a clean next step', seeds: ['Resume Polishing', 'Interview Prep', 'Salary Negotiation', 'Hype Person', 'Tough Love Delivery'] },
+      { icon: '🧠', label: 'Perspective', detail: 'Reframing what felt impossible', seeds: ['Budget Magic', 'Spreadsheet Sorcery', 'Language Teaching', 'Proofreading', 'Tax Wizardry'] },
+      { icon: '🎭', label: 'Creativity', detail: 'A weird, brilliant angle', seeds: ['Voice Acting', 'Stand-up Comedy', 'Singing', 'Storytelling', 'Poetry'] },
+    ],
+  },
+  {
+    prompt: 'Choose a tiny joy.',
+    choices: [
+      { icon: '🍄', label: 'Mossy forests', detail: 'Soft ground, secret worlds', seeds: ['Foraging', 'Gardening', 'Composting', 'Plant Parenting', 'Cloud Watching'] },
+      { icon: '📼', label: 'Niche documentaries', detail: 'Specific stories, stranger than fiction', seeds: ['Video Editing', 'Writing', 'Photography', 'Storytelling', 'Proofreading'] },
+      { icon: '🧶', label: 'Soft yarn', detail: 'Texture, patience, a quiet spell', seeds: ['Knitting', 'Crocheting', 'Macramé', 'Sewing', 'Embroidery'] },
+      { icon: '🌧️', label: 'Thunderstorms', detail: 'Drama outside, cozy inside', seeds: ['Professional Napping', 'Dream Interpretation', 'Tea Ceremony', 'Sound Healing', 'Poetry'] },
+    ],
+  },
+  {
+    prompt: 'What kind of projects energize you?',
+    choices: [
+      { icon: '🧭', label: 'Untangling a system', detail: 'Making the hidden structure visible', seeds: ['Coding', 'Web Design', 'Spreadsheet Sorcery', 'Budget Magic', 'Home Repairs'] },
+      { icon: '🌺', label: 'Making beauty useful', detail: 'Aesthetic with a job to do', seeds: ['Graphic Design', 'Photography', 'Pottery', 'Painting Walls', 'Gift Wrapping'] },
+      { icon: '🛠️', label: 'Hands-on rescue missions', detail: 'Fixing the thing everyone avoided', seeds: ['Furniture Building', 'Assembling IKEA', 'Moving Heavy Things', 'Parallel Parking', 'Home Repairs'] },
+      { icon: '🎤', label: 'Creating a moment', detail: 'Room energy, surprise, performance', seeds: ['DJing', 'Karaoke Domination', 'Dance Floor Presence', 'Surprise Orchestration', 'Party Planning'] },
+    ],
+  },
+  {
+    prompt: 'Which environment feels most like home?',
+    choices: [
+      { icon: '🕯️', label: 'A calm little room', detail: 'Low light, deep care, no rush', seeds: ['Meditation', 'Reiki', 'Massage', 'Tea Ceremony', 'Couples Counseling'] },
+      { icon: '🌊', label: 'A big open edge', detail: 'Wind, water, horizon', seeds: ['Surfing', 'Camping', 'Trail Finding', 'Cloud Watching', 'Ocean Boiling'] },
+      { icon: '🎪', label: 'A place with spectacle', detail: 'Color, risk, rhythm', seeds: ['Aerial Acrobatics', 'Trapeze', 'Pole Dancing', 'Contortion', 'Dance Floor Presence'] },
+      { icon: '🧪', label: 'A workshop of experiments', detail: 'Try it, break it, make it better', seeds: ['Fermentation', 'Baking', 'Coffee Snobbery', 'App Building', 'Web Design'] },
+    ],
+  },
+  {
+    prompt: 'When the group needs magic, you bring...',
+    choices: [
+      { icon: '✨', label: 'Wonder', detail: 'Myth, symbolism, delightful weirdness', seeds: ['Astrology', 'Tarot Reading', 'Crystal Collecting', 'Dragon Taming', 'Parallel Universe Hopping'] },
+      { icon: '🌿', label: 'Grounding', detail: 'The practical thing that lets everyone breathe', seeds: ['Meal Prep', 'Composting', 'Gardening', 'Animal Training', 'Pet Photography'] },
+      { icon: '🧲', label: 'Belonging', detail: 'Making the room feel held', seeds: ['Wingman Services', 'Pep Talks', 'Hype Person', 'Deep Listening', 'Intimacy Coaching'] },
+      { icon: '🪩', label: 'Spark', detail: 'The lift, the joke, the brave first move', seeds: ['Stand-up Comedy', 'Guitar Playing', 'Singing', 'Voice Acting', 'Karaoke Domination'] },
+    ],
+  },
+  {
+    prompt: 'A future-you badge would say...',
+    choices: [
+      { icon: '🏡', label: 'Builder of cozy worlds', detail: 'Homes, rituals, care systems', seeds: ['Cooking', 'Home Repairs', 'Furniture Building', 'Plant Parenting', 'Party Planning'] },
+      { icon: '🚀', label: 'Architect of wild plans', detail: 'Bold ideas with an engine', seeds: ['Starship Navigation', 'App Building', 'Salary Negotiation', 'Coding', 'Budget Magic'] },
+      { icon: '🎐', label: 'Keeper of subtle signals', detail: 'Pattern, mood, intuition', seeds: ['Dream Interpretation', 'Astrology', 'Tarot Reading', 'Sound Healing', 'Meditation'] },
+      { icon: '🌻', label: 'Friend of becoming', detail: 'Growth, practice, encouragement', seeds: ['Yoga', 'Breathwork', 'Language Teaching', 'Interview Prep', 'Pep Talks'] },
+    ],
+  },
+];
 
 const STAGES: StageDef[] = [
   { label: 'Seed', height: 24, canvasWidth: 72, labelWidth: 100 },
@@ -200,8 +246,42 @@ const SOIL_SPECKS = Array.from({ length: 38 }, (_, index) => ({
   opacity: 0.14 + ((index * 5) % 18) / 100,
 }));
 
+const MEADOW_MOTES = Array.from({ length: 28 }, (_, index) => ({
+  leftRatio: ((index * 3.19) % 100) / 100,
+  topRatio: 0.11 + (((index * 5.43) % 100) / 100) * 0.44,
+  size: 1.6 + (index % 4) * 0.75,
+  opacity: 0.22 + ((index * 7) % 24) / 100,
+  drift: `${-10 + ((index * 13) % 21)}px`,
+}));
+
+const DISTANT_BLOOMS = Array.from({ length: 34 }, (_, index) => ({
+  leftRatio: ((index * 2.91) % 100) / 100,
+  bottomRatio: 0.22 + (((index * 4.17) % 100) / 100) * 0.18,
+  height: 7 + (index % 5) * 2,
+  color: ['#f2c85a', '#dd7e6b', '#c7aadf', '#f4b8cc', '#fff2ba'][index % 5],
+  opacity: 0.32 + ((index * 11) % 24) / 100,
+}));
+
+const FEATURED_MEADOW_BLOOMS = [
+  { leftRatio: 0.08, bottomRatio: 0.05, height: 150, size: 86, color: '#f07aa5', edge: '#b94d76', center: '#f5c24b', lean: -10 },
+  { leftRatio: 0.2, bottomRatio: 0.09, height: 128, size: 72, color: '#f16454', edge: '#b8443a', center: '#ffd24d', lean: 8 },
+  { leftRatio: 0.82, bottomRatio: 0.08, height: 144, size: 82, color: '#b174df', edge: '#7b52ae', center: '#ffe063', lean: -4 },
+  { leftRatio: 0.93, bottomRatio: 0.04, height: 118, size: 64, color: '#f58ab7', edge: '#c95b86', center: '#ffd568', lean: 9 },
+];
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function greatestCommonDivisor(left: number, right: number): number {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
+  while (b > 0) {
+    const next = a % b;
+    a = b;
+    b = next;
+  }
+  return a || 1;
 }
 
 function hashString(value: string) {
@@ -225,7 +305,7 @@ function getCategoryForSkill(description: string) {
 }
 
 function getLevel(skill: Partial<Skill>) {
-  const level = Number(skill.enthusiasm_level ?? 5);
+  const level = Number(skill.enthusiasm_level ?? 0);
   return clamp(Number.isFinite(level) ? level : 0, 0, 5);
 }
 
@@ -233,30 +313,81 @@ function getStage(level: number) {
   return STAGES[clamp(level, 0, STAGES.length - 1)];
 }
 
-function getWildflowerSpecies(skill: GardenSkill, index: number, category: SkillCategoryDef) {
-  const options = SPECIES_BY_CATEGORY[category.species];
-  return options[(hashString(`${skill.id}:${skill.description}:${index}`) % options.length)];
+function getEmbeddedLabelLines(label: string) {
+  const words = label.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return [label.trim().slice(0, 14)];
+
+  const lines: string[] = [];
+  let current = '';
+  words.forEach(word => {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= 12 || lines.length === 0 && words.length === 2) {
+      current = next;
+      return;
+    }
+    lines.push(current);
+    current = word;
+  });
+  if (current) lines.push(current);
+
+  return lines.slice(0, 2).map(line => line.length > 14 ? `${line.slice(0, 12)}…` : line);
 }
 
 function getDefaultPosition(skill: GardenSkill, index: number, count: number) {
-  const baseSlot = (index + 0.5) / Math.max(1, count);
-  const maxJitter = clamp(0.22 / Math.max(1, count), 0.018, 0.085);
-  const jitter = (ratioFromHash(skill.id || skill.description, 1) - 0.5) * maxJitter * 2;
-  const freeScatter = ratioFromHash(skill.description || skill.id, 3);
-  const mixedX = count <= 3
-    ? 0.1 + freeScatter * 0.8
-    : baseSlot * 0.72 + freeScatter * 0.28;
+  if (count > 18) {
+    const columns = Math.ceil(Math.sqrt(count * 1.35));
+    const rows = Math.ceil(count / columns);
+    const stride = [7, 11, 13, 17].find(candidate => greatestCommonDivisor(candidate, count) === 1) ?? 1;
+    const layoutIndex = (index * stride) % count;
+    const row = Math.floor(layoutIndex / columns);
+    const column = layoutIndex % columns;
+    const rowOffset = row % 2 === 0 ? 0 : 0.5 / columns;
+    const xJitter = (ratioFromHash(skill.id || skill.description, 1) - 0.5) * (0.54 / columns);
+    const yJitter = (ratioFromHash(skill.description || skill.id, 2) - 0.5) * (0.16 / Math.max(1, rows));
+
+    return {
+      x: clamp((column + 0.5) / columns + rowOffset + xJitter, 0.06, 0.94),
+      y: clamp(0.48 + (row / Math.max(1, rows - 1)) * 0.39 + yJitter, 0.46, 0.9),
+    };
+  }
+
+  const columns = Math.min(count, Math.max(count <= 5 ? count : 3, Math.ceil(Math.sqrt(count * 1.45))));
+  const rows = Math.ceil(count / columns);
+  const row = Math.floor(index / columns);
+  const column = index % columns;
+  const rowOffset = rows > 1 && row % 2 === 1 ? 0.32 / columns : 0;
+  const xJitter = (ratioFromHash(skill.id || skill.description, 1) - 0.5) * (0.2 / columns);
+  const yJitter = (ratioFromHash(skill.description || skill.id, 2) - 0.5) * 0.045;
 
   return {
-    x: clamp(mixedX + jitter, 0.08, 0.92),
-    y: clamp(0.8 + ratioFromHash(skill.description || skill.id, 2) * 0.14, 0.78, 0.95),
+    x: clamp((column + 0.5) / columns + rowOffset + xJitter, 0.08, 0.92),
+    y: clamp(0.55 + (row / Math.max(1, rows - 1)) * 0.3 + yJitter, 0.52, 0.9),
   };
 }
 
 function getMeadowHeight(skillCount: number, width: number) {
-  const base = skillCount === 0 ? (width < 420 ? 230 : 255) : (width < 420 ? 340 : 390);
-  const extra = Math.max(0, skillCount - (width < 420 ? 5 : 8)) * (width < 420 ? 18 : 12);
-  return clamp(base + extra, base, width < 420 ? 520 : 560);
+  const base = skillCount === 0 ? (width < 420 ? 310 : 350) : (width < 420 ? 430 : 480);
+  const extra = Math.max(0, skillCount - (width < 420 ? 10 : 18)) * (width < 420 ? 8 : 5);
+  return clamp(base + extra, base, width < 420 ? 660 : 720);
+}
+
+function normalizeSkillName(skill: string) {
+  return skill.trim().toLowerCase();
+}
+
+function getSeedTray(seedSkills: string[], plantedNames: Set<string>, shakeIndex: number) {
+  const readySeeds = seedSkills
+    .filter(skill => !plantedNames.has(normalizeSkillName(skill)))
+    .filter((skill, index, all) => all.findIndex(item => normalizeSkillName(item) === normalizeSkillName(skill)) === index);
+
+  return readySeeds
+    .map(skill => ({
+      skill,
+      score: hashString(`${skill}:${shakeIndex}:seed-pouch`),
+    }))
+    .sort((a, b) => a.score - b.score)
+    .slice(0, SEED_TRAY_SIZE)
+    .map(item => item.skill);
 }
 
 function useWildflowerStyles() {
@@ -281,9 +412,148 @@ function useWildflowerStyles() {
         transform-origin: 50% 100%;
         will-change: transform;
       }
+      @keyframes meadowMoteDrift {
+        0%, 100% { transform: translate3d(0, 0, 0); }
+        50% { transform: translate3d(var(--mote-drift, 8px), -8px, 0); }
+      }
+      .meadow-mote {
+        animation-name: meadowMoteDrift;
+        animation-duration: 6.5s;
+        animation-timing-function: ease-in-out;
+        animation-iteration-count: infinite;
+        will-change: transform;
+      }
     `;
     document.head.appendChild(style);
   }, []);
+}
+
+function MeadowAtmosphere({ width, height }: { width: number; height: number }) {
+  const hillHeight = Math.max(260, height - GROUND_HEIGHT + 28);
+
+  return (
+    <>
+      <Svg
+        pointerEvents="none"
+        width="100%"
+        height={hillHeight}
+        viewBox="0 0 1000 520"
+        preserveAspectRatio="none"
+        style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
+      >
+        <Path d="M0 0 H1000 V520 H0 Z" fill="#32b8dd" opacity="0.92" />
+        <Path d="M0 0 H1000 V520 H0 Z" fill="#ffffff" opacity="0.18" />
+        <G opacity="0.82" fill="#fffdf7">
+          <Ellipse cx="118" cy="86" rx="58" ry="26" />
+          <Ellipse cx="165" cy="77" rx="42" ry="28" />
+          <Ellipse cx="210" cy="90" rx="56" ry="22" />
+          <Ellipse cx="610" cy="86" rx="64" ry="24" />
+          <Ellipse cx="670" cy="75" rx="46" ry="31" />
+          <Ellipse cx="724" cy="91" rx="58" ry="22" />
+          <Ellipse cx="385" cy="142" rx="54" ry="21" />
+          <Ellipse cx="430" cy="132" rx="38" ry="26" />
+          <Ellipse cx="475" cy="145" rx="50" ry="19" />
+        </G>
+        <Path
+          d="M0 310 C120 238 250 248 370 296 C515 354 650 228 790 268 C900 300 962 250 1000 236 L1000 520 L0 520 Z"
+          fill="#c7edb3"
+          opacity="0.96"
+        />
+        <Path
+          d="M0 366 C118 292 248 304 378 352 C510 402 644 304 792 326 C902 344 958 318 1000 296 L1000 520 L0 520 Z"
+          fill="#8fce7d"
+          opacity="0.93"
+        />
+        <Path
+          d="M0 430 C170 372 295 404 430 426 C584 452 720 374 864 394 C936 404 980 380 1000 364 L1000 520 L0 520 Z"
+          fill="#63ad5d"
+          opacity="0.82"
+        />
+        <Path
+          d="M0 476 C155 426 284 448 404 472 C548 504 710 426 862 446 C934 456 980 428 1000 410 L1000 520 L0 520 Z"
+          fill="#3e8d4e"
+          opacity="0.78"
+        />
+      </Svg>
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: Math.max(16, width * 0.06),
+          top: Math.max(18, height * 0.06),
+          width: Math.min(190, width * 0.28),
+          height: Math.min(190, width * 0.28),
+          borderRadius: 999,
+          backgroundColor: 'rgba(255,229,110,0.38)',
+          shadowColor: '#f2c85a',
+          shadowOpacity: 0.36,
+          shadowRadius: 52,
+          shadowOffset: { width: 0, height: 0 },
+        }}
+      />
+      {width > 0 && DISTANT_BLOOMS.map((bloom, index) => (
+        <View
+          pointerEvents="none"
+          key={`distant-bloom-${index}`}
+          style={{
+            position: 'absolute',
+            left: width * bloom.leftRatio,
+            bottom: GROUND_HEIGHT + height * bloom.bottomRatio,
+            width: 2,
+            height: bloom.height,
+            borderRadius: 2,
+            backgroundColor: 'rgba(94,126,82,0.46)',
+            opacity: bloom.opacity,
+          }}
+        >
+          <View
+            style={{
+              position: 'absolute',
+              left: -3,
+              top: -5,
+              width: 8,
+              height: 8,
+              borderRadius: 999,
+              backgroundColor: bloom.color,
+              borderWidth: 1,
+              borderColor: 'rgba(255,253,247,0.42)',
+            }}
+          />
+        </View>
+      ))}
+      {width > 0 && FEATURED_MEADOW_BLOOMS.map((bloom, index) => (
+        <DecorativeMeadowBloom
+          key={`featured-meadow-bloom-${index}`}
+          bloom={bloom}
+          width={width}
+          height={height}
+        />
+      ))}
+      {width > 0 && MEADOW_MOTES.map((mote, index) => (
+        <View
+          pointerEvents="none"
+          key={`meadow-mote-${index}`}
+          className={Platform.OS === 'web' ? 'meadow-mote' : undefined}
+          style={{
+            position: 'absolute',
+            left: width * mote.leftRatio,
+            top: height * mote.topRatio,
+            width: mote.size,
+            height: mote.size,
+            borderRadius: 999,
+            backgroundColor: index % 3 === 0 ? '#fff8cf' : index % 3 === 1 ? '#f5c1cd' : '#d5c7f1',
+            opacity: mote.opacity,
+            ...(Platform.OS === 'web'
+              ? ({
+                  ['--mote-drift' as any]: mote.drift,
+                  animationDelay: `${-index * 280}ms`,
+                } as any)
+              : {}),
+          }}
+        />
+      ))}
+    </>
+  );
 }
 
 function renderStem({
@@ -364,7 +634,7 @@ function renderDaisy(cx: number, cy: number, radius: number, full: boolean, cate
   );
 }
 
-function renderSunflower(cx: number, cy: number, radius: number, full: boolean, category: SkillCategoryDef) {
+function renderSunflower(cx: number, cy: number, radius: number, full: boolean) {
   const petalCount = full ? 18 : 12;
   return (
     <G>
@@ -474,20 +744,149 @@ function renderLavender(cx: number, cy: number, radius: number, full: boolean, c
 }
 
 function renderBloom(species: WildflowerSpecies, cx: number, cy: number, radius: number, full: boolean, category: SkillCategoryDef) {
-  if (species === 'sunflower') return renderSunflower(cx, cy, radius, full, category);
+  if (species === 'sunflower') return renderSunflower(cx, cy, radius, full);
   if (species === 'poppy') return renderPoppy(cx, cy, radius, full, category);
   if (species === 'lavender') return renderLavender(cx, cy, radius, full, category);
   return renderDaisy(cx, cy, radius, full, category);
+}
+
+function renderEmbeddedSkillLabel({
+  label,
+  species,
+  cx,
+  cy,
+  radius,
+  category,
+}: {
+  label?: string;
+  species: WildflowerSpecies;
+  cx: number;
+  cy: number;
+  radius: number;
+  category: SkillCategoryDef;
+}) {
+  if (!label) return null;
+
+  const lines = getEmbeddedLabelLines(label);
+  const fontSize = clamp(radius * 0.32 - Math.max(0, label.length - 12) * 0.08, 5.8, 8.2);
+  const badgeWidth = clamp(radius * (species === 'lavender' ? 1.72 : 2.12), 38, 62);
+  const badgeHeight = lines.length > 1 ? fontSize * 2.45 : fontSize * 1.72;
+  const badgeY = species === 'lavender' ? cy - radius * 0.06 : cy - badgeHeight / 2;
+
+  return (
+    <G>
+      <Rect
+        x={cx - badgeWidth / 2}
+        y={badgeY}
+        width={badgeWidth}
+        height={badgeHeight}
+        rx={badgeHeight / 2}
+        fill="rgba(255,253,247,0.86)"
+        stroke={category.edge}
+        strokeOpacity={0.2}
+        strokeWidth={0.8}
+      />
+      <SvgText
+        fill={category.text}
+        fontSize={fontSize}
+        fontWeight="700"
+        textAnchor="middle"
+      >
+        {lines.map((line, index) => (
+          <TSpan
+            key={`${line}-${index}`}
+            x={cx}
+            y={badgeY + fontSize * (lines.length > 1 ? 0.88 + index * 1.04 : 1.1)}
+          >
+            {line}
+          </TSpan>
+        ))}
+      </SvgText>
+    </G>
+  );
+}
+
+function DecorativeMeadowBloom({
+  bloom,
+  width,
+  height,
+}: {
+  bloom: typeof FEATURED_MEADOW_BLOOMS[number];
+  width: number;
+  height: number;
+}) {
+  const size = Math.round(bloom.size * (width < 420 ? 0.78 : 1));
+  const stemHeight = Math.round(bloom.height * (width < 420 ? 0.76 : 1));
+  const canvasWidth = size * 1.35;
+  const canvasHeight = stemHeight + size * 0.9;
+  const cx = canvasWidth / 2;
+  const baseY = canvasHeight - 4;
+  const cy = size * 0.5;
+  const petalCount = size > 76 ? 10 : 7;
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: width * bloom.leftRatio - canvasWidth / 2,
+        bottom: GROUND_HEIGHT - 8 + height * bloom.bottomRatio,
+        width: canvasWidth,
+        height: canvasHeight,
+        opacity: 0.72,
+      }}
+    >
+      <Svg width={canvasWidth} height={canvasHeight} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
+        <Line
+          x1={cx}
+          y1={baseY}
+          x2={cx + bloom.lean}
+          y2={cy + size * 0.35}
+          stroke="#2f7d4d"
+          strokeWidth={4}
+          strokeLinecap="round"
+        />
+        <G transform={`rotate(-28 ${cx - 12} ${baseY - stemHeight * 0.34})`}>
+          <Ellipse cx={cx - 18} cy={baseY - stemHeight * 0.34} rx={25} ry={9} fill="#3fa763" opacity="0.72" />
+        </G>
+        <G transform={`rotate(32 ${cx + 14} ${baseY - stemHeight * 0.55})`}>
+          <Ellipse cx={cx + 20} cy={baseY - stemHeight * 0.55} rx={25} ry={9} fill="#49b66b" opacity="0.68" />
+        </G>
+        <G transform={`translate(${bloom.lean} 0)`}>
+          {Array.from({ length: petalCount }, (_, petal) => {
+            const angle = petal * (360 / petalCount);
+            return (
+              <G key={petal} transform={`rotate(${angle} ${cx} ${cy})`}>
+                <Ellipse
+                  cx={cx}
+                  cy={cy - size * 0.28}
+                  rx={size * 0.17}
+                  ry={size * 0.34}
+                  fill={petal % 2 === 0 ? bloom.color : `${bloom.color}dd`}
+                  stroke={bloom.edge}
+                  strokeWidth={1.6}
+                />
+              </G>
+            );
+          })}
+          <Circle cx={cx} cy={cy} r={size * 0.18} fill={bloom.center} stroke={bloom.edge} strokeWidth={1.4} />
+          <Circle cx={cx - size * 0.04} cy={cy - size * 0.04} r={size * 0.038} fill="#fff8c9" opacity={0.75} />
+        </G>
+      </Svg>
+    </View>
+  );
 }
 
 function WildflowerSvg({
   level,
   species,
   category,
+  label,
 }: {
   level: number;
   species: WildflowerSpecies;
   category: SkillCategoryDef;
+  label?: string;
 }) {
   const stage = getStage(level);
   const canvasWidth = stage.canvasWidth;
@@ -568,6 +967,14 @@ function WildflowerSvg({
     <Svg width={canvasWidth} height={canvasHeight} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
       {renderStem({ cx, baseY, topY: flowerY + bloomRadius * 0.25, leafColor: leaf, strokeWidth: full ? 2.8 : 2.4, lean: flowerX - cx })}
       {renderBloom(species, flowerX, flowerY, bloomRadius, full, category)}
+      {renderEmbeddedSkillLabel({
+        label,
+        species,
+        cx: flowerX,
+        cy: flowerY,
+        radius: bloomRadius,
+        category,
+      })}
     </Svg>
   );
 }
@@ -576,15 +983,17 @@ function WildflowerSprite({
   level,
   category,
   swaySalt,
+  label,
 }: {
   level: number;
   category: SkillCategoryDef;
   swaySalt: string;
+  label?: string;
 }) {
   const stage = getStage(level);
-  const imageLevel = clamp(level, 1, 5);
-  const source = FLOWER_ASSETS[category.species][imageLevel];
-  const imageSize = Math.round(stage.canvasWidth * (level >= 4 ? 1.12 : 1.04));
+  const speciesOptions = SPECIES_BY_CATEGORY[category.species];
+  const species = speciesOptions[hashString(swaySalt) % speciesOptions.length];
+  const spriteScale = level >= 4 ? 1.18 : level >= 2 ? 1.1 : 1;
   const shouldSway = Platform.OS === 'web' && level >= 4;
   const swayDelay = -Math.round(ratioFromHash(swaySalt, 4) * 2600);
   const swayDuration = 3300 + Math.round(ratioFromHash(swaySalt, 5) * 1200);
@@ -601,7 +1010,6 @@ function WildflowerSprite({
       }}
     >
       <View
-        // @ts-ignore - className applies the web-only CSS keyframe.
         className={shouldSway ? 'wildflower-sway' : undefined}
         style={{
           ...(shouldSway
@@ -611,20 +1019,18 @@ function WildflowerSprite({
                 transformOrigin: '50% 100%',
               } as any)
             : {}),
-          width: imageSize,
-          height: imageSize,
+          width: stage.canvasWidth,
+          height: stage.height + 18,
           alignItems: 'center',
           justifyContent: 'flex-end',
+          transform: [{ scale: spriteScale }],
         }}
       >
-        <Image
-          source={source}
-          contentFit="contain"
-          style={{
-            width: imageSize,
-            height: imageSize,
-            opacity: level === 0 ? 0.72 : 1,
-          }}
+        <WildflowerSvg
+          level={level}
+          species={species}
+          category={category}
+          label={level >= 4 ? label : undefined}
         />
       </View>
     </View>
@@ -692,15 +1098,15 @@ function GroundStrip({ width }: { width: number }) {
         bottom: 0,
         height: GROUND_HEIGHT,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(63,91,59,0.28)',
-        backgroundColor: '#4f3421',
+        borderTopColor: 'rgba(255,253,247,0.18)',
+        backgroundColor: '#2f7d4d',
         overflow: 'hidden',
         ...(Platform.OS === 'web'
           ? ({
-              backgroundImage: [
-                'linear-gradient(180deg, rgba(128,147,92,0.92) 0px, rgba(92,124,74,0.96) 16px, rgba(83,64,39,0.98) 17px, rgba(77,49,29,0.98) 48px, rgba(42,27,18,1) 100%)',
-                'radial-gradient(circle at 12% 62%, rgba(218,184,118,0.22) 0 2px, transparent 3px)',
-                'radial-gradient(circle at 76% 72%, rgba(30,20,14,0.28) 0 2px, transparent 3px)',
+            backgroundImage: [
+                'linear-gradient(180deg, rgba(91,171,78,0.96) 0px, rgba(61,143,75,0.98) 42px, rgba(34,103,63,1) 100%)',
+                'radial-gradient(circle at 12% 48%, rgba(255,228,104,0.38) 0 2px, transparent 3px)',
+                'radial-gradient(circle at 76% 54%, rgba(245,160,204,0.28) 0 2px, transparent 3px)',
               ].join(', '),
               backgroundSize: 'auto, 44px 34px, 52px 40px',
             } as any)
@@ -713,11 +1119,11 @@ function GroundStrip({ width }: { width: number }) {
           left: 0,
           right: 0,
           top: 0,
-          height: 18,
-          backgroundColor: 'rgba(112,138,83,0.78)',
+          height: 28,
+          backgroundColor: 'rgba(128,204,84,0.78)',
           ...(Platform.OS === 'web'
             ? ({
-                backgroundImage: 'linear-gradient(180deg, rgba(152,168,99,0.92), rgba(78,112,69,0.9))',
+                backgroundImage: 'linear-gradient(180deg, rgba(143,214,95,0.96), rgba(72,157,78,0.9))',
               } as any)
             : {}),
         }}
@@ -732,8 +1138,8 @@ function GroundStrip({ width }: { width: number }) {
             width: speck.size,
             height: speck.size,
             borderRadius: speck.size,
-            backgroundColor: index % 3 === 0 ? '#d2a35a' : '#251810',
-            opacity: speck.opacity,
+            backgroundColor: index % 3 === 0 ? '#ffe06d' : index % 3 === 1 ? '#f5a5cc' : '#c7edb3',
+            opacity: speck.opacity * 1.2,
           }}
         />
       ))}
@@ -744,11 +1150,11 @@ function GroundStrip({ width }: { width: number }) {
             position: 'absolute',
             left: width * blade.leftRatio,
             bottom: blade.bottom,
-            width: 1.2,
-            height: blade.height,
+            width: 1.5,
+            height: blade.height + 18,
             borderRadius: 1,
-            backgroundColor: index % 4 === 0 ? '#a5a762' : '#6d8d5f',
-            opacity: blade.opacity,
+            backgroundColor: index % 4 === 0 ? '#b6e26f' : '#245e3c',
+            opacity: blade.opacity + 0.18,
             transform: [{ rotate: blade.rotate }],
           }}
         />
@@ -766,12 +1172,18 @@ function SkillPlant({
   editable,
   onUpdateSkill,
   onDeleteSkill,
+  selected,
+  featured,
+  onSelect,
 }: SkillBubbleGardenProps & {
   skill: GardenSkill;
   index: number;
   count: number;
   width: number;
   height: number;
+  selected: boolean;
+  featured: boolean;
+  onSelect: (skillId: string) => void;
 }) {
   const level = getLevel(skill);
   const stage = getStage(level);
@@ -780,18 +1192,20 @@ function SkillPlant({
   const storedX = typeof skill.display_x === 'number' ? skill.display_x : fallback.x;
   const storedY = typeof skill.display_y === 'number' ? skill.display_y : fallback.y;
   const x = clamp(storedX, 0.06, 0.94);
-  const y = clamp(storedY, 0.76, 0.96);
+  const y = clamp(storedY, 0.54, 0.96);
   const plantWidth = stage.labelWidth;
   const plantHeight = stage.height + LABEL_HEIGHT + 14;
   const anchorY = clamp(y * height, stage.height + LABEL_HEIGHT + 10, height - 9);
   const left = clamp(x * width - plantWidth / 2, FIELD_SIDE_PADDING, Math.max(FIELD_SIDE_PADDING, width - plantWidth - FIELD_SIDE_PADDING));
   const top = clamp(anchorY - plantHeight, 6, Math.max(6, height - plantHeight - 4));
-  const labelFont = clamp(12 - Math.max(0, skill.description.length - 22) * 0.08, 9.8, 12);
+  const labelFont = clamp(12 - Math.max(0, skill.description.length - 22) * 0.08, 9.4, 12);
   const pan = useRef(new Animated.ValueXY()).current;
   const grow = useRef(new Animated.Value(0)).current;
   const dragStart = useRef({ left, top });
   const didDrag = useRef(false);
   const canDrag = !!editable;
+  const bloomHasEmbeddedLabel = level >= 4;
+  const showLabel = !bloomHasEmbeddedLabel && (selected || count <= 10 || featured);
 
   useEffect(() => {
     grow.setValue(0);
@@ -842,6 +1256,7 @@ function SkillPlant({
   );
 
   const cycleLevel = () => {
+    onSelect(skill.id);
     if (!editable || !onUpdateSkill) return;
     if (didDrag.current) {
       didDrag.current = false;
@@ -849,9 +1264,63 @@ function SkillPlant({
     }
 
     onUpdateSkill(skill, {
-      enthusiasm_level: level === 5 ? 0 : level + 1,
+      enthusiasm_level: level >= 5 ? 0 : clamp(level + 1, 0, 5),
     });
   };
+
+  const updateLevel = (nextLevel: number) => {
+    if (!editable || !onUpdateSkill) return;
+    onSelect(skill.id);
+    onUpdateSkill(skill, {
+      enthusiasm_level: clamp(nextLevel, 0, 5),
+    });
+  };
+
+  const label = showLabel ? (
+    <View
+      style={{
+        minHeight: 22,
+        maxWidth: plantWidth - 10,
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 10,
+        backgroundColor: level === 0
+          ? 'rgba(75,49,29,0.68)'
+          : 'rgba(255,253,247,0.78)',
+        borderWidth: 1,
+        borderColor: level === 0
+          ? 'rgba(217,190,139,0.24)'
+          : 'rgba(154,129,81,0.18)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: category.edge,
+        shadowOpacity: 0.02,
+        shadowRadius: 2,
+        shadowOffset: { width: 0, height: 2 },
+      }}
+    >
+      <Text
+        selectable={false}
+        numberOfLines={2}
+        style={{
+          fontFamily: 'Lato_700Bold',
+          color: level === 0 ? '#f8eee2' : category.text,
+          fontSize: labelFont,
+          lineHeight: labelFont * 1.12,
+          textAlign: 'center',
+          opacity: 0.94,
+          ...(Platform.OS === 'web'
+            ? ({
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+              } as any)
+            : {}),
+        }}
+      >
+        {skill.description}
+      </Text>
+    </View>
+  ) : null;
 
   return (
     <Animated.View
@@ -873,6 +1342,7 @@ function SkillPlant({
               userSelect: 'none',
               WebkitUserSelect: 'none',
               touchAction: 'none',
+              filter: selected ? 'drop-shadow(0 10px 16px rgba(77, 58, 34, 0.18))' : undefined,
             } as any)
           : {}),
       }}
@@ -897,77 +1367,94 @@ function SkillPlant({
             : {}),
         }}
       >
-        {editable && onDeleteSkill && (
-          <Pressable
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`Remove ${skill.description}`}
-            onPress={(event) => {
-              event.stopPropagation?.();
-              onDeleteSkill(skill);
-            }}
+        <View style={{ width: plantWidth, height: stage.height + 18, alignItems: 'center', justifyContent: 'flex-end' }}>
+          <WildflowerSprite
+            level={level}
+            category={category}
+            swaySalt={`${skill.id}:${skill.description}`}
+            label={skill.description}
+          />
+        </View>
+
+        {label}
+        {selected && editable && (
+          <View
             style={{
               position: 'absolute',
-              right: 4,
+              left: plantWidth / 2 - 52,
               top: 0,
-              width: 22,
-              height: 22,
-              borderRadius: 11,
-              backgroundColor: 'rgba(255,253,247,0.94)',
+              minWidth: 104,
+              minHeight: 28,
+              borderRadius: 999,
+              backgroundColor: 'rgba(255,253,247,0.95)',
               borderWidth: 1,
-              borderColor: 'rgba(111,91,64,0.28)',
+              borderColor: 'rgba(122,89,42,0.16)',
+              flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
-              zIndex: 4,
-            }}
-          >
-            <Text style={{ fontFamily: 'Lato_700Bold', color: '#7a5a36', fontSize: 13, lineHeight: 16 }}>
-              x
-            </Text>
-          </Pressable>
-        )}
-
-        <WildflowerSprite
-          level={level}
-          category={category}
-          swaySalt={`${skill.id}:${skill.description}`}
-        />
-
-        <View
-          style={{
-            minHeight: 22,
-            maxWidth: plantWidth - 10,
-            paddingHorizontal: 7,
-            paddingVertical: 3,
-            borderRadius: 10,
-            backgroundColor: level === 0 ? 'rgba(75,49,29,0.68)' : 'rgba(255,253,247,0.78)',
-            borderWidth: 1,
-            borderColor: level === 0 ? 'rgba(217,190,139,0.24)' : 'rgba(154,129,81,0.18)',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text
-            selectable={false}
-            numberOfLines={2}
-            style={{
-              fontFamily: 'Lato_700Bold',
-              color: level === 0 ? '#f8eee2' : category.text,
-              fontSize: labelFont,
-              lineHeight: labelFont * 1.12,
-              textAlign: 'center',
-              opacity: 0.9,
+              gap: 4,
+              paddingHorizontal: 4,
+              shadowColor: '#5b3a22',
+              shadowOpacity: 0.12,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 3 },
+              zIndex: 6,
               ...(Platform.OS === 'web'
                 ? ({
+                    cursor: 'default',
                     userSelect: 'none',
                     WebkitUserSelect: 'none',
+                    touchAction: 'manipulation',
                   } as any)
                 : {}),
             }}
           >
-            {skill.description}
-          </Text>
-        </View>
+            {[
+              { label: '-', action: () => updateLevel(level - 1), disabled: level <= 0, accessibilityLabel: `Shrink ${skill.description}` },
+              { label: '+', action: () => updateLevel(level + 1), disabled: level >= 5, accessibilityLabel: `Grow ${skill.description}` },
+              { label: 'Remove', action: () => onDeleteSkill?.(skill), disabled: !onDeleteSkill, accessibilityLabel: `Remove ${skill.description}` },
+            ].map(action => (
+              <Pressable
+                key={action.label}
+                disabled={action.disabled}
+                accessibilityRole="button"
+                accessibilityLabel={action.accessibilityLabel}
+                hitSlop={6}
+                onPress={(event) => {
+                  event.stopPropagation?.();
+                  action.action();
+                }}
+                style={{
+                  minWidth: action.label === 'Remove' ? 54 : 24,
+                  height: 22,
+                  borderRadius: 999,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: action.label === 'Remove' ? 'rgba(248,238,226,0.82)' : category.pale,
+                  opacity: action.disabled ? 0.38 : 1,
+                  ...(Platform.OS === 'web'
+                    ? ({
+                        cursor: action.disabled ? 'default' : 'pointer',
+                      } as any)
+                    : {}),
+                }}
+              >
+                <Text
+                  selectable={false}
+                  numberOfLines={1}
+                  style={{
+                    fontFamily: 'Lato_700Bold',
+                    color: action.label === 'Remove' ? '#7a5a36' : category.text,
+                    fontSize: action.label === 'Remove' ? 10 : 14,
+                    lineHeight: action.label === 'Remove' ? 12 : 16,
+                  }}
+                >
+                  {action.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
       </Pressable>
     </Animated.View>
   );
@@ -980,7 +1467,7 @@ function SeedButton({
 }: {
   skill: string;
   index: number;
-  onPlantSkill?: (skillDescription: string) => void;
+  onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
   planted?: boolean;
 }) {
   const category = getCategoryForSkill(skill);
@@ -988,26 +1475,30 @@ function SeedButton({
   return (
     <Pressable
       onPress={() => {
-        if (!planted) onPlantSkill?.(skill);
+        if (!planted) onPlantSkill?.(skill, { enthusiasmLevel: 0 });
       }}
       disabled={!onPlantSkill || planted}
+      accessibilityRole="button"
+      accessibilityLabel={planted ? `${skill} already planted` : `Plant ${skill}`}
+      accessibilityState={{ disabled: !onPlantSkill || planted }}
       style={{
-        minHeight: 34,
-        maxWidth: 208,
-        borderRadius: 999,
+        minHeight: 48,
+        width: 190,
+        maxWidth: '100%',
+        borderRadius: 15,
         borderWidth: 1,
-        borderColor: planted ? 'rgba(115,154,136,0.22)' : `${category.edge}66`,
-        backgroundColor: planted ? 'rgba(238,246,240,0.46)' : 'rgba(255,253,247,0.9)',
-        paddingHorizontal: 11,
-        paddingVertical: 6,
+        borderColor: planted ? 'rgba(115,154,136,0.22)' : `${category.edge}55`,
+        backgroundColor: planted ? 'rgba(238,246,240,0.46)' : category.pale,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
         opacity: planted ? 0.58 : 1,
         shadowColor: planted ? '#739a88' : category.edge,
-        shadowOpacity: planted ? 0.02 : 0.1,
-        shadowRadius: 7,
-        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: planted ? 0.02 : 0.13,
+        shadowRadius: 9,
+        shadowOffset: { width: 0, height: 3 },
         ...(Platform.OS === 'web'
           ? ({
               cursor: onPlantSkill && !planted ? 'pointer' : 'default',
@@ -1018,26 +1509,55 @@ function SeedButton({
           : {}),
       }}
     >
-      <SeedMark category={category} size={18} muted={planted} />
-      <Text
-        selectable={false}
-        numberOfLines={1}
+      <View
         style={{
-          fontFamily: 'Lato_700Bold',
-          color: planted ? '#8f8a7f' : category.text,
-          fontSize: 12,
-          lineHeight: 15,
-          flexShrink: 1,
-          ...(Platform.OS === 'web'
-            ? ({
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-              } as any)
-            : {}),
+          width: 30,
+          height: 30,
+          borderRadius: 15,
+          backgroundColor: 'rgba(255,253,247,0.78)',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 1,
+          borderColor: 'rgba(255,253,247,0.8)',
         }}
       >
-        {skill}
-      </Text>
+        <SeedMark category={category} size={19} muted={planted} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          selectable={false}
+          numberOfLines={2}
+          style={{
+            fontFamily: 'Lato_700Bold',
+            color: planted ? '#8f8a7f' : category.text,
+            fontSize: 12.5,
+            lineHeight: 14,
+            flexShrink: 1,
+            ...(Platform.OS === 'web'
+              ? ({
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                } as any)
+              : {}),
+          }}
+        >
+          {skill}
+        </Text>
+        <Text
+          selectable={false}
+          numberOfLines={1}
+          style={{
+            fontFamily: 'Lato_400Regular',
+            color: planted ? '#aaa397' : category.text,
+            fontSize: 9.5,
+            lineHeight: 12,
+            opacity: 0.64,
+            marginTop: 1,
+          }}
+        >
+          {getCategoryForSkill(skill).label}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -1047,15 +1567,23 @@ function CustomSeedButton({ onPress }: { onPress?: () => void }) {
     <Pressable
       onPress={onPress}
       disabled={!onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Plant your own skill"
+      accessibilityState={{ disabled: !onPress }}
       style={{
-        width: 38,
-        height: 38,
-        borderRadius: 19,
+        minHeight: 48,
+        width: 190,
+        maxWidth: '100%',
+        borderRadius: 15,
         borderWidth: 1,
         borderColor: 'rgba(189,147,72,0.42)',
         backgroundColor: '#fffdf7',
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
+        gap: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
         shadowColor: '#bd9348',
         shadowOpacity: 0.1,
         shadowRadius: 8,
@@ -1070,20 +1598,360 @@ function CustomSeedButton({ onPress }: { onPress?: () => void }) {
           : {}),
       }}
     >
-      <BloomMark category={FALLBACK_CATEGORY} size={20} />
-      <Text
-        selectable={false}
+      <View
         style={{
-          position: 'absolute',
-          fontFamily: 'Lato_700Bold',
-          color: '#315d4e',
-          fontSize: 14,
-          lineHeight: 16,
+          width: 30,
+          height: 30,
+          borderRadius: 15,
+          backgroundColor: 'rgba(238,246,240,0.7)',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        +
+        <BloomMark category={FALLBACK_CATEGORY} size={20} />
+      </View>
+      <Text
+        selectable={false}
+        numberOfLines={2}
+        style={{
+          fontFamily: 'Lato_700Bold',
+          color: '#315d4e',
+          fontSize: 12.5,
+          lineHeight: 14,
+          flex: 1,
+        }}
+      >
+        Plant your own
       </Text>
     </Pressable>
+  );
+}
+
+function getSurveySuggestions(answers: number[], plantedNames: Set<string>) {
+  const scores = new Map<string, number>();
+
+  answers.forEach((choiceIndex, questionIndex) => {
+    const choice = SEED_SURVEY[questionIndex]?.choices[choiceIndex];
+    if (!choice) return;
+
+    choice.seeds.forEach((seed, seedIndex) => {
+      const normalized = normalizeSkillName(seed);
+      if (plantedNames.has(normalized)) return;
+      scores.set(seed, (scores.get(seed) ?? 0) + 12 - seedIndex);
+    });
+  });
+
+  const ranked = [...scores.entries()]
+    .map(([description, score]) => ({
+      description,
+      score: score * 100000 + hashString(description),
+    }))
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 8)
+    .map((item, index) => ({
+      description: item.description,
+      enthusiasmLevel: index < 3 ? 5 : index < 6 ? 4 : 3,
+    }));
+
+  return ranked;
+}
+
+function SeedSurvey({
+  plantedNames,
+  hasSkills,
+  onPlantSkill,
+  onPlantSkills,
+}: {
+  plantedNames: Set<string>;
+  hasSkills: boolean;
+  onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
+  onPlantSkills?: (skills: PlantSkillSelection[]) => void;
+}) {
+  const [active, setActive] = useState(false);
+  const [answers, setAnswers] = useState<number[]>([]);
+  const [suggestions, setSuggestions] = useState<PlantSkillSelection[]>([]);
+  const question = SEED_SURVEY[answers.length];
+  const complete = suggestions.length > 0;
+
+  const plantSuggestions = () => {
+    if (suggestions.length === 0) return;
+
+    if (onPlantSkills) {
+      onPlantSkills(suggestions);
+    } else {
+      suggestions.forEach(seed => onPlantSkill?.(seed.description, { enthusiasmLevel: seed.enthusiasmLevel }));
+    }
+
+    setActive(false);
+    setAnswers([]);
+    setSuggestions([]);
+  };
+
+  if (!active) {
+    return (
+      <Pressable
+        onPress={() => setActive(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Seed your garden"
+        style={{
+          minHeight: hasSkills ? 42 : 178,
+          borderRadius: hasSkills ? 16 : 24,
+          borderWidth: 1,
+          borderColor: hasSkills ? 'rgba(92,157,91,0.24)' : 'rgba(255,253,247,0.62)',
+          backgroundColor: hasSkills ? '#eef8e8' : 'rgba(255,253,247,0.9)',
+          paddingHorizontal: hasSkills ? 12 : 18,
+          paddingVertical: hasSkills ? 9 : 18,
+          marginBottom: hasSkills ? 12 : 0,
+          alignItems: hasSkills ? 'stretch' : 'center',
+          justifyContent: 'center',
+          gap: hasSkills ? 10 : 14,
+          shadowColor: hasSkills ? '#5b3a22' : '#315d4e',
+          shadowOpacity: hasSkills ? 0.06 : 0.16,
+          shadowRadius: hasSkills ? 8 : 28,
+          shadowOffset: { width: 0, height: hasSkills ? 2 : 12 },
+          ...(Platform.OS === 'web'
+            ? ({
+                cursor: 'pointer',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+              } as any)
+            : {}),
+        }}
+      >
+        {hasSkills ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: 13 }}>
+                Seed Your Garden
+              </Text>
+              <Text selectable={false} style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 11, marginTop: 1 }}>
+                A tiny identity ritual
+              </Text>
+            </View>
+            <BloomMark category={FALLBACK_CATEGORY} size={22} />
+          </View>
+        ) : (
+          <>
+            <View style={{ flexDirection: 'row', gap: 9 }}>
+              {['✦', '•', '✧', '•', '✦'].map((mote, index) => (
+                <Text
+                  key={`${mote}-${index}`}
+                  selectable={false}
+                  style={{
+                    color: index % 2 === 0 ? '#f2c85a' : '#f5a5cc',
+                    fontSize: index % 2 === 0 ? 18 : 13,
+                    lineHeight: 20,
+                  }}
+                >
+                  {mote}
+                </Text>
+              ))}
+            </View>
+            <Text selectable={false} style={{ fontFamily: 'LibreBaskerville_700Bold', color: '#315d4e', fontSize: 22, lineHeight: 28, textAlign: 'center' }}>
+              Let’s see what grows in your garden…
+            </Text>
+            <Text selectable={false} style={{ fontFamily: 'Lato_400Regular', color: '#52755b', fontSize: 12.5, lineHeight: 18, textAlign: 'center', maxWidth: 290 }}>
+              A few tiny choices, then your meadow blooms from the pattern.
+            </Text>
+            <View
+              style={{
+                minHeight: 40,
+                borderRadius: 999,
+                backgroundColor: '#315d4e',
+                paddingHorizontal: 18,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 13 }}>
+                Begin
+              </Text>
+            </View>
+          </>
+        )}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View
+      style={{
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: hasSkills ? 'rgba(92,157,91,0.24)' : 'rgba(255,253,247,0.62)',
+        backgroundColor: hasSkills ? '#eef8e8' : 'rgba(255,253,247,0.92)',
+        padding: hasSkills ? 12 : 14,
+        marginBottom: hasSkills ? 12 : 0,
+        shadowColor: hasSkills ? '#5b3a22' : '#315d4e',
+        shadowOpacity: hasSkills ? 0.04 : 0.12,
+        shadowRadius: hasSkills ? 8 : 24,
+        shadowOffset: { width: 0, height: hasSkills ? 2 : 10 },
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: 13 }}>
+            Seed Your Garden
+          </Text>
+          <Text selectable={false} style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 11, marginTop: 1 }}>
+            {complete ? 'Your meadow pattern is ready' : `${answers.length + 1}/${SEED_SURVEY.length}`}
+          </Text>
+        </View>
+        <Pressable
+          onPress={() => {
+            setActive(false);
+            setAnswers([]);
+            setSuggestions([]);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Close garden survey"
+          style={{
+            minWidth: 54,
+            minHeight: 30,
+            borderRadius: 999,
+            backgroundColor: 'rgba(255,253,247,0.82)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            ...(Platform.OS === 'web'
+              ? ({
+                  cursor: 'pointer',
+                } as any)
+              : {}),
+          }}
+        >
+          <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#5d8b67', fontSize: 11 }}>
+            Later
+          </Text>
+        </Pressable>
+      </View>
+
+      {!complete && question ? (
+        <>
+          <View style={{ flexDirection: 'row', gap: 4, marginBottom: 10 }}>
+            {SEED_SURVEY.map((_, index) => (
+              <View
+                key={index}
+                style={{
+                  flex: 1,
+                  height: 4,
+                  borderRadius: 99,
+                  backgroundColor: index <= answers.length ? '#3f9958' : 'rgba(63,153,88,0.18)',
+                }}
+              />
+            ))}
+          </View>
+          <Text selectable={false} style={{ fontFamily: 'LibreBaskerville_700Bold', color: '#315d4e', fontSize: 16, lineHeight: 21, marginBottom: 10 }}>
+            {question.prompt}
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {question.choices.map((choice, index) => (
+              <Pressable
+                key={choice.label}
+                onPress={() => {
+                  const nextAnswers = [...answers, index];
+                  if (nextAnswers.length >= SEED_SURVEY.length) {
+                    setSuggestions(getSurveySuggestions(nextAnswers, plantedNames));
+                  }
+                  setAnswers(nextAnswers);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={choice.label}
+                style={{
+                  minHeight: 86,
+                  minWidth: 150,
+                  flexGrow: 1,
+                  flexBasis: 160,
+                  borderRadius: 18,
+                  borderWidth: 1,
+                  borderColor: 'rgba(92,157,91,0.22)',
+                  backgroundColor: '#fffdf7',
+                  paddingHorizontal: 11,
+                  paddingVertical: 9,
+                  justifyContent: 'flex-start',
+                  shadowColor: '#315d4e',
+                  shadowOpacity: 0.06,
+                  shadowRadius: 10,
+                  shadowOffset: { width: 0, height: 4 },
+                  ...(Platform.OS === 'web'
+                    ? ({
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        WebkitUserSelect: 'none',
+                      } as any)
+                    : {}),
+                }}
+              >
+                <Text selectable={false} style={{ fontSize: 22, lineHeight: 26, marginBottom: 5 }}>
+                  {choice.icon}
+                </Text>
+                <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#315d4e', fontSize: 12.5, lineHeight: 15 }}>
+                  {choice.label}
+                </Text>
+                <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 10.5, lineHeight: 13, marginTop: 3 }}>
+                  {choice.detail}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : (
+        <>
+          <Text selectable={false} style={{ fontFamily: 'LibreBaskerville_700Bold', color: '#315d4e', fontSize: 17, lineHeight: 23, marginBottom: 6 }}>
+            Your ecosystem is ready.
+          </Text>
+          <Text selectable={false} style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 12, lineHeight: 17, marginBottom: 10 }}>
+            {suggestions.length} blooms will open from what you chose. You can tend, resize, or remove them afterward.
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
+            {suggestions.map((seed, index) => {
+              const category = getCategoryForSkill(seed.description);
+              return (
+                <View
+                  key={seed.description}
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 999,
+                    backgroundColor: category.pale,
+                    borderWidth: 1,
+                    borderColor: `${category.edge}44`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: [{ translateY: index % 2 === 0 ? 0 : 4 }],
+                  }}
+                >
+                  <BloomMark category={category} size={18} />
+                </View>
+              );
+            })}
+          </View>
+          <Pressable
+            onPress={plantSuggestions}
+            accessibilityRole="button"
+            accessibilityLabel="Plant this garden"
+            style={{
+              minHeight: 42,
+              borderRadius: 999,
+              backgroundColor: '#3f9958',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 14,
+              ...(Platform.OS === 'web'
+                ? ({
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                  } as any)
+                : {}),
+            }}
+          >
+            <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 13 }}>
+              Let It Bloom
+            </Text>
+          </Pressable>
+        </>
+      )}
+    </View>
   );
 }
 
@@ -1094,53 +1962,63 @@ export function SkillBubbleGarden({
   onDeleteSkill,
   seedSkills = [],
   onPlantSkill,
+  onPlantSkills,
   onAddCustomSkill,
 }: SkillBubbleGardenProps) {
   useWildflowerStyles();
 
   const [width, setWidth] = useState(0);
-  const [openSeedGroups, setOpenSeedGroups] = useState<Record<string, boolean>>({});
+  const [seedShake, setSeedShake] = useState(0);
+  const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
   const displaySkills = useMemo(() => [...skills], [skills]);
+  const visibleSkillLimit = width > 0 && width < 420 ? MOBILE_VISIBLE_BLOOM_LIMIT : VISIBLE_BLOOM_LIMIT;
+  const visibleSkills = useMemo(() => {
+    if (displaySkills.length <= visibleSkillLimit) return displaySkills;
+
+    return displaySkills
+      .map((skill, index) => ({
+        skill,
+        score: getLevel(skill) * 1000000 + (displaySkills.length - index) * 100 + hashString(`${skill.id}:${skill.description}`) % 100,
+      }))
+      .sort((left, right) => right.score - left.score)
+      .slice(0, visibleSkillLimit)
+      .map(item => item.skill);
+  }, [displaySkills, visibleSkillLimit]);
+  const storedSkillCount = Math.max(0, displaySkills.length - visibleSkills.length);
   const plantedNames = useMemo(
-    () => new Set(displaySkills.map((skill) => skill.description.trim().toLowerCase())),
+    () => new Set(displaySkills.map((skill) => normalizeSkillName(skill.description))),
     [displaySkills]
   );
-  const seedGroups = useMemo(
-    () => {
-      if (!editable) return [];
-      const seedSet = new Set(seedSkills.map(skill => skill.trim()));
-      const grouped = CATEGORY_DEFS
-        .map(group => ({
-          label: group.label,
-          skills: group.skills.filter(skill => seedSet.has(skill)),
-        }))
-        .filter(group => group.skills.length > 0);
-      const groupedSkills = new Set(grouped.flatMap(group => group.skills));
-      const uncategorized = seedSkills.filter(skill => !groupedSkills.has(skill));
-      if (uncategorized.length > 0) {
-        grouped.push({ label: 'More Seeds', skills: uncategorized });
-      }
-      return grouped;
-    },
-    [editable, seedSkills]
+  const seedTray = useMemo(
+    () => editable ? getSeedTray(seedSkills, plantedNames, seedShake) : [],
+    [editable, plantedNames, seedShake, seedSkills]
   );
   const availableSeedCount = useMemo(
-    () => seedSkills.filter((skill) => !plantedNames.has(skill.trim().toLowerCase())).length,
+    () => seedSkills.filter((skill) => !plantedNames.has(normalizeSkillName(skill))).length,
     [plantedNames, seedSkills]
   );
-  const meadowHeight = getMeadowHeight(displaySkills.length, width || 680);
-  const isCompactSeedBank = width > 0 && width < 620;
+  const featuredSkillIds = useMemo(() => {
+    if (visibleSkills.length <= 14) {
+      return new Set(visibleSkills.map(skill => skill.id));
+    }
+
+    const labelLimit = visibleSkills.length <= 32 ? 9 : visibleSkills.length <= 70 ? 11 : 13;
+    return new Set(
+      visibleSkills
+        .filter(skill => getLevel(skill) >= 4)
+        .map((skill, index) => ({
+          id: skill.id,
+          score: getLevel(skill) * 10000000000 + hashString(`${skill.id}:${skill.description}:${index}`),
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, labelLimit)
+        .map(item => item.id)
+    );
+  }, [visibleSkills]);
+  const meadowHeight = getMeadowHeight(visibleSkills.length, width || 680);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     setWidth(event.nativeEvent.layout.width);
-  };
-
-  const isSeedGroupOpen = (label: string, index: number) =>
-    openSeedGroups[label] ?? (!isCompactSeedBank || index === 0);
-
-  const toggleSeedGroup = (label: string, index: number) => {
-    const current = isSeedGroupOpen(label, index);
-    setOpenSeedGroups(prev => ({ ...prev, [label]: !current }));
   };
 
   return (
@@ -1159,48 +2037,66 @@ export function SkillBubbleGarden({
           minHeight: meadowHeight,
           position: 'relative',
           overflow: 'hidden',
-          backgroundColor: '#fbf7ee',
+          backgroundColor: '#32b8dd',
           ...(Platform.OS === 'web'
             ? ({
-                backgroundImage: 'linear-gradient(180deg, #fffaf0 0%, #eef6e8 58%, #d9c08a 100%)',
+                backgroundImage: 'linear-gradient(180deg, #26b7de 0%, #77d9e8 38%, #bceca6 66%, #4aa25b 100%)',
               } as any)
             : {}),
         }}
       >
-        <Image
-          source={MEADOW_BACKGROUND}
-          contentFit="fill"
-          style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, width: '100%', height: '100%' }}
-        />
+        <MeadowAtmosphere width={width} height={meadowHeight} />
         <View
           style={{
             position: 'absolute',
             left: 0,
             right: 0,
             top: 0,
-            height: Math.min(110, meadowHeight * 0.36),
-            backgroundColor: 'rgba(255,255,255,0.28)',
+            height: Math.min(120, meadowHeight * 0.26),
+            backgroundColor: 'rgba(255,255,255,0.08)',
           }}
         />
 
         <GroundStrip width={width} />
 
-        {width > 0 && displaySkills.map((skill, index) => (
+        {editable && displaySkills.length === 0 && (
+          <View
+            style={{
+              position: 'absolute',
+              left: 14,
+              right: 14,
+              top: 18,
+              zIndex: 30,
+            }}
+          >
+            <SeedSurvey
+              plantedNames={plantedNames}
+              hasSkills={false}
+              onPlantSkill={onPlantSkill}
+              onPlantSkills={onPlantSkills}
+            />
+          </View>
+        )}
+
+        {width > 0 && visibleSkills.map((skill, index) => (
           <SkillPlant
             key={skill.id}
             skill={skill}
             index={index}
-            count={displaySkills.length}
+            count={visibleSkills.length}
             width={width}
             height={meadowHeight}
             editable={editable}
             onUpdateSkill={onUpdateSkill}
             onDeleteSkill={onDeleteSkill}
+            selected={selectedSkillId === skill.id}
+            featured={featuredSkillIds.has(skill.id)}
+            onSelect={setSelectedSkillId}
             skills={skills}
           />
         ))}
 
-        {displaySkills.length === 0 && (
+        {displaySkills.length === 0 && !editable && (
           <View
             style={{
               flex: 1,
@@ -1219,13 +2115,13 @@ export function SkillBubbleGarden({
                 textAlign: 'center',
               }}
             >
-              Your field is waiting.
+              The field is waiting.
             </Text>
           </View>
         )}
       </View>
 
-      {(seedGroups.length > 0 || (editable && onAddCustomSkill)) && (
+      {editable && displaySkills.length > 0 && (seedTray.length > 0 || onAddCustomSkill) && (
         <View
           style={{
             borderTopWidth: 1,
@@ -1236,78 +2132,118 @@ export function SkillBubbleGarden({
             paddingBottom: 14,
           }}
         >
-          <Text
+          {displaySkills.length > 0 && (
+            <SeedSurvey
+              plantedNames={plantedNames}
+              hasSkills
+              onPlantSkill={onPlantSkill}
+              onPlantSkills={onPlantSkills}
+            />
+          )}
+
+          <View
             style={{
-              fontFamily: 'Lato_700Bold',
-              color: '#8f7b55',
-              fontSize: 12,
-              marginBottom: 8,
-              letterSpacing: 0,
+              flexDirection: width > 520 ? 'row' : 'column',
+              alignItems: width > 520 ? 'center' : 'stretch',
+              justifyContent: 'space-between',
+              gap: 10,
+              marginBottom: 10,
             }}
           >
-            Seed Bank{availableSeedCount !== seedSkills.length ? ` · ${availableSeedCount} ready` : ''}
-          </Text>
-          {seedGroups.map((group, groupIndex) => {
-            const open = isSeedGroupOpen(group.label, groupIndex);
-            const readyCount = group.skills.filter(skill => !plantedNames.has(skill.trim().toLowerCase())).length;
-            const category = getCategoryForSkill(group.skills[0] ?? group.label);
-            return (
-              <View key={group.label} style={{ marginBottom: 8 }}>
-                <Pressable
-                  onPress={() => toggleSeedGroup(group.label, groupIndex)}
+            <View>
+              <Text
+                style={{
+                  fontFamily: 'Lato_700Bold',
+                  color: '#7d6843',
+                  fontSize: 13,
+                  letterSpacing: 0,
+                }}
+              >
+                Seed Pouch
+              </Text>
+              <Text
+                style={{
+                  fontFamily: 'Lato_400Regular',
+                  color: '#9b8a6b',
+                  fontSize: 11,
+                  marginTop: 1,
+                }}
+              >
+                {storedSkillCount > 0
+                  ? `${storedSkillCount} resting in seed storage`
+                  : availableSeedCount > SEED_TRAY_SIZE
+                    ? `${Math.min(seedTray.length, SEED_TRAY_SIZE)} offered · shake for another set`
+                    : 'A few seeds left'}
+              </Text>
+            </View>
+            {availableSeedCount > SEED_TRAY_SIZE && (
+              <Pressable
+                onPress={() => setSeedShake(current => current + 1)}
+                accessibilityRole="button"
+                accessibilityLabel="Shake seeds"
+                style={{
+                  minHeight: 38,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: 'rgba(189,147,72,0.36)',
+                  backgroundColor: '#fffdf7',
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 7,
+                  shadowColor: '#bd9348',
+                  shadowOpacity: 0.08,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 2 },
+                  ...(Platform.OS === 'web'
+                    ? ({
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        WebkitUserSelect: 'none',
+                        touchAction: 'manipulation',
+                      } as any)
+                    : {}),
+                }}
+              >
+                <SeedMark category={FALLBACK_CATEGORY} size={17} />
+                <Text
+                  selectable={false}
                   style={{
-                    minHeight: 34,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: open ? `${category.edge}66` : 'rgba(222,193,129,0.3)',
-                    backgroundColor: open ? category.pale : 'rgba(255,250,240,0.62)',
-                    paddingHorizontal: 10,
-                    paddingVertical: 7,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 10,
-                    ...(Platform.OS === 'web'
-                      ? ({
-                          cursor: 'pointer',
-                          userSelect: 'none',
-                          WebkitUserSelect: 'none',
-                        } as any)
-                      : {}),
+                    fontFamily: 'Lato_700Bold',
+                    color: '#694321',
+                    fontSize: 12,
+                    lineHeight: 14,
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <SeedMark category={category} size={16} />
-                    <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: category.text, fontSize: 12 }}>
-                      {group.label}
-                    </Text>
-                  </View>
-                  <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', fontSize: 11 }}>
-                    {readyCount}/{group.skills.length} {open ? '-' : '+'}
-                  </Text>
-                </Pressable>
-                {open && (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center', paddingTop: 8 }}>
-                    {group.skills.map((skill, index) => (
-                      <SeedButton
-                        key={skill}
-                        skill={skill}
-                        index={index + groupIndex * 11}
-                        onPlantSkill={onPlantSkill}
-                        planted={plantedNames.has(skill.trim().toLowerCase())}
-                      />
-                    ))}
-                    {groupIndex === seedGroups.length - 1 && editable && onAddCustomSkill ? (
-                      <CustomSeedButton onPress={onAddCustomSkill} />
-                    ) : null}
-                  </View>
-                )}
-              </View>
-            );
-          })}
-          {seedGroups.length === 0 && editable && onAddCustomSkill ? (
-            <CustomSeedButton onPress={onAddCustomSkill} />
-          ) : null}
+                  Shake Seeds
+                </Text>
+              </Pressable>
+            )}
+          </View>
+
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 9,
+              alignItems: 'center',
+            }}
+          >
+            {seedTray.map((skill, index) => (
+              <SeedButton
+                key={`${skill}-${seedShake}`}
+                skill={skill}
+                index={index}
+                onPlantSkill={onPlantSkill}
+                planted={plantedNames.has(normalizeSkillName(skill))}
+              />
+            ))}
+            {onAddCustomSkill ? (
+              <CustomSeedButton onPress={onAddCustomSkill} />
+            ) : null}
+          </View>
         </View>
       )}
     </View>
