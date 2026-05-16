@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Svg, { Circle, Ellipse, G, Line, Path, Rect, Text as SvgText, TSpan } from 'react-native-svg';
+import Svg, { Circle, Ellipse, G, Line, Path, Text as SvgText, TSpan } from 'react-native-svg';
 import type { Skill } from '../../types';
 
 type GardenSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
@@ -571,8 +571,52 @@ function renderStem({
   );
 }
 
-function renderDaisy(cx: number, cy: number, radius: number, full: boolean, category: SkillCategoryDef) {
-  const petalCount = full ? 14 : 10;
+function renderFlowerCenterLabel({
+  label,
+  cx,
+  cy,
+  radius,
+  category,
+}: {
+  label?: string;
+  cx: number;
+  cy: number;
+  radius: number;
+  category: SkillCategoryDef;
+}) {
+  if (!label) return null;
+
+  const lines = getEmbeddedLabelLines(label);
+  const longestLine = lines.reduce((longest, line) => Math.max(longest, line.length), 0);
+  const fontSize = clamp(radius * 0.27 - Math.max(0, longestLine - 9) * 0.12, 4.6, 7.4);
+  const lineGap = fontSize * 1.08;
+  const firstLineY = cy - ((lines.length - 1) * lineGap) / 2 + fontSize * 0.34;
+
+  return (
+    <SvgText
+      fill={category.text}
+      fontSize={fontSize}
+      fontWeight="700"
+      textAnchor="middle"
+    >
+      {lines.map((line, index) => (
+        <TSpan
+          key={`${line}-${index}`}
+          x={cx}
+          y={firstLineY + index * lineGap}
+        >
+          {line}
+        </TSpan>
+      ))}
+    </SvgText>
+  );
+}
+
+function renderDaisy(cx: number, cy: number, radius: number, full: boolean, category: SkillCategoryDef, label?: string) {
+  const petalCount = 8;
+  const petalFill = full ? category.color : category.pale;
+  const alternateFill = full ? `${category.color}dd` : '#fffdf7';
+  const centerRadius = clamp(radius * (full ? 0.72 : 0.66), 9.5, 22);
   return (
     <G>
       {Array.from({ length: petalCount }, (_, petal) => {
@@ -582,17 +626,18 @@ function renderDaisy(cx: number, cy: number, radius: number, full: boolean, cate
             <Ellipse
               cx={cx}
               cy={cy - radius * 0.72}
-              rx={radius * (full ? 0.21 : 0.19)}
-              ry={radius * (full ? 0.48 : 0.42)}
-              fill={full ? '#fffdf7' : category.pale}
+              rx={radius * 0.34}
+              ry={radius * 0.58}
+              fill={petal % 2 === 0 ? petalFill : alternateFill}
               stroke={category.edge}
-              strokeWidth={1}
+              strokeWidth={1.1}
             />
           </G>
         );
       })}
-      <Circle cx={cx} cy={cy} r={radius * (full ? 0.34 : 0.3)} fill="#d8aa37" stroke="#a37b25" strokeWidth={1.2} />
-      <Circle cx={cx - radius * 0.1} cy={cy - radius * 0.08} r={radius * 0.06} fill="#fff5c8" opacity={0.76} />
+      <Circle cx={cx} cy={cy} r={centerRadius} fill="#fffdf7" stroke={category.edge} strokeOpacity={0.42} strokeWidth={1.2} />
+      <Circle cx={cx - centerRadius * 0.28} cy={cy - centerRadius * 0.32} r={centerRadius * 0.16} fill="#fff7c8" opacity={0.78} />
+      {renderFlowerCenterLabel({ label, cx, cy, radius: centerRadius, category })}
     </G>
   );
 }
@@ -706,64 +751,8 @@ function renderLavender(cx: number, cy: number, radius: number, full: boolean, c
   );
 }
 
-function renderBloom(species: WildflowerSpecies, cx: number, cy: number, radius: number, full: boolean, category: SkillCategoryDef) {
-  return renderDaisy(cx, cy, radius, full, category);
-}
-
-function renderEmbeddedSkillLabel({
-  label,
-  species,
-  cx,
-  cy,
-  radius,
-  category,
-}: {
-  label?: string;
-  species: WildflowerSpecies;
-  cx: number;
-  cy: number;
-  radius: number;
-  category: SkillCategoryDef;
-}) {
-  if (!label) return null;
-
-  const lines = getEmbeddedLabelLines(label);
-  const fontSize = clamp(radius * 0.32 - Math.max(0, label.length - 12) * 0.08, 5.8, 8.2);
-  const badgeWidth = clamp(radius * (species === 'lavender' ? 1.72 : 2.12), 38, 62);
-  const badgeHeight = lines.length > 1 ? fontSize * 2.45 : fontSize * 1.72;
-  const badgeY = species === 'lavender' ? cy - radius * 0.06 : cy - badgeHeight / 2;
-
-  return (
-    <G>
-      <Rect
-        x={cx - badgeWidth / 2}
-        y={badgeY}
-        width={badgeWidth}
-        height={badgeHeight}
-        rx={badgeHeight / 2}
-        fill="rgba(255,253,247,0.86)"
-        stroke={category.edge}
-        strokeOpacity={0.2}
-        strokeWidth={0.8}
-      />
-      <SvgText
-        fill={category.text}
-        fontSize={fontSize}
-        fontWeight="700"
-        textAnchor="middle"
-      >
-        {lines.map((line, index) => (
-          <TSpan
-            key={`${line}-${index}`}
-            x={cx}
-            y={badgeY + fontSize * (lines.length > 1 ? 0.88 + index * 1.04 : 1.1)}
-          >
-            {line}
-          </TSpan>
-        ))}
-      </SvgText>
-    </G>
-  );
+function renderBloom(species: WildflowerSpecies, cx: number, cy: number, radius: number, full: boolean, category: SkillCategoryDef, label?: string) {
+  return renderDaisy(cx, cy, radius, full, category, label);
 }
 
 function WildflowerSvg({
@@ -802,15 +791,7 @@ function WildflowerSvg({
   return (
     <Svg width={canvasWidth} height={canvasHeight} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
       {renderStem({ cx, baseY, topY: flowerY + bloomRadius * 0.25, leafColor: leaf, strokeWidth: 2 + level * 0.18, lean: flowerX - cx })}
-      {renderBloom(species, flowerX, flowerY, bloomRadius, full, category)}
-      {renderEmbeddedSkillLabel({
-        label,
-        species,
-        cx: flowerX,
-        cy: flowerY,
-        radius: bloomRadius,
-        category,
-      })}
+      {renderBloom(species, flowerX, flowerY, bloomRadius, full, category, level >= 2 ? label : undefined)}
     </Svg>
   );
 }
@@ -1039,7 +1020,7 @@ function SkillPlant({
   const dragStart = useRef({ left, top });
   const didDrag = useRef(false);
   const canDrag = !!editable;
-  const bloomHasEmbeddedLabel = level >= 4;
+  const bloomHasEmbeddedLabel = level >= 2;
   const showLabel = !bloomHasEmbeddedLabel && (selected || count <= 10 || featured);
 
   useEffect(() => {
