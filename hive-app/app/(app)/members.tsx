@@ -1876,6 +1876,10 @@ export default function MembersScreen() {
                               ? 'Skill'
                               : 'Profile note';
                     const hasDailyMatch = !isMe && typeof member.dailyMatchPercent === 'number' && (member.dailyMatchSharedCount ?? 0) > 0;
+                    const matchBadgeLeft = Math.round(
+                      honeycombCellWidth / 2 + honeycombAvatarSize * (isCompactHoneycomb ? 0.12 : 0.18)
+                    );
+                    const matchBadgeTop = Math.round(honeycombCardHeight * (isCompactHoneycomb ? 0.11 : 0.12));
                     const visibleChips = [
                       publicWishes.length > 0 && publicWishes[0]?.description !== spotlight
                         ? `${publicWishes.length} wish${publicWishes.length === 1 ? '' : 'es'}`
@@ -1907,8 +1911,8 @@ export default function MembersScreen() {
                               accessibilityLabel={`${member.dailyMatchPercent}% daily question match with ${member.name}`}
                               style={{
                                 position: 'absolute',
-                                top: Math.max(isCompactHoneycomb ? 10 : 14, honeycombCardHeight * 0.08),
-                                right: Math.max(isCompactHoneycomb ? 18 : 30, honeycombCellWidth * 0.13),
+                                top: matchBadgeTop,
+                                left: matchBadgeLeft,
                                 backgroundColor: 'rgba(255,247,221,0.95)',
                                 borderWidth: 1.25,
                                 borderColor: 'rgba(189,147,72,0.46)',
