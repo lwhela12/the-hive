@@ -145,9 +145,38 @@ function AdminPanel({
   );
 }
 
+function AdminHeaderAction({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => ({
+        flexShrink: 0,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        marginBottom: 4,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: 'rgba(222,193,129,0.72)',
+        backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+      })}
+    >
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export default function AdminScreen() {
   const { profile, communityId, communityRole } = useAuth();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const queryClient = useQueryClient();
   const useMobileLayout = width < 768;
   const currentDuesPeriod = getCurrentDuesPeriod();
@@ -181,6 +210,7 @@ export default function AdminScreen() {
   const [eventDescription, setEventDescription] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('member');
+  const [showInviteMember, setShowInviteMember] = useState(false);
 
   // Honey Pot state
   const [honeyPotBalance, setHoneyPotBalance] = useState<number>(0);
@@ -519,6 +549,7 @@ export default function AdminScreen() {
       Alert.alert('Invite sent', `${inviteEmail} will receive an invite to join.`);
       setInviteEmail('');
       setInviteRole('member');
+      setShowInviteMember(false);
       await fetchData();
     }
   };
@@ -653,10 +684,11 @@ export default function AdminScreen() {
   const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
   const canEditHoneyPot = isTreasurer || isAdmin;
   const selectedDuesMember = members.find((member) => member.profiles.id === duesMemberId)?.profiles;
+  const desktopPanelHeight = Math.max(300, Math.floor((height - 210) / 2));
   const dashboardOuterContentStyle: ViewStyle = useMobileLayout
     ? { padding: 16 }
-    : { flexGrow: 1, padding: 16, paddingBottom: 8 };
-  const dashboardPanelStyle = useMobileLayout ? undefined : { flex: 1 };
+    : { padding: 16, paddingBottom: 10 };
+  const dashboardPanelStyle = useMobileLayout ? undefined : { height: desktopPanelHeight };
   const dashboardPanelBodyStyle = useMobileLayout ? undefined : { flex: 1 };
   const panelScrollStyle = useMobileLayout ? undefined : { flex: 1 };
   const panelOrderStyle = (order: number) => ({ order } as unknown as ViewStyle);
@@ -664,14 +696,11 @@ export default function AdminScreen() {
     flexDirection: useMobileLayout ? 'column' : 'row',
     flexWrap: 'wrap',
     marginHorizontal: useMobileLayout ? 0 : -8,
-    ...(useMobileLayout ? {} : { flex: 1 }),
   };
   const dashboardCellStyle: ViewStyle = {
     width: useMobileLayout ? '100%' : '50%',
-    height: useMobileLayout ? undefined : '50%',
     paddingHorizontal: useMobileLayout ? 0 : 8,
-    marginBottom: useMobileLayout ? 18 : 0,
-    paddingBottom: useMobileLayout ? 0 : 14,
+    marginBottom: useMobileLayout ? 18 : 14,
   };
 
   if (!isAdmin && !isTreasurer) {
@@ -966,46 +995,58 @@ export default function AdminScreen() {
 
           {isAdmin && (
             <View style={[dashboardCellStyle, panelOrderStyle(1)]}>
-              <AdminPanel title={`Members (${members.length})`} style={dashboardPanelStyle} bodyStyle={dashboardPanelBodyStyle}>
+              <AdminPanel
+                title={`Members (${members.length})`}
+                style={dashboardPanelStyle}
+                bodyStyle={dashboardPanelBodyStyle}
+                action={(
+                  <AdminHeaderAction
+                    label={showInviteMember ? 'Close Invite' : '+ New Member'}
+                    onPress={() => setShowInviteMember((current) => !current)}
+                  />
+                )}
+              >
                 <ScrollView
                   style={panelScrollStyle}
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={false}
                 >
-                  <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 10 }}>
-                      Invite Member
-                    </Text>
-                    <TextInput
-                      placeholder="Email address"
-                      value={inviteEmail}
-                      onChangeText={setInviteEmail}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      className="border border-gray-300 rounded-lg p-3 mb-3 bg-white"
-                    />
-                    <View className="flex-row flex-wrap mb-4">
-                      {ROLE_OPTIONS.map((role) => (
-                        <Pressable
-                          key={role}
-                          onPress={() => setInviteRole(role)}
-                          className={`px-3 py-2 rounded mr-2 mb-2 ${
-                            inviteRole === role ? 'bg-honey-500' : 'bg-gray-100'
-                          }`}
-                        >
-                          <Text className={`${inviteRole === role ? 'text-white' : 'text-gray-600'} capitalize`}>
-                            {ROLE_LABELS[role]}
-                          </Text>
-                        </Pressable>
-                      ))}
+                  {showInviteMember && (
+                    <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3e6c8', backgroundColor: '#fffaf0' }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 10 }}>
+                        Invite Member
+                      </Text>
+                      <TextInput
+                        placeholder="Email address"
+                        value={inviteEmail}
+                        onChangeText={setInviteEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        className="border border-gray-300 rounded-lg p-3 mb-3 bg-white"
+                      />
+                      <View className="flex-row flex-wrap mb-4">
+                        {ROLE_OPTIONS.map((role) => (
+                          <Pressable
+                            key={role}
+                            onPress={() => setInviteRole(role)}
+                            className={`px-3 py-2 rounded mr-2 mb-2 ${
+                              inviteRole === role ? 'bg-honey-500' : 'bg-gray-100'
+                            }`}
+                          >
+                            <Text className={`${inviteRole === role ? 'text-white' : 'text-gray-600'} capitalize`}>
+                              {ROLE_LABELS[role]}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                      <Pressable
+                        onPress={sendInvite}
+                        className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
+                      >
+                        <Text className="text-center font-semibold text-white">Send Invite</Text>
+                      </Pressable>
                     </View>
-                    <Pressable
-                      onPress={sendInvite}
-                      className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
-                    >
-                      <Text className="text-center font-semibold text-white">Send Invite</Text>
-                    </Pressable>
-                  </View>
+                  )}
 
                 {members.map((member) => {
                   const roleButtons = (
@@ -1131,17 +1172,10 @@ export default function AdminScreen() {
                 style={dashboardPanelStyle}
                 bodyStyle={dashboardPanelBodyStyle}
                 action={(
-                  <Pressable
+                  <AdminHeaderAction
+                    label="+ Create"
                     onPress={() => setShowSurveyModal(true)}
-                    style={({ pressed }: { pressed: boolean }) => ({
-                      backgroundColor: pressed ? '#f5e0b0' : '#fdf3dc',
-                      paddingHorizontal: 12,
-                      paddingVertical: 5,
-                      borderRadius: 10,
-                    })}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Create</Text>
-                  </Pressable>
+                  />
                 )}
               >
                 <ScrollView
