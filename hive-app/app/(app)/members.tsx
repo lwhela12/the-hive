@@ -192,9 +192,10 @@ function HoneycombCardShell({
   height: number;
   width: number;
 }) {
-  const horizontalPadding = Math.max(34, width * 0.18);
-  const topPadding = Math.max(22, height * 0.09);
-  const bottomPadding = Math.max(24, height * 0.1);
+  const compact = width < 240;
+  const horizontalPadding = compact ? Math.max(22, width * 0.14) : Math.max(34, width * 0.18);
+  const topPadding = compact ? Math.max(16, height * 0.08) : Math.max(22, height * 0.09);
+  const bottomPadding = compact ? Math.max(18, height * 0.09) : Math.max(24, height * 0.1);
 
   return (
     <View
@@ -1784,9 +1785,10 @@ export default function MembersScreen() {
         ].some(value => value?.toLowerCase().includes(query));
       })
     : members;
-  const desiredHoneycombColumns = width >= 1500 ? 5 : width >= 1120 ? 4 : width >= 760 ? 3 : width >= 520 ? 2 : 1;
+  const desiredHoneycombColumns = width >= 1500 ? 5 : width >= 1120 ? 4 : width >= 760 ? 3 : width >= 360 ? 2 : 1;
   const honeycombColumns = Math.max(1, Math.min(desiredHoneycombColumns, Math.max(1, filtered.length)));
-  const honeycombMaxWidth = Math.max(280, Math.min(width - 32, 1680));
+  const honeycombOuterGutter = width < 520 ? 12 : 32;
+  const honeycombMaxWidth = Math.max(280, Math.min(width - honeycombOuterGutter, 1680));
   const honeycombCellWidth = honeycombColumns === 1
     ? Math.min(honeycombMaxWidth, 360)
     : Math.min(320, honeycombMaxWidth / (1 + 0.75 * (honeycombColumns - 1)));
@@ -1797,7 +1799,11 @@ export default function MembersScreen() {
   const honeycombGridHeight = honeycombPlacements.length === 0
     ? 0
     : Math.max(...honeycombPlacements.map(placement => placement.top + honeycombCardHeight));
-  const honeycombAvatarSize = honeycombCellWidth < 300 ? 50 : 56;
+  const isCompactHoneycomb = honeycombCellWidth < 240;
+  const honeycombAvatarSize = isCompactHoneycomb ? 42 : honeycombCellWidth < 300 ? 50 : 56;
+  const honeycombNameFontSize = isCompactHoneycomb ? 12 : honeycombCellWidth < 300 ? 13.5 : 14.5;
+  const honeycombNameLineHeight = isCompactHoneycomb ? 16 : honeycombCellWidth < 300 ? 18 : 19;
+  const honeycombTextMaxWidth = Math.max(96, honeycombCellWidth - (isCompactHoneycomb ? 64 : 96));
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#faf8f3' }}>
@@ -1902,22 +1908,27 @@ export default function MembersScreen() {
                               accessibilityLabel={`${member.dailyMatchPercent}% daily question match with ${member.name}`}
                               style={{
                                 position: 'absolute',
-                                top: Math.max(12, honeycombCardHeight * 0.06),
-                                right: -8,
-                                backgroundColor: 'rgba(245,234,209,0.88)',
-                                borderWidth: 1,
-                                borderColor: 'rgba(189,147,72,0.35)',
+                                top: Math.max(isCompactHoneycomb ? 10 : 14, honeycombCardHeight * 0.08),
+                                right: Math.max(isCompactHoneycomb ? 18 : 30, honeycombCellWidth * 0.13),
+                                backgroundColor: 'rgba(255,247,221,0.95)',
+                                borderWidth: 1.25,
+                                borderColor: 'rgba(189,147,72,0.46)',
                                 borderRadius: 999,
-                                paddingHorizontal: 8,
-                                paddingVertical: 4,
+                                paddingHorizontal: isCompactHoneycomb ? 6 : 8,
+                                paddingVertical: isCompactHoneycomb ? 3 : 4,
                                 alignItems: 'center',
-                                minWidth: 50,
+                                minWidth: isCompactHoneycomb ? 42 : 50,
+                                shadowColor: '#bd9348',
+                                shadowOpacity: 0.16,
+                                shadowRadius: 8,
+                                shadowOffset: { width: 0, height: 3 },
+                                zIndex: 5,
                               }}
                             >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', lineHeight: 13 }}>
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: isCompactHoneycomb ? 10 : 11, color: '#bd9348', lineHeight: isCompactHoneycomb ? 12 : 13 }}>
                                 {member.dailyMatchPercent}%
                               </Text>
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 8, color: '#9a8060', textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 10 }}>
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: isCompactHoneycomb ? 7 : 8, color: '#9a8060', textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: isCompactHoneycomb ? 8 : 10 }}>
                                 match
                               </Text>
                             </View>
@@ -1925,9 +1936,9 @@ export default function MembersScreen() {
                           <View style={{ alignItems: 'center' }}>
                             <View style={{
                               borderRadius: (honeycombAvatarSize + 8) / 2,
-                              borderWidth: isMe ? 2.5 : 1.5,
+                              borderWidth: isMe ? 2.5 : isCompactHoneycomb ? 1.25 : 1.5,
                               borderColor: isMe ? '#bd9348' : 'rgba(222,193,129,0.7)',
-                              padding: 3,
+                              padding: isCompactHoneycomb ? 2 : 3,
                               backgroundColor: 'white',
                               shadowColor: '#bd9348',
                               shadowOpacity: 0.14,
@@ -1937,16 +1948,16 @@ export default function MembersScreen() {
                               <Avatar uri={member.avatar_url} name={member.name} size={honeycombAvatarSize} />
                             </View>
 
-                            <View style={{ minWidth: 0, alignItems: 'center', marginTop: 8, maxWidth: honeycombCellWidth - 96 }}>
-                              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: honeycombCellWidth < 300 ? 13.5 : 14.5, color: '#2d2d2d', lineHeight: honeycombCellWidth < 300 ? 18 : 19, textAlign: 'center' }} numberOfLines={2}>
+                            <View style={{ minWidth: 0, alignItems: 'center', marginTop: isCompactHoneycomb ? 6 : 8, maxWidth: honeycombTextMaxWidth }}>
+                              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: honeycombNameFontSize, color: '#2d2d2d', lineHeight: honeycombNameLineHeight, textAlign: 'center' }} numberOfLines={2}>
                                 {isMe ? `${member.name.split(' ')[0]} (you)` : member.name}
                               </Text>
                               {titleLine && (
-                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', marginTop: 3, textAlign: 'center' }} numberOfLines={1}>
+                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: isCompactHoneycomb ? 8.5 : 10, color: '#bd9348', marginTop: isCompactHoneycomb ? 2 : 3, textAlign: 'center' }} numberOfLines={1}>
                                   {titleLine}
                                 </Text>
                               )}
-                              {member.birthday && (
+                              {member.birthday && !isCompactHoneycomb && (
                                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#8a8173', marginTop: 2, textAlign: 'center' }} numberOfLines={1}>
                                   Birthday: {new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                 </Text>
@@ -1954,8 +1965,8 @@ export default function MembersScreen() {
                             </View>
                           </View>
 
-                          {spotlight && (
-                            <View style={{ marginTop: 8, alignItems: 'center', maxWidth: honeycombCellWidth - 96 }}>
+                          {spotlight && !isCompactHoneycomb && (
+                            <View style={{ marginTop: 8, alignItems: 'center', maxWidth: honeycombTextMaxWidth }}>
                               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 8.5, color: '#bd9348', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 2 }} numberOfLines={1}>
                                 {spotlightLabel}
                               </Text>
@@ -1966,10 +1977,10 @@ export default function MembersScreen() {
                           )}
 
                           {visibleChips.length > 0 && (
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 9, justifyContent: 'center' }}>
-                              {visibleChips.map(chip => (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: isCompactHoneycomb ? 4 : 5, marginTop: isCompactHoneycomb ? 7 : 9, justifyContent: 'center' }}>
+                              {visibleChips.slice(0, isCompactHoneycomb ? 1 : 2).map(chip => (
                                 <View key={chip} style={{ backgroundColor: 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 }}>
-                                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }} numberOfLines={1}>
+                                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: isCompactHoneycomb ? 8 : 9, color: '#8a6a2f' }} numberOfLines={1}>
                                     {chip}
                                   </Text>
                                 </View>
