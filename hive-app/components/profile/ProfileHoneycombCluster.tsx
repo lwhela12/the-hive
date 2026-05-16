@@ -261,13 +261,23 @@ export function ProfileHoneycombCluster({
       })
       .filter(Boolean)
   ) as { cell: HoneycombInfoCell; col: number; row: number }[];
-  const placements = placedCells.map(({ cell, col, row }) => {
+  const rawPlacements = placedCells.map(({ cell, col, row }) => {
+    const columnOffset = columns >= 3 && col === 1
+      ? cellHeight * -0.5
+      : col % 2 === 1
+        ? cellHeight * 0.5
+        : 0;
     return {
       key: cell.key,
       left: col * stepX,
-      top: row * cellHeight + (col % 2 === 1 ? cellHeight * 0.5 : 0),
+      top: row * cellHeight + columnOffset,
     };
   });
+  const minTop = rawPlacements.length === 0 ? 0 : Math.min(...rawPlacements.map((placement) => placement.top));
+  const placements = rawPlacements.map((placement) => ({
+    ...placement,
+    top: placement.top - minTop,
+  }));
   const clusterWidth = cellWidth + stepX * (columns - 1);
   const clusterHeight = placements.length === 0
     ? cellHeight
