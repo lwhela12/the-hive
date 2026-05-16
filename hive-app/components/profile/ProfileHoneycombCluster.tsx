@@ -108,10 +108,10 @@ function valueFontSize(cell: HoneycombInfoCell, cellWidth: number, compact: bool
   return 14;
 }
 
-function valueLineLimit(cell: HoneycombInfoCell) {
+function valueLineLimit(cell: HoneycombInfoCell, compact: boolean) {
   if (cell.key === 'project') return 4;
-  if (cell.key.startsWith('fun-fact')) return 3;
-  if (cell.key === 'book' || cell.key === 'hobby') return 3;
+  if (cell.key.startsWith('fun-fact')) return compact ? 3 : 4;
+  if (cell.key === 'book' || cell.key === 'hobby') return compact ? 3 : 4;
   return 2;
 }
 
@@ -186,7 +186,7 @@ function HoneycombCell({
 
         <Text
           selectable={false}
-          numberOfLines={valueLineLimit(cell)}
+          numberOfLines={valueLineLimit(cell, compact)}
           ellipsizeMode="tail"
           style={{
             fontFamily: 'Lato_700Bold',
@@ -221,7 +221,7 @@ export function ProfileHoneycombCluster({
   const measuredWidth = containerWidth > 0 ? containerWidth : compact ? 360 : 520;
   const desiredColumns = preferredColumns ?? (measuredWidth >= 330 ? 3 : 2);
   const columns = Math.max(1, Math.min(desiredColumns, Math.max(1, cells.length), 3));
-  const maxCellWidth = compact ? 154 : 164;
+  const maxCellWidth = compact ? 164 : 196;
   const availableCellWidth = Math.max(104, (measuredWidth - 2) / (1 + 0.75 * (columns - 1)));
   const cellWidth = Math.round(Math.min(maxCellWidth, availableCellWidth));
   const cellHeight = Math.round(cellWidth * HEX_HEIGHT_RATIO);
