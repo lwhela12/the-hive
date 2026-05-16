@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -46,6 +46,13 @@ const formatPhoneNumber = (value: string): string => {
   return `(${limited.slice(0, 3)}) ${limited.slice(3, 6)}-${limited.slice(6)}`;
 };
 
+const hasBloomingSkill = (skill: Partial<Skill>) => {
+  const level = Number(skill.enthusiasm_level ?? 0);
+  return Number.isFinite(level) && level > 0;
+};
+
+const SKILLS_GARDEN_CAPACITY = 8;
+
 export default function ProfileScreen() {
   const { profile, communityId, communityRole, refreshProfile } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
@@ -65,6 +72,8 @@ export default function ProfileScreen() {
   const [expandedWishId, setExpandedWishId] = useState<string | null>(null);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const skillsGardenY = useRef(0);
 
   // Editable profile fields
   const [isEditing, setIsEditing] = useState(false);
@@ -561,13 +570,40 @@ export default function ProfileScreen() {
   ) => {
     if (!profile || !communityId) return;
 
-    const alreadyPlanted = skills.some(
+    const existingSkill = skills.find(
       (skill) => skill.description.trim().toLowerCase() === skillDescription.trim().toLowerCase()
     );
-    if (alreadyPlanted) return;
+    if (existingSkill && hasBloomingSkill(existingSkill)) return;
 
-    const seedIndex = skills.length + 1;
+    const bloomingCount = skills.filter(hasBloomingSkill).length;
+    if (bloomingCount >= SKILLS_GARDEN_CAPACITY) return;
+
+    const seedIndex = bloomingCount + 1;
     const position = getSkillPlantPosition(skillDescription, seedIndex);
+    const updates = {
+      enthusiasm_level: options?.enthusiasmLevel ?? 1,
+      display_x: position.display_x,
+      display_y: position.display_y,
+    };
+
+    if (existingSkill) {
+      setSkills((current) =>
+        current.map((item) => item.id === existingSkill.id ? { ...item, ...updates } : item)
+      );
+
+      const { error } = await supabase
+        .from('skills')
+        .update(updates)
+        .eq('id', existingSkill.id)
+        .eq('user_id', profile.id)
+        .eq('community_id', communityId);
+
+      if (error) {
+        Alert.alert('Error', 'Failed to plant that skill. Please try again.');
+        await fetchData();
+      }
+      return;
+    }
 
     const { data, error } = await supabase
       .from('skills')
@@ -577,9 +613,7 @@ export default function ProfileScreen() {
         description: skillDescription,
         raw_input: skillDescription,
         extracted_from: 'manual',
-        enthusiasm_level: options?.enthusiasmLevel ?? 0,
-        display_x: position.display_x,
-        display_y: position.display_y,
+        ...updates,
       })
       .select('*')
       .single();
@@ -595,50 +629,136 @@ export default function ProfileScreen() {
   };
 
   const handlePlantSkills = async (
-    seeds: Array<{ description: string; enthusiasmLevel?: number }>
+    seeds: Array<{ description: string; enthusiasmLevel?: number }>,
+    options?: { mode?: 'fill' | 'replace' }
   ) => {
     if (!profile || !communityId || seeds.length === 0) return;
 
-    const existingNames = new Set(skills.map(skill => skill.description.trim().toLowerCase()));
+    const mode = options?.mode ?? 'fill';
+    const activeNames = new Set(
+      skills
+        .filter(hasBloomingSkill)
+        .map(skill => skill.description.trim().toLowerCase())
+    );
+    const bloomingCount = mode === 'replace' ? 0 : skills.filter(hasBloomingSkill).length;
+    const openSlots = Math.max(0, SKILLS_GARDEN_CAPACITY - bloomingCount);
+    if (openSlots === 0) return;
+
     const uniqueSeeds = seeds.filter((seed, index, all) => {
       const normalized = seed.description.trim().toLowerCase();
-      return !existingNames.has(normalized) &&
+      return (mode === 'replace' || !activeNames.has(normalized)) &&
         all.findIndex(item => item.description.trim().toLowerCase() === normalized) === index;
-    });
+    }).slice(0, openSlots);
 
     if (uniqueSeeds.length === 0) return;
 
-    const rows = uniqueSeeds.map((seed, index) => {
+    if (mode === 'replace') {
+      const { error: resetError } = await supabase
+        .from('skills')
+        .update({
+          enthusiasm_level: 0,
+          display_x: null,
+          display_y: null,
+        })
+        .eq('user_id', profile.id)
+        .eq('community_id', communityId);
+
+      if (resetError) {
+        Alert.alert('Error', 'Failed to clear your current garden. Please try again.');
+        return;
+      }
+
+      setSkills((current) =>
+        current.map((skill) => ({
+          ...skill,
+          enthusiasm_level: 0,
+          display_x: null,
+          display_y: null,
+        }))
+      );
+    }
+
+    const existingByName = new Map(
+      skills.map(skill => [skill.description.trim().toLowerCase(), skill])
+    );
+    const updatedRows: Skill[] = [];
+    const rowsToInsert: Array<{
+      user_id: string;
+      community_id: string;
+      description: string;
+      raw_input: string;
+      extracted_from: 'manual';
+      enthusiasm_level: number;
+      display_x: number;
+      display_y: number;
+    }> = [];
+
+    for (const [index, seed] of uniqueSeeds.entries()) {
       const position = getSkillPlantPosition(
         seed.description,
-        skills.length + index + 1,
+        bloomingCount + index + 1,
         index,
         uniqueSeeds.length
       );
-      return {
-        user_id: profile.id,
-        community_id: communityId,
-        description: seed.description,
-        raw_input: seed.description,
-        extracted_from: 'manual' as const,
-        enthusiasm_level: seed.enthusiasmLevel ?? 4,
+      const plantedSkill = {
+        enthusiasm_level: seed.enthusiasmLevel ?? (mode === 'replace' ? 4 : 1),
         display_x: position.display_x,
         display_y: position.display_y,
       };
-    });
+      const existingSkill = existingByName.get(seed.description.trim().toLowerCase());
 
-    const { data, error } = await supabase
-      .from('skills')
-      .insert(rows)
-      .select('*');
+      if (existingSkill) {
+        const { data, error } = await supabase
+          .from('skills')
+          .update(plantedSkill)
+          .eq('id', existingSkill.id)
+          .eq('user_id', profile.id)
+          .eq('community_id', communityId)
+          .select('*')
+          .single();
 
-    if (error) {
-      Alert.alert('Error', 'Failed to plant that garden. Please try again.');
-      return;
+        if (error) {
+          Alert.alert('Error', 'Failed to plant that garden. Please try again.');
+          await fetchData();
+          return;
+        }
+
+        if (data) updatedRows.push(data as Skill);
+      } else {
+        rowsToInsert.push({
+          ...plantedSkill,
+          user_id: profile.id,
+          community_id: communityId,
+          description: seed.description,
+          raw_input: seed.description,
+          extracted_from: 'manual' as const,
+        });
+      }
     }
 
-    if (data) {
-      setSkills((current) => [...current, ...(data as Skill[])]);
+    let insertedRows: Skill[] = [];
+    if (rowsToInsert.length > 0) {
+      const { data, error } = await supabase
+        .from('skills')
+        .insert(rowsToInsert)
+        .select('*');
+
+      if (error) {
+        Alert.alert('Error', 'Failed to plant that garden. Please try again.');
+        await fetchData();
+        return;
+      }
+
+      insertedRows = (data as Skill[] | null) ?? [];
+    }
+
+    const plantedRows = [...updatedRows, ...insertedRows];
+    if (plantedRows.length > 0) {
+      setSkills((current) => {
+        const byId = new Map(current.map(skill => [skill.id, skill]));
+        plantedRows.forEach(skill => byId.set(skill.id, skill));
+        return Array.from(byId.values());
+      });
     }
   };
 
@@ -726,8 +846,11 @@ export default function ProfileScreen() {
       void pickImage();
       return;
     }
-    if (label === 'Add a skill') {
-      setSkillsModalVisible(true);
+    if (label === 'Seed your Skills Garden' || label === 'Add a skill') {
+      scrollViewRef.current?.scrollTo({
+        y: Math.max(0, skillsGardenY.current - 16),
+        animated: true,
+      });
       return;
     }
     if (label === 'Share a wish') {
@@ -745,6 +868,7 @@ export default function ProfileScreen() {
 
   const isProfileDesktop = screenWidth >= 1240;
   const isProfilePhone = screenWidth < 640;
+  const bloomingSkillCount = skills.filter(hasBloomingSkill).length;
   const profileKnownFor = ((profile as any).known_for as string | null | undefined)?.trim() || '';
   const profileBio = ((profile as any).bio as string | null | undefined)?.trim() || '';
   const profileHoneycombItems = [
@@ -921,6 +1045,7 @@ export default function ProfileScreen() {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <ScrollView
+        ref={scrollViewRef}
         className="flex-1"
         contentContainerClassName="p-4"
         refreshControl={
@@ -930,6 +1055,7 @@ export default function ProfileScreen() {
         {/* Profile Header with Bee Progress Arc */}
         <FadeIn>
         {(() => {
+          const seededSkillsGarden = skills.some(hasBloomingSkill);
           const checks = [
             { label: 'Add a photo', done: !!profile.avatar_url },
             { label: 'Choose your title', done: !!(profile as any).profile_title },
@@ -939,7 +1065,7 @@ export default function ProfileScreen() {
             { label: 'Share what people should ask you about', done: !!(profile as any).known_for },
             { label: 'Answer your 3MIQ', done: !!((profile as any).miq_experiences && (profile as any).miq_growth && (profile as any).miq_contribution) },
             { label: "Complete this month's check-in", done: pendingSurveys.length === 0 },
-            { label: 'Add a skill', done: skills.length > 0 },
+            { label: 'Seed your Skills Garden', done: seededSkillsGarden },
             { label: 'Share a wish', done: wishes.length > 0 },
           ];
           const done = checks.filter(c => c.done).length;
@@ -1579,16 +1705,23 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Skills — Wildflower Meadow */}
+        {/* Skills Garden */}
         {!initialLoading && <FadeIn delay={50}>
-        <View className="mb-6">
+        <View
+          className="mb-6"
+          onLayout={(event) => {
+            skillsGardenY.current = event.nativeEvent.layout.y;
+          }}
+        >
           <View className="flex-row items-center justify-between mb-1">
             <View>
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
-                Wildflower Meadow 🌸
+                Skills Garden 🌸
               </Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-                {skills.length > 0 ? `${skills.length} skill${skills.length !== 1 ? 's' : ''} in bloom` : 'Seed your garden'}
+                {bloomingSkillCount > 0
+                  ? `${bloomingSkillCount} skill flower${bloomingSkillCount !== 1 ? 's' : ''} blooming`
+                  : 'Seed your Skills Garden'}
               </Text>
             </View>
           </View>

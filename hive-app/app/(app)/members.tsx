@@ -1299,16 +1299,16 @@ function MemberDetailModal({
               ]}
             />
 
-            {/* ── Wildflower Meadow — skills as flowers ── */}
+            {/* Skills Garden */}
             {(member.skills.length > 0 || isCurrentUser) && (
               <View style={{ marginBottom: 24 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <View>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>
-                      WILDFLOWER MEADOW 🌸
+                      SKILLS GARDEN 🌸
                     </Text>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#b5a898', marginTop: 2 }}>
-                      Each flower is a skill — bloom level shows enthusiasm
+                      {member.skills.filter(s => Number(s.enthusiasm_level ?? 0) > 0).length} skill flowers blooming
                     </Text>
                   </View>
                   {isCurrentUser && (
@@ -1329,13 +1329,13 @@ function MemberDetailModal({
                     }}
                     style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed', alignSelf: 'flex-start' }}
                   >
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Plant your first skill 🌱</Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Seed your Skills Garden 🌱</Text>
                   </Pressable>
                 ) : member.skills.length === 0 ? (
                   <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center' }}>
                     <Text style={{ fontSize: 32, marginBottom: 8 }}>🌱</Text>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
-                      No skills planted yet — meadow coming soon!
+                      No skills planted yet — garden coming soon!
                     </Text>
                   </View>
                 ) : (

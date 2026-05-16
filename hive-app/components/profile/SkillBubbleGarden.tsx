@@ -6,6 +6,7 @@ import {
   Platform,
   Pressable,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line, Path, Rect, Text as SvgText, TSpan } from 'react-native-svg';
@@ -14,6 +15,7 @@ import type { Skill } from '../../types';
 type GardenSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type WildflowerSpecies = 'poppy' | 'daisy' | 'lavender' | 'sunflower';
 type PlantSkillOptions = { enthusiasmLevel?: number };
+type PlantSkillsOptions = { mode?: 'fill' | 'replace' };
 type PlantSkillSelection = { description: string; enthusiasmLevel?: number };
 
 type SkillBubbleGardenProps = {
@@ -26,7 +28,7 @@ type SkillBubbleGardenProps = {
   onDeleteSkill?: (skill: GardenSkill) => void;
   seedSkills?: string[];
   onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
-  onPlantSkills?: (skills: PlantSkillSelection[]) => void;
+  onPlantSkills?: (skills: PlantSkillSelection[], options?: PlantSkillsOptions) => void;
   onAddCustomSkill?: () => void;
 };
 
@@ -122,9 +124,9 @@ const FALLBACK_CATEGORY = CATEGORY_DEFS[CATEGORY_DEFS.length - 1];
 const GROUND_HEIGHT = 108;
 const LABEL_HEIGHT = 30;
 const FIELD_SIDE_PADDING = 10;
-const SEED_TRAY_SIZE = 10;
-const VISIBLE_BLOOM_LIMIT = 12;
-const MOBILE_VISIBLE_BLOOM_LIMIT = 8;
+const GARDEN_CAPACITY = 8;
+const SEED_TRAY_SIZE = GARDEN_CAPACITY;
+const VISIBLE_BLOOM_LIMIT = GARDEN_CAPACITY;
 
 type SurveyChoice = {
   icon: string;
@@ -215,11 +217,11 @@ const SEED_SURVEY: SurveyQuestion[] = [
 
 const STAGES: StageDef[] = [
   { label: 'Seed', height: 24, canvasWidth: 72, labelWidth: 100 },
-  { label: 'Sprout', height: 42, canvasWidth: 84, labelWidth: 108 },
-  { label: 'Stem', height: 68, canvasWidth: 104, labelWidth: 124 },
-  { label: 'Bud', height: 92, canvasWidth: 126, labelWidth: 136 },
-  { label: 'Bloom', height: 116, canvasWidth: 146, labelWidth: 148 },
-  { label: 'Full bloom', height: 138, canvasWidth: 166, labelWidth: 158 },
+  { label: 'Tiny bloom', height: 62, canvasWidth: 88, labelWidth: 108 },
+  { label: 'Small bloom', height: 82, canvasWidth: 104, labelWidth: 120 },
+  { label: 'Bloom', height: 104, canvasWidth: 122, labelWidth: 132 },
+  { label: 'Big bloom', height: 124, canvasWidth: 142, labelWidth: 146 },
+  { label: 'Full bloom', height: 146, canvasWidth: 162, labelWidth: 158 },
 ];
 
 const SPECIES_BY_CATEGORY: Record<SkillCategoryDef['species'], WildflowerSpecies[]> = {
@@ -246,14 +248,6 @@ const SOIL_SPECKS = Array.from({ length: 38 }, (_, index) => ({
   opacity: 0.14 + ((index * 5) % 18) / 100,
 }));
 
-const MEADOW_MOTES = Array.from({ length: 28 }, (_, index) => ({
-  leftRatio: ((index * 3.19) % 100) / 100,
-  topRatio: 0.11 + (((index * 5.43) % 100) / 100) * 0.44,
-  size: 1.6 + (index % 4) * 0.75,
-  opacity: 0.22 + ((index * 7) % 24) / 100,
-  drift: `${-10 + ((index * 13) % 21)}px`,
-}));
-
 const DISTANT_BLOOMS = Array.from({ length: 34 }, (_, index) => ({
   leftRatio: ((index * 2.91) % 100) / 100,
   bottomRatio: 0.22 + (((index * 4.17) % 100) / 100) * 0.18,
@@ -261,13 +255,6 @@ const DISTANT_BLOOMS = Array.from({ length: 34 }, (_, index) => ({
   color: ['#f2c85a', '#dd7e6b', '#c7aadf', '#f4b8cc', '#fff2ba'][index % 5],
   opacity: 0.32 + ((index * 11) % 24) / 100,
 }));
-
-const FEATURED_MEADOW_BLOOMS = [
-  { leftRatio: 0.08, bottomRatio: 0.05, height: 150, size: 86, color: '#f07aa5', edge: '#b94d76', center: '#f5c24b', lean: -10 },
-  { leftRatio: 0.2, bottomRatio: 0.09, height: 128, size: 72, color: '#f16454', edge: '#b8443a', center: '#ffd24d', lean: 8 },
-  { leftRatio: 0.82, bottomRatio: 0.08, height: 144, size: 82, color: '#b174df', edge: '#7b52ae', center: '#ffe063', lean: -4 },
-  { leftRatio: 0.93, bottomRatio: 0.04, height: 118, size: 64, color: '#f58ab7', edge: '#c95b86', center: '#ffd568', lean: 9 },
-];
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -307,6 +294,10 @@ function getCategoryForSkill(description: string) {
 function getLevel(skill: Partial<Skill>) {
   const level = Number(skill.enthusiasm_level ?? 0);
   return clamp(Number.isFinite(level) ? level : 0, 0, 5);
+}
+
+function isBloomingSkill(skill: Partial<Skill>) {
+  return getLevel(skill) > 0;
 }
 
 function getStage(level: number) {
@@ -375,7 +366,7 @@ function normalizeSkillName(skill: string) {
   return skill.trim().toLowerCase();
 }
 
-function getSeedTray(seedSkills: string[], plantedNames: Set<string>, shakeIndex: number) {
+function getSeedTray(seedSkills: string[], plantedNames: Set<string>, shakeIndex: number, limit = SEED_TRAY_SIZE) {
   const readySeeds = seedSkills
     .filter(skill => !plantedNames.has(normalizeSkillName(skill)))
     .filter((skill, index, all) => all.findIndex(item => normalizeSkillName(item) === normalizeSkillName(skill)) === index);
@@ -383,10 +374,10 @@ function getSeedTray(seedSkills: string[], plantedNames: Set<string>, shakeIndex
   return readySeeds
     .map(skill => ({
       skill,
-      score: hashString(`${skill}:${shakeIndex}:seed-pouch`),
+      score: hashString(`${skill}:${shakeIndex}:skill-seeds`),
     }))
     .sort((a, b) => a.score - b.score)
-    .slice(0, SEED_TRAY_SIZE)
+    .slice(0, Math.max(0, limit))
     .map(item => item.skill);
 }
 
@@ -412,15 +403,18 @@ function useWildflowerStyles() {
         transform-origin: 50% 100%;
         will-change: transform;
       }
-      @keyframes meadowMoteDrift {
-        0%, 100% { transform: translate3d(0, 0, 0); }
-        50% { transform: translate3d(var(--mote-drift, 8px), -8px, 0); }
+      @keyframes skillSeedShake {
+        0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        18% { transform: translate3d(-4px, 0, 0) rotate(-1.4deg); }
+        36% { transform: translate3d(4px, 0, 0) rotate(1.2deg); }
+        54% { transform: translate3d(-3px, 0, 0) rotate(-0.9deg); }
+        72% { transform: translate3d(2px, 0, 0) rotate(0.6deg); }
       }
-      .meadow-mote {
-        animation-name: meadowMoteDrift;
-        animation-duration: 6.5s;
+      .skill-seed-row-shake {
+        animation-name: skillSeedShake;
+        animation-duration: 420ms;
         animation-timing-function: ease-in-out;
-        animation-iteration-count: infinite;
+        transform-origin: 50% 100%;
         will-change: transform;
       }
     `;
@@ -520,37 +514,6 @@ function MeadowAtmosphere({ width, height }: { width: number; height: number }) 
             }}
           />
         </View>
-      ))}
-      {width > 0 && FEATURED_MEADOW_BLOOMS.map((bloom, index) => (
-        <DecorativeMeadowBloom
-          key={`featured-meadow-bloom-${index}`}
-          bloom={bloom}
-          width={width}
-          height={height}
-        />
-      ))}
-      {width > 0 && MEADOW_MOTES.map((mote, index) => (
-        <View
-          pointerEvents="none"
-          key={`meadow-mote-${index}`}
-          className={Platform.OS === 'web' ? 'meadow-mote' : undefined}
-          style={{
-            position: 'absolute',
-            left: width * mote.leftRatio,
-            top: height * mote.topRatio,
-            width: mote.size,
-            height: mote.size,
-            borderRadius: 999,
-            backgroundColor: index % 3 === 0 ? '#fff8cf' : index % 3 === 1 ? '#f5c1cd' : '#d5c7f1',
-            opacity: mote.opacity,
-            ...(Platform.OS === 'web'
-              ? ({
-                  ['--mote-drift' as any]: mote.drift,
-                  animationDelay: `${-index * 280}ms`,
-                } as any)
-              : {}),
-          }}
-        />
       ))}
     </>
   );
@@ -806,77 +769,6 @@ function renderEmbeddedSkillLabel({
   );
 }
 
-function DecorativeMeadowBloom({
-  bloom,
-  width,
-  height,
-}: {
-  bloom: typeof FEATURED_MEADOW_BLOOMS[number];
-  width: number;
-  height: number;
-}) {
-  const size = Math.round(bloom.size * (width < 420 ? 0.78 : 1));
-  const stemHeight = Math.round(bloom.height * (width < 420 ? 0.76 : 1));
-  const canvasWidth = size * 1.35;
-  const canvasHeight = stemHeight + size * 0.9;
-  const cx = canvasWidth / 2;
-  const baseY = canvasHeight - 4;
-  const cy = size * 0.5;
-  const petalCount = size > 76 ? 10 : 7;
-
-  return (
-    <View
-      pointerEvents="none"
-      style={{
-        position: 'absolute',
-        left: width * bloom.leftRatio - canvasWidth / 2,
-        bottom: GROUND_HEIGHT - 8 + height * bloom.bottomRatio,
-        width: canvasWidth,
-        height: canvasHeight,
-        opacity: 0.72,
-      }}
-    >
-      <Svg width={canvasWidth} height={canvasHeight} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
-        <Line
-          x1={cx}
-          y1={baseY}
-          x2={cx + bloom.lean}
-          y2={cy + size * 0.35}
-          stroke="#2f7d4d"
-          strokeWidth={4}
-          strokeLinecap="round"
-        />
-        <G transform={`rotate(-28 ${cx - 12} ${baseY - stemHeight * 0.34})`}>
-          <Ellipse cx={cx - 18} cy={baseY - stemHeight * 0.34} rx={25} ry={9} fill="#3fa763" opacity="0.72" />
-        </G>
-        <G transform={`rotate(32 ${cx + 14} ${baseY - stemHeight * 0.55})`}>
-          <Ellipse cx={cx + 20} cy={baseY - stemHeight * 0.55} rx={25} ry={9} fill="#49b66b" opacity="0.68" />
-        </G>
-        <G transform={`translate(${bloom.lean} 0)`}>
-          {Array.from({ length: petalCount }, (_, petal) => {
-            const angle = petal * (360 / petalCount);
-            return (
-              <G key={petal} transform={`rotate(${angle} ${cx} ${cy})`}>
-                <Ellipse
-                  cx={cx}
-                  cy={cy - size * 0.28}
-                  rx={size * 0.17}
-                  ry={size * 0.34}
-                  fill={petal % 2 === 0 ? bloom.color : `${bloom.color}dd`}
-                  stroke={bloom.edge}
-                  strokeWidth={1.6}
-                />
-              </G>
-            );
-          })}
-          <Circle cx={cx} cy={cy} r={size * 0.18} fill={bloom.center} stroke={bloom.edge} strokeWidth={1.4} />
-          <Circle cx={cx - size * 0.04} cy={cy - size * 0.04} r={size * 0.038} fill="#fff8c9" opacity={0.75} />
-        </G>
-      </Svg>
-    </View>
-  );
-}
-
 function WildflowerSvg({
   level,
   species,
@@ -904,68 +796,15 @@ function WildflowerSvg({
     );
   }
 
-  if (level === 1) {
-    const topY = baseY - 18;
-    return (
-      <Svg width={canvasWidth} height={canvasHeight} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
-        <Line x1={cx} y1={baseY} x2={cx} y2={topY + 4} stroke={leaf} strokeWidth={1.9} strokeLinecap="round" />
-        <G transform={`rotate(-32 ${cx - 5} ${topY + 6})`}>
-          <Ellipse cx={cx - 6} cy={topY + 6} rx={8} ry={3.5} fill={leaf} opacity={0.82} />
-        </G>
-        <G transform={`rotate(30 ${cx + 5} ${topY + 6})`}>
-          <Ellipse cx={cx + 6} cy={topY + 6} rx={8} ry={3.5} fill={leaf} opacity={0.78} />
-        </G>
-      </Svg>
-    );
-  }
-
-  if (level === 2) {
-    const topY = baseY - 39;
-    return (
-      <Svg width={canvasWidth} height={canvasHeight} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
-        {renderStem({ cx, baseY, topY, leafColor: leaf, strokeWidth: 2.2, lean: species === 'poppy' ? -2 : 1 })}
-        <Circle cx={cx + (species === 'poppy' ? -2 : 1)} cy={topY} r={2.4} fill={leaf} opacity={0.8} />
-      </Svg>
-    );
-  }
-
-  if (level === 3) {
-    const topY = baseY - 55;
-    const budX = cx + (species === 'poppy' ? -3 : species === 'lavender' ? 2 : 0);
-    return (
-      <Svg width={canvasWidth} height={canvasHeight} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
-        {renderStem({ cx, baseY, topY: topY + 10, leafColor: leaf, strokeWidth: 2.4, lean: budX - cx })}
-        <Ellipse
-          cx={budX}
-          cy={topY}
-          rx={species === 'lavender' ? 6 : 7.5}
-          ry={species === 'lavender' ? 12 : 10.5}
-          fill={species === 'sunflower' ? '#e5b645' : category.pale}
-          stroke={category.edge}
-          strokeWidth={1.3}
-        />
-        <Path
-          d={`M ${budX - 9} ${topY + 10} C ${budX - 5} ${topY + 5}, ${budX - 2} ${topY + 5}, ${budX} ${topY + 13}
-            C ${budX + 2} ${topY + 5}, ${budX + 5} ${topY + 5}, ${budX + 9} ${topY + 10}`}
-          fill="none"
-          stroke={leaf}
-          strokeWidth={1.5}
-          strokeLinecap="round"
-        />
-        <Ellipse cx={budX - 2.5} cy={topY - 3} rx={1.6} ry={4.4} fill="#fffdf7" opacity={0.56} />
-      </Svg>
-    );
-  }
-
-  const full = level === 5;
-  const bloomRadius = full ? 24 : 19;
-  const topY = full ? baseY - 72 : baseY - 58;
+  const full = level >= 4;
+  const bloomRadius = [0, 10, 14, 18, 21, 25][level] ?? 18;
+  const topY = baseY - (34 + level * 9);
   const flowerX = cx + (species === 'poppy' ? -3 : species === 'lavender' ? 2 : 0);
   const flowerY = topY;
 
   return (
     <Svg width={canvasWidth} height={canvasHeight} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
-      {renderStem({ cx, baseY, topY: flowerY + bloomRadius * 0.25, leafColor: leaf, strokeWidth: full ? 2.8 : 2.4, lean: flowerX - cx })}
+      {renderStem({ cx, baseY, topY: flowerY + bloomRadius * 0.25, leafColor: leaf, strokeWidth: 2 + level * 0.18, lean: flowerX - cx })}
       {renderBloom(species, flowerX, flowerY, bloomRadius, full, category)}
       {renderEmbeddedSkillLabel({
         label,
@@ -1475,30 +1314,32 @@ function SeedButton({
   return (
     <Pressable
       onPress={() => {
-        if (!planted) onPlantSkill?.(skill, { enthusiasmLevel: 0 });
+        if (!planted) onPlantSkill?.(skill, { enthusiasmLevel: 1 });
       }}
       disabled={!onPlantSkill || planted}
       accessibilityRole="button"
       accessibilityLabel={planted ? `${skill} already planted` : `Plant ${skill}`}
       accessibilityState={{ disabled: !onPlantSkill || planted }}
       style={{
-        minHeight: 48,
-        width: 190,
-        maxWidth: '100%',
-        borderRadius: 15,
+        minHeight: 42,
+        minWidth: 104,
+        flexBasis: 112,
+        flexGrow: 1,
+        maxWidth: 156,
+        borderRadius: 999,
         borderWidth: 1,
-        borderColor: planted ? 'rgba(115,154,136,0.22)' : `${category.edge}55`,
-        backgroundColor: planted ? 'rgba(238,246,240,0.46)' : category.pale,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
+        borderColor: planted ? 'rgba(217,190,139,0.16)' : 'rgba(255,253,247,0.28)',
+        backgroundColor: planted ? 'rgba(83,55,34,0.38)' : 'rgba(255,250,236,0.92)',
+        paddingHorizontal: 9,
+        paddingVertical: 7,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 7,
         opacity: planted ? 0.58 : 1,
-        shadowColor: planted ? '#739a88' : category.edge,
-        shadowOpacity: planted ? 0.02 : 0.13,
-        shadowRadius: 9,
-        shadowOffset: { width: 0, height: 3 },
+        shadowColor: '#160c08',
+        shadowOpacity: planted ? 0.02 : 0.16,
+        shadowRadius: 7,
+        shadowOffset: { width: 0, height: 2 },
         ...(Platform.OS === 'web'
           ? ({
               cursor: onPlantSkill && !planted ? 'pointer' : 'default',
@@ -1511,17 +1352,17 @@ function SeedButton({
     >
       <View
         style={{
-          width: 30,
-          height: 30,
-          borderRadius: 15,
-          backgroundColor: 'rgba(255,253,247,0.78)',
+          width: 28,
+          height: 28,
+          borderRadius: 14,
+          backgroundColor: planted ? 'rgba(255,253,247,0.16)' : 'rgba(255,253,247,0.82)',
           alignItems: 'center',
           justifyContent: 'center',
           borderWidth: 1,
-          borderColor: 'rgba(255,253,247,0.8)',
+          borderColor: planted ? 'rgba(255,253,247,0.18)' : 'rgba(255,253,247,0.72)',
         }}
       >
-        <SeedMark category={category} size={19} muted={planted} />
+        <SeedMark category={category} size={17} muted={planted} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
@@ -1530,8 +1371,8 @@ function SeedButton({
           style={{
             fontFamily: 'Lato_700Bold',
             color: planted ? '#8f8a7f' : category.text,
-            fontSize: 12.5,
-            lineHeight: 14,
+            fontSize: 11.5,
+            lineHeight: 13,
             flexShrink: 1,
             ...(Platform.OS === 'web'
               ? ({
@@ -1543,54 +1384,165 @@ function SeedButton({
         >
           {skill}
         </Text>
-        <Text
-          selectable={false}
-          numberOfLines={1}
-          style={{
-            fontFamily: 'Lato_400Regular',
-            color: planted ? '#aaa397' : category.text,
-            fontSize: 9.5,
-            lineHeight: 12,
-            opacity: 0.64,
-            marginTop: 1,
-          }}
-        >
-          {getCategoryForSkill(skill).label}
-        </Text>
       </View>
     </Pressable>
   );
 }
 
-function CustomSeedButton({ onPress }: { onPress?: () => void }) {
+function CustomSeedButton({
+  onPlantSkill,
+  onPress,
+}: {
+  onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
+  onPress?: () => void;
+}) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const plantCustomSeed = () => {
+    const skill = draft.trim();
+    if (!skill) return;
+
+    if (onPlantSkill) {
+      onPlantSkill(skill, { enthusiasmLevel: 1 });
+      setDraft('');
+      setIsAdding(false);
+      return;
+    }
+
+    onPress?.();
+  };
+
+  if (isAdding && onPlantSkill) {
+    return (
+      <View
+        style={{
+          minHeight: 42,
+          minWidth: 186,
+          flexBasis: 220,
+          flexGrow: 1,
+          maxWidth: 280,
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: 'rgba(255,253,247,0.32)',
+          backgroundColor: 'rgba(255,250,236,0.95)',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          paddingHorizontal: 8,
+          paddingVertical: 6,
+        }}
+      >
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          onSubmitEditing={plantCustomSeed}
+          autoFocus
+          returnKeyType="done"
+          placeholder="New skill"
+          placeholderTextColor="rgba(105,67,33,0.48)"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontFamily: 'Lato_700Bold',
+            color: '#4a2b19',
+            fontSize: 12,
+            paddingVertical: 6,
+            paddingHorizontal: 4,
+            ...(Platform.OS === 'web'
+              ? ({
+                  outlineStyle: 'none',
+                } as any)
+              : {}),
+          }}
+        />
+        <Pressable
+          onPress={plantCustomSeed}
+          accessibilityRole="button"
+          accessibilityLabel="Plant custom skill"
+          style={{
+            minWidth: 42,
+            minHeight: 28,
+            borderRadius: 999,
+            backgroundColor: '#315d4e',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 8,
+            ...(Platform.OS === 'web'
+              ? ({
+                  cursor: 'pointer',
+                } as any)
+              : {}),
+          }}
+        >
+          <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 11 }}>
+            Plant
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            setDraft('');
+            setIsAdding(false);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel custom skill"
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 13,
+            alignItems: 'center',
+            justifyContent: 'center',
+            ...(Platform.OS === 'web'
+              ? ({
+                  cursor: 'pointer',
+                } as any)
+              : {}),
+          }}
+        >
+          <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#7d6843', fontSize: 14 }}>
+            x
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <Pressable
-      onPress={onPress}
-      disabled={!onPress}
+      onPress={() => {
+        if (onPlantSkill) {
+          setIsAdding(true);
+          return;
+        }
+        onPress?.();
+      }}
+      disabled={!onPress && !onPlantSkill}
       accessibilityRole="button"
       accessibilityLabel="Plant your own skill"
-      accessibilityState={{ disabled: !onPress }}
+      accessibilityState={{ disabled: !onPress && !onPlantSkill }}
       style={{
-        minHeight: 48,
-        width: 190,
-        maxWidth: '100%',
-        borderRadius: 15,
+        minHeight: 42,
+        minWidth: 124,
+        flexBasis: 136,
+        flexGrow: 1,
+        maxWidth: 178,
+        borderRadius: 999,
         borderWidth: 1,
-        borderColor: 'rgba(189,147,72,0.42)',
-        backgroundColor: '#fffdf7',
+        borderColor: 'rgba(255,253,247,0.38)',
+        backgroundColor: 'rgba(255,253,247,0.95)',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        gap: 8,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        shadowColor: '#bd9348',
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
+        gap: 7,
+        paddingHorizontal: 9,
+        paddingVertical: 7,
+        shadowColor: '#160c08',
+        shadowOpacity: 0.13,
+        shadowRadius: 7,
         shadowOffset: { width: 0, height: 2 },
         ...(Platform.OS === 'web'
           ? ({
-              cursor: onPress ? 'pointer' : 'default',
+              cursor: onPress || onPlantSkill ? 'pointer' : 'default',
               userSelect: 'none',
               WebkitUserSelect: 'none',
               touchAction: 'manipulation',
@@ -1600,15 +1552,15 @@ function CustomSeedButton({ onPress }: { onPress?: () => void }) {
     >
       <View
         style={{
-          width: 30,
-          height: 30,
-          borderRadius: 15,
-          backgroundColor: 'rgba(238,246,240,0.7)',
+          width: 28,
+          height: 28,
+          borderRadius: 14,
+          backgroundColor: 'rgba(238,246,240,0.78)',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <BloomMark category={FALLBACK_CATEGORY} size={20} />
+        <BloomMark category={FALLBACK_CATEGORY} size={18} />
       </View>
       <Text
         selectable={false}
@@ -1616,8 +1568,8 @@ function CustomSeedButton({ onPress }: { onPress?: () => void }) {
         style={{
           fontFamily: 'Lato_700Bold',
           color: '#315d4e',
-          fontSize: 12.5,
-          lineHeight: 14,
+          fontSize: 11.5,
+          lineHeight: 13,
           flex: 1,
         }}
       >
@@ -1627,7 +1579,7 @@ function CustomSeedButton({ onPress }: { onPress?: () => void }) {
   );
 }
 
-function getSurveySuggestions(answers: number[], plantedNames: Set<string>) {
+function getSurveySuggestions(answers: number[], plantedNames: Set<string>, limit = GARDEN_CAPACITY) {
   const scores = new Map<string, number>();
 
   answers.forEach((choiceIndex, questionIndex) => {
@@ -1647,7 +1599,7 @@ function getSurveySuggestions(answers: number[], plantedNames: Set<string>) {
       score: score * 100000 + hashString(description),
     }))
     .sort((left, right) => right.score - left.score)
-    .slice(0, 8)
+    .slice(0, limit)
     .map((item, index) => ({
       description: item.description,
       enthusiasmLevel: index < 3 ? 5 : index < 6 ? 4 : 3,
@@ -1659,13 +1611,15 @@ function getSurveySuggestions(answers: number[], plantedNames: Set<string>) {
 function SeedSurvey({
   plantedNames,
   hasSkills,
+  openSlots,
   onPlantSkill,
   onPlantSkills,
 }: {
   plantedNames: Set<string>;
   hasSkills: boolean;
+  openSlots: number;
   onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
-  onPlantSkills?: (skills: PlantSkillSelection[]) => void;
+  onPlantSkills?: (skills: PlantSkillSelection[], options?: PlantSkillsOptions) => void;
 }) {
   const [active, setActive] = useState(false);
   const [answers, setAnswers] = useState<number[]>([]);
@@ -1678,16 +1632,20 @@ function SeedSurvey({
     setSuggestions([]);
   };
 
-  const plantSuggestions = () => {
+  const plantSuggestions = (mode: PlantSkillsOptions['mode']) => {
     if (suggestions.length === 0) {
       resetSurvey();
       return;
     }
 
+    const chosenSuggestions = mode === 'fill'
+      ? suggestions.slice(0, Math.max(0, openSlots))
+      : suggestions.slice(0, GARDEN_CAPACITY);
+
     if (onPlantSkills) {
-      onPlantSkills(suggestions);
+      onPlantSkills(chosenSuggestions, { mode });
     } else {
-      suggestions.forEach(seed => onPlantSkill?.(seed.description, { enthusiasmLevel: seed.enthusiasmLevel }));
+      chosenSuggestions.forEach(seed => onPlantSkill?.(seed.description, { enthusiasmLevel: seed.enthusiasmLevel }));
     }
 
     setActive(false);
@@ -1744,10 +1702,10 @@ function SeedSurvey({
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text selectable={false} numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: 13 }}>
-                Seed Your Garden
+                Skills Garden
               </Text>
               <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 11, lineHeight: 14, marginTop: 2 }}>
-                Revisit the ritual and open what wants to bloom next.
+                Need help? Take the quiz to populate your garden.
               </Text>
             </View>
             <View
@@ -1783,10 +1741,10 @@ function SeedSurvey({
               ))}
             </View>
             <Text selectable={false} style={{ fontFamily: 'LibreBaskerville_700Bold', color: '#315d4e', fontSize: 22, lineHeight: 28, textAlign: 'center' }}>
-              Let’s see what grows in your garden…
+              Let's see what grows in your garden...
             </Text>
             <Text selectable={false} style={{ fontFamily: 'Lato_400Regular', color: '#52755b', fontSize: 12.5, lineHeight: 18, textAlign: 'center', maxWidth: 290 }}>
-              A few tiny choices, then your meadow blooms from the pattern.
+              Need help? Take the quiz to populate your garden.
             </Text>
             <View
               style={{
@@ -1826,10 +1784,10 @@ function SeedSurvey({
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
         <View style={{ flex: 1 }}>
           <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: 13 }}>
-            Seed Your Garden
+            Skills Garden
           </Text>
           <Text selectable={false} style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 11, marginTop: 1 }}>
-            {complete ? 'Your meadow pattern is ready' : `${answers.length + 1}/${SEED_SURVEY.length}`}
+            {complete ? 'Your garden pattern is ready' : `${answers.length + 1}/${SEED_SURVEY.length}`}
           </Text>
         </View>
         <Pressable
@@ -1884,7 +1842,7 @@ function SeedSurvey({
                 onPress={() => {
                   const nextAnswers = [...answers, index];
                   if (nextAnswers.length >= SEED_SURVEY.length) {
-                    setSuggestions(getSurveySuggestions(nextAnswers, plantedNames));
+                    setSuggestions(getSurveySuggestions(nextAnswers, plantedNames, GARDEN_CAPACITY));
                   }
                   setAnswers(nextAnswers);
                 }}
@@ -1931,12 +1889,12 @@ function SeedSurvey({
       ) : (
         <>
           <Text selectable={false} style={{ fontFamily: 'LibreBaskerville_700Bold', color: '#315d4e', fontSize: 17, lineHeight: 23, marginBottom: 6 }}>
-            {suggestions.length > 0 ? 'Your ecosystem is ready.' : 'Your garden already knows this path.'}
+            {suggestions.length > 0 ? 'Your garden is ready.' : 'Your garden already knows this path.'}
           </Text>
           <Text selectable={false} style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 12, lineHeight: 17, marginBottom: 10 }}>
             {suggestions.length > 0
-              ? `${suggestions.length} blooms will open from what you chose. You can tend, resize, or remove them afterward.`
-              : 'Try another path, shake the seed pouch, or add a custom bloom.'}
+              ? `${Math.min(suggestions.length, GARDEN_CAPACITY)} blooms are ready from what you chose.`
+              : 'Try another path, shake the seeds, or add a custom bloom.'}
           </Text>
           {suggestions.length > 0 && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
@@ -1963,30 +1921,89 @@ function SeedSurvey({
               })}
             </View>
           )}
-          <Pressable
-            onPress={plantSuggestions}
-            accessibilityRole="button"
-            accessibilityLabel={suggestions.length > 0 ? 'Plant this garden' : 'Try another garden path'}
-            style={{
-              minHeight: 42,
-              borderRadius: 999,
-              backgroundColor: '#3f9958',
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingHorizontal: 14,
-              ...(Platform.OS === 'web'
-                ? ({
-                    cursor: 'pointer',
-                    userSelect: 'none',
-                    WebkitUserSelect: 'none',
-                  } as any)
-                : {}),
-            }}
-          >
-            <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 13 }}>
-              {suggestions.length > 0 ? 'Let It Bloom' : 'Try Another Path'}
-            </Text>
-          </Pressable>
+          {suggestions.length > 0 ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <Pressable
+                onPress={() => plantSuggestions('replace')}
+                accessibilityRole="button"
+                accessibilityLabel="Plant a fresh garden"
+                style={{
+                  minHeight: 42,
+                  borderRadius: 999,
+                  backgroundColor: '#3f9958',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingHorizontal: 14,
+                  flexGrow: 1,
+                  ...(Platform.OS === 'web'
+                    ? ({
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        WebkitUserSelect: 'none',
+                      } as any)
+                    : {}),
+                }}
+              >
+                <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 13 }}>
+                  Plant Fresh Garden
+                </Text>
+              </Pressable>
+              {hasSkills && openSlots > 0 ? (
+                <Pressable
+                  onPress={() => plantSuggestions('fill')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Fill empty garden spots"
+                  style={{
+                    minHeight: 42,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: 'rgba(63,153,88,0.28)',
+                    backgroundColor: '#fffdf7',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingHorizontal: 14,
+                    flexGrow: 1,
+                    ...(Platform.OS === 'web'
+                      ? ({
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                          WebkitUserSelect: 'none',
+                        } as any)
+                      : {}),
+                  }}
+                >
+                  <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#315d4e', fontSize: 13 }}>
+                    Fill Empty Spots
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => resetSurvey()}
+              accessibilityRole="button"
+              accessibilityLabel="Try another garden path"
+              style={{
+                minHeight: 42,
+                borderRadius: 999,
+                backgroundColor: '#3f9958',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingHorizontal: 14,
+                ...(Platform.OS === 'web'
+                  ? ({
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                    } as any)
+                  : {}),
+              }}
+            >
+              <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 13 }}>
+                Try Another Path
+              </Text>
+            </Pressable>
+          )}
         </>
       )}
     </View>
@@ -2008,8 +2025,8 @@ export function SkillBubbleGarden({
   const [width, setWidth] = useState(0);
   const [seedShake, setSeedShake] = useState(0);
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
-  const displaySkills = useMemo(() => [...skills], [skills]);
-  const visibleSkillLimit = width > 0 && width < 420 ? MOBILE_VISIBLE_BLOOM_LIMIT : VISIBLE_BLOOM_LIMIT;
+  const displaySkills = useMemo(() => skills.filter(isBloomingSkill), [skills]);
+  const visibleSkillLimit = VISIBLE_BLOOM_LIMIT;
   const visibleSkills = useMemo(() => {
     if (displaySkills.length <= visibleSkillLimit) return displaySkills;
 
@@ -2022,18 +2039,31 @@ export function SkillBubbleGarden({
       .slice(0, visibleSkillLimit)
       .map(item => item.skill);
   }, [displaySkills, visibleSkillLimit]);
-  const storedSkillCount = Math.max(0, displaySkills.length - visibleSkills.length);
   const plantedNames = useMemo(
     () => new Set(displaySkills.map((skill) => normalizeSkillName(skill.description))),
     [displaySkills]
   );
+  const dormantSeedNames = useMemo(
+    () => skills
+      .filter(skill => !isBloomingSkill(skill))
+      .map(skill => skill.description),
+    [skills]
+  );
+  const seedSourceSkills = useMemo(
+    () => [...dormantSeedNames, ...seedSkills],
+    [dormantSeedNames, seedSkills]
+  );
+  const openSlots = Math.max(0, GARDEN_CAPACITY - visibleSkills.length);
   const seedTray = useMemo(
-    () => editable ? getSeedTray(seedSkills, plantedNames, seedShake) : [],
-    [editable, plantedNames, seedShake, seedSkills]
+    () => editable && openSlots > 0 ? getSeedTray(seedSourceSkills, plantedNames, seedShake, openSlots) : [],
+    [editable, openSlots, plantedNames, seedShake, seedSourceSkills]
   );
   const availableSeedCount = useMemo(
-    () => seedSkills.filter((skill) => !plantedNames.has(normalizeSkillName(skill))).length,
-    [plantedNames, seedSkills]
+    () => seedSourceSkills
+      .filter((skill) => !plantedNames.has(normalizeSkillName(skill)))
+      .filter((skill, index, all) => all.findIndex(item => normalizeSkillName(item) === normalizeSkillName(skill)) === index)
+      .length,
+    [plantedNames, seedSourceSkills]
   );
   const featuredSkillIds = useMemo(() => {
     if (visibleSkills.length <= 14) {
@@ -2110,6 +2140,7 @@ export function SkillBubbleGarden({
             <SeedSurvey
               plantedNames={plantedNames}
               hasSkills={false}
+              openSlots={openSlots}
               onPlantSkill={onPlantSkill}
               onPlantSkills={onPlantSkills}
             />
@@ -2130,6 +2161,7 @@ export function SkillBubbleGarden({
             <SeedSurvey
               plantedNames={plantedNames}
               hasSkills
+              openSlots={openSlots}
               onPlantSkill={onPlantSkill}
               onPlantSkills={onPlantSkills}
             />
@@ -2179,15 +2211,25 @@ export function SkillBubbleGarden({
         )}
       </View>
 
-      {editable && displaySkills.length > 0 && (seedTray.length > 0 || onAddCustomSkill) && (
+      {editable && openSlots > 0 && (seedTray.length > 0 || onPlantSkill || onAddCustomSkill) && (
         <View
           style={{
             borderTopWidth: 1,
-            borderTopColor: 'rgba(222,193,129,0.28)',
-            backgroundColor: '#f8f1e4',
+            borderTopColor: 'rgba(78,124,63,0.34)',
+            backgroundColor: '#3b2418',
             paddingHorizontal: 14,
-            paddingTop: 12,
-            paddingBottom: 14,
+            paddingTop: 10,
+            paddingBottom: 12,
+            ...(Platform.OS === 'web'
+              ? ({
+                  backgroundImage: [
+                    'linear-gradient(180deg, #4a2b19 0%, #2f1a10 100%)',
+                    'radial-gradient(circle at 10% 40%, rgba(217,190,139,0.22) 0 1px, transparent 2px)',
+                    'radial-gradient(circle at 80% 64%, rgba(255,253,247,0.13) 0 1px, transparent 2px)',
+                  ].join(', '),
+                  backgroundSize: 'auto, 38px 28px, 46px 32px',
+                } as any)
+              : {}),
           }}
         >
           <View
@@ -2195,46 +2237,67 @@ export function SkillBubbleGarden({
               flexDirection: width > 520 ? 'row' : 'column',
               alignItems: width > 520 ? 'center' : 'stretch',
               justifyContent: 'space-between',
-              gap: 10,
-              marginBottom: 10,
+              gap: 6,
+              marginBottom: 8,
             }}
           >
             <View>
               <Text
                 style={{
                   fontFamily: 'Lato_700Bold',
-                  color: '#7d6843',
-                  fontSize: 13,
+                  color: '#f8eee2',
+                  fontSize: 12,
                   letterSpacing: 0,
                 }}
               >
-                Seed Pouch
+                Skill Seeds
               </Text>
               <Text
                 style={{
                   fontFamily: 'Lato_400Regular',
-                  color: '#9b8a6b',
-                  fontSize: 11,
+                  color: 'rgba(248,238,226,0.64)',
+                  fontSize: 10.5,
                   marginTop: 1,
                 }}
               >
-                {storedSkillCount > 0
-                  ? `${storedSkillCount} resting in seed storage`
-                  : availableSeedCount > SEED_TRAY_SIZE
-                    ? `${Math.min(seedTray.length, SEED_TRAY_SIZE)} offered · shake for another set`
-                    : 'A few seeds left'}
+                {`${visibleSkills.length}/${GARDEN_CAPACITY} blooming`}
               </Text>
             </View>
-            {availableSeedCount > SEED_TRAY_SIZE && (
+          </View>
+
+          <View
+            key={`skill-seed-row-${seedShake}`}
+            className={Platform.OS === 'web' && seedShake > 0 ? 'skill-seed-row-shake' : undefined}
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 8,
+              alignItems: 'center',
+            }}
+          >
+            {seedTray.map((skill, index) => (
+              <SeedButton
+                key={`${skill}-${seedShake}`}
+                skill={skill}
+                index={index}
+                onPlantSkill={onPlantSkill}
+                planted={plantedNames.has(normalizeSkillName(skill))}
+              />
+            ))}
+            {onPlantSkill || onAddCustomSkill ? (
+              <CustomSeedButton onPlantSkill={onPlantSkill} onPress={onAddCustomSkill} />
+            ) : null}
+            {availableSeedCount > openSlots && (
               <Pressable
                 onPress={() => setSeedShake(current => current + 1)}
                 accessibilityRole="button"
                 accessibilityLabel="Shake seeds"
                 style={{
-                  minHeight: 38,
+                  minHeight: 42,
+                  minWidth: 118,
                   borderRadius: 999,
                   borderWidth: 1,
-                  borderColor: 'rgba(189,147,72,0.36)',
+                  borderColor: 'rgba(255,253,247,0.34)',
                   backgroundColor: '#fffdf7',
                   paddingHorizontal: 12,
                   paddingVertical: 7,
@@ -2242,9 +2305,9 @@ export function SkillBubbleGarden({
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 7,
-                  shadowColor: '#bd9348',
-                  shadowOpacity: 0.08,
-                  shadowRadius: 8,
+                  shadowColor: '#160c08',
+                  shadowOpacity: 0.16,
+                  shadowRadius: 7,
                   shadowOffset: { width: 0, height: 2 },
                   ...(Platform.OS === 'web'
                     ? ({
@@ -2266,32 +2329,10 @@ export function SkillBubbleGarden({
                     lineHeight: 14,
                   }}
                 >
-                  Shake Seeds
+                  Seed Shaker
                 </Text>
               </Pressable>
             )}
-          </View>
-
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 9,
-              alignItems: 'center',
-            }}
-          >
-            {seedTray.map((skill, index) => (
-              <SeedButton
-                key={`${skill}-${seedShake}`}
-                skill={skill}
-                index={index}
-                onPlantSkill={onPlantSkill}
-                planted={plantedNames.has(normalizeSkillName(skill))}
-              />
-            ))}
-            {onAddCustomSkill ? (
-              <CustomSeedButton onPress={onAddCustomSkill} />
-            ) : null}
           </View>
         </View>
       )}
