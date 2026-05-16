@@ -1283,7 +1283,6 @@ function MemberDetailModal({
 
             {/* ── Profile Honeycomb — visual snapshot, shown before bio ── */}
             <ProfileHoneycombCluster
-              title="PROFILE HONEYCOMB"
               size="compact"
               items={[
                 { label: 'Title', value: member.profile_title || member.occupation },

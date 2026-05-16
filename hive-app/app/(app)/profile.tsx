@@ -1101,7 +1101,6 @@ export default function ProfileScreen() {
 
                   <View style={{ width: 540, alignSelf: 'center' }}>
                     <ProfileHoneycombCluster
-                      title="HONEYCOMB"
                       size="roomy"
                       preferredColumns={3}
                       items={profileHoneycombItems}
@@ -1145,7 +1144,6 @@ export default function ProfileScreen() {
                   </View>
 
                   <ProfileHoneycombCluster
-                    title="HONEYCOMB"
                     size="compact"
                     preferredColumns={isProfilePhone ? 3 : undefined}
                     items={profileHoneycombItems}

@@ -9,7 +9,7 @@ export type HoneycombItem = {
 };
 
 type ProfileHoneycombClusterProps = {
-  title: string;
+  title?: string;
   items: HoneycombItem[];
   size?: 'compact' | 'roomy';
   preferredColumns?: 2 | 3;
@@ -54,7 +54,7 @@ function buildInfoCells(items: HoneycombItem[]): HoneycombInfoCell[] {
     },
     from && {
       key: 'from',
-      label: 'From',
+      label: 'Hometown',
       icon: 'location-outline',
       value: from,
     },
@@ -66,21 +66,9 @@ function buildInfoCells(items: HoneycombItem[]): HoneycombInfoCell[] {
     },
     project && {
       key: 'project',
-      label: 'Project',
+      label: 'Focus',
       icon: 'construct-outline',
       value: project,
-    },
-    ...funFacts.slice(0, 3).map((fact, index) => ({
-      key: `fun-fact-${index + 1}`,
-      label: `Fun fact ${index + 1}`,
-      icon: 'sparkles-outline' as IconName,
-      value: fact,
-    })),
-    valueFor(items, 'Book') && {
-      key: 'book',
-      label: 'Fav book',
-      icon: 'book-outline',
-      value: valueFor(items, 'Book')!,
     },
     valueFor(items, 'Food') && {
       key: 'food',
@@ -88,12 +76,24 @@ function buildInfoCells(items: HoneycombItem[]): HoneycombInfoCell[] {
       icon: 'restaurant-outline',
       value: valueFor(items, 'Food')!,
     },
+    valueFor(items, 'Book') && {
+      key: 'book',
+      label: 'Fav book',
+      icon: 'book-outline',
+      value: valueFor(items, 'Book')!,
+    },
     valueFor(items, 'Hobby') && {
       key: 'hobby',
       label: 'Fav hobby',
       icon: 'heart-outline',
       value: valueFor(items, 'Hobby')!,
     },
+    ...funFacts.slice(0, 3).map((fact, index) => ({
+      key: `fun-fact-${index + 1}`,
+      label: `Fun fact ${index + 1}`,
+      icon: 'sparkles-outline' as IconName,
+      value: fact,
+    })),
   ]).filter(Boolean) as HoneycombInfoCell[];
 }
 
@@ -220,15 +220,48 @@ export function ProfileHoneycombCluster({
   const compact = size === 'compact' || (containerWidth > 0 && containerWidth < 540);
   const measuredWidth = containerWidth > 0 ? containerWidth : compact ? 360 : 520;
   const desiredColumns = preferredColumns ?? (measuredWidth >= 330 ? 3 : 2);
-  const columns = Math.max(1, Math.min(desiredColumns, Math.max(1, cells.length)));
+  const columns = Math.max(1, Math.min(desiredColumns, Math.max(1, cells.length), 3));
   const maxCellWidth = compact ? 154 : 164;
   const availableCellWidth = Math.max(104, (measuredWidth - 2) / (1 + 0.75 * (columns - 1)));
   const cellWidth = Math.round(Math.min(maxCellWidth, availableCellWidth));
   const cellHeight = Math.round(cellWidth * HEX_HEIGHT_RATIO);
   const stepX = cellWidth * 0.75;
-  const placements = cells.map((cell, index) => {
-    const col = index % columns;
-    const row = Math.floor(index / columns);
+  const layoutOrder = columns >= 3
+    ? [
+        ['snapshot', 'from', 'birthday'],
+        ['project', 'food', 'book', 'hobby'],
+        ['fun-fact-1', 'fun-fact-2', 'fun-fact-3'],
+      ]
+    : columns === 2
+      ? [
+          ['snapshot', 'from', 'birthday', 'project', 'food'],
+          ['book', 'hobby', 'fun-fact-1', 'fun-fact-2', 'fun-fact-3'],
+        ]
+      : [
+          [
+            'snapshot',
+            'from',
+            'birthday',
+            'project',
+            'food',
+            'book',
+            'hobby',
+            'fun-fact-1',
+            'fun-fact-2',
+            'fun-fact-3',
+          ],
+        ];
+  const cellsByKey = new Map(cells.map((cell) => [cell.key, cell]));
+  const placedCells = layoutOrder.flatMap((columnKeys, col) =>
+    columnKeys
+      .map((key, row) => {
+        const cell = cellsByKey.get(key);
+        if (!cell) return null;
+        return { cell, col, row };
+      })
+      .filter(Boolean)
+  ) as { cell: HoneycombInfoCell; col: number; row: number }[];
+  const placements = placedCells.map(({ cell, col, row }) => {
     return {
       key: cell.key,
       left: col * stepX,
@@ -242,9 +275,11 @@ export function ProfileHoneycombCluster({
 
   return (
     <View onLayout={handleLayout} style={{ marginBottom: 14 }}>
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>
-        {title}
-      </Text>
+      {!!title && (
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>
+          {title}
+        </Text>
+      )}
       <View
         style={{
           alignItems: 'center',
@@ -265,7 +300,7 @@ export function ProfileHoneycombCluster({
             position: 'relative',
           }}
         >
-          {cells.map((cell, index) => (
+          {placedCells.map(({ cell }, index) => (
             <Pressable
               key={cell.key}
               accessibilityRole="button"
