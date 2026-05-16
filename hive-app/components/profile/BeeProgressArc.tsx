@@ -79,6 +79,70 @@ function EmojiMarker({
   );
 }
 
+function HiveDestinationMarker({
+  label,
+  x,
+  y,
+  size,
+}: {
+  label: string;
+  x: number;
+  y: number;
+  size: number;
+}) {
+  const width = size * 1.16;
+  const height = size * 1.08;
+
+  return (
+    <View
+      accessibilityLabel={label}
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: x - width / 2,
+        top: y - height / 2,
+        width,
+        height,
+        shadowColor: '#bd9348',
+        shadowOpacity: 0.16,
+        shadowRadius: 5,
+        shadowOffset: { width: 0, height: 2 },
+      }}
+    >
+      <Svg width={width} height={height} viewBox="0 0 36 34" style={{ overflow: 'visible' }}>
+        <Path
+          d="M18 3.4C12.2 3.4 7.7 8.9 7.7 16.7c0 7.9 4.2 13.9 10.3 13.9s10.3-6 10.3-13.9C28.3 8.9 23.8 3.4 18 3.4Z"
+          fill="#f5c95f"
+          stroke="#c89131"
+          strokeWidth={1.3}
+        />
+        <Path
+          d="M10 11.1c3.4 1.4 12.6 1.4 16 0M8.6 17c4.5 1.6 14.3 1.6 18.8 0M10.1 22.8c3.6 1.4 12.2 1.4 15.8 0"
+          stroke="#d59c36"
+          strokeWidth={2}
+          strokeLinecap="round"
+          fill="none"
+          strokeOpacity={0.78}
+        />
+        <Path
+          d="M13.6 30.2v-3.4c0-2.8 1.9-4.9 4.4-4.9s4.4 2.1 4.4 4.9v3.4"
+          fill="#6f471e"
+          stroke="#553414"
+          strokeWidth={1.1}
+        />
+        <Path
+          d="M13 8.2c1.3-1.2 2.9-1.9 5-1.9s3.7.7 5 1.9"
+          stroke="#ffe6a5"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+          fill="none"
+          strokeOpacity={0.88}
+        />
+      </Svg>
+    </View>
+  );
+}
+
 function NativeBeeBadge({
   point,
   percent,
@@ -112,7 +176,7 @@ function NativeBeeBadge({
         shadowOffset: { width: 0, height: 5 },
       }}
     >
-      <Text selectable={false} style={{ fontSize: 15, marginRight: 3 }}>
+      <Text selectable={false} style={{ fontSize: 15, marginRight: 3, transform: [{ scaleX: -1 }] }}>
         🐝
       </Text>
       <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#7a5a24' }}>
@@ -166,8 +230,11 @@ function WebBeeBadge({
       'span',
       {
         style: {
+          display: 'inline-block',
           fontSize: 15,
           lineHeight: '15px',
+          transform: 'scaleX(-1)',
+          transformOrigin: 'center',
         } as React.CSSProperties,
       },
       '🐝'
@@ -226,7 +293,7 @@ export function BeeProgressArc({ profileCompletionPercent, score, size = 220 }: 
         />
       </Svg>
       <EmojiMarker emoji="🌸" label="Profile journey start" x={start.x} y={start.y + 8 * scale} size={markerSize} />
-      <EmojiMarker emoji="🍯" label="Profile complete hive" x={end.x} y={end.y + 8 * scale} size={markerSize} />
+      <HiveDestinationMarker label="Profile complete hive" x={end.x} y={end.y + 8 * scale} size={markerSize} />
       {Platform.OS === 'web' ? (
         <WebBeeBadge path={path} percent={percent} badgeWidth={badgeWidth} badgeHeight={badgeHeight} />
       ) : (
