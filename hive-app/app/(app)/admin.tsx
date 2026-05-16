@@ -636,7 +636,7 @@ export default function AdminScreen() {
   const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
   const canEditHoneyPot = isTreasurer || isAdmin;
   const selectedDuesMember = members.find((member) => member.profiles.id === duesMemberId)?.profiles;
-  const desktopPanelHeight = Math.max(240, Math.floor((height - 188) / 2));
+  const desktopPanelHeight = Math.max(220, Math.floor((height - 300) / 2));
   const dashboardPanelStyle = useMobileLayout ? undefined : { height: desktopPanelHeight };
   const dashboardPanelBodyStyle = useMobileLayout ? undefined : { flex: 1 };
   const panelScrollStyle = useMobileLayout ? undefined : { flex: 1 };
