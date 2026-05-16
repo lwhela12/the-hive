@@ -684,13 +684,14 @@ export default function AdminScreen() {
   const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
   const canEditHoneyPot = isTreasurer || isAdmin;
   const selectedDuesMember = members.find((member) => member.profiles.id === duesMemberId)?.profiles;
-  const desktopPanelHeight = Math.max(300, Math.floor((height - 210) / 2));
+  const desktopPanelHeight = Math.max(320, Math.floor((height - 180) / 2));
+  const mobilePanelHeight = Math.min(430, Math.max(340, Math.floor(height * 0.46)));
   const dashboardOuterContentStyle: ViewStyle = useMobileLayout
     ? { padding: 16 }
     : { padding: 16, paddingBottom: 10 };
-  const dashboardPanelStyle = useMobileLayout ? undefined : { height: desktopPanelHeight };
-  const dashboardPanelBodyStyle = useMobileLayout ? undefined : { flex: 1 };
-  const panelScrollStyle = useMobileLayout ? undefined : { flex: 1 };
+  const dashboardPanelStyle = { height: useMobileLayout ? mobilePanelHeight : desktopPanelHeight };
+  const dashboardPanelBodyStyle = { flex: 1 };
+  const panelScrollStyle = { flex: 1 };
   const panelOrderStyle = (order: number) => ({ order } as unknown as ViewStyle);
   const dashboardWrapStyle: ViewStyle = {
     flexDirection: useMobileLayout ? 'column' : 'row',

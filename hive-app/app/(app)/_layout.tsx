@@ -311,7 +311,7 @@ export default function AppLayout() {
           name="admin"
           options={{
             title: 'Admin',
-            href: showAdminTab ? '/admin' : undefined,
+            href: showAdminTab ? '/admin' : null,
             tabBarAccessibilityLabel: 'Admin',
             tabBarIcon: ({ focused }) => (
               <TabIcon
