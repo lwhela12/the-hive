@@ -301,6 +301,13 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
+          name="honey-pot"
+          options={{
+            title: 'Honey Pot',
+            href: null,
+          }}
+        />
+        <Tabs.Screen
           name="admin"
           options={{
             title: 'Admin',

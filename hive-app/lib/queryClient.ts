@@ -32,6 +32,7 @@ export const queryKeys = {
     ['userSkills', communityId, userId] as const,
   events: (communityId: string) => ['events', communityId] as const,
   honeyPot: (communityId: string) => ['honeyPot', communityId] as const,
+  honeyPotLedger: (communityId: string) => ['honeyPotLedger', communityId] as const,
   meetings: (communityId: string) => ['meetings', communityId] as const,
   fallbackAdmin: (communityId: string) => ['fallbackAdmin', communityId] as const,
 

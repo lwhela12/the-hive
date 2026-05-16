@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import {
   View,
   Text,
@@ -22,10 +22,18 @@ import {
   getDuesAmountForCoverage,
   type DuesCoverage,
 } from '../../lib/dues';
-import { fetchHoneyPotBalance, getHoneyPotErrorMessage, recordHoneyPotTransaction } from '../../lib/honeyPot';
+import {
+  HONEY_POT_PAYMENT_METHOD_OPTIONS,
+  fetchHoneyPotLedger,
+  getHoneyPotErrorMessage,
+  recordHoneyPotTransaction,
+  type HoneyPotLedgerEntry,
+  type HoneyPotPaymentMethod,
+} from '../../lib/honeyPot';
 import { Avatar } from '../../components/ui/Avatar';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
+import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { useSurveys } from '../../lib/hooks/useSurveys';
 import type { Survey } from '../../lib/hooks/useSurveys';
 import { parseAmericanDate } from '../../lib/dateUtils';
@@ -78,6 +86,42 @@ const HONEY_POT_FEEDBACK_STYLE: Record<HoneyPotFeedback['tone'], {
   },
 };
 
+function AdminPanel({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <View style={{ marginBottom: 18 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+          {title}
+        </Text>
+        {action}
+      </View>
+      <View
+        style={{
+          backgroundColor: '#fff',
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: 'rgba(222,193,129,0.35)',
+          shadowColor: '#000',
+          shadowOpacity: 0.04,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 5 },
+          overflow: 'hidden',
+        }}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
 export default function AdminScreen() {
   const { profile, communityId, communityRole } = useAuth();
   const { width } = useWindowDimensions();
@@ -117,8 +161,12 @@ export default function AdminScreen() {
 
   // Honey Pot state
   const [honeyPotBalance, setHoneyPotBalance] = useState<number>(0);
+  const [honeyPotTransactions, setHoneyPotTransactions] = useState<HoneyPotLedgerEntry[]>([]);
+  const [honeyPotLedgerLoading, setHoneyPotLedgerLoading] = useState(false);
   const [honeyPotAmount, setHoneyPotAmount] = useState('');
   const [honeyPotNote, setHoneyPotNote] = useState('');
+  const [honeyPotPaymentMethod, setHoneyPotPaymentMethod] = useState<HoneyPotPaymentMethod | null>(null);
+  const [honeyPotCounterparty, setHoneyPotCounterparty] = useState('');
   const [honeyPotType, setHoneyPotType] = useState<'deposit' | 'withdrawal'>('deposit');
   const [recordingHoneyPot, setRecordingHoneyPot] = useState(false);
   const [honeyPotFeedback, setHoneyPotFeedback] = useState<HoneyPotFeedback | null>(null);
@@ -162,12 +210,18 @@ export default function AdminScreen() {
       .order('created_at', { ascending: false });
     if (invitesData) setPendingInvites(invitesData as InviteRow[]);
 
-    // Fetch honey pot balance
+    // Fetch honey pot balance and transparent ledger
     try {
-      setHoneyPotBalance(await fetchHoneyPotBalance(communityId));
+      setHoneyPotLedgerLoading(true);
+      const ledger = await fetchHoneyPotLedger(communityId);
+      setHoneyPotBalance(ledger.balance);
+      setHoneyPotTransactions(ledger.transactions);
     } catch (honeyPotError) {
-      console.warn('Could not load honey pot balance', honeyPotError);
+      console.warn('Could not load honey pot ledger', honeyPotError);
       setHoneyPotBalance(0);
+      setHoneyPotTransactions([]);
+    } finally {
+      setHoneyPotLedgerLoading(false);
     }
   }, [communityId]);
 
@@ -496,6 +550,10 @@ export default function AdminScreen() {
       showHoneyPotFeedback('error', 'Error', 'No community context. Please refresh and try again.');
       return;
     }
+    if (!honeyPotPaymentMethod) {
+      showHoneyPotFeedback('error', 'Error', 'Please choose how this money moved.');
+      return;
+    }
     const taggedAsDues = honeyPotType === 'deposit' && duesCoverage !== 'none';
     const duesYearValue = Number(duesYear);
     const duesQuarterValue = Number(duesQuarter);
@@ -526,6 +584,8 @@ export default function AdminScreen() {
         signedAmount,
         transactionType: honeyPotType,
         note: honeyPotNote,
+        paymentMethod: honeyPotPaymentMethod,
+        externalCounterpartyName: taggedAsDues ? null : honeyPotCounterparty,
         recordedBy: profile?.id ?? null,
         relatedUserId: taggedAsDues ? duesMemberId : null,
         duesYear: taggedAsDues ? duesYearValue : null,
@@ -541,11 +601,16 @@ export default function AdminScreen() {
       setHoneyPotBalance(savedBalance);
       queryClient.setQueryData(queryKeys.honeyPot(communityId), savedBalance);
       await queryClient.invalidateQueries({ queryKey: queryKeys.honeyPot(communityId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.honeyPotLedger(communityId) });
       setHoneyPotAmount('');
       setHoneyPotNote('');
+      setHoneyPotCounterparty('');
       if (duesCoverage !== 'none') {
         setDuesMemberId('');
       }
+      const ledger = await fetchHoneyPotLedger(communityId);
+      setHoneyPotBalance(ledger.balance);
+      setHoneyPotTransactions(ledger.transactions);
       showHoneyPotFeedback(
         'success',
         'Success',
@@ -565,6 +630,15 @@ export default function AdminScreen() {
   const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
   const canEditHoneyPot = isTreasurer || isAdmin;
   const selectedDuesMember = members.find((member) => member.profiles.id === duesMemberId)?.profiles;
+  const dashboardWrapStyle = {
+    flexDirection: useMobileLayout ? 'column' : 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: useMobileLayout ? 0 : -8,
+  } as const;
+  const dashboardCellStyle = {
+    width: useMobileLayout ? '100%' : '50%',
+    paddingHorizontal: useMobileLayout ? 0 : 8,
+  } as const;
 
   if (!isAdmin && !isTreasurer) {
     return (
@@ -585,414 +659,477 @@ export default function AdminScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Honey Pot Section - visible to admin and treasurer */}
-        <View className="mb-6">
-          <Text className="text-lg font-semibold text-gray-700 mb-2">
-            Honey Pot
-          </Text>
-          <View className="bg-white rounded-xl shadow-sm p-4">
-            <Text className="text-2xl font-bold text-center text-honey-600 mb-4">
-              ${honeyPotBalance.toFixed(2)}
-            </Text>
+        <View style={dashboardWrapStyle}>
+          <View style={dashboardCellStyle}>
+            <AdminPanel title="Honey Pot">
+              <View style={{ padding: 16 }}>
+                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 28, color: '#bd9348', textAlign: 'center', marginBottom: 16 }}>
+                  ${honeyPotBalance.toFixed(2)}
+                </Text>
 
-            {canEditHoneyPot ? (
-              <>
-                <View className="flex-row mb-3">
-                  {(['deposit', 'withdrawal'] as const).map((type) => (
-                    <Pressable
-                      key={type}
-                      onPress={() => {
-                        setHoneyPotType(type);
-                        if (type === 'withdrawal') setDuesCoverage('none');
-                      }}
-                      className={`flex-1 py-2 rounded-lg mr-2 last:mr-0 ${
-                        honeyPotType === type
-                          ? type === 'deposit' ? 'bg-green-500' : 'bg-red-400'
-                          : 'bg-gray-100'
-                      }`}
-                    >
-                      <Text className={`text-center capitalize font-medium ${
-                        honeyPotType === type ? 'text-white' : 'text-gray-600'
-                      }`}>
-                        {type}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-
-                <TextInput
-                  placeholder="Amount"
-                  value={honeyPotAmount}
-                  onChangeText={setHoneyPotAmount}
-                  keyboardType="decimal-pad"
-                  className="border border-gray-300 rounded-lg p-3 mb-3"
-                />
-                <TextInput
-                  placeholder="Note (optional)"
-                  value={honeyPotNote}
-                  onChangeText={setHoneyPotNote}
-                  className="border border-gray-300 rounded-lg p-3 mb-3"
-                />
-                {honeyPotType === 'deposit' && (
-                  <View className="mb-3">
-                    <Text className="text-xs font-semibold text-gray-500 mb-2">
-                      Dues tag (optional)
-                    </Text>
-                    <View className="flex-row flex-wrap mb-2">
-                      <Pressable
-                        onPress={() => setDuesCoverage('none')}
-                        className={`px-3 py-2 rounded-lg mr-2 mb-2 ${
-                          duesCoverage === 'none' ? 'bg-honey-500' : 'bg-gray-100'
-                        }`}
-                      >
-                        <Text className={`text-xs font-medium ${
-                          duesCoverage === 'none' ? 'text-white' : 'text-gray-600'
-                        }`}>
-                          No dues tag
-                        </Text>
-                      </Pressable>
-                      {DUES_QUARTERS.map((quarter) => {
-                        const isSelected = duesCoverage === 'quarter' && duesQuarter === String(quarter);
+                {canEditHoneyPot ? (
+                  <>
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                      {(['deposit', 'withdrawal'] as const).map((type) => {
+                        const selected = honeyPotType === type;
                         return (
                           <Pressable
-                            key={quarter}
+                            key={type}
                             onPress={() => {
-                              setDuesCoverage('quarter');
-                              setDuesQuarter(String(quarter));
+                              setHoneyPotType(type);
+                              if (type === 'withdrawal') {
+                                setDuesCoverage('none');
+                                setDuesMemberId('');
+                              }
                             }}
-                            className={`px-3 py-2 rounded-lg mr-2 mb-2 ${
-                              isSelected ? 'bg-honey-500' : 'bg-gray-100'
-                            }`}
+                            accessibilityRole="button"
+                            style={({ pressed }) => ({
+                              flex: 1,
+                              backgroundColor: selected
+                                ? type === 'deposit' ? '#22c55e' : '#ef4444'
+                                : pressed ? '#edf2f7' : '#f3f4f6',
+                              borderRadius: 12,
+                              paddingVertical: 10,
+                            })}
                           >
-                            <Text className={`text-xs font-medium ${
-                              isSelected ? 'text-white' : 'text-gray-600'
-                            }`}>
-                              Q{quarter} · ${QUARTERLY_DUES_AMOUNT}
+                            <Text style={{
+                              fontFamily: 'Lato_700Bold',
+                              color: selected ? 'white' : '#4b5563',
+                              textAlign: 'center',
+                              textTransform: 'capitalize',
+                            }}>
+                              {type}
                             </Text>
                           </Pressable>
                         );
                       })}
-                      <Pressable
-                        onPress={() => setDuesCoverage('year')}
-                        className={`px-3 py-2 rounded-lg mr-2 mb-2 ${
-                          duesCoverage === 'year' ? 'bg-honey-500' : 'bg-gray-100'
-                        }`}
-                      >
-                        <Text className={`text-xs font-medium ${
-                          duesCoverage === 'year' ? 'text-white' : 'text-gray-600'
-                        }`}>
-                          Full year · ${ANNUAL_DUES_AMOUNT}
-                        </Text>
-                      </Pressable>
                     </View>
 
-                    {duesCoverage !== 'none' && (
-                      <View className="bg-honey-50 border border-honey-100 rounded-lg p-3">
-                        <View className="flex-row mb-2">
-                          <TextInput
-                            placeholder="Year"
-                            value={duesYear}
-                            onChangeText={setDuesYear}
-                            keyboardType="number-pad"
-                            className="border border-honey-200 rounded-lg px-3 py-2 mr-2 bg-white"
-                            style={{ width: 92 }}
-                          />
-                          {duesCoverage === 'quarter' && (
-                            <View className="flex-1 bg-white rounded-lg px-3 py-2 border border-honey-100">
-                              <Text className="text-xs font-semibold text-gray-600">
-                                Q{duesQuarter} selected
-                              </Text>
-                            </View>
-                          )}
-                          {duesCoverage === 'year' && (
-                            <View className="flex-1 bg-white rounded-lg px-3 py-2 border border-honey-100">
-                              <Text className="text-xs font-semibold text-gray-600">
-                                Covers Q1-Q4
-                              </Text>
-                            </View>
-                          )}
+                    <TextInput
+                      placeholder="Amount"
+                      value={honeyPotAmount}
+                      onChangeText={setHoneyPotAmount}
+                      keyboardType="decimal-pad"
+                      className="border border-gray-300 rounded-lg p-3 mb-3 bg-white"
+                    />
+
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+                      Payment method
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                      {HONEY_POT_PAYMENT_METHOD_OPTIONS.map((method) => {
+                        const selected = honeyPotPaymentMethod === method.value;
+                        return (
+                          <Pressable
+                            key={method.value}
+                            onPress={() => setHoneyPotPaymentMethod(method.value)}
+                            accessibilityRole="button"
+                            style={({ pressed }) => ({
+                              backgroundColor: selected ? '#bd9348' : pressed ? '#fbf0d7' : '#f9fafb',
+                              borderColor: selected ? '#bd9348' : 'rgba(222,193,129,0.55)',
+                              borderWidth: 1,
+                              borderRadius: 999,
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                            })}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: selected ? 'white' : '#4b5563' }}>
+                              {method.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+
+                    {!(honeyPotType === 'deposit' && duesCoverage !== 'none') && (
+                      <TextInput
+                        placeholder={honeyPotType === 'withdrawal' ? 'Paid to / for (optional)' : 'From / donor name (optional)'}
+                        value={honeyPotCounterparty}
+                        onChangeText={setHoneyPotCounterparty}
+                        className="border border-gray-300 rounded-lg p-3 mb-3 bg-white"
+                      />
+                    )}
+
+                    <TextInput
+                      placeholder="Note (optional)"
+                      value={honeyPotNote}
+                      onChangeText={setHoneyPotNote}
+                      className="border border-gray-300 rounded-lg p-3 mb-3 bg-white"
+                    />
+
+                    {honeyPotType === 'deposit' && (
+                      <View className="mb-3">
+                        <Text className="text-xs font-semibold text-gray-500 mb-2">
+                          Dues tag (optional)
+                        </Text>
+                        <View className="flex-row flex-wrap mb-2">
+                          <Pressable
+                            onPress={() => setDuesCoverage('none')}
+                            className={`px-3 py-2 rounded-lg mr-2 mb-2 ${
+                              duesCoverage === 'none' ? 'bg-honey-500' : 'bg-gray-100'
+                            }`}
+                          >
+                            <Text className={`text-xs font-medium ${
+                              duesCoverage === 'none' ? 'text-white' : 'text-gray-600'
+                            }`}>
+                              No dues tag
+                            </Text>
+                          </Pressable>
+                          {DUES_QUARTERS.map((quarter) => {
+                            const isSelected = duesCoverage === 'quarter' && duesQuarter === String(quarter);
+                            return (
+                              <Pressable
+                                key={quarter}
+                                onPress={() => {
+                                  setDuesCoverage('quarter');
+                                  setDuesQuarter(String(quarter));
+                                }}
+                                className={`px-3 py-2 rounded-lg mr-2 mb-2 ${
+                                  isSelected ? 'bg-honey-500' : 'bg-gray-100'
+                                }`}
+                              >
+                                <Text className={`text-xs font-medium ${
+                                  isSelected ? 'text-white' : 'text-gray-600'
+                                }`}>
+                                  Q{quarter} · ${QUARTERLY_DUES_AMOUNT}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                          <Pressable
+                            onPress={() => setDuesCoverage('year')}
+                            className={`px-3 py-2 rounded-lg mr-2 mb-2 ${
+                              duesCoverage === 'year' ? 'bg-honey-500' : 'bg-gray-100'
+                            }`}
+                          >
+                            <Text className={`text-xs font-medium ${
+                              duesCoverage === 'year' ? 'text-white' : 'text-gray-600'
+                            }`}>
+                              Full year · ${ANNUAL_DUES_AMOUNT}
+                            </Text>
+                          </Pressable>
                         </View>
 
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                          {members.map((member) => (
-                            <Pressable
-                              key={member.profiles.id}
-                              onPress={() => setDuesMemberId(member.profiles.id)}
-                              className={`mr-2 px-3 py-2 rounded-lg border ${
-                                duesMemberId === member.profiles.id
-                                  ? 'bg-honey-500 border-honey-500'
-                                  : 'bg-white border-honey-100'
-                              }`}
-                            >
-                              <Text className={`text-xs font-semibold ${
-                                duesMemberId === member.profiles.id ? 'text-white' : 'text-gray-700'
-                              }`}>
-                                {member.profiles.name}
+                        {duesCoverage !== 'none' && (
+                          <View className="bg-honey-50 border border-honey-100 rounded-lg p-3">
+                            <View className="flex-row mb-2">
+                              <TextInput
+                                placeholder="Year"
+                                value={duesYear}
+                                onChangeText={setDuesYear}
+                                keyboardType="number-pad"
+                                className="border border-honey-200 rounded-lg px-3 py-2 mr-2 bg-white"
+                                style={{ width: 92 }}
+                              />
+                              {duesCoverage === 'quarter' && (
+                                <View className="flex-1 bg-white rounded-lg px-3 py-2 border border-honey-100">
+                                  <Text className="text-xs font-semibold text-gray-600">
+                                    Q{duesQuarter} selected
+                                  </Text>
+                                </View>
+                              )}
+                              {duesCoverage === 'year' && (
+                                <View className="flex-1 bg-white rounded-lg px-3 py-2 border border-honey-100">
+                                  <Text className="text-xs font-semibold text-gray-600">
+                                    Covers Q1-Q4
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                              {members.map((member) => (
+                                <Pressable
+                                  key={member.profiles.id}
+                                  onPress={() => setDuesMemberId(member.profiles.id)}
+                                  className={`mr-2 px-3 py-2 rounded-lg border ${
+                                    duesMemberId === member.profiles.id
+                                      ? 'bg-honey-500 border-honey-500'
+                                      : 'bg-white border-honey-100'
+                                  }`}
+                                >
+                                  <Text className={`text-xs font-semibold ${
+                                    duesMemberId === member.profiles.id ? 'text-white' : 'text-gray-700'
+                                  }`}>
+                                    {member.profiles.name}
+                                  </Text>
+                                </Pressable>
+                              ))}
+                            </ScrollView>
+                            {selectedDuesMember && (
+                              <Text className="text-xs text-gray-500 mt-2">
+                                Tagging this deposit as dues for {selectedDuesMember.name}.
                               </Text>
-                            </Pressable>
-                          ))}
-                        </ScrollView>
-                        {selectedDuesMember && (
-                          <Text className="text-xs text-gray-500 mt-2">
-                            Tagging this deposit as dues for {selectedDuesMember.name}.
-                          </Text>
+                            )}
+                          </View>
                         )}
                       </View>
                     )}
-                  </View>
-                )}
-                <Pressable
-                  onPress={updateHoneyPot}
-                  disabled={recordingHoneyPot}
-                  accessibilityRole="button"
-                  className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
-                  style={{ opacity: recordingHoneyPot ? 0.6 : 1 }}
-                >
-                  <Text className="text-center font-semibold text-white">
-                    {recordingHoneyPot
-                      ? 'Recording...'
-                      : `Record ${honeyPotType === 'deposit' ? 'Deposit' : 'Withdrawal'}`}
-                  </Text>
-                </Pressable>
-                {honeyPotFeedback && (
-                  <View
-                    className="mt-3 rounded-lg border px-3 py-2"
-                    style={{
-                      backgroundColor: HONEY_POT_FEEDBACK_STYLE[honeyPotFeedback.tone].backgroundColor,
-                      borderColor: HONEY_POT_FEEDBACK_STYLE[honeyPotFeedback.tone].borderColor,
-                    }}
-                  >
-                    <Text
-                      className="text-sm font-semibold text-center"
-                      style={{ color: HONEY_POT_FEEDBACK_STYLE[honeyPotFeedback.tone].color }}
-                    >
-                      {honeyPotFeedback.message}
-                    </Text>
-                  </View>
-                )}
-              </>
-            ) : (
-              <Text className="text-center text-gray-500">
-                Honey Pot changes are limited to Admins and the Treasurer.
-              </Text>
-            )}
-          </View>
-        </View>
 
-        {/* Admin tools */}
-        {isAdmin && (<>
-        {/* Members Section */}
-        <View className="mb-6">
-          <Text className="text-lg font-semibold text-gray-700 mb-2">
-            Members ({members.length})
-          </Text>
-          <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-            {members.map((member, index) => {
-              const roleButtons = (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    justifyContent: useMobileLayout ? 'flex-start' : 'flex-end',
-                    flexShrink: 0,
-                  }}
-                >
-                  {ROLE_OPTIONS.map((role) => (
                     <Pressable
-                      key={role}
-                      onPress={() => updateMemberRole(member.id, role)}
-                      style={({ pressed }) => ({
-                        backgroundColor: member.role === role ? '#bd9348' : pressed ? '#eceff3' : '#f3f4f6',
-                        borderRadius: 8,
-                        paddingHorizontal: 12,
-                        paddingVertical: 7,
-                        marginRight: 6,
-                        marginBottom: useMobileLayout ? 6 : 0,
-                      })}
+                      onPress={updateHoneyPot}
+                      disabled={recordingHoneyPot}
+                      accessibilityRole="button"
+                      className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
+                      style={{ opacity: recordingHoneyPot ? 0.6 : 1 }}
                     >
-                      <Text
+                      <Text className="text-center font-semibold text-white">
+                        {recordingHoneyPot
+                          ? 'Recording...'
+                          : `Record ${honeyPotType === 'deposit' ? 'Deposit' : 'Withdrawal'}`}
+                      </Text>
+                    </Pressable>
+                    {honeyPotFeedback && (
+                      <View
+                        className="mt-3 rounded-lg border px-3 py-2"
                         style={{
-                          color: member.role === role ? 'white' : '#4b5563',
-                          fontSize: 12,
-                          fontWeight: '600',
+                          backgroundColor: HONEY_POT_FEEDBACK_STYLE[honeyPotFeedback.tone].backgroundColor,
+                          borderColor: HONEY_POT_FEEDBACK_STYLE[honeyPotFeedback.tone].borderColor,
                         }}
                       >
-                        {ROLE_LABELS[role]}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              );
-
-              return (
-                <View
-                  key={member.id}
-                  style={{
-                    padding: 16,
-                    borderBottomWidth: index < members.length - 1 ? 1 : 0,
-                    borderBottomColor: '#f3f4f6',
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Avatar name={member.profiles.name} url={member.profiles.avatar_url} size={40} />
-                    <View style={{ flex: 1, minWidth: 0, marginLeft: 12, marginRight: 12 }}>
-                      <Text className="font-medium text-gray-800" numberOfLines={2}>
-                        {member.profiles.name}
-                      </Text>
-                      <Text className="text-sm text-gray-500" numberOfLines={1}>
-                        {member.profiles.email}
-                      </Text>
-                    </View>
-
-                    {!useMobileLayout && roleButtons}
-                    {member.profiles.id !== profile?.id && (
-                      <Pressable
-                        onPress={() => removeMember(member.id, member.profiles.name, member.profiles.id)}
-                        className="px-2 py-1 bg-red-100 rounded active:bg-red-200"
-                        style={{ marginLeft: useMobileLayout ? 0 : 8 }}
-                      >
-                        <Text className="text-red-600 text-xs">✕</Text>
-                      </Pressable>
+                        <Text
+                          className="text-sm font-semibold text-center"
+                          style={{ color: HONEY_POT_FEEDBACK_STYLE[honeyPotFeedback.tone].color }}
+                        >
+                          {honeyPotFeedback.message}
+                        </Text>
+                      </View>
                     )}
-                  </View>
-
-                  {useMobileLayout && (
-                    <View style={{ marginTop: 12, marginLeft: 52 }}>
-                      {roleButtons}
-                    </View>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Invite Section */}
-        <View className="mb-6">
-          <Text className="text-lg font-semibold text-gray-700 mb-2">
-            Invite Member
-          </Text>
-          <View className="bg-white rounded-xl shadow-sm p-4">
-            <TextInput
-              placeholder="Email address"
-              value={inviteEmail}
-              onChangeText={setInviteEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              className="border border-gray-300 rounded-lg p-3 mb-3"
-            />
-            <View className="flex-row mb-4">
-              {ROLE_OPTIONS.map((role) => (
-                <Pressable
-                  key={role}
-                  onPress={() => setInviteRole(role)}
-                  className={`px-3 py-2 rounded mr-2 ${
-                    inviteRole === role ? 'bg-honey-500' : 'bg-gray-100'
-                  }`}
-                >
-                  <Text className={`${inviteRole === role ? 'text-white' : 'text-gray-600'} capitalize`}>
-                    {ROLE_LABELS[role]}
+                  </>
+                ) : (
+                  <Text className="text-center text-gray-500">
+                    Honey Pot changes are limited to Admins and the Treasurer.
                   </Text>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable
-              onPress={sendInvite}
-              className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
-            >
-              <Text className="text-center font-semibold text-white">Send Invite</Text>
-            </Pressable>
+                )}
+              </View>
+            </AdminPanel>
           </View>
-        </View>
 
-        {/* Pending Invites Section */}
-        {pendingInvites.length > 0 && (
-          <View className="mb-6">
-            <Text className="text-lg font-semibold text-gray-700 mb-2">
-              Pending Invites ({pendingInvites.length})
-            </Text>
-            <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-              {pendingInvites.map((invite) => {
-                const isExpired = invite.expires_at && new Date(invite.expires_at) < new Date();
-                return (
-                  <View
-                    key={invite.id}
-                    className="flex-row items-center p-4 border-b border-gray-100 last:border-b-0"
-                  >
-                    <View className="flex-1">
-                      <Text className="font-medium text-gray-800">
-                        {invite.email}
-                      </Text>
-                      <Text className="text-sm text-gray-500">
-                        Role: {ROLE_LABELS[invite.role] || invite.role} • Invited by {invite.inviter?.name || 'Unknown'}
-                      </Text>
-                      {isExpired && (
-                        <Text className="text-sm text-red-500">Expired</Text>
+          <View style={dashboardCellStyle}>
+            <AdminPanel title="Honey Pot Transactions">
+              <View style={{ padding: 14 }}>
+                <HoneyPotLedger
+                  balance={honeyPotBalance}
+                  transactions={honeyPotTransactions}
+                  loading={honeyPotLedgerLoading}
+                  compact
+                  showBalanceCard={false}
+                />
+              </View>
+            </AdminPanel>
+          </View>
+
+          {isAdmin && (
+            <View style={dashboardCellStyle}>
+              <AdminPanel title={`Members (${members.length})`}>
+                {members.map((member) => {
+                  const roleButtons = (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        flexWrap: 'wrap',
+                        justifyContent: useMobileLayout ? 'flex-start' : 'flex-end',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {ROLE_OPTIONS.map((role) => (
+                        <Pressable
+                          key={role}
+                          onPress={() => updateMemberRole(member.id, role)}
+                          style={({ pressed }) => ({
+                            backgroundColor: member.role === role ? '#bd9348' : pressed ? '#eceff3' : '#f3f4f6',
+                            borderRadius: 8,
+                            paddingHorizontal: 12,
+                            paddingVertical: 7,
+                            marginRight: 6,
+                            marginBottom: useMobileLayout ? 6 : 0,
+                          })}
+                        >
+                          <Text
+                            style={{
+                              color: member.role === role ? 'white' : '#4b5563',
+                              fontSize: 12,
+                              fontWeight: '600',
+                            }}
+                          >
+                            {ROLE_LABELS[role]}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  );
+
+                  return (
+                    <View
+                      key={member.id}
+                      style={{
+                        padding: 16,
+                        borderBottomWidth: 1,
+                        borderBottomColor: '#f3f4f6',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Avatar name={member.profiles.name} url={member.profiles.avatar_url} size={40} />
+                        <View style={{ flex: 1, minWidth: 0, marginLeft: 12, marginRight: 12 }}>
+                          <Text className="font-medium text-gray-800" numberOfLines={2}>
+                            {member.profiles.name}
+                          </Text>
+                          <Text className="text-sm text-gray-500" numberOfLines={1}>
+                            {member.profiles.email}
+                          </Text>
+                        </View>
+
+                        {!useMobileLayout && roleButtons}
+                        {member.profiles.id !== profile?.id && (
+                          <Pressable
+                            onPress={() => removeMember(member.id, member.profiles.name, member.profiles.id)}
+                            className="px-2 py-1 bg-red-100 rounded active:bg-red-200"
+                            style={{ marginLeft: useMobileLayout ? 0 : 8 }}
+                          >
+                            <Text className="text-red-600 text-xs">✕</Text>
+                          </Pressable>
+                        )}
+                      </View>
+
+                      {useMobileLayout && (
+                        <View style={{ marginTop: 12, marginLeft: 52 }}>
+                          {roleButtons}
+                        </View>
                       )}
                     </View>
-                    <Pressable
-                      onPress={() => revokeInvite(invite.id, invite.email)}
-                      className="px-3 py-2 bg-red-100 rounded-lg active:bg-red-200"
-                    >
-                      <Text className="text-red-600 text-sm font-medium">Revoke</Text>
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        )}
-        {/* Surveys Section */}
-        <View style={{ marginBottom: 24 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>Surveys</Text>
-            <Pressable
-              onPress={() => setShowSurveyModal(true)}
-              style={({ pressed }: { pressed: boolean }) => ({ backgroundColor: pressed ? '#f5e0b0' : '#fdf3dc', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 })}
-            >
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Create</Text>
-            </Pressable>
-          </View>
-          {allSurveys.length === 0 ? (
-            <View style={{ backgroundColor: '#faf8f3', borderRadius: 14, padding: 20, alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af' }}>
-                No surveys yet. Create one for the next meeting!
-              </Text>
-            </View>
-          ) : (
-            <View style={{ backgroundColor: '#faf8f3', borderRadius: 14, overflow: 'hidden' }}>
-              {allSurveys.map((survey, i) => (
-                <View key={survey.id} style={{
-                  flexDirection: 'row', alignItems: 'center', padding: 14,
-                  borderBottomWidth: i < allSurveys.length - 1 ? 1 : 0,
-                  borderBottomColor: 'rgba(222,193,129,0.3)',
-                }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>{survey.title}</Text>
-                    {survey.due_date && (
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-                        Due {new Date(survey.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </Text>
-                    )}
+                  );
+                })}
+
+                <View style={{ padding: 16 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 10 }}>
+                    Invite Member
+                  </Text>
+                  <TextInput
+                    placeholder="Email address"
+                    value={inviteEmail}
+                    onChangeText={setInviteEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    className="border border-gray-300 rounded-lg p-3 mb-3 bg-white"
+                  />
+                  <View className="flex-row flex-wrap mb-4">
+                    {ROLE_OPTIONS.map((role) => (
+                      <Pressable
+                        key={role}
+                        onPress={() => setInviteRole(role)}
+                        className={`px-3 py-2 rounded mr-2 mb-2 ${
+                          inviteRole === role ? 'bg-honey-500' : 'bg-gray-100'
+                        }`}
+                      >
+                        <Text className={`${inviteRole === role ? 'text-white' : 'text-gray-600'} capitalize`}>
+                          {ROLE_LABELS[role]}
+                        </Text>
+                      </Pressable>
+                    ))}
                   </View>
                   <Pressable
-                    onPress={() => toggleSurveyActive(survey)}
-                    style={({ pressed }: { pressed: boolean }) => ({
-                      backgroundColor: pressed ? (survey.is_active ? '#f5e0b0' : '#e5e7eb') : (survey.is_active ? '#fdf3dc' : '#f3f4f6'),
-                      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10,
-                    })}
+                    onPress={sendInvite}
+                    className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
                   >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: survey.is_active ? '#bd9348' : '#9ca3af' }}>
-                      {survey.is_active ? 'Active' : 'Inactive'}
-                    </Text>
+                    <Text className="text-center font-semibold text-white">Send Invite</Text>
                   </Pressable>
                 </View>
-              ))}
+
+                {pendingInvites.length > 0 && (
+                  <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', paddingHorizontal: 16, paddingTop: 16 }}>
+                      Pending Invites ({pendingInvites.length})
+                    </Text>
+                    {pendingInvites.map((invite) => {
+                      const isExpired = invite.expires_at && new Date(invite.expires_at) < new Date();
+                      return (
+                        <View
+                          key={invite.id}
+                          className="flex-row items-center p-4 border-b border-gray-100 last:border-b-0"
+                        >
+                          <View className="flex-1">
+                            <Text className="font-medium text-gray-800">
+                              {invite.email}
+                            </Text>
+                            <Text className="text-sm text-gray-500">
+                              Role: {ROLE_LABELS[invite.role] || invite.role} • Invited by {invite.inviter?.name || 'Unknown'}
+                            </Text>
+                            {isExpired && (
+                              <Text className="text-sm text-red-500">Expired</Text>
+                            )}
+                          </View>
+                          <Pressable
+                            onPress={() => revokeInvite(invite.id, invite.email)}
+                            className="px-3 py-2 bg-red-100 rounded-lg active:bg-red-200"
+                          >
+                            <Text className="text-red-600 text-sm font-medium">Revoke</Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </AdminPanel>
+            </View>
+          )}
+
+          {isAdmin && (
+            <View style={dashboardCellStyle}>
+              <AdminPanel
+                title="Surveys"
+                action={(
+                  <Pressable
+                    onPress={() => setShowSurveyModal(true)}
+                    style={({ pressed }: { pressed: boolean }) => ({
+                      backgroundColor: pressed ? '#f5e0b0' : '#fdf3dc',
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                      borderRadius: 10,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>+ Create</Text>
+                  </Pressable>
+                )}
+              >
+                {allSurveys.length === 0 ? (
+                  <View style={{ padding: 20, alignItems: 'center' }}>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af' }}>
+                      No surveys yet.
+                    </Text>
+                  </View>
+                ) : (
+                  allSurveys.map((survey, i) => (
+                    <View key={survey.id} style={{
+                      flexDirection: 'row', alignItems: 'center', padding: 14,
+                      borderBottomWidth: i < allSurveys.length - 1 ? 1 : 0,
+                      borderBottomColor: 'rgba(222,193,129,0.3)',
+                    }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>{survey.title}</Text>
+                        {survey.due_date && (
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                            Due {new Date(survey.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </Text>
+                        )}
+                      </View>
+                      <Pressable
+                        onPress={() => toggleSurveyActive(survey)}
+                        style={({ pressed }: { pressed: boolean }) => ({
+                          backgroundColor: pressed ? (survey.is_active ? '#f5e0b0' : '#e5e7eb') : (survey.is_active ? '#fdf3dc' : '#f3f4f6'),
+                          paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10,
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: survey.is_active ? '#bd9348' : '#9ca3af' }}>
+                          {survey.is_active ? 'Active' : 'Inactive'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ))
+                )}
+              </AdminPanel>
             </View>
           )}
         </View>
-
-        </>)}
       </ScrollView>
 
       {/* Survey Create Modal */}

@@ -254,6 +254,8 @@ export interface HoneyPotTransaction extends Record<string, unknown> {
   amount: number;
   transaction_type: 'deposit' | 'withdrawal' | 'adjustment';
   note?: string | null;
+  payment_method?: string | null;
+  external_counterparty_name?: string | null;
   recorded_by?: string | null;
   related_user_id?: string | null;
   dues_year?: number | null;
@@ -862,6 +864,8 @@ export interface Database {
           p_amount: number;
           p_transaction_type: 'deposit' | 'withdrawal' | 'adjustment';
           p_note?: string | null;
+          p_payment_method?: string | null;
+          p_external_counterparty_name?: string | null;
           p_related_user_id?: string | null;
           p_dues_year?: number | null;
           p_dues_quarter?: number | null;

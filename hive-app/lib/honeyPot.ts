@@ -1,12 +1,55 @@
+import type { HoneyPotTransaction, Profile } from '../types';
 import { supabase } from './supabase';
 
 export type HoneyPotTransactionType = 'deposit' | 'withdrawal';
+export type HoneyPotPaymentMethod = 'cash_app' | 'venmo' | 'zelle' | 'cash' | 'check' | 'other';
+
+export const HONEY_POT_PAYMENT_METHOD_OPTIONS: {
+  value: HoneyPotPaymentMethod;
+  label: string;
+}[] = [
+  { value: 'cash_app', label: 'Cash App' },
+  { value: 'venmo', label: 'Venmo' },
+  { value: 'zelle', label: 'Zelle' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'check', label: 'Check' },
+  { value: 'other', label: 'Other' },
+];
+
+export const HONEY_POT_PAYMENT_METHOD_LABELS = HONEY_POT_PAYMENT_METHOD_OPTIONS.reduce(
+  (labels, option) => {
+    labels[option.value] = option.label;
+    return labels;
+  },
+  {} as Record<HoneyPotPaymentMethod, string>
+);
+
+type HoneyPotPerson = Pick<Profile, 'id' | 'name' | 'email' | 'avatar_url'>;
+
+type HoneyPotTransactionRow = HoneyPotTransaction & {
+  payment_method?: HoneyPotPaymentMethod | string | null;
+  external_counterparty_name?: string | null;
+};
+
+export type HoneyPotLedgerEntry = HoneyPotTransactionRow & {
+  amount: number;
+  running_balance: number;
+  recorded_by_profile?: HoneyPotPerson | null;
+  related_user_profile?: HoneyPotPerson | null;
+};
+
+export type HoneyPotLedger = {
+  balance: number;
+  transactions: HoneyPotLedgerEntry[];
+};
 
 export type RecordHoneyPotTransactionInput = {
   communityId: string;
   signedAmount: number;
   transactionType: HoneyPotTransactionType;
   note: string;
+  paymentMethod: HoneyPotPaymentMethod | null;
+  externalCounterpartyName: string | null;
   recordedBy: string | null;
   relatedUserId: string | null;
   duesYear: number | null;
@@ -45,11 +88,25 @@ const isMissingDuesColumnError = (error: unknown) => {
     || (message.includes('schema cache') && message.includes('honey_pot_transactions'));
 };
 
+const isMissingPaymentColumnError = (error: unknown) => {
+  const message = getHoneyPotErrorMessage(error).toLowerCase();
+  return message.includes('payment_method')
+    || message.includes('external_counterparty_name')
+    || (message.includes('schema cache') && message.includes('honey_pot_transactions'));
+};
+
+const getPaymentMethodLabel = (method?: string | null) => {
+  if (!method) return null;
+  return HONEY_POT_PAYMENT_METHOD_LABELS[method as HoneyPotPaymentMethod] ?? method;
+};
+
 const recordWithTables = async ({
   communityId,
   signedAmount,
   transactionType,
   note,
+  paymentMethod,
+  externalCounterpartyName,
   recordedBy,
   relatedUserId,
   duesYear,
@@ -58,7 +115,12 @@ const recordWithTables = async ({
   fallbackDuesLabel,
 }: RecordHoneyPotTransactionInput): Promise<RecordHoneyPotTransactionResult> => {
   const trimmedNote = note.trim();
-  const fallbackNote = [trimmedNote, fallbackDuesLabel ? `Dues: ${fallbackDuesLabel}` : null]
+  const fallbackNote = [
+    trimmedNote,
+    getPaymentMethodLabel(paymentMethod) ? `Method: ${getPaymentMethodLabel(paymentMethod)}` : null,
+    externalCounterpartyName ? `Party: ${externalCounterpartyName.trim()}` : null,
+    fallbackDuesLabel ? `Dues: ${fallbackDuesLabel}` : null,
+  ]
     .filter(Boolean)
     .join(' · ') || null;
 
@@ -80,6 +142,8 @@ const recordWithTables = async ({
       amount: signedAmount,
       transaction_type: transactionType,
       note: trimmedNote || null,
+      payment_method: paymentMethod,
+      external_counterparty_name: externalCounterpartyName?.trim() || null,
       recorded_by: recordedBy,
       related_user_id: relatedUserId,
       dues_year: duesYear,
@@ -89,7 +153,8 @@ const recordWithTables = async ({
 
   let savedStructuredDues = !!relatedUserId;
   if (structuredTransactionError) {
-    if (!isMissingDuesColumnError(structuredTransactionError)) {
+    if (!isMissingDuesColumnError(structuredTransactionError)
+      && !isMissingPaymentColumnError(structuredTransactionError)) {
       throw structuredTransactionError;
     }
     savedStructuredDues = false;
@@ -146,6 +211,8 @@ export const recordHoneyPotTransaction = async (
     p_amount: input.signedAmount,
     p_transaction_type: input.transactionType,
     p_note: input.note.trim() || null,
+    p_payment_method: input.paymentMethod,
+    p_external_counterparty_name: input.externalCounterpartyName?.trim() || null,
     p_related_user_id: input.relatedUserId,
     p_dues_year: input.duesYear,
     p_dues_quarter: input.duesQuarter,
@@ -211,3 +278,122 @@ export const fetchHoneyPotBalance = async (communityId: string) => {
 
   return storedBalance ?? 0;
 };
+
+const LEGACY_LEDGER_COLUMNS = [
+  'id',
+  'community_id',
+  'amount',
+  'transaction_type',
+  'note',
+  'recorded_by',
+  'related_user_id',
+  'dues_year',
+  'dues_quarter',
+  'dues_covered_quarters',
+  'created_at',
+].join(', ');
+
+const TRANSPARENT_LEDGER_COLUMNS = `${LEGACY_LEDGER_COLUMNS}, payment_method, external_counterparty_name`;
+
+const fetchHoneyPotTransactionRows = async (communityId: string): Promise<HoneyPotTransactionRow[]> => {
+  const runQuery = (columns: string) => (supabase as any)
+    .from('honey_pot_transactions')
+    .select(columns)
+    .eq('community_id', communityId)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
+
+  const { data, error } = await runQuery(TRANSPARENT_LEDGER_COLUMNS);
+  if (!error) return (data ?? []) as HoneyPotTransactionRow[];
+
+  if (!isMissingPaymentColumnError(error)) throw error;
+
+  const fallback = await runQuery(LEGACY_LEDGER_COLUMNS);
+  if (fallback.error) throw fallback.error;
+  return (fallback.data ?? []).map((row: HoneyPotTransactionRow) => ({
+    ...row,
+    payment_method: null,
+    external_counterparty_name: null,
+  }));
+};
+
+const fetchHoneyPotPeople = async (userIds: string[]) => {
+  const ids = Array.from(new Set(userIds.filter(Boolean)));
+  if (ids.length === 0) return new Map<string, HoneyPotPerson>();
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, name, email, avatar_url')
+    .in('id', ids);
+
+  if (error) {
+    console.warn('Could not load Honey Pot profile names', error);
+    return new Map<string, HoneyPotPerson>();
+  }
+
+  return new Map((data ?? []).map((person) => [person.id, person as HoneyPotPerson]));
+};
+
+export const fetchHoneyPotLedger = async (communityId: string): Promise<HoneyPotLedger> => {
+  const rows = await fetchHoneyPotTransactionRows(communityId);
+  const people = await fetchHoneyPotPeople(
+    rows.flatMap((row) => [row.recorded_by, row.related_user_id]).filter(Boolean) as string[]
+  );
+
+  let runningBalance = 0;
+  const chronological = rows.map((row) => {
+    runningBalance += Number(row.amount ?? 0);
+    return {
+      ...row,
+      amount: Number(row.amount ?? 0),
+      running_balance: runningBalance,
+      recorded_by_profile: row.recorded_by ? people.get(row.recorded_by) ?? null : null,
+      related_user_profile: row.related_user_id ? people.get(row.related_user_id) ?? null : null,
+    };
+  });
+
+  const balance = await fetchHoneyPotBalance(communityId).catch(() => runningBalance);
+
+  return {
+    balance,
+    transactions: chronological.reverse(),
+  };
+};
+
+export const formatHoneyPotAmount = (amount: number) => {
+  const formatted = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(Math.abs(amount));
+  return amount < 0 ? `-${formatted}` : formatted;
+};
+
+export const getHoneyPotDuesLabel = (transaction: Pick<
+  HoneyPotLedgerEntry,
+  'dues_year' | 'dues_quarter' | 'dues_covered_quarters'
+>) => {
+  if (!transaction.dues_year || !transaction.dues_covered_quarters) return null;
+  if (transaction.dues_covered_quarters >= 4) return `Full year ${transaction.dues_year}`;
+  if (!transaction.dues_quarter) return `${transaction.dues_year} dues`;
+  return `Q${transaction.dues_quarter} ${transaction.dues_year}`;
+};
+
+export const describeHoneyPotTransaction = (transaction: HoneyPotLedgerEntry) => {
+  const recorder = transaction.recorded_by_profile?.name ?? 'Someone';
+  const amount = formatHoneyPotAmount(transaction.amount);
+  const type = transaction.transaction_type === 'withdrawal' ? 'withdrawal' : 'deposit';
+  const member = transaction.related_user_profile?.name ?? transaction.external_counterparty_name?.trim();
+  const method = getPaymentMethodLabel(transaction.payment_method);
+  const duesLabel = getHoneyPotDuesLabel(transaction);
+
+  const pieces = [
+    `${recorder} recorded a ${amount} ${type}`,
+    member ? `${transaction.transaction_type === 'withdrawal' ? 'for' : 'from'} ${member}` : null,
+    duesLabel ? `for ${duesLabel}` : null,
+    method ? `via ${method}` : null,
+  ].filter(Boolean);
+
+  return `${pieces.join(' ')}.`;
+};
+
+export const getHoneyPotPaymentMethodLabel = getPaymentMethodLabel;

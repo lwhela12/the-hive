@@ -2004,7 +2004,7 @@ export default function HiveScreen() {
             emoji="🍯"
             label="Honey Pot"
             sublabel={loading.honeyPot ? '...' : `$${honeyPotBalance?.toFixed(0) ?? '0'}`}
-            onPress={() => {}}
+            onPress={() => router.push('/honey-pot' as any)}
           />
           <HexShortcut
             emoji="📋"
