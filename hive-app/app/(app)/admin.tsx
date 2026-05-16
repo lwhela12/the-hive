@@ -9,6 +9,8 @@ import {
   RefreshControl,
   Modal,
   useWindowDimensions,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -89,14 +91,18 @@ const HONEY_POT_FEEDBACK_STYLE: Record<HoneyPotFeedback['tone'], {
 function AdminPanel({
   title,
   action,
+  style,
+  bodyStyle,
   children,
 }: {
   title: string;
   action?: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  bodyStyle?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
   return (
-    <View style={{ marginBottom: 18 }}>
+    <View style={[{ marginBottom: 0 }, style]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
           {title}
@@ -104,7 +110,7 @@ function AdminPanel({
         {action}
       </View>
       <View
-        style={{
+        style={[{
           backgroundColor: '#fff',
           borderRadius: 16,
           borderWidth: 1,
@@ -114,7 +120,7 @@ function AdminPanel({
           shadowRadius: 12,
           shadowOffset: { width: 0, height: 5 },
           overflow: 'hidden',
-        }}
+        }, bodyStyle]}
       >
         {children}
       </View>
@@ -124,7 +130,7 @@ function AdminPanel({
 
 export default function AdminScreen() {
   const { profile, communityId, communityRole } = useAuth();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const queryClient = useQueryClient();
   const useMobileLayout = width < 768;
   const currentDuesPeriod = getCurrentDuesPeriod();
@@ -630,6 +636,11 @@ export default function AdminScreen() {
   const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
   const canEditHoneyPot = isTreasurer || isAdmin;
   const selectedDuesMember = members.find((member) => member.profiles.id === duesMemberId)?.profiles;
+  const desktopPanelHeight = Math.max(240, Math.floor((height - 188) / 2));
+  const dashboardPanelStyle = useMobileLayout ? undefined : { height: desktopPanelHeight };
+  const dashboardPanelBodyStyle = useMobileLayout ? undefined : { flex: 1 };
+  const panelScrollStyle = useMobileLayout ? undefined : { flex: 1 };
+  const panelOrderStyle = (order: number) => ({ order } as unknown as ViewStyle);
   const dashboardWrapStyle = {
     flexDirection: useMobileLayout ? 'column' : 'row',
     flexWrap: 'wrap',
@@ -638,6 +649,7 @@ export default function AdminScreen() {
   const dashboardCellStyle = {
     width: useMobileLayout ? '100%' : '50%',
     paddingHorizontal: useMobileLayout ? 0 : 8,
+    marginBottom: useMobileLayout ? 18 : 16,
   } as const;
 
   if (!isAdmin && !isTreasurer) {
@@ -660,9 +672,14 @@ export default function AdminScreen() {
         }
       >
         <View style={dashboardWrapStyle}>
-          <View style={dashboardCellStyle}>
-            <AdminPanel title="Honey Pot">
-              <View style={{ padding: 16 }}>
+          <View style={[dashboardCellStyle, panelOrderStyle(3)]}>
+            <AdminPanel title="Honey Pot" style={dashboardPanelStyle} bodyStyle={dashboardPanelBodyStyle}>
+              <ScrollView
+                style={panelScrollStyle}
+                contentContainerStyle={{ padding: 16 }}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={!useMobileLayout}
+              >
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 28, color: '#bd9348', textAlign: 'center', marginBottom: 16 }}>
                   ${honeyPotBalance.toFixed(2)}
                 </Text>
@@ -901,13 +918,18 @@ export default function AdminScreen() {
                     Honey Pot changes are limited to Admins and the Treasurer.
                   </Text>
                 )}
-              </View>
+              </ScrollView>
             </AdminPanel>
           </View>
 
-          <View style={dashboardCellStyle}>
-            <AdminPanel title="Honey Pot Transactions">
-              <View style={{ padding: 14 }}>
+          <View style={[dashboardCellStyle, panelOrderStyle(4)]}>
+            <AdminPanel title="Honey Pot Transactions" style={dashboardPanelStyle} bodyStyle={dashboardPanelBodyStyle}>
+              <ScrollView
+                style={panelScrollStyle}
+                contentContainerStyle={{ padding: 14 }}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={!useMobileLayout}
+              >
                 <HoneyPotLedger
                   balance={honeyPotBalance}
                   transactions={honeyPotTransactions}
@@ -915,13 +937,53 @@ export default function AdminScreen() {
                   compact
                   showBalanceCard={false}
                 />
-              </View>
+              </ScrollView>
             </AdminPanel>
           </View>
 
           {isAdmin && (
-            <View style={dashboardCellStyle}>
-              <AdminPanel title={`Members (${members.length})`}>
+            <View style={[dashboardCellStyle, panelOrderStyle(1)]}>
+              <AdminPanel title={`Members (${members.length})`} style={dashboardPanelStyle} bodyStyle={dashboardPanelBodyStyle}>
+                <ScrollView
+                  style={panelScrollStyle}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={!useMobileLayout}
+                >
+                  <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 10 }}>
+                      Invite Member
+                    </Text>
+                    <TextInput
+                      placeholder="Email address"
+                      value={inviteEmail}
+                      onChangeText={setInviteEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      className="border border-gray-300 rounded-lg p-3 mb-3 bg-white"
+                    />
+                    <View className="flex-row flex-wrap mb-4">
+                      {ROLE_OPTIONS.map((role) => (
+                        <Pressable
+                          key={role}
+                          onPress={() => setInviteRole(role)}
+                          className={`px-3 py-2 rounded mr-2 mb-2 ${
+                            inviteRole === role ? 'bg-honey-500' : 'bg-gray-100'
+                          }`}
+                        >
+                          <Text className={`${inviteRole === role ? 'text-white' : 'text-gray-600'} capitalize`}>
+                            {ROLE_LABELS[role]}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    <Pressable
+                      onPress={sendInvite}
+                      className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
+                    >
+                      <Text className="text-center font-semibold text-white">Send Invite</Text>
+                    </Pressable>
+                  </View>
+
                 {members.map((member) => {
                   const roleButtons = (
                     <View
@@ -1000,41 +1062,6 @@ export default function AdminScreen() {
                   );
                 })}
 
-                <View style={{ padding: 16 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 10 }}>
-                    Invite Member
-                  </Text>
-                  <TextInput
-                    placeholder="Email address"
-                    value={inviteEmail}
-                    onChangeText={setInviteEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    className="border border-gray-300 rounded-lg p-3 mb-3 bg-white"
-                  />
-                  <View className="flex-row flex-wrap mb-4">
-                    {ROLE_OPTIONS.map((role) => (
-                      <Pressable
-                        key={role}
-                        onPress={() => setInviteRole(role)}
-                        className={`px-3 py-2 rounded mr-2 mb-2 ${
-                          inviteRole === role ? 'bg-honey-500' : 'bg-gray-100'
-                        }`}
-                      >
-                        <Text className={`${inviteRole === role ? 'text-white' : 'text-gray-600'} capitalize`}>
-                          {ROLE_LABELS[role]}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                  <Pressable
-                    onPress={sendInvite}
-                    className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
-                  >
-                    <Text className="text-center font-semibold text-white">Send Invite</Text>
-                  </Pressable>
-                </View>
-
                 {pendingInvites.length > 0 && (
                   <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', paddingHorizontal: 16, paddingTop: 16 }}>
@@ -1069,14 +1096,17 @@ export default function AdminScreen() {
                     })}
                   </View>
                 )}
+                </ScrollView>
               </AdminPanel>
             </View>
           )}
 
           {isAdmin && (
-            <View style={dashboardCellStyle}>
+            <View style={[dashboardCellStyle, panelOrderStyle(2)]}>
               <AdminPanel
                 title="Surveys"
+                style={dashboardPanelStyle}
+                bodyStyle={dashboardPanelBodyStyle}
                 action={(
                   <Pressable
                     onPress={() => setShowSurveyModal(true)}
@@ -1091,41 +1121,47 @@ export default function AdminScreen() {
                   </Pressable>
                 )}
               >
-                {allSurveys.length === 0 ? (
-                  <View style={{ padding: 20, alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af' }}>
-                      No surveys yet.
-                    </Text>
-                  </View>
-                ) : (
-                  allSurveys.map((survey, i) => (
-                    <View key={survey.id} style={{
-                      flexDirection: 'row', alignItems: 'center', padding: 14,
-                      borderBottomWidth: i < allSurveys.length - 1 ? 1 : 0,
-                      borderBottomColor: 'rgba(222,193,129,0.3)',
-                    }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>{survey.title}</Text>
-                        {survey.due_date && (
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-                            Due {new Date(survey.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          </Text>
-                        )}
-                      </View>
-                      <Pressable
-                        onPress={() => toggleSurveyActive(survey)}
-                        style={({ pressed }: { pressed: boolean }) => ({
-                          backgroundColor: pressed ? (survey.is_active ? '#f5e0b0' : '#e5e7eb') : (survey.is_active ? '#fdf3dc' : '#f3f4f6'),
-                          paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10,
-                        })}
-                      >
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: survey.is_active ? '#bd9348' : '#9ca3af' }}>
-                          {survey.is_active ? 'Active' : 'Inactive'}
-                        </Text>
-                      </Pressable>
+                <ScrollView
+                  style={panelScrollStyle}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={!useMobileLayout}
+                >
+                  {allSurveys.length === 0 ? (
+                    <View style={{ padding: 20, alignItems: 'center' }}>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af' }}>
+                        No surveys yet.
+                      </Text>
                     </View>
-                  ))
-                )}
+                  ) : (
+                    allSurveys.map((survey, i) => (
+                      <View key={survey.id} style={{
+                        flexDirection: 'row', alignItems: 'center', padding: 14,
+                        borderBottomWidth: i < allSurveys.length - 1 ? 1 : 0,
+                        borderBottomColor: 'rgba(222,193,129,0.3)',
+                      }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>{survey.title}</Text>
+                          {survey.due_date && (
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                              Due {new Date(survey.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </Text>
+                          )}
+                        </View>
+                        <Pressable
+                          onPress={() => toggleSurveyActive(survey)}
+                          style={({ pressed }: { pressed: boolean }) => ({
+                            backgroundColor: pressed ? (survey.is_active ? '#f5e0b0' : '#e5e7eb') : (survey.is_active ? '#fdf3dc' : '#f3f4f6'),
+                            paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10,
+                          })}
+                        >
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: survey.is_active ? '#bd9348' : '#9ca3af' }}>
+                            {survey.is_active ? 'Active' : 'Inactive'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
               </AdminPanel>
             </View>
           )}
