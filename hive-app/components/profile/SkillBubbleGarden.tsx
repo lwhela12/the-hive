@@ -707,9 +707,6 @@ function renderLavender(cx: number, cy: number, radius: number, full: boolean, c
 }
 
 function renderBloom(species: WildflowerSpecies, cx: number, cy: number, radius: number, full: boolean, category: SkillCategoryDef) {
-  if (species === 'sunflower') return renderSunflower(cx, cy, radius, full);
-  if (species === 'poppy') return renderPoppy(cx, cy, radius, full, category);
-  if (species === 'lavender') return renderLavender(cx, cy, radius, full, category);
   return renderDaisy(cx, cy, radius, full, category);
 }
 
@@ -830,8 +827,7 @@ function WildflowerSprite({
   label?: string;
 }) {
   const stage = getStage(level);
-  const speciesOptions = SPECIES_BY_CATEGORY[category.species];
-  const species = speciesOptions[hashString(swaySalt) % speciesOptions.length];
+  const species: WildflowerSpecies = 'daisy';
   const spriteScale = level >= 4 ? 1.18 : level >= 2 ? 1.1 : 1;
   const shouldSway = Platform.OS === 'web' && level >= 4;
   const swayDelay = -Math.round(ratioFromHash(swaySalt, 4) * 2600);
@@ -1103,7 +1099,7 @@ function SkillPlant({
     }
 
     onUpdateSkill(skill, {
-      enthusiasm_level: level >= 5 ? 0 : clamp(level + 1, 0, 5),
+      enthusiasm_level: level >= 5 ? 5 : clamp(level + 1, 1, 5),
     });
   };
 
@@ -1249,9 +1245,9 @@ function SkillPlant({
             }}
           >
             {[
-              { label: '-', action: () => updateLevel(level - 1), disabled: level <= 0, accessibilityLabel: `Shrink ${skill.description}` },
+              { label: '-', action: () => updateLevel(level - 1), disabled: level <= 1, accessibilityLabel: `Shrink ${skill.description}` },
               { label: '+', action: () => updateLevel(level + 1), disabled: level >= 5, accessibilityLabel: `Grow ${skill.description}` },
-              { label: 'Remove', action: () => onDeleteSkill?.(skill), disabled: !onDeleteSkill, accessibilityLabel: `Remove ${skill.description}` },
+              { label: 'Seed', action: () => updateLevel(0), disabled: false, accessibilityLabel: `Return ${skill.description} to seeds` },
             ].map(action => (
               <Pressable
                 key={action.label}
@@ -1264,12 +1260,12 @@ function SkillPlant({
                   action.action();
                 }}
                 style={{
-                  minWidth: action.label === 'Remove' ? 54 : 24,
+                  minWidth: action.label === 'Seed' ? 44 : 24,
                   height: 22,
                   borderRadius: 999,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: action.label === 'Remove' ? 'rgba(248,238,226,0.82)' : category.pale,
+                  backgroundColor: action.label === 'Seed' ? 'rgba(248,238,226,0.82)' : category.pale,
                   opacity: action.disabled ? 0.38 : 1,
                   ...(Platform.OS === 'web'
                     ? ({
@@ -1283,9 +1279,9 @@ function SkillPlant({
                   numberOfLines={1}
                   style={{
                     fontFamily: 'Lato_700Bold',
-                    color: action.label === 'Remove' ? '#7a5a36' : category.text,
-                    fontSize: action.label === 'Remove' ? 10 : 14,
-                    lineHeight: action.label === 'Remove' ? 12 : 16,
+                    color: action.label === 'Seed' ? '#7a5a36' : category.text,
+                    fontSize: action.label === 'Seed' ? 10 : 14,
+                    lineHeight: action.label === 'Seed' ? 12 : 16,
                   }}
                 >
                   {action.label}
@@ -2217,9 +2213,9 @@ export function SkillBubbleGarden({
             borderTopWidth: 1,
             borderTopColor: 'rgba(78,124,63,0.34)',
             backgroundColor: '#3b2418',
-            paddingHorizontal: 14,
-            paddingTop: 10,
-            paddingBottom: 12,
+            paddingHorizontal: 12,
+            paddingTop: 7,
+            paddingBottom: 8,
             ...(Platform.OS === 'web'
               ? ({
                   backgroundImage: [
@@ -2237,8 +2233,8 @@ export function SkillBubbleGarden({
               flexDirection: width > 520 ? 'row' : 'column',
               alignItems: width > 520 ? 'center' : 'stretch',
               justifyContent: 'space-between',
-              gap: 6,
-              marginBottom: 8,
+              gap: 4,
+              marginBottom: 5,
             }}
           >
             <View>
@@ -2246,7 +2242,7 @@ export function SkillBubbleGarden({
                 style={{
                   fontFamily: 'Lato_700Bold',
                   color: '#f8eee2',
-                  fontSize: 12,
+                  fontSize: 11,
                   letterSpacing: 0,
                 }}
               >
@@ -2256,7 +2252,7 @@ export function SkillBubbleGarden({
                 style={{
                   fontFamily: 'Lato_400Regular',
                   color: 'rgba(248,238,226,0.64)',
-                  fontSize: 10.5,
+                  fontSize: 9.5,
                   marginTop: 1,
                 }}
               >
@@ -2271,7 +2267,7 @@ export function SkillBubbleGarden({
             style={{
               flexDirection: 'row',
               flexWrap: 'wrap',
-              gap: 8,
+              gap: 7,
               alignItems: 'center',
             }}
           >
