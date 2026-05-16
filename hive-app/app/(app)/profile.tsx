@@ -550,7 +550,7 @@ export default function ProfileScreen() {
       .eq('community_id', communityId);
 
     if (error) {
-      Alert.alert('Error', 'Failed to update that skill bubble. Please try again.');
+      Alert.alert('Error', 'Failed to update that skill flower. Please try again.');
       await fetchData();
     }
   };
@@ -564,8 +564,12 @@ export default function ProfileScreen() {
     if (alreadyPlanted) return;
 
     const seedIndex = skills.length + 1;
-    const displayX = Number((0.12 + (((seedIndex * 17) % 76) / 100)).toFixed(4));
-    const displayY = 0.9;
+    const seedValue = Array.from(skillDescription).reduce(
+      (sum, character) => sum + character.charCodeAt(0),
+      seedIndex * 31
+    );
+    const displayX = Number((0.08 + ((seedValue * 17) % 84) / 100).toFixed(4));
+    const displayY = Number((0.8 + ((seedValue * 29) % 15) / 100).toFixed(4));
 
     const { data, error } = await supabase
       .from('skills')
@@ -575,7 +579,7 @@ export default function ProfileScreen() {
         description: skillDescription,
         raw_input: skillDescription,
         extracted_from: 'manual',
-        enthusiasm_level: 1,
+        enthusiasm_level: 0,
         display_x: displayX,
         display_y: displayY,
       })
@@ -883,11 +887,10 @@ export default function ProfileScreen() {
 
           return (
             <View style={{ alignItems: 'center', marginBottom: 20 }}>
-              {/* Arc + avatar stacked */}
+              {/* Bee route + avatar */}
               <View style={{ alignItems: 'center' }}>
-                <BeeProgressArc score={score} size={220} />
-                {/* Avatar overlaps the base of the arc */}
-                <View style={{ marginTop: -44, alignItems: 'center' }}>
+                <BeeProgressArc profileCompletionPercent={percent} size={260} />
+                <View style={{ marginTop: -44, alignItems: 'center', zIndex: 1 }}>
                   <Pressable onPress={pickImage} disabled={isUploadingPhoto} style={{ position: 'relative' }} className="active:opacity-80">
                     <Avatar name={profile.name} url={profile.avatar_url} size={80} />
                     {isUploadingPhoto ? (
@@ -1004,6 +1007,25 @@ export default function ProfileScreen() {
 
           {!isEditing ? (
             <View className="gap-4">
+              {/* Honeycomb snapshot — visual identity, shown first */}
+              <ProfileHoneycombCluster
+                title="PROFILE HONEYCOMB"
+                size="compact"
+                items={[
+                  { label: 'Title', value: (profile as any).profile_title || profile.occupation },
+                  { label: 'From', value: (profile as any).hometown },
+                  { label: 'Birthday', value: formatBirthdayForDisplay(profile.birthday) },
+                  { label: 'Project', value: (profile as any).current_project },
+                  { label: 'Book', value: (profile as any).favorite_book },
+                  { label: 'Food', value: (profile as any).favorite_food },
+                  { label: 'Hobby', value: (profile as any).favorite_hobby },
+                  ...(((profile as any).fun_facts as string[] | null) ?? []).map((fact: string, idx: number) => ({
+                    label: `Fun Fact ${idx + 1}`,
+                    value: fact,
+                  })),
+                ]}
+              />
+
               {(profile as any).bio && (
                 <View className="bg-white rounded-xl shadow-sm p-4">
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
@@ -1057,43 +1079,6 @@ export default function ProfileScreen() {
                   </View>
                 </Pressable>
               )}
-
-              <ProfileHoneycombCluster
-                title="PROFILE SNAPSHOT"
-                size="compact"
-                items={[
-                  { label: 'Title', value: (profile as any).profile_title || profile.occupation },
-                  { label: 'From', value: (profile as any).hometown },
-                  { label: 'Birthday', value: formatBirthdayForDisplay(profile.birthday) },
-                ]}
-              />
-
-              {(profile as any).current_project && (
-                <View>
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-2 tracking-wide">CURRENTLY WORKING ON</Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
-                    {(profile as any).current_project}
-                  </Text>
-                </View>
-              )}
-
-              <ProfileHoneycombCluster
-                title="FUN FACTS"
-                items={(((profile as any).fun_facts as string[] | null) ?? []).map((fact: string, idx: number) => ({
-                  label: `Fun Fact ${idx + 1}`,
-                  value: fact,
-                }))}
-              />
-
-              <ProfileHoneycombCluster
-                title="FAVORITES"
-                size="compact"
-                items={[
-                  { label: 'Book', value: (profile as any).favorite_book },
-                  { label: 'Food', value: (profile as any).favorite_food },
-                  { label: 'Hobby', value: (profile as any).favorite_hobby },
-                ]}
-              />
             </View>
           ) : (
           <View className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -1493,13 +1478,18 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Skills */}
+        {/* Skills — Wildflower Meadow */}
         {!initialLoading && <FadeIn delay={50}>
         <View className="mb-6">
-          <View className="flex-row items-center justify-between mb-2">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
-              Your Skills ({skills.length})
-            </Text>
+          <View className="flex-row items-center justify-between mb-1">
+            <View>
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
+                Wildflower Meadow 🌸
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                {skills.length > 0 ? `${skills.length} skill${skills.length !== 1 ? 's' : ''} · tap a flower to grow it` : 'Plant your skills below'}
+              </Text>
+            </View>
           </View>
           <SkillBubbleGarden
             skills={skills}

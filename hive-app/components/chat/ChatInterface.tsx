@@ -929,6 +929,8 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
         onSend={handleSendMessage}
         isLoading={isLoading}
         placeholder="Message Clive..."
+        communityId={communityId}
+        currentUserId={session?.user?.id}
       />
     </KeyboardAvoidingView>
   );

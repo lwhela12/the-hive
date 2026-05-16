@@ -14,6 +14,10 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
+import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionInput } from '../../lib/hooks/useMentionInput';
+import { notifyWishMentions } from '../../lib/wishMentions';
+import { MentionSuggestions } from '../ui/MentionSuggestions';
 import type { BoardCategory, Wish } from '../../types';
 
 const WISH_DRAFT_KEY = 'add-wish-draft';
@@ -46,8 +50,21 @@ export function AddWishModal({
   const [wishText, setWishText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
   const isEditMode = !!existingWish;
   const isLinkedWish = !!linkedBoardCategory && !existingWish;
+
+  const handleWishTextChange = (text: string) => {
+    setWishText(text);
+    if (!existingWish) AsyncStorage.setItem(WISH_DRAFT_KEY, text).catch(() => {});
+  };
+
+  const wishMentionInput = useMentionInput({
+    value: wishText,
+    onChangeText: handleWishTextChange,
+    members: mentionableMembers,
+    currentUserId: userId,
+  });
 
   useEffect(() => {
     if (visible && existingWish) {
@@ -62,6 +79,7 @@ export function AddWishModal({
     } else if (!visible) {
       setWishText('');
       setError('');
+      wishMentionInput.resetMentionSelection();
     }
   }, [visible, existingWish]);
 
@@ -73,6 +91,7 @@ export function AddWishModal({
     setError('');
 
     try {
+      let savedWishId = existingWish?.id;
       if (existingWish) {
         const { error: updateError } = await supabase
           .from('wishes')
@@ -100,12 +119,29 @@ export function AddWishModal({
           insertPayload.board_category_id = linkedBoardCategory.id;
         }
 
-        const { error: insertError } = await supabase.from('wishes').insert(insertPayload);
+        const { data: insertedWish, error: insertError } = await supabase
+          .from('wishes')
+          .insert(insertPayload)
+          .select('id')
+          .single();
 
         if (insertError) throw insertError;
+        savedWishId = insertedWish?.id;
+      }
+
+      if (savedWishId && makePublic) {
+        notifyWishMentions({
+          wishId: savedWishId,
+          senderId: userId,
+          communityId,
+          content: wishText.trim(),
+          members: mentionableMembers,
+          wishOwnerName: wishOwnerName || (ownerUserId === userId ? undefined : 'another member'),
+        });
       }
 
       if (!existingWish) AsyncStorage.removeItem(WISH_DRAFT_KEY).catch(() => {});
+      wishMentionInput.resetMentionSelection();
       onSave();
       onClose();
     } catch (err) {
@@ -113,11 +149,6 @@ export function AddWishModal({
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleWishTextChange = (text: string) => {
-    setWishText(text);
-    if (!existingWish) AsyncStorage.setItem(WISH_DRAFT_KEY, text).catch(() => {});
   };
 
   const handleRefine = () => {
@@ -193,7 +224,9 @@ export function AddWishModal({
                 </Text>
                 <TextInput
                   value={wishText}
-                  onChangeText={handleWishTextChange}
+                  onChangeText={wishMentionInput.textInputMentionProps.onChangeText}
+                  onSelectionChange={wishMentionInput.textInputMentionProps.onSelectionChange}
+                  selection={wishMentionInput.textInputMentionProps.selection}
                   placeholder="I want help learning to cook healthier meals..."
                   placeholderTextColor="#9ca3af"
                   multiline
@@ -205,6 +238,24 @@ export function AddWishModal({
                     textAlignVertical: 'top',
                   }}
                 />
+                <MentionSuggestions
+                  active={wishMentionInput.mentionQuery !== null}
+                  query={wishMentionInput.mentionQuery}
+                  loading={mentionMembersLoading}
+                  suggestions={wishMentionInput.mentionSuggestions}
+                  onSelect={wishMentionInput.selectMention}
+                />
+                {wishMentionInput.mentionedMembers.length > 0 && (
+                  <View className="flex-row flex-wrap mt-2" style={{ gap: 6 }}>
+                    {wishMentionInput.mentionedMembers.map((member) => (
+                      <View key={member.id} className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
+                          Tagged {member.name.split(/\s+/)[0]}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
                 <Text
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal/40 text-xs mt-1 text-right"

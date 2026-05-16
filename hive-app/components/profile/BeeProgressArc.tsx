@@ -1,135 +1,237 @@
-import { View } from 'react-native';
-import Svg, { Path, Circle, G, Ellipse, Line } from 'react-native-svg';
+import React from 'react';
+import { Platform, Text, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 interface BeeProgressArcProps {
-  score: number;
+  profileCompletionPercent?: number;
+  score?: number;
   size?: number;
 }
 
-function clamp(value: number) {
-  return Math.max(0, Math.min(1, value));
+type Point = {
+  x: number;
+  y: number;
+};
+
+function clamp(value: number, min = 0, max = 1) {
+  return Math.max(min, Math.min(max, value));
 }
 
-function polarToCartesian(cx: number, cy: number, radius: number, angleInDegrees: number) {
-  const angleInRadians = (angleInDegrees - 90) * Math.PI / 180;
+function normalizeProgress(profileCompletionPercent?: number, score?: number) {
+  if (typeof profileCompletionPercent === 'number') {
+    return clamp(profileCompletionPercent > 1 ? profileCompletionPercent / 100 : profileCompletionPercent);
+  }
+
+  return clamp(score ?? 0);
+}
+
+function cubicBezierPoint(progress: number, start: Point, controlA: Point, controlB: Point, end: Point) {
+  const t = clamp(progress);
+  const inverse = 1 - t;
 
   return {
-    x: cx + radius * Math.cos(angleInRadians),
-    y: cy + radius * Math.sin(angleInRadians),
+    x:
+      inverse ** 3 * start.x +
+      3 * inverse ** 2 * t * controlA.x +
+      3 * inverse * t ** 2 * controlB.x +
+      t ** 3 * end.x,
+    y:
+      inverse ** 3 * start.y +
+      3 * inverse ** 2 * t * controlA.y +
+      3 * inverse * t ** 2 * controlB.y +
+      t ** 3 * end.y,
   };
 }
 
-function describeArc(cx: number, cy: number, radius: number, startAngle: number, endAngle: number) {
-  const start = polarToCartesian(cx, cy, radius, endAngle);
-  const end = polarToCartesian(cx, cy, radius, startAngle);
-  const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
-
-  return [
-    'M', start.x, start.y,
-    'A', radius, radius, 0, largeArcFlag, 0, end.x, end.y,
-  ].join(' ');
-}
-
-function RouteFlower({ x, y, scale = 1 }: { x: number; y: number; scale?: number }) {
+function EmojiMarker({
+  emoji,
+  label,
+  x,
+  y,
+  size,
+}: {
+  emoji: string;
+  label: string;
+  x: number;
+  y: number;
+  size: number;
+}) {
   return (
-    <G transform={`translate(${x}, ${y}) scale(${scale})`}>
-      <Line x1={0} y1={17} x2={0} y2={31} stroke="#739a88" strokeWidth={1.8} strokeLinecap="round" />
-      <Path d="M0 25c-5-1-8 1-10 5M0 26c5-1 8 1 10 5" stroke="#739a88" strokeWidth={1.4} strokeLinecap="round" fill="none" />
-      {[0, 72, 144, 216, 288].map((angle) => {
-        const petal = polarToCartesian(0, 8, 8.8, angle);
-        return (
-          <Ellipse
-            key={angle}
-            cx={petal.x}
-            cy={petal.y}
-            rx={5.2}
-            ry={7.3}
-            fill="#fff4c9"
-            stroke="#dec181"
-            strokeWidth={1}
-            transform={`rotate(${angle} ${petal.x} ${petal.y})`}
-          />
-        );
-      })}
-      <Circle cx={0} cy={8} r={5.2} fill="#bd9348" />
-      <Circle cx={-1.5} cy={6.6} r={1.1} fill="rgba(255,255,255,0.45)" />
-    </G>
+    <Text
+      accessibilityLabel={label}
+      selectable={false}
+      style={{
+        position: 'absolute',
+        left: x - size / 2,
+        top: y - size / 2,
+        width: size,
+        height: size,
+        fontSize: size * 0.78,
+        lineHeight: size,
+        textAlign: 'center',
+        textShadowColor: 'rgba(49,49,48,0.1)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 4,
+      }}
+    >
+      {emoji}
+    </Text>
   );
 }
 
-function RouteHive({ x, y, scale = 1 }: { x: number; y: number; scale?: number }) {
+function NativeBeeBadge({
+  point,
+  percent,
+  badgeWidth,
+  badgeHeight,
+}: {
+  point: Point;
+  percent: number;
+  badgeWidth: number;
+  badgeHeight: number;
+}) {
   return (
-    <G transform={`translate(${x}, ${y}) scale(${scale})`}>
-      <Path
-        d="M-15 23C-15 8-8-5 0-5S15 8 15 23H-15Z"
-        fill="#f5d071"
-        stroke="#7a5a24"
-        strokeWidth={1.5}
-        strokeLinejoin="round"
-      />
-      <Path d="M-11 5h22M-14 11h28M-13 17h26M-8 -1h16" stroke="#bd9348" strokeWidth={1.35} strokeLinecap="round" />
-      <Circle cx={0} cy={18} r={3.4} fill="#7a5a24" />
-      <Path d="M-10 23h20" stroke="#7a5a24" strokeWidth={1.2} strokeLinecap="round" />
-    </G>
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: point.x - badgeWidth / 2,
+        top: point.y - badgeHeight,
+        width: badgeWidth,
+        height: badgeHeight,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: 'rgba(222,193,129,0.7)',
+        backgroundColor: 'rgba(255,250,240,0.96)',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#bd9348',
+        shadowOpacity: 0.16,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 5 },
+      }}
+    >
+      <Text selectable={false} style={{ fontSize: 15, marginRight: 3 }}>
+        🐝
+      </Text>
+      <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#7a5a24' }}>
+        {percent}%
+      </Text>
+    </View>
   );
 }
 
-function RouteBee({ x, y, scale = 1 }: { x: number; y: number; scale?: number }) {
-  return (
-    <G transform={`translate(${x}, ${y}) scale(${scale})`}>
-      <Ellipse cx={-3.2} cy={-9.4} rx={5.8} ry={3.3} fill="rgba(255,255,255,0.9)" stroke="#dec181" strokeWidth={0.8} transform="rotate(-30 -3.2 -9.4)" />
-      <Ellipse cx={-3.2} cy={9.4} rx={5.8} ry={3.3} fill="rgba(255,255,255,0.9)" stroke="#dec181" strokeWidth={0.8} transform="rotate(30 -3.2 9.4)" />
-      <Ellipse cx={-0.8} cy={0} rx={12.2} ry={7.6} fill="#f2c84b" stroke="#2d2d2d" strokeWidth={1.35} />
-      <Path d="M-7.2-6.2c1.2 4.1 1.2 8.3 0 12.4M-1.2-7c1.2 4.6 1.2 9.4 0 14M5-5.8c1 3.8 1 7.8 0 11.6" stroke="#2d2d2d" strokeWidth={2.1} strokeLinecap="round" />
-      <Circle cx={11.1} cy={0} r={4.7} fill="#2d2d2d" />
-      <Circle cx={12.4} cy={-1.4} r={0.85} fill="#fffdf7" />
-      <Path d="M14.6 -3.6c2.3-2 4.2-2.5 5.8-1.6M14.6 3.6c2.3 2 4.2 2.5 5.8 1.6" stroke="#2d2d2d" strokeWidth={1.05} strokeLinecap="round" />
-    </G>
+function WebBeeBadge({
+  path,
+  percent,
+  badgeWidth,
+  badgeHeight,
+}: {
+  path: string;
+  percent: number;
+  badgeWidth: number;
+  badgeHeight: number;
+}) {
+  return React.createElement(
+    'div',
+    {
+      'aria-label': `Profile ${percent}% complete`,
+      style: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        width: badgeWidth,
+        height: badgeHeight,
+        borderRadius: 999,
+        border: '1px solid rgba(222,193,129,0.7)',
+        background: 'rgba(255,250,240,0.96)',
+        color: '#7a5a24',
+        boxShadow: '0 8px 18px rgba(189,147,72,0.16)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        pointerEvents: 'none',
+        userSelect: 'none',
+        offsetPath: `path("${path}")`,
+        offsetDistance: `${percent}%`,
+        offsetAnchor: '50% 105%',
+        offsetRotate: '0deg',
+        transition: 'offset-distance 720ms cubic-bezier(0.22, 1, 0.36, 1)',
+        willChange: 'offset-distance',
+      } as React.CSSProperties,
+    },
+    React.createElement(
+      'span',
+      {
+        style: {
+          fontSize: 15,
+          lineHeight: '15px',
+        } as React.CSSProperties,
+      },
+      '🐝'
+    ),
+    React.createElement(
+      'span',
+      {
+        style: {
+          fontFamily: 'Lato_700Bold, Lato, sans-serif',
+          fontSize: 11,
+          lineHeight: '11px',
+          fontWeight: 700,
+        } as React.CSSProperties,
+      },
+      `${percent}%`
+    )
   );
 }
 
-export function BeeProgressArc({ score, size = 220 }: BeeProgressArcProps) {
-  const progress = clamp(score);
-  const strokeWidth = Math.max(10, size * 0.055);
+export function BeeProgressArc({ profileCompletionPercent, score, size = 220 }: BeeProgressArcProps) {
+  const progress = normalizeProgress(profileCompletionPercent, score);
+  const percent = Math.round(progress * 100);
   const width = size;
-  const height = size * 0.68;
-  const cx = width / 2;
-  const cy = height * 0.88;
-  const radius = (width - strokeWidth - 28) / 2;
-  const startAngle = 238;
-  const endAngle = 122;
-  const totalSweep = 360 - startAngle + endAngle;
-  const progressEndAngle = startAngle + totalSweep * progress;
-  const marker = polarToCartesian(cx, cy, radius, progressEndAngle);
-  const startMarker = polarToCartesian(cx, cy, radius, startAngle);
-  const endMarker = polarToCartesian(cx, cy, radius, endAngle);
-  const iconScale = size / 220;
-  const beeScale = size / 220;
-  const beeMarker = progress >= 1
-    ? { x: endMarker.x - 18 * iconScale, y: endMarker.y - 7 * iconScale }
-    : marker;
+  const height = size * 0.5;
+  const scale = size / 220;
+  const start = { x: size * 0.18, y: height * 0.72 };
+  const end = { x: size * 0.82, y: height * 0.72 };
+  const controlA = { x: size * 0.32, y: height * 0.08 };
+  const controlB = { x: size * 0.68, y: height * 0.08 };
+  const path = `M ${start.x} ${start.y} C ${controlA.x} ${controlA.y}, ${controlB.x} ${controlB.y}, ${end.x} ${end.y}`;
+  const arcLength = (end.x - start.x) * 1.24;
+  const badgeWidth = 55 * scale;
+  const badgeHeight = 27 * scale;
+  const markerSize = 27 * scale;
+  const nativePoint = cubicBezierPoint(progress, start, controlA, controlB, end);
 
   return (
-    <View style={{ width, height }}>
-      <Svg width={width} height={height}>
+    <View pointerEvents="none" style={{ width, height, position: 'relative', overflow: 'visible', zIndex: 2 }}>
+      <Svg width={width} height={height} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible' }}>
         <Path
-          d={describeArc(cx, cy, radius, startAngle, startAngle + totalSweep)}
-          stroke="rgba(189,147,72,0.22)"
-          strokeWidth={strokeWidth}
+          d={path}
+          stroke="rgba(189,147,72,0.24)"
+          strokeWidth={3 * scale}
           strokeLinecap="round"
           fill="none"
+          strokeDasharray={`${1 * scale} ${8 * scale}`}
         />
         <Path
-          d={describeArc(cx, cy, radius, startAngle, progressEndAngle)}
+          d={path}
           stroke={progress >= 1 ? '#739a88' : '#bd9348'}
-          strokeWidth={strokeWidth}
+          strokeWidth={4 * scale}
           strokeLinecap="round"
           fill="none"
+          strokeOpacity={0.42}
+          strokeDasharray={`${Math.max(1, progress * arcLength)} ${arcLength}`}
         />
-        <RouteFlower x={startMarker.x} y={startMarker.y - 30 * iconScale} scale={iconScale} />
-        <RouteHive x={endMarker.x} y={endMarker.y - 25 * iconScale} scale={iconScale} />
-        <RouteBee x={beeMarker.x} y={beeMarker.y - 11 * beeScale} scale={beeScale} />
       </Svg>
+      <EmojiMarker emoji="🌸" label="Profile journey start" x={start.x} y={start.y + 8 * scale} size={markerSize} />
+      <EmojiMarker emoji="🍯" label="Profile complete hive" x={end.x} y={end.y + 8 * scale} size={markerSize} />
+      {Platform.OS === 'web' ? (
+        <WebBeeBadge path={path} percent={percent} badgeWidth={badgeWidth} badgeHeight={badgeHeight} />
+      ) : (
+        <NativeBeeBadge point={nativePoint} percent={percent} badgeWidth={badgeWidth} badgeHeight={badgeHeight} />
+      )}
     </View>
   );
 }

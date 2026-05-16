@@ -3,17 +3,19 @@ import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowD
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import Svg, { Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
+import Svg, { Polygon } from 'react-native-svg';
 import type { Skill, UserRole, Wish } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
+import { useChatRooms } from '../../lib/hooks/useChatRooms';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import { SKILL_CATEGORIES } from '../../lib/skillsList';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileHoneycombCluster } from '../../components/profile/ProfileHoneycombCluster';
+import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
 import { LinkifiedText } from '../../components/ui/LinkifiedText';
 
@@ -25,7 +27,6 @@ interface MemberData {
   name: string;
   avatar_url?: string | null;
   role: UserRole;
-  hiveTitle?: string | null;
   queen_bee_month?: string | null;
   occupation?: string | null;
   profile_title?: string | null;
@@ -51,9 +52,12 @@ interface MemberData {
 }
 
 const ROLE_LABELS: Partial<Record<UserRole, string>> = {
-  admin: 'Admin',
-  treasurer: 'Treasurer',
+  admin: 'Admin access',
+  treasurer: 'Treasurer access',
 };
+
+const memberHoneycombCell = require('../../assets/generated/member-honeycomb-cell.png');
+const memberHoneycombCellMe = require('../../assets/generated/member-honeycomb-cell-me.png');
 
 const PROFILE_PROMPT_LIMITS = {
   name: 80,
@@ -76,9 +80,11 @@ type DailyMatchStats = {
   percent: number;
 };
 
-type HoneycombRow = {
-  items: MemberData[];
-  offset: boolean;
+type HoneycombPlacement = {
+  item: MemberData;
+  index: number;
+  left: number;
+  top: number;
 };
 
 const ANSWER_STOP_WORDS = new Set([
@@ -152,27 +158,27 @@ function buildDailyMatchStats(userId: string | null, answers: DailyAnswerRow[]) 
   return stats;
 }
 
-function buildHoneycombRows(items: MemberData[], numCols: number): HoneycombRow[] {
-  if (numCols <= 1) {
-    return items.map(item => ({ items: [item], offset: false }));
-  }
+function buildHoneycombPlacements(
+  items: MemberData[],
+  columns: number,
+  cellWidth: number,
+  cellHeight: number
+): HoneycombPlacement[] {
+  const stepX = cellWidth * 0.75;
+  const stepY = cellHeight;
+  const columnDrop = cellHeight / 2;
 
-  const rows: HoneycombRow[] = [];
-  let index = 0;
-  let rowIndex = 0;
+  return items.map((item, index) => {
+    const col = index % columns;
+    const row = Math.floor(index / columns);
 
-  while (index < items.length) {
-    const offset = rowIndex % 2 === 1;
-    const capacity = offset ? Math.max(1, numCols - 1) : numCols;
-    rows.push({
-      items: items.slice(index, index + capacity),
-      offset,
-    });
-    index += capacity;
-    rowIndex += 1;
-  }
-
-  return rows;
+    return {
+      item,
+      index,
+      left: col * stepX,
+      top: row * stepY + (col % 2 === 1 ? columnDrop : 0),
+    };
+  });
 }
 
 function HoneycombCardShell({
@@ -186,57 +192,26 @@ function HoneycombCardShell({
   height: number;
   width: number;
 }) {
+  const horizontalPadding = Math.max(34, width * 0.18);
+  const topPadding = Math.max(22, height * 0.09);
+  const bottomPadding = Math.max(24, height * 0.1);
+
   return (
     <View
       style={{
         width,
         height,
         position: 'relative',
-        shadowColor: '#000',
-        shadowOpacity: isMe ? 0.12 : 0.07,
-        shadowRadius: isMe ? 18 : 14,
-        shadowOffset: { width: 0, height: 8 },
-        elevation: isMe ? 3 : 2,
+        shadowOpacity: 0,
+        elevation: 0,
       }}
     >
-      <Svg
-        width="100%"
-        height="100%"
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
+      <Image
+        source={isMe ? memberHoneycombCellMe : memberHoneycombCell}
+        contentFit="fill"
         style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-      >
-        <Defs>
-          <LinearGradient id="memberCellFill" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#fffdf7" stopOpacity={0.98} />
-            <Stop offset="54%" stopColor={isMe ? '#fff8e8' : '#fffaf0'} stopOpacity={0.94} />
-            <Stop offset="100%" stopColor="#f5ead1" stopOpacity={0.5} />
-          </LinearGradient>
-        </Defs>
-        <Polygon
-          points="6,50 24,7 76,7 94,50 76,93 24,93"
-          fill="rgba(80,65,37,0.06)"
-          transform="translate(0 2)"
-        />
-        <Polygon
-          points="6,50 24,7 76,7 94,50 76,93 24,93"
-          fill="url(#memberCellFill)"
-          stroke={isMe ? '#bd9348' : 'rgba(222,193,129,0.72)'}
-          strokeWidth={isMe ? 1.55 : 1}
-        />
-        <Polygon
-          points="10,50 26,12 74,12 90,50 74,88 26,88"
-          fill="none"
-          stroke="rgba(255,255,255,0.72)"
-          strokeWidth={0.85}
-        />
-        <Polygon
-          points="12,49 27,13 73,13 88,49 73,17 27,17"
-          fill="rgba(255,255,255,0.22)"
-          stroke="none"
-        />
-      </Svg>
-      <View style={{ flex: 1, paddingHorizontal: 48, paddingTop: 30, paddingBottom: 34, position: 'relative' }}>
+      />
+      <View style={{ flex: 1, paddingHorizontal: horizontalPadding, paddingTop: topPadding, paddingBottom: bottomPadding, position: 'relative' }}>
         {children}
       </View>
     </View>
@@ -345,6 +320,7 @@ function MemberDetailModal({
   const isCurrentUser = !!currentAuthId && member.id === currentAuthId;
   const publicWishes = member.wishes.filter(w => w.status === 'public');
   const roleLabel = ROLE_LABELS[member.role];
+  const { getOrCreateDMRoom } = useChatRooms(communityId ?? undefined, currentAuthId ?? undefined);
   const [introExpanded, setIntroExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -380,6 +356,7 @@ function MemberDetailModal({
   const [addingWish, setAddingWish] = useState(false);
   const [newWishInput, setNewWishInput] = useState('');
   const [wishActionLoading, setWishActionLoading] = useState<string | null>(null);
+  const [startingMessage, setStartingMessage] = useState(false);
   const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
   const wishMentionInput = useMentionInput({
     value: newWishInput,
@@ -550,7 +527,40 @@ function MemberDetailModal({
   };
 
   const refineWithClive = (description: string) => {
-    router.push({ pathname: '/', params: { refineWish: description } });
+    router.push({ pathname: '/(app)', params: { refineWish: description } });
+  };
+
+  const startDirectMessage = async () => {
+    if (!currentAuthId || !communityId || isCurrentUser || startingMessage) return;
+    setStartingMessage(true);
+    try {
+      const room = await getOrCreateDMRoom(member.id);
+      if (!room) throw new Error('No DM room returned');
+      onClose();
+      router.push({ pathname: '/(app)/messages', params: { roomId: room.id } });
+    } catch (error) {
+      console.warn('[Members] start DM failed', error);
+      Alert.alert('Could not open message', 'Please try again from Messages.');
+    } finally {
+      setStartingMessage(false);
+    }
+  };
+
+  const askCliveAboutMember = () => {
+    const context = [
+      member.known_for ? `${member.name} says to ask them about ${member.known_for}.` : null,
+      publicWishes[0]?.description ? `They are currently wishing for ${publicWishes[0].description}.` : null,
+      member.current_project ? `They are building or exploring ${member.current_project}.` : null,
+      member.skills[0]?.description ? `One visible skill is ${member.skills[0].description}.` : null,
+    ].filter(Boolean).join(' ');
+
+    onClose();
+    router.push({
+      pathname: '/(app)',
+      params: {
+        prefill: `Help me find a warm, specific way to connect with ${member.name}. ${context}`,
+      },
+    });
   };
 
   const renderNewWishMentions = () => (
@@ -668,7 +678,6 @@ function MemberDetailModal({
       onMemberUpdated({
         ...member,
         ...updates,
-        hiveTitle: null,
         skills: skillDescriptions.map((description, index) => ({
           id: member.skills[index]?.id ?? `draft-skill-${index}`,
           description,
@@ -687,6 +696,21 @@ function MemberDetailModal({
       setSaving(false);
     }
   };
+
+  // Profile richness score — how filled-out is this member's profile?
+  const memberRichness = (() => {
+    if (isCurrentUser) return null;
+    let score = 0;
+    if (member.profile_title || member.occupation) score++;
+    if (member.bio) score++;
+    if (member.current_project) score++;
+    if (member.hometown) score++;
+    if (member.known_for) score++;
+    if ((member.fun_facts ?? []).filter(Boolean).length > 0) score++;
+    if (member.skills.length > 0) score++;
+    if (publicWishes.length > 0) score++;
+    return Math.round((score / 8) * 100);
+  })();
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
@@ -943,11 +967,23 @@ function MemberDetailModal({
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}>
             {/* Header */}
-            <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-              <View style={{ borderRadius: 56, borderWidth: 2, borderColor: '#dec181', padding: 3, marginBottom: 12, shadowColor: '#bd9348', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } }}>
-                <Avatar uri={member.avatar_url} name={member.name} size={100} />
-              </View>
-              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d' }}>{member.name}</Text>
+            <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 16 }}>
+              {/* Avatar — wrapped in BeeProgressArc for other members */}
+              {!isCurrentUser && memberRichness !== null ? (
+                <View style={{ alignItems: 'center' }}>
+                  <BeeProgressArc profileCompletionPercent={memberRichness} size={200} />
+                  <View style={{ marginTop: -34, alignItems: 'center', zIndex: 1 }}>
+                    <View style={{ borderRadius: 50, borderWidth: 2.5, borderColor: '#dec181', padding: 3, backgroundColor: 'white', shadowColor: '#bd9348', shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }}>
+                      <Avatar uri={member.avatar_url} name={member.name} size={84} />
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={{ borderRadius: 56, borderWidth: 2, borderColor: '#dec181', padding: 3, marginBottom: 12, marginTop: 12, shadowColor: '#bd9348', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } }}>
+                  <Avatar uri={member.avatar_url} name={member.name} size={100} />
+                </View>
+              )}
+              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginTop: 6 }}>{member.name}</Text>
               {(member.profile_title || member.occupation) && (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', marginTop: 3 }}>{member.profile_title || member.occupation}</Text>
               )}
@@ -973,6 +1009,27 @@ function MemberDetailModal({
                   </View>
                 )}
               </View>
+              {!isCurrentUser && (
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 16, width: '100%' }}>
+                  <Pressable
+                    onPress={startDirectMessage}
+                    disabled={startingMessage}
+                    style={{ flex: 1, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 12, alignItems: 'center', opacity: startingMessage ? 0.6 : 1 }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'white' }}>
+                      {startingMessage ? 'Opening...' : 'Message'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={askCliveAboutMember}
+                    style={{ flex: 1, backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)', borderRadius: 14, paddingVertical: 12, alignItems: 'center' }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#bd9348' }}>
+                      Ask Clive
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
 
             {/* Current user quick-action bar — three equal cards */}
@@ -1222,7 +1279,71 @@ function MemberDetailModal({
               </View>
             )}
 
-            {/* Bio */}
+            {/* ── Profile Honeycomb — visual snapshot, shown before bio ── */}
+            <ProfileHoneycombCluster
+              title="PROFILE HONEYCOMB"
+              size="compact"
+              items={[
+                { label: 'Title', value: member.profile_title || member.occupation },
+                { label: 'From', value: member.hometown },
+                { label: 'Birthday', value: member.birthday ? new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric' }) : null },
+                { label: 'Project', value: member.current_project },
+                { label: 'Book', value: member.favorite_book },
+                { label: 'Food', value: member.favorite_food },
+                { label: 'Hobby', value: member.favorite_hobby },
+                ...(member.fun_facts ?? []).map((fact, i) => ({
+                  label: `Fun Fact ${i + 1}`,
+                  value: fact,
+                })),
+              ]}
+            />
+
+            {/* ── Wildflower Meadow — skills as flowers ── */}
+            {(member.skills.length > 0 || isCurrentUser) && (
+              <View style={{ marginBottom: 24 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <View>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>
+                      WILDFLOWER MEADOW 🌸
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#b5a898', marginTop: 2 }}>
+                      Each flower is a skill — bloom level shows enthusiasm
+                    </Text>
+                  </View>
+                  {isCurrentUser && (
+                    <Pressable
+                      onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
+                      style={{ backgroundColor: '#fdf3dc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Edit</Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                {member.skills.length === 0 && isCurrentUser ? (
+                  <Pressable
+                    onPress={() => {
+                      setDraftSkillList(member.skills.map(s => s.description));
+                      setShowSkillPicker(true);
+                    }}
+                    style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed', alignSelf: 'flex-start' }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Plant your first skill 🌱</Text>
+                  </Pressable>
+                ) : member.skills.length === 0 ? (
+                  <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 32, marginBottom: 8 }}>🌱</Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
+                      No skills planted yet — meadow coming soon!
+                    </Text>
+                  </View>
+                ) : (
+                  <SkillBubbleGarden skills={member.skills} />
+                )}
+              </View>
+            )}
+
+            {/* ── Bio ── */}
             {member.bio && (
               <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16, marginBottom: 20 }}>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#4b5563', lineHeight: 22 }}>
@@ -1247,76 +1368,6 @@ function MemberDetailModal({
                   <InfoRow label="Growth" value={member.miq_growth} />
                   <InfoRow label="Contribution" value={member.miq_contribution} />
                 </View>
-              </View>
-            )}
-
-            <ProfileHoneycombCluster
-              title="PROFILE SNAPSHOT"
-              size="compact"
-              items={[
-                { label: 'Title', value: member.profile_title || member.occupation },
-                { label: 'From', value: member.hometown },
-                { label: 'Birthday', value: member.birthday ? new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric' }) : null },
-              ]}
-            />
-
-            {member.current_project && (
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 6 }}>CURRENTLY WORKING ON</Text>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', lineHeight: 20 }}>
-                  {member.current_project}
-                </Text>
-              </View>
-            )}
-
-            <ProfileHoneycombCluster
-              title="FUN FACTS"
-              items={(member.fun_facts ?? []).map((fact, i) => ({
-                label: `Fun Fact ${i + 1}`,
-                value: fact,
-              }))}
-            />
-
-            {hasFavorites && (
-              <ProfileHoneycombCluster
-                title="FAVORITES"
-                size="compact"
-                items={[
-                  { label: 'Book', value: member.favorite_book },
-                  { label: 'Food', value: member.favorite_food },
-                  { label: 'Hobby', value: member.favorite_hobby },
-                ]}
-              />
-            )}
-
-            {/* Skills */}
-            {(member.skills.length > 0 || isCurrentUser) && (
-              <View style={{ marginBottom: 20 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>SKILLS</Text>
-                  {isCurrentUser && (
-                    <Pressable
-                      onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
-                      style={{ backgroundColor: '#fdf3dc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Edit skills</Text>
-                    </Pressable>
-                  )}
-                </View>
-
-                {member.skills.length === 0 && isCurrentUser ? (
-                  <Pressable
-                    onPress={() => {
-                      setDraftSkillList(member.skills.map(s => s.description));
-                      setShowSkillPicker(true);
-                    }}
-                    style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed', alignSelf: 'flex-start' }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Add your skills</Text>
-                  </Pressable>
-                ) : (
-                  <SkillBubbleGarden skills={member.skills} />
-                )}
               </View>
             )}
 
@@ -1567,7 +1618,6 @@ export default function MembersScreen() {
           name: memberProfile?.name ?? 'Unknown member',
           avatar_url: memberProfile?.avatar_url ?? null,
           role: (m.role ?? memberProfile?.role ?? 'member') as UserRole,
-          hiveTitle: null,
           queen_bee_month: memberProfile?.queen_bee_month ?? null,
           birthday: memberProfile?.birthday ?? null,
           occupation: memberProfile?.occupation ?? null,
@@ -1591,8 +1641,17 @@ export default function MembersScreen() {
       });
 
       const [skillsRes, wishesRes, introRes, answersRes] = await Promise.all([
-        supabase.from('skills').select('user_id, id, description, enthusiasm_level, display_x, display_y').in('user_id', userIds),
-        supabase.from('wishes').select('user_id, id, description, status').in('user_id', userIds).eq('status', 'public'),
+        supabase
+          .from('skills')
+          .select('user_id, id, description, enthusiasm_level, display_x, display_y')
+          .eq('community_id', communityId)
+          .in('user_id', userIds),
+        supabase
+          .from('wishes')
+          .select('user_id, id, description, status')
+          .eq('community_id', communityId)
+          .in('user_id', userIds)
+          .eq('status', 'public'),
         supabase
           .from('board_posts')
           .select('author_id, title, content, board_categories!inner(category_type)')
@@ -1701,13 +1760,13 @@ export default function MembersScreen() {
     }
   }, [currentUserId, router, selected]);
 
-  const numCols = width >= 1440 ? 4 : width >= 980 ? 3 : width >= 680 ? 2 : 1;
   const filtered = search.trim()
     ? members.filter(m => {
         const query = search.toLowerCase();
         return [
           m.name,
-          m.hiveTitle,
+          m.role,
+          ROLE_LABELS[m.role],
           m.profile_title,
           m.occupation,
           m.bio,
@@ -1725,15 +1784,20 @@ export default function MembersScreen() {
         ].some(value => value?.toLowerCase().includes(query));
       })
     : members;
-  const honeycombRows = buildHoneycombRows(filtered, numCols);
-  const honeycombMaxWidth = Math.min(width - 32, 1540);
-  const honeycombCellWidth = numCols === 1
-    ? Math.min(width - 32, 430)
-    : Math.min(honeycombMaxWidth / numCols, 385);
-  const honeycombGridWidth = honeycombCellWidth * numCols;
-  const honeycombCardHeight = Math.round(honeycombCellWidth * 0.88);
-  const honeycombOverlap = numCols > 1 ? -Math.round(honeycombCardHeight * 0.2) : 12;
-  const honeycombAvatarSize = width >= 720 ? 62 : 58;
+  const desiredHoneycombColumns = width >= 1500 ? 5 : width >= 1120 ? 4 : width >= 760 ? 3 : width >= 520 ? 2 : 1;
+  const honeycombColumns = Math.max(1, Math.min(desiredHoneycombColumns, Math.max(1, filtered.length)));
+  const honeycombMaxWidth = Math.max(280, Math.min(width - 32, 1680));
+  const honeycombCellWidth = honeycombColumns === 1
+    ? Math.min(honeycombMaxWidth, 360)
+    : Math.min(320, honeycombMaxWidth / (1 + 0.75 * (honeycombColumns - 1)));
+  const honeycombCardHeight = Math.round(honeycombCellWidth * 0.866);
+  const honeycombStepX = honeycombCellWidth * 0.75;
+  const honeycombGridWidth = honeycombCellWidth + honeycombStepX * (honeycombColumns - 1);
+  const honeycombPlacements = buildHoneycombPlacements(filtered, honeycombColumns, honeycombCellWidth, honeycombCardHeight);
+  const honeycombGridHeight = honeycombPlacements.length === 0
+    ? 0
+    : Math.max(...honeycombPlacements.map(placement => placement.top + honeycombCardHeight));
+  const honeycombAvatarSize = honeycombCellWidth < 300 ? 50 : 56;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#faf8f3' }}>
@@ -1783,31 +1847,52 @@ export default function MembersScreen() {
         ) : (
           <>
             <View style={{ alignItems: 'center', paddingTop: 8 }}>
-              {honeycombRows.map((row, rowIndex) => (
-                <View
-                  key={`member-row-${rowIndex}`}
-                  style={{
-                    flexDirection: 'row',
-                    width: honeycombGridWidth,
-                    marginTop: rowIndex === 0 ? 0 : honeycombOverlap,
-                    paddingLeft: row.offset
-                      ? honeycombCellWidth / 2
-                      : Math.max(0, (numCols - row.items.length) * honeycombCellWidth / 2),
-                  }}
-                >
-                  {row.items.map(member => {
+              <View
+                style={{
+                  width: honeycombGridWidth,
+                  height: honeycombGridHeight,
+                  position: 'relative',
+                }}
+              >
+                  {honeycombPlacements.map(({ item: member, index, left, top }) => {
                     const isMe = member.id === currentUserId;
                     const titleLine = member.profile_title || member.occupation;
                     const publicWishes = member.wishes.filter(w => w.status === 'public');
-                    const spotlight = member.known_for || member.miq_experiences || member.current_project || member.bio || member.skills[0]?.description || publicWishes[0]?.description;
+                    const spotlight = member.known_for || publicWishes[0]?.description || member.current_project || member.miq_experiences || member.skills[0]?.description || member.bio;
+                    const spotlightLabel = member.known_for
+                      ? 'Ask me about'
+                      : publicWishes[0]?.description === spotlight
+                        ? 'Wishing for'
+                        : member.current_project
+                          ? 'Building'
+                          : member.miq_experiences
+                            ? '3MIQ'
+                            : member.skills[0]?.description === spotlight
+                              ? 'Skill'
+                              : 'Profile note';
                     const hasDailyMatch = !isMe && typeof member.dailyMatchPercent === 'number' && (member.dailyMatchSharedCount ?? 0) > 0;
+                    const visibleChips = [
+                      publicWishes.length > 0 && publicWishes[0]?.description !== spotlight
+                        ? `${publicWishes.length} wish${publicWishes.length === 1 ? '' : 'es'}`
+                        : null,
+                      member.skills[0]?.description && member.skills[0].description !== spotlight
+                        ? member.skills[0].description
+                        : null,
+                      hasDailyMatch
+                        ? `${member.dailyMatchSharedCount} shared Q`
+                        : null,
+                    ].filter(Boolean).slice(0, 2) as string[];
                     return (
                       <Pressable
                         key={member.id}
                         onPress={() => openMemberProfile(member, isMe)}
                         style={{
+                          position: 'absolute',
+                          left,
+                          top,
                           width: honeycombCellWidth,
                           alignItems: 'center',
+                          zIndex: isMe ? filtered.length + 10 : filtered.length - index,
                         }}
                       >
                         <HoneycombCardShell isMe={isMe} height={honeycombCardHeight} width={honeycombCellWidth}>
@@ -1817,8 +1902,8 @@ export default function MembersScreen() {
                               accessibilityLabel={`${member.dailyMatchPercent}% daily question match with ${member.name}`}
                               style={{
                                 position: 'absolute',
-                                top: 24,
-                                right: 42,
+                                top: Math.max(12, honeycombCardHeight * 0.06),
+                                right: -8,
                                 backgroundColor: 'rgba(245,234,209,0.88)',
                                 borderWidth: 1,
                                 borderColor: 'rgba(189,147,72,0.35)',
@@ -1853,7 +1938,7 @@ export default function MembersScreen() {
                             </View>
 
                             <View style={{ minWidth: 0, alignItems: 'center', marginTop: 8, maxWidth: honeycombCellWidth - 96 }}>
-                              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 20, textAlign: 'center' }} numberOfLines={2}>
+                              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: honeycombCellWidth < 300 ? 13.5 : 14.5, color: '#2d2d2d', lineHeight: honeycombCellWidth < 300 ? 18 : 19, textAlign: 'center' }} numberOfLines={2}>
                                 {isMe ? `${member.name.split(' ')[0]} (you)` : member.name}
                               </Text>
                               {titleLine && (
@@ -1870,46 +1955,32 @@ export default function MembersScreen() {
                           </View>
 
                           {spotlight && (
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#4b5563', lineHeight: 16, marginTop: 8, textAlign: 'center' }} numberOfLines={2}>
-                              {spotlight}
-                            </Text>
+                            <View style={{ marginTop: 8, alignItems: 'center', maxWidth: honeycombCellWidth - 96 }}>
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 8.5, color: '#bd9348', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 2 }} numberOfLines={1}>
+                                {spotlightLabel}
+                              </Text>
+                              <Text style={{ fontFamily: member.known_for ? 'LibreBaskerville_400Regular' : 'Lato_400Regular', fontSize: member.known_for ? 10.8 : 10.5, color: '#4b5563', lineHeight: 14.5, textAlign: 'center', fontStyle: member.known_for ? 'italic' : 'normal' }} numberOfLines={2}>
+                                {spotlight}
+                              </Text>
+                            </View>
                           )}
 
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 9, justifyContent: 'center' }}>
-                            {member.skills.slice(0, 2).map(skill => (
-                              <View key={skill.id} style={{ backgroundColor: 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 }}>
-                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }} numberOfLines={1}>
-                                  {skill.description}
-                                </Text>
-                              </View>
-                            ))}
-                            {publicWishes.length > 0 && (
-                              <View style={{ backgroundColor: 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 }}>
-                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }}>
-                                  {publicWishes.length} wish{publicWishes.length === 1 ? '' : 'es'}
-                                </Text>
-                              </View>
-                            )}
-                            {hasDailyMatch ? (
-                              <View style={{ backgroundColor: 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 }}>
-                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }}>
-                                  {member.dailyMatchSharedCount} shared question{member.dailyMatchSharedCount === 1 ? '' : 's'}
-                                </Text>
-                              </View>
-                            ) : member.questionAnswerCount > 0 && (
-                              <View style={{ backgroundColor: 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 }}>
-                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }}>
-                                  {member.questionAnswerCount} answers
-                                </Text>
-                              </View>
-                            )}
-                          </View>
+                          {visibleChips.length > 0 && (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 9, justifyContent: 'center' }}>
+                              {visibleChips.map(chip => (
+                                <View key={chip} style={{ backgroundColor: 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 }}>
+                                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#8a6a2f' }} numberOfLines={1}>
+                                    {chip}
+                                  </Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
                         </HoneycombCardShell>
                       </Pressable>
                     );
                   })}
-                </View>
-              ))}
+              </View>
             </View>
           </>
         )}

@@ -7,6 +7,10 @@ import { getDraft, setDraft, clearDraft } from '../../lib/draftStore';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
 import { Ionicons } from '@expo/vector-icons';
+import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionInput } from '../../lib/hooks/useMentionInput';
+import { MentionSuggestions } from '../ui/MentionSuggestions';
+import type { Profile } from '../../types';
 
 const DRAFT_KEY = 'clive-message';
 const MAX_IMAGES = 5;
@@ -68,6 +72,9 @@ interface ChatInputProps {
   placeholder?: string;
   /** Override the draft storage key (e.g. per-conversation) */
   draftKey?: string;
+  communityId?: string | null;
+  currentUserId?: string;
+  mentionableMembers?: Pick<Profile, 'id' | 'name'>[];
 }
 
 export const ChatInput = memo(function ChatInput({
@@ -75,6 +82,9 @@ export const ChatInput = memo(function ChatInput({
   isLoading,
   placeholder = 'Message...',
   draftKey = DRAFT_KEY,
+  communityId,
+  currentUserId,
+  mentionableMembers = [],
 }: ChatInputProps) {
   const [inputText, setInputText] = useState(() => getDraft(draftKey));
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
@@ -82,6 +92,10 @@ export const ChatInput = memo(function ChatInput({
   const [isDragActive, setIsDragActive] = useState(false);
   const voiceBaseTextRef = useRef<string | null>(null);
   const dragDepthRef = useRef(0);
+  const { members: activeMentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(
+    communityId,
+    mentionableMembers
+  );
 
   const handleRemoveImage = (index: number) => {
     setSelectedImages((prev) => prev.filter((_, i) => i !== index));
@@ -110,12 +124,20 @@ export const ChatInput = memo(function ChatInput({
     setSelectedImages([]);
     setSelectedFiles([]);
     voiceBaseTextRef.current = null;
+    mentionInput.resetMentionSelection();
   };
 
   const handleTextChange = (text: string) => {
     setInputText(text);
     setDraft(draftKey, text);
   };
+
+  const mentionInput = useMentionInput({
+    value: inputText,
+    onChangeText: handleTextChange,
+    members: activeMentionableMembers,
+    currentUserId,
+  });
 
   const handleKeyPress = submitOnEnter(handleSend);
   const enterToSubmitCaptureProps = Platform.OS === 'web'
@@ -242,6 +264,26 @@ export const ChatInput = memo(function ChatInput({
         </View>
       )}
 
+      <MentionSuggestions
+        active={mentionInput.mentionQuery !== null}
+        query={mentionInput.mentionQuery}
+        loading={mentionMembersLoading}
+        suggestions={mentionInput.mentionSuggestions}
+        onSelect={mentionInput.selectMention}
+        placement="above"
+      />
+      {mentionInput.mentionedMembers.length > 0 && (
+        <View className="flex-row flex-wrap mb-2" style={{ gap: 6 }}>
+          {mentionInput.mentionedMembers.map((member) => (
+            <View key={member.id} className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
+                Tagged {member.name.split(/\s+/)[0]}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       <View
         className={`flex-row items-end rounded-2xl px-3 py-2 border ${
           isDragActive ? 'bg-gold/10 border-gold' : 'bg-cream border-transparent'
@@ -258,7 +300,9 @@ export const ChatInput = memo(function ChatInput({
         />
         <TextInput
           value={inputText}
-          onChangeText={handleTextChange}
+          onChangeText={mentionInput.textInputMentionProps.onChangeText}
+          onSelectionChange={mentionInput.textInputMentionProps.onSelectionChange}
+          selection={mentionInput.textInputMentionProps.selection}
           placeholder={placeholder}
           placeholderTextColor="#9CA3AF"
           selectionColor="#313130"
@@ -290,8 +334,7 @@ export const ChatInput = memo(function ChatInput({
           style={{ marginLeft: 6 }}
           onTranscript={(text) => {
             const merged = mergeTranscript(voiceBaseTextRef.current ?? inputText, text);
-            setInputText(merged);
-            setDraft(draftKey, merged);
+            handleTextChange(merged);
             voiceBaseTextRef.current = null;
           }}
           onInterimTranscript={(text) => {
@@ -301,7 +344,9 @@ export const ChatInput = memo(function ChatInput({
             }
             setInputText((prev) => {
               if (voiceBaseTextRef.current === null) voiceBaseTextRef.current = prev;
-              return mergeTranscript(voiceBaseTextRef.current, text);
+              const merged = mergeTranscript(voiceBaseTextRef.current, text);
+              setDraft(draftKey, merged);
+              return merged;
             });
           }}
         />

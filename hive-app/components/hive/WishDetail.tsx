@@ -17,6 +17,11 @@ import { formatDateShort } from '../../lib/dateUtils';
 import { GrantWishModal } from './GrantWishModal';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getLinkedBoardLabel } from '../../lib/boardWishLinks';
+import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionInput } from '../../lib/hooks/useMentionInput';
+import { notifyWishMentions } from '../../lib/wishMentions';
+import { LinkifiedText } from '../ui/LinkifiedText';
+import { MentionSuggestions } from '../ui/MentionSuggestions';
 import type { Wish, Profile, WishComment, WishGranter } from '../../types';
 
 type WishWithGranters = Wish & {
@@ -53,6 +58,13 @@ export function WishDetail({
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showGrantModal, setShowGrantModal] = useState(false);
+  const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
+  const commentMentionInput = useMentionInput({
+    value: newComment,
+    onChangeText: setNewComment,
+    members: mentionableMembers,
+    currentUserId: profile?.id,
+  });
 
   // Check if this is the user's own wish and can be granted
   const isOwnWish = profile?.id === wish.user_id;
@@ -101,7 +113,16 @@ export function WishDetail({
       if (error) throw error;
 
       setComments((prev) => [...prev, data as WishComment & { user: Profile }]);
+      notifyWishMentions({
+        wishId: wish.id,
+        senderId: profile.id,
+        communityId,
+        content: newComment.trim(),
+        members: mentionableMembers,
+        wishOwnerName: wish.user?.name,
+      });
       setNewComment('');
+      commentMentionInput.resetMentionSelection();
     } catch (error) {
       console.error('Error submitting comment:', error);
     } finally {
@@ -159,9 +180,12 @@ export function WishDetail({
                   </View>
                 )}
               </View>
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/80 mt-1 text-base">
+              <LinkifiedText
+                style={{ fontFamily: 'Lato_400Regular', color: 'rgba(49,49,48,0.8)', marginTop: 4, fontSize: 16 }}
+                mentionStyle={{ color: '#1d4ed8', backgroundColor: 'rgba(37,99,235,0.1)' }}
+              >
                 {wish.description}
-              </Text>
+              </LinkifiedText>
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-2">
                 {formatDateShort(wish.created_at)}
                 {isGranted && wish.fulfilled_at && (
@@ -261,7 +285,7 @@ export function WishDetail({
                   </Text>
                 </View>
                 <Text
-                  style={{ fontFamily: 'Lato_400Regular' }}
+                  style={{ fontFamily: 'Lato_400Regular', color: 'rgba(49,49,48,0.8)', marginTop: 4 }}
                   className="text-charcoal/80 text-base italic"
                 >
                   "{wish.thank_you_message}"
@@ -297,9 +321,12 @@ export function WishDetail({
                     {formatDateShort(comment.created_at)}
                   </Text>
                 </View>
-                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/80 mt-1">
+                <LinkifiedText
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  mentionStyle={{ color: '#1d4ed8', backgroundColor: 'rgba(37,99,235,0.1)' }}
+                >
                   {comment.content}
-                </Text>
+                </LinkifiedText>
               </View>
             </View>
           ))
@@ -326,6 +353,25 @@ export function WishDetail({
 
       {/* Comment Input */}
       <View className="border-t border-gray-100 px-4 py-3">
+        <MentionSuggestions
+          active={commentMentionInput.mentionQuery !== null}
+          query={commentMentionInput.mentionQuery}
+          loading={mentionMembersLoading}
+          suggestions={commentMentionInput.mentionSuggestions}
+          onSelect={commentMentionInput.selectMention}
+          placement="above"
+        />
+        {commentMentionInput.mentionedMembers.length > 0 && (
+          <View className="flex-row flex-wrap mb-2" style={{ gap: 6 }}>
+            {commentMentionInput.mentionedMembers.map((member) => (
+              <View key={member.id} className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
+                  Tagged {member.name.split(/\s+/)[0]}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
         <View className="flex-row items-end">
           <TextInput
             className="flex-1 bg-gray-50 rounded-xl px-4 py-3 mr-2 max-h-24"
@@ -333,7 +379,9 @@ export function WishDetail({
             placeholder="Write a comment..."
             placeholderTextColor="#9ca3af"
             value={newComment}
-            onChangeText={setNewComment}
+            onChangeText={commentMentionInput.textInputMentionProps.onChangeText}
+            onSelectionChange={commentMentionInput.textInputMentionProps.onSelectionChange}
+            selection={commentMentionInput.textInputMentionProps.selection}
             multiline
             blurOnSubmit={false}
             onKeyPress={submitOnEnter(handleSubmitComment)}

@@ -26,7 +26,11 @@ import { SelectedImage, pickSingleImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadMultipleFiles, uploadMultipleImages, uploadSingleImage } from '../../lib/attachmentUpload';
 import { submitOnEnter } from '../../lib/submitOnEnter';
+import { getMentionedMembers } from '../../lib/mentions';
+import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
+import { MentionSuggestions } from '../ui/MentionSuggestions';
 import { VoiceMicButton } from '../ui/VoiceMicButton';
 import {
   CHAT_ROOM_THEMES,
@@ -47,7 +51,6 @@ interface RoomChatViewProps {
   startCustomizing?: boolean;
 }
 
-const BROADCAST_MENTION_HANDLES = new Set(['everyone', 'all', 'group']);
 const CHAT_EMOJI_OPTIONS = ['💬', '✨', '🎯', '🍯', '📌', '💡', '🎉', '🧭', '🫶', '📅', '🏠', '📝'];
 const THEME_OPTIONS = Object.values(CHAT_ROOM_THEMES);
 
@@ -67,44 +70,6 @@ function getFirstGrapheme(value: string): string {
   }
 
   return Array.from(trimmed)[0] ?? '';
-}
-
-function normalizeMentionHandle(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-function getMentionedMembers(
-  content: string,
-  members: Profile[],
-  currentUserId?: string
-): Profile[] {
-  const mentionHandles = new Set(
-    Array.from(content.matchAll(/@([a-z0-9._-]+)/gi))
-      .map((match) => normalizeMentionHandle(match[1]))
-      .filter(Boolean)
-  );
-
-  if (mentionHandles.size === 0) return [];
-
-  if (Array.from(mentionHandles).some((handle) => BROADCAST_MENTION_HANDLES.has(handle))) {
-    return members.filter((member) => member.id && member.id !== currentUserId);
-  }
-
-  const mentioned = new Map<string, Profile>();
-
-  members.forEach((member) => {
-    if (!member.id || member.id === currentUserId || !member.name) return;
-
-    const nameParts = member.name.split(/\s+/).filter(Boolean);
-    const firstName = normalizeMentionHandle(nameParts[0] || '');
-    const fullName = normalizeMentionHandle(member.name);
-
-    if (mentionHandles.has(firstName) || mentionHandles.has(fullName)) {
-      mentioned.set(member.id, member);
-    }
-  });
-
-  return Array.from(mentioned.values());
 }
 
 export function RoomChatView({ room, onBack, startCustomizing = false }: RoomChatViewProps) {
@@ -178,6 +143,17 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
   const roomSubtitle = useMemo(
     () => getRoomSubtitle(roomWithCustomization, profile?.id),
     [profile?.id, roomWithCustomization]
+  );
+  const roomMentionableMembers = useMemo(
+    () => (room.members || [])
+      .map((member) => member.user)
+      .filter((user): user is Profile => !!user?.id && !!user?.name)
+      .map((user) => ({ id: user.id, name: user.name })),
+    [room.members]
+  );
+  const { members: activeMentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(
+    room.room_type === 'community' ? communityId : null,
+    roomMentionableMembers
   );
 
   useEffect(() => {
@@ -489,6 +465,18 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
   };
 
   const hasMessageContent = newMessage.trim().length > 0 || selectedImages.length > 0 || selectedFiles.length > 0;
+  const messageMentionInput = useMentionInput({
+    value: newMessage,
+    onChangeText: handleTextChange,
+    members: activeMentionableMembers,
+    currentUserId: profile?.id,
+  });
+  const editMentionInput = useMentionInput({
+    value: editContent,
+    onChangeText: setEditContent,
+    members: activeMentionableMembers,
+    currentUserId: profile?.id,
+  });
 
   const handleSend = async () => {
     if (!hasMessageContent || !profile || !communityId) return;
@@ -531,24 +519,9 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
 
       // In community rooms, @mentions notify only the people named.
       if (room.room_type === 'community' && messageContent) {
-        let mentionableMembers = (room.members || [])
-          .map((m) => m.user)
-          .filter((u): u is Profile => !!u);
-
-        if (mentionableMembers.length === 0) {
-          const { data: memberRows } = await supabase
-            .from('community_memberships')
-            .select('user:profiles(*)')
-            .eq('community_id', communityId);
-
-          mentionableMembers = (memberRows || [])
-            .map((m) => (m as any).user)
-            .filter((u): u is Profile => !!u);
-        }
-
         const mentionedMembers = getMentionedMembers(
           messageContent,
-          mentionableMembers,
+          activeMentionableMembers,
           profile.id
         );
         const messagePreview = messageContent || (attachments ? 'Sent an attachment' : '');
@@ -590,6 +563,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
       setSelectedImages([]);
       setSelectedFiles([]);
       voiceBaseTextRef.current = null;
+      messageMentionInput.resetMentionSelection();
     } catch (error) {
       console.error('Error sending message:', error);
       Alert.alert('Error', 'Failed to send message.');
@@ -652,6 +626,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
 
       setEditingMessageId(null);
       setEditContent('');
+      editMentionInput.resetMentionSelection();
       await refetchMessages();
     } catch (error) {
       console.error('Error editing message:', error);
@@ -1023,12 +998,26 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm flex-1">
                 Editing message
               </Text>
-              <Pressable onPress={() => setEditingMessageId(null)}>
+              <Pressable
+                onPress={() => {
+                  setEditingMessageId(null);
+                  setEditContent('');
+                  editMentionInput.resetMentionSelection();
+                }}
+              >
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-red-500 text-sm">
                   Cancel
                 </Text>
               </Pressable>
             </View>
+            <MentionSuggestions
+              active={editMentionInput.mentionQuery !== null}
+              query={editMentionInput.mentionQuery}
+              loading={mentionMembersLoading}
+              suggestions={editMentionInput.mentionSuggestions}
+              onSelect={editMentionInput.selectMention}
+              placement="above"
+            />
             <View
               className="flex-row items-end rounded-2xl px-3 py-2"
               style={{ backgroundColor: roomTheme.input }}
@@ -1036,7 +1025,9 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
             >
               <TextInput
                 value={editContent}
-                onChangeText={setEditContent}
+                onChangeText={editMentionInput.textInputMentionProps.onChangeText}
+                onSelectionChange={editMentionInput.textInputMentionProps.onSelectionChange}
+                selection={editMentionInput.textInputMentionProps.selection}
                 multiline
                 blurOnSubmit={Platform.OS === 'web'}
                 submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
@@ -1114,6 +1105,26 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
               </ScrollView>
             )}
 
+            <MentionSuggestions
+              active={messageMentionInput.mentionQuery !== null}
+              query={messageMentionInput.mentionQuery}
+              loading={mentionMembersLoading}
+              suggestions={messageMentionInput.mentionSuggestions}
+              onSelect={messageMentionInput.selectMention}
+              placement="above"
+            />
+            {messageMentionInput.mentionedMembers.length > 0 && (
+              <View className="flex-row flex-wrap mb-2" style={{ gap: 6 }}>
+                {messageMentionInput.mentionedMembers.map((member) => (
+                  <View key={member.id} className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
+                      Tagged {member.name.split(/\s+/)[0]}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
             <View
               className="flex-row items-end rounded-2xl px-3 py-2"
               style={{ backgroundColor: roomTheme.input }}
@@ -1130,7 +1141,9 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
 
               <TextInput
                 value={newMessage}
-                onChangeText={handleTextChange}
+                onChangeText={messageMentionInput.textInputMentionProps.onChangeText}
+                onSelectionChange={messageMentionInput.textInputMentionProps.onSelectionChange}
+                selection={messageMentionInput.textInputMentionProps.selection}
                 placeholder="Message..."
                 placeholderTextColor="#9CA3AF"
                 selectionColor="#313130"

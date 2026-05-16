@@ -157,6 +157,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         }
         break;
       case 'wish_match':
+      case 'wish_mention':
         router.push('/hive');
         break;
       case 'meeting_summary':
