@@ -1671,10 +1671,18 @@ function SeedSurvey({
   const [answers, setAnswers] = useState<number[]>([]);
   const [suggestions, setSuggestions] = useState<PlantSkillSelection[]>([]);
   const question = SEED_SURVEY[answers.length];
-  const complete = suggestions.length > 0;
+  const complete = answers.length >= SEED_SURVEY.length;
+
+  const resetSurvey = () => {
+    setAnswers([]);
+    setSuggestions([]);
+  };
 
   const plantSuggestions = () => {
-    if (suggestions.length === 0) return;
+    if (suggestions.length === 0) {
+      resetSurvey();
+      return;
+    }
 
     if (onPlantSkills) {
       onPlantSkills(suggestions);
@@ -1683,8 +1691,7 @@ function SeedSurvey({
     }
 
     setActive(false);
-    setAnswers([]);
-    setSuggestions([]);
+    resetSurvey();
   };
 
   if (!active) {
@@ -1694,21 +1701,22 @@ function SeedSurvey({
         accessibilityRole="button"
         accessibilityLabel="Seed your garden"
         style={{
-          minHeight: hasSkills ? 42 : 178,
-          borderRadius: hasSkills ? 16 : 24,
+          minHeight: hasSkills ? 72 : 178,
+          borderRadius: hasSkills ? 22 : 24,
           borderWidth: 1,
-          borderColor: hasSkills ? 'rgba(92,157,91,0.24)' : 'rgba(255,253,247,0.62)',
-          backgroundColor: hasSkills ? '#eef8e8' : 'rgba(255,253,247,0.9)',
-          paddingHorizontal: hasSkills ? 12 : 18,
-          paddingVertical: hasSkills ? 9 : 18,
-          marginBottom: hasSkills ? 12 : 0,
+          borderColor: hasSkills ? 'rgba(255,253,247,0.68)' : 'rgba(255,253,247,0.62)',
+          backgroundColor: hasSkills ? 'rgba(255,253,247,0.92)' : 'rgba(255,253,247,0.9)',
+          paddingHorizontal: hasSkills ? 13 : 18,
+          paddingVertical: hasSkills ? 12 : 18,
+          marginBottom: hasSkills ? 0 : 0,
           alignItems: hasSkills ? 'stretch' : 'center',
           justifyContent: 'center',
-          gap: hasSkills ? 10 : 14,
-          shadowColor: hasSkills ? '#5b3a22' : '#315d4e',
-          shadowOpacity: hasSkills ? 0.06 : 0.16,
-          shadowRadius: hasSkills ? 8 : 28,
-          shadowOffset: { width: 0, height: hasSkills ? 2 : 12 },
+          gap: hasSkills ? 12 : 14,
+          shadowColor: '#315d4e',
+          shadowOpacity: hasSkills ? 0.14 : 0.16,
+          shadowRadius: hasSkills ? 18 : 28,
+          shadowOffset: { width: 0, height: hasSkills ? 8 : 12 },
+          elevation: hasSkills ? 3 : 0,
           ...(Platform.OS === 'web'
             ? ({
                 cursor: 'pointer',
@@ -1719,16 +1727,43 @@ function SeedSurvey({
         }}
       >
         {hasSkills ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <View style={{ flex: 1 }}>
-              <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: 13 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 17,
+                backgroundColor: '#eef8e8',
+                borderWidth: 1,
+                borderColor: 'rgba(92,157,91,0.2)',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <BloomMark category={FALLBACK_CATEGORY} size={22} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text selectable={false} numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: 13 }}>
                 Seed Your Garden
               </Text>
-              <Text selectable={false} style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 11, marginTop: 1 }}>
-                A tiny identity ritual
+              <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 11, lineHeight: 14, marginTop: 2 }}>
+                Revisit the ritual and open what wants to bloom next.
               </Text>
             </View>
-            <BloomMark category={FALLBACK_CATEGORY} size={22} />
+            <View
+              style={{
+                minHeight: 30,
+                borderRadius: 999,
+                backgroundColor: '#315d4e',
+                paddingHorizontal: 11,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 11 }}>
+                Begin
+              </Text>
+            </View>
           </View>
         ) : (
           <>
@@ -1800,8 +1835,7 @@ function SeedSurvey({
         <Pressable
           onPress={() => {
             setActive(false);
-            setAnswers([]);
-            setSuggestions([]);
+            resetSurvey();
           }}
           accessibilityRole="button"
           accessibilityLabel="Close garden survey"
@@ -1897,38 +1931,42 @@ function SeedSurvey({
       ) : (
         <>
           <Text selectable={false} style={{ fontFamily: 'LibreBaskerville_700Bold', color: '#315d4e', fontSize: 17, lineHeight: 23, marginBottom: 6 }}>
-            Your ecosystem is ready.
+            {suggestions.length > 0 ? 'Your ecosystem is ready.' : 'Your garden already knows this path.'}
           </Text>
           <Text selectable={false} style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 12, lineHeight: 17, marginBottom: 10 }}>
-            {suggestions.length} blooms will open from what you chose. You can tend, resize, or remove them afterward.
+            {suggestions.length > 0
+              ? `${suggestions.length} blooms will open from what you chose. You can tend, resize, or remove them afterward.`
+              : 'Try another path, shake the seed pouch, or add a custom bloom.'}
           </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
-            {suggestions.map((seed, index) => {
-              const category = getCategoryForSkill(seed.description);
-              return (
-                <View
-                  key={seed.description}
-                  style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 999,
-                    backgroundColor: category.pale,
-                    borderWidth: 1,
-                    borderColor: `${category.edge}44`,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transform: [{ translateY: index % 2 === 0 ? 0 : 4 }],
-                  }}
-                >
-                  <BloomMark category={category} size={18} />
-                </View>
-              );
-            })}
-          </View>
+          {suggestions.length > 0 && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
+              {suggestions.map((seed, index) => {
+                const category = getCategoryForSkill(seed.description);
+                return (
+                  <View
+                    key={seed.description}
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 999,
+                      backgroundColor: category.pale,
+                      borderWidth: 1,
+                      borderColor: `${category.edge}44`,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transform: [{ translateY: index % 2 === 0 ? 0 : 4 }],
+                    }}
+                  >
+                    <BloomMark category={category} size={18} />
+                  </View>
+                );
+              })}
+            </View>
+          )}
           <Pressable
             onPress={plantSuggestions}
             accessibilityRole="button"
-            accessibilityLabel="Plant this garden"
+            accessibilityLabel={suggestions.length > 0 ? 'Plant this garden' : 'Try another garden path'}
             style={{
               minHeight: 42,
               borderRadius: 999,
@@ -1946,7 +1984,7 @@ function SeedSurvey({
             }}
           >
             <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 13 }}>
-              Let It Bloom
+              {suggestions.length > 0 ? 'Let It Bloom' : 'Try Another Path'}
             </Text>
           </Pressable>
         </>
@@ -2078,6 +2116,26 @@ export function SkillBubbleGarden({
           </View>
         )}
 
+        {editable && displaySkills.length > 0 && (
+          <View
+            style={{
+              position: 'absolute',
+              left: 14,
+              right: width > 620 ? undefined : 14,
+              top: 14,
+              width: width > 620 ? Math.min(380, Math.max(0, width - 28)) : undefined,
+              zIndex: 35,
+            }}
+          >
+            <SeedSurvey
+              plantedNames={plantedNames}
+              hasSkills
+              onPlantSkill={onPlantSkill}
+              onPlantSkills={onPlantSkills}
+            />
+          </View>
+        )}
+
         {width > 0 && visibleSkills.map((skill, index) => (
           <SkillPlant
             key={skill.id}
@@ -2132,15 +2190,6 @@ export function SkillBubbleGarden({
             paddingBottom: 14,
           }}
         >
-          {displaySkills.length > 0 && (
-            <SeedSurvey
-              plantedNames={plantedNames}
-              hasSkills
-              onPlantSkill={onPlantSkill}
-              onPlantSkills={onPlantSkills}
-            />
-          )}
-
           <View
             style={{
               flexDirection: width > 520 ? 'row' : 'column',

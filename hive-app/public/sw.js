@@ -1,8 +1,8 @@
 // Cache names: bump these when a deployed app shell must replace old clients.
-const APP_CACHE = 'hive-app-v6-chat-customizer';
-const STATIC_CACHE = 'hive-static-v6-chat-customizer';
+const APP_CACHE = 'hive-app-v7-wildflower-garden';
+const STATIC_CACHE = 'hive-static-v7-wildflower-garden';
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'chat-customizer-v6';
+const REFRESH_TOKEN = 'wildflower-garden-v7';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant
