@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { InteractionManager } from 'react-native';
 import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
+import { fetchHoneyPotBalance } from '../honeyPot';
 import type { Event, Wish, Profile, BoardCategory } from '../../types';
 
 /**
@@ -115,14 +116,7 @@ export function usePrefetchAppData(
     // 5. Honey pot balance for HIVE page
     queryClient.prefetchQuery({
       queryKey: queryKeys.honeyPot(communityId),
-      queryFn: async () => {
-        const { data } = await supabase
-          .from('honey_pot')
-          .select('balance')
-          .eq('community_id', communityId)
-          .maybeSingle();
-        return Number((data as { balance: number } | null)?.balance ?? 0);
-      },
+      queryFn: () => fetchHoneyPotBalance(communityId),
       staleTime: 60 * 1000,
     });
     }); // end InteractionManager.runAfterInteractions

@@ -1,6 +1,7 @@
 import { useQueries } from '@tanstack/react-query';
 import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
+import { fetchHoneyPotBalance } from '../honeyPot';
 import type {
   QueenBee,
   Wish,
@@ -273,14 +274,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
       // Honey pot
       {
         queryKey: queryKeys.honeyPot(communityId || ''),
-        queryFn: async () => {
-          const { data } = (await supabase
-            .from('honey_pot')
-            .select('balance')
-            .eq('community_id', communityId!)
-            .maybeSingle()) as { data: { balance: number } | null };
-          return Number(data?.balance ?? 0);
-        },
+        queryFn: () => fetchHoneyPotBalance(communityId!),
         enabled: !!communityId,
         staleTime: 60 * 1000,
       },

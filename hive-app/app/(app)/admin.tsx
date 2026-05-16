@@ -22,7 +22,7 @@ import {
   getDuesAmountForCoverage,
   type DuesCoverage,
 } from '../../lib/dues';
-import { getHoneyPotErrorMessage, recordHoneyPotTransaction } from '../../lib/honeyPot';
+import { fetchHoneyPotBalance, getHoneyPotErrorMessage, recordHoneyPotTransaction } from '../../lib/honeyPot';
 import { Avatar } from '../../components/ui/Avatar';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
@@ -50,6 +50,33 @@ const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 const DUES_QUARTERS = [1, 2, 3, 4] as const;
+
+type HoneyPotFeedback = {
+  tone: 'success' | 'error' | 'info';
+  message: string;
+};
+
+const HONEY_POT_FEEDBACK_STYLE: Record<HoneyPotFeedback['tone'], {
+  backgroundColor: string;
+  borderColor: string;
+  color: string;
+}> = {
+  success: {
+    backgroundColor: '#ecfdf3',
+    borderColor: '#86efac',
+    color: '#166534',
+  },
+  error: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
+    color: '#991b1b',
+  },
+  info: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#cbd5e1',
+    color: '#475569',
+  },
+};
 
 export default function AdminScreen() {
   const { profile, communityId, communityRole } = useAuth();
@@ -94,6 +121,7 @@ export default function AdminScreen() {
   const [honeyPotNote, setHoneyPotNote] = useState('');
   const [honeyPotType, setHoneyPotType] = useState<'deposit' | 'withdrawal'>('deposit');
   const [recordingHoneyPot, setRecordingHoneyPot] = useState(false);
+  const [honeyPotFeedback, setHoneyPotFeedback] = useState<HoneyPotFeedback | null>(null);
   const [duesCoverage, setDuesCoverage] = useState<DuesCoverage>('none');
   const [duesMemberId, setDuesMemberId] = useState('');
   const [duesYear, setDuesYear] = useState(String(currentDuesPeriod.year));
@@ -135,15 +163,12 @@ export default function AdminScreen() {
     if (invitesData) setPendingInvites(invitesData as InviteRow[]);
 
     // Fetch honey pot balance
-    const { data: honeyPotData, error: honeyPotError } = await supabase
-      .from('honey_pot')
-      .select('balance')
-      .eq('community_id', communityId)
-      .maybeSingle();
-    if (honeyPotError) {
+    try {
+      setHoneyPotBalance(await fetchHoneyPotBalance(communityId));
+    } catch (honeyPotError) {
       console.warn('Could not load honey pot balance', honeyPotError);
+      setHoneyPotBalance(0);
     }
-    setHoneyPotBalance(Number(honeyPotData?.balance ?? 0));
   }, [communityId]);
 
   useEffect(() => {
@@ -155,6 +180,17 @@ export default function AdminScreen() {
     await Promise.all([fetchData(), refetchSurveys()]);
     setRefreshing(false);
   };
+
+  const showHoneyPotFeedback = useCallback((
+    tone: HoneyPotFeedback['tone'],
+    title: string,
+    message: string
+  ) => {
+    setHoneyPotFeedback({ tone, message });
+    if (typeof window === 'undefined') {
+      Alert.alert(title, message);
+    }
+  }, []);
 
   const toggleSurveyActive = async (survey: Survey) => {
     await supabase.from('surveys').update({ is_active: !survey.is_active }).eq('id', survey.id);
@@ -453,24 +489,27 @@ export default function AdminScreen() {
     if (recordingHoneyPot) return;
     const amount = parseFloat(honeyPotAmount);
     if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
+      showHoneyPotFeedback('error', 'Error', 'Please enter a valid amount.');
       return;
     }
-    if (!communityId) return;
+    if (!communityId) {
+      showHoneyPotFeedback('error', 'Error', 'No community context. Please refresh and try again.');
+      return;
+    }
     const taggedAsDues = honeyPotType === 'deposit' && duesCoverage !== 'none';
     const duesYearValue = Number(duesYear);
     const duesQuarterValue = Number(duesQuarter);
 
     if (taggedAsDues && !duesMemberId) {
-      Alert.alert('Error', 'Please choose who this dues payment is for.');
+      showHoneyPotFeedback('error', 'Error', 'Please choose who this dues payment is for.');
       return;
     }
     if (taggedAsDues && (!duesYearValue || duesYearValue < 2020)) {
-      Alert.alert('Error', 'Please enter a valid dues year.');
+      showHoneyPotFeedback('error', 'Error', 'Please enter a valid dues year.');
       return;
     }
     if (duesCoverage === 'quarter' && (!duesQuarterValue || duesQuarterValue < 1 || duesQuarterValue > 4)) {
-      Alert.alert('Error', 'Please choose a valid quarter.');
+      showHoneyPotFeedback('error', 'Error', 'Please choose a valid quarter.');
       return;
     }
 
@@ -478,6 +517,10 @@ export default function AdminScreen() {
 
     try {
       setRecordingHoneyPot(true);
+      setHoneyPotFeedback({
+        tone: 'info',
+        message: `Recording Honey Pot ${honeyPotType === 'deposit' ? 'deposit' : 'withdrawal'}...`,
+      });
       const result = await recordHoneyPotTransaction({
         communityId,
         signedAmount,
@@ -503,7 +546,8 @@ export default function AdminScreen() {
       if (duesCoverage !== 'none') {
         setDuesMemberId('');
       }
-      Alert.alert(
+      showHoneyPotFeedback(
+        'success',
         'Success',
         savedStructuredDues || !taggedAsDues
           ? `Honey Pot ${honeyPotType === 'deposit' ? 'deposit' : 'withdrawal'} recorded`
@@ -511,7 +555,7 @@ export default function AdminScreen() {
       );
     } catch (err) {
       console.error('Honey pot update error:', err);
-      Alert.alert('Honey Pot update failed', getHoneyPotErrorMessage(err));
+      showHoneyPotFeedback('error', 'Honey Pot update failed', getHoneyPotErrorMessage(err));
     } finally {
       setRecordingHoneyPot(false);
     }
@@ -700,6 +744,7 @@ export default function AdminScreen() {
                 <Pressable
                   onPress={updateHoneyPot}
                   disabled={recordingHoneyPot}
+                  accessibilityRole="button"
                   className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
                   style={{ opacity: recordingHoneyPot ? 0.6 : 1 }}
                 >
@@ -709,6 +754,22 @@ export default function AdminScreen() {
                       : `Record ${honeyPotType === 'deposit' ? 'Deposit' : 'Withdrawal'}`}
                   </Text>
                 </Pressable>
+                {honeyPotFeedback && (
+                  <View
+                    className="mt-3 rounded-lg border px-3 py-2"
+                    style={{
+                      backgroundColor: HONEY_POT_FEEDBACK_STYLE[honeyPotFeedback.tone].backgroundColor,
+                      borderColor: HONEY_POT_FEEDBACK_STYLE[honeyPotFeedback.tone].borderColor,
+                    }}
+                  >
+                    <Text
+                      className="text-sm font-semibold text-center"
+                      style={{ color: HONEY_POT_FEEDBACK_STYLE[honeyPotFeedback.tone].color }}
+                    >
+                      {honeyPotFeedback.message}
+                    </Text>
+                  </View>
+                )}
               </>
             ) : (
               <Text className="text-center text-gray-500">

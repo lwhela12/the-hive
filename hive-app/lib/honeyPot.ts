@@ -62,6 +62,17 @@ const recordWithTables = async ({
     .filter(Boolean)
     .join(' · ') || null;
 
+  const { data: startingPot, error: startingPotError } = await supabase
+    .from('honey_pot')
+    .select('balance')
+    .eq('community_id', communityId)
+    .maybeSingle();
+  if (startingPotError) {
+    console.warn('Could not read starting Honey Pot balance before fallback write', startingPotError);
+  }
+  const startingBalance = await fetchHoneyPotBalance(communityId)
+    .catch(() => Number(startingPot?.balance ?? 0));
+
   const { error: structuredTransactionError } = await (supabase as any)
     .from('honey_pot_transactions')
     .insert({
@@ -94,46 +105,35 @@ const recordWithTables = async ({
     if (legacyTransactionError) throw legacyTransactionError;
   }
 
-  const { data: currentPot, error: currentPotError } = await supabase
-    .from('honey_pot')
-    .select('balance')
-    .eq('community_id', communityId)
-    .maybeSingle();
-  if (currentPotError) throw currentPotError;
-
-  const nextBalance = Number(currentPot?.balance ?? 0) + signedAmount;
-  if (currentPot) {
-    const { data, error } = await (supabase as any)
-      .from('honey_pot')
-      .update({
-        balance: nextBalance,
-        updated_by: recordedBy,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('community_id', communityId)
-      .select('balance')
-      .maybeSingle();
-    if (error) throw error;
-    return {
-      balance: Number(data?.balance ?? nextBalance),
-      savedStructuredDues,
-    };
+  const nextBalance = startingBalance + signedAmount;
+  try {
+    if (startingPot) {
+      const { error } = await (supabase as any)
+        .from('honey_pot')
+        .update({
+          balance: nextBalance,
+          updated_by: recordedBy,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('community_id', communityId);
+      if (error) throw error;
+    } else {
+      const { error } = await (supabase as any)
+        .from('honey_pot')
+        .upsert({
+          community_id: communityId,
+          balance: nextBalance,
+          updated_by: recordedBy,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'community_id' });
+      if (error) throw error;
+    }
+  } catch (balanceSyncError) {
+    console.warn('Honey Pot transaction saved, but balance sync needs migration', balanceSyncError);
   }
 
-  const { data, error } = await (supabase as any)
-    .from('honey_pot')
-    .upsert({
-      community_id: communityId,
-      balance: nextBalance,
-      updated_by: recordedBy,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'community_id' })
-    .select('balance')
-    .single();
-  if (error) throw error;
-
   return {
-    balance: Number(data?.balance ?? nextBalance),
+    balance: await fetchHoneyPotBalance(communityId).catch(() => nextBalance),
     savedStructuredDues,
   };
 };
@@ -153,8 +153,15 @@ export const recordHoneyPotTransaction = async (
   });
 
   if (!error) {
+    let confirmedBalance: number;
+    try {
+      confirmedBalance = await fetchHoneyPotBalance(input.communityId);
+    } catch (fetchError) {
+      if (data === null || data === undefined) throw fetchError;
+      confirmedBalance = Number(data);
+    }
     return {
-      balance: Number(data ?? 0),
+      balance: confirmedBalance,
       savedStructuredDues: !!input.relatedUserId,
     };
   }
@@ -164,4 +171,43 @@ export const recordHoneyPotTransaction = async (
   }
 
   throw error;
+};
+
+const fetchLedgerBalance = async (communityId: string) => {
+  const { data, error } = await supabase
+    .from('honey_pot_transactions')
+    .select('amount')
+    .eq('community_id', communityId);
+
+  if (error) throw error;
+
+  return (data ?? []).reduce((total, transaction) => {
+    return total + Number(transaction.amount ?? 0);
+  }, 0);
+};
+
+export const fetchHoneyPotBalance = async (communityId: string) => {
+  const { data, error } = await supabase
+    .from('honey_pot')
+    .select('balance')
+    .eq('community_id', communityId)
+    .maybeSingle();
+
+  if (error) {
+    return fetchLedgerBalance(communityId);
+  }
+
+  const storedBalance = data ? Number(data.balance ?? 0) : null;
+
+  try {
+    const ledgerBalance = await fetchLedgerBalance(communityId);
+    if (storedBalance === null || Math.abs(storedBalance - ledgerBalance) >= 0.005) {
+      return ledgerBalance;
+    }
+  } catch (ledgerError) {
+    if (storedBalance !== null) return storedBalance;
+    throw ledgerError;
+  }
+
+  return storedBalance ?? 0;
 };
