@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView, Modal } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,8 +25,8 @@ import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { PREDEFINED_SKILLS } from '../../components/skills/constants';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { Ionicons } from '@expo/vector-icons';
-import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
-import type { Skill, Wish, ActionItem, UserInsights, Profile } from '../../types';
+import { formatDateLong, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
+import type { Skill, Wish, UserInsights, Profile } from '../../types';
 
 const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
 
@@ -47,6 +47,7 @@ const formatPhoneNumber = (value: string): string => {
 
 export default function ProfileScreen() {
   const { profile, communityId, communityRole, refreshProfile } = useAuth();
+  const { width: screenWidth } = useWindowDimensions();
   const { permissionStatus, requestPermissions } = useNotifications({ enableListeners: false });
   const { grantWish } = useWishes();
   const { pendingSurveys } = useSurveys(communityId ?? undefined, profile?.id);
@@ -55,7 +56,6 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [wishes, setWishes] = useState<Wish[]>([]);
-  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [wishToGrant, setWishToGrant] = useState<(Wish & { user: Profile }) | null>(null);
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
@@ -93,7 +93,6 @@ export default function ProfileScreen() {
     const [
       skillsResult,
       wishesResult,
-      actionItemsResult,
       insightsResult,
       dailyAnswerCountResult,
     ] = await Promise.all([
@@ -109,13 +108,6 @@ export default function ProfileScreen() {
         .eq('user_id', profile.id)
         .eq('community_id', communityId)
         .order('created_at', { ascending: false }),
-      supabase
-        .from('action_items')
-        .select('*')
-        .eq('assigned_to', profile.id)
-        .eq('community_id', communityId)
-        .eq('completed', false)
-        .order('due_date', { ascending: true }),
       // Use maybeSingle() to gracefully handle cases where no record exists yet
       supabase
         .from('user_insights')
@@ -151,7 +143,6 @@ export default function ProfileScreen() {
     if (skillsResult.data) setSkills(skillsResult.data);
     if (wishesData) setWishes(wishesData);
     if (wishesError) console.error('Error fetching profile wishes:', wishesError);
-    if (actionItemsResult.data) setActionItems(actionItemsResult.data);
     setUserInsights(insightsResult.data);
     setDailyAnswerCount(dailyAnswerCountResult.count ?? 0);
     setInitialLoading(false);
@@ -388,23 +379,6 @@ export default function ProfileScreen() {
         onPress: performSignOut,
       },
     ]);
-  };
-
-  const toggleActionItem = async (item: ActionItem) => {
-    if (!communityId) return;
-
-    const { error } = await supabase
-      .from('action_items')
-      .update({
-        completed: true,
-        completed_at: new Date().toISOString(),
-      })
-      .eq('id', item.id)
-      .eq('community_id', communityId);
-
-    if (!error) {
-      setActionItems((prev) => prev.filter((i) => i.id !== item.id));
-    }
   };
 
   const handlePublishWish = (wish: Wish) => {
@@ -696,6 +670,24 @@ export default function ProfileScreen() {
   };
 
   if (!profile) return null;
+
+  const isProfileDesktop = screenWidth >= 1240;
+  const isProfilePhone = screenWidth < 640;
+  const profileKnownFor = ((profile as any).known_for as string | null | undefined)?.trim() || '';
+  const profileBio = ((profile as any).bio as string | null | undefined)?.trim() || '';
+  const profileHoneycombItems = [
+    { label: 'Title', value: (profile as any).profile_title || profile.occupation },
+    { label: 'From', value: (profile as any).hometown },
+    { label: 'Birthday', value: formatBirthdayForDisplay(profile.birthday) },
+    { label: 'Project', value: (profile as any).current_project },
+    { label: 'Book', value: (profile as any).favorite_book },
+    { label: 'Food', value: (profile as any).favorite_food },
+    { label: 'Hobby', value: (profile as any).favorite_hobby },
+    ...(((profile as any).fun_facts as string[] | null) ?? []).map((fact: string, idx: number) => ({
+      label: `Fun Fact ${idx + 1}`,
+      value: fact,
+    })),
+  ];
 
   const managingWishIsLinked = !!(managingWish?.board_category_id || managingWish?.source_board_post_id);
   const wishManageModal = (
@@ -1007,40 +999,110 @@ export default function ProfileScreen() {
 
           {!isEditing ? (
             <View className="gap-4">
-              {/* Honeycomb snapshot — visual identity, shown first */}
-              <ProfileHoneycombCluster
-                title="PROFILE HONEYCOMB"
-                size="compact"
-                items={[
-                  { label: 'Title', value: (profile as any).profile_title || profile.occupation },
-                  { label: 'From', value: (profile as any).hometown },
-                  { label: 'Birthday', value: formatBirthdayForDisplay(profile.birthday) },
-                  { label: 'Project', value: (profile as any).current_project },
-                  { label: 'Book', value: (profile as any).favorite_book },
-                  { label: 'Food', value: (profile as any).favorite_food },
-                  { label: 'Hobby', value: (profile as any).favorite_hobby },
-                  ...(((profile as any).fun_facts as string[] | null) ?? []).map((fact: string, idx: number) => ({
-                    label: `Fun Fact ${idx + 1}`,
-                    value: fact,
-                  })),
-                ]}
-              />
+              {isProfileDesktop ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'stretch',
+                    justifyContent: 'center',
+                    gap: 18,
+                    marginTop: 4,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 290,
+                      minHeight: 560,
+                      borderRadius: 34,
+                      backgroundColor: '#fffdf5',
+                      borderWidth: 1,
+                      borderColor: 'rgba(222,193,129,0.35)',
+                      paddingHorizontal: 24,
+                      paddingVertical: 28,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.9, textTransform: 'uppercase', color: '#bd9348', marginBottom: 12 }}>
+                      People should ask me about
+                    </Text>
+                    <Text style={{ fontFamily: 'LibreBaskerville_400Regular', fontSize: 18, lineHeight: 28, color: '#2d2d2d', fontStyle: 'italic' }}>
+                      {profileKnownFor ? `"${profileKnownFor}"` : 'Add the one thing people should ask you about.'}
+                    </Text>
+                  </View>
 
-              {(profile as any).bio && (
-                <View className="bg-white rounded-xl shadow-sm p-4">
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
-                    {(profile as any).bio}
-                  </Text>
-                </View>
-              )}
+                  <View style={{ width: 540, alignSelf: 'center' }}>
+                    <ProfileHoneycombCluster
+                      title="PROFILE HONEYCOMB"
+                      size="roomy"
+                      preferredColumns={3}
+                      items={profileHoneycombItems}
+                    />
+                  </View>
 
-              {(profile as any).known_for && (
-                <View>
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-charcoal/40 mb-2 tracking-wide">ASK ME ABOUT</Text>
-                  <Text style={{ fontFamily: 'LibreBaskerville_400Regular' }} className="text-charcoal italic leading-6">
-                    "{(profile as any).known_for}"
-                  </Text>
+                  <View
+                    style={{
+                      width: 330,
+                      minHeight: 560,
+                      borderRadius: 34,
+                      backgroundColor: '#fff',
+                      borderWidth: 1,
+                      borderColor: 'rgba(45,45,45,0.08)',
+                      paddingHorizontal: 24,
+                      paddingVertical: 28,
+                      justifyContent: 'center',
+                      shadowColor: '#2d2d2d',
+                      shadowOpacity: 0.06,
+                      shadowRadius: 18,
+                      shadowOffset: { width: 0, height: 8 },
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.9, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 12 }}>
+                      Longer profile
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 24, color: '#2d2d2d' }}>
+                      {profileBio || 'Add the longer version of your story here.'}
+                    </Text>
+                  </View>
                 </View>
+              ) : (
+                <>
+                  <View style={{ paddingVertical: 2 }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase', color: '#bd9348', marginBottom: 8 }}>
+                      People should ask me about
+                    </Text>
+                    <Text style={{ fontFamily: 'LibreBaskerville_400Regular', fontSize: isProfilePhone ? 19 : 20, lineHeight: isProfilePhone ? 28 : 30, color: '#2d2d2d', fontStyle: 'italic' }}>
+                      {profileKnownFor ? `"${profileKnownFor}"` : 'Add the one thing people should ask you about.'}
+                    </Text>
+                  </View>
+
+                  <ProfileHoneycombCluster
+                    title="PROFILE HONEYCOMB"
+                    size="compact"
+                    preferredColumns={isProfilePhone ? 3 : undefined}
+                    items={profileHoneycombItems}
+                  />
+
+                  <View
+                    style={{
+                      borderRadius: 28,
+                      backgroundColor: '#fff',
+                      borderWidth: 1,
+                      borderColor: 'rgba(45,45,45,0.08)',
+                      padding: 18,
+                      shadowColor: '#2d2d2d',
+                      shadowOpacity: 0.05,
+                      shadowRadius: 12,
+                      shadowOffset: { width: 0, height: 5 },
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 8 }}>
+                      Longer profile
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14.5, lineHeight: 23, color: '#2d2d2d' }}>
+                      {profileBio || 'Add the longer version of your story here.'}
+                    </Text>
+                  </View>
+                </>
               )}
 
               {((profile as any).miq_experiences || (profile as any).miq_growth || (profile as any).miq_contribution) ? (
@@ -1446,34 +1508,6 @@ export default function ProfileScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/40 mt-3">
                 These notes are maintained by the HIVE assistant based on your conversations. Only you can see them.
               </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Action Items */}
-        {!initialLoading && actionItems.length > 0 && (
-          <View className="mb-6">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
-              Your Action Items
-            </Text>
-            <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-              {actionItems.map((item) => (
-                <Pressable
-                  key={item.id}
-                  onPress={() => toggleActionItem(item)}
-                  className="flex-row items-center p-4 border-b border-cream last:border-b-0 active:bg-cream"
-                >
-                  <View className="w-6 h-6 rounded-full border-2 border-gold mr-3" />
-                  <View className="flex-1">
-                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">{item.description}</Text>
-                    {item.due_date && (
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
-                        Due: {formatDateShort(item.due_date)}
-                      </Text>
-                    )}
-                  </View>
-                </Pressable>
-              ))}
             </View>
           </View>
         )}

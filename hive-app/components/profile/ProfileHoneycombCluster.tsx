@@ -1,5 +1,5 @@
 import { useMemo, useState, type ComponentProps } from 'react';
-import { LayoutChangeEvent, Platform, StyleSheet, Text, View } from 'react-native';
+import { LayoutChangeEvent, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 
@@ -12,6 +12,7 @@ type ProfileHoneycombClusterProps = {
   title: string;
   items: HoneycombItem[];
   size?: 'compact' | 'roomy';
+  preferredColumns?: 2 | 3;
 };
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -206,8 +207,10 @@ export function ProfileHoneycombCluster({
   title,
   items,
   size = 'roomy',
+  preferredColumns,
 }: ProfileHoneycombClusterProps) {
   const [containerWidth, setContainerWidth] = useState(0);
+  const [expandedCell, setExpandedCell] = useState<HoneycombInfoCell | null>(null);
   const cells = useMemo(() => buildInfoCells(items), [items]);
 
   const handleLayout = (event: LayoutChangeEvent) => {
@@ -216,7 +219,7 @@ export function ProfileHoneycombCluster({
 
   const compact = size === 'compact' || (containerWidth > 0 && containerWidth < 540);
   const measuredWidth = containerWidth > 0 ? containerWidth : compact ? 360 : 520;
-  const desiredColumns = measuredWidth >= 390 ? 3 : 2;
+  const desiredColumns = preferredColumns ?? (measuredWidth >= 330 ? 3 : 2);
   const columns = Math.max(1, Math.min(desiredColumns, Math.max(1, cells.length)));
   const maxCellWidth = compact ? 154 : 164;
   const availableCellWidth = Math.max(104, (measuredWidth - 2) / (1 + 0.75 * (columns - 1)));
@@ -263,8 +266,11 @@ export function ProfileHoneycombCluster({
           }}
         >
           {cells.map((cell, index) => (
-            <View
+            <Pressable
               key={cell.key}
+              accessibilityRole="button"
+              accessibilityLabel={`${cell.label}: ${cell.value}. Tap to read the full answer.`}
+              onPress={() => setExpandedCell(cell)}
               style={{
                 position: 'absolute',
                 left: placements[index].left,
@@ -280,10 +286,86 @@ export function ProfileHoneycombCluster({
                 height={cellHeight}
                 compact={compact}
               />
-            </View>
+            </Pressable>
           ))}
         </View>
       </View>
+      <Modal
+        visible={!!expandedCell}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setExpandedCell(null)}
+      >
+        <Pressable
+          onPress={() => setExpandedCell(null)}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(45,45,45,0.26)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 22,
+          }}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: 430,
+              borderRadius: 28,
+              backgroundColor: '#fff8df',
+              borderWidth: 1,
+              borderColor: 'rgba(189,147,72,0.3)',
+              padding: 22,
+              shadowColor: '#bd9348',
+              shadowOpacity: 0.2,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 10 },
+            }}
+          >
+            {expandedCell && (
+              <>
+                <Text
+                  style={{
+                    fontFamily: 'Lato_700Bold',
+                    fontSize: 11,
+                    letterSpacing: 0.7,
+                    textTransform: 'uppercase',
+                    color: '#9a6f28',
+                    marginBottom: 8,
+                  }}
+                >
+                  {expandedCell.label}
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: 'LibreBaskerville_700Bold',
+                    fontSize: 20,
+                    lineHeight: 28,
+                    color: '#2d2d2d',
+                    marginBottom: 16,
+                  }}
+                >
+                  {expandedCell.value}
+                </Text>
+                <Pressable
+                  onPress={() => setExpandedCell(null)}
+                  style={{
+                    alignSelf: 'flex-start',
+                    borderRadius: 999,
+                    backgroundColor: '#bd9348',
+                    paddingHorizontal: 16,
+                    paddingVertical: 9,
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#fffaf0' }}>
+                    Close
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
