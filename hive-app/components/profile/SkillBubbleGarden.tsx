@@ -632,26 +632,31 @@ function useWildflowerStyles() {
       @keyframes skillSeedBubbleIn {
         0% {
           opacity: 0;
-          transform: scaleX(0.14) scaleY(0.08);
+          transform: translate3d(0, -4px, 0) scaleX(0.08) scaleY(0.06);
           filter: blur(1.4px);
         }
-        42% {
+        34% {
+          opacity: 0.9;
+          transform: translate3d(0, -2px, 0) scaleX(0.28) scaleY(1.42);
+          filter: blur(0.4px);
+        }
+        62% {
           opacity: 1;
-          transform: scaleX(1.12) scaleY(0.74);
+          transform: translate3d(0, 1px, 0) scaleX(1.18) scaleY(0.72);
           filter: blur(0);
         }
-        68% {
-          transform: scaleX(0.94) scaleY(1.08);
+        82% {
+          transform: translate3d(0, -1px, 0) scaleX(0.94) scaleY(1.08);
         }
         100% {
           opacity: 1;
-          transform: scaleX(1) scaleY(1);
+          transform: translate3d(0, 0, 0) scaleX(1) scaleY(1);
           filter: blur(0);
         }
       }
       .skill-seed-bubble-in {
         animation-name: skillSeedBubbleIn;
-        animation-duration: 820ms;
+        animation-duration: 1180ms;
         animation-timing-function: cubic-bezier(0.18, 0.9, 0.12, 1);
         transform-origin: 50% 50%;
         will-change: transform, opacity;
@@ -666,12 +671,17 @@ function useWildflowerStyles() {
       @keyframes skillGardenSoftOpen {
         0% {
           opacity: 0;
-          transform: translate3d(0, 22px, 0) scaleX(0.94) scaleY(0.78);
+          transform: translate3d(0, 30px, 0) scaleX(0.86) scaleY(0.62);
           filter: blur(2px);
         }
-        58% {
+        46% {
+          opacity: 0.96;
+          transform: translate3d(0, 6px, 0) scaleX(0.72) scaleY(1.18);
+          filter: blur(0.4px);
+        }
+        72% {
           opacity: 1;
-          transform: translate3d(0, -3px, 0) scaleX(1.015) scaleY(1.045);
+          transform: translate3d(0, -4px, 0) scaleX(1.035) scaleY(1.05);
           filter: blur(0);
         }
         100% {
@@ -682,7 +692,7 @@ function useWildflowerStyles() {
       }
       .skill-garden-soft-open {
         animation-name: skillGardenSoftOpen;
-        animation-duration: 860ms;
+        animation-duration: 1180ms;
         animation-timing-function: cubic-bezier(0.18, 0.9, 0.16, 1);
         transform-origin: 50% 100%;
         will-change: transform, opacity;
@@ -1375,8 +1385,8 @@ function SkillPlant({
     Animated.timing(grow, {
       toValue: 1,
       useNativeDriver: true,
-      duration: justPlanted ? 2060 : 780,
-      easing: justPlanted ? Easing.bezier(0.22, 0.78, 0.1, 1) : Easing.out(Easing.cubic),
+      duration: justPlanted ? 2860 : 980,
+      easing: justPlanted ? Easing.bezier(0.18, 0.84, 0.08, 1) : Easing.out(Easing.cubic),
     }).start(({ finished }) => {
       if (finished && justPlanted) {
         onEntryComplete(skill);
@@ -1457,8 +1467,8 @@ function SkillPlant({
     Animated.timing(depart, {
       toValue: 1,
       useNativeDriver: true,
-      duration: 1980,
-      easing: Easing.bezier(0.52, 0.02, 0.1, 1),
+      duration: 2780,
+      easing: Easing.bezier(0.48, 0, 0.08, 1),
     }).start(({ finished }) => {
       if (finished) {
         onReturnToSeed(skill, returnSlotIndex);
@@ -1489,28 +1499,46 @@ function SkillPlant({
   };
 
   const showReseedButton = editable && !isReseeding && (isHovered || selected);
-  const entryLift = justPlanted ? Math.max(190, GROUND_HEIGHT * 1.82) : 28;
-  const soilDrop = Math.max(138, height - top - GROUND_HEIGHT * 0.03 - plantHeight * 0.48);
+  const entryLift = justPlanted ? Math.max(230, GROUND_HEIGHT * 2.28) : 32;
+  const soilDrop = Math.max(168, height - top - GROUND_HEIGHT * 0.02 - plantHeight * 0.44);
   const entryOriginOffset = justPlanted && entryOriginX !== undefined
     ? entryOriginX * width - centerX
     : 0;
   const entryTranslateX = grow.interpolate({ inputRange: [0, 1], outputRange: [entryOriginOffset, 0] });
   const entryTranslateY = justPlanted
-    ? grow.interpolate({ inputRange: [0, 0.34, 0.72, 0.9, 1], outputRange: [entryLift, entryLift * 0.58, entryLift * 0.14, -7, 0] })
+    ? grow.interpolate({
+        inputRange: [0, 0.16, 0.34, 0.56, 0.76, 0.9, 1],
+        outputRange: [entryLift, entryLift * 0.92, entryLift * 0.58, entryLift * 0.2, -18, 8, 0],
+      })
     : grow.interpolate({ inputRange: [0, 1], outputRange: [entryLift, 0] });
   const entryScaleX = justPlanted
-    ? grow.interpolate({ inputRange: [0, 0.2, 0.48, 0.76, 1], outputRange: [0.18, 0.14, 0.32, 1.12, 1] })
-    : grow.interpolate({ inputRange: [0, 0.48, 0.78, 1], outputRange: [0.84, 0.36, 1.08, 1] });
+    ? grow.interpolate({
+        inputRange: [0, 0.16, 0.34, 0.56, 0.76, 0.9, 1],
+        outputRange: [0.1, 0.16, 0.08, 0.34, 1.2, 0.94, 1],
+      })
+    : grow.interpolate({ inputRange: [0, 0.42, 0.74, 1], outputRange: [0.78, 0.28, 1.12, 1] });
   const entryScaleY = justPlanted
-    ? grow.interpolate({ inputRange: [0, 0.2, 0.48, 0.76, 1], outputRange: [0.08, 0.5, 1.44, 0.92, 1] })
-    : grow.interpolate({ inputRange: [0, 0.48, 0.78, 1], outputRange: [0.84, 1.22, 0.96, 1] });
+    ? grow.interpolate({
+        inputRange: [0, 0.16, 0.34, 0.56, 0.76, 0.9, 1],
+        outputRange: [0.04, 0.18, 1.9, 1.34, 0.86, 1.06, 1],
+      })
+    : grow.interpolate({ inputRange: [0, 0.42, 0.74, 1], outputRange: [0.76, 1.3, 0.94, 1] });
   const entryOpacity = justPlanted
-    ? grow.interpolate({ inputRange: [0, 0.02, 0.18, 1], outputRange: [0.6, 0.78, 1, 1] })
+    ? grow.interpolate({ inputRange: [0, 0.04, 0.18, 1], outputRange: [0.38, 0.68, 1, 1] })
     : grow.interpolate({ inputRange: [0, 0.16, 0.52, 1], outputRange: [0.72, 0.86, 1, 1] });
-  const departTranslateY = depart.interpolate({ inputRange: [0, 1], outputRange: [0, soilDrop] });
-  const departScaleX = depart.interpolate({ inputRange: [0, 0.38, 0.72, 0.9, 1], outputRange: [1, 1.16, 0.8, 0.44, 0.16] });
-  const departScaleY = depart.interpolate({ inputRange: [0, 0.38, 0.72, 0.9, 1], outputRange: [1, 0.86, 0.28, 0.12, 0.04] });
-  const departOpacity = depart.interpolate({ inputRange: [0, 0.86, 0.97, 1], outputRange: [1, 0.92, 0.58, 0] });
+  const departTranslateY = depart.interpolate({
+    inputRange: [0, 0.22, 0.48, 0.7, 0.88, 1],
+    outputRange: [0, soilDrop * 0.06, soilDrop * 0.28, soilDrop * 0.62, soilDrop * 0.9, soilDrop],
+  });
+  const departScaleX = depart.interpolate({
+    inputRange: [0, 0.22, 0.48, 0.7, 0.88, 1],
+    outputRange: [1, 1.22, 0.96, 0.52, 0.24, 0.08],
+  });
+  const departScaleY = depart.interpolate({
+    inputRange: [0, 0.22, 0.48, 0.7, 0.88, 1],
+    outputRange: [1, 0.74, 0.44, 0.22, 0.09, 0.025],
+  });
+  const departOpacity = depart.interpolate({ inputRange: [0, 0.82, 0.94, 1], outputRange: [1, 0.96, 0.72, 0] });
 
   const label = showLabel ? (
     <View
