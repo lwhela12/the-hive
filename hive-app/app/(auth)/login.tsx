@@ -106,12 +106,12 @@ export default function LoginScreen() {
               style={{ width: 190, height: 190, marginBottom: 10 }}
               resizeMode="contain"
             />
-            {/* H.I.V.E. */}
+            {/* HIVE */}
             <Text
               style={{ fontFamily: 'LibreBaskerville_700Bold' }}
               className="text-5xl text-charcoal text-center"
             >
-              H.I.V.E.
+              HIVE
             </Text>
             {/* "Architects of Collective" dark, "Abundance" gold — matching website layout */}
             <Text

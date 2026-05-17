@@ -21,10 +21,10 @@ type InviteBlock = {
 const normalizeEmail = (email?: string | null) => (email ?? '').trim().toLowerCase();
 const normalizeHiveBrandName = (name?: string | null) => {
   const trimmed = (name ?? '').trim();
-  if (!trimmed) return 'H.I.V.E.';
+  if (!trimmed) return 'HIVE';
   const normalized = trimmed.toLowerCase();
   if (['hive', 'the hive', 'h.i.v.e.', 'the h.i.v.e.'].includes(normalized)) {
-    return 'H.I.V.E.';
+    return 'HIVE';
   }
   return trimmed;
 };
@@ -266,7 +266,7 @@ export default function JoinScreen() {
         const { data: newCommunity, error: communityError } = await supabase
           .from('communities')
           .insert({
-            name: 'H.I.V.E.',
+            name: 'HIVE',
             slug: 'default',
             created_by: profile.id,
           })

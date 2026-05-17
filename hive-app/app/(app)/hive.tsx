@@ -1664,7 +1664,7 @@ export default function HiveScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
-      <AppHeader title="H.I.V.E." />
+      <AppHeader title="HIVE" />
 
       <ScrollView
         className="flex-1"
