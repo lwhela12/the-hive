@@ -2249,19 +2249,19 @@ function SeedSurvey({
         accessibilityRole="button"
         accessibilityLabel="Seed your garden"
         style={{
-          width: hasSkills ? (compact ? 126 : 206) : undefined,
+          width: hasSkills ? (compact ? 108 : 206) : undefined,
           maxWidth: '100%',
-          minHeight: hasSkills ? (compact ? 126 : 206) : 190,
+          minHeight: hasSkills ? (compact ? 108 : 206) : 190,
           borderRadius: hasSkills ? 999 : 28,
           borderWidth: 1,
           borderColor: hasSkills ? 'rgba(255,253,247,0.54)' : 'rgba(255,253,247,0.62)',
           backgroundColor: hasSkills ? 'rgba(255,224,105,0.68)' : 'rgba(255,244,187,0.92)',
-          paddingHorizontal: hasSkills ? (compact ? 12 : 20) : 18,
-          paddingVertical: hasSkills ? (compact ? 10 : 18) : 18,
+          paddingHorizontal: hasSkills ? (compact ? 10 : 20) : 18,
+          paddingVertical: hasSkills ? (compact ? 9 : 18) : 18,
           marginBottom: hasSkills ? 0 : 0,
           alignItems: 'center',
           justifyContent: 'center',
-          gap: hasSkills ? (compact ? 7 : 10) : 14,
+          gap: hasSkills ? (compact ? 5 : 10) : 14,
           shadowColor: hasSkills ? '#f2c85a' : '#315d4e',
           shadowOpacity: hasSkills ? 0.3 : 0.16,
           shadowRadius: hasSkills ? 36 : 28,
@@ -2282,24 +2282,24 @@ function SeedSurvey({
       >
         {hasSkills ? (
           <>
-            <SunRayBackground size={compact ? 154 : 250} />
-            <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: compact ? 10.8 : 15, lineHeight: compact ? 13 : 18, textAlign: 'center' }}>
+            <SunRayBackground size={compact ? 130 : 250} />
+            <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: compact ? 9.6 : 15, lineHeight: compact ? 11.6 : 18, textAlign: 'center' }}>
               Skills Garden Quiz
             </Text>
-            <Text selectable={false} numberOfLines={3} style={{ fontFamily: 'Lato_400Regular', color: '#52755b', fontSize: compact ? 8.8 : 11.5, lineHeight: compact ? 11 : 15, textAlign: 'center' }}>
+            <Text selectable={false} numberOfLines={3} style={{ fontFamily: 'Lato_400Regular', color: '#52755b', fontSize: compact ? 7.8 : 11.5, lineHeight: compact ? 9.6 : 15, textAlign: 'center' }}>
               Need help? Let the sun pick a few blooms.
             </Text>
             <View
               style={{
-                minHeight: compact ? 25 : 34,
+                minHeight: compact ? 22 : 34,
                 borderRadius: 999,
                 backgroundColor: '#315d4e',
-                paddingHorizontal: compact ? 11 : 16,
+                paddingHorizontal: compact ? 9 : 16,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: compact ? 9.5 : 12 }}>
+              <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: compact ? 8.6 : 12 }}>
                 Begin
               </Text>
             </View>
