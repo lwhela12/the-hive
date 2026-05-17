@@ -417,9 +417,9 @@ function getFrontRowScale(width: number, compactLandscape = false) {
   const effectiveWidth = Math.max(width || 0, 360);
   const fullBloomWidth = STAGES[STAGES.length - 1].labelWidth;
   const sidePadding = clamp(effectiveWidth * 0.045, effectiveWidth < 520 ? 18 : 30, effectiveWidth > 1280 ? 96 : 58);
-  const idealScale = ((effectiveWidth - sidePadding * 2) / (GARDEN_CAPACITY * fullBloomWidth)) * (compactLandscape ? 1.42 : 1.78);
-  const minScale = effectiveWidth < 520 ? 0.54 : 0.82;
-  const maxScale = compactLandscape ? 0.9 : effectiveWidth > 1280 ? 1.46 : effectiveWidth > 860 ? 1.22 : 0.98;
+  const idealScale = ((effectiveWidth - sidePadding * 2) / (GARDEN_CAPACITY * fullBloomWidth)) * (compactLandscape ? 1.55 : 1.78);
+  const minScale = compactLandscape ? 0.48 : effectiveWidth < 520 ? 0.54 : 0.82;
+  const maxScale = compactLandscape ? 0.64 : effectiveWidth > 1280 ? 1.46 : effectiveWidth > 860 ? 1.22 : 0.98;
 
   return clamp(idealScale, minScale, maxScale);
 }
@@ -527,7 +527,7 @@ function buildFlowerSlots(skills: GardenSkill[], pinnedSlots: Record<string, num
 function getFrontRowAnchorY(height: number, width: number, index: number, compactLandscape = false) {
   const baseAnchor = height - clamp(width < 520 ? 34 : 48, 32, 58);
   if (compactLandscape) {
-    const staggerPattern = [0, 30, 12, 44, 20];
+    const staggerPattern = [0, 82, 24, 118, 46, 98, 14, 128, 58, 108];
     return baseAnchor - staggerPattern[index % staggerPattern.length];
   }
   if (width < 520) {
@@ -541,9 +541,9 @@ function getFrontRowAnchorY(height: number, width: number, index: number, compac
 
 function getMeadowHeight(skillCount: number, width: number, compactLandscape = false) {
   if (compactLandscape) {
-    const base = skillCount === 0 ? 330 : 430;
-    const extra = Math.max(0, skillCount - GARDEN_CAPACITY) * 4;
-    return clamp(base + extra, base, 500);
+    const base = skillCount === 0 ? 285 : 350;
+    const extra = Math.max(0, skillCount - GARDEN_CAPACITY) * 3;
+    return clamp(base + extra, base, 390);
   }
 
   const base = skillCount === 0 ? (width < 420 ? 330 : 370) : (width < 420 ? 500 : 560);
@@ -1488,7 +1488,7 @@ function SkillPlant({
     });
   };
 
-  const showReseedButton = editable && !isReseeding && isHovered;
+  const showReseedButton = editable && !isReseeding && (isHovered || selected);
   const entryLift = justPlanted ? Math.max(190, GROUND_HEIGHT * 1.82) : 28;
   const soilDrop = Math.max(138, height - top - GROUND_HEIGHT * 0.03 - plantHeight * 0.48);
   const entryOriginOffset = justPlanted && entryOriginX !== undefined
@@ -1689,6 +1689,7 @@ function SeedButton({
   shakeIndex = 0,
   bubbleIn = false,
   slotMode = false,
+  compact = false,
   onPlantSkill,
   onPressSeed,
   planted = false,
@@ -1699,6 +1700,7 @@ function SeedButton({
   shakeIndex?: number;
   bubbleIn?: boolean;
   slotMode?: boolean;
+  compact?: boolean;
   onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
   onPressSeed?: (skillDescription: string, index: number) => void;
   planted?: boolean;
@@ -1726,7 +1728,7 @@ function SeedButton({
       accessibilityLabel={planted ? `${skill} already planted` : disabled ? `${skill} available when a garden spot opens` : `Plant ${skill}`}
       accessibilityState={{ disabled: isDisabled }}
       style={{
-        minHeight: 42,
+        minHeight: compact ? 36 : 42,
         minWidth: slotMode ? 0 : 104,
         flexBasis: slotMode ? 0 : 112,
         flexGrow: 1,
@@ -1763,9 +1765,9 @@ function SeedButton({
     >
       <View
         style={{
-          width: 28,
-          height: 28,
-          borderRadius: 14,
+          width: compact ? 24 : 28,
+          height: compact ? 24 : 28,
+          borderRadius: compact ? 12 : 14,
           backgroundColor: isDisabled ? 'rgba(255,253,247,0.34)' : 'rgba(255,253,247,0.82)',
           alignItems: 'center',
           justifyContent: 'center',
@@ -1773,7 +1775,7 @@ function SeedButton({
           borderColor: isDisabled ? 'rgba(255,253,247,0.28)' : 'rgba(255,253,247,0.72)',
         }}
       >
-        <SeedMark category={category} size={17} muted={isDisabled} />
+        <SeedMark category={category} size={compact ? 15 : 17} muted={isDisabled} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
@@ -1782,8 +1784,8 @@ function SeedButton({
           style={{
             fontFamily: 'Lato_700Bold',
             color: isDisabled ? '#8f8a7f' : category.text,
-            fontSize: 11.5,
-            lineHeight: 13,
+            fontSize: compact ? 10.5 : 11.5,
+            lineHeight: compact ? 12 : 13,
             flexShrink: 1,
             ...(Platform.OS === 'web'
               ? ({
@@ -1800,12 +1802,12 @@ function SeedButton({
   );
 }
 
-function EmptySeedSlot({ index, shakeIndex = 0 }: { index: number; shakeIndex?: number }) {
+function EmptySeedSlot({ index, shakeIndex = 0, compact = false }: { index: number; shakeIndex?: number; compact?: boolean }) {
   return (
     <View
       className={Platform.OS === 'web' && shakeIndex > 0 ? 'skill-seed-popcorn' : undefined}
       style={{
-        minHeight: 42,
+        minHeight: compact ? 36 : 42,
         minWidth: 0,
         flexBasis: 0,
         flexGrow: 1,
@@ -1841,11 +1843,13 @@ function CustomSeedButton({
   onPress,
   suggestedSkills = [],
   disabled = false,
+  compact = false,
 }: {
   onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
   onPress?: () => void;
   suggestedSkills?: string[];
   disabled?: boolean;
+  compact?: boolean;
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [draft, setDraft] = useState('');
@@ -1885,7 +1889,7 @@ function CustomSeedButton({
     return (
       <View
         style={{
-          minHeight: 42,
+          minHeight: compact ? 36 : 42,
           minWidth: 186,
           flexBasis: 220,
           flexGrow: 1,
@@ -2047,7 +2051,7 @@ function CustomSeedButton({
       accessibilityLabel={disabled ? 'Plant your own skill when a garden spot opens' : 'Plant your own skill'}
       accessibilityState={{ disabled: disabled || (!onPress && !onPlantSkill) }}
       style={{
-        minHeight: 42,
+        minHeight: compact ? 36 : 42,
         minWidth: 124,
         flexBasis: 136,
         flexGrow: 1,
@@ -2079,15 +2083,15 @@ function CustomSeedButton({
     >
       <View
         style={{
-          width: 28,
-          height: 28,
-          borderRadius: 14,
+          width: compact ? 24 : 28,
+          height: compact ? 24 : 28,
+          borderRadius: compact ? 12 : 14,
           backgroundColor: 'rgba(238,246,240,0.78)',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <BloomMark category={FALLBACK_CATEGORY} size={18} muted={disabled} />
+        <BloomMark category={FALLBACK_CATEGORY} size={compact ? 15 : 18} muted={disabled} />
       </View>
       <Text
         selectable={false}
@@ -2095,8 +2099,8 @@ function CustomSeedButton({
         style={{
           fontFamily: 'Lato_700Bold',
           color: disabled ? '#8f8a7f' : '#315d4e',
-          fontSize: 11.5,
-          lineHeight: 13,
+          fontSize: compact ? 10.5 : 11.5,
+          lineHeight: compact ? 12 : 13,
           flex: 1,
         }}
       >
@@ -2155,12 +2159,14 @@ function SeedSurvey({
   openSlots,
   onPlantSkill,
   onPlantSkills,
+  compact = false,
 }: {
   plantedNames: Set<string>;
   hasSkills: boolean;
   openSlots: number;
   onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
   onPlantSkills?: (skills: PlantSkillSelection[], options?: PlantSkillsOptions) => void;
+  compact?: boolean;
 }) {
   const [active, setActive] = useState(false);
   const [surveySeed, setSurveySeed] = useState(() => Date.now());
@@ -2213,15 +2219,15 @@ function SeedSurvey({
         accessibilityRole="button"
         accessibilityLabel="Seed your garden"
         style={{
-          width: hasSkills ? 206 : undefined,
+          width: hasSkills ? (compact ? 168 : 206) : undefined,
           maxWidth: '100%',
-          minHeight: hasSkills ? 206 : 190,
+          minHeight: hasSkills ? (compact ? 168 : 206) : 190,
           borderRadius: hasSkills ? 999 : 28,
           borderWidth: 1,
           borderColor: hasSkills ? 'rgba(255,253,247,0.54)' : 'rgba(255,253,247,0.62)',
           backgroundColor: hasSkills ? 'rgba(255,224,105,0.68)' : 'rgba(255,244,187,0.92)',
-          paddingHorizontal: hasSkills ? 20 : 18,
-          paddingVertical: hasSkills ? 18 : 18,
+          paddingHorizontal: hasSkills ? (compact ? 16 : 20) : 18,
+          paddingVertical: hasSkills ? (compact ? 14 : 18) : 18,
           marginBottom: hasSkills ? 0 : 0,
           alignItems: 'center',
           justifyContent: 'center',
@@ -2246,24 +2252,24 @@ function SeedSurvey({
       >
         {hasSkills ? (
           <>
-            <SunRayBackground size={250} />
-            <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: 15, lineHeight: 18, textAlign: 'center' }}>
+            <SunRayBackground size={compact ? 204 : 250} />
+            <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: compact ? 13.2 : 15, lineHeight: compact ? 16 : 18, textAlign: 'center' }}>
               Skills Garden Quiz
             </Text>
-            <Text selectable={false} numberOfLines={3} style={{ fontFamily: 'Lato_400Regular', color: '#52755b', fontSize: 11.5, lineHeight: 15, textAlign: 'center' }}>
+            <Text selectable={false} numberOfLines={3} style={{ fontFamily: 'Lato_400Regular', color: '#52755b', fontSize: compact ? 10.5 : 11.5, lineHeight: compact ? 13 : 15, textAlign: 'center' }}>
               Need help? Let the sun pick a few blooms.
             </Text>
             <View
               style={{
-                minHeight: 34,
+                minHeight: compact ? 30 : 34,
                 borderRadius: 999,
                 backgroundColor: '#315d4e',
-                paddingHorizontal: 16,
+                paddingHorizontal: compact ? 14 : 16,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 12 }}>
+              <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: compact ? 11 : 12 }}>
                 Begin
               </Text>
             </View>
@@ -2667,7 +2673,9 @@ export function SkillBubbleGarden({
   const compactLandscape = editable && viewport.width > viewport.height && viewport.height < 540;
   const meadowHeight = getMeadowHeight(visibleSkills.length, width || 680, compactLandscape);
   const showLandscapeHint = editable && width > 0 && width < 560;
-  const seedPageWidth = Math.max(width - 24, SEED_TRAY_SIZE * 112 + (SEED_TRAY_SIZE - 1) * 7);
+  const seedLaneWidth = compactLandscape ? 94 : 112;
+  const seedGap = compactLandscape ? 6 : 7;
+  const seedPageWidth = Math.max(width - 24, SEED_TRAY_SIZE * seedLaneWidth + (SEED_TRAY_SIZE - 1) * seedGap);
   const seedContentWidth = seedPageWidth * Math.max(1, seedPages.length);
   const seedRowScrolls = width > 0 && (seedPages.length > 1 || seedPageWidth > width - 24);
   const surveyPanelWidth = width > 760
@@ -2861,6 +2869,7 @@ export function SkillBubbleGarden({
               plantedNames={plantedNames}
               hasSkills={displaySkills.length > 0}
               openSlots={openSlots}
+              compact={compactLandscape}
               onPlantSkill={onPlantSkill ? handlePlantSeed : undefined}
               onPlantSkills={onPlantSkills || onPlantSkill ? handlePlantSeeds : undefined}
             />
@@ -2922,8 +2931,8 @@ export function SkillBubbleGarden({
             borderTopColor: 'rgba(78,124,63,0.34)',
             backgroundColor: '#3b2418',
             paddingHorizontal: 12,
-            paddingTop: 7,
-            paddingBottom: 8,
+            paddingTop: compactLandscape ? 5 : 7,
+            paddingBottom: compactLandscape ? 6 : 8,
             ...(Platform.OS === 'web'
               ? ({
                   backgroundImage: [
@@ -2942,7 +2951,7 @@ export function SkillBubbleGarden({
               alignItems: width > 520 ? 'center' : 'stretch',
               justifyContent: 'space-between',
               gap: 4,
-              marginBottom: 5,
+              marginBottom: compactLandscape ? 3 : 5,
             }}
           >
             <View>
@@ -2950,7 +2959,7 @@ export function SkillBubbleGarden({
                 style={{
                   fontFamily: 'Lato_700Bold',
                   color: '#f8eee2',
-                  fontSize: 11,
+                  fontSize: compactLandscape ? 10 : 11,
                   letterSpacing: 0,
                 }}
               >
@@ -2960,7 +2969,7 @@ export function SkillBubbleGarden({
                 style={{
                   fontFamily: 'Lato_400Regular',
                   color: 'rgba(248,238,226,0.64)',
-                  fontSize: 9.5,
+                  fontSize: compactLandscape ? 8.8 : 9.5,
                   marginTop: 1,
                 }}
               >
@@ -2971,7 +2980,7 @@ export function SkillBubbleGarden({
                   style={{
                     fontFamily: 'Lato_400Regular',
                     color: 'rgba(248,238,226,0.58)',
-                    fontSize: 9,
+                    fontSize: compactLandscape ? 8.4 : 9,
                     marginTop: 2,
                   }}
                 >
@@ -3010,7 +3019,7 @@ export function SkillBubbleGarden({
           <View
             key={`skill-seed-row-${seedShake}`}
             style={{
-              gap: 8,
+              gap: compactLandscape ? 5 : 8,
             }}
           >
             <ScrollView
@@ -3045,7 +3054,7 @@ export function SkillBubbleGarden({
                   style={{
                     width: seedPageWidth,
                     flexDirection: 'row',
-                    gap: 7,
+                    gap: seedGap,
                     alignItems: 'center',
                     paddingRight: pageIndex === seedPages.length - 1 ? 2 : 0,
                   }}
@@ -3058,6 +3067,7 @@ export function SkillBubbleGarden({
                         index={slotIndex}
                         shakeIndex={seedShake}
                         slotMode
+                        compact={compactLandscape}
                         onPlantSkill={onPlantSkill ? handlePlantSeed : undefined}
                         onPressSeed={onPlantSkill ? (description) => handlePlantSeedFromSlot(description, slotIndex) : undefined}
                         planted={plantedNames.has(normalizeSkillName(skill))}
@@ -3065,7 +3075,7 @@ export function SkillBubbleGarden({
                         bubbleIn={pageIndex === 0 && returnedSeedSet.has(normalizeSkillName(skill))}
                       />
                     ) : (
-                      <EmptySeedSlot key={`empty-seed-${pageIndex}-${slotIndex}-${seedShake}`} index={slotIndex} shakeIndex={seedShake} />
+                      <EmptySeedSlot key={`empty-seed-${pageIndex}-${slotIndex}-${seedShake}`} index={slotIndex} shakeIndex={seedShake} compact={compactLandscape} />
                     )
                   ))}
                 </View>
@@ -3079,7 +3089,7 @@ export function SkillBubbleGarden({
                 alignItems: 'center',
                 justifyContent: 'flex-end',
                 flexWrap: 'wrap',
-                marginTop: 2,
+                marginTop: compactLandscape ? 0 : 2,
               }}
             >
               {onPlantSkill || onAddCustomSkill ? (
@@ -3088,6 +3098,7 @@ export function SkillBubbleGarden({
                   onPress={onAddCustomSkill}
                   suggestedSkills={seedSourceSkills.filter(skill => !plantedNames.has(normalizeSkillName(skill)))}
                   disabled={!canPlantSeeds}
+                  compact={compactLandscape}
                 />
               ) : null}
               <Pressable
@@ -3097,14 +3108,14 @@ export function SkillBubbleGarden({
                 accessibilityLabel="Shake seeds"
                 accessibilityState={{ disabled: !canShakeSeeds }}
                 style={{
-                  minHeight: 42,
-                  minWidth: 118,
+                  minHeight: compactLandscape ? 36 : 42,
+                  minWidth: compactLandscape ? 108 : 118,
                   borderRadius: 999,
                   borderWidth: 1,
                   borderColor: 'rgba(255,253,247,0.34)',
                   backgroundColor: '#fffdf7',
-                  paddingHorizontal: 12,
-                  paddingVertical: 7,
+                  paddingHorizontal: compactLandscape ? 10 : 12,
+                  paddingVertical: compactLandscape ? 6 : 7,
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -3125,14 +3136,14 @@ export function SkillBubbleGarden({
                     : {}),
                 }}
               >
-                <SeedMark category={FALLBACK_CATEGORY} size={17} />
+                <SeedMark category={FALLBACK_CATEGORY} size={compactLandscape ? 15 : 17} />
                 <Text
                   selectable={false}
                   style={{
                     fontFamily: 'Lato_700Bold',
                     color: '#694321',
-                    fontSize: 12,
-                    lineHeight: 14,
+                    fontSize: compactLandscape ? 11 : 12,
+                    lineHeight: compactLandscape ? 13 : 14,
                   }}
                 >
                   Seed Shaker
