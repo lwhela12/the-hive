@@ -248,16 +248,15 @@ export default function ProfileScreen() {
     resetProfileDrafts();
   };
 
-  const saveProfile = async () => {
-    if (!profile) return;
+  const buildProfileUpdate = () => {
+    const cleanBirthday = editBirthday.trim();
+    const birthdayIso = cleanBirthday ? parseAmericanDate(cleanBirthday) : null;
+    const funFacts = editFunFacts.map(f => f.trim()).filter(Boolean);
 
-    // Convert American date format to ISO for storage
-    const birthdayIso = editBirthday ? parseAmericanDate(editBirthday) : null;
-
-    setIsSaving(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({
+    return {
+      cleanBirthday,
+      birthdayIso,
+      payload: {
         name: editName.trim(),
         phone: editPhone.trim() || null,
         birthday: birthdayIso,
@@ -274,65 +273,54 @@ export default function ProfileScreen() {
         miq_experiences: editMiqExperiences.trim() || null,
         miq_growth: editMiqGrowth.trim() || null,
         miq_contribution: editMiqContribution.trim() || null,
-        fun_facts: editFunFacts.map(f => f.trim()).filter(Boolean).length > 0
-          ? editFunFacts.map(f => f.trim()).filter(Boolean)
-          : null,
+        fun_facts: funFacts.length > 0 ? funFacts : null,
         updated_at: new Date().toISOString(),
-      })
-      .eq('id', profile.id);
+      },
+    };
+  };
 
-    setIsSaving(false);
+  const saveProfileDraft = async (failureMessage: string) => {
+    if (!profile) return false;
 
-    if (error) {
-      Alert.alert('Error', 'Failed to save profile. Please try again.');
-    } else {
+    const { cleanBirthday, birthdayIso, payload } = buildProfileUpdate();
+    if (cleanBirthday && !birthdayIso) {
+      Alert.alert('Birthday format', 'Please enter your birthday as MM-DD-YYYY, like 10-12-1987.');
+      return false;
+    }
+
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update(payload)
+        .eq('id', profile.id);
+
+      if (error) {
+        Alert.alert('Error', failureMessage);
+        return false;
+      }
+
       await refreshProfile();
+      return true;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveProfile = async () => {
+    const saved = await saveProfileDraft('Failed to save profile. Please try again.');
+    if (saved) {
       setIsEditing(false);
     }
   };
 
-  const saveDeepQuiz = async () => {
-    if (!profile) return;
-
-    const birthdayIso = editBirthday ? parseAmericanDate(editBirthday) : null;
-    setIsSaving(true);
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        name: editName.trim(),
-        phone: editPhone.trim() || null,
-        birthday: birthdayIso,
-        occupation: editOccupation.trim() || null,
-        profile_title: editProfileTitle.trim() || null,
-        preferred_contact: editPreferredContact,
-        bio: editBio.trim() || null,
-        current_project: editCurrentProject.trim() || null,
-        hometown: editHometown.trim() || null,
-        favorite_book: editFavBook.trim() || null,
-        favorite_food: editFavFood.trim() || null,
-        favorite_hobby: editFavHobby.trim() || null,
-        known_for: editKnownFor.trim() || null,
-        miq_experiences: editMiqExperiences.trim() || null,
-        miq_growth: editMiqGrowth.trim() || null,
-        miq_contribution: editMiqContribution.trim() || null,
-        fun_facts: editFunFacts.map(f => f.trim()).filter(Boolean).length > 0
-          ? editFunFacts.map(f => f.trim()).filter(Boolean)
-          : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', profile.id);
-
-    setIsSaving(false);
-
-    if (error) {
-      Alert.alert('Error', 'Failed to save your deeper profile. Please try again.');
-      return;
+  const saveDeepQuiz = async ({ closeAfterSave = true } = {}) => {
+    const saved = await saveProfileDraft('Failed to save your deeper profile. Please try again.');
+    if (saved && closeAfterSave) {
+      setDeepQuizVisible(false);
+      setDeepQuizStep(0);
     }
-
-    await refreshProfile();
-    setDeepQuizVisible(false);
-    setDeepQuizStep(0);
+    return saved;
   };
 
   const formatBirthdayForDisplay = (dateStr?: string) => {
@@ -958,6 +946,14 @@ export default function ProfileScreen() {
   const deepQuizCanGoBack = deepQuizStep > 0;
   const deepQuizIsLastStep = deepQuizStep === DEEP_PROFILE_STEPS.length - 1;
   const deepQuizProgress = `${deepQuizStep + 1}/${DEEP_PROFILE_STEPS.length}`;
+  const hasAny3MiqDraft = [
+    editMiqExperiences,
+    editMiqGrowth,
+    editMiqContribution,
+  ].some(value => value.trim().length > 0);
+  const deepQuizPrimaryLabel = deepQuizIsLastStep
+    ? hasAny3MiqDraft ? 'Save & finish' : 'Save without 3MIQ'
+    : 'Save & continue';
   const profileHoneycombItems = [
     { label: 'Title', value: (profile as any).profile_title || profile.occupation },
     { label: 'From', value: (profile as any).hometown },
@@ -1014,6 +1010,43 @@ export default function ProfileScreen() {
     </View>
   );
 
+  const renderDeepQuizBirthdayField = () => (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#9a7a3a', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
+        Birthday
+      </Text>
+      <View
+        style={{
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: 'rgba(222,193,129,0.55)',
+          backgroundColor: '#fffdf7',
+          paddingHorizontal: 12,
+          paddingVertical: 12,
+        }}
+      >
+        <BirthdayPicker
+          value={editBirthday}
+          onChange={setEditBirthday}
+        />
+      </View>
+    </View>
+  );
+
+  const handleDeepQuizSaveAndContinue = () => {
+    void (async () => {
+      const saved = await saveDeepQuiz({ closeAfterSave: deepQuizIsLastStep });
+      if (!saved || deepQuizIsLastStep) {
+        return;
+      }
+      setDeepQuizStep(step => Math.min(DEEP_PROFILE_STEPS.length - 1, step + 1));
+    })();
+  };
+
+  const handleDeepQuizSaveAndExit = () => {
+    void saveDeepQuiz({ closeAfterSave: true });
+  };
+
   const renderDeepQuizStep = () => {
     if (deepQuizStep === 0) {
       return (
@@ -1036,12 +1069,7 @@ export default function ProfileScreen() {
             onChangeText: setEditHometown,
             placeholder: 'Olympia, WA',
           })}
-          {renderDeepQuizField({
-            label: 'Birthday',
-            value: editBirthday,
-            onChangeText: setEditBirthday,
-            placeholder: '10/12/1987',
-          })}
+          {renderDeepQuizBirthdayField()}
           {renderDeepQuizField({
             label: 'People should ask me about',
             value: editKnownFor,
@@ -2318,7 +2346,7 @@ export default function ProfileScreen() {
 
             <View
               style={{
-                flexDirection: 'row',
+                flexDirection: isProfilePhone ? 'column' : 'row',
                 gap: 10,
                 paddingHorizontal: isProfilePhone ? 18 : 24,
                 paddingVertical: 16,
@@ -2331,7 +2359,7 @@ export default function ProfileScreen() {
                 disabled={!deepQuizCanGoBack || isSaving}
                 onPress={() => setDeepQuizStep(step => Math.max(0, step - 1))}
                 style={{
-                  flex: 1,
+                  flex: isProfilePhone ? undefined : 0.85,
                   borderRadius: 999,
                   borderWidth: 1,
                   borderColor: 'rgba(222,193,129,0.55)',
@@ -2345,15 +2373,27 @@ export default function ProfileScreen() {
               </Pressable>
               <Pressable
                 disabled={isSaving}
-                onPress={() => {
-                  if (deepQuizIsLastStep) {
-                    void saveDeepQuiz();
-                    return;
-                  }
-                  setDeepQuizStep(step => Math.min(DEEP_PROFILE_STEPS.length - 1, step + 1));
-                }}
+                onPress={handleDeepQuizSaveAndExit}
                 style={{
-                  flex: 1.5,
+                  flex: isProfilePhone ? undefined : 1.15,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: 'rgba(189,147,72,0.48)',
+                  backgroundColor: '#fffdf7',
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  opacity: isSaving ? 0.62 : 1,
+                }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9a7a3a' }}>
+                  {isSaving ? 'Saving...' : 'Save & exit'}
+                </Text>
+              </Pressable>
+              <Pressable
+                disabled={isSaving}
+                onPress={handleDeepQuizSaveAndContinue}
+                style={{
+                  flex: isProfilePhone ? undefined : 1.45,
                   borderRadius: 999,
                   backgroundColor: '#bd9348',
                   paddingVertical: 12,
@@ -2362,7 +2402,7 @@ export default function ProfileScreen() {
                 }}
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#fffaf0' }}>
-                  {isSaving ? 'Saving...' : deepQuizIsLastStep ? 'Save honeycomb' : 'Next'}
+                  {isSaving ? 'Saving...' : deepQuizPrimaryLabel}
                 </Text>
               </Pressable>
             </View>

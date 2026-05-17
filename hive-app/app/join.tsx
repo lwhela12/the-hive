@@ -49,8 +49,16 @@ export default function JoinScreen() {
         return;
       }
 
-      if (userEmail && profile) {
+      if (userEmail) {
         checkForInvite();
+      } else {
+        setInviteBlock({
+          title: 'Sign in with the invited account',
+          message: 'We could not read an email address from this Google session, so HIVE did not open the invite.',
+          detail: 'Sign out, then continue with the Google account that received the invite.',
+          action: 'switch-account',
+        });
+        setLoading(false);
       }
       return;
     }
@@ -67,14 +75,23 @@ export default function JoinScreen() {
       return;
     }
 
-    // Need both userEmail and profile to check for invites
+    // Non-token join still waits for the profile so genesis/waitlist setup has identity context.
     if (userEmail && profile) {
       checkForInvite();
     }
   }, [session, authLoading, userEmail, profile, communityId, hasInviteToken, inviteToken, joinReturnPath]);
 
   const checkForInvite = async () => {
-    if (!normalizedUserEmail || !profile) return;
+    if (!normalizedUserEmail) {
+      setInviteBlock({
+        title: 'Sign in with the invited account',
+        message: 'We could not read an email address from this Google session, so HIVE did not open the invite.',
+        detail: 'Sign out, then continue with the Google account that received the invite.',
+        action: 'switch-account',
+      });
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setInvite(null);
@@ -110,29 +127,31 @@ export default function JoinScreen() {
         const inviteEmail = normalizeEmail(tokenInvite.email);
         if (inviteEmail !== normalizedUserEmail) {
           setInviteBlock({
-            title: 'Wrong Google account',
-            message: 'This invite belongs to a different email address. HIVE will not open another member profile from this link.',
-            detail: `You are signed in as ${userEmail}. Sign out, then use the invited account instead.`,
+            title: 'Use the invited Google account',
+            message: 'This invite is for a different email than the one currently signed in. HIVE will not open the current member profile from this link.',
+            detail: `Current browser session: ${userEmail}. Invited account: ${tokenInvite.email}. Sign out, then continue with the invited account.`,
             action: 'switch-account',
           });
           return;
         }
 
-        const { data: existingMembership } = await supabase
-          .from('community_memberships')
-          .select('id, role')
-          .eq('community_id', tokenInvite.community_id)
-          .eq('user_id', profile.id)
-          .maybeSingle();
+        if (profile?.id) {
+          const { data: existingMembership } = await supabase
+            .from('community_memberships')
+            .select('id, role')
+            .eq('community_id', tokenInvite.community_id)
+            .eq('user_id', profile.id)
+            .maybeSingle();
 
-        if (existingMembership) {
-          setInviteBlock({
-            title: 'This account is already in HIVE',
-            message: `${profile.name || userEmail} is already a member of ${tokenInvite.community?.name || 'this HIVE'}. We kept the invite link from opening that existing profile.`,
-            detail: 'To test a brand-new member onboarding flow, send an invite to a different email address and sign in with that Google account.',
-            action: 'go-home',
-          });
-          return;
+          if (existingMembership) {
+            setInviteBlock({
+              title: 'This account is already in HIVE',
+              message: `${profile.name || userEmail} is already a member of ${tokenInvite.community?.name || 'this HIVE'}. We kept the invite link from opening that existing profile.`,
+              detail: 'To test a brand-new member onboarding flow, send an invite to a different email address and sign in with that Google account.',
+              action: 'go-home',
+            });
+            return;
+          }
         }
 
         setInvite(tokenInvite);
@@ -176,9 +195,46 @@ export default function JoinScreen() {
       }
     } catch (err) {
       console.error('Error checking invite:', err);
+      if (hasInviteToken) {
+        setInviteBlock({
+          title: 'Invite check got stuck',
+          message: 'HIVE could not finish verifying this invite link, so we did not open any member data.',
+          detail: 'Refresh and try once more. If it happens again, ask Nat to resend the invite.',
+          action: 'switch-account',
+        });
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const ensureProfile = async () => {
+    if (profile) return profile;
+    if (!session?.user) return null;
+
+    const { data: existingProfile, error: fetchError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    if (existingProfile) return existingProfile as Profile;
+    if (fetchError) console.warn('Could not fetch profile before accepting invite:', fetchError.message);
+
+    const { data: createdProfile, error: createError } = await supabase
+      .from('profiles')
+      .insert({
+        id: session.user.id,
+        name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'New Member',
+        email: session.user.email || '',
+        avatar_url: session.user.user_metadata?.avatar_url || null,
+        role: 'member',
+      })
+      .select()
+      .single();
+
+    if (createError) throw createError;
+    return createdProfile as Profile;
   };
 
   const bootstrapGenesisCommunity = async () => {
@@ -273,15 +329,11 @@ export default function JoinScreen() {
       Alert.alert('Error', 'No invite found. Please refresh and try again.');
       return;
     }
-    if (!profile) {
-      Alert.alert('Error', 'Profile not loaded. Please refresh and try again.');
-      return;
-    }
     if (normalizeEmail(invite.email) !== normalizedUserEmail) {
       setInviteBlock({
-        title: 'Wrong Google account',
-        message: 'This invite belongs to a different email address. HIVE will not open another member profile from this link.',
-        detail: `You are signed in as ${userEmail}. Sign out, then use the invited account instead.`,
+        title: 'Use the invited Google account',
+        message: 'This invite is for a different email than the one currently signed in. HIVE will not open the current member profile from this link.',
+        detail: `Current browser session: ${userEmail}. Invited account: ${invite.email}. Sign out, then continue with the invited account.`,
         action: 'switch-account',
       });
       setInvite(null);
@@ -290,17 +342,24 @@ export default function JoinScreen() {
 
     setSubmitting(true);
     try {
+      const activeProfile = await ensureProfile();
+
+      if (!activeProfile) {
+        Alert.alert('Error', 'Profile not loaded. Please refresh and try again.');
+        return;
+      }
+
       const { data: existingMembership } = await supabase
         .from('community_memberships')
         .select('id')
         .eq('community_id', invite.community_id)
-        .eq('user_id', profile.id)
+        .eq('user_id', activeProfile.id)
         .maybeSingle();
 
       if (existingMembership) {
         setInviteBlock({
           title: 'This account is already in HIVE',
-          message: `${profile.name || userEmail} is already a member of ${invite.community?.name || 'this HIVE'}. We kept the invite link from opening that existing profile.`,
+          message: `${activeProfile.name || userEmail} is already a member of ${invite.community?.name || 'this HIVE'}. We kept the invite link from opening that existing profile.`,
           detail: 'To test a brand-new member onboarding flow, send an invite to a different email address and sign in with that Google account.',
           action: 'go-home',
         });
@@ -313,7 +372,7 @@ export default function JoinScreen() {
         .from('community_memberships')
         .insert({
           community_id: invite.community_id,
-          user_id: profile.id,
+          user_id: activeProfile.id,
           role: invite.role,
         });
 
@@ -323,7 +382,7 @@ export default function JoinScreen() {
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ current_community_id: invite.community_id })
-        .eq('id', profile.id);
+        .eq('id', activeProfile.id);
 
       if (profileError) throw profileError;
 
@@ -346,7 +405,7 @@ export default function JoinScreen() {
       const { data: welcomeConv } = await supabase
         .from('conversations')
         .insert({
-          user_id: profile.id,
+          user_id: activeProfile.id,
           community_id: invite.community_id,
           title: 'Welcome to the HIVE!',
           mode: 'default',
@@ -360,7 +419,7 @@ export default function JoinScreen() {
         const welcomeMessage = `Welcome to the HIVE! Feel free to look around! You can see what's going on with the group on the HIVE page, add topics for discussion on the Board, chat with other members in the messages, or fill out your profile. When you're ready I'd love to chat with you about your goals and the skills you bring to the group!`;
 
         await supabase.from('chat_messages').insert({
-          user_id: profile.id,
+          user_id: activeProfile.id,
           community_id: invite.community_id,
           conversation_id: (welcomeConv as any).id,
           role: 'assistant',

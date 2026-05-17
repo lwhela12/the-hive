@@ -50,11 +50,11 @@ export function formatDateMedium(date: string | Date): string {
 }
 
 /**
- * Parse an American format date (MM-DD-YYYY) to ISO format (YYYY-MM-DD) for database storage
+ * Parse an American format date (MM-DD-YYYY or MM/DD/YYYY) to ISO format (YYYY-MM-DD) for database storage
  */
 export function parseAmericanDate(dateStr: string): string | null {
-  // Handle MM-DD-YYYY format
-  const americanMatch = dateStr.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  // Handle MM-DD-YYYY and MM/DD/YYYY formats
+  const americanMatch = dateStr.trim().match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
   if (americanMatch) {
     const [, month, day, year] = americanMatch;
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;

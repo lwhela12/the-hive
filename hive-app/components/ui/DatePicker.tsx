@@ -46,8 +46,8 @@ function parseDate(dateStr?: string): { month: number | null; day: number | null
     };
   }
 
-  // Try American format (MM-DD-YYYY)
-  const americanMatch = dateStr.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  // Try American format (MM-DD-YYYY or MM/DD/YYYY)
+  const americanMatch = dateStr.trim().match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
   if (americanMatch) {
     return {
       month: parseInt(americanMatch[1], 10),
