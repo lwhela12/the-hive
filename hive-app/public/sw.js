@@ -1,8 +1,8 @@
 // Cache names: bump these when a deployed app shell must replace old clients.
-const APP_CACHE = 'hive-app-v10-wish-status-sections';
-const STATIC_CACHE = 'hive-static-v10-wish-status-sections';
+const APP_CACHE = 'hive-app-v11-wish-card-color-system';
+const STATIC_CACHE = 'hive-static-v11-wish-card-color-system';
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'wish-status-sections-v10';
+const REFRESH_TOKEN = 'wish-card-color-system-v11';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant

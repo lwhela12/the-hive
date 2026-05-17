@@ -915,7 +915,7 @@ export default function ProfileScreen() {
       expanded={expandedWishId === wish.id}
       linkedBoardLabel={
         wish.board_category_id || wish.source_board_post_id
-          ? getLinkedBoardLabel(wish.board_category) || 'Linked HD board'
+          ? getLinkedBoardLabel(wish.board_category) || 'HD Board'
           : null
       }
       onToggle={(selectedWish) => {

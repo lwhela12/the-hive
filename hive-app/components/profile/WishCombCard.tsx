@@ -83,6 +83,7 @@ export function WishCombCard({
 }: WishCombCardProps) {
   const status = getStatusMeta(wish.status);
   const isGranted = wish.status === 'fulfilled';
+  const isPrivate = wish.status === 'private';
   const isLong = wish.description.length > 128 || wish.description.includes('\n');
 
   const content = (
@@ -130,11 +131,11 @@ export function WishCombCard({
           {wish.description}
         </Text>
 
-        <View style={styles.chipRow}>
+        <View style={styles.cardMetaRow}>
           {linkedBoardLabel && (
-            <View style={styles.linkedChip}>
-              <Ionicons name="folder-open-outline" size={13} color="#bd9348" />
-              <Text style={styles.linkedChipText}>
+            <View style={styles.linkedMeta}>
+              <Ionicons name="link-outline" size={14} color="#b88a3c" />
+              <Text style={styles.linkedMetaText}>
                 {linkedBoardLabel}
               </Text>
             </View>
@@ -158,7 +159,7 @@ export function WishCombCard({
 
   if (!isLong) {
     return (
-      <View style={[styles.card, isGranted ? styles.cardGranted : null]}>
+      <View style={[styles.card, isPrivate ? styles.cardPrivate : styles.cardPublic, isGranted ? styles.cardGranted : null]}>
         {content}
       </View>
     );
@@ -172,6 +173,7 @@ export function WishCombCard({
       onPress={() => onToggle?.(wish)}
       style={({ pressed }) => [
         styles.card,
+        isPrivate ? styles.cardPrivate : styles.cardPublic,
         isGranted ? styles.cardGranted : null,
         pressed ? styles.cardPressed : null,
       ]}
@@ -187,8 +189,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(222,193,129,0.54)',
-    backgroundColor: '#fffefa',
     paddingHorizontal: 18,
     paddingVertical: 16,
     minHeight: 96,
@@ -196,6 +196,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
+  },
+  cardPublic: {
+    borderColor: 'rgba(222,193,129,0.46)',
+    backgroundColor: '#ffffff',
+  },
+  cardPrivate: {
+    borderColor: 'rgba(222,193,129,0.44)',
+    backgroundColor: '#fff7e6',
   },
   cardPressed: {
     opacity: 0.82,
@@ -253,27 +261,22 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textDecorationLine: 'line-through',
   },
-  chipRow: {
+  cardMetaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
     marginTop: 10,
   },
-  linkedChip: {
+  linkedMeta: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(189,147,72,0.28)',
-    backgroundColor: 'rgba(245,234,209,0.48)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 1,
   },
-  linkedChipText: {
+  linkedMetaText: {
     fontFamily: 'Lato_700Bold',
-    color: '#bd9348',
+    color: '#b88a3c',
     fontSize: 12,
     marginLeft: 5,
   },
