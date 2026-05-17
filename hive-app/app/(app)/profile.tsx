@@ -52,6 +52,12 @@ const hasBloomingSkill = (skill: Partial<Skill>) => {
   return Number.isFinite(level) && level > 0;
 };
 
+const hasProfileText = (value: unknown) =>
+  typeof value === 'string' && value.trim().length > 0;
+
+const hasProfileListItem = (value: unknown) =>
+  Array.isArray(value) && value.some(item => hasProfileText(item));
+
 const SKILLS_GARDEN_CAPACITY = 10;
 const DEEP_PROFILE_STEPS = ['Basics', 'Now', 'Favorites', '3MIQ'] as const;
 
@@ -237,10 +243,10 @@ export default function ProfileScreen() {
     resetProfileDrafts();
   };
 
-  const startDeepQuiz = () => {
+  const startDeepQuiz = (step = 0) => {
     resetProfileDrafts();
     setIsEditing(false);
-    setDeepQuizStep(0);
+    setDeepQuizStep(Math.max(0, Math.min(DEEP_PROFILE_STEPS.length - 1, step)));
     setDeepQuizVisible(true);
   };
 
@@ -931,10 +937,24 @@ export default function ProfileScreen() {
     if (
       label === 'Choose your title'
       || label === 'Add your birthday'
-      || label === 'Write a bio'
       || label === 'Share what people should ask you about'
+      || label === 'Add your hometown'
     ) {
-      startDeepQuiz();
+      startDeepQuiz(0);
+      return;
+    }
+    if (
+      label === 'Write a bio'
+      || label === 'Add your current focus'
+    ) {
+      startDeepQuiz(1);
+      return;
+    }
+    if (
+      label === 'Add favorites'
+      || label === 'Add a fun fact'
+    ) {
+      startDeepQuiz(2);
       return;
     }
     startEditing();
@@ -1380,20 +1400,28 @@ export default function ProfileScreen() {
       >
         {/* Profile Header with Bee Progress Arc */}
         <FadeIn>
-        {(() => {
-          const seededSkillsGarden = skills.some(hasBloomingSkill);
-          const checks = [
-            { label: 'Add a photo', done: !!profile.avatar_url },
-            { label: 'Choose your title', done: !!(profile as any).profile_title },
-            { label: 'Add your birthday', done: !!profile.birthday },
-            { label: 'Add your phone', done: !!profile.phone },
-            { label: 'Write a bio', done: !!(profile as any).bio },
-            { label: 'Share what people should ask you about', done: !!(profile as any).known_for },
-            { label: 'Answer your 3MIQ', done: !!((profile as any).miq_experiences && (profile as any).miq_growth && (profile as any).miq_contribution) },
-            { label: "Complete this month's check-in", done: pendingSurveys.length === 0 },
-            { label: 'Seed your Skills Garden', done: seededSkillsGarden },
-            { label: 'Share a wish', done: wishes.length > 0 },
-          ];
+          {(() => {
+            const seededSkillsGarden = skills.some(hasBloomingSkill);
+            const checks = [
+              { label: 'Add a photo', actionLabel: 'Photo', done: !!profile.avatar_url },
+              { label: 'Choose your title', actionLabel: 'Title', done: hasProfileText((profile as any).profile_title) },
+              { label: 'Add your birthday', actionLabel: 'Birthday', done: !!profile.birthday },
+              { label: 'Add your phone', actionLabel: 'Phone', done: hasProfileText(profile.phone) },
+              { label: 'Add your hometown', actionLabel: 'Hometown', done: hasProfileText((profile as any).hometown) },
+              { label: 'Share what people should ask you about', actionLabel: 'Ask me about', done: hasProfileText((profile as any).known_for) },
+              { label: 'Write a bio', actionLabel: 'Bio', done: hasProfileText((profile as any).bio) },
+              { label: 'Add your current focus', actionLabel: 'Current focus', done: hasProfileText((profile as any).current_project) },
+              {
+                label: 'Add favorites',
+                actionLabel: 'Favorites',
+                done: ['favorite_food', 'favorite_book', 'favorite_hobby'].some(key => hasProfileText((profile as any)[key])),
+              },
+              { label: 'Add a fun fact', actionLabel: 'Fun fact', done: hasProfileListItem((profile as any).fun_facts) },
+              { label: 'Answer your 3MIQ', actionLabel: '3MIQ', done: !!((profile as any).miq_experiences && (profile as any).miq_growth && (profile as any).miq_contribution) },
+              { label: "Complete this month's check-in", actionLabel: 'Check-in', done: pendingSurveys.length === 0 },
+              { label: 'Seed your Skills Garden', actionLabel: 'Skills Garden', done: seededSkillsGarden },
+              { label: 'Share a wish', actionLabel: 'Wish', done: wishes.length > 0 },
+            ];
           const done = checks.filter(c => c.done).length;
           const score = done / checks.length;
           const nextMissing = checks.find(c => !c.done);
@@ -1459,10 +1487,10 @@ export default function ProfileScreen() {
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', marginTop: 8 }}>
                     {percent}% filled out
                   </Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 3 }}>
-                    Next: {nextMissing.label} to move your bee closer to the hive ✨
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 3, textAlign: 'center', paddingHorizontal: 12 }}>
+                    Pick a chip to move your bee closer to the hive.
                   </Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 7, marginTop: 10, maxWidth: Math.min(screenWidth - 28, 560) }}>
                     {missing.map(item => (
                       <Pressable
                         key={item.label}
@@ -1473,35 +1501,18 @@ export default function ProfileScreen() {
                           borderWidth: 1,
                           borderColor: 'rgba(222,193,129,0.65)',
                           borderRadius: 999,
-                          paddingHorizontal: 14,
-                          paddingVertical: 7,
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
                           shadowColor: '#bd9348',
                           shadowOpacity: 0.08,
                           shadowRadius: 8,
                           shadowOffset: { width: 0, height: 3 },
                         }}
                       >
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348' }}>{item.label}</Text>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{item.actionLabel}</Text>
                       </Pressable>
                     ))}
                   </View>
-                  <Pressable
-                    onPress={startDeepQuiz}
-                    className="active:opacity-80"
-                    style={{
-                      marginTop: 10,
-                      borderRadius: 999,
-                      backgroundColor: '#bd9348',
-                      paddingHorizontal: 18,
-                      paddingVertical: 9,
-                      shadowColor: '#bd9348',
-                      shadowOpacity: 0.16,
-                      shadowRadius: 10,
-                      shadowOffset: { width: 0, height: 5 },
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#fffaf0' }}>Let's get deeper</Text>
-                  </Pressable>
                 </>
               ) : null}
             </View>
@@ -1514,14 +1525,9 @@ export default function ProfileScreen() {
         <View className="mb-6">
           <View className="flex-row items-center justify-end mb-2">
             {!isEditing ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Pressable onPress={startDeepQuiz} className="px-3 py-1 active:opacity-70">
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">Go deeper</Text>
-                </Pressable>
-                <Pressable onPress={startEditing} className="px-3 py-1 active:opacity-70">
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">Edit</Text>
-                </Pressable>
-              </View>
+              <Pressable onPress={startEditing} className="px-3 py-1 active:opacity-70">
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">Edit</Text>
+              </Pressable>
             ) : (
               <View className="flex-row">
                 <Pressable onPress={cancelEditing} className="px-3 py-1 mr-2 active:opacity-70">
