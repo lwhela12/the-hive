@@ -58,7 +58,7 @@ export async function buildContext(params: BuildContextParams): Promise<ContextR
   // 2. Fetch community context (always fresh - small data)
   const communityContext = await fetchCommunityContext(supabase, userId, communityId);
 
-  // 3. Get conversation messages and handle summarization
+  // 3. Get this user's private Clive conversation messages and handle summarization
   const { recentMessages, conversationSummary, messageCount } = await handleConversationHistory(
     supabase,
     userId,
@@ -450,7 +450,9 @@ function assembleContext(data: {
       .map((a) => `- ${a.completed ? '[DONE]' : '[TODO]'} ${a.description}${a.due_date ? ` (due: ${a.due_date})` : ''}`)
       .join('\n') || 'None';
 
-  sections.push(`## Signed-in User (the human Clive is helping, not Clive)
+  sections.push(`## Private Signed-in User Context (for this user only; not community knowledge)
+The human Clive is helping is ${data.userContext.profile.name}, not Clive.
+
 Name: ${data.userContext.profile.name}
 
 ### User's Skills
@@ -542,7 +544,7 @@ ${data.meetingsSummary}`);
 
   // Conversation summary (if conversation is long)
   if (data.conversationSummary) {
-    sections.push(`## Earlier in This Conversation
+    sections.push(`## Earlier in This Private Clive Conversation
 ${data.conversationSummary}`);
   }
 
