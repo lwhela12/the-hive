@@ -1290,7 +1290,7 @@ export default function HiveScreen() {
     })),
     ...homeActionItems.map(a => ({
       id: `action-${a.id}`,
-      emoji: '✅',
+      emoji: '📝',
       title: a.description,
       detail: a.completed
         ? `Done${a.completed_at ? ` · ${formatDateShort(a.completed_at)}` : ''}`
@@ -1326,6 +1326,11 @@ export default function HiveScreen() {
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
   const sortedHomeTodos = [...openTodos, ...doneTodos];
   const completedActionCount = homeActionItems.filter(action => action.completed).length;
+  const dashboardSectionStyle = useMobileLayout
+    ? { width: '100%' as const }
+    : { flex: 1, minWidth: 0 };
+  const dashboardPanelHeight = useMobileLayout ? 300 : 280;
+  const todoPanelHeight = useMobileLayout ? 420 : 280;
 
   const renderTodoRow = (todo: HomeTodo, isLast: boolean) => {
     const isDone = !!todo.isDone;
@@ -1334,8 +1339,8 @@ export default function HiveScreen() {
       height: 24,
       borderRadius: 12,
       borderWidth: 2,
-      borderColor: isDone ? '#8e7a5e' : 'rgba(189,147,72,0.48)',
-      backgroundColor: isDone ? '#8e7a5e' : pressed ? '#fbf4e3' : 'rgba(255,255,255,0.62)',
+      borderColor: isDone ? 'rgba(142,122,94,0.36)' : '#bd9348',
+      backgroundColor: isDone ? 'rgba(142,122,94,0.12)' : pressed ? '#f7e7bd' : 'rgba(189,147,72,0.16)',
       flexShrink: 0,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
@@ -1353,7 +1358,9 @@ export default function HiveScreen() {
           padding: 14,
           borderBottomWidth: isLast ? 0 : 1,
           borderBottomColor: 'rgba(222,193,129,0.28)',
-          backgroundColor: pressed && todo.onPress ? '#fbf4e3' : isDone ? '#f6eddc' : '#fffdf5',
+          backgroundColor: pressed && todo.onPress
+            ? '#fbf4e3'
+            : isDone ? '#fffdf5' : '#fff8e8',
           gap: 10,
         })}
       >
@@ -1365,7 +1372,7 @@ export default function HiveScreen() {
             hitSlop={8}
             style={({ pressed }) => circleStyle(pressed)}
           >
-            {isDone && <Text style={{ color: 'white', fontSize: 12, lineHeight: 14 }}>✓</Text>}
+            {isDone && <Text style={{ color: '#8e7a5e', fontSize: 12, lineHeight: 14 }}>✓</Text>}
           </Pressable>
         ) : (
           <View style={circleStyle(false)} />
@@ -1775,10 +1782,10 @@ export default function HiveScreen() {
         )}
 
         {/* Activity · My To Do List · Upcoming Events */}
-        <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: useMobileLayout ? 30 : 16, marginBottom: 24 }}>
+        <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: useMobileLayout ? 22 : 16, marginBottom: 24 }}>
 
           {/* Activity Feed */}
-          <View style={{ flex: 1 }}>
+          <View style={dashboardSectionStyle}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
               <View style={{ backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
@@ -1811,7 +1818,7 @@ export default function HiveScreen() {
               shadowOffset: { width: 0, height: 5 },
               elevation: 3,
               overflow: 'hidden',
-              height: 280,
+              height: dashboardPanelHeight,
               position: 'relative',
             }}>
               <ConfettiBurst visible={showActivityConfetti} onDone={() => setShowActivityConfetti(false)} />
@@ -1900,7 +1907,7 @@ export default function HiveScreen() {
           </View>
 
           {/* My To Do List */}
-          <View style={{ flex: 1 }}>
+          <View style={dashboardSectionStyle}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 0 }}>
               <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
                 <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
@@ -1924,8 +1931,7 @@ export default function HiveScreen() {
               shadowOffset: { width: 0, height: 5 },
               elevation: 3,
               overflow: 'hidden',
-              height: useMobileLayout ? undefined : 280,
-              minHeight: useMobileLayout ? 220 : undefined,
+              height: todoPanelHeight,
               position: 'relative',
             }}>
               <ConfettiBurst visible={showConfetti} onDone={() => setShowConfetti(false)} />
@@ -1943,21 +1949,15 @@ export default function HiveScreen() {
                   </Text>
                 </View>
               ) : (
-                useMobileLayout ? (
-                  <View>
-                    {renderTodoList()}
-                  </View>
-                ) : (
-                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                    {renderTodoList()}
-                  </ScrollView>
-                )
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                  {renderTodoList()}
+                </ScrollView>
               )}
             </View>
           </View>
 
           {/* Upcoming Events */}
-          <View style={{ flex: 1 }}>
+          <View style={dashboardSectionStyle}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 0 }}>
               <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
                 <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
@@ -1978,7 +1978,7 @@ export default function HiveScreen() {
               shadowOffset: { width: 0, height: 5 },
               elevation: 3,
               overflow: 'hidden',
-              height: 280,
+              height: dashboardPanelHeight,
             }}>
               {/* Inner top highlight — liquid glass gloss */}
               <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.95)', marginHorizontal: 10, marginTop: 0 }} />
