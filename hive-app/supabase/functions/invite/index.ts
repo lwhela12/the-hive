@@ -5,7 +5,24 @@ import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@yourdomain.com>';
-const INVITE_URL_BASE = Deno.env.get('INVITE_URL_BASE') || 'https://yourdomain.com/invite';
+const DEFAULT_INVITE_URL_BASE = 'https://app.the-hive.app/join';
+
+function getInviteUrlBase() {
+  const configuredBase = Deno.env.get('INVITE_URL_BASE')?.trim();
+  const normalizedBase = (configuredBase || DEFAULT_INVITE_URL_BASE).replace(/\/+$/, '');
+
+  if (
+    normalizedBase === 'https://the-hive.app'
+    || normalizedBase === 'https://www.the-hive.app'
+    || normalizedBase === 'https://the-hive.app/join'
+    || normalizedBase === 'https://www.the-hive.app/join'
+    || normalizedBase === 'https://yourdomain.com/invite'
+  ) {
+    return DEFAULT_INVITE_URL_BASE;
+  }
+
+  return normalizedBase;
+}
 
 interface InvitePayload {
   email: string;
@@ -88,7 +105,7 @@ serve(async (req) => {
     return errorResponse('Failed to create invite', 500);
   }
 
-  const inviteUrl = `${INVITE_URL_BASE}?token=${encodeURIComponent(token_invite)}`;
+  const inviteUrl = `${getInviteUrlBase()}?token=${encodeURIComponent(token_invite)}`;
   const communityName = community?.name || 'the HIVE';
 
   if (RESEND_API_KEY) {

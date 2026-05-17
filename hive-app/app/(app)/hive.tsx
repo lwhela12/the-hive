@@ -1975,7 +1975,7 @@ export default function HiveScreen() {
               ) : (
                 <ScrollView
                   nestedScrollEnabled
-                  showsVerticalScrollIndicator={false}
+                  showsVerticalScrollIndicator={true}
                   onScroll={handleActivityScroll}
                   scrollEventThrottle={16}
                   refreshControl={<RefreshControl refreshing={isActivityChecking} onRefresh={handleActivityRefresh} tintColor="#bd9348" />}
@@ -2087,7 +2087,7 @@ export default function HiveScreen() {
                   </Text>
                 </View>
               ) : (
-                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true}>
                   {renderTodoList()}
                 </ScrollView>
               )}
@@ -2123,7 +2123,7 @@ export default function HiveScreen() {
               {loading.events ? (
                 <View style={{ padding: 16 }}><EventsListSkeleton /></View>
               ) : upcomingEvents.length > 0 ? (
-                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true}>
                   <EventsList events={upcomingEvents} onEditEvent={openEditEvent} />
                 </ScrollView>
               ) : (
@@ -2202,7 +2202,7 @@ export default function HiveScreen() {
             }}>
               <ScrollView
                 nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator={true}
                 contentContainerStyle={{
                   padding: 12,
                   paddingBottom: 12,
@@ -2770,7 +2770,7 @@ export default function HiveScreen() {
               <ScrollView
                 nestedScrollEnabled
                 keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator={true}
                 style={{ maxHeight: useMobileLayout ? 470 : 620 }}
                 contentContainerStyle={{ paddingBottom: 2 }}
               >

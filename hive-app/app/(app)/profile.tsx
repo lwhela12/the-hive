@@ -51,7 +51,7 @@ const hasBloomingSkill = (skill: Partial<Skill>) => {
   return Number.isFinite(level) && level > 0;
 };
 
-const SKILLS_GARDEN_CAPACITY = 8;
+const SKILLS_GARDEN_CAPACITY = 10;
 
 function ProfileHeaderActionPill({ label, onPress }: { label: string; onPress: () => void }) {
   return (
@@ -558,8 +558,17 @@ export default function ProfileScreen() {
     skillDescription: string,
     seedIndex: number,
     groupIndex = 0,
-    groupSize = 1
+    groupSize = 1,
+    slotIndex?: number
   ) => {
+    if (slotIndex !== undefined) {
+      const safeSlot = Math.min(SKILLS_GARDEN_CAPACITY - 1, Math.max(0, Math.round(slotIndex)));
+      return {
+        display_x: Number((safeSlot / Math.max(1, SKILLS_GARDEN_CAPACITY - 1)).toFixed(4)),
+        display_y: Number((0.72 + (safeSlot % 2 === 0 ? 0.02 : -0.02)).toFixed(4)),
+      };
+    }
+
     const seedValue = Array.from(skillDescription).reduce(
       (sum, character) => sum + character.charCodeAt(0),
       seedIndex * 31
@@ -588,7 +597,7 @@ export default function ProfileScreen() {
 
   const handlePlantSkill = async (
     skillDescription: string,
-    options?: { enthusiasmLevel?: number }
+    options?: { enthusiasmLevel?: number; originSlot?: number }
   ) => {
     if (!profile || !communityId) return;
 
@@ -601,7 +610,7 @@ export default function ProfileScreen() {
     if (bloomingCount >= SKILLS_GARDEN_CAPACITY) return;
 
     const seedIndex = bloomingCount + 1;
-    const position = getSkillPlantPosition(skillDescription, seedIndex);
+    const position = getSkillPlantPosition(skillDescription, seedIndex, 0, 1, options?.originSlot);
     const updates = {
       enthusiasm_level: options?.enthusiasmLevel ?? 1,
       display_x: position.display_x,
@@ -651,7 +660,7 @@ export default function ProfileScreen() {
   };
 
   const handlePlantSkills = async (
-    seeds: Array<{ description: string; enthusiasmLevel?: number }>,
+    seeds: Array<{ description: string; enthusiasmLevel?: number; slotIndex?: number }>,
     options?: { mode?: 'fill' | 'replace' }
   ) => {
     if (!profile || !communityId || seeds.length === 0) return;
@@ -720,7 +729,8 @@ export default function ProfileScreen() {
         seed.description,
         bloomingCount + index + 1,
         index,
-        uniqueSeeds.length
+        uniqueSeeds.length,
+        seed.slotIndex
       );
       const plantedSkill = {
         enthusiasm_level: seed.enthusiasmLevel ?? (mode === 'replace' ? 4 : 1),
@@ -1805,7 +1815,7 @@ export default function ProfileScreen() {
           }}>
             <ScrollView
               nestedScrollEnabled
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={true}
               contentContainerStyle={{
                 padding: 12,
                 paddingBottom: 12,

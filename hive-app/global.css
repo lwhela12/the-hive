@@ -1,3 +1,68 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --hive-scrollbar-thumb: rgba(117, 86, 42, 0.42);
+  --hive-scrollbar-thumb-active: rgba(93, 68, 34, 0.62);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hive-scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  background-color: var(--hive-scrollbar-thumb);
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active {
+  background-color: var(--hive-scrollbar-thumb-active);
+}
+
+textarea {
+  scrollbar-gutter: stable;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  * {
+    scrollbar-color: transparent transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: transparent;
+  }
+
+  *:hover,
+  *:focus-within,
+  *:active {
+    scrollbar-color: var(--hive-scrollbar-thumb) transparent;
+  }
+
+  *:hover::-webkit-scrollbar-thumb,
+  *:focus-within::-webkit-scrollbar-thumb,
+  *:active::-webkit-scrollbar-thumb {
+    background-color: var(--hive-scrollbar-thumb);
+  }
+
+  *:hover::-webkit-scrollbar-thumb:hover,
+  *:focus-within::-webkit-scrollbar-thumb:hover,
+  *:active::-webkit-scrollbar-thumb:active {
+    background-color: var(--hive-scrollbar-thumb-active);
+  }
+}

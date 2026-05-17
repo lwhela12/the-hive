@@ -548,23 +548,6 @@ function MemberDetailModal({
     }
   };
 
-  const askCliveAboutMember = () => {
-    const context = [
-      member.known_for ? `${member.name} says to ask them about ${member.known_for}.` : null,
-      publicWishes[0]?.description ? `They are currently wishing for ${publicWishes[0].description}.` : null,
-      member.current_project ? `They are building or exploring ${member.current_project}.` : null,
-      member.skills[0]?.description ? `One visible skill is ${member.skills[0].description}.` : null,
-    ].filter(Boolean).join(' ');
-
-    onClose();
-    router.push({
-      pathname: '/(app)',
-      params: {
-        prefill: `Help me find a warm, specific way to connect with ${member.name}. ${context}`,
-      },
-    });
-  };
-
   const renderNewWishMentions = () => (
     <>
       <MentionSuggestions
@@ -754,7 +737,7 @@ function MemberDetailModal({
                   style={{ backgroundColor: '#faf8f3', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 4 }}
                 />
               </View>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
+              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
                 {/* Custom / type-your-own */}
                 <View style={{ marginBottom: 20 }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#9ca3af', letterSpacing: 0.7, marginBottom: 8 }}>✍️ TYPE YOUR OWN</Text>
@@ -851,7 +834,7 @@ function MemberDetailModal({
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#9ca3af' }}>Close</Text>
                 </Pressable>
               </View>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 120 }}>
+              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 120 }}>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', marginBottom: 16, lineHeight: 18 }}>
                   Private wishes are just for you. Share with the HIVE when you're ready — someone might know exactly how to help.
                 </Text>
@@ -967,7 +950,7 @@ function MemberDetailModal({
             </View>
           )}
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}>
+          <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}>
             {/* Header */}
             <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 16 }}>
               {/* Avatar — wrapped in BeeProgressArc for other members */}
@@ -1020,14 +1003,6 @@ function MemberDetailModal({
                   >
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'white' }}>
                       {startingMessage ? 'Opening...' : 'Message'}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={askCliveAboutMember}
-                    style={{ flex: 1, backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)', borderRadius: 14, paddingVertical: 12, alignItems: 'center' }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#bd9348' }}>
-                      Ask Clive
                     </Text>
                   </Pressable>
                 </View>
@@ -1284,6 +1259,7 @@ function MemberDetailModal({
             {/* ── Profile Honeycomb — visual snapshot, shown before bio ── */}
             <ProfileHoneycombCluster
               size="compact"
+              showEmptyCells
               items={[
                 { label: 'Title', value: member.profile_title || member.occupation },
                 { label: 'From', value: member.hometown },

@@ -309,7 +309,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
       </Pressable>
 
       {/* Conversations List */}
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={true}>
         <View>
           <View className="px-4 pt-4 pb-2 flex-row items-center">
             <Text

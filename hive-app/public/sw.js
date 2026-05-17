@@ -1,8 +1,8 @@
 // Cache names: bump these when a deployed app shell must replace old clients.
-const APP_CACHE = 'hive-app-v15-profile-wish-scrollbox';
-const STATIC_CACHE = 'hive-static-v15-profile-wish-scrollbox';
+const APP_CACHE = 'hive-app-v16-skills-garden-slots';
+const STATIC_CACHE = 'hive-static-v16-skills-garden-slots';
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'profile-wish-scrollbox-v15';
+const REFRESH_TOKEN = 'skills-garden-slots-v16';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant

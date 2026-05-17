@@ -13,6 +13,7 @@ type ProfileHoneycombClusterProps = {
   items: HoneycombItem[];
   size?: 'compact' | 'roomy';
   preferredColumns?: 2 | 3;
+  showEmptyCells?: boolean;
 };
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -22,6 +23,7 @@ type HoneycombInfoCell = {
   label: string;
   icon: IconName;
   value: string;
+  isEmpty?: boolean;
 };
 
 const HEX_HEIGHT_RATIO = Math.sqrt(3) / 2;
@@ -36,68 +38,64 @@ function valueFor(items: HoneycombItem[], label: string) {
   return clean(items.find(item => item.label.toLowerCase() === label.toLowerCase())?.value);
 }
 
-function buildInfoCells(items: HoneycombItem[]): HoneycombInfoCell[] {
-  const title = valueFor(items, 'Title');
-  const from = valueFor(items, 'From');
-  const birthday = valueFor(items, 'Birthday');
-  const project = valueFor(items, 'Project');
+const EMPTY_CELL_COPY: Record<string, string> = {
+  snapshot: 'Not shared yet',
+  from: 'Not shared yet',
+  birthday: 'Not shared yet',
+  project: 'No focus yet',
+  food: 'Favorite not shared',
+  book: 'Favorite not shared',
+  hobby: 'Favorite not shared',
+  'fun-fact-1': 'No fun fact yet',
+  'fun-fact-2': 'No fun fact yet',
+  'fun-fact-3': 'No fun fact yet',
+};
+
+function makeCell(
+  key: string,
+  label: string,
+  icon: IconName,
+  value: string | null,
+  showEmptyCells: boolean,
+) {
+  if (value) return { key, label, icon, value };
+  if (!showEmptyCells) return null;
+  return {
+    key,
+    label,
+    icon,
+    value: EMPTY_CELL_COPY[key] || 'Not shared yet',
+    isEmpty: true,
+  };
+}
+
+function buildInfoCells(items: HoneycombItem[], showEmptyCells = false): HoneycombInfoCell[] {
   const funFacts = items
     .filter(item => item.label.toLowerCase().startsWith('fun fact'))
     .map(item => clean(item.value))
     .filter(Boolean) as string[];
+
   return ([
-    title && {
-      key: 'snapshot',
-      label: 'Title',
-      icon: 'person-circle-outline',
-      value: title,
-    },
-    from && {
-      key: 'from',
-      label: 'Hometown',
-      icon: 'location-outline',
-      value: from,
-    },
-    birthday && {
-      key: 'birthday',
-      label: 'Bday',
-      icon: 'calendar-outline',
-      value: birthday,
-    },
-    project && {
-      key: 'project',
-      label: 'Focus',
-      icon: 'construct-outline',
-      value: project,
-    },
-    valueFor(items, 'Food') && {
-      key: 'food',
-      label: 'Fav food',
-      icon: 'restaurant-outline',
-      value: valueFor(items, 'Food')!,
-    },
-    valueFor(items, 'Book') && {
-      key: 'book',
-      label: 'Fav book',
-      icon: 'book-outline',
-      value: valueFor(items, 'Book')!,
-    },
-    valueFor(items, 'Hobby') && {
-      key: 'hobby',
-      label: 'Fav hobby',
-      icon: 'heart-outline',
-      value: valueFor(items, 'Hobby')!,
-    },
-    ...funFacts.slice(0, 3).map((fact, index) => ({
-      key: `fun-fact-${index + 1}`,
-      label: `Fun fact ${index + 1}`,
-      icon: 'sparkles-outline' as IconName,
-      value: fact,
-    })),
+    makeCell('snapshot', 'Title', 'person-circle-outline', valueFor(items, 'Title'), showEmptyCells),
+    makeCell('from', 'Hometown', 'location-outline', valueFor(items, 'From'), showEmptyCells),
+    makeCell('birthday', 'Bday', 'calendar-outline', valueFor(items, 'Birthday'), showEmptyCells),
+    makeCell('project', 'Focus', 'construct-outline', valueFor(items, 'Project'), showEmptyCells),
+    makeCell('food', 'Fav food', 'restaurant-outline', valueFor(items, 'Food'), showEmptyCells),
+    makeCell('book', 'Fav book', 'book-outline', valueFor(items, 'Book'), showEmptyCells),
+    makeCell('hobby', 'Fav hobby', 'heart-outline', valueFor(items, 'Hobby'), showEmptyCells),
+    makeCell('fun-fact-1', 'Fun fact 1', 'sparkles-outline', funFacts[0] || null, showEmptyCells),
+    makeCell('fun-fact-2', 'Fun fact 2', 'sparkles-outline', funFacts[1] || null, showEmptyCells),
+    makeCell('fun-fact-3', 'Fun fact 3', 'sparkles-outline', funFacts[2] || null, showEmptyCells),
   ]).filter(Boolean) as HoneycombInfoCell[];
 }
 
 function valueFontSize(cell: HoneycombInfoCell, cellWidth: number, compact: boolean) {
+  if (cell.isEmpty) {
+    if (cellWidth < 124) return 8.8;
+    if (cellWidth < 148) return 9.8;
+    return compact ? 10.6 : 11.4;
+  }
+
   const textLength = cell.value.length;
 
   if (cellWidth < 124) return textLength > 72 ? 8.8 : 9.8;
@@ -196,6 +194,7 @@ function HoneycombCell({
             fontSize,
             lineHeight: fontSize * 1.14,
             color: '#2d2d2d',
+            opacity: cell.isEmpty ? 0.56 : 1,
             textAlign: 'center',
           }}
         >
@@ -211,10 +210,11 @@ export function ProfileHoneycombCluster({
   items,
   size = 'roomy',
   preferredColumns,
+  showEmptyCells = false,
 }: ProfileHoneycombClusterProps) {
   const [containerWidth, setContainerWidth] = useState(0);
   const [expandedCell, setExpandedCell] = useState<HoneycombInfoCell | null>(null);
-  const cells = useMemo(() => buildInfoCells(items), [items]);
+  const cells = useMemo(() => buildInfoCells(items, showEmptyCells), [items, showEmptyCells]);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     setContainerWidth(event.nativeEvent.layout.width);
@@ -316,9 +316,9 @@ export function ProfileHoneycombCluster({
           {placedCells.map(({ cell }, index) => (
             <Pressable
               key={cell.key}
-              accessibilityRole="button"
-              accessibilityLabel={`${cell.label}: ${cell.value}. Tap to read the full answer.`}
-              onPress={() => setExpandedCell(cell)}
+              accessibilityRole={cell.isEmpty ? undefined : 'button'}
+              accessibilityLabel={cell.isEmpty ? `${cell.label}: ${cell.value}.` : `${cell.label}: ${cell.value}. Tap to read the full answer.`}
+              onPress={cell.isEmpty ? undefined : () => setExpandedCell(cell)}
               style={{
                 position: 'absolute',
                 left: placements[index].left,

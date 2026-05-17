@@ -763,7 +763,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
                 </Pressable>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 16 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
                   Title
                 </Text>

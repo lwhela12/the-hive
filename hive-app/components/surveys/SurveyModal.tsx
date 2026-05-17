@@ -205,7 +205,7 @@ export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
               </Pressable>
             </View>
           ) : (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}>
+            <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}>
               {/* Header */}
               <View style={{ marginBottom: 28 }}>
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 8 }}>{survey.title}</Text>

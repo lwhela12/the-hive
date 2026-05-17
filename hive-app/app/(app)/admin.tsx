@@ -854,7 +854,7 @@ export default function AdminScreen() {
                 style={panelScrollStyle}
                 contentContainerStyle={{ padding: 16 }}
                 nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator={true}
               >
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 28, color: '#bd9348', textAlign: 'center', marginBottom: 16 }}>
                   ${honeyPotBalance.toFixed(2)}
@@ -1104,7 +1104,7 @@ export default function AdminScreen() {
                 style={panelScrollStyle}
                 contentContainerStyle={{ padding: 14 }}
                 nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator={true}
               >
                 <HoneyPotLedger
                   balance={honeyPotBalance}
@@ -1133,7 +1133,7 @@ export default function AdminScreen() {
                 <ScrollView
                   style={panelScrollStyle}
                   nestedScrollEnabled
-                  showsVerticalScrollIndicator={false}
+                  showsVerticalScrollIndicator={true}
                 >
                   {showInviteMember && (
                     <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3e6c8', backgroundColor: '#fffaf0' }}>
@@ -1305,7 +1305,7 @@ export default function AdminScreen() {
                 <ScrollView
                   style={panelScrollStyle}
                   nestedScrollEnabled
-                  showsVerticalScrollIndicator={false}
+                  showsVerticalScrollIndicator={true}
                 >
                   {allSurveys.length === 0 ? (
                     <View style={{ padding: 20, alignItems: 'center' }}>
