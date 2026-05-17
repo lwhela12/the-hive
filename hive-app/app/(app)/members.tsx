@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowD
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import type { Skill, UserRole, Wish } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -12,6 +13,7 @@ import { useChatRooms } from '../../lib/hooks/useChatRooms';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import { SKILL_CATEGORIES } from '../../lib/skillsList';
 import { notifyWishMentions } from '../../lib/wishMentions';
+import { setStoredItem } from '../../lib/webStorage';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileHoneycombCluster } from '../../components/profile/ProfileHoneycombCluster';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
@@ -533,13 +535,18 @@ function MemberDetailModal({
   };
 
   const startDirectMessage = async () => {
-    if (!currentAuthId || !communityId || isCurrentUser || startingMessage) return;
+    if (isCurrentUser || startingMessage) return;
+    if (!currentAuthId || !communityId) {
+      Alert.alert('Could not open message', 'Please refresh HIVE and try again.');
+      return;
+    }
     setStartingMessage(true);
     try {
       const room = await getOrCreateDMRoom(member.id);
       if (!room) throw new Error('No DM room returned');
+      setStoredItem(`the-hive:last-chat-room:${communityId}`, room.id);
       onClose();
-      router.push({ pathname: '/(app)/messages', params: { roomId: room.id } });
+      router.push({ pathname: '/messages', params: { roomId: room.id } });
     } catch (error) {
       console.warn('[Members] start DM failed', error);
       Alert.alert('Could not open message', 'Please try again from Messages.');
@@ -995,13 +1002,27 @@ function MemberDetailModal({
                 )}
               </View>
               {!isCurrentUser && (
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 16, width: '100%' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 14, width: '100%' }}>
                   <Pressable
                     onPress={startDirectMessage}
                     disabled={startingMessage}
-                    style={{ flex: 1, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 12, alignItems: 'center', opacity: startingMessage ? 0.6 : 1 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Message ${member.name}`}
+                    style={{
+                      backgroundColor: '#bd9348',
+                      borderRadius: 999,
+                      paddingVertical: 8,
+                      paddingHorizontal: 22,
+                      minWidth: 148,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 6,
+                      opacity: startingMessage ? 0.6 : 1,
+                    }}
                   >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'white' }}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={15} color="white" />
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>
                       {startingMessage ? 'Opening...' : 'Message'}
                     </Text>
                   </Pressable>
@@ -1810,7 +1831,7 @@ export default function MembersScreen() {
   const honeycombTextMaxWidth = Math.max(96, honeycombCellWidth - (isCompactHoneycomb ? 64 : 96));
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#faf8f3' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#faf8f3' }} edges={['top']}>
       {/* Header */}
       <View style={{ backgroundColor: '#bd9348', paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' }}>
         <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: '#ffffff' }}>Members</Text>

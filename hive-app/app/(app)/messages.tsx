@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -15,6 +15,7 @@ import type { Profile } from '../../types';
 
 export default function MessagesScreen() {
   const { roomId } = useLocalSearchParams<{ roomId?: string }>();
+  const router = useRouter();
   const { profile, communityId } = useAuth();
   const { width } = useWindowDimensions();
   const queryClient = useQueryClient();
@@ -24,6 +25,7 @@ export default function MessagesScreen() {
   const [customizeRoomOnOpen, setCustomizeRoomOnOpen] = useState(false);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
   const hasPrefetchedRef = useRef(false);
+  const ignoredDirectRoomIdRef = useRef<string | null>(null);
   const selectedRoomStorageKey = communityId ? `the-hive:last-chat-room:${communityId}` : null;
 
   // Use the optimized chat rooms hook (React Query with caching)
@@ -48,12 +50,16 @@ export default function MessagesScreen() {
   }, [rooms, queryClient]);
 
   useEffect(() => {
+    if (!roomId || roomId !== ignoredDirectRoomIdRef.current) {
+      ignoredDirectRoomIdRef.current = null;
+    }
     if (selectedRoom || rooms.length === 0) return;
 
     const savedRoomId = selectedRoomStorageKey
       ? getStoredItem(selectedRoomStorageKey)
       : null;
-    const roomToRestore = rooms.find((room) => room.id === (roomId || savedRoomId));
+    const directRoomId = roomId && roomId !== ignoredDirectRoomIdRef.current ? roomId : null;
+    const roomToRestore = rooms.find((room) => room.id === (directRoomId || savedRoomId));
 
     if (roomToRestore) {
       setSelectedRoom(roomToRestore);
@@ -124,6 +130,10 @@ export default function MessagesScreen() {
         onBack={() => {
           // Mark room as read when leaving
           markRoomAsRead(selectedRoom.id);
+          if (roomId) {
+            ignoredDirectRoomIdRef.current = roomId;
+            router.replace('/messages');
+          }
           setSelectedRoom(null);
           setCustomizeRoomOnOpen(false);
           if (selectedRoomStorageKey) {

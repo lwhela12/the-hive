@@ -30,6 +30,7 @@ import { getMentionedMembers } from '../../lib/mentions';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
+import { Avatar } from '../ui/Avatar';
 import { MentionSuggestions } from '../ui/MentionSuggestions';
 import { VoiceMicButton } from '../ui/VoiceMicButton';
 import {
@@ -286,6 +287,24 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
           }}
         >
           <Text style={{ fontSize: size * 0.5, lineHeight: size * 0.62 }}>{currentCustomEmoji}</Text>
+        </View>
+      );
+    }
+
+    if (room.room_type === 'dm' && otherMembers.length === 1) {
+      const otherMember = otherMembers[0];
+      return (
+        <View
+          style={{
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            borderWidth: 1,
+            borderColor: roomTheme.border,
+            overflow: 'hidden',
+          }}
+        >
+          <Avatar name={otherMember.name} url={otherMember.avatar_url} size={size} />
         </View>
       );
     }

@@ -291,6 +291,50 @@ export default function ProfileScreen() {
     }
   };
 
+  const saveDeepQuiz = async () => {
+    if (!profile) return;
+
+    const birthdayIso = editBirthday ? parseAmericanDate(editBirthday) : null;
+    setIsSaving(true);
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        name: editName.trim(),
+        phone: editPhone.trim() || null,
+        birthday: birthdayIso,
+        occupation: editOccupation.trim() || null,
+        profile_title: editProfileTitle.trim() || null,
+        preferred_contact: editPreferredContact,
+        bio: editBio.trim() || null,
+        current_project: editCurrentProject.trim() || null,
+        hometown: editHometown.trim() || null,
+        favorite_book: editFavBook.trim() || null,
+        favorite_food: editFavFood.trim() || null,
+        favorite_hobby: editFavHobby.trim() || null,
+        known_for: editKnownFor.trim() || null,
+        miq_experiences: editMiqExperiences.trim() || null,
+        miq_growth: editMiqGrowth.trim() || null,
+        miq_contribution: editMiqContribution.trim() || null,
+        fun_facts: editFunFacts.map(f => f.trim()).filter(Boolean).length > 0
+          ? editFunFacts.map(f => f.trim()).filter(Boolean)
+          : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', profile.id);
+
+    setIsSaving(false);
+
+    if (error) {
+      Alert.alert('Error', 'Failed to save your deeper profile. Please try again.');
+      return;
+    }
+
+    await refreshProfile();
+    setDeepQuizVisible(false);
+    setDeepQuizStep(0);
+  };
+
   const formatBirthdayForDisplay = (dateStr?: string) => {
     if (!dateStr) return '';
     return formatDateLong(dateStr);
@@ -891,6 +935,15 @@ export default function ProfileScreen() {
       router.push('/(app)/hive');
       return;
     }
+    if (
+      label === 'Choose your title'
+      || label === 'Add your birthday'
+      || label === 'Write a bio'
+      || label === 'Share what people should ask you about'
+    ) {
+      startDeepQuiz();
+      return;
+    }
     startEditing();
   };
 
@@ -902,6 +955,9 @@ export default function ProfileScreen() {
   const bloomingSkillCount = skills.filter(hasBloomingSkill).length;
   const profileKnownFor = ((profile as any).known_for as string | null | undefined)?.trim() || '';
   const profileBio = ((profile as any).bio as string | null | undefined)?.trim() || '';
+  const deepQuizCanGoBack = deepQuizStep > 0;
+  const deepQuizIsLastStep = deepQuizStep === DEEP_PROFILE_STEPS.length - 1;
+  const deepQuizProgress = `${deepQuizStep + 1}/${DEEP_PROFILE_STEPS.length}`;
   const profileHoneycombItems = [
     { label: 'Title', value: (profile as any).profile_title || profile.occupation },
     { label: 'From', value: (profile as any).hometown },
@@ -917,6 +973,198 @@ export default function ProfileScreen() {
   ];
   const activeWishes = wishes.filter(wish => wish.status !== 'fulfilled');
   const grantedWishes = wishes.filter(wish => wish.status === 'fulfilled');
+  const renderDeepQuizField = ({
+    label,
+    value,
+    onChangeText,
+    placeholder,
+    multiline = false,
+  }: {
+    label: string;
+    value: string;
+    onChangeText: (value: string) => void;
+    placeholder: string;
+    multiline?: boolean;
+  }) => (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#9a7a3a', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
+        {label}
+      </Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#b8ad9f"
+        multiline={multiline}
+        textAlignVertical={multiline ? 'top' : 'center'}
+        style={{
+          minHeight: multiline ? 86 : 44,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: 'rgba(222,193,129,0.55)',
+          backgroundColor: '#fffdf7',
+          paddingHorizontal: 14,
+          paddingVertical: multiline ? 12 : 0,
+          fontFamily: 'Lato_400Regular',
+          fontSize: 14,
+          lineHeight: 20,
+          color: '#2d2d2d',
+        }}
+      />
+    </View>
+  );
+
+  const renderDeepQuizStep = () => {
+    if (deepQuizStep === 0) {
+      return (
+        <>
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 6 }}>
+            Start with the visible you
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#7d715f', marginBottom: 18 }}>
+            These are the pieces people understand at a glance when they open your honeycomb.
+          </Text>
+          {renderDeepQuizField({
+            label: 'Self-appointed title',
+            value: editProfileTitle,
+            onChangeText: setEditProfileTitle,
+            placeholder: 'Founder, Tarot Reader, Spreadsheet Sorcerer...',
+          })}
+          {renderDeepQuizField({
+            label: 'Hometown',
+            value: editHometown,
+            onChangeText: setEditHometown,
+            placeholder: 'Olympia, WA',
+          })}
+          {renderDeepQuizField({
+            label: 'Birthday',
+            value: editBirthday,
+            onChangeText: setEditBirthday,
+            placeholder: '10/12/1987',
+          })}
+          {renderDeepQuizField({
+            label: 'People should ask me about',
+            value: editKnownFor,
+            onChangeText: setEditKnownFor,
+            placeholder: 'Digital organization, party planning, weirdly good pep talks...',
+            multiline: true,
+          })}
+        </>
+      );
+    }
+
+    if (deepQuizStep === 1) {
+      return (
+        <>
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 6 }}>
+            What is alive right now?
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#7d715f', marginBottom: 18 }}>
+            This gives the HIVE a reason to know what to bring you, send you, or ask you about this month.
+          </Text>
+          {renderDeepQuizField({
+            label: 'Current focus',
+            value: editCurrentProject,
+            onChangeText: setEditCurrentProject,
+            placeholder: 'My biggest focus right now is...',
+            multiline: true,
+          })}
+          {renderDeepQuizField({
+            label: 'Bio',
+            value: editBio,
+            onChangeText: setEditBio,
+            placeholder: 'A few sentences that help people feel like they actually know you.',
+            multiline: true,
+          })}
+        </>
+      );
+    }
+
+    if (deepQuizStep === 2) {
+      return (
+        <>
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 6 }}>
+            Add the texture
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#7d715f', marginBottom: 18 }}>
+            Favorites and tiny facts make a sparse profile feel human fast.
+          </Text>
+          {renderDeepQuizField({
+            label: 'Favorite food',
+            value: editFavFood,
+            onChangeText: setEditFavFood,
+            placeholder: 'Ramen, tacos, croissants...',
+          })}
+          {renderDeepQuizField({
+            label: 'Favorite book',
+            value: editFavBook,
+            onChangeText: setEditFavBook,
+            placeholder: 'The book you keep recommending lately',
+          })}
+          {renderDeepQuizField({
+            label: 'Favorite hobby',
+            value: editFavHobby,
+            onChangeText: setEditFavHobby,
+            placeholder: 'Crocheting, plants, chess...',
+          })}
+          {editFunFacts.map((fact, index) => (
+            <View key={`deep-fun-fact-${index}`}>
+              {renderDeepQuizField({
+                label: `Fun fact ${index + 1}`,
+                value: fact,
+                onChangeText: (text) => {
+                  const next = [...editFunFacts];
+                  next[index] = text;
+                  setEditFunFacts(next);
+                },
+                placeholder: index === 0 ? 'Something people would not guess at first glance' : 'Another tiny, delightful detail',
+                multiline: true,
+              })}
+            </View>
+          ))}
+        </>
+      );
+    }
+
+    return (
+      <>
+        <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 6 }}>
+          Your 3MIQ
+        </Text>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#7d715f', marginBottom: 14 }}>
+          These can stay rough. They are meant to help Clive, the boards, and the HIVE understand what matters most to you.
+        </Text>
+        <Pressable
+          onPress={handleFind3MiqWithClive}
+          style={{ alignSelf: 'flex-start', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(222,193,129,0.72)', backgroundColor: '#fffdf7', paddingHorizontal: 14, paddingVertical: 8, marginBottom: 16 }}
+        >
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>Find these with Clive</Text>
+        </Pressable>
+        {renderDeepQuizField({
+          label: 'Experiences',
+          value: editMiqExperiences,
+          onChangeText: setEditMiqExperiences,
+          placeholder: 'What do I want to experience in this lifetime?',
+          multiline: true,
+        })}
+        {renderDeepQuizField({
+          label: 'Growth',
+          value: editMiqGrowth,
+          onChangeText: setEditMiqGrowth,
+          placeholder: 'How do I want to grow?',
+          multiline: true,
+        })}
+        {renderDeepQuizField({
+          label: 'Contribution',
+          value: editMiqContribution,
+          onChangeText: setEditMiqContribution,
+          placeholder: 'How do I want to contribute?',
+          multiline: true,
+        })}
+      </>
+    );
+  };
+
   const renderWishCard = (wish: Wish) => (
     <WishCombCard
       key={wish.id}
@@ -1204,6 +1452,23 @@ export default function ProfileScreen() {
                       </Pressable>
                     ))}
                   </View>
+                  <Pressable
+                    onPress={startDeepQuiz}
+                    className="active:opacity-80"
+                    style={{
+                      marginTop: 10,
+                      borderRadius: 999,
+                      backgroundColor: '#bd9348',
+                      paddingHorizontal: 18,
+                      paddingVertical: 9,
+                      shadowColor: '#bd9348',
+                      shadowOpacity: 0.16,
+                      shadowRadius: 10,
+                      shadowOffset: { width: 0, height: 5 },
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#fffaf0' }}>Let's get deeper</Text>
+                  </Pressable>
                 </>
               ) : null}
             </View>
@@ -1216,9 +1481,14 @@ export default function ProfileScreen() {
         <View className="mb-6">
           <View className="flex-row items-center justify-end mb-2">
             {!isEditing ? (
-              <Pressable onPress={startEditing} className="px-3 py-1 active:opacity-70">
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">Edit</Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Pressable onPress={startDeepQuiz} className="px-3 py-1 active:opacity-70">
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">Go deeper</Text>
+                </Pressable>
+                <Pressable onPress={startEditing} className="px-3 py-1 active:opacity-70">
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">Edit</Text>
+                </Pressable>
+              </View>
             ) : (
               <View className="flex-row">
                 <Pressable onPress={cancelEditing} className="px-3 py-1 mr-2 active:opacity-70">
@@ -1953,6 +2223,152 @@ export default function ProfileScreen() {
         onSave={handleWishSaved}
         existingWish={editingWish}
       />
+
+      <Modal
+        visible={deepQuizVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDeepQuiz}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(45,45,45,0.28)',
+            justifyContent: 'center',
+            padding: isProfilePhone ? 12 : 24,
+          }}
+        >
+          <View
+            style={{
+              alignSelf: 'center',
+              width: '100%',
+              maxWidth: 620,
+              maxHeight: '92%',
+              borderRadius: 28,
+              backgroundColor: '#f8f4e8',
+              borderWidth: 1,
+              borderColor: 'rgba(222,193,129,0.55)',
+              overflow: 'hidden',
+              shadowColor: '#2d2d2d',
+              shadowOpacity: 0.18,
+              shadowRadius: 24,
+              shadowOffset: { width: 0, height: 14 },
+            }}
+          >
+            <View
+              style={{
+                paddingHorizontal: isProfilePhone ? 18 : 24,
+                paddingTop: 20,
+                paddingBottom: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: 'rgba(222,193,129,0.32)',
+                backgroundColor: '#fff9e8',
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                    Let's get deeper
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8e7a5e', marginTop: 3 }}>
+                    {DEEP_PROFILE_STEPS[deepQuizStep]} · {deepQuizProgress}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={closeDeepQuiz}
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#fffdf7',
+                    borderWidth: 1,
+                    borderColor: 'rgba(222,193,129,0.5)',
+                  }}
+                >
+                  <Ionicons name="close" size={18} color="#9a7a3a" />
+                </Pressable>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 6, marginTop: 14 }}>
+                {DEEP_PROFILE_STEPS.map((step, index) => (
+                  <View
+                    key={step}
+                    style={{
+                      flex: 1,
+                      height: 5,
+                      borderRadius: 999,
+                      backgroundColor: index <= deepQuizStep ? '#bd9348' : 'rgba(189,147,72,0.18)',
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{
+                paddingHorizontal: isProfilePhone ? 18 : 26,
+                paddingVertical: 22,
+              }}
+            >
+              {renderDeepQuizStep()}
+            </ScrollView>
+
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: 10,
+                paddingHorizontal: isProfilePhone ? 18 : 24,
+                paddingVertical: 16,
+                borderTopWidth: 1,
+                borderTopColor: 'rgba(222,193,129,0.32)',
+                backgroundColor: '#fff9e8',
+              }}
+            >
+              <Pressable
+                disabled={!deepQuizCanGoBack || isSaving}
+                onPress={() => setDeepQuizStep(step => Math.max(0, step - 1))}
+                style={{
+                  flex: 1,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.55)',
+                  backgroundColor: '#fffdf7',
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  opacity: !deepQuizCanGoBack || isSaving ? 0.45 : 1,
+                }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9a7a3a' }}>Back</Text>
+              </Pressable>
+              <Pressable
+                disabled={isSaving}
+                onPress={() => {
+                  if (deepQuizIsLastStep) {
+                    void saveDeepQuiz();
+                    return;
+                  }
+                  setDeepQuizStep(step => Math.min(DEEP_PROFILE_STEPS.length - 1, step + 1));
+                }}
+                style={{
+                  flex: 1.5,
+                  borderRadius: 999,
+                  backgroundColor: '#bd9348',
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  opacity: isSaving ? 0.62 : 1,
+                }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#fffaf0' }}>
+                  {isSaving ? 'Saving...' : deepQuizIsLastStep ? 'Save honeycomb' : 'Next'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }

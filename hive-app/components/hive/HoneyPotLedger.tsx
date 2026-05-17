@@ -63,6 +63,40 @@ function DetailLine({ label, value }: { label: string; value?: string | null }) 
   );
 }
 
+function GlanceChip({ label, value }: { label: string; value: string }) {
+  return (
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: 'rgba(222,193,129,0.44)',
+        backgroundColor: '#fffaf0',
+        borderRadius: 999,
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+        flexDirection: 'row',
+        alignItems: 'center',
+        maxWidth: '100%',
+      }}
+    >
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#8a6b30', textTransform: 'uppercase' }}>
+        {label}
+      </Text>
+      <Text
+        numberOfLines={1}
+        style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#374151', marginLeft: 5, flexShrink: 1 }}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+const getNotePreview = (note?: string | null) => {
+  const normalized = note?.trim().replace(/\s+/g, ' ');
+  if (!normalized) return null;
+  return normalized.length > 82 ? `${normalized.slice(0, 79)}...` : normalized;
+};
+
 function TransactionRow({ transaction }: { transaction: HoneyPotLedgerEntry }) {
   const [expanded, setExpanded] = useState(false);
   const amountColor = transaction.amount < 0 ? '#b91c1c' : '#15803d';
@@ -70,6 +104,18 @@ function TransactionRow({ transaction }: { transaction: HoneyPotLedgerEntry }) {
   const duesLabel = getHoneyPotDuesLabel(transaction);
   const counterparty = transaction.related_user_profile?.name ?? transaction.external_counterparty_name;
   const recorder = transaction.recorded_by_profile?.name ?? 'Unknown recorder';
+  const notePreview = getNotePreview(transaction.note);
+  const glanceItems = [
+    counterparty
+      ? {
+        label: transaction.transaction_type === 'withdrawal' ? 'Paid to' : 'From',
+        value: counterparty,
+      }
+      : null,
+    duesLabel ? { label: 'Dues', value: duesLabel } : null,
+    methodLabel ? { label: 'Via', value: methodLabel } : null,
+    notePreview ? { label: 'Note', value: notePreview } : null,
+  ].filter(Boolean) as { label: string; value: string }[];
 
   const toggleExpanded = () => {
     LayoutAnimation.configureNext({
@@ -107,6 +153,13 @@ function TransactionRow({ transaction }: { transaction: HoneyPotLedgerEntry }) {
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#6b7280', marginTop: 4 }}>
             {formatLedgerDate(transaction.created_at)} · balance after {formatHoneyPotAmount(transaction.running_balance)}
           </Text>
+          {glanceItems.length > 0 && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              {glanceItems.map((item) => (
+                <GlanceChip key={`${item.label}-${item.value}`} label={item.label} value={item.value} />
+              ))}
+            </View>
+          )}
         </View>
         <View style={{ alignItems: 'flex-end', marginLeft: 10 }}>
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: amountColor }}>
