@@ -635,6 +635,7 @@ export default function HiveScreen() {
 
   const [showConfetti, setShowConfetti] = useState(false);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [selectedActionItemId, setSelectedActionItemId] = useState<string | null>(null);
   const [newTaskText, setNewTaskText] = useState('');
   const [savingTask, setSavingTask] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
@@ -750,6 +751,10 @@ export default function HiveScreen() {
     setShowAddTaskModal(false);
     fetchMyActionItems();
   };
+
+  const selectedActionItem = selectedActionItemId
+    ? homeActionItems.find(item => item.id === selectedActionItemId) ?? null
+    : null;
 
   const markQuarterlyDuesReminderDone = useCallback(async () => {
     if (!profile?.id || !communityId) return;
@@ -910,6 +915,12 @@ export default function HiveScreen() {
     if (activityReadIdsKey) removeStoredItem(activityReadIdsKey);
   }, [activityReadKey, activityReadIdsKey, hasUnreadActivity, triggerActivityConfetti]);
 
+  const getActivityDestination = useCallback((item: ActivityItem): ActivityItem['navigatesTo'] => {
+    if (item.navigatesTo) return item.navigatesTo;
+    if (item.type === 'wish_posted' || item.type === 'wish_granted') return 'wish';
+    return undefined;
+  }, []);
+
   const openWishFromActivity = useCallback(async (wishId: string) => {
     if (!communityId) return;
 
@@ -945,7 +956,9 @@ export default function HiveScreen() {
   }, [communityId]);
 
   const navigateFromActivityItem = useCallback((item: ActivityItem) => {
-    if (item.navigatesTo === 'board') {
+    const destination = getActivityDestination(item);
+
+    if (destination === 'board') {
       // Pre-set the board's localStorage keys so it opens directly to the right post
       if (communityId) {
         if (item.categoryId) {
@@ -955,16 +968,17 @@ export default function HiveScreen() {
         setStoredItem(`the-hive:board-direct-open:${communityId}`, 'true');
       }
       router.push('/board');
-    } else if (item.navigatesTo === 'members') {
+    } else if (destination === 'members') {
       router.push('/members');
-    } else if (item.navigatesTo === 'wish') {
+    } else if (destination === 'wish') {
       openWishFromActivity(item.sourceId);
     }
-  }, [communityId, openWishFromActivity, router]);
+  }, [communityId, getActivityDestination, openWishFromActivity, router]);
 
   const handleActivityPress = useCallback((item: ActivityItem) => {
     const wasUnread = item.timestamp > sessionReadAt && !readItemIds.has(item.id);
     const clearsLastUnread = wasUnread && unreadActivityCount === 1;
+    const destination = getActivityDestination(item);
 
     if (wasUnread) {
       markItemRead(item.id);
@@ -972,14 +986,14 @@ export default function HiveScreen() {
 
     if (clearsLastUnread) {
       triggerActivityConfetti();
-      if (item.navigatesTo) {
+      if (destination) {
         setTimeout(() => navigateFromActivityItem(item), 700);
         return;
       }
     }
 
     navigateFromActivityItem(item);
-  }, [markItemRead, navigateFromActivityItem, readItemIds, sessionReadAt, triggerActivityConfetti, unreadActivityCount]);
+  }, [getActivityDestination, markItemRead, navigateFromActivityItem, readItemIds, sessionReadAt, triggerActivityConfetti, unreadActivityCount]);
 
   const handleActivityScroll = useCallback((event: any) => {
     const y = event.nativeEvent?.contentOffset?.y ?? 0;
@@ -1459,6 +1473,7 @@ export default function HiveScreen() {
         : a.due_date ? `Due ${formatDateShort(a.due_date)}` : undefined,
       isDone: a.completed,
       completedAt: a.completed_at,
+      onPress: () => setSelectedActionItemId(a.id),
       onToggle: () => toggleActionItem(a),
       onLongPress: () => archiveActionItem(a),
       onArchive: a.completed ? () => archiveActionItem(a) : undefined,
@@ -1572,7 +1587,10 @@ export default function HiveScreen() {
         </View>
         {isDone && todo.onArchive ? (
           <Pressable
-            onPress={todo.onArchive}
+            onPress={(event) => {
+              event.stopPropagation();
+              todo.onArchive?.();
+            }}
             accessibilityRole="button"
             accessibilityLabel="Archive completed task"
             hitSlop={8}
@@ -2047,7 +2065,7 @@ export default function HiveScreen() {
                   )}
                   {activityItems.map((item, i) => {
                     const isUnread = item.timestamp > sessionReadAt && !readItemIds.has(item.id);
-                    const canNavigate = !!item.navigatesTo;
+                    const canNavigate = !!getActivityDestination(item);
                     return (
                       <Pressable
                         key={item.id}
@@ -2721,6 +2739,106 @@ export default function HiveScreen() {
                 {savingTask ? 'Saving...' : 'Add Task'}
               </Text>
             </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Task Detail Modal */}
+      <Modal visible={!!selectedActionItem} animationType="slide" transparent onRequestClose={() => setSelectedActionItemId(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'flex-end' }} onPress={() => setSelectedActionItemId(null)}>
+          <Pressable
+            onPress={event => event.stopPropagation()}
+            style={{
+              backgroundColor: '#fffdf5',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 24,
+              paddingBottom: useMobileLayout ? 40 : 28,
+              maxHeight: useMobileLayout ? '78%' : '68%',
+            }}
+          >
+            <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
+            {selectedActionItem ? (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d', marginBottom: 4 }}>Task</Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060' }}>
+                      {selectedActionItem.completed
+                        ? `Completed${selectedActionItem.completed_at ? ` · ${formatDateShort(selectedActionItem.completed_at)}` : ''}`
+                        : selectedActionItem.due_date ? `Due ${formatDateShort(selectedActionItem.due_date)}` : 'On your personal to-do list'}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => setSelectedActionItemId(null)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close task details"
+                    hitSlop={8}
+                    style={({ pressed }) => ({
+                      width: 34,
+                      height: 34,
+                      borderRadius: 17,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: pressed ? '#f2e1bd' : '#fff8e8',
+                      borderWidth: 1,
+                      borderColor: 'rgba(189,147,72,0.24)',
+                    })}
+                  >
+                    <Ionicons name="close" size={18} color="#8e6f35" />
+                  </Pressable>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator style={{ maxHeight: useMobileLayout ? 260 : 220, marginBottom: 18 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', lineHeight: 24 }}>
+                    {selectedActionItem.description}
+                  </Text>
+                </ScrollView>
+
+                <View style={{ gap: 10 }}>
+                  <Pressable
+                    onPress={() => toggleActionItem(selectedActionItem)}
+                    accessibilityRole="button"
+                    accessibilityLabel={selectedActionItem.completed ? 'Mark task open' : 'Mark task complete'}
+                    style={({ pressed }) => ({
+                      backgroundColor: selectedActionItem.completed ? '#fff8e8' : '#bd9348',
+                      borderColor: selectedActionItem.completed ? 'rgba(189,147,72,0.36)' : '#bd9348',
+                      borderWidth: 1,
+                      borderRadius: 14,
+                      paddingVertical: 13,
+                      paddingHorizontal: 14,
+                      alignItems: 'center',
+                      opacity: pressed ? 0.78 : 1,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: selectedActionItem.completed ? '#8e6f35' : 'white' }}>
+                      {selectedActionItem.completed ? 'Mark Open' : 'Mark Complete'}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => archiveActionItem(selectedActionItem)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Archive task"
+                    style={({ pressed }) => ({
+                      backgroundColor: pressed ? '#fdf2f2' : '#fffdf5',
+                      borderColor: 'rgba(239,68,68,0.22)',
+                      borderWidth: 1,
+                      borderRadius: 14,
+                      paddingVertical: 13,
+                      paddingHorizontal: 14,
+                      alignItems: 'center',
+                      flexDirection: 'row',
+                      justifyContent: 'center',
+                      gap: 8,
+                    })}
+                  >
+                    <Ionicons name="archive-outline" size={16} color="#b91c1c" />
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#b91c1c' }}>Archive</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : null}
           </Pressable>
         </Pressable>
       </Modal>
