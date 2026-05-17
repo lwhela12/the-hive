@@ -34,6 +34,14 @@
         height: 100%;
         flex: 1;
       }
+
+      @supports (height: 100dvh) {
+        html,
+        body,
+        #root {
+          height: 100dvh;
+        }
+      }
     </style>
   </head>
 

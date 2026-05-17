@@ -129,6 +129,7 @@ const LABEL_HEIGHT = 30;
 const FIELD_SIDE_PADDING = 10;
 const GARDEN_CAPACITY = 10;
 const SEED_TRAY_SIZE = GARDEN_CAPACITY;
+const SEED_STRIP_LIMIT = GARDEN_CAPACITY * 3;
 const VISIBLE_BLOOM_LIMIT = GARDEN_CAPACITY;
 const BLOOM_CANVAS_EXTRA = 38;
 
@@ -2611,13 +2612,29 @@ export function SkillBubbleGarden({
   );
   const openSlots = Math.max(0, GARDEN_CAPACITY - visibleSkills.length);
   const seedTray = useMemo(
-    () => editable ? getSeedTray(seedSourceSkills, plantedNames, seedShake, SEED_TRAY_SIZE, recentSeedNames) : [],
+    () => editable ? getSeedTray(seedSourceSkills, plantedNames, seedShake, SEED_STRIP_LIMIT, recentSeedNames) : [],
     [editable, plantedNames, recentSeedNames, seedShake, seedSourceSkills]
   );
   const seedSlots = useMemo(
     () => buildSeedSlots(seedTray, recentSeedSlots),
     [recentSeedSlots, seedTray]
   );
+  const seedPages = useMemo(() => {
+    const firstPageSeeds = new Set(
+      seedSlots
+        .filter((skill): skill is string => Boolean(skill))
+        .map(normalizeSkillName)
+    );
+    const extraSeeds = seedTray.filter((skill) => !firstPageSeeds.has(normalizeSkillName(skill)));
+    const pages: SeedSlot[][] = [seedSlots];
+
+    for (let index = 0; index < extraSeeds.length; index += SEED_TRAY_SIZE) {
+      const page = Array.from({ length: SEED_TRAY_SIZE }, (_, offset) => extraSeeds[index + offset]);
+      if (page.some(Boolean)) pages.push(page);
+    }
+
+    return pages;
+  }, [seedSlots, seedTray]);
   const availableSeedCount = useMemo(
     () => seedSourceSkills
       .filter((skill) => !plantedNames.has(normalizeSkillName(skill)))
@@ -2650,8 +2667,9 @@ export function SkillBubbleGarden({
   const compactLandscape = editable && viewport.width > viewport.height && viewport.height < 540;
   const meadowHeight = getMeadowHeight(visibleSkills.length, width || 680, compactLandscape);
   const showLandscapeHint = editable && width > 0 && width < 560;
-  const seedRowScrolls = width > 0 && width < 1060;
-  const seedRowMinWidth = Math.max(width - 24, SEED_TRAY_SIZE * 112 + (SEED_TRAY_SIZE - 1) * 7);
+  const seedPageWidth = Math.max(width - 24, SEED_TRAY_SIZE * 112 + (SEED_TRAY_SIZE - 1) * 7);
+  const seedContentWidth = seedPageWidth * Math.max(1, seedPages.length);
+  const seedRowScrolls = width > 0 && (seedPages.length > 1 || seedPageWidth > width - 24);
   const surveyPanelWidth = width > 760
     ? Math.min(520, Math.max(0, width - 36))
     : Math.max(0, width - 28);
@@ -2995,71 +3013,64 @@ export function SkillBubbleGarden({
               gap: 8,
             }}
           >
-            {seedRowScrolls ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator
-                scrollEnabled={seedRowScrolls}
-                style={{
-                  minWidth: 0,
-                  overflow: 'visible',
-                }}
-                contentContainerStyle={{
-                  width: seedRowMinWidth,
-                  gap: 7,
-                  alignItems: 'center',
-                  paddingRight: 2,
-                  paddingBottom: 6,
-                }}
-              >
-                {seedSlots.map((skill, index) => (
-                  skill ? (
-                    <SeedButton
-                      key={`${skill}-${index}-${seedShake}`}
-                      skill={skill}
-                      index={index}
-                      shakeIndex={seedShake}
-                      slotMode
-                      onPlantSkill={onPlantSkill ? handlePlantSeed : undefined}
-                      onPressSeed={onPlantSkill ? (description) => handlePlantSeedFromSlot(description, index) : undefined}
-                      planted={plantedNames.has(normalizeSkillName(skill))}
-                      disabled={!canPlantSeeds}
-                      bubbleIn={returnedSeedSet.has(normalizeSkillName(skill))}
-                    />
-                  ) : (
-                    <EmptySeedSlot key={`empty-seed-${index}-${seedShake}`} index={index} shakeIndex={seedShake} />
-                  )
-                ))}
-              </ScrollView>
-            ) : (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  gap: 7,
-                  alignItems: 'center',
-                  width: '100%',
-                }}
-              >
-                {seedSlots.map((skill, index) => (
-                  skill ? (
-                    <SeedButton
-                      key={`${skill}-${index}-${seedShake}`}
-                      skill={skill}
-                      index={index}
-                      shakeIndex={seedShake}
-                      slotMode
-                      onPlantSkill={onPlantSkill ? handlePlantSeed : undefined}
-                      onPressSeed={onPlantSkill ? (description) => handlePlantSeedFromSlot(description, index) : undefined}
-                      planted={plantedNames.has(normalizeSkillName(skill))}
-                      disabled={!canPlantSeeds}
-                      bubbleIn={returnedSeedSet.has(normalizeSkillName(skill))}
-                    />
-                  ) : (
-                    <EmptySeedSlot key={`empty-seed-${index}-${seedShake}`} index={index} shakeIndex={seedShake} />
-                  )
-                ))}
-              </View>
-            )}
+            <ScrollView
+              horizontal
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator
+              scrollEnabled={seedRowScrolls}
+              snapToInterval={seedPageWidth}
+              decelerationRate="fast"
+              style={{
+                minWidth: 0,
+                maxWidth: '100%',
+                ...(Platform.OS === 'web'
+                  ? ({
+                      overflowX: 'auto',
+                      overflowY: 'hidden',
+                      WebkitOverflowScrolling: 'touch',
+                      overscrollBehaviorX: 'contain',
+                      touchAction: 'pan-x',
+                    } as any)
+                  : {}),
+              }}
+              contentContainerStyle={{
+                width: seedContentWidth,
+                alignItems: 'center',
+                paddingBottom: 6,
+              }}
+            >
+              {seedPages.map((page, pageIndex) => (
+                <View
+                  key={`seed-page-${pageIndex}-${seedShake}`}
+                  style={{
+                    width: seedPageWidth,
+                    flexDirection: 'row',
+                    gap: 7,
+                    alignItems: 'center',
+                    paddingRight: pageIndex === seedPages.length - 1 ? 2 : 0,
+                  }}
+                >
+                  {page.map((skill, slotIndex) => (
+                    skill ? (
+                      <SeedButton
+                        key={`${skill}-${pageIndex}-${slotIndex}-${seedShake}`}
+                        skill={skill}
+                        index={slotIndex}
+                        shakeIndex={seedShake}
+                        slotMode
+                        onPlantSkill={onPlantSkill ? handlePlantSeed : undefined}
+                        onPressSeed={onPlantSkill ? (description) => handlePlantSeedFromSlot(description, slotIndex) : undefined}
+                        planted={plantedNames.has(normalizeSkillName(skill))}
+                        disabled={!canPlantSeeds}
+                        bubbleIn={pageIndex === 0 && returnedSeedSet.has(normalizeSkillName(skill))}
+                      />
+                    ) : (
+                      <EmptySeedSlot key={`empty-seed-${pageIndex}-${slotIndex}-${seedShake}`} index={slotIndex} shakeIndex={seedShake} />
+                    )
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
 
             <View
               style={{
