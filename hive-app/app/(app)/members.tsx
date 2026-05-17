@@ -1967,17 +1967,15 @@ export default function MembersScreen() {
                       honeycombCellWidth / 2 + honeycombAvatarSize * (isCompactHoneycomb ? 0.2 : 0.3)
                     );
                     const matchBadgeTop = Math.round(honeycombCardHeight * (isCompactHoneycomb ? 0.11 : 0.12));
-                    const visibleChips = [
-                      publicWishes.length > 0 && publicWishes[0]?.description !== spotlight
-                        ? `${publicWishes.length} wish${publicWishes.length === 1 ? '' : 'es'}`
-                        : null,
-                      member.skills[0]?.description && member.skills[0].description !== spotlight
-                        ? member.skills[0].description
-                        : null,
-                      hasDailyMatch
-                        ? `${member.dailyMatchSharedCount} shared Q`
-                        : null,
-                    ].filter(Boolean).slice(0, 2) as string[];
+                    const contextChip = publicWishes.length > 0
+                      ? `${publicWishes.length} wish${publicWishes.length === 1 ? '' : 'es'}`
+                      : member.skills[0]?.description || null;
+                    const connectionChip = hasDailyMatch
+                      ? isCompactHoneycomb
+                        ? `${member.dailyMatchSharedCount} shared`
+                        : `${member.dailyMatchSharedCount} shared answers`
+                      : null;
+                    const visibleChips = [contextChip, connectionChip].filter(Boolean) as string[];
                     return (
                       <Pressable
                         key={member.id}
