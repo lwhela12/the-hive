@@ -34,6 +34,44 @@ interface NotesImportFile {
 const DEFAULT_HIVE_DECK_VIEW_URL = 'https://www.canva.com/d/CQkVqOMhwuO06qe';
 const DEFAULT_HIVE_DECK_EDIT_URL = 'https://www.canva.com/d/QPpy59P1sGtp6Al';
 
+const getIsMobileWeb = () => {
+  if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
+  return /Android|iPad|iPhone|iPod/i.test(navigator.userAgent);
+};
+
+const openExternalUrl = async (url: string, errorMessage: string) => {
+  const trimmedUrl = url.trim();
+  if (!trimmedUrl) {
+    Alert.alert('Error', errorMessage);
+    return;
+  }
+
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      if (getIsMobileWeb()) {
+        window.location.assign(trimmedUrl);
+        return;
+      }
+
+      const openedWindow = window.open(trimmedUrl, '_blank');
+      if (!openedWindow) {
+        window.location.assign(trimmedUrl);
+      } else {
+        openedWindow.opener = null;
+      }
+    } catch {
+      window.location.assign(trimmedUrl);
+    }
+    return;
+  }
+
+  try {
+    await Linking.openURL(trimmedUrl);
+  } catch {
+    Alert.alert('Error', errorMessage);
+  }
+};
+
 const toAmericanDate = (isoDate: string) => {
   const [year, month, day] = isoDate.split('-');
   return month && day && year ? `${month}-${day}-${year}` : isoDate;
@@ -89,13 +127,17 @@ export default function MeetingsScreen() {
 
     if (error) {
       console.error('Failed to fetch slide deck URL:', error);
-      return slideDeckUrl;
+      return '';
     }
 
     const latestUrl = data?.slide_deck_url ?? '';
     setSlideDeckUrl(latestUrl);
     return latestUrl;
-  }, [communityId, slideDeckUrl]);
+  }, [communityId]);
+
+  useEffect(() => {
+    void fetchLatestSlideDeckUrl();
+  }, [fetchLatestSlideDeckUrl]);
 
   const handleSaveDeckUrl = async () => {
     if (!communityId) return;
@@ -112,6 +154,21 @@ export default function MeetingsScreen() {
       Alert.alert('Error', 'Could not save the slide deck link. Please try again.');
       console.error('Slide deck URL save failed:', error);
     }
+  };
+
+  const handleSlideDeckPress = () => {
+    if (isAdmin) {
+      setShowDeckActions(true);
+      void fetchLatestSlideDeckUrl();
+      return;
+    }
+
+    void openExternalUrl(effectiveSlideDeckUrl, 'Could not open the slide deck');
+    void fetchLatestSlideDeckUrl();
+  };
+
+  const handleOpenSlideDeck = (url: string) => {
+    void openExternalUrl(url, 'Could not open the slide deck');
   };
   const [upcomingMeetings, setUpcomingMeetings] = useState<Event[]>([]);
   const [meetingEvents, setMeetingEvents] = useState<Event[]>([]);
@@ -688,18 +745,12 @@ export default function MeetingsScreen() {
 
             {/* Slide Deck */}
             <Pressable
-              onPress={async () => {
-                const latestUrl = await fetchLatestSlideDeckUrl();
-                const deckUrl = latestUrl || DEFAULT_HIVE_DECK_VIEW_URL;
-                if (isAdmin) {
-                  setShowDeckActions(true);
-                } else if (deckUrl) {
-                  Linking.openURL(deckUrl);
-                }
-              }}
+              onPress={handleSlideDeckPress}
               onLongPress={() => {
                 if (isAdmin) {
                   setShowDeckActions(true);
+                } else {
+                  void fetchLatestSlideDeckUrl();
                 }
               }}
               style={({ pressed }) => ({
@@ -1198,7 +1249,7 @@ export default function MeetingsScreen() {
               <Pressable
                 onPress={() => {
                   setShowDeckActions(false);
-                  Linking.openURL(effectiveSlideDeckUrl);
+                  handleOpenSlideDeck(effectiveSlideDeckUrl);
                 }}
                 style={{ backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
               >
@@ -1208,7 +1259,7 @@ export default function MeetingsScreen() {
                 <Pressable
                   onPress={() => {
                     setShowDeckActions(false);
-                    Linking.openURL(DEFAULT_HIVE_DECK_EDIT_URL);
+                    handleOpenSlideDeck(DEFAULT_HIVE_DECK_EDIT_URL);
                   }}
                   style={{ backgroundColor: '#2d2d2d', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
                 >
