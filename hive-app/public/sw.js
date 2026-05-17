@@ -1,8 +1,8 @@
 // Cache names: bump these when a deployed app shell must replace old clients.
-const APP_CACHE = 'hive-app-v30-skills-garden-portrait-sun';
-const STATIC_CACHE = 'hive-static-v30-skills-garden-portrait-sun';
+const APP_CACHE = 'hive-app-v31-skills-garden-sun-rays';
+const STATIC_CACHE = 'hive-static-v31-skills-garden-sun-rays';
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'skills-garden-portrait-sun-v30';
+const REFRESH_TOKEN = 'skills-garden-sun-rays-v31';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant

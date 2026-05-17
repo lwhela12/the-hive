@@ -530,16 +530,21 @@ function getFrontRowAnchorY(height: number, width: number, index: number, compac
   const baseAnchor = height - clamp(width < 520 ? 34 : 48, 32, 58);
   if (compactLandscape) {
     const foregroundTop = height - groundHeight;
-    const plantedBaseAnchor = foregroundTop + groundHeight * 0.54;
-    const highestRoot = Math.max(18, foregroundTop - 14);
-    const maxLift = Math.max(18, plantedBaseAnchor - highestRoot);
-    const staggerPattern = [0, 44, 16, 58, 30, 52, 8, 64, 38, 56];
+    const plantedBaseAnchor = foregroundTop + groundHeight * 0.74;
+    const highestRoot = Math.max(18, foregroundTop - 6);
+    const maxLift = Math.max(22, plantedBaseAnchor - highestRoot);
+    const staggerPattern = [0, 58, 16, 70, 30, 64, 8, 76, 42, 68];
     const lift = clamp(staggerPattern[index % staggerPattern.length], 0, maxLift);
     return plantedBaseAnchor - lift;
   }
   if (width < 520) {
-    const staggerPattern = [0, 34, 14, 52, 22];
-    return baseAnchor - staggerPattern[index % staggerPattern.length];
+    const foregroundTop = height - groundHeight;
+    const plantedBaseAnchor = Math.min(height - 16, foregroundTop + groundHeight * 0.78);
+    const highestRoot = Math.max(42, foregroundTop - 12);
+    const maxLift = Math.max(28, plantedBaseAnchor - highestRoot);
+    const staggerPattern = [4, 76, 22, 96, 42, 68, 12, 88, 32, 104];
+    const lift = clamp(staggerPattern[index % staggerPattern.length], 0, maxLift);
+    return plantedBaseAnchor - lift;
   }
   const stagger = index % 2 === 1 ? clamp(width < 520 ? 28 : 54, 28, 68) : 0;
 
@@ -1239,8 +1244,8 @@ function SunRayBackground({ size = 250 }: { size?: number }) {
       viewBox={`0 0 ${size} ${size}`}
       style={{
         position: 'absolute',
-        left: -size * 0.088,
-        top: -size * 0.088,
+        left: 0,
+        top: 0,
       }}
     >
       {rayAngles.map((angle, index) => (
@@ -2255,17 +2260,17 @@ function SeedSurvey({
     resetSurvey();
   };
 
-  const sunSize = compact ? 96 : narrow ? 148 : 206;
-  const sunRaySize = compact ? 114 : narrow ? 174 : 250;
+  const sunSize = compact ? 96 : narrow ? 132 : 206;
+  const sunRaySize = compact ? 124 : narrow ? 166 : 250;
   const sunPadding = compact ? 9 : narrow ? 13 : 20;
-  const sunGap = compact ? 5 : narrow ? 7 : 10;
-  const sunTitleFontSize = compact ? 8.8 : narrow ? 12 : 15;
-  const sunTitleLineHeight = compact ? 10.4 : narrow ? 14 : 18;
-  const sunBodyFontSize = compact ? 7 : narrow ? 9 : 11.5;
-  const sunBodyLineHeight = compact ? 8.6 : narrow ? 11.5 : 15;
-  const sunButtonHeight = compact ? 20 : narrow ? 28 : 34;
-  const sunButtonPadding = compact ? 8 : narrow ? 12 : 16;
-  const sunButtonFontSize = compact ? 7.8 : narrow ? 10.5 : 12;
+  const sunGap = compact ? 5 : narrow ? 6 : 10;
+  const sunTitleFontSize = compact ? 8.8 : narrow ? 10.2 : 15;
+  const sunTitleLineHeight = compact ? 10.4 : narrow ? 12 : 18;
+  const sunBodyFontSize = compact ? 7 : narrow ? 7.8 : 11.5;
+  const sunBodyLineHeight = compact ? 8.6 : narrow ? 9.8 : 15;
+  const sunButtonHeight = compact ? 20 : narrow ? 24 : 34;
+  const sunButtonPadding = compact ? 8 : narrow ? 10 : 16;
+  const sunButtonFontSize = compact ? 7.8 : narrow ? 9.2 : 12;
 
   if (!active) {
     return (
@@ -2279,18 +2284,19 @@ function SeedSurvey({
         accessibilityLabel="Seed your garden"
         style={{
           width: hasSkills ? sunSize : undefined,
+          height: hasSkills ? sunSize : undefined,
           maxWidth: '100%',
-          minHeight: hasSkills ? sunSize : 190,
+          minHeight: hasSkills ? undefined : 190,
           borderRadius: hasSkills ? 999 : 28,
-          borderWidth: 1,
+          borderWidth: hasSkills ? 0 : 1,
           borderColor: hasSkills ? 'rgba(255,253,247,0.54)' : 'rgba(255,253,247,0.62)',
-          backgroundColor: hasSkills ? 'rgba(255,224,105,0.68)' : 'rgba(255,244,187,0.92)',
-          paddingHorizontal: hasSkills ? sunPadding : 18,
-          paddingVertical: hasSkills ? sunPadding : 18,
+          backgroundColor: hasSkills ? 'transparent' : 'rgba(255,244,187,0.92)',
+          paddingHorizontal: hasSkills ? 0 : 18,
+          paddingVertical: hasSkills ? 0 : 18,
           marginBottom: hasSkills ? 0 : 0,
           alignItems: 'center',
           justifyContent: 'center',
-          gap: hasSkills ? sunGap : 14,
+          gap: hasSkills ? 0 : 14,
           shadowColor: hasSkills ? '#f2c85a' : '#315d4e',
           shadowOpacity: hasSkills ? 0.3 : 0.16,
           shadowRadius: hasSkills ? 36 : 28,
@@ -2303,7 +2309,7 @@ function SeedSurvey({
                 WebkitUserSelect: 'none',
                 overflow: 'visible',
                 backgroundImage: hasSkills
-                  ? 'radial-gradient(circle at 42% 35%, rgba(255,253,210,0.96) 0%, rgba(255,228,111,0.88) 48%, rgba(255,207,81,0.68) 100%)'
+                  ? undefined
                   : 'radial-gradient(circle at 48% 34%, rgba(255,253,226,0.98) 0%, rgba(255,237,152,0.92) 100%)',
               } as any)
             : {}),
@@ -2311,26 +2317,60 @@ function SeedSurvey({
       >
         {hasSkills ? (
           <>
-            <SunRayBackground size={sunRaySize} />
-            <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: sunTitleFontSize, lineHeight: sunTitleLineHeight, textAlign: 'center' }}>
-              Skills Garden Quiz
-            </Text>
-            <Text selectable={false} numberOfLines={3} style={{ fontFamily: 'Lato_400Regular', color: '#52755b', fontSize: sunBodyFontSize, lineHeight: sunBodyLineHeight, textAlign: 'center' }}>
-              Need help? Let the sun pick a few blooms.
-            </Text>
             <View
+              pointerEvents="none"
               style={{
-                minHeight: sunButtonHeight,
-                borderRadius: 999,
-                backgroundColor: '#315d4e',
-                paddingHorizontal: sunButtonPadding,
-                alignItems: 'center',
-                justifyContent: 'center',
+                position: 'absolute',
+                left: (sunSize - sunRaySize) / 2,
+                top: (sunSize - sunRaySize) / 2,
+                width: sunRaySize,
+                height: sunRaySize,
+                zIndex: 0,
               }}
             >
-              <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: sunButtonFontSize }}>
-                Begin
+              <SunRayBackground size={sunRaySize} />
+            </View>
+            <View
+              style={{
+                width: sunSize,
+                height: sunSize,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: 'rgba(255,253,247,0.54)',
+                backgroundColor: 'rgba(255,224,105,0.82)',
+                padding: sunPadding,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: sunGap,
+                overflow: 'hidden',
+                zIndex: 1,
+                ...(Platform.OS === 'web'
+                  ? ({
+                      backgroundImage: 'radial-gradient(circle at 42% 35%, rgba(255,253,210,0.96) 0%, rgba(255,228,111,0.9) 48%, rgba(255,207,81,0.74) 100%)',
+                    } as any)
+                  : {}),
+              }}
+            >
+              <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: sunTitleFontSize, lineHeight: sunTitleLineHeight, textAlign: 'center' }}>
+                Skills Garden Quiz
               </Text>
+              <Text selectable={false} numberOfLines={3} style={{ fontFamily: 'Lato_400Regular', color: '#52755b', fontSize: sunBodyFontSize, lineHeight: sunBodyLineHeight, textAlign: 'center' }}>
+                Need help? Let the sun pick a few blooms.
+              </Text>
+              <View
+                style={{
+                  minHeight: sunButtonHeight,
+                  borderRadius: 999,
+                  backgroundColor: '#315d4e',
+                  paddingHorizontal: sunButtonPadding,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: sunButtonFontSize }}>
+                  Begin
+                </Text>
+              </View>
             </View>
           </>
         ) : (
