@@ -250,7 +250,7 @@ const SOIL_SPECKS = Array.from({ length: 38 }, (_, index) => ({
 
 const DISTANT_BLOOMS = Array.from({ length: 34 }, (_, index) => ({
   leftRatio: ((index * 2.91) % 100) / 100,
-  bottomRatio: 0.22 + (((index * 4.17) % 100) / 100) * 0.18,
+  bottomRatio: 0.12 + (((index * 4.17) % 100) / 100) * 0.10,
   height: 7 + (index % 5) * 2,
   color: ['#f2c85a', '#dd7e6b', '#c7aadf', '#f4b8cc', '#fff2ba'][index % 5],
   opacity: 0.32 + ((index * 11) % 24) / 100,
