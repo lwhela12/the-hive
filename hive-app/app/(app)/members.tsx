@@ -1964,7 +1964,7 @@ export default function MembersScreen() {
                               : 'Profile note';
                     const hasDailyMatch = !isMe && typeof member.dailyMatchPercent === 'number' && (member.dailyMatchSharedCount ?? 0) > 0;
                     const matchBadgeLeft = Math.round(
-                      honeycombCellWidth / 2 + honeycombAvatarSize * (isCompactHoneycomb ? 0.12 : 0.18)
+                      honeycombCellWidth / 2 + honeycombAvatarSize * (isCompactHoneycomb ? 0.2 : 0.3)
                     );
                     const matchBadgeTop = Math.round(honeycombCardHeight * (isCompactHoneycomb ? 0.11 : 0.12));
                     const visibleChips = [
