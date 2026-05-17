@@ -4,6 +4,8 @@ import { formatDateShort } from '../../lib/dateUtils';
 import type { Wish } from '../../types';
 
 const publicBeeIcon = require('../../assets/BEE ONLY IN GOLD BG.png');
+const ACTIVE_WISH_CARD_BACKGROUND = '#fff8e8';
+const GRANTED_WISH_CARD_BACKGROUND = '#fffdf5';
 
 type WishCombCardProps = {
   wish: Wish;
@@ -206,11 +208,11 @@ const styles = StyleSheet.create({
   },
   cardPublic: {
     borderColor: 'rgba(222,193,129,0.5)',
-    backgroundColor: '#fff8e8',
+    backgroundColor: ACTIVE_WISH_CARD_BACKGROUND,
   },
   cardPrivate: {
     borderColor: 'rgba(222,193,129,0.5)',
-    backgroundColor: '#fff8e8',
+    backgroundColor: ACTIVE_WISH_CARD_BACKGROUND,
   },
   cardPressed: {
     opacity: 0.82,
@@ -218,7 +220,7 @@ const styles = StyleSheet.create({
   },
   cardGranted: {
     borderColor: 'rgba(222,193,129,0.28)',
-    backgroundColor: '#fffdf5',
+    backgroundColor: GRANTED_WISH_CARD_BACKGROUND,
     shadowOpacity: 0.04,
   },
   content: {

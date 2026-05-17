@@ -890,6 +890,7 @@ export default function ProfileScreen() {
 
   const isProfileDesktop = screenWidth >= 1240;
   const isProfilePhone = screenWidth < 640;
+  const profileWishPanelHeight = isProfilePhone ? 500 : 520;
   const bloomingSkillCount = skills.filter(hasBloomingSkill).length;
   const profileKnownFor = ((profile as any).known_for as string | null | undefined)?.trim() || '';
   const profileBio = ((profile as any).bio as string | null | undefined)?.trim() || '';
@@ -1799,41 +1800,52 @@ export default function ProfileScreen() {
             shadowRadius: 18,
             shadowOffset: { width: 0, height: 5 },
             elevation: 3,
-            padding: 12,
+            height: profileWishPanelHeight,
+            overflow: 'hidden',
           }}>
-            {wishes.length === 0 ? (
-              <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
-                <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
-                  No wishes yet. What do you need help with?
-                </Text>
-              </View>
-            ) : (
-              <View style={{ gap: 12 }}>
-                {activeWishes.map(renderWishCard)}
-                {grantedWishes.length > 0 ? (
-                  <View
-                    key="granted-divider"
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                      borderTopWidth: activeWishes.length > 0 ? 1 : 0,
-                      borderBottomWidth: 1,
-                      borderColor: 'rgba(222,193,129,0.28)',
-                      backgroundColor: '#fbf1dc',
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8e7a5e' }}>
-                      Granted ({grantedWishes.length})
-                    </Text>
-                    <Ionicons name="sparkles-outline" size={14} color="#bd9348" />
-                  </View>
-                ) : null}
-                {grantedWishes.map(renderWishCard)}
-              </View>
-            )}
+            <ScrollView
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{
+                padding: 12,
+                paddingBottom: 12,
+                flexGrow: wishes.length === 0 ? 1 : undefined,
+              }}
+            >
+              {wishes.length === 0 ? (
+                <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
+                    No wishes yet. What do you need help with?
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: 12 }}>
+                  {activeWishes.map(renderWishCard)}
+                  {grantedWishes.length > 0 ? (
+                    <View
+                      key="granted-divider"
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderTopWidth: activeWishes.length > 0 ? 1 : 0,
+                        borderBottomWidth: 1,
+                        borderColor: 'rgba(222,193,129,0.28)',
+                        backgroundColor: '#fbf1dc',
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8e7a5e' }}>
+                        Granted ({grantedWishes.length})
+                      </Text>
+                      <Ionicons name="sparkles-outline" size={14} color="#bd9348" />
+                    </View>
+                  ) : null}
+                  {grantedWishes.map(renderWishCard)}
+                </View>
+              )}
+            </ScrollView>
             </View>
         </View>
         </FadeIn>}
