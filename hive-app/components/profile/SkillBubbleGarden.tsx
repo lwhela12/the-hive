@@ -217,11 +217,11 @@ const SEED_SURVEY: SurveyQuestion[] = [
 
 const STAGES: StageDef[] = [
   { label: 'Seed', height: 24, canvasWidth: 72, labelWidth: 100 },
-  { label: 'Tiny bloom', height: 62, canvasWidth: 88, labelWidth: 108 },
-  { label: 'Small bloom', height: 82, canvasWidth: 104, labelWidth: 120 },
-  { label: 'Bloom', height: 104, canvasWidth: 122, labelWidth: 132 },
-  { label: 'Big bloom', height: 124, canvasWidth: 142, labelWidth: 146 },
-  { label: 'Full bloom', height: 146, canvasWidth: 162, labelWidth: 158 },
+  { label: 'Tiny bloom', height: 98, canvasWidth: 128, labelWidth: 132 },
+  { label: 'Small bloom', height: 128, canvasWidth: 154, labelWidth: 162 },
+  { label: 'Bloom', height: 158, canvasWidth: 184, labelWidth: 190 },
+  { label: 'Big bloom', height: 192, canvasWidth: 220, labelWidth: 226 },
+  { label: 'Full bloom', height: 224, canvasWidth: 254, labelWidth: 260 },
 ];
 
 const SPECIES_BY_CATEGORY: Record<SkillCategoryDef['species'], WildflowerSpecies[]> = {
@@ -354,6 +354,31 @@ function getDefaultPosition(skill: GardenSkill, index: number, count: number) {
     x: clamp((column + 0.5) / columns + rowOffset + xJitter, 0.08, 0.92),
     y: clamp(0.55 + (row / Math.max(1, rows - 1)) * 0.3 + yJitter, 0.52, 0.9),
   };
+}
+
+function getFrontRowScale(width: number) {
+  const effectiveWidth = Math.max(width || 0, 360);
+  const fullBloomWidth = STAGES[STAGES.length - 1].labelWidth;
+  const sidePadding = clamp(effectiveWidth * 0.045, effectiveWidth < 520 ? 18 : 30, effectiveWidth > 1280 ? 96 : 58);
+  const idealScale = ((effectiveWidth - sidePadding * 2) / (GARDEN_CAPACITY * fullBloomWidth)) * 1.38;
+  const minScale = effectiveWidth < 520 ? 0.46 : 0.66;
+  const maxScale = effectiveWidth > 1280 ? 1.28 : effectiveWidth > 860 ? 1.08 : 0.88;
+
+  return clamp(idealScale, minScale, maxScale);
+}
+
+function getFrontRowCenterX(index: number, count: number, width: number) {
+  if (count <= 1) return width / 2;
+
+  const sidePadding = clamp(width * 0.045, width < 520 ? 18 : 30, width > 1280 ? 96 : 58);
+  const usableWidth = Math.max(1, width - sidePadding * 2);
+  const slotIndex = (GARDEN_CAPACITY - 1) * (index / Math.max(1, count - 1));
+
+  return sidePadding + (usableWidth * slotIndex) / (GARDEN_CAPACITY - 1);
+}
+
+function getFrontRowAnchorY(height: number, width: number) {
+  return height - clamp(width < 520 ? 34 : 48, 32, 58);
 }
 
 function getMeadowHeight(skillCount: number, width: number) {
@@ -588,7 +613,7 @@ function renderFlowerCenterLabel({
 
   const lines = getEmbeddedLabelLines(label);
   const longestLine = lines.reduce((longest, line) => Math.max(longest, line.length), 0);
-  const fontSize = clamp(radius * 0.27 - Math.max(0, longestLine - 9) * 0.12, 4.6, 7.4);
+  const fontSize = clamp(radius * 0.27 - Math.max(0, longestLine - 9) * 0.12, 4.8, 13.5);
   const lineGap = fontSize * 1.08;
   const firstLineY = cy - ((lines.length - 1) * lineGap) / 2 + fontSize * 0.34;
 
@@ -616,7 +641,7 @@ function renderDaisy(cx: number, cy: number, radius: number, full: boolean, cate
   const petalCount = 8;
   const petalFill = full ? category.color : category.pale;
   const alternateFill = full ? `${category.color}dd` : '#fffdf7';
-  const centerRadius = clamp(radius * (full ? 0.72 : 0.66), 9.5, 22);
+  const centerRadius = clamp(radius * (full ? 0.68 : 0.62), 10, 46);
   return (
     <G>
       {Array.from({ length: petalCount }, (_, petal) => {
@@ -760,11 +785,13 @@ function WildflowerSvg({
   species,
   category,
   label,
+  sizeScale = 1,
 }: {
   level: number;
   species: WildflowerSpecies;
   category: SkillCategoryDef;
   label?: string;
+  sizeScale?: number;
 }) {
   const stage = getStage(level);
   const canvasWidth = stage.canvasWidth;
@@ -775,7 +802,7 @@ function WildflowerSvg({
 
   if (level === 0) {
     return (
-      <Svg width={canvasWidth} height={canvasHeight} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
+      <Svg width={canvasWidth * sizeScale} height={canvasHeight * sizeScale} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
         <Ellipse cx={cx} cy={baseY - 2} rx={5.2} ry={3.6} fill="#5b3a22" stroke="#2d1c12" strokeWidth={1} />
         <Ellipse cx={cx - 1.4} cy={baseY - 3.4} rx={1.4} ry={0.9} fill="#b98f5e" opacity={0.7} />
       </Svg>
@@ -783,13 +810,13 @@ function WildflowerSvg({
   }
 
   const full = level >= 4;
-  const bloomRadius = [0, 10, 14, 18, 21, 25][level] ?? 18;
-  const topY = baseY - (34 + level * 9);
+  const bloomRadius = [0, 18, 25, 33, 43, 54][level] ?? 33;
+  const topY = baseY - (48 + level * 18);
   const flowerX = cx + (species === 'poppy' ? -3 : species === 'lavender' ? 2 : 0);
   const flowerY = topY;
 
   return (
-    <Svg width={canvasWidth} height={canvasHeight} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
+    <Svg width={canvasWidth * sizeScale} height={canvasHeight * sizeScale} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
       {renderStem({ cx, baseY, topY: flowerY + bloomRadius * 0.25, leafColor: leaf, strokeWidth: 2 + level * 0.18, lean: flowerX - cx })}
       {renderBloom(species, flowerX, flowerY, bloomRadius, full, category, level >= 2 ? label : undefined)}
     </Svg>
@@ -801,15 +828,18 @@ function WildflowerSprite({
   category,
   swaySalt,
   label,
+  sizeScale = 1,
 }: {
   level: number;
   category: SkillCategoryDef;
   swaySalt: string;
   label?: string;
+  sizeScale?: number;
 }) {
   const stage = getStage(level);
   const species: WildflowerSpecies = 'daisy';
-  const spriteScale = level >= 4 ? 1.18 : level >= 2 ? 1.1 : 1;
+  const spriteScale = level >= 4 ? 1.04 : 1;
+  const renderedScale = sizeScale * spriteScale;
   const shouldSway = Platform.OS === 'web' && level >= 4;
   const swayDelay = -Math.round(ratioFromHash(swaySalt, 4) * 2600);
   const swayDuration = 3300 + Math.round(ratioFromHash(swaySalt, 5) * 1200);
@@ -818,8 +848,8 @@ function WildflowerSprite({
     <View
       pointerEvents="none"
       style={{
-        width: stage.canvasWidth,
-        height: stage.height + 18,
+        width: stage.canvasWidth * renderedScale,
+        height: (stage.height + 18) * renderedScale,
         alignItems: 'center',
         justifyContent: 'flex-end',
         overflow: 'visible',
@@ -835,18 +865,18 @@ function WildflowerSprite({
                 transformOrigin: '50% 100%',
               } as any)
             : {}),
-          width: stage.canvasWidth,
-          height: stage.height + 18,
+          width: stage.canvasWidth * renderedScale,
+          height: (stage.height + 18) * renderedScale,
           alignItems: 'center',
           justifyContent: 'flex-end',
-          transform: [{ scale: spriteScale }],
         }}
       >
         <WildflowerSvg
           level={level}
           species={species}
           category={category}
-          label={level >= 4 ? label : undefined}
+          label={level >= 2 ? label : undefined}
+          sizeScale={renderedScale}
         />
       </View>
     </View>
@@ -1004,24 +1034,22 @@ function SkillPlant({
   const level = getLevel(skill);
   const stage = getStage(level);
   const category = getCategoryForSkill(skill.description);
-  const fallback = getDefaultPosition(skill, index, count);
-  const storedX = typeof skill.display_x === 'number' ? skill.display_x : fallback.x;
-  const storedY = typeof skill.display_y === 'number' ? skill.display_y : fallback.y;
-  const x = clamp(storedX, 0.06, 0.94);
-  const y = clamp(storedY, 0.54, 0.96);
-  const plantWidth = stage.labelWidth;
-  const plantHeight = stage.height + LABEL_HEIGHT + 14;
-  const anchorY = clamp(y * height, stage.height + LABEL_HEIGHT + 10, height - 9);
-  const left = clamp(x * width - plantWidth / 2, FIELD_SIDE_PADDING, Math.max(FIELD_SIDE_PADDING, width - plantWidth - FIELD_SIDE_PADDING));
+  const rowScale = getFrontRowScale(width);
+  const bloomHasEmbeddedLabel = level >= 2;
+  const showLabel = !bloomHasEmbeddedLabel && (selected || count <= 10 || featured);
+  const plantWidth = stage.labelWidth * rowScale;
+  const spriteHeight = (stage.height + 18) * rowScale * (level >= 4 ? 1.04 : 1);
+  const plantHeight = spriteHeight + (showLabel ? LABEL_HEIGHT : 8);
+  const centerX = getFrontRowCenterX(index, count, width);
+  const anchorY = getFrontRowAnchorY(height, width);
+  const left = clamp(centerX - plantWidth / 2, -plantWidth * 0.28, Math.max(-plantWidth * 0.28, width - plantWidth * 0.72));
   const top = clamp(anchorY - plantHeight, 6, Math.max(6, height - plantHeight - 4));
-  const labelFont = clamp(12 - Math.max(0, skill.description.length - 22) * 0.08, 9.4, 12);
+  const labelFont = clamp(12 * rowScale - Math.max(0, skill.description.length - 22) * 0.06, 8.4, 12);
   const pan = useRef(new Animated.ValueXY()).current;
   const grow = useRef(new Animated.Value(0)).current;
   const dragStart = useRef({ left, top });
   const didDrag = useRef(false);
-  const canDrag = !!editable;
-  const bloomHasEmbeddedLabel = level >= 2;
-  const showLabel = !bloomHasEmbeddedLabel && (selected || count <= 10 || featured);
+  const canDrag = false;
 
   useEffect(() => {
     grow.setValue(0);
@@ -1145,7 +1173,7 @@ function SkillPlant({
         position: 'absolute',
         left,
         top,
-        zIndex: Math.round(y * 1000),
+        zIndex: selected ? 90 : 20 + index,
         transform: [
           { translateX: pan.x },
           { translateY: Animated.add(pan.y, grow.interpolate({ inputRange: [0, 1], outputRange: [18, 0] })) },
@@ -1183,12 +1211,13 @@ function SkillPlant({
             : {}),
         }}
       >
-        <View style={{ width: plantWidth, height: stage.height + 18, alignItems: 'center', justifyContent: 'flex-end' }}>
+        <View style={{ width: plantWidth, height: spriteHeight, alignItems: 'center', justifyContent: 'flex-end' }}>
           <WildflowerSprite
             level={level}
             category={category}
             swaySalt={`${skill.id}:${skill.description}`}
             label={skill.description}
+            sizeScale={rowScale}
           />
         </View>
 
@@ -2111,7 +2140,7 @@ export function SkillBubbleGarden({
               left: 14,
               right: 14,
               top: 18,
-              zIndex: 30,
+              zIndex: 500,
             }}
           >
             <SeedSurvey
@@ -2132,7 +2161,7 @@ export function SkillBubbleGarden({
               right: width > 620 ? undefined : 14,
               top: 14,
               width: width > 620 ? Math.min(380, Math.max(0, width - 28)) : undefined,
-              zIndex: 35,
+              zIndex: 500,
             }}
           >
             <SeedSurvey
