@@ -130,6 +130,9 @@ function HoneycombCell({
   const iconSize = width < 150 ? 12 : 15;
   const headerGap = width < 150 ? 4 : 5;
   const headerFontSize = width < 150 ? 7.6 : compact ? 8.2 : 9;
+  const horizontalInset = compact
+    ? Math.max(26, width * 0.2)
+    : Math.max(34, width * 0.22);
 
   return (
     <View
@@ -151,7 +154,7 @@ function HoneycombCell({
         pointerEvents="none"
         style={{
           minHeight: height,
-          paddingHorizontal: Math.max(20, width * 0.17),
+          paddingHorizontal: horizontalInset,
           paddingTop: Math.max(20, height * 0.16),
           paddingBottom: Math.max(20, height * 0.15),
           alignItems: 'center',
