@@ -162,7 +162,7 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
       id: `join_${m.user_id}`,
       type: 'member_joined',
       emoji: '🐝',
-      text: `${name} joined the HIVE`,
+      text: `${name} joined HIVE`,
       timestamp: m.created_at,
       sourceId: m.user_id,
       navigatesTo: 'members',

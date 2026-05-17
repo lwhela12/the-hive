@@ -843,7 +843,7 @@ function MemberDetailModal({
               </View>
               <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 120 }}>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', marginBottom: 16, lineHeight: 18 }}>
-                  Private wishes are just for you. Share with the HIVE when you're ready — someone might know exactly how to help.
+                  Private wishes are just for you. Share with HIVE when you're ready — someone might know exactly how to help.
                 </Text>
                 {wishesLoading ? (
                   <ActivityIndicator size="small" color="#bd9348" style={{ marginVertical: 20 }} />
@@ -859,7 +859,7 @@ function MemberDetailModal({
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: wish.status === 'public' ? '#22c55e' : '#d1d5db', marginRight: 8 }} />
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: wish.status === 'public' ? '#16a34a' : '#9ca3af' }}>
-                            {wish.status === 'public' ? 'Shared with the HIVE' : 'Private'}
+                            {wish.status === 'public' ? 'Shared with HIVE' : 'Private'}
                           </Text>
                         </View>
                         <LinkifiedText
@@ -1443,7 +1443,7 @@ function MemberDetailModal({
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                           <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: wish.status === 'public' ? '#22c55e' : '#9ca3af', marginRight: 7 }} />
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: wish.status === 'public' ? '#16a34a' : '#9ca3af' }}>
-                            {wish.status === 'public' ? 'Shared with the HIVE' : 'Private'}
+                            {wish.status === 'public' ? 'Shared with HIVE' : 'Private'}
                           </Text>
                         </View>
                         <LinkifiedText

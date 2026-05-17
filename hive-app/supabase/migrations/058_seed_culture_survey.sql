@@ -32,7 +32,7 @@ BEGIN
     ) VALUES (
       v_community_id,
       'Pre-Meeting Elevator Pitch',
-      'A quick check-in so the HIVE (and Clive) know where everyone''s at before we gather. Takes about 2 minutes.',
+      'A quick check-in so HIVE (and Clive) know where everyone''s at before we gather. Takes about 2 minutes.',
       '[
         {
           "id": "q_name_today",

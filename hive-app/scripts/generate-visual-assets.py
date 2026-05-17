@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate bitmap UI assets for the HIVE member honeycomb and skill garden.
+"""Generate bitmap UI assets for HIVE member honeycomb and skill garden.
 
 The app intentionally uses these as PNG sprites instead of composing every
 petal and honeycomb facet as runtime vector views. The generator is pure

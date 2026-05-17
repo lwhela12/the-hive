@@ -2840,7 +2840,7 @@ export default function HiveScreen() {
                             </Text>
                           ) : null}
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#9a8060', marginTop: 8 }}>
-                            {answerCount} {answerCount === 1 ? 'answer' : 'answers'} from the HIVE
+                            {answerCount} {answerCount === 1 ? 'answer' : 'answers'} from HIVE
                           </Text>
                         </View>
                       </View>
@@ -2878,7 +2878,7 @@ export default function HiveScreen() {
                 <TextInput
                   value={myAnswer}
                   onChangeText={setMyAnswer}
-                  placeholder={isVoiceListening ? '' : 'Share your answer with the HIVE...'}
+                  placeholder={isVoiceListening ? '' : 'Share your answer with HIVE...'}
                   placeholderTextColor="#9ca3af"
                   multiline
                   numberOfLines={4}

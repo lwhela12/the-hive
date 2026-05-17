@@ -440,7 +440,7 @@ export default function ProfileScreen() {
     if (!profile || !communityId) return;
 
     Alert.alert(
-      'Share with the HIVE?',
+      'Share with HIVE?',
       `This will make your wish visible to all HIVE members:\n\n"${wish.description}"`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -1088,7 +1088,7 @@ export default function ProfileScreen() {
             What is alive right now?
           </Text>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#7d715f', marginBottom: 18 }}>
-            This gives the HIVE a reason to know what to bring you, send you, or ask you about this month.
+            This gives HIVE a reason to know what to bring you, send you, or ask you about this month.
           </Text>
           {renderDeepQuizField({
             label: 'Current focus',
@@ -1160,7 +1160,7 @@ export default function ProfileScreen() {
           Your 3MIQ
         </Text>
         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: '#7d715f', marginBottom: 14 }}>
-          These can stay rough. They are meant to help Clive, the boards, and the HIVE understand what matters most to you.
+          These can stay rough. They are meant to help Clive, the boards, and HIVE understand what matters most to you.
         </Text>
         <Pressable
           onPress={handleFind3MiqWithClive}
@@ -2031,18 +2031,18 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* Personality Notes - How the HIVE Sees You */}
+        {/* Personality Notes - How HIVE Sees You */}
         {!initialLoading && userInsights?.personality_notes && (
           <View className="mb-6">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
-              How the HIVE Sees You
+              How HIVE Sees You
             </Text>
             <View className="bg-white rounded-xl shadow-sm p-4">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
                 {userInsights.personality_notes}
               </Text>
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/40 mt-3">
-                These notes are maintained by the HIVE assistant based on your conversations. Only you can see them.
+                These notes are maintained by Clive based on your conversations. Only you can see them.
               </Text>
             </View>
           </View>

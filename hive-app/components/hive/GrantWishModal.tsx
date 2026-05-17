@@ -326,7 +326,7 @@ export function GrantWishModal({
                   className="text-charcoal/70 text-sm"
                 >
                   Your wish will be moved to the "Granted" section where the community can see how
-                  the HIVE came together to help.
+                  HIVE came together to help.
                 </Text>
               </View>
 

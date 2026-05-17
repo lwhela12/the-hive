@@ -548,7 +548,7 @@ Status: ${qb.status}`);
           return `- ${w.userName}${marker}: ${w.description}`;
         })
         .join('\n');
-      sections.push(`## Active Public Wishes in the HIVE
+      sections.push(`## Active Public Wishes in HIVE
 ${wishes}`);
     }
 

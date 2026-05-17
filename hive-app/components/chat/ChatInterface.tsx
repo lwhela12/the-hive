@@ -359,12 +359,12 @@ What are some things you feel you're particularly good at? It could be professio
     if (mode === 'onboarding' && context === 'wishes') {
       return `Now let's talk about what you might need help with.
 
-What are you working on these days? Is there anything you've been meaning to do but haven't had the time or know-how? Remember, these stay private unless you choose to share them with the HIVE.`;
+What are you working on these days? Is there anything you've been meaning to do but haven't had the time or know-how? Remember, these stay private unless you choose to share them with HIVE.`;
     }
 
     // Unified onboarding (no context specified)
     if (mode === 'onboarding' && !context) {
-      return `Hey ${profile?.name || 'there'}! Welcome to the HIVE! I'm so excited to get to know you.
+      return `Hey ${profile?.name || 'there'}! Welcome to HIVE! I'm so excited to get to know you.
 
 Before we dive in, when's your birthday? We love celebrating our members!`;
     }

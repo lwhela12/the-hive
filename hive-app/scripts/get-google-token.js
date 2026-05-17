@@ -5,7 +5,7 @@
  * 1. Set your CLIENT_ID and CLIENT_SECRET below
  * 2. Run: node scripts/get-google-token.js
  * 3. Open the URL in your browser
- * 4. Sign in with the HIVE Gmail account
+ * 4. Sign in with HIVE Gmail account
  * 5. Copy the refresh token from the console output
  */
 

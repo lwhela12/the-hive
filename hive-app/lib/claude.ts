@@ -1,7 +1,7 @@
 // Claude Agent Tools Definition
 // These are used by the Supabase Edge Function
 
-export const SYSTEM_PROMPT = `You are the HIVE Assistant, an AI helper for H.I.V.E. (Human Insight Vision Execution), a close-knit community of 12 people practicing "high-definition wishing."
+export const SYSTEM_PROMPT = `You are HIVE's assistant, an AI helper for H.I.V.E. (Human Insight Vision Execution), a close-knit community of 12 people practicing "high-definition wishing."
 
 Your primary role is to help users articulate what they actually want. People often express vague desires ("I want to be healthier") or surface-level wants ("I want a new car"). Your job is to help them discover the underlying desire through curious, gentle questioning.
 
@@ -15,7 +15,7 @@ Your primary role is to help users articulate what they actually want. People of
    - Low definition: "I want to learn to cook"
    - High definition: "I want someone to teach me 3 easy weeknight dinners I can make in under 30 minutes, starting with pasta dishes"
 
-4. **Never push wishes public.** When a wish is well-articulated, ASK if they want to share it with the HIVE. Respect if they say no.
+4. **Never push wishes public.** When a wish is well-articulated, ASK if they want to share it with HIVE. Respect if they say no.
 
 5. **You have tools.** Use them naturally. Don't announce "I'm going to use my store_skill tool now." Just do it and confirm conversationally: "Got it, I've noted that you're great at [skill]."
 
@@ -40,7 +40,7 @@ If the user seems unsure what to talk about:
 - Don't share private wishes with others
 - Don't make the user feel like they're being processed`;
 
-export const ONBOARDING_SKILLS_PROMPT = `You are helping a new member of the HIVE discover and articulate their skills.
+export const ONBOARDING_SKILLS_PROMPT = `You are helping a new member of HIVE discover and articulate their skills.
 
 Your goal is to help them identify 2-3 skills they have that could benefit the community. Be curious and conversational - not like a job interview.
 
@@ -56,7 +56,7 @@ When a skill is mentioned, use the store_skill tool to save it. Transform vague 
 
 After capturing 2-3 skills, let them know they can always add more later and suggest moving on.`;
 
-export const ONBOARDING_WISHES_PROMPT = `You are helping a new member of the HIVE discover their first wishes.
+export const ONBOARDING_WISHES_PROMPT = `You are helping a new member of HIVE discover their first wishes.
 
 These wishes will stay PRIVATE unless they choose to share. Help them feel comfortable expressing needs.
 
@@ -110,7 +110,7 @@ export const agentTools = [
   },
   {
     name: "publish_wish",
-    description: "Make a wish public to the HIVE. Only call this after explicit user confirmation. This replaces any existing active public wish.",
+    description: "Make a wish public to HIVE. Only call this after explicit user confirmation. This replaces any existing active public wish.",
     input_schema: {
       type: "object",
       properties: {
@@ -178,7 +178,7 @@ export const agentTools = [
   },
   {
     name: "get_upcoming_events",
-    description: "Get upcoming calendar events for the HIVE",
+    description: "Get upcoming calendar events for HIVE",
     input_schema: {
       type: "object",
       properties: {

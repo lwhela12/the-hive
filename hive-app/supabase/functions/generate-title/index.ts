@@ -94,7 +94,7 @@ Rules:
 - Use title case
 - No full sentences
 - No punctuation unless it is part of a name
-- No cute bee, honey, buzz, or HIVE language unless the conversation is actually about the HIVE app/community
+- No cute bee, honey, buzz, or HIVE language unless the conversation is actually about HIVE app/community
 - Return only the title, nothing else
 
 Good examples:

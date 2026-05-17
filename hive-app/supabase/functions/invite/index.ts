@@ -24,6 +24,16 @@ function getInviteUrlBase() {
   return normalizedBase;
 }
 
+function normalizeHiveBrandName(name?: string | null) {
+  const trimmed = (name ?? '').trim();
+  if (!trimmed) return 'H.I.V.E.';
+  const normalized = trimmed.toLowerCase();
+  if (['hive', 'the hive', 'h.i.v.e.', 'the h.i.v.e.'].includes(normalized)) {
+    return 'H.I.V.E.';
+  }
+  return trimmed;
+}
+
 interface InvitePayload {
   email: string;
   role?: 'member' | 'treasurer' | 'admin';
@@ -169,7 +179,7 @@ serve(async (req) => {
   }
 
   const inviteUrl = `${getInviteUrlBase()}?token=${encodeURIComponent(token_invite)}`;
-  const communityName = community?.name || 'the HIVE';
+  const communityName = normalizeHiveBrandName(community?.name);
 
   if (RESEND_API_KEY) {
     try {

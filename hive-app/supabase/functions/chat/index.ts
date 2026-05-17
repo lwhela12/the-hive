@@ -9,9 +9,9 @@ import {
   SSEWriter,
 } from '../_shared/streaming.ts';
 
-const SYSTEM_PROMPT = `You are Clive, the HIVE Assistant, an AI helper for H.I.V.E. (Human Insight Vision Execution), a close-knit community of 12 people practicing "high-definition wishing."
+const SYSTEM_PROMPT = `You are Clive, HIVE's assistant, an AI helper for H.I.V.E. (Human Insight Vision Execution), a close-knit community of 12 people practicing "high-definition wishing."
 
-**IMPORTANT: Use "H.I.V.E." for the formal brand name and "the HIVE" in prose. Avoid mixed-case brand variants.**
+**IMPORTANT: Use "H.I.V.E." for the formal brand name and "HIVE" in product copy. Avoid article-prefixed, mixed-case, or lowercase brand variants.**
 **Identity: Your name is Clive. The signed-in user's name appears in context; that is the human you are helping, not you. If the user addresses "Clive," they are talking to you. Never claim to be the signed-in user.**
 **Speed posture: respond quickly and concisely by default. Prefer 1-3 short paragraphs, ask one clear next question, and only go deep when the user asks for depth or the task truly requires it.**
 
@@ -74,7 +74,7 @@ Examples:
 
 2. **Listen for latent wishes.** When someone says "I'm having a rough day"—that might lead to a wish. Probe gently.
 
-3. **Never push wishes public.** When a wish is well-articulated and confirmed, ASK if they want to share it with the HIVE. Respect if they say no.
+3. **Never push wishes public.** When a wish is well-articulated and confirmed, ASK if they want to share it with HIVE. Respect if they say no.
 
 4. **You have tools.** Use them naturally. Don't announce tool usage—just use them and continue conversationally. But ALWAYS confirm wishes before saving.
 
@@ -138,9 +138,9 @@ You maintain a private personality profile for each user. The user CAN see these
 - Don't project what you think they should want
 - Don't assume impossible wishes have no actionable components`;
 
-const ONBOARDING_SKILLS_PROMPT = `You are helping a new member of the HIVE discover and articulate their skills.
+const ONBOARDING_SKILLS_PROMPT = `You are helping a new member of HIVE discover and articulate their skills.
 
-**IMPORTANT: Use "H.I.V.E." for the formal brand name and "the HIVE" in prose. Avoid mixed-case brand variants.**
+**IMPORTANT: Use "H.I.V.E." for the formal brand name and "HIVE" in product copy. Avoid article-prefixed, mixed-case, or lowercase brand variants.**
 
 Your goal is to help them identify 2-3 skills they have that could benefit the community. Be curious and conversational.
 
@@ -148,9 +148,9 @@ When a skill is mentioned, use the store_skill tool to save it. Transform vague 
 
 After capturing 2-3 skills, suggest moving on to wishes.`;
 
-const ONBOARDING_WISHES_PROMPT = `You are helping a new member of the HIVE discover their first wishes.
+const ONBOARDING_WISHES_PROMPT = `You are helping a new member of HIVE discover their first wishes.
 
-**IMPORTANT: Use "H.I.V.E." for the formal brand name and "the HIVE" in prose. Avoid mixed-case brand variants.**
+**IMPORTANT: Use "H.I.V.E." for the formal brand name and "HIVE" in product copy. Avoid article-prefixed, mixed-case, or lowercase brand variants.**
 
 These wishes will stay PRIVATE unless they choose to share. Help them feel comfortable expressing needs.
 
@@ -163,9 +163,9 @@ Use the HD wishing process: explore what they really want through curious questi
 
 Remind them these stay private and they can refine them later.`;
 
-const UNIFIED_ONBOARDING_PROMPT = `You are welcoming a new member to the HIVE. Guide them through getting to know each other in a single flowing conversation.
+const UNIFIED_ONBOARDING_PROMPT = `You are welcoming a new member to HIVE. Guide them through getting to know each other in a single flowing conversation.
 
-**IMPORTANT: Use "H.I.V.E." for the formal brand name and "the HIVE" in prose. Avoid mixed-case brand variants.**
+**IMPORTANT: Use "H.I.V.E." for the formal brand name and "HIVE" in product copy. Avoid article-prefixed, mixed-case, or lowercase brand variants.**
 
 ## Your Goals (in this order):
 1. **Get to know them** - They've already been greeted with a birthday question. When they share their birthday, save it immediately with update_profile. If they share their phone number or preferred contact method, save those too.
@@ -301,7 +301,7 @@ function quickStreamResponse(response: string): Response {
 
 const REFINE_WISH_PROMPT = `You are helping a HIVE member refine their wish into a "high-definition" version.
 
-**IMPORTANT: Use "H.I.V.E." for the formal brand name and "the HIVE" in prose. Avoid mixed-case brand variants.**
+**IMPORTANT: Use "H.I.V.E." for the formal brand name and "HIVE" in product copy. Avoid article-prefixed, mixed-case, or lowercase brand variants.**
 
 They started with this rough wish:
 "{rough_wish}"
@@ -380,7 +380,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "publish_wish",
-    description: "Make a wish public to the HIVE. Only call after explicit user confirmation.",
+    description: "Make a wish public to HIVE. Only call after explicit user confirmation.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -485,7 +485,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "search_board_posts",
-    description: "Search and retrieve board posts from the HIVE message board. Use this to find specific discussions, reference threads in conversation, or look up what members have posted. Returns post details including ID, title, content snippet, author, category, reply count, and whether it's pinned.",
+    description: "Search and retrieve board posts from HIVE message board. Use this to find specific discussions, reference threads in conversation, or look up what members have posted. Returns post details including ID, title, content snippet, author, category, reply count, and whether it's pinned.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -1471,7 +1471,7 @@ serve(async (req) => {
               .eq('id', wish_id)
               .eq('user_id', userId)
               .eq('community_id', communityId);
-            result = error ? `Error: ${error.message}` : 'Wish published to the HIVE';
+            result = error ? `Error: ${error.message}` : 'Wish published to HIVE';
             break;
           }
 
@@ -1597,7 +1597,7 @@ serve(async (req) => {
 
           case 'complete_onboarding': {
             onboardingComplete = true;
-            result = 'Onboarding marked as complete. The user can now enter the HIVE!';
+            result = 'Onboarding marked as complete. The user can now enter HIVE!';
             break;
           }
 

@@ -19,6 +19,15 @@ type InviteBlock = {
 };
 
 const normalizeEmail = (email?: string | null) => (email ?? '').trim().toLowerCase();
+const normalizeHiveBrandName = (name?: string | null) => {
+  const trimmed = (name ?? '').trim();
+  if (!trimmed) return 'H.I.V.E.';
+  const normalized = trimmed.toLowerCase();
+  if (['hive', 'the hive', 'h.i.v.e.', 'the h.i.v.e.'].includes(normalized)) {
+    return 'H.I.V.E.';
+  }
+  return trimmed;
+};
 
 export default function JoinScreen() {
   const { session, profile, communityId, refreshProfile, loading: authLoading } = useAuth();
@@ -146,7 +155,7 @@ export default function JoinScreen() {
           if (existingMembership) {
             setInviteBlock({
               title: 'This account is already in HIVE',
-              message: `${profile.name || userEmail} is already a member of ${tokenInvite.community?.name || 'this HIVE'}. We kept the invite link from opening that existing profile.`,
+              message: `${profile.name || userEmail} is already a member of ${normalizeHiveBrandName(tokenInvite.community?.name)}. We kept the invite link from opening that existing profile.`,
               detail: 'To test a brand-new member onboarding flow, send an invite to a different email address and sign in with that Google account.',
               action: 'go-home',
             });
@@ -293,7 +302,7 @@ export default function JoinScreen() {
         .insert({
           user_id: profile.id,
           community_id: communityId,
-          title: 'Welcome to the HIVE!',
+          title: 'Welcome to HIVE!',
           mode: 'default',
           is_active: true,
         } as any)
@@ -301,7 +310,7 @@ export default function JoinScreen() {
         .single();
 
       if (welcomeConv) {
-        const welcomeMessage = `Welcome to the HIVE, founding member! 🐝\n\nYou're the first one here, which means you're the admin. You can invite others from the Admin panel.\n\nFeel free to look around! You can see what's going on with the group on the HIVE page, add topics for discussion on the Board, chat with other members in the messages, or fill out your profile.\n\nWhen you're ready, I'd love to chat with you about your goals and the skills you bring to the group!`;
+        const welcomeMessage = `Welcome to HIVE, founding member! 🐝\n\nYou're the first one here, which means you're the admin. You can invite others from the Admin panel.\n\nFeel free to look around! You can see what's going on with the group on HIVE, add topics for discussion on the Board, chat with other members in the messages, or fill out your profile.\n\nWhen you're ready, I'd love to chat with you about your goals and the skills you bring to the group!`;
 
         await supabase.from('chat_messages').insert({
           user_id: profile.id,
@@ -359,7 +368,7 @@ export default function JoinScreen() {
       if (existingMembership) {
         setInviteBlock({
           title: 'This account is already in HIVE',
-          message: `${activeProfile.name || userEmail} is already a member of ${invite.community?.name || 'this HIVE'}. We kept the invite link from opening that existing profile.`,
+          message: `${activeProfile.name || userEmail} is already a member of ${normalizeHiveBrandName(invite.community?.name)}. We kept the invite link from opening that existing profile.`,
           detail: 'To test a brand-new member onboarding flow, send an invite to a different email address and sign in with that Google account.',
           action: 'go-home',
         });
@@ -407,7 +416,7 @@ export default function JoinScreen() {
         .insert({
           user_id: activeProfile.id,
           community_id: invite.community_id,
-          title: 'Welcome to the HIVE!',
+          title: 'Welcome to HIVE!',
           mode: 'default',
           is_active: true,
         } as any)
@@ -416,7 +425,7 @@ export default function JoinScreen() {
 
       // Add the welcome message to the conversation
       if (welcomeConv) {
-        const welcomeMessage = `Welcome to the HIVE! Feel free to look around! You can see what's going on with the group on the HIVE page, add topics for discussion on the Board, chat with other members in the messages, or fill out your profile. When you're ready I'd love to chat with you about your goals and the skills you bring to the group!`;
+        const welcomeMessage = `Welcome to HIVE! Feel free to look around! You can see what's going on with the group on HIVE, add topics for discussion on the Board, chat with other members in the messages, or fill out your profile. When you're ready I'd love to chat with you about your goals and the skills you bring to the group!`;
 
         await supabase.from('chat_messages').insert({
           user_id: activeProfile.id,
@@ -443,7 +452,7 @@ export default function JoinScreen() {
   const handleDeclineInvite = () => {
     Alert.alert(
       'Decline Invite',
-      `Are you sure you want to decline the invitation to join ${invite?.community?.name}?`,
+      `Are you sure you want to decline the invitation to join ${normalizeHiveBrandName(invite?.community?.name)}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -525,7 +534,7 @@ export default function JoinScreen() {
               You're invited to join
             </Text>
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-gold text-center mb-4">
-              {invite.community?.name || 'H.I.V.E.'}
+              {normalizeHiveBrandName(invite.community?.name)}
             </Text>
 
             {invite.inviter && (

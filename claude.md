@@ -1,8 +1,8 @@
-# The Hive - AI-Powered Wish Coordination App
+# H.I.V.E. - AI-Powered Wish Coordination App
 
 ## Project Overview
 
-The Hive is a mobile + web application for a 12-person community that practices "high-definition wishing" - a framework where AI helps people articulate what they actually want beneath surface-level desires, then matches wishes to the skills and capabilities of other community members.
+H.I.V.E. is a mobile + web application for a 12-person community that practices "high-definition wishing" - a framework where AI helps people articulate what they actually want beneath surface-level desires, then matches wishes to the skills and capabilities of other community members.
 
 ### Core Philosophy
 
@@ -51,7 +51,7 @@ hive-app/
 │   ├── (app)/                    # Authenticated app group
 │   │   ├── _layout.tsx           # Tab navigator
 │   │   ├── index.tsx             # Main chat interface
-│   │   ├── hive.tsx              # "Check on the Hive" view
+│   │   ├── hive.tsx              # "Check on HIVE" view
 │   │   ├── meetings.tsx          # Meeting history
 │   │   ├── profile.tsx           # User profile/settings
 │   │   └── admin.tsx             # Admin panel (role-gated)
@@ -424,7 +424,7 @@ The chat agent is the heart of the application. It should feel like a helpful fr
 ### System Prompt
 
 ```
-You are the Hive Assistant, an AI helper for a close-knit community of 12 people practicing "high-definition wishing."
+You are HIVE's assistant, an AI helper for a close-knit community of 12 people practicing "high-definition wishing."
 
 Your primary role is to help users articulate what they actually want. People often express vague desires ("I want to be healthier") or surface-level wants ("I want a new car"). Your job is to help them discover the underlying desire through curious, gentle questioning.
 
@@ -438,7 +438,7 @@ Your primary role is to help users articulate what they actually want. People of
    - Low definition: "I want to learn to cook"
    - High definition: "I want someone to teach me 3 easy weeknight dinners I can make in under 30 minutes, starting with pasta dishes"
 
-4. **Never push wishes public.** When a wish is well-articulated, ASK if they want to share it with the Hive. Respect if they say no.
+4. **Never push wishes public.** When a wish is well-articulated, ASK if they want to share it with HIVE. Respect if they say no.
 
 5. **You have tools.** Use them naturally. Don't announce "I'm going to use my store_skill tool now." Just do it and confirm conversationally: "Got it, I've noted that you're great at [skill]."
 
@@ -508,7 +508,7 @@ const agentTools = [
   },
   {
     name: "publish_wish",
-    description: "Make a wish public to the Hive. Only call this after explicit user confirmation. This replaces any existing active public wish.",
+    description: "Make a wish public to HIVE. Only call this after explicit user confirmation. This replaces any existing active public wish.",
     input_schema: {
       type: "object",
       properties: {
@@ -538,7 +538,7 @@ const agentTools = [
   },
   {
     name: "get_public_wishes",
-    description: "Get all public wishes from other Hive members. Use to find matches or inform the user about community needs.",
+    description: "Get all public wishes from other HIVE members. Use to find matches or inform the user about community needs.",
     input_schema: {
       type: "object",
       properties: {}
@@ -546,7 +546,7 @@ const agentTools = [
   },
   {
     name: "get_all_skills",
-    description: "Get all skills from all Hive members. Use to find potential matches for wishes.",
+    description: "Get all skills from all HIVE members. Use to find potential matches for wishes.",
     input_schema: {
       type: "object",
       properties: {}
@@ -576,7 +576,7 @@ const agentTools = [
   },
   {
     name: "get_upcoming_events",
-    description: "Get upcoming calendar events for the Hive",
+    description: "Get upcoming calendar events for HIVE",
     input_schema: {
       type: "object",
       properties: {
@@ -597,7 +597,7 @@ const agentTools = [
   },
   {
     name: "check_wish_matches",
-    description: "Find Hive members whose skills might match a specific wish",
+    description: "Find HIVE members whose skills might match a specific wish",
     input_schema: {
       type: "object",
       properties: {
@@ -611,7 +611,7 @@ const agentTools = [
   },
   {
     name: "get_hive_members",
-    description: "Get list of all Hive members with basic info",
+    description: "Get list of all HIVE members with basic info",
     input_schema: {
       type: "object",
       properties: {}
@@ -652,7 +652,7 @@ const agentTools = [
    - If no: redirect to /onboarding/welcome
 
 4. /onboarding/welcome
-   - "Welcome to The Hive! Let's get you set up."
+   - "Welcome to H.I.V.E.! Let's get you set up."
    - [Continue]
 
 5. /onboarding/info
@@ -674,8 +674,8 @@ const agentTools = [
    - Chat continues
    - Agent: "Now, what are you working on these days? Anything you might need help with? This stays private unless you choose to share."
    - Natural conversation extracts initial wishes (stored as private)
-   - Agent: "Perfect. You can always refine these later. Welcome to The Hive!"
-   - [Enter The Hive]
+   - Agent: "Perfect. You can always refine these later. Welcome to H.I.V.E.!"
+   - [Enter H.I.V.E.]
 
 8. Create profile with onboarded_at = now()
 9. Redirect to main chat
@@ -693,15 +693,15 @@ const agentTools = [
    - Uses tools silently to store/retrieve
    - Mentions relevant community context
 5. When a wish crystallizes:
-   - Agent: "That sounds like a clear wish: '[description]'. Want me to share this with the Hive? It might match someone's skills."
+   - Agent: "That sounds like a clear wish: '[description]'. Want me to share this with HIVE? It might match someone's skills."
    - If yes: publish_wish, notify relevant members
    - If no: stays private, can revisit later
 ```
 
-### Flow 3: Check on the Hive
+### Flow 3: Check on HIVE
 
 ```
-1. User taps "Hive" tab
+1. User taps "HIVE" tab
 2. View shows:
    - Current Queen Bee card (name, photo, project, recent update)
    - "Public Wishes" section (one per member who has one)
@@ -790,7 +790,7 @@ async function pushToGoogle(userId: string, event: Event) {
   // Store google_event_id in our events table
 }
 
-// Create shared Hive calendar
+// Create shared HIVE calendar
 // All members subscribe to this calendar
 // Events pushed there are visible to all
 ```
@@ -841,14 +841,14 @@ async function sendWishMatchNotification(
   wisher: Profile
 ) {
   await resend.emails.send({
-    from: 'The Hive <hive@yourdomain.com>',
+    from: 'H.I.V.E. <hive@yourdomain.com>',
     to,
     subject: `🐝 Your skills might help ${wisher.name}!`,
     html: `
       <h2>A wish you might be able to grant</h2>
       <p><strong>${wisher.name}</strong> is wishing for:</p>
       <blockquote>${matchedWish.description}</blockquote>
-      <p>Think you can help? Open The Hive to connect.</p>
+      <p>Think you can help? Open H.I.V.E. to connect.</p>
     `
   });
 }
@@ -1139,7 +1139,7 @@ Before launch, verify:
 - [ ] Chat sends/receives messages correctly
 - [ ] Agent tools store skills and wishes
 - [ ] Wishes can be published/replaced
-- [ ] Hive view loads all data correctly
+- [ ] HIVE view loads all data correctly
 - [ ] Queen Bee display works
 - [ ] Audio recording works on iOS
 - [ ] Audio uploads successfully
@@ -1184,7 +1184,7 @@ Before launch, verify:
 - [ ] Query tools working
 - [ ] Test full conversation flow
 
-### Day 5: Hive View
+### Day 5: HIVE View
 - [ ] Queen Bee card component
 - [ ] Wish board component
 - [ ] Calendar integration setup
@@ -1217,5 +1217,5 @@ Before launch, verify:
 - Wish fulfillment celebrations
 - Karma/contribution tracking (optional, could conflict with philosophy)
 - Integration with payment systems
-- Multiple Hive support
-- Public Hive discovery
+- Multiple HIVE support
+- Public HIVE discovery

@@ -143,7 +143,7 @@ function TransactionRow({ transaction }: { transaction: HoneyPotLedgerEntry }) {
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
         <Avatar
-          name={transaction.recorded_by_profile?.name ?? 'Hive'}
+          name={transaction.recorded_by_profile?.name ?? 'HIVE'}
           url={transaction.recorded_by_profile?.avatar_url}
           size={36}
         />
