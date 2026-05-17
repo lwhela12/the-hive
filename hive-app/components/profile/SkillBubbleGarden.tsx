@@ -419,9 +419,9 @@ function getFrontRowScale(width: number, compactLandscape = false) {
   const fullBloomWidth = STAGES[STAGES.length - 1].labelWidth;
   const sidePadding = clamp(effectiveWidth * 0.045, effectiveWidth < 520 ? 18 : 30, effectiveWidth > 1280 ? 96 : 58);
   const compactScale = compactLandscape ? PHONE_LANDSCAPE_SCALE : 1;
-  const idealScale = ((effectiveWidth - sidePadding * 2) / (GARDEN_CAPACITY * fullBloomWidth)) * (compactLandscape ? 1.55 : 1.78) * compactScale;
-  const minScale = (compactLandscape ? 0.48 : effectiveWidth < 520 ? 0.54 : 0.82) * compactScale;
-  const maxScale = (compactLandscape ? 0.64 : effectiveWidth > 1280 ? 1.46 : effectiveWidth > 860 ? 1.22 : 0.98) * compactScale;
+  const idealScale = ((effectiveWidth - sidePadding * 2) / (GARDEN_CAPACITY * fullBloomWidth)) * (compactLandscape ? 1.88 : 1.78) * compactScale;
+  const minScale = (compactLandscape ? 0.56 : effectiveWidth < 520 ? 0.54 : 0.82) * compactScale;
+  const maxScale = (compactLandscape ? 0.88 : effectiveWidth > 1280 ? 1.46 : effectiveWidth > 860 ? 1.22 : 0.98) * compactScale;
 
   return clamp(idealScale, minScale, maxScale);
 }
@@ -526,11 +526,16 @@ function buildFlowerSlots(skills: GardenSkill[], pinnedSlots: Record<string, num
     .filter((slot): slot is FlowerSlot => Boolean(slot));
 }
 
-function getFrontRowAnchorY(height: number, width: number, index: number, compactLandscape = false) {
+function getFrontRowAnchorY(height: number, width: number, index: number, compactLandscape = false, groundHeight = GROUND_HEIGHT) {
   const baseAnchor = height - clamp(width < 520 ? 34 : 48, 32, 58);
   if (compactLandscape) {
-    const staggerPattern = [0, 82, 24, 118, 46, 98, 14, 128, 58, 108].map(value => value * PHONE_LANDSCAPE_SCALE);
-    return baseAnchor - staggerPattern[index % staggerPattern.length];
+    const foregroundTop = height - groundHeight;
+    const plantedBaseAnchor = foregroundTop + groundHeight * 0.54;
+    const highestRoot = Math.max(18, foregroundTop - 14);
+    const maxLift = Math.max(18, plantedBaseAnchor - highestRoot);
+    const staggerPattern = [0, 44, 16, 58, 30, 52, 8, 64, 38, 56];
+    const lift = clamp(staggerPattern[index % staggerPattern.length], 0, maxLift);
+    return plantedBaseAnchor - lift;
   }
   if (width < 520) {
     const staggerPattern = [0, 34, 14, 52, 22];
@@ -709,11 +714,13 @@ function MeadowAtmosphere({
   height,
   showSun = true,
   groundHeight = GROUND_HEIGHT,
+  compactLandscape = false,
 }: {
   width: number;
   height: number;
   showSun?: boolean;
   groundHeight?: number;
+  compactLandscape?: boolean;
 }) {
   const hillHeight = Math.max(260, height - groundHeight + 28);
 
@@ -786,7 +793,9 @@ function MeadowAtmosphere({
           style={{
             position: 'absolute',
             left: width * bloom.leftRatio,
-            bottom: groundHeight + height * bloom.bottomRatio,
+            bottom: groundHeight + height * (compactLandscape
+              ? 0.012 + bloom.bottomRatio * 0.22
+              : bloom.bottomRatio),
             width: 2,
             height: bloom.height,
             borderRadius: 2,
@@ -1219,6 +1228,8 @@ function BloomMark({
 function SunRayBackground({ size = 250 }: { size?: number }) {
   const center = size / 2;
   const rayAngles = Array.from({ length: 14 }, (_, index) => index * (360 / 14));
+  const coreRadius = size * 0.368;
+  const glowRadius = size * 0.168;
 
   return (
     <Svg
@@ -1228,24 +1239,24 @@ function SunRayBackground({ size = 250 }: { size?: number }) {
       viewBox={`0 0 ${size} ${size}`}
       style={{
         position: 'absolute',
-        left: -22,
-        top: -22,
+        left: -size * 0.088,
+        top: -size * 0.088,
       }}
     >
       {rayAngles.map((angle, index) => (
         <G key={angle} transform={`rotate(${angle} ${center} ${center})`}>
           <Ellipse
             cx={center}
-            cy={20}
-            rx={index % 2 === 0 ? 8 : 5}
-            ry={index % 2 === 0 ? 22 : 14}
+            cy={size * 0.08}
+            rx={index % 2 === 0 ? size * 0.032 : size * 0.02}
+            ry={index % 2 === 0 ? size * 0.088 : size * 0.056}
             fill={index % 2 === 0 ? '#ffe86b' : '#ffd45a'}
             opacity={0.7}
           />
         </G>
       ))}
-      <Circle cx={center} cy={center} r={92} fill="#ffe36d" opacity={0.86} />
-      <Circle cx={center - 22} cy={center - 26} r={42} fill="#fff6a8" opacity={0.28} />
+      <Circle cx={center} cy={center} r={coreRadius} fill="#ffe36d" opacity={0.86} />
+      <Circle cx={center - size * 0.088} cy={center - size * 0.104} r={glowRadius} fill="#fff6a8" opacity={0.28} />
     </Svg>
   );
 }
@@ -1370,7 +1381,7 @@ function SkillPlant({
   const spriteHeight = getStageCanvasHeight(stage) * rowScale * (bloomStep >= 3 ? 1.04 : 1);
   const plantHeight = spriteHeight + (showLabel ? LABEL_HEIGHT : 8);
   const centerX = getFrontRowCenterX(index, count, width);
-  const anchorY = getFrontRowAnchorY(height, width, index, compactLandscape);
+  const anchorY = getFrontRowAnchorY(height, width, index, compactLandscape, groundHeight);
   const left = clamp(centerX - plantWidth / 2, -plantWidth * 0.28, Math.max(-plantWidth * 0.28, width - plantWidth * 0.72));
   const top = clamp(anchorY - plantHeight, 6, Math.max(6, height - plantHeight - 4));
   const labelFont = clamp(12 * rowScale - Math.max(0, skill.description.length - 22) * 0.06, 8.4, 12);
@@ -2253,15 +2264,15 @@ function SeedSurvey({
         accessibilityRole="button"
         accessibilityLabel="Seed your garden"
         style={{
-          width: hasSkills ? (compact ? 92 : 206) : undefined,
+          width: hasSkills ? (compact ? 96 : 206) : undefined,
           maxWidth: '100%',
-          minHeight: hasSkills ? (compact ? 92 : 206) : 190,
+          minHeight: hasSkills ? (compact ? 96 : 206) : 190,
           borderRadius: hasSkills ? 999 : 28,
           borderWidth: 1,
           borderColor: hasSkills ? 'rgba(255,253,247,0.54)' : 'rgba(255,253,247,0.62)',
           backgroundColor: hasSkills ? 'rgba(255,224,105,0.68)' : 'rgba(255,244,187,0.92)',
-          paddingHorizontal: hasSkills ? (compact ? 8 : 20) : 18,
-          paddingVertical: hasSkills ? (compact ? 7 : 18) : 18,
+          paddingHorizontal: hasSkills ? (compact ? 9 : 20) : 18,
+          paddingVertical: hasSkills ? (compact ? 8 : 18) : 18,
           marginBottom: hasSkills ? 0 : 0,
           alignItems: 'center',
           justifyContent: 'center',
@@ -2286,11 +2297,11 @@ function SeedSurvey({
       >
         {hasSkills ? (
           <>
-            <SunRayBackground size={compact ? 112 : 250} />
-            <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: compact ? 8.5 : 15, lineHeight: compact ? 10.4 : 18, textAlign: 'center' }}>
+            <SunRayBackground size={compact ? 114 : 250} />
+            <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: compact ? 8.8 : 15, lineHeight: compact ? 10.4 : 18, textAlign: 'center' }}>
               Skills Garden Quiz
             </Text>
-            <Text selectable={false} numberOfLines={3} style={{ fontFamily: 'Lato_400Regular', color: '#52755b', fontSize: compact ? 6.9 : 11.5, lineHeight: compact ? 8.6 : 15, textAlign: 'center' }}>
+            <Text selectable={false} numberOfLines={3} style={{ fontFamily: 'Lato_400Regular', color: '#52755b', fontSize: compact ? 7 : 11.5, lineHeight: compact ? 8.6 : 15, textAlign: 'center' }}>
               Need help? Let the sun pick a few blooms.
             </Text>
             <View
@@ -2878,7 +2889,13 @@ export function SkillBubbleGarden({
             : {}),
         }}
       >
-        <MeadowAtmosphere width={width} height={meadowHeight} showSun={!editable} groundHeight={groundHeight} />
+        <MeadowAtmosphere
+          width={width}
+          height={meadowHeight}
+          showSun={!editable}
+          groundHeight={groundHeight}
+          compactLandscape={compactLandscape}
+        />
         <View
           style={{
             position: 'absolute',
@@ -2896,8 +2913,8 @@ export function SkillBubbleGarden({
           <View
             style={{
               position: 'absolute',
-              left: compactLandscape ? 6 : width > 620 ? 8 : 10,
-              top: compactLandscape ? 6 : width > 620 ? 8 : 10,
+              left: compactLandscape ? 14 : width > 620 ? 8 : 10,
+              top: compactLandscape ? 12 : width > 620 ? 8 : 10,
               width: surveyPanelWidth,
               zIndex: 500,
             }}

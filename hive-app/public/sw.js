@@ -1,8 +1,8 @@
 // Cache names: bump these when a deployed app shell must replace old clients.
-const APP_CACHE = 'hive-app-v28-todo-detail-sheet';
-const STATIC_CACHE = 'hive-static-v28-todo-detail-sheet';
+const APP_CACHE = 'hive-app-v29-skills-garden-mobile-stagger';
+const STATIC_CACHE = 'hive-static-v29-skills-garden-mobile-stagger';
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'todo-detail-sheet-v28';
+const REFRESH_TOKEN = 'skills-garden-mobile-stagger-v29';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant
