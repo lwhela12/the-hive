@@ -1,8 +1,8 @@
 // Cache names: bump these when a deployed app shell must replace old clients.
-const APP_CACHE = 'hive-app-v7-wildflower-garden';
-const STATIC_CACHE = 'hive-static-v7-wildflower-garden';
+const APP_CACHE = 'hive-app-v8-wish-status-bees';
+const STATIC_CACHE = 'hive-static-v8-wish-status-bees';
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'wildflower-garden-v7';
+const REFRESH_TOKEN = 'wish-status-bees-v8';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant

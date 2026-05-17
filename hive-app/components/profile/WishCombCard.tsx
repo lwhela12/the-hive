@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Wish } from '../../types';
+
+const publicBeeIcon = require('../../assets/BEE ONLY IN GOLD BG.png');
 
 type WishCombCardProps = {
   wish: Wish;
@@ -16,23 +18,76 @@ function getStatusMeta(status: Wish['status']) {
       label: 'Granted',
       color: '#bd9348',
       bg: '#fff4d3',
+      rail: '#efc657',
+      capBg: '#fff7df',
+      border: 'rgba(189,147,72,0.72)',
+      iconKind: 'ionicon' as const,
       icon: 'sparkles-outline' as const,
     };
   }
   if (status === 'private') {
     return {
       label: 'Private',
-      color: '#7d7d78',
+      color: '#77736a',
       bg: '#f4f2eb',
+      rail: '#c7c2b5',
+      capBg: '#fbfaf5',
+      border: 'rgba(119,115,106,0.72)',
+      iconKind: 'ionicon' as const,
       icon: 'lock-closed-outline' as const,
     };
   }
   return {
     label: 'Public',
-    color: '#4fbf67',
-    bg: '#eef9ef',
-    icon: 'leaf-outline' as const,
+    color: '#a87822',
+    bg: '#fff7dc',
+    rail: '#f3c044',
+    capBg: '#fff9e8',
+    border: 'rgba(189,147,72,0.72)',
+    iconKind: 'bees' as const,
   };
+}
+
+type StatusMeta = ReturnType<typeof getStatusMeta>;
+
+function StatusIcon({
+  status,
+  compact = false,
+}: {
+  status: StatusMeta;
+  compact?: boolean;
+}) {
+  if (status.iconKind === 'bees') {
+    return <PublicBeesIcon compact={compact} />;
+  }
+
+  return (
+    <Ionicons
+      name={status.icon}
+      size={compact ? 12 : 16}
+      color={status.color}
+    />
+  );
+}
+
+function PublicBeesIcon({ compact = false }: { compact?: boolean }) {
+  if (compact) {
+    return (
+      <Image
+        source={publicBeeIcon}
+        style={styles.beePillIcon}
+        resizeMode="contain"
+      />
+    );
+  }
+
+  return (
+    <View style={styles.beeCluster}>
+      <Image source={publicBeeIcon} style={[styles.beeImage, styles.beeImageOne]} resizeMode="contain" />
+      <Image source={publicBeeIcon} style={[styles.beeImage, styles.beeImageTwo]} resizeMode="contain" />
+      <Image source={publicBeeIcon} style={[styles.beeImage, styles.beeImageThree]} resizeMode="contain" />
+    </View>
+  );
 }
 
 export function WishCombCard({
@@ -47,25 +102,33 @@ export function WishCombCard({
 
   const content = (
     <>
-      <View style={styles.topHoneyRail} />
+      <View style={[styles.topHoneyRail, { backgroundColor: status.rail }]} />
       <View
         style={[
           styles.leftCombCap,
           {
-            backgroundColor: status.bg,
-            borderColor: status.color,
+            backgroundColor: status.capBg,
+            borderColor: status.border,
           },
         ]}
       >
         <View style={styles.leftCombIcon}>
-          <Ionicons name={status.icon} size={16} color={status.color} />
+          <StatusIcon status={status} />
         </View>
       </View>
 
       <View style={styles.content}>
         <View style={styles.metaRow}>
-          <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
-            <Ionicons name={status.icon} size={12} color={status.color} />
+          <View
+            style={[
+              styles.statusPill,
+              {
+                backgroundColor: status.bg,
+                borderColor: status.border,
+              },
+            ]}
+          >
+            <StatusIcon status={status} compact />
             <Text style={[styles.statusText, { color: status.color }]}>
               {status.label}
             </Text>
@@ -151,7 +214,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(222,193,129,0.54)',
-    backgroundColor: '#fffdf5',
+    backgroundColor: '#fffefa',
     paddingHorizontal: 18,
     paddingVertical: 16,
     paddingLeft: 58,
@@ -211,6 +274,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     borderRadius: 999,
+    borderWidth: 1,
     paddingHorizontal: 9,
     paddingVertical: 5,
   },
@@ -270,5 +334,37 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontStyle: 'italic',
     marginTop: 10,
+  },
+  beeCluster: {
+    position: 'relative',
+    width: 25,
+    height: 18,
+  },
+  beePillIcon: {
+    width: 13,
+    height: 13,
+  },
+  beeImage: {
+    position: 'absolute',
+  },
+  beeImageOne: {
+    left: 0,
+    top: 4,
+    width: 15,
+    height: 15,
+  },
+  beeImageTwo: {
+    left: 10,
+    top: -1,
+    width: 12,
+    height: 12,
+    opacity: 0.86,
+  },
+  beeImageThree: {
+    left: 14,
+    top: 9,
+    width: 10,
+    height: 10,
+    opacity: 0.76,
   },
 });
