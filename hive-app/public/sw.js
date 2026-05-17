@@ -1,8 +1,8 @@
 // Cache names: bump these when a deployed app shell must replace old clients.
-const APP_CACHE = 'hive-app-v16-skills-garden-slots';
-const STATIC_CACHE = 'hive-static-v16-skills-garden-slots';
+const APP_CACHE = 'hive-app-v17-consistent-profile-wishes';
+const STATIC_CACHE = 'hive-static-v17-consistent-profile-wishes';
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'skills-garden-slots-v16';
+const REFRESH_TOKEN = 'consistent-profile-wishes-v17';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant

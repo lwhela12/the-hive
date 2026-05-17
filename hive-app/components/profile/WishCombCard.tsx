@@ -9,9 +9,7 @@ const GRANTED_WISH_CARD_BACKGROUND = '#fffdf5';
 
 type WishCombCardProps = {
   wish: Wish;
-  expanded?: boolean;
   linkedBoardLabel?: string | null;
-  onToggle?: (wish: Wish) => void;
   onManage?: (wish: Wish) => void;
 };
 
@@ -79,15 +77,12 @@ function PublicBeesIcon({ compact = false }: { compact?: boolean }) {
 
 export function WishCombCard({
   wish,
-  expanded = false,
   linkedBoardLabel,
-  onToggle,
   onManage,
 }: WishCombCardProps) {
   const status = getStatusMeta(wish.status);
   const isGranted = wish.status === 'fulfilled';
   const isPrivate = wish.status === 'private';
-  const isLong = wish.description.length > 128 || wish.description.includes('\n');
   const dateLabel = isGranted && wish.fulfilled_at
     ? `Granted · ${formatDateShort(wish.fulfilled_at)}`
     : formatDateShort(wish.created_at);
@@ -131,8 +126,8 @@ export function WishCombCard({
           style={[
             styles.description,
             isGranted ? styles.descriptionGranted : styles.descriptionOpen,
+            isPrivate ? styles.descriptionPrivate : null,
           ]}
-          numberOfLines={expanded ? undefined : 3}
         >
           {wish.description}
         </Text>
@@ -150,11 +145,6 @@ export function WishCombCard({
           <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
             {dateLabel}
           </Text>
-          {isLong ? (
-            <Text style={[styles.expandHint, isGranted ? styles.expandHintGranted : null]}>
-              {expanded ? 'Less' : 'More'}
-            </Text>
-          ) : null}
         </View>
 
         {wish.status === 'fulfilled' && wish.thank_you_message && (
@@ -166,29 +156,10 @@ export function WishCombCard({
     </>
   );
 
-  if (!isLong) {
-    return (
-      <View style={[styles.card, isPrivate ? styles.cardPrivate : styles.cardPublic, isGranted ? styles.cardGranted : null]}>
-        {content}
-      </View>
-    );
-  }
-
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${expanded ? 'Collapse' : 'Expand'} wish`}
-      accessibilityHint={wish.description}
-      onPress={() => onToggle?.(wish)}
-      style={({ pressed }) => [
-        styles.card,
-        isPrivate ? styles.cardPrivate : styles.cardPublic,
-        isGranted ? styles.cardGranted : null,
-        pressed ? styles.cardPressed : null,
-      ]}
-    >
+    <View style={[styles.card, isPrivate ? styles.cardPrivate : styles.cardPublic, isGranted ? styles.cardGranted : null]}>
       {content}
-    </Pressable>
+    </View>
   );
 }
 
@@ -211,12 +182,8 @@ const styles = StyleSheet.create({
     backgroundColor: ACTIVE_WISH_CARD_BACKGROUND,
   },
   cardPrivate: {
-    borderColor: 'rgba(222,193,129,0.5)',
-    backgroundColor: ACTIVE_WISH_CARD_BACKGROUND,
-  },
-  cardPressed: {
-    opacity: 0.82,
-    transform: [{ scale: 0.995 }],
+    borderColor: 'rgba(119,115,106,0.28)',
+    backgroundColor: '#f8f4ea',
   },
   cardGranted: {
     borderColor: 'rgba(222,193,129,0.28)',
@@ -263,6 +230,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Lato_700Bold',
     color: '#2d2d2d',
   },
+  descriptionPrivate: {
+    color: '#49463f',
+  },
   descriptionGranted: {
     fontFamily: 'Lato_400Regular',
     color: '#7f715f',
@@ -298,14 +268,6 @@ const styles = StyleSheet.create({
   },
   dateTextGranted: {
     color: '#9a8060',
-  },
-  expandHint: {
-    fontFamily: 'Lato_700Bold',
-    color: '#9a8060',
-    fontSize: 12,
-  },
-  expandHintGranted: {
-    color: '#8e7a5e',
   },
   thankYou: {
     fontFamily: 'LibreBaskerville_400Regular',

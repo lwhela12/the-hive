@@ -52,6 +52,7 @@ const hasBloomingSkill = (skill: Partial<Skill>) => {
 };
 
 const SKILLS_GARDEN_CAPACITY = 10;
+const DEEP_PROFILE_STEPS = ['Basics', 'Now', 'Favorites', '3MIQ'] as const;
 
 function ProfileHeaderActionPill({ label, onPress }: { label: string; onPress: () => void }) {
   return (
@@ -91,7 +92,6 @@ export default function ProfileScreen() {
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [managingWish, setManagingWish] = useState<Wish | null>(null);
-  const [expandedWishId, setExpandedWishId] = useState<string | null>(null);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -116,6 +116,8 @@ export default function ProfileScreen() {
   const [editMiqGrowth, setEditMiqGrowth] = useState('');
   const [editMiqContribution, setEditMiqContribution] = useState('');
   const [editFunFacts, setEditFunFacts] = useState(['', '', '']);
+  const [deepQuizVisible, setDeepQuizVisible] = useState(false);
+  const [deepQuizStep, setDeepQuizStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
@@ -201,11 +203,10 @@ export default function ProfileScreen() {
     }
   }, [profile]);
 
-  const startEditing = () => {
+  const resetProfileDrafts = () => {
     if (profile) {
       setEditName(profile.name || '');
       setEditPhone(formatPhoneNumber(profile.phone || ''));
-      // Convert ISO date to American format for editing
       setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
       setEditOccupation(profile.occupation || '');
       setEditProfileTitle((profile as any).profile_title || '');
@@ -222,32 +223,29 @@ export default function ProfileScreen() {
       setEditMiqContribution((profile as any).miq_contribution || '');
       setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
     }
+  };
+
+  const startEditing = () => {
+    resetProfileDrafts();
     setIsEditing(true);
   };
 
   const cancelEditing = () => {
     setIsEditing(false);
-    // Reset to original values
-    if (profile) {
-      setEditName(profile.name || '');
-      setEditPhone(formatPhoneNumber(profile.phone || ''));
-      // Convert ISO date to American format for editing
-      setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
-      setEditOccupation(profile.occupation || '');
-      setEditProfileTitle((profile as any).profile_title || '');
-      setEditPreferredContact(profile.preferred_contact || 'email');
-      setEditBio((profile as any).bio || '');
-      setEditCurrentProject((profile as any).current_project || '');
-      setEditHometown((profile as any).hometown || '');
-      setEditFavBook((profile as any).favorite_book || '');
-      setEditFavFood((profile as any).favorite_food || '');
-      setEditFavHobby((profile as any).favorite_hobby || '');
-      setEditKnownFor((profile as any).known_for || '');
-      setEditMiqExperiences((profile as any).miq_experiences || '');
-      setEditMiqGrowth((profile as any).miq_growth || '');
-      setEditMiqContribution((profile as any).miq_contribution || '');
-      setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
-    }
+    resetProfileDrafts();
+  };
+
+  const startDeepQuiz = () => {
+    resetProfileDrafts();
+    setIsEditing(false);
+    setDeepQuizStep(0);
+    setDeepQuizVisible(true);
+  };
+
+  const closeDeepQuiz = () => {
+    setDeepQuizVisible(false);
+    setDeepQuizStep(0);
+    resetProfileDrafts();
   };
 
   const saveProfile = async () => {
@@ -923,15 +921,11 @@ export default function ProfileScreen() {
     <WishCombCard
       key={wish.id}
       wish={wish}
-      expanded={expandedWishId === wish.id}
       linkedBoardLabel={
         wish.board_category_id || wish.source_board_post_id
           ? getLinkedBoardLabel(wish.board_category) || 'HD Board'
           : null
       }
-      onToggle={(selectedWish) => {
-        setExpandedWishId(current => current === selectedWish.id ? null : selectedWish.id);
-      }}
       onManage={setManagingWish}
     />
   );
