@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Easing,
   LayoutChangeEvent,
   PanResponder,
   Platform,
@@ -125,7 +126,7 @@ const FALLBACK_CATEGORY = CATEGORY_DEFS[CATEGORY_DEFS.length - 1];
 const GROUND_HEIGHT = 108;
 const LABEL_HEIGHT = 30;
 const FIELD_SIDE_PADDING = 10;
-const GARDEN_CAPACITY = 8;
+const GARDEN_CAPACITY = 10;
 const SEED_TRAY_SIZE = GARDEN_CAPACITY;
 const SEED_STRIP_LIMIT = GARDEN_CAPACITY * 3;
 const VISIBLE_BLOOM_LIMIT = GARDEN_CAPACITY;
@@ -482,10 +483,34 @@ function useWildflowerStyles() {
       }
       .skill-seed-row-shake {
         animation-name: skillSeedShake;
-        animation-duration: 420ms;
+        animation-duration: 760ms;
         animation-timing-function: ease-in-out;
         transform-origin: 50% 100%;
         will-change: transform;
+      }
+      @keyframes skillGardenSoftOpen {
+        0% {
+          opacity: 0;
+          transform: translate3d(0, 22px, 0) scaleX(0.94) scaleY(0.78);
+          filter: blur(2px);
+        }
+        58% {
+          opacity: 1;
+          transform: translate3d(0, -3px, 0) scaleX(1.015) scaleY(1.045);
+          filter: blur(0);
+        }
+        100% {
+          opacity: 1;
+          transform: translate3d(0, 0, 0) scaleX(1) scaleY(1);
+          filter: blur(0);
+        }
+      }
+      .skill-garden-soft-open {
+        animation-name: skillGardenSoftOpen;
+        animation-duration: 860ms;
+        animation-timing-function: cubic-bezier(0.18, 0.9, 0.16, 1);
+        transform-origin: 50% 100%;
+        will-change: transform, opacity;
       }
     `;
     document.head.appendChild(style);
@@ -956,28 +981,22 @@ function SeedMark({
 
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      {[
-        { x: 8, y: 14, rotate: -56, scale: 1 },
-        { x: 13.5, y: 7.2, rotate: 10, scale: 0.92 },
-        { x: 16, y: 15, rotate: 58, scale: 1 },
-      ].map(seed => (
-        <G key={`${seed.x}-${seed.y}`} transform={`translate(${seed.x} ${seed.y}) rotate(${seed.rotate}) scale(${seed.scale})`}>
-          <Path
-            d="M0 -6.4 C4.2 -3.7 5.6 2.4 1.2 6.7 C-3.4 4.4 -5.4 -1.5 0 -6.4 Z"
-            fill={fill}
-            stroke={stroke}
-            strokeWidth={1.1}
-          />
-          <Path
-            d="M-1.6 -2.5 C0.4 -2.9 2.2 -1.5 2.7 0.5"
-            stroke={highlight}
-            strokeWidth={1.2}
-            strokeLinecap="round"
-            fill="none"
-            opacity={0.88}
-          />
-        </G>
-      ))}
+      <G transform="rotate(-18 12 12)">
+        <Path
+          d="M4.4 14.9 C5.9 8.2 13.4 3.5 20.1 5.3 C20.5 11.9 14.4 19.5 7 18.5 C5.1 18.2 4 16.8 4.4 14.9 Z"
+          fill={fill}
+          stroke={stroke}
+          strokeWidth={1.2}
+        />
+        <Path
+          d="M8.2 14.5 C10.8 10.9 14.4 8.7 17.8 8.2"
+          stroke={highlight}
+          strokeWidth={1.4}
+          strokeLinecap="round"
+          fill="none"
+          opacity={0.86}
+        />
+      </G>
     </Svg>
   );
 }
@@ -1129,6 +1148,8 @@ function SkillPlant({
   featured,
   onSelect,
   onReturnToSeed,
+  justPlanted,
+  onEntryComplete,
 }: SkillBubbleGardenProps & {
   skill: GardenSkill;
   index: number;
@@ -1139,6 +1160,8 @@ function SkillPlant({
   featured: boolean;
   onSelect: (skillId: string) => void;
   onReturnToSeed: (skill: GardenSkill) => void;
+  justPlanted: boolean;
+  onEntryComplete: (skill: GardenSkill) => void;
 }) {
   const level = getLevel(skill);
   const bloomStep = getBloomStep(level);
@@ -1157,19 +1180,27 @@ function SkillPlant({
   const labelFont = clamp(12 * rowScale - Math.max(0, skill.description.length - 22) * 0.06, 8.4, 12);
   const pan = useRef(new Animated.ValueXY()).current;
   const grow = useRef(new Animated.Value(0)).current;
+  const depart = useRef(new Animated.Value(0)).current;
   const dragStart = useRef({ left, top });
   const didDrag = useRef(false);
+  const [isReseeding, setIsReseeding] = useState(false);
   const canDrag = false;
 
   useEffect(() => {
-    grow.setValue(0);
-    Animated.spring(grow, {
+    grow.stopAnimation();
+    depart.setValue(0);
+    grow.setValue(justPlanted ? 0 : 0.34);
+    Animated.timing(grow, {
       toValue: 1,
       useNativeDriver: true,
-      tension: 58,
-      friction: 9,
-    }).start();
-  }, [grow, skill.id, level]);
+      duration: justPlanted ? 980 : 720,
+      easing: Easing.out(Easing.cubic),
+    }).start(({ finished }) => {
+      if (finished && justPlanted) {
+        onEntryComplete(skill);
+      }
+    });
+  }, [depart, grow, justPlanted, level, onEntryComplete, skill.id, skill.description]);
 
   const responder = useMemo(
     () => PanResponder.create({
@@ -1219,13 +1250,41 @@ function SkillPlant({
 
     const nextLevel = getNextBloomLevel(level);
     if (nextLevel === 0) {
-      onReturnToSeed(skill);
+      if (isReseeding) return;
+
+      setIsReseeding(true);
+      depart.setValue(0);
+      Animated.timing(depart, {
+        toValue: 1,
+        useNativeDriver: true,
+        duration: 1180,
+        easing: Easing.inOut(Easing.cubic),
+      }).start(({ finished }) => {
+        if (finished) {
+          onReturnToSeed(skill);
+          onUpdateSkill(skill, {
+            enthusiasm_level: nextLevel,
+          });
+        }
+        setIsReseeding(false);
+      });
+      return;
     }
 
     onUpdateSkill(skill, {
       enthusiasm_level: nextLevel,
     });
   };
+
+  const entryLift = justPlanted ? Math.max(78, GROUND_HEIGHT * 0.9) : 28;
+  const soilDrop = Math.max(92, height - top - GROUND_HEIGHT * 0.18 - plantHeight * 0.62);
+  const entryTranslateY = grow.interpolate({ inputRange: [0, 1], outputRange: [entryLift, 0] });
+  const entryScale = grow.interpolate({ inputRange: [0, 0.72, 1], outputRange: [justPlanted ? 0.32 : 0.84, 1.035, 1] });
+  const entryOpacity = grow.interpolate({ inputRange: [0, 0.28, 1], outputRange: [0, 0.82, 1] });
+  const departTranslateY = depart.interpolate({ inputRange: [0, 1], outputRange: [0, soilDrop] });
+  const departScaleX = depart.interpolate({ inputRange: [0, 0.74, 1], outputRange: [1, 0.42, 0.16] });
+  const departScaleY = depart.interpolate({ inputRange: [0, 0.74, 1], outputRange: [1, 0.2, 0.05] });
+  const departOpacity = depart.interpolate({ inputRange: [0, 0.76, 1], outputRange: [1, 0.72, 0] });
 
   const label = showLabel ? (
     <View
@@ -1283,10 +1342,12 @@ function SkillPlant({
         zIndex: selected ? 90 : 20 + index,
         transform: [
           { translateX: pan.x },
-          { translateY: Animated.add(pan.y, grow.interpolate({ inputRange: [0, 1], outputRange: [18, 0] })) },
-          { scale: grow.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) },
+          { translateY: Animated.add(Animated.add(pan.y, entryTranslateY), departTranslateY) },
+          { scale: entryScale },
+          { scaleX: departScaleX },
+          { scaleY: departScaleY },
         ],
-        opacity: grow.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] }),
+        opacity: Animated.multiply(entryOpacity, departOpacity),
         ...(Platform.OS === 'web'
           ? ({
               cursor: editable ? 'pointer' : 'default',
@@ -1294,13 +1355,17 @@ function SkillPlant({
               WebkitUserSelect: 'none',
               touchAction: 'none',
               filter: selected ? 'drop-shadow(0 10px 16px rgba(77, 58, 34, 0.18))' : undefined,
+              transitionProperty: 'left, top',
+              transitionDuration: '920ms',
+              transitionTimingFunction: 'cubic-bezier(0.18, 0.9, 0.16, 1)',
+              transformOrigin: '50% 100%',
             } as any)
           : {}),
       }}
     >
       <Pressable
         onPress={cycleLevel}
-        disabled={!editable}
+        disabled={!editable || isReseeding}
         accessibilityRole={editable ? 'button' : undefined}
         accessibilityLabel={`${skill.description}, ${stage.label}`}
         style={{
@@ -1314,6 +1379,9 @@ function SkillPlant({
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
                 touchAction: 'none',
+                transitionProperty: 'width, height',
+                transitionDuration: '920ms',
+                transitionTimingFunction: 'cubic-bezier(0.18, 0.9, 0.16, 1)',
               } as any)
             : {}),
         }}
@@ -1710,6 +1778,7 @@ function SeedSurvey({
   if (!active) {
     return (
       <Pressable
+        className={Platform.OS === 'web' ? 'skill-garden-soft-open' : undefined}
         onPress={() => {
           resetSurvey(true);
           setActive(true);
@@ -1817,6 +1886,7 @@ function SeedSurvey({
 
   return (
     <View
+      className={Platform.OS === 'web' ? 'skill-garden-soft-open' : undefined}
       style={{
         borderRadius: hasSkills ? 32 : 24,
         borderWidth: 1,
@@ -2075,6 +2145,7 @@ export function SkillBubbleGarden({
   const [seedShake, setSeedShake] = useState(0);
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
   const [recentSeedNames, setRecentSeedNames] = useState<string[]>([]);
+  const [incomingSeedNames, setIncomingSeedNames] = useState<string[]>([]);
   const displaySkills = useMemo(() => skills.filter(isBloomingSkill), [skills]);
   const visibleSkillLimit = VISIBLE_BLOOM_LIMIT;
   const visibleSkills = useMemo(() => {
@@ -2117,6 +2188,7 @@ export function SkillBubbleGarden({
   );
   const canPlantSeeds = openSlots > 0;
   const canShakeSeeds = availableSeedCount > 1;
+  const incomingSeedSet = useMemo(() => new Set(incomingSeedNames), [incomingSeedNames]);
   const featuredSkillIds = useMemo(() => {
     if (visibleSkills.length <= 14) {
       return new Set(visibleSkills.map(skill => skill.id));
@@ -2158,6 +2230,41 @@ export function SkillBubbleGarden({
     ].slice(0, GARDEN_CAPACITY));
     setSeedShake((current) => current + 1);
   };
+
+  const rememberIncomingSeeds = useCallback((descriptions: string[]) => {
+    const normalizedSeeds = descriptions
+      .map(normalizeSkillName)
+      .filter(Boolean);
+    if (normalizedSeeds.length === 0) return;
+
+    setIncomingSeedNames((current) => [
+      ...normalizedSeeds,
+      ...current.filter((name) => !normalizedSeeds.includes(name)),
+    ].slice(0, GARDEN_CAPACITY * 2));
+  }, []);
+
+  const handlePlantSeed = useCallback((skillDescription: string, options?: PlantSkillOptions) => {
+    rememberIncomingSeeds([skillDescription]);
+    onPlantSkill?.(skillDescription, options);
+  }, [onPlantSkill, rememberIncomingSeeds]);
+
+  const handlePlantSeeds = useCallback((selections: PlantSkillSelection[], options?: PlantSkillsOptions) => {
+    rememberIncomingSeeds(selections.map((selection) => selection.description));
+
+    if (onPlantSkills) {
+      onPlantSkills(selections, options);
+      return;
+    }
+
+    selections.forEach((selection) => {
+      onPlantSkill?.(selection.description, { enthusiasmLevel: selection.enthusiasmLevel });
+    });
+  }, [onPlantSkill, onPlantSkills, rememberIncomingSeeds]);
+
+  const handleEntryComplete = useCallback((skill: GardenSkill) => {
+    const normalized = normalizeSkillName(skill.description);
+    setIncomingSeedNames((current) => current.filter((name) => name !== normalized));
+  }, []);
 
   return (
     <View
@@ -2211,8 +2318,8 @@ export function SkillBubbleGarden({
               plantedNames={plantedNames}
               hasSkills={displaySkills.length > 0}
               openSlots={openSlots}
-              onPlantSkill={onPlantSkill}
-              onPlantSkills={onPlantSkills}
+              onPlantSkill={onPlantSkill ? handlePlantSeed : undefined}
+              onPlantSkills={onPlantSkills || onPlantSkill ? handlePlantSeeds : undefined}
             />
           </View>
         )}
@@ -2232,6 +2339,8 @@ export function SkillBubbleGarden({
             featured={featuredSkillIds.has(skill.id)}
             onSelect={setSelectedSkillId}
             onReturnToSeed={handleReturnToSeed}
+            justPlanted={incomingSeedSet.has(normalizeSkillName(skill.description))}
+            onEntryComplete={handleEntryComplete}
             skills={skills}
           />
         ))}
@@ -2354,7 +2463,7 @@ export function SkillBubbleGarden({
                   key={`${skill}-${seedShake}`}
                   skill={skill}
                   index={index}
-                  onPlantSkill={onPlantSkill}
+                  onPlantSkill={onPlantSkill ? handlePlantSeed : undefined}
                   planted={plantedNames.has(normalizeSkillName(skill))}
                   disabled={!canPlantSeeds}
                 />
@@ -2393,7 +2502,7 @@ export function SkillBubbleGarden({
               }}
             >
               {onPlantSkill || onAddCustomSkill ? (
-                <CustomSeedButton onPlantSkill={onPlantSkill} onPress={onAddCustomSkill} disabled={!canPlantSeeds} />
+                <CustomSeedButton onPlantSkill={onPlantSkill ? handlePlantSeed : undefined} onPress={onAddCustomSkill} disabled={!canPlantSeeds} />
               ) : null}
               <Pressable
                 onPress={() => setSeedShake(current => current + 1)}
