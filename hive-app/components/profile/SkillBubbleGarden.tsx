@@ -530,10 +530,10 @@ function getFrontRowAnchorY(height: number, width: number, index: number, compac
   const baseAnchor = height - clamp(width < 520 ? 34 : 48, 32, 58);
   if (compactLandscape) {
     const foregroundTop = height - groundHeight;
-    const plantedBaseAnchor = foregroundTop + groundHeight * 0.74;
-    const highestRoot = Math.max(18, foregroundTop - 6);
+    const plantedBaseAnchor = foregroundTop + groundHeight * 0.86;
+    const highestRoot = Math.max(18, foregroundTop + groundHeight * 0.25);
     const maxLift = Math.max(22, plantedBaseAnchor - highestRoot);
-    const staggerPattern = [0, 58, 16, 70, 30, 64, 8, 76, 42, 68];
+    const staggerPattern = [0, 4, 12, 44, 18, 38, 10, 48, 24, 42];
     const lift = clamp(staggerPattern[index % staggerPattern.length], 0, maxLift);
     return plantedBaseAnchor - lift;
   }
@@ -2260,17 +2260,17 @@ function SeedSurvey({
     resetSurvey();
   };
 
-  const sunSize = compact ? 96 : narrow ? 132 : 206;
-  const sunRaySize = compact ? 124 : narrow ? 166 : 250;
-  const sunPadding = compact ? 9 : narrow ? 13 : 20;
-  const sunGap = compact ? 5 : narrow ? 6 : 10;
-  const sunTitleFontSize = compact ? 8.8 : narrow ? 10.2 : 15;
-  const sunTitleLineHeight = compact ? 10.4 : narrow ? 12 : 18;
-  const sunBodyFontSize = compact ? 7 : narrow ? 7.8 : 11.5;
-  const sunBodyLineHeight = compact ? 8.6 : narrow ? 9.8 : 15;
-  const sunButtonHeight = compact ? 20 : narrow ? 24 : 34;
-  const sunButtonPadding = compact ? 8 : narrow ? 10 : 16;
-  const sunButtonFontSize = compact ? 7.8 : narrow ? 9.2 : 12;
+  const sunSize = compact ? 78 : narrow ? 132 : 206;
+  const sunRaySize = compact ? 108 : narrow ? 166 : 250;
+  const sunPadding = compact ? 7 : narrow ? 13 : 20;
+  const sunGap = compact ? 3 : narrow ? 6 : 10;
+  const sunTitleFontSize = compact ? 7.2 : narrow ? 10.2 : 15;
+  const sunTitleLineHeight = compact ? 8.6 : narrow ? 12 : 18;
+  const sunBodyFontSize = compact ? 5.8 : narrow ? 7.8 : 11.5;
+  const sunBodyLineHeight = compact ? 7.2 : narrow ? 9.8 : 15;
+  const sunButtonHeight = compact ? 16 : narrow ? 24 : 34;
+  const sunButtonPadding = compact ? 7 : narrow ? 10 : 16;
+  const sunButtonFontSize = compact ? 6.5 : narrow ? 9.2 : 12;
 
   if (!active) {
     return (
@@ -2968,8 +2968,8 @@ export function SkillBubbleGarden({
           <View
             style={{
               position: 'absolute',
-              left: compactLandscape ? 14 : width > 620 ? 8 : 10,
-              top: compactLandscape ? 12 : width > 620 ? 8 : 10,
+              left: compactLandscape ? 8 : width > 620 ? 8 : 10,
+              top: compactLandscape ? 6 : width > 620 ? 8 : 10,
               width: surveyPanelWidth,
               zIndex: 500,
             }}
