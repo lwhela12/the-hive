@@ -145,6 +145,10 @@ type SurveyQuestion = {
 };
 
 type SeedSlot = string | undefined;
+type FlowerSlot = {
+  skill: GardenSkill;
+  slotIndex: number;
+};
 
 const SEED_SURVEY: SurveyQuestion[] = [
   {
@@ -452,6 +456,47 @@ function buildSeedSlots(seedTray: string[], pinnedSlots: Record<string, number>)
   });
 }
 
+function buildFlowerSlots(skills: GardenSkill[], pinnedSlots: Record<string, number>) {
+  const slots: Array<FlowerSlot | undefined> = Array.from({ length: GARDEN_CAPACITY });
+  const usedSkills = new Set<string>();
+  const orderBySkill = new Map(
+    skills.map((skill, index) => [normalizeSkillName(skill.description), index] as const)
+  );
+  const findNearestOpenSlot = (targetSlot: number) =>
+    Array.from({ length: GARDEN_CAPACITY }, (_, index) => index)
+      .sort((left, right) => Math.abs(left - targetSlot) - Math.abs(right - targetSlot))
+      .find(index => slots[index] === undefined);
+
+  Object.entries(pinnedSlots)
+    .sort((left, right) => left[1] - right[1])
+    .forEach(([normalizedSkill, slotIndex]) => {
+      const skill = skills.find(item => normalizeSkillName(item.description) === normalizedSkill);
+      if (!skill) return;
+
+      const targetSlot = clamp(slotIndex, 0, GARDEN_CAPACITY - 1);
+      const availableSlot = findNearestOpenSlot(targetSlot);
+
+      if (availableSlot === undefined) return;
+      slots[availableSlot] = { skill, slotIndex: availableSlot };
+      usedSkills.add(normalizedSkill);
+    });
+
+  const remainingSkills = skills.filter(skill => !usedSkills.has(normalizeSkillName(skill.description)));
+  remainingSkills.forEach((skill) => {
+    const orderIndex = orderBySkill.get(normalizeSkillName(skill.description)) ?? 0;
+    const targetSlot = skills.length <= 1
+      ? Math.round((GARDEN_CAPACITY - 1) / 2)
+      : Math.round(((GARDEN_CAPACITY - 1) * orderIndex) / Math.max(1, skills.length - 1));
+    const availableSlot = findNearestOpenSlot(clamp(targetSlot, 0, GARDEN_CAPACITY - 1));
+
+    if (availableSlot === undefined) return;
+    slots[availableSlot] = { skill, slotIndex: availableSlot };
+  });
+
+  return slots
+    .filter((slot): slot is FlowerSlot => Boolean(slot));
+}
+
 function getFrontRowAnchorY(height: number, width: number, index: number) {
   const baseAnchor = height - clamp(width < 520 ? 34 : 48, 32, 58);
   const stagger = index % 2 === 1 ? clamp(width < 520 ? 28 : 54, 28, 68) : 0;
@@ -542,6 +587,33 @@ function useWildflowerStyles() {
         animation-timing-function: cubic-bezier(0.2, 0.9, 0.18, 1);
         transform-origin: 50% 80%;
         will-change: transform;
+      }
+      @keyframes skillSeedBubbleIn {
+        0% {
+          opacity: 0;
+          transform: scaleX(0.14) scaleY(0.08);
+          filter: blur(1.4px);
+        }
+        42% {
+          opacity: 1;
+          transform: scaleX(1.12) scaleY(0.74);
+          filter: blur(0);
+        }
+        68% {
+          transform: scaleX(0.94) scaleY(1.08);
+        }
+        100% {
+          opacity: 1;
+          transform: scaleX(1) scaleY(1);
+          filter: blur(0);
+        }
+      }
+      .skill-seed-bubble-in {
+        animation-name: skillSeedBubbleIn;
+        animation-duration: 820ms;
+        animation-timing-function: cubic-bezier(0.18, 0.9, 0.12, 1);
+        transform-origin: 50% 50%;
+        will-change: transform, opacity;
       }
       .skill-seed-row-shake {
         animation-name: skillSeedShake;
@@ -1342,8 +1414,8 @@ function SkillPlant({
     Animated.timing(depart, {
       toValue: 1,
       useNativeDriver: true,
-      duration: 1520,
-      easing: Easing.bezier(0.58, 0, 0.16, 1),
+      duration: 1680,
+      easing: Easing.bezier(0.54, 0.02, 0.12, 1),
     }).start(({ finished }) => {
       if (finished) {
         onReturnToSeed(skill, returnSlotIndex);
@@ -1375,7 +1447,7 @@ function SkillPlant({
 
   const showReseedButton = editable && !isReseeding && (selected || isHovered);
   const entryLift = justPlanted ? Math.max(138, GROUND_HEIGHT * 1.42) : 28;
-  const soilDrop = Math.max(118, height - top - GROUND_HEIGHT * 0.1 - plantHeight * 0.58);
+  const soilDrop = Math.max(138, height - top - GROUND_HEIGHT * 0.03 - plantHeight * 0.48);
   const entryOriginOffset = justPlanted && entryOriginX !== undefined
     ? entryOriginX * width - centerX
     : 0;
@@ -1385,9 +1457,9 @@ function SkillPlant({
   const entryScaleY = grow.interpolate({ inputRange: [0, 0.48, 0.78, 1], outputRange: [justPlanted ? 0.06 : 0.84, 1.22, 0.96, 1] });
   const entryOpacity = grow.interpolate({ inputRange: [0, 0.16, 0.52, 1], outputRange: [0, 0.72, 1, 1] });
   const departTranslateY = depart.interpolate({ inputRange: [0, 1], outputRange: [0, soilDrop] });
-  const departScaleX = depart.interpolate({ inputRange: [0, 0.52, 0.86, 1], outputRange: [1, 0.72, 0.22, 0.08] });
-  const departScaleY = depart.interpolate({ inputRange: [0, 0.52, 0.86, 1], outputRange: [1, 1.18, 0.22, 0.04] });
-  const departOpacity = depart.interpolate({ inputRange: [0, 0.82, 1], outputRange: [1, 0.78, 0] });
+  const departScaleX = depart.interpolate({ inputRange: [0, 0.42, 0.76, 0.92, 1], outputRange: [1, 1.12, 0.72, 0.38, 0.16] });
+  const departScaleY = depart.interpolate({ inputRange: [0, 0.42, 0.76, 0.92, 1], outputRange: [1, 0.9, 0.24, 0.11, 0.04] });
+  const departOpacity = depart.interpolate({ inputRange: [0, 0.84, 0.96, 1], outputRange: [1, 0.9, 0.5, 0] });
 
   const label = showLabel ? (
     <View
@@ -1562,6 +1634,7 @@ function SeedButton({
   skill,
   index,
   shakeIndex = 0,
+  bubbleIn = false,
   slotMode = false,
   onPlantSkill,
   onPressSeed,
@@ -1571,6 +1644,7 @@ function SeedButton({
   skill: string;
   index: number;
   shakeIndex?: number;
+  bubbleIn?: boolean;
   slotMode?: boolean;
   onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
   onPressSeed?: (skillDescription: string, index: number) => void;
@@ -1579,10 +1653,13 @@ function SeedButton({
 }) {
   const category = getCategoryForSkill(skill);
   const isDisabled = (!onPlantSkill && !onPressSeed) || planted || disabled;
+  const seedAnimationClass = Platform.OS === 'web'
+    ? shakeIndex > 0 ? 'skill-seed-popcorn' : bubbleIn ? 'skill-seed-bubble-in' : undefined
+    : undefined;
 
   return (
     <Pressable
-      className={Platform.OS === 'web' && shakeIndex > 0 ? 'skill-seed-popcorn' : undefined}
+      className={seedAnimationClass}
       onPress={() => {
         if (isDisabled) return;
         if (onPressSeed) {
@@ -2434,6 +2511,8 @@ export function SkillBubbleGarden({
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
   const [recentSeedNames, setRecentSeedNames] = useState<string[]>([]);
   const [recentSeedSlots, setRecentSeedSlots] = useState<Record<string, number>>({});
+  const [flowerSlotPins, setFlowerSlotPins] = useState<Record<string, number>>({});
+  const [returnedSeedNames, setReturnedSeedNames] = useState<string[]>([]);
   const [incomingSeedNames, setIncomingSeedNames] = useState<string[]>([]);
   const [incomingSeedOrigins, setIncomingSeedOrigins] = useState<Record<string, number>>({});
   const displaySkills = useMemo(() => skills.filter(isBloomingSkill), [skills]);
@@ -2450,6 +2529,10 @@ export function SkillBubbleGarden({
       .slice(0, visibleSkillLimit)
       .map(item => item.skill);
   }, [displaySkills, visibleSkillLimit]);
+  const flowerSlots = useMemo(
+    () => buildFlowerSlots(visibleSkills, flowerSlotPins),
+    [flowerSlotPins, visibleSkills]
+  );
   const plantedNames = useMemo(
     () => new Set(displaySkills.map((skill) => normalizeSkillName(skill.description))),
     [displaySkills]
@@ -2483,6 +2566,7 @@ export function SkillBubbleGarden({
   const canPlantSeeds = openSlots > 0;
   const canShakeSeeds = availableSeedCount > 1;
   const incomingSeedSet = useMemo(() => new Set(incomingSeedNames), [incomingSeedNames]);
+  const returnedSeedSet = useMemo(() => new Set(returnedSeedNames), [returnedSeedNames]);
   const featuredSkillIds = useMemo(() => {
     if (visibleSkills.length <= 14) {
       return new Set(visibleSkills.map(skill => skill.id));
@@ -2525,6 +2609,10 @@ export function SkillBubbleGarden({
   const handleReturnToSeed = (skill: GardenSkill, slotIndex: number) => {
     const normalizedSkill = normalizeSkillName(skill.description);
     setSelectedSkillId(null);
+    setFlowerSlotPins((current) => {
+      const { [normalizedSkill]: _removed, ...next } = current;
+      return next;
+    });
     setRecentSeedNames((current) => [
       skill.description,
       ...current.filter((item) => normalizeSkillName(item) !== normalizedSkill),
@@ -2533,7 +2621,7 @@ export function SkillBubbleGarden({
       ...current,
       [normalizedSkill]: slotIndex,
     }));
-    setSeedShake((current) => current + 1);
+    setReturnedSeedNames([normalizedSkill]);
   };
 
   const rememberIncomingSeeds = useCallback((descriptions: string[], originIndex?: number) => {
@@ -2548,15 +2636,25 @@ export function SkillBubbleGarden({
     ].slice(0, GARDEN_CAPACITY * 2));
 
     if (originIndex !== undefined) {
-      const originX = clamp((originIndex + 0.5) / GARDEN_CAPACITY, 0.04, 0.96);
+      const originX = width > 0
+        ? clamp(getFrontRowCenterX(originIndex, GARDEN_CAPACITY, width) / width, 0.04, 0.96)
+        : clamp((originIndex + 0.5) / GARDEN_CAPACITY, 0.04, 0.96);
       setIncomingSeedOrigins((current) => ({
         ...current,
         ...Object.fromEntries(normalizedSeeds.map((name) => [name, originX])),
       }));
     }
-  }, []);
+  }, [width]);
 
   const handlePlantSeed = useCallback((skillDescription: string, options?: PlantSkillOptions, originIndex?: number) => {
+    const normalizedSkill = normalizeSkillName(skillDescription);
+    setReturnedSeedNames((current) => current.filter((name) => name !== normalizedSkill));
+    if (originIndex !== undefined) {
+      setFlowerSlotPins((current) => ({
+        ...current,
+        [normalizedSkill]: clamp(originIndex, 0, GARDEN_CAPACITY - 1),
+      }));
+    }
     rememberIncomingSeeds([skillDescription], originIndex);
     onPlantSkill?.(skillDescription, options);
   }, [onPlantSkill, rememberIncomingSeeds]);
@@ -2566,6 +2664,11 @@ export function SkillBubbleGarden({
   }, [handlePlantSeed]);
 
   const handlePlantSeeds = useCallback((selections: PlantSkillSelection[], options?: PlantSkillsOptions) => {
+    if (options?.mode === 'replace') {
+      setFlowerSlotPins({});
+      setRecentSeedSlots({});
+      setReturnedSeedNames([]);
+    }
     rememberIncomingSeeds(selections.map((selection) => selection.description));
 
     if (onPlantSkills) {
@@ -2645,12 +2748,12 @@ export function SkillBubbleGarden({
           </View>
         )}
 
-        {width > 0 && visibleSkills.map((skill, index) => (
+        {width > 0 && flowerSlots.map(({ skill, slotIndex }) => (
           <SkillPlant
             key={skill.id}
             skill={skill}
-            index={index}
-            count={visibleSkills.length}
+            index={slotIndex}
+            count={GARDEN_CAPACITY}
             width={width}
             height={meadowHeight}
             editable={editable}
@@ -2817,6 +2920,7 @@ export function SkillBubbleGarden({
                       onPressSeed={onPlantSkill ? handlePlantSeedFromSlot : undefined}
                       planted={plantedNames.has(normalizeSkillName(skill))}
                       disabled={!canPlantSeeds}
+                      bubbleIn={returnedSeedSet.has(normalizeSkillName(skill))}
                     />
                   ) : (
                     <EmptySeedSlot key={`empty-seed-${index}-${seedShake}`} index={index} shakeIndex={seedShake} />
@@ -2844,6 +2948,7 @@ export function SkillBubbleGarden({
                       onPressSeed={onPlantSkill ? handlePlantSeedFromSlot : undefined}
                       planted={plantedNames.has(normalizeSkillName(skill))}
                       disabled={!canPlantSeeds}
+                      bubbleIn={returnedSeedSet.has(normalizeSkillName(skill))}
                     />
                   ) : (
                     <EmptySeedSlot key={`empty-seed-${index}-${seedShake}`} index={index} shakeIndex={seedShake} />
