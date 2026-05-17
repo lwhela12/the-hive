@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { formatDateShort } from '../../lib/dateUtils';
 import type { Wish } from '../../types';
 
 const publicBeeIcon = require('../../assets/BEE ONLY IN GOLD BG.png');
@@ -85,6 +86,9 @@ export function WishCombCard({
   const isGranted = wish.status === 'fulfilled';
   const isPrivate = wish.status === 'private';
   const isLong = wish.description.length > 128 || wish.description.includes('\n');
+  const dateLabel = isGranted && wish.fulfilled_at
+    ? `Granted · ${formatDateShort(wish.fulfilled_at)}`
+    : formatDateShort(wish.created_at);
 
   const content = (
     <>
@@ -131,21 +135,24 @@ export function WishCombCard({
           {wish.description}
         </Text>
 
-        <View style={styles.cardMetaRow}>
-          {linkedBoardLabel && (
-            <View style={styles.linkedMeta}>
-              <Ionicons name="link-outline" size={14} color="#b88a3c" />
-              <Text style={styles.linkedMetaText}>
-                {linkedBoardLabel}
-              </Text>
-            </View>
-          )}
+        {linkedBoardLabel && (
+          <View style={styles.linkedMeta}>
+            <Ionicons name="link-outline" size={13} color={isGranted ? '#9a8060' : '#b88a3c'} />
+            <Text style={[styles.linkedMetaText, isGranted ? styles.linkedMetaTextGranted : null]}>
+              {linkedBoardLabel}
+            </Text>
+          </View>
+        )}
 
-          {isLong && (
+        <View style={styles.footerRow}>
+          <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
+            {dateLabel}
+          </Text>
+          {isLong ? (
             <Text style={[styles.expandHint, isGranted ? styles.expandHintGranted : null]}>
               {expanded ? 'Less' : 'More'}
             </Text>
-          )}
+          ) : null}
         </View>
 
         {wish.status === 'fulfilled' && wish.thank_you_message && (
@@ -187,32 +194,32 @@ const styles = StyleSheet.create({
   card: {
     position: 'relative',
     overflow: 'hidden',
-    borderRadius: 24,
+    borderRadius: 14,
     borderWidth: 1,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    minHeight: 96,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    minHeight: 0,
     shadowColor: '#bd9348',
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   cardPublic: {
-    borderColor: 'rgba(222,193,129,0.46)',
-    backgroundColor: '#ffffff',
+    borderColor: 'rgba(222,193,129,0.5)',
+    backgroundColor: '#fff8e8',
   },
   cardPrivate: {
-    borderColor: 'rgba(222,193,129,0.44)',
-    backgroundColor: '#fff7e6',
+    borderColor: 'rgba(222,193,129,0.5)',
+    backgroundColor: '#fff8e8',
   },
   cardPressed: {
     opacity: 0.82,
     transform: [{ scale: 0.995 }],
   },
   cardGranted: {
-    borderColor: 'rgba(222,193,129,0.34)',
-    backgroundColor: '#fffdf7',
-    shadowOpacity: 0.035,
+    borderColor: 'rgba(222,193,129,0.28)',
+    backgroundColor: '#fffdf5',
+    shadowOpacity: 0.04,
   },
   content: {
     minWidth: 0,
@@ -222,7 +229,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    marginBottom: 8,
+    marginBottom: 9,
   },
   statusPill: {
     flexDirection: 'row',
@@ -230,14 +237,14 @@ const styles = StyleSheet.create({
     gap: 6,
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
   statusText: {
     fontFamily: 'Lato_700Bold',
     fontSize: 12,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   manageButton: {
     width: 32,
@@ -245,11 +252,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(245,234,209,0.7)',
   },
   description: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
   },
   descriptionOpen: {
     fontFamily: 'Lato_700Bold',
@@ -261,24 +267,35 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textDecorationLine: 'line-through',
   },
-  cardMetaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 10,
-  },
   linkedMeta: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 1,
+    marginTop: 9,
   },
   linkedMetaText: {
     fontFamily: 'Lato_700Bold',
     color: '#b88a3c',
     fontSize: 12,
     marginLeft: 5,
+  },
+  linkedMetaTextGranted: {
+    color: '#9a8060',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 12,
+  },
+  dateText: {
+    fontFamily: 'Lato_400Regular',
+    color: 'rgba(45,45,45,0.4)',
+    fontSize: 12,
+  },
+  dateTextGranted: {
+    color: '#9a8060',
   },
   expandHint: {
     fontFamily: 'Lato_700Bold',
@@ -298,12 +315,12 @@ const styles = StyleSheet.create({
   },
   beeCluster: {
     position: 'relative',
-    width: 40,
-    height: 22,
+    width: 34,
+    height: 18,
   },
   beeClusterCompact: {
-    width: 40,
-    height: 22,
+    width: 34,
+    height: 18,
     marginRight: 1,
   },
   beeImage: {
@@ -331,22 +348,22 @@ const styles = StyleSheet.create({
   },
   beePillOne: {
     left: 0,
-    top: 6,
-    width: 18,
-    height: 18,
+    top: 5,
+    width: 15,
+    height: 15,
   },
   beePillTwo: {
-    left: 14,
+    left: 12,
     top: 0,
-    width: 16,
-    height: 16,
+    width: 13,
+    height: 13,
     opacity: 0.9,
   },
   beePillThree: {
-    left: 28,
-    top: 9,
-    width: 12,
-    height: 12,
+    left: 24,
+    top: 8,
+    width: 10,
+    height: 10,
     opacity: 0.72,
   },
 });

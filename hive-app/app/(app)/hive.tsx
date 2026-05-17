@@ -1447,6 +1447,7 @@ export default function HiveScreen() {
     : { flex: 1, minWidth: 0 };
   const dashboardPanelHeight = useMobileLayout ? 300 : 280;
   const todoPanelHeight = useMobileLayout ? 420 : 280;
+  const wishPanelHeight = useMobileLayout ? 460 : 360;
 
   const renderTodoRow = (todo: HomeTodo, isLast: boolean) => {
     const isDone = !!todo.isDone;
@@ -2167,7 +2168,23 @@ export default function HiveScreen() {
           </View>
 
           {loading.publicWishes && loading.grantedWishes ? (
-            <WishSectionSkeleton />
+            <View style={{
+              backgroundColor: '#fdf3dc',
+              borderRadius: 20,
+              borderTopLeftRadius: 0,
+              borderWidth: 1,
+              borderColor: 'rgba(222,193,129,0.7)',
+              shadowColor: '#bd9348',
+              shadowOpacity: 0.12,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 5 },
+              elevation: 3,
+              height: wishPanelHeight,
+              overflow: 'hidden',
+              padding: 12,
+            }}>
+              <WishSectionSkeleton />
+            </View>
           ) : (
             <View style={{
               backgroundColor: '#fdf3dc',
@@ -2180,61 +2197,72 @@ export default function HiveScreen() {
               shadowRadius: 18,
               shadowOffset: { width: 0, height: 5 },
               elevation: 3,
-              padding: 12,
+              height: wishPanelHeight,
+              overflow: 'hidden',
             }}>
-              {publicWishes.length + grantedWishes.length === 0 ? (
-                <View className="bg-white rounded-xl p-6 shadow-sm items-center">
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
-                    No HD wishes yet
-                  </Text>
-                </View>
-              ) : (
-                <>
-                  {publicWishes.map((wish) => (
-                    <WishCard
-                      key={wish.id}
-                      wish={wish}
-                      onPress={() => setSelectedWish(wish)}
-                      canEdit={canOpenWishActions(wish)}
-                      canDelete={canDeleteWish(wish)}
-                      onManage={() => setManagingWish(wish)}
-                    />
-                  ))}
-                  {grantedWishes.length > 0 ? (
-                    <View
-                      key="granted-divider"
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 10,
-                        paddingHorizontal: 14,
-                        paddingVertical: 8,
-                        borderTopWidth: publicWishes.length > 0 ? 1 : 0,
-                        borderBottomWidth: 1,
-                        borderColor: 'rgba(222,193,129,0.28)',
-                        backgroundColor: '#fbf1dc',
-                        marginBottom: 12,
-                      }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e7a5e' }}>
-                        Granted ({grantedWishes.length})
-                      </Text>
-                      <Ionicons name="sparkles-outline" size={14} color="#bd9348" />
-                    </View>
-                  ) : null}
-                  {grantedWishes.map((wish) => (
-                    <WishCard
-                      key={wish.id}
-                      wish={wish}
-                      onPress={() => setSelectedWish(wish)}
-                      canEdit={canOpenWishActions(wish)}
-                      canDelete={canDeleteWish(wish)}
-                      onManage={() => setManagingWish(wish)}
-                    />
-                  ))}
-                </>
-              )}
+              <ScrollView
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  padding: 12,
+                  paddingBottom: 12,
+                  flexGrow: publicWishes.length + grantedWishes.length === 0 ? 1 : undefined,
+                }}
+              >
+                {publicWishes.length + grantedWishes.length === 0 ? (
+                  <View className="bg-white rounded-xl p-6 shadow-sm items-center">
+                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
+                      No HD wishes yet
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    {publicWishes.map((wish) => (
+                      <WishCard
+                        key={wish.id}
+                        wish={wish}
+                        onPress={() => setSelectedWish(wish)}
+                        canEdit={canOpenWishActions(wish)}
+                        canDelete={canDeleteWish(wish)}
+                        onManage={() => setManagingWish(wish)}
+                      />
+                    ))}
+                    {grantedWishes.length > 0 ? (
+                      <View
+                        key="granted-divider"
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          borderTopWidth: publicWishes.length > 0 ? 1 : 0,
+                          borderBottomWidth: 1,
+                          borderColor: 'rgba(222,193,129,0.28)',
+                          backgroundColor: '#fbf1dc',
+                          marginBottom: 12,
+                        }}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e7a5e' }}>
+                          Granted ({grantedWishes.length})
+                        </Text>
+                        <Ionicons name="sparkles-outline" size={14} color="#bd9348" />
+                      </View>
+                    ) : null}
+                    {grantedWishes.map((wish) => (
+                      <WishCard
+                        key={wish.id}
+                        wish={wish}
+                        onPress={() => setSelectedWish(wish)}
+                        canEdit={canOpenWishActions(wish)}
+                        canDelete={canDeleteWish(wish)}
+                        onManage={() => setManagingWish(wish)}
+                      />
+                    ))}
+                  </>
+                )}
+              </ScrollView>
             </View>
           )}
         </View>

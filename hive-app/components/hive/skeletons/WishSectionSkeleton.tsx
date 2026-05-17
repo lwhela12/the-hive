@@ -30,22 +30,12 @@ function WishCardSkeleton() {
 
 /**
  * Skeleton for the HD Wishes section
- * Includes tab bar and wish card placeholders
+ * Includes wish card placeholders
  */
 export function WishSectionSkeleton() {
   return (
     <View>
-      {/* Tabs skeleton */}
-      <View className="flex-row mb-3 bg-cream/50 rounded-lg p-1">
-        <View className="flex-1 py-2 rounded-md bg-white shadow-sm">
-          <Skeleton width="50%" height={14} style={{ alignSelf: 'center' }} />
-        </View>
-        <View className="flex-1 py-2 rounded-md">
-          <Skeleton width="50%" height={14} style={{ alignSelf: 'center' }} />
-        </View>
-      </View>
-
-      {/* Wish cards */}
+      <WishCardSkeleton />
       <WishCardSkeleton />
       <WishCardSkeleton />
     </View>
