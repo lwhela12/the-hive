@@ -76,6 +76,7 @@ function GlanceChip({ label, value }: { label: string; value: string }) {
         flexDirection: 'row',
         alignItems: 'center',
         maxWidth: '100%',
+        minWidth: 0,
       }}
     >
       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#8a6b30', textTransform: 'uppercase' }}>
@@ -102,7 +103,7 @@ function TransactionRow({ transaction }: { transaction: HoneyPotLedgerEntry }) {
   const amountColor = transaction.amount < 0 ? '#b91c1c' : '#15803d';
   const methodLabel = getHoneyPotPaymentMethodLabel(transaction.payment_method);
   const duesLabel = getHoneyPotDuesLabel(transaction);
-  const counterparty = transaction.related_user_profile?.name ?? transaction.external_counterparty_name;
+  const counterparty = transaction.related_user_profile?.name ?? transaction.external_counterparty_name?.trim();
   const recorder = transaction.recorded_by_profile?.name ?? 'Unknown recorder';
   const notePreview = getNotePreview(transaction.note);
   const glanceItems = [

@@ -71,7 +71,7 @@ export default function ChatScreen() {
   const useMobileLayout = width < 768;
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['top', 'bottom']}>
+    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       <View className="flex-1 flex-row">
         {/* Sidebar - always visible on wide screens (collapsible), drawer on narrow screens */}
         {!useMobileLayout && (

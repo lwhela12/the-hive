@@ -9,6 +9,7 @@ import {
   ScrollView,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line, Path, Text as SvgText, TSpan } from 'react-native-svg';
@@ -341,10 +342,10 @@ function getBloomStep(level: number) {
 
 function getNextBloomLevel(level: number) {
   const step = getBloomStep(level);
-  if (step === 0) return 1;
-  if (step === 1) return 3;
+  if (step === 0) return 2;
+  if (step === 1) return 4;
   if (step === 2) return 5;
-  return 1;
+  return 2;
 }
 
 function isBloomingSkill(skill: Partial<Skill>) {
@@ -412,13 +413,13 @@ function getDefaultPosition(skill: GardenSkill, index: number, count: number) {
   };
 }
 
-function getFrontRowScale(width: number) {
+function getFrontRowScale(width: number, compactLandscape = false) {
   const effectiveWidth = Math.max(width || 0, 360);
   const fullBloomWidth = STAGES[STAGES.length - 1].labelWidth;
   const sidePadding = clamp(effectiveWidth * 0.045, effectiveWidth < 520 ? 18 : 30, effectiveWidth > 1280 ? 96 : 58);
-  const idealScale = ((effectiveWidth - sidePadding * 2) / (GARDEN_CAPACITY * fullBloomWidth)) * 1.78;
+  const idealScale = ((effectiveWidth - sidePadding * 2) / (GARDEN_CAPACITY * fullBloomWidth)) * (compactLandscape ? 1.42 : 1.78);
   const minScale = effectiveWidth < 520 ? 0.54 : 0.82;
-  const maxScale = effectiveWidth > 1280 ? 1.46 : effectiveWidth > 860 ? 1.22 : 0.98;
+  const maxScale = compactLandscape ? 0.9 : effectiveWidth > 1280 ? 1.46 : effectiveWidth > 860 ? 1.22 : 0.98;
 
   return clamp(idealScale, minScale, maxScale);
 }
@@ -523,14 +524,28 @@ function buildFlowerSlots(skills: GardenSkill[], pinnedSlots: Record<string, num
     .filter((slot): slot is FlowerSlot => Boolean(slot));
 }
 
-function getFrontRowAnchorY(height: number, width: number, index: number) {
+function getFrontRowAnchorY(height: number, width: number, index: number, compactLandscape = false) {
   const baseAnchor = height - clamp(width < 520 ? 34 : 48, 32, 58);
+  if (compactLandscape) {
+    const staggerPattern = [0, 30, 12, 44, 20];
+    return baseAnchor - staggerPattern[index % staggerPattern.length];
+  }
+  if (width < 520) {
+    const staggerPattern = [0, 34, 14, 52, 22];
+    return baseAnchor - staggerPattern[index % staggerPattern.length];
+  }
   const stagger = index % 2 === 1 ? clamp(width < 520 ? 28 : 54, 28, 68) : 0;
 
   return baseAnchor - stagger;
 }
 
-function getMeadowHeight(skillCount: number, width: number) {
+function getMeadowHeight(skillCount: number, width: number, compactLandscape = false) {
+  if (compactLandscape) {
+    const base = skillCount === 0 ? 330 : 430;
+    const extra = Math.max(0, skillCount - GARDEN_CAPACITY) * 4;
+    return clamp(base + extra, base, 500);
+  }
+
   const base = skillCount === 0 ? (width < 420 ? 330 : 370) : (width < 420 ? 500 : 560);
   const extra = Math.max(0, skillCount - (width < 420 ? 10 : 18)) * (width < 420 ? 8 : 5);
   return clamp(base + extra, base, width < 420 ? 720 : 780);
@@ -1312,6 +1327,7 @@ function SkillPlant({
   justPlanted,
   entryOriginX,
   onEntryComplete,
+  compactLandscape,
 }: SkillBubbleGardenProps & {
   skill: GardenSkill;
   index: number;
@@ -1325,19 +1341,20 @@ function SkillPlant({
   justPlanted: boolean;
   entryOriginX?: number;
   onEntryComplete: (skill: GardenSkill) => void;
+  compactLandscape: boolean;
 }) {
   const level = getLevel(skill);
   const bloomStep = getBloomStep(level);
   const stage = getStage(level);
   const category = getCategoryForSkill(skill.description);
-  const rowScale = getFrontRowScale(width);
+  const rowScale = getFrontRowScale(width, compactLandscape);
   const bloomHasEmbeddedLabel = bloomStep > 0;
   const showLabel = !bloomHasEmbeddedLabel && (selected || count <= 10 || featured);
   const plantWidth = stage.labelWidth * rowScale;
   const spriteHeight = getStageCanvasHeight(stage) * rowScale * (bloomStep >= 3 ? 1.04 : 1);
   const plantHeight = spriteHeight + (showLabel ? LABEL_HEIGHT : 8);
   const centerX = getFrontRowCenterX(index, count, width);
-  const anchorY = getFrontRowAnchorY(height, width, index);
+  const anchorY = getFrontRowAnchorY(height, width, index, compactLandscape);
   const left = clamp(centerX - plantWidth / 2, -plantWidth * 0.28, Math.max(-plantWidth * 0.28, width - plantWidth * 0.72));
   const top = clamp(anchorY - plantHeight, 6, Math.max(6, height - plantHeight - 4));
   const labelFont = clamp(12 * rowScale - Math.max(0, skill.description.length - 22) * 0.06, 8.4, 12);
@@ -1471,7 +1488,7 @@ function SkillPlant({
     });
   };
 
-  const showReseedButton = editable && !isReseeding && (selected || isHovered);
+  const showReseedButton = editable && !isReseeding && isHovered;
   const entryLift = justPlanted ? Math.max(190, GROUND_HEIGHT * 1.82) : 28;
   const soilDrop = Math.max(138, height - top - GROUND_HEIGHT * 0.03 - plantHeight * 0.48);
   const entryOriginOffset = justPlanted && entryOriginX !== undefined
@@ -1563,10 +1580,10 @@ function SkillPlant({
               cursor: editable ? 'pointer' : 'default',
               userSelect: 'none',
               WebkitUserSelect: 'none',
-              touchAction: 'none',
+              touchAction: 'manipulation',
               filter: selected ? 'drop-shadow(0 10px 16px rgba(77, 58, 34, 0.18))' : undefined,
               transitionProperty: 'left, top',
-              transitionDuration: '920ms',
+              transitionDuration: compactLandscape ? '420ms' : '920ms',
               transitionTimingFunction: 'cubic-bezier(0.18, 0.9, 0.16, 1)',
               transformOrigin: '50% 100%',
             } as any)
@@ -1575,6 +1592,8 @@ function SkillPlant({
     >
       <Pressable
         onPress={cycleLevel}
+        onLongPress={beginReseed}
+        delayLongPress={620}
         onHoverIn={showHoverControls}
         onHoverOut={hideHoverControls}
         disabled={!editable || isReseeding}
@@ -1590,9 +1609,9 @@ function SkillPlant({
             ? ({
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
-                touchAction: 'none',
+                touchAction: 'manipulation',
                 transitionProperty: 'width, height',
-                transitionDuration: '920ms',
+                transitionDuration: compactLandscape ? '420ms' : '920ms',
                 transitionTimingFunction: 'cubic-bezier(0.18, 0.9, 0.16, 1)',
               } as any)
             : {}),
@@ -2549,6 +2568,7 @@ export function SkillBubbleGarden({
 }: SkillBubbleGardenProps) {
   useWildflowerStyles();
 
+  const viewport = useWindowDimensions();
   const [width, setWidth] = useState(0);
   const [seedShake, setSeedShake] = useState(0);
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
@@ -2599,6 +2619,15 @@ export function SkillBubbleGarden({
     () => buildSeedSlots(seedTray, recentSeedSlots),
     [recentSeedSlots, seedTray]
   );
+  const scrollSeedStrip = useMemo(() => {
+    const slotSeeds = new Set(
+      seedSlots
+        .filter((skill): skill is string => Boolean(skill))
+        .map(normalizeSkillName)
+    );
+    const extraSeeds = seedTray.filter((skill) => !slotSeeds.has(normalizeSkillName(skill)));
+    return [...seedSlots, ...extraSeeds];
+  }, [seedSlots, seedTray]);
   const availableSeedCount = useMemo(
     () => seedSourceSkills
       .filter((skill) => !plantedNames.has(normalizeSkillName(skill)))
@@ -2628,10 +2657,12 @@ export function SkillBubbleGarden({
         .map(item => item.id)
     );
   }, [visibleSkills]);
-  const meadowHeight = getMeadowHeight(visibleSkills.length, width || 680);
+  const compactLandscape = editable && viewport.width > viewport.height && viewport.height < 540;
+  const meadowHeight = getMeadowHeight(visibleSkills.length, width || 680, compactLandscape);
   const showLandscapeHint = editable && width > 0 && width < 560;
-  const seedRowScrolls = width > 0 && width < 1060;
-  const seedRowMinWidth = Math.max(width - 24, SEED_TRAY_SIZE * 112 + (SEED_TRAY_SIZE - 1) * 7);
+  const seedRowScrolls = width > 0 && (width < 1060 || scrollSeedStrip.length > SEED_TRAY_SIZE);
+  const visibleSeedSlots = seedRowScrolls ? scrollSeedStrip : seedSlots;
+  const seedRowMinWidth = Math.max(width - 24, visibleSeedSlots.length * 112 + Math.max(0, visibleSeedSlots.length - 1) * 7);
   const surveyPanelWidth = width > 760
     ? Math.min(520, Math.max(0, width - 36))
     : Math.max(0, width - 28);
@@ -2847,6 +2878,7 @@ export function SkillBubbleGarden({
             justPlanted={incomingSeedSet.has(normalizeSkillName(skill.description))}
             entryOriginX={incomingSeedOrigins[normalizeSkillName(skill.description)]}
             onEntryComplete={handleEntryComplete}
+            compactLandscape={compactLandscape}
             skills={skills}
           />
         ))}
@@ -2977,7 +3009,8 @@ export function SkillBubbleGarden({
             {seedRowScrolls ? (
               <ScrollView
                 horizontal
-                showsHorizontalScrollIndicator={false}
+                showsHorizontalScrollIndicator
+                scrollEnabled={seedRowScrolls}
                 style={{
                   minWidth: 0,
                   overflow: 'visible',
@@ -2987,9 +3020,10 @@ export function SkillBubbleGarden({
                   gap: 7,
                   alignItems: 'center',
                   paddingRight: 2,
+                  paddingBottom: 6,
                 }}
               >
-                {seedSlots.map((skill, index) => (
+                {visibleSeedSlots.map((skill, index) => (
                   skill ? (
                     <SeedButton
                       key={`${skill}-${index}-${seedShake}`}
@@ -2998,7 +3032,7 @@ export function SkillBubbleGarden({
                       shakeIndex={seedShake}
                       slotMode
                       onPlantSkill={onPlantSkill ? handlePlantSeed : undefined}
-                      onPressSeed={onPlantSkill ? handlePlantSeedFromSlot : undefined}
+                      onPressSeed={onPlantSkill ? (description) => handlePlantSeedFromSlot(description, index % GARDEN_CAPACITY) : undefined}
                       planted={plantedNames.has(normalizeSkillName(skill))}
                       disabled={!canPlantSeeds}
                       bubbleIn={returnedSeedSet.has(normalizeSkillName(skill))}
@@ -3026,7 +3060,7 @@ export function SkillBubbleGarden({
                       shakeIndex={seedShake}
                       slotMode
                       onPlantSkill={onPlantSkill ? handlePlantSeed : undefined}
-                      onPressSeed={onPlantSkill ? handlePlantSeedFromSlot : undefined}
+                      onPressSeed={onPlantSkill ? (description) => handlePlantSeedFromSlot(description, index) : undefined}
                       planted={plantedNames.has(normalizeSkillName(skill))}
                       disabled={!canPlantSeeds}
                       bubbleIn={returnedSeedSet.has(normalizeSkillName(skill))}

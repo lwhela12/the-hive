@@ -2,8 +2,12 @@
   "name": "H.I.V.E.",
   "short_name": "HIVE",
   "description": "AI-powered wish coordination for your community",
+  "id": "/hive",
   "start_url": "/hive",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone"],
+  "orientation": "portrait",
   "background_color": "#bd9348",
   "theme_color": "#bd9348",
   "icons": [

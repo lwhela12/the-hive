@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
+import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
 import { getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 
@@ -91,6 +92,12 @@ export default function AppLayout() {
   const { width } = useWindowDimensions();
   // Use mobile layout for narrow screens (< 768px) regardless of platform
   const useMobileLayout = width < 768;
+  const { isBrowserMode } = useWebAppDisplayMode();
+  const useBrowserCompactTabs = Platform.OS === 'web' && useMobileLayout && isBrowserMode;
+  const mobileTabHeight = useBrowserCompactTabs ? 62 : 78;
+  const mobileTabPaddingBottom = useBrowserCompactTabs ? 6 : Platform.OS === 'ios' ? 14 : 8;
+  const mobileTabPaddingTop = useBrowserCompactTabs ? 2 : 4;
+  const tabIconSize = useMobileLayout ? (useBrowserCompactTabs ? 20 : 22) : 26;
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
 
   // Initialize push notification listeners and state (no permission prompt on load)
@@ -131,9 +138,9 @@ export default function AppLayout() {
           headerShown: false,
           tabBarStyle: useMobileLayout
             ? {
-                height: 78,
-                paddingTop: 4,
-                paddingBottom: Platform.OS === 'ios' ? 14 : 8,
+                height: mobileTabHeight,
+                paddingTop: mobileTabPaddingTop,
+                paddingBottom: mobileTabPaddingBottom,
                 backgroundColor: '#fff',
                 borderTopColor: '#dec181',
               }
@@ -144,9 +151,10 @@ export default function AppLayout() {
                 borderTopColor: '#dec181',
               },
           tabBarItemStyle: useMobileLayout
-            ? { minWidth: 0, paddingHorizontal: 0 }
+            ? { minWidth: 0, paddingHorizontal: 0, paddingVertical: 0 }
             : undefined,
           tabBarShowLabel: false,
+          tabBarHideOnKeyboard: true,
         }}
       >
         <Tabs.Screen
@@ -159,7 +167,7 @@ export default function AppLayout() {
                 customIcon={
                   <Ionicons
                     name="home-outline"
-                    size={useMobileLayout ? 22 : 26}
+                    size={tabIconSize}
                     color={focused ? '#bd9348' : '#2d2d2d80'}
                   />
                 }
@@ -181,7 +189,7 @@ export default function AppLayout() {
                 customIcon={
                   <Ionicons
                     name="sparkles-outline"
-                    size={useMobileLayout ? 22 : 26}
+                    size={tabIconSize}
                     color={focused ? '#bd9348' : '#2d2d2d80'}
                   />
                 }
@@ -202,7 +210,7 @@ export default function AppLayout() {
                 customIcon={
                   <Ionicons
                     name="people-outline"
-                    size={useMobileLayout ? 22 : 26}
+                    size={tabIconSize}
                     color={focused ? '#bd9348' : '#2d2d2d80'}
                   />
                 }
@@ -228,7 +236,7 @@ export default function AppLayout() {
                 customIcon={
                   <Ionicons
                     name="grid-outline"
-                    size={useMobileLayout ? 22 : 26}
+                    size={tabIconSize}
                     color={focused ? '#bd9348' : '#2d2d2d80'}
                   />
                 }
@@ -249,7 +257,7 @@ export default function AppLayout() {
                 customIcon={
                   <Ionicons
                     name="chatbubble-ellipses-outline"
-                    size={useMobileLayout ? 22 : 26}
+                    size={tabIconSize}
                     color={focused ? '#bd9348' : '#2d2d2d80'}
                   />
                 }
@@ -271,7 +279,7 @@ export default function AppLayout() {
                 customIcon={
                   <Ionicons
                     name="calendar-outline"
-                    size={useMobileLayout ? 22 : 26}
+                    size={tabIconSize}
                     color={focused ? '#bd9348' : '#2d2d2d80'}
                   />
                 }
@@ -318,7 +326,7 @@ export default function AppLayout() {
                 customIcon={
                   <Ionicons
                     name="settings-outline"
-                    size={useMobileLayout ? 22 : 26}
+                    size={tabIconSize}
                     color={focused ? '#bd9348' : '#2d2d2d80'}
                   />
                 }
