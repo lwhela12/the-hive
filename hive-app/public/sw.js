@@ -1,8 +1,8 @@
 // Cache names: bump these when a deployed app shell must replace old clients.
-const APP_CACHE = 'hive-app-v31-skills-garden-sun-rays';
-const STATIC_CACHE = 'hive-static-v31-skills-garden-sun-rays';
+const APP_CACHE = 'hive-app-v32-activity-board-deeplinks';
+const STATIC_CACHE = 'hive-static-v32-activity-board-deeplinks';
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'skills-garden-sun-rays-v31';
+const REFRESH_TOKEN = 'activity-board-deeplinks-v32';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant

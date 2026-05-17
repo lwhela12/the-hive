@@ -967,7 +967,14 @@ export default function HiveScreen() {
         setStoredItem(`the-hive:last-board-post:${communityId}`, item.sourceId);
         setStoredItem(`the-hive:board-direct-open:${communityId}`, 'true');
       }
-      router.push('/board');
+      router.push({
+        pathname: '/board',
+        params: {
+          ...(item.categoryId ? { categoryId: item.categoryId } : {}),
+          postId: item.sourceId,
+          open: String(Date.now()),
+        },
+      });
     } else if (destination === 'members') {
       router.push('/members');
     } else if (destination === 'wish') {
@@ -1398,7 +1405,13 @@ export default function HiveScreen() {
     removeStoredItem(`the-hive:last-board-post:${communityId}`);
     setStoredItem(`the-hive:board-direct-open:${communityId}`, 'true');
     setSelectedWish(null);
-    router.push('/board');
+    router.push({
+      pathname: '/board',
+      params: {
+        categoryId,
+        open: String(Date.now()),
+      },
+    });
   }, [communityId, router]);
 
   const createBoardFromWish = useCallback(async (wish: WishWithGranters) => {

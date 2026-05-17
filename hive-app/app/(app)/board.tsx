@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, Alert, ActivityIndicator, TextInput, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useBoardCategoriesQuery, useBoardPostsQuery, useBoardPostCountsQuery } from '../../lib/hooks/useBoardQuery';
@@ -112,10 +112,20 @@ function getCategorySearchText(category: BoardCategory) {
   ].filter(Boolean).join(' ').toLowerCase();
 }
 
+function getRouteParam(value: string | string[] | undefined) {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
 export default function BoardScreen() {
   const { profile, communityId, communityRole } = useAuth();
+  const routeParams = useLocalSearchParams<{ categoryId?: string | string[]; postId?: string | string[]; open?: string | string[] }>();
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
+  const routeCategoryId = getRouteParam(routeParams.categoryId);
+  const routePostId = getRouteParam(routeParams.postId);
+  const routeOpenKey = getRouteParam(routeParams.open);
+  const hasRouteTarget = !!routeCategoryId || !!routePostId;
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -264,6 +274,8 @@ export default function BoardScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (hasRouteTarget) return;
+
       const isDirectOpen = boardDirectOpenStorageKey
         ? getStoredItem(boardDirectOpenStorageKey) === 'true'
         : false;
@@ -282,8 +294,52 @@ export default function BoardScreen() {
       if (!isComposing) {
         resetBoardToList();
       }
-    }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey, resetBoardToList])
+    }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey, hasRouteTarget, resetBoardToList])
   );
+
+  useEffect(() => {
+    if (!communityId || !hasRouteTarget) return;
+
+    setBoardSearch('');
+    setBoardListView('active');
+    setThreadListView('active');
+    setShowComposer(false);
+    setEditingPost(null);
+    setShowTopicComposer(false);
+    setEditingTopic(null);
+    setShowAddLinkedWishModal(false);
+    setSelectedLinkedWish(null);
+    setManagingLinkedWish(null);
+    setEditingLinkedWish(null);
+    setLinkedWishToGrant(null);
+    setGrantThreadContext(null);
+
+    if (routeCategoryId) {
+      setSelectedCategoryId(routeCategoryId);
+      if (boardCategoryStorageKey) setStoredItem(boardCategoryStorageKey, routeCategoryId);
+    }
+
+    if (routePostId) {
+      setSelectedPostId(routePostId);
+      if (boardPostStorageKey) setStoredItem(boardPostStorageKey, routePostId);
+    } else {
+      setSelectedPostId(null);
+      if (boardPostStorageKey) removeStoredItem(boardPostStorageKey);
+    }
+
+    if (boardComposerStorageKey) removeStoredItem(boardComposerStorageKey);
+    if (boardDirectOpenStorageKey) removeStoredItem(boardDirectOpenStorageKey);
+  }, [
+    boardCategoryStorageKey,
+    boardComposerStorageKey,
+    boardDirectOpenStorageKey,
+    boardPostStorageKey,
+    communityId,
+    hasRouteTarget,
+    routeCategoryId,
+    routeOpenKey,
+    routePostId,
+  ]);
 
   useEffect(() => {
     if (!boardCategoryStorageKey || selectedCategoryId || categories.length === 0) return;
