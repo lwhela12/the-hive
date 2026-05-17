@@ -381,10 +381,11 @@ function HeaderActionPill({ label, onPress }: { label: string; onPress: () => vo
 }
 
 export default function HiveScreen() {
-  const { profile, communityId, communityRole } = useAuth();
+  const { profile, communityId, communityRole, session } = useAuth();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
+  const currentUserId = session?.user?.id ?? profile?.id ?? null;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const canManageDues = isAdmin || communityRole === 'treasurer' || profile?.role === 'treasurer';
 
@@ -836,16 +837,18 @@ export default function HiveScreen() {
 
   // Activity feed
   const { items: activityItems, loading: activityLoading, refetch: refetchActivity } = useActivityFeed(communityId ?? undefined);
+  const [currentMembershipStartedAt, setCurrentMembershipStartedAt] = useState<string | null>(null);
 
   // Read state — timestamp-based (for auto-clear) + per-item set (for tap-to-clear)
-  const activityReadKey = communityId ? `the-hive:activity-viewed:${communityId}` : null;
-  const activityReadIdsKey = communityId ? `the-hive:activity-read-ids:${communityId}` : null;
+  const activityReadKey = communityId && currentUserId ? `the-hive:activity-viewed:${communityId}:${currentUserId}` : null;
+  const activityReadIdsKey = communityId && currentUserId ? `the-hive:activity-read-ids:${communityId}:${currentUserId}` : null;
+  const activityDefaultReadAt = currentMembershipStartedAt ?? (profile?.created_at as string | undefined) ?? new Date(0).toISOString();
 
   const [sessionReadAt, setSessionReadAt] = useState<string>(() => {
     if (activityReadKey) {
-      return getStoredItem(activityReadKey) ?? new Date(0).toISOString();
+      return getStoredItem(activityReadKey) ?? activityDefaultReadAt;
     }
-    return new Date(0).toISOString();
+    return activityDefaultReadAt;
   });
 
   const [readItemIds, setReadItemIds] = useState<Set<string>>(new Set());
@@ -862,14 +865,22 @@ export default function HiveScreen() {
     setShowActivityConfetti(true);
   }, []);
 
-  // Load per-item read IDs from localStorage once communityId is known
+  // Load member-specific activity read state when the signed-in account changes.
   useEffect(() => {
-    if (!activityReadIdsKey) return;
+    if (!activityReadKey || !activityReadIdsKey) {
+      setSessionReadAt(activityDefaultReadAt);
+      setReadItemIds(new Set());
+      return;
+    }
+
+    setSessionReadAt(getStoredItem(activityReadKey) ?? activityDefaultReadAt);
     try {
       const stored = getStoredItem(activityReadIdsKey);
-      if (stored) setReadItemIds(new Set(JSON.parse(stored)));
-    } catch {}
-  }, [activityReadIdsKey]);
+      setReadItemIds(stored ? new Set(JSON.parse(stored)) : new Set());
+    } catch {
+      setReadItemIds(new Set());
+    }
+  }, [activityDefaultReadAt, activityReadIdsKey, activityReadKey]);
 
   const markItemRead = useCallback((itemId: string) => {
     setReadItemIds(prev => {
@@ -982,7 +993,11 @@ export default function HiveScreen() {
   const [carouselMembers, setCarouselMembers] = useState<{ id: string; name: string; avatar_url?: string | null; role: string }[]>([]);
 
   useEffect(() => {
-    if (!communityId) return;
+    if (!communityId) {
+      setCarouselMembers([]);
+      setCurrentMembershipStartedAt(null);
+      return;
+    }
     supabase
       .from('community_memberships')
       .select('user_id, role, created_at, profiles(id, name, avatar_url)')
@@ -990,6 +1005,8 @@ export default function HiveScreen() {
       .order('created_at', { ascending: true })
       .then(({ data }) => {
         if (data) {
+          const currentMembership = data.find((m: any) => m.user_id === currentUserId);
+          setCurrentMembershipStartedAt(currentMembership?.created_at ?? null);
           setCarouselMembers(
             data.map((m: any) => ({
               id: m.profiles?.id ?? m.user_id,
@@ -998,9 +1015,11 @@ export default function HiveScreen() {
               role: m.role ?? 'member',
             })).filter(m => m.name)
           );
+        } else {
+          setCurrentMembershipStartedAt(null);
         }
       });
-  }, [communityId]);
+  }, [communityId, currentUserId]);
 
   // Use the optimized hive data hook (React Query with caching)
   const {
