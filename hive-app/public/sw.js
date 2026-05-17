@@ -1,8 +1,8 @@
 // Cache names: bump these when a deployed app shell must replace old clients.
-const APP_CACHE = 'hive-app-v27-activity-wish-nav';
-const STATIC_CACHE = 'hive-static-v27-activity-wish-nav';
+const APP_CACHE = 'hive-app-v28-todo-detail-sheet';
+const STATIC_CACHE = 'hive-static-v28-todo-detail-sheet';
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'activity-wish-nav-v27';
+const REFRESH_TOKEN = 'todo-detail-sheet-v28';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant
