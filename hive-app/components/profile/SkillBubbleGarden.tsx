@@ -144,6 +144,8 @@ type SurveyQuestion = {
   choices: SurveyChoice[];
 };
 
+type SeedSlot = string | undefined;
+
 const SEED_SURVEY: SurveyQuestion[] = [
   {
     prompt: 'Which sounds most fulfilling?',
@@ -407,6 +409,47 @@ function getFrontRowCenterX(index: number, count: number, width: number) {
   const slotIndex = (GARDEN_CAPACITY - 1) * (index / Math.max(1, count - 1));
 
   return sidePadding + (usableWidth * slotIndex) / (GARDEN_CAPACITY - 1);
+}
+
+function getSeedSlotIndexForCenterX(centerX: number, width: number) {
+  if (width <= 0) return 0;
+
+  const sidePadding = clamp(width * 0.045, width < 520 ? 18 : 30, width > 1280 ? 96 : 58);
+  const usableWidth = Math.max(1, width - sidePadding * 2);
+  const slotRatio = clamp((centerX - sidePadding) / usableWidth, 0, 1);
+
+  return clamp(Math.round(slotRatio * (GARDEN_CAPACITY - 1)), 0, GARDEN_CAPACITY - 1);
+}
+
+function buildSeedSlots(seedTray: string[], pinnedSlots: Record<string, number>) {
+  const slots: SeedSlot[] = Array.from({ length: SEED_TRAY_SIZE });
+  const usedSeeds = new Set<string>();
+
+  Object.entries(pinnedSlots)
+    .sort((left, right) => left[1] - right[1])
+    .forEach(([normalizedSeed, slotIndex]) => {
+      const seed = seedTray.find(item => normalizeSkillName(item) === normalizedSeed);
+      if (!seed) return;
+
+      const targetSlot = clamp(slotIndex, 0, SEED_TRAY_SIZE - 1);
+      const availableSlot = Array.from({ length: SEED_TRAY_SIZE }, (_, index) => index)
+        .sort((left, right) => Math.abs(left - targetSlot) - Math.abs(right - targetSlot))
+        .find(index => slots[index] === undefined);
+
+      if (availableSlot === undefined) return;
+      slots[availableSlot] = seed;
+      usedSeeds.add(normalizedSeed);
+    });
+
+  const remainingSeeds = seedTray.filter(seed => !usedSeeds.has(normalizeSkillName(seed)));
+  let remainingIndex = 0;
+
+  return slots.map(seed => {
+    if (seed) return seed;
+    const nextSeed = remainingSeeds[remainingIndex];
+    remainingIndex += 1;
+    return nextSeed;
+  });
 }
 
 function getFrontRowAnchorY(height: number, width: number, index: number) {
@@ -1180,7 +1223,7 @@ function SkillPlant({
   selected: boolean;
   featured: boolean;
   onSelect: (skillId: string) => void;
-  onReturnToSeed: (skill: GardenSkill) => void;
+  onReturnToSeed: (skill: GardenSkill, slotIndex: number) => void;
   justPlanted: boolean;
   entryOriginX?: number;
   onEntryComplete: (skill: GardenSkill) => void;
@@ -1291,6 +1334,7 @@ function SkillPlant({
   const beginReseed = () => {
     if (!editable || !onUpdateSkill || isReseeding) return;
 
+    const returnSlotIndex = getSeedSlotIndexForCenterX(centerX, width);
     setIsReseeding(true);
     setIsHovered(false);
     onSelect(skill.id);
@@ -1302,7 +1346,7 @@ function SkillPlant({
       easing: Easing.bezier(0.58, 0, 0.16, 1),
     }).start(({ finished }) => {
       if (finished) {
-        onReturnToSeed(skill);
+        onReturnToSeed(skill, returnSlotIndex);
         onUpdateSkill(skill, {
           enthusiasm_level: 0,
         });
@@ -1665,27 +1709,46 @@ function EmptySeedSlot({ index, shakeIndex = 0 }: { index: number; shakeIndex?: 
 function CustomSeedButton({
   onPlantSkill,
   onPress,
+  suggestedSkills = [],
   disabled = false,
 }: {
   onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
   onPress?: () => void;
+  suggestedSkills?: string[];
   disabled?: boolean;
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [draft, setDraft] = useState('');
 
-  const plantCustomSeed = () => {
-    const skill = draft.trim();
-    if (!skill) return;
+  const autocompleteSeeds = useMemo(() => {
+    const query = normalizeSkillName(draft);
+    if (!query) return [];
+
+    return suggestedSkills
+      .filter((skill, index, all) => all.findIndex(item => normalizeSkillName(item) === normalizeSkillName(skill)) === index)
+      .filter(skill => normalizeSkillName(skill).startsWith(query))
+      .slice(0, 5);
+  }, [draft, suggestedSkills]);
+
+  const plantSeed = (skill: string) => {
+    const trimmedSkill = skill.trim();
+    if (!trimmedSkill) return;
 
     if (onPlantSkill) {
-      onPlantSkill(skill, { enthusiasmLevel: 1 });
+      onPlantSkill(trimmedSkill, { enthusiasmLevel: 1 });
       setDraft('');
       setIsAdding(false);
       return;
     }
 
     onPress?.();
+  };
+
+  const plantCustomSeed = () => {
+    const skill = draft.trim();
+    if (!skill) return;
+
+    plantSeed(skill);
   };
 
   if (isAdding && onPlantSkill) {
@@ -1696,90 +1759,145 @@ function CustomSeedButton({
           minWidth: 186,
           flexBasis: 220,
           flexGrow: 1,
-          maxWidth: 280,
+          maxWidth: 360,
           borderRadius: 22,
           borderWidth: 1,
           borderColor: 'rgba(255,253,247,0.32)',
           backgroundColor: 'rgba(255,250,236,0.95)',
-          flexDirection: 'row',
-          alignItems: 'center',
           gap: 6,
           paddingHorizontal: 8,
           paddingVertical: 6,
         }}
       >
-        <TextInput
-          value={draft}
-          onChangeText={setDraft}
-          onSubmitEditing={plantCustomSeed}
-          autoFocus
-          returnKeyType="done"
-          placeholder="New skill"
-          placeholderTextColor="rgba(105,67,33,0.48)"
+        <View
           style={{
-            flex: 1,
-            minWidth: 0,
-            fontFamily: 'Lato_700Bold',
-            color: '#4a2b19',
-            fontSize: 12,
-            paddingVertical: 6,
-            paddingHorizontal: 4,
-            ...(Platform.OS === 'web'
-              ? ({
-                  outlineStyle: 'none',
-                } as any)
-              : {}),
-          }}
-        />
-        <Pressable
-          onPress={plantCustomSeed}
-          accessibilityRole="button"
-          accessibilityLabel="Plant custom skill"
-          style={{
-            minWidth: 42,
-            minHeight: 28,
-            borderRadius: 999,
-            backgroundColor: '#315d4e',
+            flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
-            paddingHorizontal: 8,
-            ...(Platform.OS === 'web'
-              ? ({
-                  cursor: 'pointer',
-                  outlineStyle: 'none',
-                } as any)
-              : {}),
+            gap: 6,
           }}
         >
-          <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 11 }}>
-            Plant
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            setDraft('');
-            setIsAdding(false);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel custom skill"
-          style={{
-            width: 26,
-            height: 26,
-            borderRadius: 13,
-            alignItems: 'center',
-            justifyContent: 'center',
-            ...(Platform.OS === 'web'
-              ? ({
-                  cursor: 'pointer',
-                  outlineStyle: 'none',
-                } as any)
-              : {}),
-          }}
-        >
-          <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#7d6843', fontSize: 14 }}>
-            x
-          </Text>
-        </Pressable>
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            onSubmitEditing={plantCustomSeed}
+            autoFocus
+            returnKeyType="done"
+            placeholder="New skill"
+            placeholderTextColor="rgba(105,67,33,0.48)"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontFamily: 'Lato_700Bold',
+              color: '#4a2b19',
+              fontSize: 12,
+              paddingVertical: 6,
+              paddingHorizontal: 4,
+              ...(Platform.OS === 'web'
+                ? ({
+                    outlineStyle: 'none',
+                  } as any)
+                : {}),
+            }}
+          />
+          <Pressable
+            onPress={plantCustomSeed}
+            accessibilityRole="button"
+            accessibilityLabel="Plant custom skill"
+            style={{
+              minWidth: 42,
+              minHeight: 28,
+              borderRadius: 999,
+              backgroundColor: '#315d4e',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 8,
+              ...(Platform.OS === 'web'
+                ? ({
+                    cursor: 'pointer',
+                    outlineStyle: 'none',
+                  } as any)
+                : {}),
+            }}
+          >
+            <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 11 }}>
+              Plant
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setDraft('');
+              setIsAdding(false);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel custom skill"
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 13,
+              alignItems: 'center',
+              justifyContent: 'center',
+              ...(Platform.OS === 'web'
+                ? ({
+                    cursor: 'pointer',
+                    outlineStyle: 'none',
+                  } as any)
+                : {}),
+            }}
+          >
+            <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#7d6843', fontSize: 14 }}>
+              x
+            </Text>
+          </Pressable>
+        </View>
+        {autocompleteSeeds.length > 0 && (
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 5,
+              paddingBottom: 1,
+            }}
+          >
+            {autocompleteSeeds.map(skill => {
+              const category = getCategoryForSkill(skill);
+              return (
+                <Pressable
+                  key={skill}
+                  onPress={() => plantSeed(skill)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Plant ${skill}`}
+                  style={{
+                    borderRadius: 999,
+                    backgroundColor: category.pale,
+                    borderWidth: 1,
+                    borderColor: `${category.edge}33`,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    ...(Platform.OS === 'web'
+                      ? ({
+                          cursor: 'pointer',
+                          outlineStyle: 'none',
+                        } as any)
+                      : {}),
+                  }}
+                >
+                  <Text
+                    selectable={false}
+                    numberOfLines={1}
+                    style={{
+                      fontFamily: 'Lato_700Bold',
+                      color: category.text,
+                      fontSize: 10.5,
+                      lineHeight: 12,
+                    }}
+                  >
+                    {skill}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </View>
     );
   }
@@ -2315,6 +2433,7 @@ export function SkillBubbleGarden({
   const [seedShake, setSeedShake] = useState(0);
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
   const [recentSeedNames, setRecentSeedNames] = useState<string[]>([]);
+  const [recentSeedSlots, setRecentSeedSlots] = useState<Record<string, number>>({});
   const [incomingSeedNames, setIncomingSeedNames] = useState<string[]>([]);
   const [incomingSeedOrigins, setIncomingSeedOrigins] = useState<Record<string, number>>({});
   const displaySkills = useMemo(() => skills.filter(isBloomingSkill), [skills]);
@@ -2351,8 +2470,8 @@ export function SkillBubbleGarden({
     [editable, plantedNames, recentSeedNames, seedShake, seedSourceSkills]
   );
   const seedSlots = useMemo(
-    () => Array.from({ length: SEED_TRAY_SIZE }, (_, index) => seedTray[index]),
-    [seedTray]
+    () => buildSeedSlots(seedTray, recentSeedSlots),
+    [recentSeedSlots, seedTray]
   );
   const availableSeedCount = useMemo(
     () => seedSourceSkills
@@ -2394,18 +2513,26 @@ export function SkillBubbleGarden({
     setRecentSeedNames((current) =>
       current.filter((skill) => !plantedNames.has(normalizeSkillName(skill)))
     );
+    setRecentSeedSlots((current) => Object.fromEntries(
+      Object.entries(current).filter(([normalizedSkill]) => !plantedNames.has(normalizedSkill))
+    ));
   }, [plantedNames]);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     setWidth(event.nativeEvent.layout.width);
   };
 
-  const handleReturnToSeed = (skill: GardenSkill) => {
+  const handleReturnToSeed = (skill: GardenSkill, slotIndex: number) => {
+    const normalizedSkill = normalizeSkillName(skill.description);
     setSelectedSkillId(null);
     setRecentSeedNames((current) => [
       skill.description,
-      ...current.filter((item) => normalizeSkillName(item) !== normalizeSkillName(skill.description)),
+      ...current.filter((item) => normalizeSkillName(item) !== normalizedSkill),
     ].slice(0, GARDEN_CAPACITY));
+    setRecentSeedSlots((current) => ({
+      ...current,
+      [normalizedSkill]: slotIndex,
+    }));
     setSeedShake((current) => current + 1);
   };
 
@@ -2736,7 +2863,12 @@ export function SkillBubbleGarden({
               }}
             >
               {onPlantSkill || onAddCustomSkill ? (
-                <CustomSeedButton onPlantSkill={onPlantSkill ? handlePlantSeed : undefined} onPress={onAddCustomSkill} disabled={!canPlantSeeds} />
+                <CustomSeedButton
+                  onPlantSkill={onPlantSkill ? handlePlantSeed : undefined}
+                  onPress={onAddCustomSkill}
+                  suggestedSkills={seedSourceSkills.filter(skill => !plantedNames.has(normalizeSkillName(skill)))}
+                  disabled={!canPlantSeeds}
+                />
               ) : null}
               <Pressable
                 onPress={() => setSeedShake(current => current + 1)}
