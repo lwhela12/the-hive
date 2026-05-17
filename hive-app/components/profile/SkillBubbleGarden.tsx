@@ -217,11 +217,9 @@ const SEED_SURVEY: SurveyQuestion[] = [
 
 const STAGES: StageDef[] = [
   { label: 'Seed', height: 24, canvasWidth: 72, labelWidth: 100 },
-  { label: 'Tiny bloom', height: 98, canvasWidth: 128, labelWidth: 132 },
-  { label: 'Small bloom', height: 128, canvasWidth: 154, labelWidth: 162 },
-  { label: 'Bloom', height: 158, canvasWidth: 184, labelWidth: 190 },
-  { label: 'Big bloom', height: 192, canvasWidth: 220, labelWidth: 226 },
-  { label: 'Full bloom', height: 224, canvasWidth: 254, labelWidth: 260 },
+  { label: 'Small bloom', height: 118, canvasWidth: 146, labelWidth: 152 },
+  { label: 'Medium bloom', height: 174, canvasWidth: 214, labelWidth: 220 },
+  { label: 'Large bloom', height: 230, canvasWidth: 270, labelWidth: 276 },
 ];
 
 const SPECIES_BY_CATEGORY: Record<SkillCategoryDef['species'], WildflowerSpecies[]> = {
@@ -296,12 +294,27 @@ function getLevel(skill: Partial<Skill>) {
   return clamp(Number.isFinite(level) ? level : 0, 0, 5);
 }
 
+function getBloomStep(level: number) {
+  if (level <= 0) return 0;
+  if (level < 3) return 1;
+  if (level < 5) return 2;
+  return 3;
+}
+
+function getNextBloomLevel(level: number) {
+  const step = getBloomStep(level);
+  if (step === 0) return 1;
+  if (step === 1) return 3;
+  if (step === 2) return 5;
+  return 0;
+}
+
 function isBloomingSkill(skill: Partial<Skill>) {
   return getLevel(skill) > 0;
 }
 
 function getStage(level: number) {
-  return STAGES[clamp(level, 0, STAGES.length - 1)];
+  return STAGES[clamp(getBloomStep(level), 0, STAGES.length - 1)];
 }
 
 function getEmbeddedLabelLines(label: string) {
@@ -380,7 +393,7 @@ function getFrontRowCenterX(index: number, count: number, width: number) {
 
 function getFrontRowAnchorY(height: number, width: number, index: number) {
   const baseAnchor = height - clamp(width < 520 ? 34 : 48, 32, 58);
-  const stagger = index % 2 === 0 ? clamp(width < 520 ? 28 : 54, 28, 68) : 0;
+  const stagger = index % 2 === 1 ? clamp(width < 520 ? 28 : 54, 28, 68) : 0;
 
   return baseAnchor - stagger;
 }
@@ -808,13 +821,14 @@ function WildflowerSvg({
   sizeScale?: number;
 }) {
   const stage = getStage(level);
+  const bloomStep = getBloomStep(level);
   const canvasWidth = stage.canvasWidth;
   const canvasHeight = stage.height + 12;
   const cx = canvasWidth / 2;
   const baseY = canvasHeight - 4;
   const leaf = category.leaf;
 
-  if (level === 0) {
+  if (bloomStep === 0) {
     return (
       <Svg width={canvasWidth * sizeScale} height={canvasHeight * sizeScale} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
         <Ellipse cx={cx} cy={baseY - 2} rx={5.2} ry={3.6} fill="#5b3a22" stroke="#2d1c12" strokeWidth={1} />
@@ -823,17 +837,17 @@ function WildflowerSvg({
     );
   }
 
-  const full = level >= 4;
-  const bloomRadius = [0, 24, 36, 50, 64, 78][level] ?? 50;
-  const stemLift = [0, 58, 76, 92, 108, 124][level] ?? 92;
+  const full = bloomStep >= 3;
+  const bloomRadius = [0, 34, 58, 84][bloomStep] ?? 58;
+  const stemLift = [0, 72, 108, 132][bloomStep] ?? 108;
   const topY = baseY - stemLift;
   const flowerX = cx + (species === 'poppy' ? -3 : species === 'lavender' ? 2 : 0);
   const flowerY = topY;
 
   return (
     <Svg width={canvasWidth * sizeScale} height={canvasHeight * sizeScale} viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}>
-      {renderStem({ cx, baseY, topY: flowerY + bloomRadius * 0.25, leafColor: leaf, strokeWidth: 2 + level * 0.18, lean: flowerX - cx })}
-      {renderBloom(species, flowerX, flowerY, bloomRadius, full, category, level >= 2 ? label : undefined)}
+      {renderStem({ cx, baseY, topY: flowerY + bloomRadius * 0.25, leafColor: leaf, strokeWidth: 2 + bloomStep * 0.22, lean: flowerX - cx })}
+      {renderBloom(species, flowerX, flowerY, bloomRadius, full, category, label)}
     </Svg>
   );
 }
@@ -852,10 +866,11 @@ function WildflowerSprite({
   sizeScale?: number;
 }) {
   const stage = getStage(level);
+  const bloomStep = getBloomStep(level);
   const species: WildflowerSpecies = 'daisy';
-  const spriteScale = level >= 4 ? 1.04 : 1;
+  const spriteScale = bloomStep >= 3 ? 1.04 : 1;
   const renderedScale = sizeScale * spriteScale;
-  const shouldSway = Platform.OS === 'web' && level >= 4;
+  const shouldSway = Platform.OS === 'web' && bloomStep >= 3;
   const swayDelay = -Math.round(ratioFromHash(swaySalt, 4) * 2600);
   const swayDuration = 3300 + Math.round(ratioFromHash(swaySalt, 5) * 1200);
 
@@ -890,7 +905,7 @@ function WildflowerSprite({
           level={level}
           species={species}
           category={category}
-          label={level >= 2 ? label : undefined}
+          label={bloomStep >= 1 ? label : undefined}
           sizeScale={renderedScale}
         />
       </View>
@@ -907,19 +922,34 @@ function SeedMark({
   size?: number;
   muted?: boolean;
 }) {
+  const fill = muted ? '#8f7f70' : '#8f4f2e';
+  const stroke = muted ? '#7c6c5d' : category.edge;
+  const highlight = muted ? 'rgba(228,205,182,0.36)' : 'rgba(198,119,74,0.72)';
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Ellipse
-        cx="12"
-        cy="13"
-        rx="6.5"
-        ry="4.4"
-        fill={muted ? '#d7d0bf' : '#5b3a22'}
-        stroke={muted ? '#b9ad96' : category.edge}
-        strokeWidth="1.3"
-        transform="rotate(-13 12 13)"
-      />
-      <Ellipse cx="9.5" cy="11.5" rx="1.7" ry="1" fill="#d9be8b" opacity={muted ? 0.38 : 0.72} />
+      {[
+        { x: 8, y: 14, rotate: -56, scale: 1 },
+        { x: 13.5, y: 7.2, rotate: 10, scale: 0.92 },
+        { x: 16, y: 15, rotate: 58, scale: 1 },
+      ].map(seed => (
+        <G key={`${seed.x}-${seed.y}`} transform={`translate(${seed.x} ${seed.y}) rotate(${seed.rotate}) scale(${seed.scale})`}>
+          <Path
+            d="M0 -6.4 C4.2 -3.7 5.6 2.4 1.2 6.7 C-3.4 4.4 -5.4 -1.5 0 -6.4 Z"
+            fill={fill}
+            stroke={stroke}
+            strokeWidth={1.1}
+          />
+          <Path
+            d="M-1.6 -2.5 C0.4 -2.9 2.2 -1.5 2.7 0.5"
+            stroke={highlight}
+            strokeWidth={1.2}
+            strokeLinecap="round"
+            fill="none"
+            opacity={0.88}
+          />
+        </G>
+      ))}
     </Svg>
   );
 }
@@ -939,12 +969,46 @@ function BloomMark({
 
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      {[0, 72, 144, 216, 288].map(angle => (
+      {[0, 45, 90, 135, 180, 225, 270, 315].map(angle => (
         <G key={angle} transform={`rotate(${angle} 12 12)`}>
-          <Ellipse cx="12" cy="6.7" rx="3" ry="5" fill={color} stroke={edge} strokeWidth="1" />
+          <Ellipse cx="12" cy="6" rx="3.4" ry="5.6" fill={color} stroke={edge} strokeWidth="1" />
         </G>
       ))}
-      <Circle cx="12" cy="12" r="3.3" fill={center} stroke={edge} strokeWidth="1" />
+      <Circle cx="12" cy="12" r="4.2" fill={center} stroke={edge} strokeWidth="1" />
+    </Svg>
+  );
+}
+
+function SunRayBackground({ size = 250 }: { size?: number }) {
+  const center = size / 2;
+  const rayAngles = Array.from({ length: 14 }, (_, index) => index * (360 / 14));
+
+  return (
+    <Svg
+      pointerEvents="none"
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      style={{
+        position: 'absolute',
+        left: -22,
+        top: -22,
+      }}
+    >
+      {rayAngles.map((angle, index) => (
+        <G key={angle} transform={`rotate(${angle} ${center} ${center})`}>
+          <Ellipse
+            cx={center}
+            cy={20}
+            rx={index % 2 === 0 ? 8 : 5}
+            ry={index % 2 === 0 ? 22 : 14}
+            fill={index % 2 === 0 ? '#ffe86b' : '#ffd45a'}
+            opacity={0.7}
+          />
+        </G>
+      ))}
+      <Circle cx={center} cy={center} r={92} fill="#ffe36d" opacity={0.86} />
+      <Circle cx={center - 22} cy={center - 26} r={42} fill="#fff6a8" opacity={0.28} />
     </Svg>
   );
 }
@@ -1047,13 +1111,14 @@ function SkillPlant({
   onSelect: (skillId: string) => void;
 }) {
   const level = getLevel(skill);
+  const bloomStep = getBloomStep(level);
   const stage = getStage(level);
   const category = getCategoryForSkill(skill.description);
   const rowScale = getFrontRowScale(width);
-  const bloomHasEmbeddedLabel = level >= 2;
+  const bloomHasEmbeddedLabel = bloomStep > 0;
   const showLabel = !bloomHasEmbeddedLabel && (selected || count <= 10 || featured);
   const plantWidth = stage.labelWidth * rowScale;
-  const spriteHeight = (stage.height + 18) * rowScale * (level >= 4 ? 1.04 : 1);
+  const spriteHeight = (stage.height + 18) * rowScale * (bloomStep >= 3 ? 1.04 : 1);
   const plantHeight = spriteHeight + (showLabel ? LABEL_HEIGHT : 8);
   const centerX = getFrontRowCenterX(index, count, width);
   const anchorY = getFrontRowAnchorY(height, width, index);
@@ -1123,15 +1188,7 @@ function SkillPlant({
     }
 
     onUpdateSkill(skill, {
-      enthusiasm_level: level >= 5 ? 5 : clamp(level + 1, 1, 5),
-    });
-  };
-
-  const updateLevel = (nextLevel: number) => {
-    if (!editable || !onUpdateSkill) return;
-    onSelect(skill.id);
-    onUpdateSkill(skill, {
-      enthusiasm_level: clamp(nextLevel, 0, 5),
+      enthusiasm_level: getNextBloomLevel(level),
     });
   };
 
@@ -1237,84 +1294,6 @@ function SkillPlant({
         </View>
 
         {label}
-        {selected && editable && (
-          <View
-            style={{
-              position: 'absolute',
-              left: plantWidth / 2 - 52,
-              top: 0,
-              minWidth: 104,
-              minHeight: 28,
-              borderRadius: 999,
-              backgroundColor: 'rgba(255,253,247,0.95)',
-              borderWidth: 1,
-              borderColor: 'rgba(122,89,42,0.16)',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
-              paddingHorizontal: 4,
-              shadowColor: '#5b3a22',
-              shadowOpacity: 0.12,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 3 },
-              zIndex: 6,
-              ...(Platform.OS === 'web'
-                ? ({
-                    cursor: 'default',
-                    userSelect: 'none',
-                    WebkitUserSelect: 'none',
-                    touchAction: 'manipulation',
-                  } as any)
-                : {}),
-            }}
-          >
-            {[
-              { label: '-', action: () => updateLevel(level - 1), disabled: level <= 1, accessibilityLabel: `Shrink ${skill.description}` },
-              { label: '+', action: () => updateLevel(level + 1), disabled: level >= 5, accessibilityLabel: `Grow ${skill.description}` },
-              { label: 'Seed', action: () => updateLevel(0), disabled: false, accessibilityLabel: `Return ${skill.description} to seeds` },
-            ].map(action => (
-              <Pressable
-                key={action.label}
-                disabled={action.disabled}
-                accessibilityRole="button"
-                accessibilityLabel={action.accessibilityLabel}
-                hitSlop={6}
-                onPress={(event) => {
-                  event.stopPropagation?.();
-                  action.action();
-                }}
-                style={{
-                  minWidth: action.label === 'Seed' ? 44 : 24,
-                  height: 22,
-                  borderRadius: 999,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: action.label === 'Seed' ? 'rgba(248,238,226,0.82)' : category.pale,
-                  opacity: action.disabled ? 0.38 : 1,
-                  ...(Platform.OS === 'web'
-                    ? ({
-                        cursor: action.disabled ? 'default' : 'pointer',
-                      } as any)
-                    : {}),
-                }}
-              >
-                <Text
-                  selectable={false}
-                  numberOfLines={1}
-                  style={{
-                    fontFamily: 'Lato_700Bold',
-                    color: action.label === 'Seed' ? '#7a5a36' : category.text,
-                    fontSize: action.label === 'Seed' ? 10 : 14,
-                    lineHeight: action.label === 'Seed' ? 12 : 16,
-                  }}
-                >
-                  {action.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
       </Pressable>
     </Animated.View>
   );
@@ -1623,7 +1602,7 @@ function getSurveySuggestions(answers: number[], plantedNames: Set<string>, limi
     .slice(0, limit)
     .map((item, index) => ({
       description: item.description,
-      enthusiasmLevel: index < 3 ? 5 : index < 6 ? 4 : 3,
+      enthusiasmLevel: index < 3 ? 5 : index < 6 ? 3 : 1,
     }));
 
   return ranked;
@@ -1680,14 +1659,14 @@ function SeedSurvey({
         accessibilityRole="button"
         accessibilityLabel="Seed your garden"
         style={{
-          width: hasSkills ? 214 : undefined,
+          width: hasSkills ? 206 : undefined,
           maxWidth: '100%',
-          minHeight: hasSkills ? 214 : 190,
+          minHeight: hasSkills ? 206 : 190,
           borderRadius: hasSkills ? 999 : 28,
           borderWidth: 1,
           borderColor: hasSkills ? 'rgba(255,253,247,0.54)' : 'rgba(255,253,247,0.62)',
-          backgroundColor: hasSkills ? 'rgba(255,224,105,0.82)' : 'rgba(255,244,187,0.92)',
-          paddingHorizontal: hasSkills ? 22 : 18,
+          backgroundColor: hasSkills ? 'rgba(255,224,105,0.68)' : 'rgba(255,244,187,0.92)',
+          paddingHorizontal: hasSkills ? 20 : 18,
           paddingVertical: hasSkills ? 18 : 18,
           marginBottom: hasSkills ? 0 : 0,
           alignItems: 'center',
@@ -1703,6 +1682,7 @@ function SeedSurvey({
                 cursor: 'pointer',
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
+                overflow: 'visible',
                 backgroundImage: hasSkills
                   ? 'radial-gradient(circle at 42% 35%, rgba(255,253,210,0.96) 0%, rgba(255,228,111,0.88) 48%, rgba(255,207,81,0.68) 100%)'
                   : 'radial-gradient(circle at 48% 34%, rgba(255,253,226,0.98) 0%, rgba(255,237,152,0.92) 100%)',
@@ -1712,20 +1692,7 @@ function SeedSurvey({
       >
         {hasSkills ? (
           <>
-            <View
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: 'rgba(255,253,247,0.66)',
-                borderWidth: 1,
-                borderColor: 'rgba(92,157,91,0.18)',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <BloomMark category={FALLBACK_CATEGORY} size={30} />
-            </View>
+            <SunRayBackground size={250} />
             <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: 15, lineHeight: 18, textAlign: 'center' }}>
               Skills Garden Quiz
             </Text>
@@ -2158,8 +2125,8 @@ export function SkillBubbleGarden({
           <View
             style={{
               position: 'absolute',
-              left: width > 620 ? 18 : 14,
-              top: width > 620 ? 18 : 14,
+              left: width > 620 ? 8 : 10,
+              top: width > 620 ? 8 : 10,
               width: surveyPanelWidth,
               zIndex: 500,
             }}
