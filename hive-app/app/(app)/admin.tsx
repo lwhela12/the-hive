@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Modal,
   useWindowDimensions,
+  ActivityIndicator,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -336,6 +337,7 @@ export default function AdminScreen() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('member');
   const [showInviteMember, setShowInviteMember] = useState(false);
+  const [sendingInvite, setSendingInvite] = useState(false);
 
   // Honey Pot state
   const [honeyPotBalance, setHoneyPotBalance] = useState<number>(0);
@@ -655,27 +657,38 @@ export default function AdminScreen() {
   };
 
   const sendInvite = async () => {
-    if (!inviteEmail || !communityId) {
+    const trimmedEmail = inviteEmail.trim();
+
+    if (!trimmedEmail || !communityId) {
       Alert.alert('Error', 'Please enter an email');
       return;
     }
 
-    const { error } = await supabase.functions.invoke('invite', {
-      body: {
-        email: inviteEmail.trim(),
-        role: inviteRole,
-        community_id: communityId,
-      },
-    });
+    if (sendingInvite) return;
 
-    if (error) {
-      Alert.alert('Error', 'Failed to send invite');
-    } else {
-      Alert.alert('Invite sent', `${inviteEmail} will receive an invite to join.`);
+    setSendingInvite(true);
+
+    try {
+      const { error } = await supabase.functions.invoke('invite', {
+        body: {
+          email: trimmedEmail,
+          role: inviteRole,
+          community_id: communityId,
+        },
+      });
+
+      if (error) throw error;
+
+      await fetchData();
+      Alert.alert('Invite sent', `${trimmedEmail} will receive an invite to join.`);
       setInviteEmail('');
       setInviteRole('member');
       setShowInviteMember(false);
-      await fetchData();
+    } catch (error) {
+      console.error('Invite send error:', error);
+      Alert.alert('Error', 'Failed to send invite');
+    } finally {
+      setSendingInvite(false);
     }
   };
 
@@ -1146,16 +1159,20 @@ export default function AdminScreen() {
                         onChangeText={setInviteEmail}
                         keyboardType="email-address"
                         autoCapitalize="none"
+                        editable={!sendingInvite}
                         className="border border-gray-300 rounded-lg p-3 mb-3 bg-white"
+                        style={sendingInvite ? { opacity: 0.65 } : undefined}
                       />
                       <View className="flex-row flex-wrap mb-4">
                         {ROLE_OPTIONS.map((role) => (
                           <Pressable
                             key={role}
                             onPress={() => setInviteRole(role)}
+                            disabled={sendingInvite}
                             className={`px-3 py-2 rounded mr-2 mb-2 ${
                               inviteRole === role ? 'bg-honey-500' : 'bg-gray-100'
                             }`}
+                            style={sendingInvite ? { opacity: 0.7 } : undefined}
                           >
                             <Text className={`${inviteRole === role ? 'text-white' : 'text-gray-600'} capitalize`}>
                               {ROLE_LABELS[role]}
@@ -1163,11 +1180,49 @@ export default function AdminScreen() {
                           </Pressable>
                         ))}
                       </View>
+                      {sendingInvite && (
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: '#fff7e1',
+                            borderColor: '#efd28b',
+                            borderWidth: 1,
+                            borderRadius: 12,
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                            marginBottom: 12,
+                          }}
+                        >
+                          <ActivityIndicator size="small" color="#bd9348" />
+                          <View style={{ flex: 1, marginLeft: 10 }}>
+                            <Text style={{ color: '#5f451b', fontWeight: '700', fontSize: 13 }}>
+                              Adding a little magic...
+                            </Text>
+                            <Text style={{ color: '#7c5d22', fontSize: 12, marginTop: 2 }}>
+                              Getting the invite ready to send and refreshing the list.
+                            </Text>
+                          </View>
+                          <Text style={{ color: '#bd9348', fontSize: 18, marginLeft: 8 }}>🐝</Text>
+                        </View>
+                      )}
                       <Pressable
                         onPress={sendInvite}
-                        className="bg-honey-500 py-3 rounded-lg active:bg-honey-600"
+                        disabled={sendingInvite}
+                        className="py-3 rounded-lg active:bg-honey-600"
+                        style={{
+                          backgroundColor: sendingInvite ? '#d6b56b' : '#bd9348',
+                          opacity: sendingInvite ? 0.85 : 1,
+                        }}
                       >
-                        <Text className="text-center font-semibold text-white">Send Invite</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                          {sendingInvite && (
+                            <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
+                          )}
+                          <Text className="text-center font-semibold text-white">
+                            {sendingInvite ? 'Sending Invite' : 'Send Invite'}
+                          </Text>
+                        </View>
                       </Pressable>
                     </View>
                   )}
