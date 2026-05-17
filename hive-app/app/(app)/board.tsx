@@ -11,7 +11,6 @@ import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
 import { BoardComposer } from '../../components/board/BoardComposer';
 import { BoardTopicComposer, type BoardTopicAudience, type BoardTopicMetadata } from '../../components/board/BoardTopicComposer';
-import { BoardLinkedWishes } from '../../components/board/BoardLinkedWishes';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
@@ -204,7 +203,6 @@ export default function BoardScreen() {
   const visiblePosts = threadListView === 'archive' ? archivedPosts : activePosts;
   const {
     wishes: linkedWishes,
-    loading: linkedWishesLoading,
     refetch: refetchLinkedWishes,
     invalidateLinkedWishes,
   } = useBoardLinkedWishes(communityId ?? undefined, selectedCategory?.id);
@@ -1628,15 +1626,20 @@ export default function BoardScreen() {
       <FlatList
         data={visiblePosts}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <BoardPostCard
-            post={item}
-            onPress={() => handlePostSelect(item.id)}
-            canEdit={canManageThread(item)}
-            onEdit={handleEditThread}
-            compactImages={!useMobileLayout}
-          />
-        )}
+        renderItem={({ item }) => {
+          const linkedWish = getLinkedWishForPost(item);
+          return (
+            <BoardPostCard
+              post={item}
+              onPress={() => handlePostSelect(item.id)}
+              canEdit={canManageThread(item)}
+              onEdit={handleEditThread}
+              compactImages={!useMobileLayout}
+              linkedWishLabel={linkedWish ? 'Community Wish' : undefined}
+              onLinkedWishPress={linkedWish ? () => setSelectedLinkedWish(linkedWish) : undefined}
+            />
+          );
+        }}
         contentContainerStyle={{ padding: 16 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#bd9348" />
@@ -1653,15 +1656,6 @@ export default function BoardScreen() {
                 </Text>
               </View>
             ) : null}
-            {linkedWishes.length > 0 && (
-              <BoardLinkedWishes
-                wishes={linkedWishes}
-                loading={linkedWishesLoading}
-                canAdd={canAddLinkedWish}
-                onAddWish={() => setShowAddLinkedWishModal(true)}
-                onSelectWish={setSelectedLinkedWish}
-              />
-            )}
             <View className="flex-row items-center justify-between mb-3">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/50 text-xs uppercase tracking-wide">
                 {threadListView === 'archive'
@@ -1669,14 +1663,14 @@ export default function BoardScreen() {
                   : `Threads (${activePosts.length})`}
               </Text>
               <View className="flex-row items-center" style={{ gap: 8 }}>
-                {linkedWishes.length === 0 && canAddLinkedWish && (
+                {canAddLinkedWish && (
                   <Pressable
                     onPress={() => setShowAddLinkedWishModal(true)}
                     className="flex-row items-center rounded-full px-3 py-1.5 bg-white/70 border border-gold/15 active:opacity-70"
                     hitSlop={8}
                   >
                     <Ionicons
-                      name="sparkles-outline"
+                      name="link-outline"
                       size={14}
                       color="#bd9348"
                       style={{ marginRight: 4 }}

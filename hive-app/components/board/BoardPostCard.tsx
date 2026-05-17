@@ -11,6 +11,8 @@ interface BoardPostCardProps {
   canEdit?: boolean;
   onEdit?: (post: BoardPost & { author?: Profile; reactions?: BoardReaction[] }) => void;
   compactImages?: boolean;
+  linkedWishLabel?: string;
+  onLinkedWishPress?: () => void;
 }
 
 // Group reactions by emoji and count them
@@ -50,6 +52,8 @@ export function BoardPostCard({
   canEdit = false,
   onEdit,
   compactImages = false,
+  linkedWishLabel,
+  onLinkedWishPress,
 }: BoardPostCardProps) {
   const timeAgo = getTimeAgo(new Date(post.created_at));
   const isCompleted = post.status === 'completed';
@@ -141,11 +145,33 @@ export function BoardPostCard({
               {post.title}
             </Text>
             <LinkifiedText
-              style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: 'rgba(49, 49, 48, 0.7)', marginBottom: 8 }}
+              style={{
+                fontFamily: 'Lato_400Regular',
+                fontSize: 14,
+                color: 'rgba(49, 49, 48, 0.7)',
+                marginBottom: linkedWishLabel ? 6 : 8,
+              }}
               linkStyle={{ color: '#bd9348' }}
             >
               {contentPreview}
             </LinkifiedText>
+            {linkedWishLabel && (
+              <Pressable
+                onPress={(event) => {
+                  event.stopPropagation();
+                  onLinkedWishPress?.();
+                }}
+                disabled={!onLinkedWishPress}
+                className="self-start flex-row items-center bg-cream/75 border border-gold/20 rounded-full px-2 py-1 mb-2 active:opacity-70"
+                accessibilityRole={onLinkedWishPress ? 'button' : undefined}
+                accessibilityLabel={linkedWishLabel}
+              >
+                <Ionicons name="link-outline" size={12} color="#bd9348" />
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
+                  {linkedWishLabel}
+                </Text>
+              </Pressable>
+            )}
             <View className="flex-row items-center justify-between">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs">
                 {post.author?.name || 'Unknown'} · {timeAgo}

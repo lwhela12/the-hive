@@ -106,7 +106,7 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
           </Text>
           {linkedBoardLabel && (
             <View className="self-start flex-row items-center bg-white/70 border border-gold/20 rounded-full px-2 py-1 mt-2">
-              <Ionicons name="albums-outline" size={12} color="#bd9348" />
+              <Ionicons name="link-outline" size={12} color="#bd9348" />
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
                 {linkedBoardLabel}
               </Text>
