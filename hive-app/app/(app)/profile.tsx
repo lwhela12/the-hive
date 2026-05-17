@@ -53,6 +53,28 @@ const hasBloomingSkill = (skill: Partial<Skill>) => {
 
 const SKILLS_GARDEN_CAPACITY = 8;
 
+function ProfileHeaderActionPill({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexShrink: 0,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        marginBottom: 4,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: 'rgba(222,193,129,0.72)',
+        backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+      })}
+    >
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export default function ProfileScreen() {
   const { profile, communityId, communityRole, refreshProfile } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
@@ -1738,44 +1760,56 @@ export default function ProfileScreen() {
         </View>
 
         {/* Wishes */}
-        <View className="mb-6">
-          <View className="flex-row items-center justify-between mb-2">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
-              Your Wishes ({wishes.length})
-            </Text>
-            <Pressable
-              onPress={() => setAddWishModalVisible(true)}
-              className="w-8 h-8 rounded-full bg-gold items-center justify-center active:opacity-80"
-            >
-              <Ionicons name="add" size={20} color="white" />
-            </Pressable>
-          </View>
-          {wishes.length === 0 ? (
-            <View className="bg-white rounded-xl p-4 shadow-sm">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
-                No wishes yet. What do you need help with?
+        <View style={{ marginBottom: 24 }}>
+          <View style={{ marginBottom: 0, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+            <View style={{ alignSelf: 'flex-start', flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
+              <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: isProfilePhone ? 16 : 17, color: '#2d2d2d' }}>
+                Your Wishes ({wishes.length})
               </Text>
             </View>
-          ) : (
-            <View style={{ gap: 12 }}>
-              {wishes.map((wish) => (
-                <WishCombCard
-                  key={wish.id}
-                  wish={wish}
-                  expanded={expandedWishId === wish.id}
-                  linkedBoardLabel={
-                    wish.board_category_id || wish.source_board_post_id
-                      ? getLinkedBoardLabel(wish.board_category) || 'Linked HD board'
-                      : null
-                  }
-                  onToggle={(selectedWish) => {
-                    setExpandedWishId(current => current === selectedWish.id ? null : selectedWish.id);
-                  }}
-                  onManage={setManagingWish}
-                />
-              ))}
+            <ProfileHeaderActionPill label="+ Wish" onPress={() => setAddWishModalVisible(true)} />
+          </View>
+
+          <View style={{
+            backgroundColor: '#fdf3dc',
+            borderRadius: 20,
+            borderTopLeftRadius: 0,
+            borderWidth: 1,
+            borderColor: 'rgba(222,193,129,0.7)',
+            shadowColor: '#bd9348',
+            shadowOpacity: 0.12,
+            shadowRadius: 18,
+            shadowOffset: { width: 0, height: 5 },
+            elevation: 3,
+            padding: 12,
+          }}>
+            {wishes.length === 0 ? (
+              <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
+                  No wishes yet. What do you need help with?
+                </Text>
+              </View>
+            ) : (
+              <View style={{ gap: 12 }}>
+                {wishes.map((wish) => (
+                  <WishCombCard
+                    key={wish.id}
+                    wish={wish}
+                    expanded={expandedWishId === wish.id}
+                    linkedBoardLabel={
+                      wish.board_category_id || wish.source_board_post_id
+                        ? getLinkedBoardLabel(wish.board_category) || 'Linked HD board'
+                        : null
+                    }
+                    onToggle={(selectedWish) => {
+                      setExpandedWishId(current => current === selectedWish.id ? null : selectedWish.id);
+                    }}
+                    onManage={setManagingWish}
+                  />
+                ))}
+              </View>
+            )}
             </View>
-          )}
         </View>
         </FadeIn>}
 

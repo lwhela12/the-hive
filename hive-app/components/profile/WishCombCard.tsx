@@ -48,8 +48,18 @@ export function WishCombCard({
   const content = (
     <>
       <View style={styles.topHoneyRail} />
-      <View style={styles.leftCombCap}>
-        <Ionicons name="star-outline" size={16} color="#bd9348" />
+      <View
+        style={[
+          styles.leftCombCap,
+          {
+            backgroundColor: status.bg,
+            borderColor: status.color,
+          },
+        ]}
+      >
+        <View style={styles.leftCombIcon}>
+          <Ionicons name={status.icon} size={16} color={status.color} />
+        </View>
       </View>
 
       <View style={styles.content}>
@@ -182,6 +192,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     transform: [{ rotate: '30deg' }],
+  },
+  leftCombIcon: {
+    transform: [{ rotate: '-30deg' }],
   },
   content: {
     minWidth: 0,
