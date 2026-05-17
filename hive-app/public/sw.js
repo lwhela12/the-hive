@@ -1,8 +1,8 @@
 // Cache names: bump these when a deployed app shell must replace old clients.
-const APP_CACHE = 'hive-app-v19-pwa-route-shell';
-const STATIC_CACHE = 'hive-static-v19-pwa-route-shell';
+const APP_CACHE = 'hive-app-v20-skills-garden-ten-seeds';
+const STATIC_CACHE = 'hive-static-v20-skills-garden-ten-seeds';
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'pwa-route-shell-v19';
+const REFRESH_TOKEN = 'skills-garden-ten-seeds-v20';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant

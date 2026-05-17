@@ -129,7 +129,6 @@ const LABEL_HEIGHT = 30;
 const FIELD_SIDE_PADDING = 10;
 const GARDEN_CAPACITY = 10;
 const SEED_TRAY_SIZE = GARDEN_CAPACITY;
-const SEED_STRIP_LIMIT = GARDEN_CAPACITY * 3;
 const VISIBLE_BLOOM_LIMIT = GARDEN_CAPACITY;
 const BLOOM_CANVAS_EXTRA = 38;
 
@@ -2612,22 +2611,13 @@ export function SkillBubbleGarden({
   );
   const openSlots = Math.max(0, GARDEN_CAPACITY - visibleSkills.length);
   const seedTray = useMemo(
-    () => editable ? getSeedTray(seedSourceSkills, plantedNames, seedShake, SEED_STRIP_LIMIT, recentSeedNames) : [],
+    () => editable ? getSeedTray(seedSourceSkills, plantedNames, seedShake, SEED_TRAY_SIZE, recentSeedNames) : [],
     [editable, plantedNames, recentSeedNames, seedShake, seedSourceSkills]
   );
   const seedSlots = useMemo(
     () => buildSeedSlots(seedTray, recentSeedSlots),
     [recentSeedSlots, seedTray]
   );
-  const scrollSeedStrip = useMemo(() => {
-    const slotSeeds = new Set(
-      seedSlots
-        .filter((skill): skill is string => Boolean(skill))
-        .map(normalizeSkillName)
-    );
-    const extraSeeds = seedTray.filter((skill) => !slotSeeds.has(normalizeSkillName(skill)));
-    return [...seedSlots, ...extraSeeds];
-  }, [seedSlots, seedTray]);
   const availableSeedCount = useMemo(
     () => seedSourceSkills
       .filter((skill) => !plantedNames.has(normalizeSkillName(skill)))
@@ -2660,9 +2650,8 @@ export function SkillBubbleGarden({
   const compactLandscape = editable && viewport.width > viewport.height && viewport.height < 540;
   const meadowHeight = getMeadowHeight(visibleSkills.length, width || 680, compactLandscape);
   const showLandscapeHint = editable && width > 0 && width < 560;
-  const seedRowScrolls = width > 0 && (width < 1060 || scrollSeedStrip.length > SEED_TRAY_SIZE);
-  const visibleSeedSlots = seedRowScrolls ? scrollSeedStrip : seedSlots;
-  const seedRowMinWidth = Math.max(width - 24, visibleSeedSlots.length * 112 + Math.max(0, visibleSeedSlots.length - 1) * 7);
+  const seedRowScrolls = width > 0 && width < 1060;
+  const seedRowMinWidth = Math.max(width - 24, SEED_TRAY_SIZE * 112 + (SEED_TRAY_SIZE - 1) * 7);
   const surveyPanelWidth = width > 760
     ? Math.min(520, Math.max(0, width - 36))
     : Math.max(0, width - 28);
@@ -3023,7 +3012,7 @@ export function SkillBubbleGarden({
                   paddingBottom: 6,
                 }}
               >
-                {visibleSeedSlots.map((skill, index) => (
+                {seedSlots.map((skill, index) => (
                   skill ? (
                     <SeedButton
                       key={`${skill}-${index}-${seedShake}`}
@@ -3032,7 +3021,7 @@ export function SkillBubbleGarden({
                       shakeIndex={seedShake}
                       slotMode
                       onPlantSkill={onPlantSkill ? handlePlantSeed : undefined}
-                      onPressSeed={onPlantSkill ? (description) => handlePlantSeedFromSlot(description, index % GARDEN_CAPACITY) : undefined}
+                      onPressSeed={onPlantSkill ? (description) => handlePlantSeedFromSlot(description, index) : undefined}
                       planted={plantedNames.has(normalizeSkillName(skill))}
                       disabled={!canPlantSeeds}
                       bubbleIn={returnedSeedSet.has(normalizeSkillName(skill))}
