@@ -8,7 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useWishes } from '../../lib/hooks/useWishes';
-import { useSurveys } from '../../lib/hooks/useSurveys';
+import { useSurveys, type Survey } from '../../lib/hooks/useSurveys';
 import { Avatar } from '../../components/ui/Avatar';
 import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
@@ -22,6 +22,7 @@ import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileHoneycombCluster } from '../../components/profile/ProfileHoneycombCluster';
 import { WishCombCard } from '../../components/profile/WishCombCard';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
+import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { PREDEFINED_SKILLS } from '../../components/skills/constants';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
@@ -81,7 +82,7 @@ export default function ProfileScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const { permissionStatus, requestPermissions } = useNotifications({ enableListeners: false });
   const { grantWish } = useWishes();
-  const { pendingSurveys } = useSurveys(communityId ?? undefined, profile?.id);
+  const { pendingSurveys, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
   const isNotificationEnabled =
     permissionStatus === 'granted' || permissionStatus === 'provisional';
   const [refreshing, setRefreshing] = useState(false);
@@ -92,6 +93,7 @@ export default function ProfileScreen() {
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [managingWish, setManagingWish] = useState<Wish | null>(null);
+  const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -920,7 +922,10 @@ export default function ProfileScreen() {
       return;
     }
     if (label === "Complete this month's check-in") {
-      router.push('/(app)/hive');
+      const nextSurvey = pendingSurveys[0];
+      if (nextSurvey) {
+        setActiveSurvey(nextSurvey);
+      }
       return;
     }
     if (
@@ -2251,6 +2256,14 @@ export default function ProfileScreen() {
         onSave={handleWishSaved}
         existingWish={editingWish}
       />
+
+      {activeSurvey && (
+        <SurveyModal
+          survey={activeSurvey}
+          onSubmit={(answers) => submitResponse(activeSurvey.id, answers)}
+          onClose={() => setActiveSurvey(null)}
+        />
+      )}
 
       <Modal
         visible={deepQuizVisible}

@@ -170,9 +170,14 @@ export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      {/* Non-interactive backdrop — no tap-to-close so users don't lose their work */}
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-        <View style={{ backgroundColor: '#faf8f3', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '94%' }}>
+      <Pressable
+        onPress={onClose}
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+      >
+        <Pressable
+          onPress={(event) => event.stopPropagation()}
+          style={{ backgroundColor: '#faf8f3', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '94%' }}
+        >
           {/* Handle + close button */}
           <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
@@ -239,8 +244,8 @@ export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
               </Pressable>
             </ScrollView>
           )}
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }

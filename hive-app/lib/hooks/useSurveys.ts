@@ -35,9 +35,42 @@ const RETIRED_SURVEY_PATTERNS = [
   /q1\s+review/i,
 ];
 
+const MONTHLY_CHECK_IN_WINDOW_DAYS = 5;
+const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
+
 function isRetiredSurvey(survey: Survey) {
   const label = `${survey.title} ${survey.description ?? ''}`;
   return RETIRED_SURVEY_PATTERNS.some(pattern => pattern.test(label));
+}
+
+function getLocalDateFromSurveyDueDate(dueDate?: string | null) {
+  if (!dueDate) return null;
+
+  const dateOnly = dueDate.slice(0, 10);
+  const match = dateOnly.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+
+  const parsed = new Date(dueDate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function isSurveyAvailableToMembers(survey: Survey) {
+  const label = `${survey.title} ${survey.description ?? ''}`;
+  if (!MONTHLY_CHECK_IN_PATTERN.test(label)) return true;
+
+  const dueDate = getLocalDateFromSurveyDueDate(survey.due_date);
+  if (!dueDate) return true;
+
+  const availableAt = startOfLocalDay(dueDate);
+  availableAt.setDate(availableAt.getDate() - MONTHLY_CHECK_IN_WINDOW_DAYS);
+
+  return startOfLocalDay(new Date()) >= availableAt;
 }
 
 export function useSurveys(communityId?: string, userId?: string) {
@@ -81,7 +114,8 @@ export function useSurveys(communityId?: string, userId?: string) {
   }, [load]);
 
   const activeSurveys = allSurveys.filter(s => s.is_active && !isRetiredSurvey(s));
-  const pendingSurveys = activeSurveys.filter(s => !myResponses.has(s.id));
+  const availableSurveys = activeSurveys.filter(isSurveyAvailableToMembers);
+  const pendingSurveys = availableSurveys.filter(s => !myResponses.has(s.id));
 
   const submitResponse = async (
     surveyId: string,
@@ -107,5 +141,5 @@ export function useSurveys(communityId?: string, userId?: string) {
     return { error };
   };
 
-  return { allSurveys, activeSurveys, pendingSurveys, myResponses, loading, refetch: load, submitResponse };
+  return { allSurveys, activeSurveys, availableSurveys, pendingSurveys, myResponses, loading, refetch: load, submitResponse };
 }
