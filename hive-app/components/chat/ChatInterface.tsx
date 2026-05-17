@@ -81,13 +81,18 @@ const createFallbackTitle = (text: string): string => {
 };
 
 const STARTER_PROMPTS = [
-  'Help me write a community post',
-  'Turn this idea into a wish',
-  'Summarize my notes',
-  'Plan a HIVE meetup',
-  'Tell me a joke',
-  'Give me a riddle',
-  'Surprise me',
+  { label: 'Help me write a community post', message: 'Help me write a community post' },
+  { label: 'Turn this idea into a wish', message: 'Turn this idea into a wish' },
+  {
+    label: 'Refine my 3MIQ',
+    message:
+      'Help me refine my 3 Most Important Questions: one for experiences I want to have, one for ways I want to grow, and one for how I want to contribute. After we shape them, help me add them to my profile.',
+  },
+  { label: 'Summarize my notes', message: 'Summarize my notes' },
+  { label: 'Plan a HIVE meetup', message: 'Plan a HIVE meetup' },
+  { label: 'Tell me a joke', message: 'Tell me a joke' },
+  { label: 'Give me a riddle', message: 'Give me a riddle' },
+  { label: 'Surprise me', message: 'Surprise me' },
 ];
 
 const getFirstName = (name?: string | null) => {
@@ -147,8 +152,8 @@ const WelcomeState = memo(function WelcomeState({
         <View className="flex-row flex-wrap justify-center gap-3">
           {STARTER_PROMPTS.map((prompt) => (
             <Pressable
-              key={prompt}
-              onPress={() => onSelectPrompt(prompt)}
+              key={prompt.label}
+              onPress={() => onSelectPrompt(prompt.message)}
               disabled={isLoading}
               className="bg-cream border border-gold/20 rounded-full px-4 py-3 active:opacity-80"
             >
@@ -156,7 +161,7 @@ const WelcomeState = memo(function WelcomeState({
                 style={{ fontFamily: 'Lato_700Bold' }}
                 className="text-charcoal text-sm"
               >
-                {prompt}
+                {prompt.label}
               </Text>
             </Pressable>
           ))}
