@@ -53,6 +53,11 @@ type InviteRow = CommunityInvite & {
   inviter: Pick<Profile, 'name'> | null;
 };
 
+type InviteFunctionResponse = {
+  success?: boolean;
+  reusedInvite?: boolean;
+};
+
 const ROLE_OPTIONS: UserRole[] = ['member', 'treasurer', 'admin'];
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -62,6 +67,49 @@ const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 const DUES_QUARTERS = [1, 2, 3, 4] as const;
+
+const getInviteKey = (invite: InviteRow) => `${invite.community_id}:${invite.email.trim().toLowerCase()}`;
+const getInviteTime = (invite: InviteRow) => new Date(invite.created_at).getTime() || 0;
+
+const dedupePendingInvites = (invites: InviteRow[]) => {
+  const byEmail = new Map<string, InviteRow>();
+
+  invites.forEach((invite) => {
+    const key = getInviteKey(invite);
+    const existing = byEmail.get(key);
+    if (!existing || getInviteTime(invite) > getInviteTime(existing)) {
+      byEmail.set(key, invite);
+    }
+  });
+
+  return Array.from(byEmail.values()).sort((a, b) => getInviteTime(b) - getInviteTime(a));
+};
+
+const readFunctionErrorMessage = async (error: unknown, fallback: string) => {
+  try {
+    const maybeError = error as {
+      context?: {
+        clone?: () => { json: () => Promise<unknown> };
+        json?: () => Promise<unknown>;
+      };
+      message?: string;
+    };
+    const context = maybeError.context;
+    const body = context?.clone
+      ? await context.clone().json()
+      : context?.json
+        ? await context.json()
+        : null;
+
+    if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string') {
+      return body.error;
+    }
+
+    return maybeError.message || fallback;
+  } catch {
+    return fallback;
+  }
+};
 
 type HoneyPotFeedback = {
   tone: 'success' | 'error' | 'info';
@@ -369,7 +417,8 @@ export default function AdminScreen() {
       .select('id, role, profiles(*)')
       .eq('community_id', communityId)
       .order('created_at', { ascending: true });
-    if (membersData) setMembers(membersData as unknown as MemberRow[]);
+    const memberRows = (membersData || []) as unknown as MemberRow[];
+    if (membersData) setMembers(memberRows);
 
     // Fetch queen bees (ordered by display_order for queue)
     const { data: qbData } = await supabase
@@ -388,7 +437,12 @@ export default function AdminScreen() {
       .eq('community_id', communityId)
       .is('accepted_at', null)
       .order('created_at', { ascending: false });
-    if (invitesData) setPendingInvites(invitesData as InviteRow[]);
+    if (invitesData) {
+      const memberEmails = new Set(memberRows.map((member) => member.profiles.email.trim().toLowerCase()));
+      const visibleInvites = dedupePendingInvites(invitesData as InviteRow[])
+        .filter((invite) => !memberEmails.has(invite.email.trim().toLowerCase()));
+      setPendingInvites(visibleInvites);
+    }
 
     // Fetch honey pot balance and transparent ledger
     try {
@@ -669,7 +723,7 @@ export default function AdminScreen() {
     setSendingInvite(true);
 
     try {
-      const { error } = await supabase.functions.invoke('invite', {
+      const { data, error } = await supabase.functions.invoke<InviteFunctionResponse>('invite', {
         body: {
           email: trimmedEmail,
           role: inviteRole,
@@ -677,16 +731,23 @@ export default function AdminScreen() {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(await readFunctionErrorMessage(error, 'Failed to send invite'));
+      }
 
       await fetchData();
-      Alert.alert('Invite sent', `${trimmedEmail} will receive an invite to join.`);
+      Alert.alert(
+        data?.reusedInvite ? 'Invite refreshed' : 'Invite sent',
+        data?.reusedInvite
+          ? `${trimmedEmail} already had a pending invite, so we refreshed it and sent the link again.`
+          : `${trimmedEmail} will receive an invite to join.`
+      );
       setInviteEmail('');
       setInviteRole('member');
       setShowInviteMember(false);
     } catch (error) {
       console.error('Invite send error:', error);
-      Alert.alert('Error', 'Failed to send invite');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to send invite');
     } finally {
       setSendingInvite(false);
     }

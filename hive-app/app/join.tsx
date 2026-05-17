@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/hooks/useAuth';
 import type { CommunityInvite, Community, Profile } from '../types';
@@ -11,22 +11,51 @@ type InviteWithDetails = CommunityInvite & {
   inviter: Profile | null;
 };
 
+type InviteBlock = {
+  title: string;
+  message: string;
+  detail?: string;
+  action?: 'switch-account' | 'go-home';
+};
+
+const normalizeEmail = (email?: string | null) => (email ?? '').trim().toLowerCase();
+
 export default function JoinScreen() {
   const { session, profile, communityId, refreshProfile, loading: authLoading } = useAuth();
+  const params = useLocalSearchParams<{ token?: string }>();
   const [loading, setLoading] = useState(true);
   const [invite, setInvite] = useState<InviteWithDetails | null>(null);
+  const [inviteBlock, setInviteBlock] = useState<InviteBlock | null>(null);
   const [waitlistName, setWaitlistName] = useState('');
   const [waitlistMessage, setWaitlistMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [alreadyOnWaitlist, setAlreadyOnWaitlist] = useState(false);
 
+  const inviteToken = typeof params.token === 'string' ? params.token.trim() : '';
+  const hasInviteToken = inviteToken.length > 0;
   const userEmail = session?.user?.email || profile?.email;
+  const normalizedUserEmail = normalizeEmail(userEmail);
+  const joinReturnPath = hasInviteToken ? `/join?token=${encodeURIComponent(inviteToken)}` : '/join';
 
   useEffect(() => {
     // If auth is still loading, wait
     if (authLoading) return;
 
-    // If community resolved (e.g., initializeUserData completed), go to app
+    // Token links are account-bound. Never let an existing session turn
+    // an invite URL into the logged-in member's app session.
+    if (hasInviteToken) {
+      if (!session) {
+        router.replace(`/(auth)/login?returnTo=${encodeURIComponent(joinReturnPath)}`);
+        return;
+      }
+
+      if (userEmail && profile) {
+        checkForInvite();
+      }
+      return;
+    }
+
+    // If community resolved (e.g., initializeUserData completed), go to app.
     if (session && communityId) {
       router.replace('/(app)/hive');
       return;
@@ -34,7 +63,7 @@ export default function JoinScreen() {
 
     // If no session, redirect to login with return URL
     if (!session) {
-      router.replace('/(auth)/login?returnTo=/join');
+      router.replace(`/(auth)/login?returnTo=${encodeURIComponent(joinReturnPath)}`);
       return;
     }
 
@@ -42,13 +71,74 @@ export default function JoinScreen() {
     if (userEmail && profile) {
       checkForInvite();
     }
-  }, [session, authLoading, userEmail, profile, communityId]);
+  }, [session, authLoading, userEmail, profile, communityId, hasInviteToken, inviteToken, joinReturnPath]);
 
   const checkForInvite = async () => {
-    if (!userEmail || !profile) return;
+    if (!normalizedUserEmail || !profile) return;
 
     setLoading(true);
+    setInvite(null);
+    setInviteBlock(null);
     try {
+      if (hasInviteToken) {
+        const { data: invites, error } = await supabase
+          .from('community_invites')
+          .select('*, community:communities(*), inviter:profiles!community_invites_invited_by_fkey(*)')
+          .eq('token', inviteToken)
+          .is('accepted_at', null)
+          .gt('expires_at', new Date().toISOString())
+          .limit(1);
+
+        if (error) {
+          throw error;
+        }
+
+        const tokenInvite = invites?.[0] as InviteWithDetails | undefined;
+
+        if (!tokenInvite) {
+          setInviteBlock({
+            title: 'Invite needs the right account',
+            message: 'This invite link is private to the Google account it was sent to. We did not open your current HIVE session.',
+            detail: userEmail
+              ? `You are signed in as ${userEmail}. Sign out, then open the invite with the email address that received it.`
+              : 'Sign in with the email address that received the invite.',
+            action: 'switch-account',
+          });
+          return;
+        }
+
+        const inviteEmail = normalizeEmail(tokenInvite.email);
+        if (inviteEmail !== normalizedUserEmail) {
+          setInviteBlock({
+            title: 'Wrong Google account',
+            message: 'This invite belongs to a different email address. HIVE will not open another member profile from this link.',
+            detail: `You are signed in as ${userEmail}. Sign out, then use the invited account instead.`,
+            action: 'switch-account',
+          });
+          return;
+        }
+
+        const { data: existingMembership } = await supabase
+          .from('community_memberships')
+          .select('id, role')
+          .eq('community_id', tokenInvite.community_id)
+          .eq('user_id', profile.id)
+          .maybeSingle();
+
+        if (existingMembership) {
+          setInviteBlock({
+            title: 'This account is already in HIVE',
+            message: `${profile.name || userEmail} is already a member of ${tokenInvite.community?.name || 'this HIVE'}. We kept the invite link from opening that existing profile.`,
+            detail: 'To test a brand-new member onboarding flow, send an invite to a different email address and sign in with that Google account.',
+            action: 'go-home',
+          });
+          return;
+        }
+
+        setInvite(tokenInvite);
+        return;
+      }
+
       // GENESIS CHECK: Is this the very first user?
       // Use the RPC function which bypasses RLS
       const { data: isGenesis } = await supabase.rpc('is_genesis_state');
@@ -63,7 +153,7 @@ export default function JoinScreen() {
       const { data: invites, error } = await supabase
         .from('community_invites')
         .select('*, community:communities(*), inviter:profiles!community_invites_invited_by_fkey(*)')
-        .eq('email', userEmail.toLowerCase())
+        .eq('email', normalizedUserEmail)
         .is('accepted_at', null)
         .gt('expires_at', new Date().toISOString())
         .limit(1);
@@ -77,7 +167,7 @@ export default function JoinScreen() {
         const { data: waitlistEntry } = await supabase
           .from('waitlist')
           .select('id')
-          .eq('email', userEmail.toLowerCase())
+          .eq('email', normalizedUserEmail)
           .single();
 
         if (waitlistEntry) {
@@ -187,9 +277,37 @@ export default function JoinScreen() {
       Alert.alert('Error', 'Profile not loaded. Please refresh and try again.');
       return;
     }
+    if (normalizeEmail(invite.email) !== normalizedUserEmail) {
+      setInviteBlock({
+        title: 'Wrong Google account',
+        message: 'This invite belongs to a different email address. HIVE will not open another member profile from this link.',
+        detail: `You are signed in as ${userEmail}. Sign out, then use the invited account instead.`,
+        action: 'switch-account',
+      });
+      setInvite(null);
+      return;
+    }
 
     setSubmitting(true);
     try {
+      const { data: existingMembership } = await supabase
+        .from('community_memberships')
+        .select('id')
+        .eq('community_id', invite.community_id)
+        .eq('user_id', profile.id)
+        .maybeSingle();
+
+      if (existingMembership) {
+        setInviteBlock({
+          title: 'This account is already in HIVE',
+          message: `${profile.name || userEmail} is already a member of ${invite.community?.name || 'this HIVE'}. We kept the invite link from opening that existing profile.`,
+          detail: 'To test a brand-new member onboarding flow, send an invite to a different email address and sign in with that Google account.',
+          action: 'go-home',
+        });
+        setInvite(null);
+        return;
+      }
+
       // Create membership
       const { error: membershipError } = await supabase
         .from('community_memberships')
@@ -313,7 +431,11 @@ export default function JoinScreen() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    router.replace('/(auth)/login');
+    router.replace(`/(auth)/login?returnTo=${encodeURIComponent(joinReturnPath)}`);
+  };
+
+  const handleGoHome = () => {
+    router.replace('/(app)/hive');
   };
 
   if (loading) {
@@ -377,6 +499,56 @@ export default function JoinScreen() {
           >
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
               Decline Invite
+            </Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (inviteBlock) {
+    return (
+      <SafeAreaView className="flex-1 bg-cream">
+        <ScrollView className="flex-1" contentContainerClassName="p-6">
+          <View className="items-center mb-8 mt-8">
+            <Text className="text-6xl mb-4">🔐</Text>
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-charcoal text-center">
+              {inviteBlock.title}
+            </Text>
+          </View>
+
+          <View className="bg-white rounded-2xl p-6 shadow-sm mb-6">
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal text-center leading-6">
+              {inviteBlock.message}
+            </Text>
+            {inviteBlock.detail && (
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-center text-sm leading-5 mt-4">
+                {inviteBlock.detail}
+              </Text>
+            )}
+          </View>
+
+          {inviteBlock.action === 'go-home' && (
+            <Pressable
+              onPress={handleGoHome}
+              className="py-4 rounded-xl items-center mb-3 bg-gold active:opacity-80"
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-lg">
+                Go to My HIVE
+              </Text>
+            </Pressable>
+          )}
+
+          <Pressable
+            onPress={handleSignOut}
+            disabled={submitting}
+            className={`${inviteBlock.action === 'go-home' ? 'py-3' : 'py-4 rounded-xl items-center mb-3 bg-gold active:opacity-80'}`}
+          >
+            <Text
+              style={{ fontFamily: inviteBlock.action === 'go-home' ? 'Lato_400Regular' : 'Lato_700Bold' }}
+              className={`${inviteBlock.action === 'go-home' ? 'text-center text-charcoal/60' : 'text-white text-lg'}`}
+            >
+              Sign Out and Switch Account
             </Text>
           </Pressable>
         </ScrollView>

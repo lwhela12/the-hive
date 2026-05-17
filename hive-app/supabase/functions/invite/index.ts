@@ -30,6 +30,11 @@ interface InvitePayload {
   community_id: string;
 }
 
+type PendingInvite = {
+  id: string;
+  token: string;
+};
+
 serve(async (req) => {
   // Handle CORS preflight
   const corsResponse = handleCors(req);
@@ -80,7 +85,6 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
-  const token_invite = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data: community } = await supabaseAdmin
@@ -89,20 +93,79 @@ serve(async (req) => {
     .eq('id', communityId)
     .single();
 
-  const { error: inviteError } = await supabaseAdmin
-    .from('community_invites')
-    .insert({
-      community_id: communityId,
-      email,
-      role,
-      invited_by: userId,
-      token: token_invite,
-      expires_at: expiresAt,
-    });
+  const { data: existingProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('id, name')
+    .eq('email', email)
+    .limit(1)
+    .maybeSingle();
 
-  if (inviteError) {
-    console.error('Failed to create invite:', inviteError);
-    return errorResponse('Failed to create invite', 500);
+  if (existingProfile) {
+    const { data: existingMembership } = await supabaseAdmin
+      .from('community_memberships')
+      .select('id')
+      .eq('community_id', communityId)
+      .eq('user_id', existingProfile.id)
+      .maybeSingle();
+
+    if (existingMembership) {
+      const name = existingProfile.name || email;
+      return errorResponse(`${name} is already a member of this HIVE. Use a different email to test new-member onboarding.`, 409);
+    }
+  }
+
+  const { data: existingInvite, error: existingInviteError } = await supabaseAdmin
+    .from('community_invites')
+    .select('id, token')
+    .eq('community_id', communityId)
+    .eq('email', email)
+    .is('accepted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingInviteError) {
+    console.error('Failed to check existing invite:', existingInviteError);
+    return errorResponse('Failed to check existing invite', 500);
+  }
+
+  let token_invite = crypto.randomUUID();
+  let reusedInvite = false;
+
+  if (existingInvite) {
+    const invite = existingInvite as PendingInvite;
+    token_invite = invite.token;
+    reusedInvite = true;
+
+    const { error: updateInviteError } = await supabaseAdmin
+      .from('community_invites')
+      .update({
+        role,
+        invited_by: userId,
+        expires_at: expiresAt,
+      })
+      .eq('id', invite.id);
+
+    if (updateInviteError) {
+      console.error('Failed to refresh invite:', updateInviteError);
+      return errorResponse('Failed to refresh invite', 500);
+    }
+  } else {
+    const { error: inviteError } = await supabaseAdmin
+      .from('community_invites')
+      .insert({
+        community_id: communityId,
+        email,
+        role,
+        invited_by: userId,
+        token: token_invite,
+        expires_at: expiresAt,
+      });
+
+    if (inviteError) {
+      console.error('Failed to create invite:', inviteError);
+      return errorResponse('Failed to create invite', 500);
+    }
   }
 
   const inviteUrl = `${getInviteUrlBase()}?token=${encodeURIComponent(token_invite)}`;
@@ -134,5 +197,5 @@ serve(async (req) => {
     }
   }
 
-  return jsonResponse({ success: true });
+  return jsonResponse({ success: true, reusedInvite });
 });

@@ -1,6 +1,6 @@
 import '../global.css';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
@@ -92,6 +92,7 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in
 }
 
 export default function RootLayout() {
+  const pathname = usePathname();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [community, setCommunity] = useState<Community | null>(null);
@@ -275,6 +276,7 @@ export default function RootLayout() {
     loading,
     refreshProfile,
   }), [session, profile, community, communityId, communityRole, loading, refreshProfile]);
+  const isJoinRoute = pathname === '/join' || pathname?.startsWith('/join/');
 
   // Show loading screen while fonts load
   if (!fontsLoaded) {
@@ -290,7 +292,7 @@ export default function RootLayout() {
       <AppPrefetcher
         communityId={communityId}
         userId={profile?.id ?? null}
-        isAuthenticated={!!session && !loading}
+        isAuthenticated={!!session && !loading && !isJoinRoute}
       />
       <AuthContext.Provider value={authContextValue}>
         <StatusBar style="dark" />
