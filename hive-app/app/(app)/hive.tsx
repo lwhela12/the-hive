@@ -30,6 +30,7 @@ import { linkWishToHdBoard, unlinkWishFromBoard } from '../../lib/wishBoardLinki
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import {
   QUARTERLY_DUES_AMOUNT,
+  type DuesPeriod,
   duesTransactionCoversQuarter,
   getCurrentDuesPeriod,
   getDuesPeriodStartDate,
@@ -50,6 +51,7 @@ type HomeTodo = {
   title: string;
   detail?: string;
   cta?: string;
+  ctaOnPress?: () => void;
   isDone?: boolean;
   completedAt?: string | null;
   onPress?: () => void;
@@ -170,6 +172,30 @@ const createIcsContent = (event: Event) => {
     'END:VEVENT',
     'END:VCALENDAR',
   ].join('\r\n');
+};
+
+const formatDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getQuarterlyDuesActionTitle = (period: DuesPeriod) =>
+  `Quarterly dues for Q${period.quarter} ${period.year}`;
+
+const isQuarterlyDuesActionItem = (
+  item: ActionItem,
+  period: DuesPeriod,
+  dueDateKey: string
+) => {
+  const description = item.description.trim().toLowerCase();
+  if (!description.startsWith('quarterly dues')) return false;
+
+  const itemDueDate = typeof item.due_date === 'string' ? item.due_date.slice(0, 10) : null;
+  if (itemDueDate === dueDateKey) return true;
+
+  return description.includes(`q${period.quarter}`) && description.includes(String(period.year));
 };
 
 const downloadIcsFile = (event: Event) => {
@@ -726,6 +752,90 @@ export default function HiveScreen() {
     setShowAddTaskModal(false);
     fetchMyActionItems();
   };
+
+  const markQuarterlyDuesReminderDone = useCallback(async () => {
+    if (!profile?.id || !communityId) return;
+
+    const now = new Date();
+    const completedAt = now.toISOString();
+    const period = getCurrentDuesPeriod(now);
+    const dueDate = getDuesPeriodStartDate(period);
+    const dueDateKey = formatDateKey(dueDate);
+    const description = getQuarterlyDuesActionTitle(period);
+    const existingItem = homeActionItems.find(item => (
+      isQuarterlyDuesActionItem(item, period, dueDateKey)
+    ));
+
+    if (existingItem?.completed) return;
+
+    triggerCompletion();
+
+    if (existingItem) {
+      setHomeActionItems(prev => prev.map(action => (
+        action.id === existingItem.id
+          ? { ...action, completed: true, completed_at: completedAt }
+          : action
+      )));
+
+      const { error } = await supabase
+        .from('action_items')
+        .update({ completed: true, completed_at: completedAt } as any)
+        .eq('id', existingItem.id)
+        .eq('assigned_to', profile.id)
+        .eq('community_id', communityId);
+
+      if (error) {
+        console.warn('Could not mark dues reminder done', error);
+        setHomeActionItems(prev => prev.map(action => (
+          action.id === existingItem.id ? existingItem : action
+        )));
+        Alert.alert('Could not update dues reminder', 'Please try again.');
+      }
+      return;
+    }
+
+    const optimisticAction: ActionItem = {
+      id: `quarterly-dues-${period.year}-q${period.quarter}-${completedAt}`,
+      meeting_id: null,
+      community_id: communityId,
+      description,
+      assigned_to: profile.id,
+      due_date: dueDateKey,
+      completed: true,
+      completed_at: completedAt,
+      archived_at: null,
+      created_at: completedAt,
+    };
+
+    setHomeActionItems(prev => [optimisticAction, ...prev]);
+
+    const { data, error } = await supabase
+      .from('action_items')
+      .insert({
+        meeting_id: null,
+        description,
+        assigned_to: profile.id,
+        community_id: communityId,
+        due_date: dueDateKey,
+        completed: true,
+        completed_at: completedAt,
+      } as any)
+      .select('*')
+      .single();
+
+    if (error) {
+      console.warn('Could not save dues reminder completion', error);
+      setHomeActionItems(prev => prev.filter(action => action.id !== optimisticAction.id));
+      Alert.alert('Could not update dues reminder', 'Please try again.');
+      return;
+    }
+
+    if (data) {
+      setHomeActionItems(prev => prev.map(action => (
+        action.id === optimisticAction.id ? data as ActionItem : action
+      )));
+    }
+  }, [communityId, homeActionItems, profile?.id, triggerCompletion]);
 
   // Activity feed
   const { items: activityItems, loading: activityLoading, refetch: refetchActivity } = useActivityFeed(communityId ?? undefined);
@@ -1302,12 +1412,19 @@ export default function HiveScreen() {
       onArchive: a.completed ? () => archiveActionItem(a) : undefined,
     })),
     ...(() => {
-      if (!duesStatusChecked || duesCoveredThisQuarter) return [];
       const today = new Date();
       const { year, quarter } = getCurrentDuesPeriod(today);
-      const dueDate = getDuesPeriodStartDate({ year, quarter });
+      const period = { year, quarter };
+      const dueDate = getDuesPeriodStartDate(period);
+      const dueDateKey = formatDateKey(dueDate);
+      const duesReminderAction = homeActionItems.find(item => (
+        isQuarterlyDuesActionItem(item, period, dueDateKey)
+      ));
+
+      if (!duesStatusChecked || duesCoveredThisQuarter || duesReminderAction) return [];
+
       const dueDateLabel = formatDateShort(dueDate);
-      const isDueToday = isDuesPeriodStartDay(today, { year, quarter });
+      const isDueToday = isDuesPeriodStartDay(today, period);
       return [{
         id: `quarterly-dues-${year}-q${quarter}`,
         emoji: '🍯',
@@ -1315,8 +1432,10 @@ export default function HiveScreen() {
         detail: duesStatusLoading
           ? 'Checking payment status...'
           : `Due ${dueDateLabel} · $${QUARTERLY_DUES_AMOUNT} for Q${quarter} ${year}`,
-        cta: canManageDues ? 'Admin →' : undefined,
-        onPress: canManageDues ? () => router.push('/admin') : undefined,
+        cta: canManageDues ? 'Record →' : undefined,
+        ctaOnPress: canManageDues ? () => router.push('/admin') : undefined,
+        onPress: markQuarterlyDuesReminderDone,
+        onToggle: markQuarterlyDuesReminderDone,
       }];
     })(),
   ];
@@ -1366,7 +1485,10 @@ export default function HiveScreen() {
       >
         {todo.onToggle ? (
           <Pressable
-            onPress={todo.onToggle}
+            onPress={(event) => {
+              event.stopPropagation();
+              todo.onToggle?.();
+            }}
             accessibilityRole="button"
             accessibilityLabel={isDone ? 'Mark task open' : 'Mark task complete'}
             hitSlop={8}
@@ -1414,7 +1536,25 @@ export default function HiveScreen() {
             <Ionicons name="archive-outline" size={16} color="#8e6f35" />
           </Pressable>
         ) : !isDone && todo.cta ? (
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', flexShrink: 0 }}>{todo.cta}</Text>
+          todo.ctaOnPress ? (
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                todo.ctaOnPress?.();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={todo.cta.replace('→', '').trim()}
+              hitSlop={8}
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.72 : 1,
+                flexShrink: 0,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>{todo.cta}</Text>
+            </Pressable>
+          ) : (
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', flexShrink: 0 }}>{todo.cta}</Text>
+          )
         ) : null}
       </Pressable>
     );
