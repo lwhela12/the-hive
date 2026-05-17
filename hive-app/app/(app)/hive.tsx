@@ -9,7 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
-import { useActivityFeed } from '../../lib/hooks/useActivityFeed';
+import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
 import { useSurveys } from '../../lib/hooks/useSurveys';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { WishCard } from '../../components/hive/WishCard';
@@ -910,7 +910,41 @@ export default function HiveScreen() {
     if (activityReadIdsKey) removeStoredItem(activityReadIdsKey);
   }, [activityReadKey, activityReadIdsKey, hasUnreadActivity, triggerActivityConfetti]);
 
-  const navigateFromActivityItem = useCallback((item: import('../../lib/hooks/useActivityFeed').ActivityItem) => {
+  const openWishFromActivity = useCallback(async (wishId: string) => {
+    if (!communityId) return;
+
+    try {
+      let { data, error } = await (supabase as any)
+        .from('wishes')
+        .select('*, user:profiles!user_id(*), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status), granters:wish_granters(*, granter:profiles!granter_id(*))')
+        .eq('id', wishId)
+        .eq('community_id', communityId)
+        .single();
+
+      if (
+        error &&
+        (String(error.message ?? '').includes('wishes_board_category_id_fkey') ||
+          String(error.message ?? '').includes('board_category'))
+      ) {
+        const fallback = await (supabase as any)
+          .from('wishes')
+          .select('*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))')
+          .eq('id', wishId)
+          .eq('community_id', communityId)
+          .single();
+        data = fallback.data;
+        error = fallback.error;
+      }
+
+      if (error || !data) throw error ?? new Error('Wish not found');
+      setSelectedWish(data as WishWithGranters);
+    } catch (error) {
+      console.warn('Could not open activity wish', error);
+      Alert.alert('Wish unavailable', 'That wish may have been archived or moved.');
+    }
+  }, [communityId]);
+
+  const navigateFromActivityItem = useCallback((item: ActivityItem) => {
     if (item.navigatesTo === 'board') {
       // Pre-set the board's localStorage keys so it opens directly to the right post
       if (communityId) {
@@ -923,10 +957,12 @@ export default function HiveScreen() {
       router.push('/board');
     } else if (item.navigatesTo === 'members') {
       router.push('/members');
+    } else if (item.navigatesTo === 'wish') {
+      openWishFromActivity(item.sourceId);
     }
-  }, [communityId, router]);
+  }, [communityId, openWishFromActivity, router]);
 
-  const handleActivityPress = useCallback((item: import('../../lib/hooks/useActivityFeed').ActivityItem) => {
+  const handleActivityPress = useCallback((item: ActivityItem) => {
     const wasUnread = item.timestamp > sessionReadAt && !readItemIds.has(item.id);
     const clearsLastUnread = wasUnread && unreadActivityCount === 1;
 

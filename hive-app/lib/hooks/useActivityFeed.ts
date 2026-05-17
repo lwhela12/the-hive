@@ -9,7 +9,7 @@ export interface ActivityItem {
   timestamp: string; // ISO string
   sourceId: string;  // the DB record ID (post id, event id, wish id, user id)
   categoryId?: string; // board_post only — to deep-link into the right topic
-  navigatesTo?: 'board' | 'members'; // screens that can be navigated to
+  navigatesTo?: 'board' | 'members' | 'wish'; // screens that can be navigated to
 }
 
 function truncate(text: string, max: number): string {
@@ -103,6 +103,7 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
       text: `${name} posted a new wish: ${truncate(w.description, 55)}`,
       timestamp: w.created_at,
       sourceId: w.id,
+      navigatesTo: 'wish',
     });
   }
 
@@ -120,6 +121,7 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
       text: `${wisherName}'s wish "${truncate(w.description, 40)}" was granted${grantedBy}`,
       timestamp: (w as any).fulfilled_at,
       sourceId: w.id,
+      navigatesTo: 'wish',
     });
   }
 
