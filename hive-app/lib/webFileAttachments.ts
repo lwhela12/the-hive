@@ -5,6 +5,9 @@ import type { SelectedImage } from './imagePicker';
 export const isImageFile = (file: File) =>
   file.type.startsWith('image/') || /\.(gif|jpe?g|png|webp)$/i.test(file.name);
 
+export const isVideoFile = (file: File) =>
+  file.type.startsWith('video/') || /\.(avi|m4v|mkv|mov|mp4|mpeg|mpg|webm)$/i.test(file.name);
+
 const getFallbackImageMimeType = (file: File) => {
   if (file.type) return file.type;
   if (/\.png$/i.test(file.name)) return 'image/png';

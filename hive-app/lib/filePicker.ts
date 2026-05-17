@@ -6,6 +6,7 @@ export interface SelectedFile {
   size?: number;
   mimeType?: string;
   file?: File;
+  duration?: number;
 }
 
 const MAX_FILES = 5;

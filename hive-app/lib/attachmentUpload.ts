@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import { Attachment } from '../types';
 import { SelectedImage, getImageExtension, getContentType } from './imagePicker';
 import type { SelectedFile } from './filePicker';
+import { getShortVideoRejectionReason } from './mediaAttachments';
 
 // Generate a UUID v4
 function generateUUID(): string {
@@ -190,6 +191,12 @@ export async function uploadSingleFile(
   file: SelectedFile
 ): Promise<Attachment | null> {
   try {
+    const rejectionReason = getShortVideoRejectionReason(file);
+    if (rejectionReason) {
+      console.warn(`Skipping video attachment: ${rejectionReason}`);
+      return null;
+    }
+
     const id = generateUUID();
     const safeName = getSafeFileName(file.name || 'attachment');
     const fileName = `${userId}/${id}-${safeName}`;
@@ -239,6 +246,7 @@ export async function uploadSingleFile(
       filename: file.name || safeName,
       size: fileSize,
       mime_type: contentType,
+      ...(file.duration ? { duration_ms: file.duration } : {}),
       ...(await getTextPreview(file)),
     };
   } catch (error) {

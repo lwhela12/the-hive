@@ -1,5 +1,5 @@
 import { useState, memo, useRef } from 'react';
-import { View, TextInput, Pressable, Text, Image as RNImage, ScrollView, Platform } from 'react-native';
+import { Alert, View, TextInput, Pressable, Text, Image as RNImage, ScrollView, Platform } from 'react-native';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { VoiceMicButton } from '../ui/VoiceMicButton';
@@ -11,7 +11,9 @@ import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { MentionSuggestions } from '../ui/MentionSuggestions';
 import { fileToSelectedFile, fileToSelectedImage, isImageFile } from '../../lib/webFileAttachments';
+import { getShortVideoLimitLabel, partitionAllowedShortVideos } from '../../lib/mediaAttachments';
 import type { Profile } from '../../types';
+import { SelectedFilePreview } from '../ui/SelectedFilePreview';
 
 const DRAFT_KEY = 'clive-message';
 const MAX_IMAGES = 5;
@@ -115,7 +117,13 @@ export const ChatInput = memo(function ChatInput({
 
     if (droppedFiles.length > 0) {
       const fileAttachments = droppedFiles.map(fileToSelectedFile);
-      setSelectedFiles((prev) => [...prev, ...fileAttachments].slice(0, MAX_FILES));
+      const { accepted, rejected } = partitionAllowedShortVideos(fileAttachments);
+      if (rejected.length > 0) {
+        Alert.alert('Video Too Large', `Please choose short clips: ${getShortVideoLimitLabel()}.`);
+      }
+      if (accepted.length > 0) {
+        setSelectedFiles((prev) => [...prev, ...accepted].slice(0, MAX_FILES));
+      }
     }
   };
 
@@ -181,33 +189,11 @@ export const ChatInput = memo(function ChatInput({
             </View>
           ))}
           {selectedFiles.map((file, index) => (
-            <View key={`${file.uri}-${index}`} className="relative bg-cream border border-gold/20 rounded-lg px-3 py-2 w-48">
-              <View className="flex-row items-center">
-                <Ionicons name="document-attach-outline" size={20} color="#bd9348" />
-                <View className="ml-2 flex-1">
-                  <Text
-                    className="text-charcoal text-xs"
-                    style={{ fontFamily: 'Lato_700Bold' }}
-                    numberOfLines={1}
-                  >
-                    {file.name}
-                  </Text>
-                  <Text
-                    className="text-charcoal/45 text-[10px]"
-                    style={{ fontFamily: 'Lato_400Regular' }}
-                    numberOfLines={1}
-                  >
-                    {file.mimeType || 'File'}
-                  </Text>
-                </View>
-              </View>
-              <Pressable
-                onPress={() => handleRemoveFile(index)}
-                className="absolute -top-1 -right-1 bg-charcoal rounded-full w-5 h-5 items-center justify-center"
-              >
-                <Ionicons name="close" size={12} color="white" />
-              </Pressable>
-            </View>
+            <SelectedFilePreview
+              key={`${file.uri}-${index}`}
+              file={file}
+              onRemove={() => handleRemoveFile(index)}
+            />
           ))}
         </ScrollView>
       )}
@@ -215,7 +201,7 @@ export const ChatInput = memo(function ChatInput({
       {isDragActive && (
         <View className="mb-2 rounded-xl border border-gold/30 bg-gold/10 px-3 py-2">
           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-            Drop images or files to attach
+            Drop photos, videos, or files to attach
           </Text>
         </View>
       )}

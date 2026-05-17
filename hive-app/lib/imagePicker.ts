@@ -29,7 +29,7 @@ export async function requestMediaLibraryPermission(): Promise<boolean> {
   if (status !== 'granted') {
     Alert.alert(
       'Permission Required',
-      'Please allow access to your photo library to attach images.',
+      'Please allow access to your photo library to attach photos or videos.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Open Settings', onPress: () => Linking.openSettings() },

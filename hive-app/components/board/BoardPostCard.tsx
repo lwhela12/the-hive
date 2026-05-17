@@ -2,6 +2,7 @@ import { View, Text, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDateShort } from '../../lib/dateUtils';
+import { isVideoAttachment } from '../../lib/mediaAttachments';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import type { BoardPost, BoardReaction, Profile } from '../../types';
 
@@ -59,10 +60,11 @@ export function BoardPostCard({
   const isCompleted = post.status === 'completed';
   const isArchived = !!post.archived_at;
   const hasAttachments = post.attachments && post.attachments.length > 0;
-  const imageAttachments = hasAttachments
-    ? post.attachments!.filter((attachment) => attachment.mime_type?.startsWith('image/'))
+  const previewAttachments = hasAttachments
+    ? post.attachments!.filter((attachment) => attachment.mime_type?.startsWith('image/') || isVideoAttachment(attachment))
     : [];
-  const firstAttachment = imageAttachments[0] || null;
+  const firstAttachment = previewAttachments[0] || null;
+  const isVideoPreview = firstAttachment ? isVideoAttachment(firstAttachment) : false;
   const extraCount = hasAttachments ? post.attachments!.length - 1 : 0;
   const reactionCounts = getReactionCounts(post.reactions || []);
   const contentPreview = createContentPreview(post.content);
@@ -81,12 +83,23 @@ export function BoardPostCard({
         <View style={useCompactImage ? { flexDirection: 'row', alignItems: 'stretch' } : undefined}>
           {firstAttachment && (
             <View style={{ position: 'relative', flexShrink: 0 }}>
-              <Image
-                source={{ uri: firstAttachment.url }}
-                style={imageStyle}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-              />
+              {isVideoPreview ? (
+                <View
+                  style={[imageStyle, { backgroundColor: '#313130', alignItems: 'center', justifyContent: 'center' }]}
+                >
+                  <Ionicons name="play-circle" size={42} color="#f6f4e5" />
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: '#f6f4e5', fontSize: 12, marginTop: 4 }}>
+                    Video clip
+                  </Text>
+                </View>
+              ) : (
+                <Image
+                  source={{ uri: firstAttachment.url }}
+                  style={imageStyle}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                />
+              )}
               {extraCount > 0 && (
                 <View
                   style={{
@@ -101,7 +114,7 @@ export function BoardPostCard({
                     alignItems: 'center',
                   }}
                 >
-                  <Ionicons name="images-outline" size={12} color="white" />
+                  <Ionicons name={isVideoPreview ? 'film-outline' : 'images-outline'} size={12} color="white" />
                   <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 12, marginLeft: 4 }}>
                     +{extraCount}
                   </Text>

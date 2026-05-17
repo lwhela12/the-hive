@@ -1,9 +1,12 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, Image, Pressable, ScrollView } from 'react-native';
+import { Alert, View, Text, Image, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SelectedImage, pickMultipleImages, takePhoto } from '../../lib/imagePicker';
 import { SelectedFile, pickMultipleFiles } from '../../lib/filePicker';
+import { pickMultipleVideos, takeVideo } from '../../lib/videoPicker';
 import { fileToSelectedFile, fileToSelectedImage, isImageFile, isTouchWebDevice } from '../../lib/webFileAttachments';
+import { getShortVideoLimitLabel, partitionAllowedShortVideos } from '../../lib/mediaAttachments';
+import { SelectedFilePreview } from './SelectedFilePreview';
 
 const MAX_IMAGES = 5;
 const MAX_FILES = 5;
@@ -53,8 +56,32 @@ export function AttachmentPicker({
     if (!canAddFiles || !onFilesChange) return;
 
     const newFiles = await pickMultipleFiles(remainingFileSlots);
-    if (newFiles.length > 0) {
-      onFilesChange([...selectedFiles, ...newFiles].slice(0, maxFiles));
+    const { accepted, rejected } = partitionAllowedShortVideos(newFiles);
+    if (rejected.length > 0) {
+      Alert.alert('Video Too Large', `Please choose short clips: ${getShortVideoLimitLabel()}.`);
+    }
+    if (accepted.length > 0) {
+      onFilesChange([...selectedFiles, ...accepted].slice(0, maxFiles));
+    }
+  };
+
+  const handlePickVideos = async () => {
+    if (!canAddFiles || !onFilesChange) return;
+
+    const newVideos = await pickMultipleVideos({
+      maxVideos: remainingFileSlots,
+    });
+    if (newVideos.length > 0) {
+      onFilesChange([...selectedFiles, ...newVideos].slice(0, maxFiles));
+    }
+  };
+
+  const handleTakeVideo = async () => {
+    if (!canAddFiles || !onFilesChange) return;
+
+    const newVideo = await takeVideo();
+    if (newVideo) {
+      onFilesChange([...selectedFiles, newVideo].slice(0, maxFiles));
     }
   };
 
@@ -101,7 +128,13 @@ export function AttachmentPicker({
 
     if (documentFiles.length > 0 && onFilesChange) {
       const attachments = documentFiles.map(fileToSelectedFile);
-      onFilesChange([...selectedFiles, ...attachments].slice(0, maxFiles));
+      const { accepted, rejected } = partitionAllowedShortVideos(attachments);
+      if (rejected.length > 0) {
+        Alert.alert('Video Too Large', `Please choose short clips: ${getShortVideoLimitLabel()}.`);
+      }
+      if (accepted.length > 0) {
+        onFilesChange([...selectedFiles, ...accepted].slice(0, maxFiles));
+      }
     }
   };
 
@@ -170,6 +203,36 @@ export function AttachmentPicker({
               </Text>
             </Pressable>
             {onFilesChange && (
+              <>
+                <Pressable
+                  onPress={async () => {
+                    setShowCompactMenu(false);
+                    await handleTakeVideo();
+                  }}
+                  disabled={!canAddFiles}
+                  className="flex-row items-center px-3 py-3 active:bg-cream border-t border-cream"
+                >
+                  <Ionicons name="videocam-outline" size={18} color={canAddFiles ? '#bd9348' : '#ccc'} />
+                  <Text className={`ml-2 text-sm ${canAddFiles ? 'text-charcoal' : 'text-gray-400'}`} style={{ fontFamily: 'Lato_700Bold' }}>
+                    Record video
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => {
+                    setShowCompactMenu(false);
+                    await handlePickVideos();
+                  }}
+                  disabled={!canAddFiles}
+                  className="flex-row items-center px-3 py-3 active:bg-cream border-t border-cream"
+                >
+                  <Ionicons name="film-outline" size={18} color={canAddFiles ? '#bd9348' : '#ccc'} />
+                  <Text className={`ml-2 text-sm ${canAddFiles ? 'text-charcoal' : 'text-gray-400'}`} style={{ fontFamily: 'Lato_700Bold' }}>
+                    Video clip
+                  </Text>
+                </Pressable>
+              </>
+            )}
+            {onFilesChange && (
               <Pressable
                 onPress={async () => {
                   setShowCompactMenu(false);
@@ -222,6 +285,20 @@ export function AttachmentPicker({
         </Pressable>
         {onFilesChange && (
           <Pressable
+            onPress={handlePickVideos}
+            disabled={!canAddFiles}
+            className={`flex-row items-center gap-2 px-3 py-2 rounded-lg ${
+              canAddFiles ? 'bg-gray-100' : 'bg-gray-50'
+            }`}
+          >
+            <Ionicons name="film-outline" size={20} color={canAddFiles ? '#666' : '#ccc'} />
+            <Text className={`text-sm ${canAddFiles ? 'text-gray-600' : 'text-gray-400'}`}>
+              Video
+            </Text>
+          </Pressable>
+        )}
+        {onFilesChange && (
+          <Pressable
             onPress={handlePickFiles}
             disabled={!canAddFiles}
             className={`flex-row items-center gap-2 px-3 py-2 rounded-lg ${
@@ -260,24 +337,13 @@ export function AttachmentPicker({
             </View>
           ))}
           {selectedFiles.map((file, index) => (
-            <View key={`${file.uri}-${index}`} className="relative bg-white border border-gray-200 rounded-lg px-3 py-2 w-44">
-              <View className="flex-row items-center">
-                <Ionicons name="document-attach-outline" size={20} color="#bd9348" />
-                <Text
-                  className="text-charcoal text-xs ml-2 flex-1"
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  numberOfLines={2}
-                >
-                  {file.name}
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => handleRemoveFile(index)}
-                className="absolute -top-2 -right-2 bg-charcoal rounded-full w-6 h-6 items-center justify-center"
-              >
-                <Ionicons name="close" size={14} color="white" />
-              </Pressable>
-            </View>
+            <SelectedFilePreview
+              key={`${file.uri}-${index}`}
+              file={file}
+              onRemove={() => handleRemoveFile(index)}
+              className="bg-white border border-gray-200"
+              widthClassName="w-44"
+            />
           ))}
         </ScrollView>
       )}

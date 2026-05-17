@@ -8,8 +8,10 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { ResizeMode, Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { Attachment } from '../../types';
+import { formatFileSize, isVideoAttachment } from '../../lib/mediaAttachments';
 
 interface AttachmentGalleryProps {
   attachments: Attachment[];
@@ -25,7 +27,10 @@ export function AttachmentGallery({
   const galleryMaxWidth = maxWidth ?? screenWidth * 0.8;
   const safeAttachments = attachments ?? [];
   const imageAttachments = safeAttachments.filter((attachment) => attachment.mime_type?.startsWith('image/'));
-  const fileAttachments = safeAttachments.filter((attachment) => !attachment.mime_type?.startsWith('image/'));
+  const videoAttachments = safeAttachments.filter(isVideoAttachment);
+  const fileAttachments = safeAttachments.filter((attachment) =>
+    !attachment.mime_type?.startsWith('image/') && !isVideoAttachment(attachment)
+  );
   const selectedImage = selectedIndex !== null ? imageAttachments[selectedIndex] : null;
 
   useEffect(() => {
@@ -196,9 +201,58 @@ export function AttachmentGallery({
     );
   };
 
+  const renderVideos = () => {
+    if (videoAttachments.length === 0) return null;
+
+    const videoHeight = Math.max(150, Math.min(320, galleryMaxWidth * 0.5625));
+
+    return (
+      <View className="mt-2" style={{ gap: 8, maxWidth: galleryMaxWidth }}>
+        {videoAttachments.map((attachment) => {
+          const sizeLabel = formatFileSize(attachment.size);
+
+          return (
+            <View
+              key={attachment.id}
+              className="overflow-hidden rounded-lg bg-black border border-gold/20"
+              style={{ width: galleryMaxWidth }}
+            >
+              <Video
+                source={{ uri: attachment.url }}
+                style={{ width: galleryMaxWidth, height: videoHeight }}
+                resizeMode={ResizeMode.CONTAIN}
+                useNativeControls
+                shouldPlay={false}
+              />
+              <Pressable
+                onPress={() => Linking.openURL(attachment.url)}
+                className="flex-row items-center bg-cream px-3 py-2 active:opacity-70"
+              >
+                <Ionicons name="videocam-outline" size={18} color="#bd9348" />
+                <View className="ml-2 flex-1">
+                  <Text
+                    style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#313130' }}
+                    numberOfLines={1}
+                  >
+                    {attachment.filename || 'Video clip'}
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(49,49,48,0.5)' }}>
+                    {sizeLabel ? `Video clip - ${sizeLabel}` : 'Video clip'}
+                  </Text>
+                </View>
+                <Ionicons name="open-outline" size={16} color="rgba(49,49,48,0.42)" />
+              </Pressable>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   return (
     <>
       {imageAttachments.length > 0 && <View className="mt-2">{renderGrid()}</View>}
+      {renderVideos()}
       {renderFiles()}
 
       {/* Full-screen modal */}

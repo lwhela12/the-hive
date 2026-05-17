@@ -14,6 +14,7 @@ import type { Attachment, Profile } from '../../types';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
 import { VoiceMicButton } from '../ui/VoiceMicButton';
 import { MentionSuggestions } from './MentionSuggestions';
+import { SelectedFilePreview } from '../ui/SelectedFilePreview';
 
 interface BoardReplyComposerProps {
   postId: string;
@@ -235,24 +236,13 @@ export function BoardReplyComposer({
             </View>
           ))}
           {selectedFiles.map((file, index) => (
-            <View key={`${file.uri}-${index}`} className="relative bg-white border border-gold/20 rounded-lg px-3 py-2 w-44">
-              <View className="flex-row items-center">
-                <Ionicons name="document-attach-outline" size={18} color="#bd9348" />
-                <Text
-                  className="text-charcoal text-xs ml-2 flex-1"
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  numberOfLines={2}
-                >
-                  {file.name}
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => setSelectedFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index))}
-                className="absolute -top-1 -right-1 bg-charcoal rounded-full w-5 h-5 items-center justify-center"
-              >
-                <Ionicons name="close" size={12} color="white" />
-              </Pressable>
-            </View>
+            <SelectedFilePreview
+              key={`${file.uri}-${index}`}
+              file={file}
+              onRemove={() => setSelectedFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index))}
+              className="bg-white border border-gold/20"
+              widthClassName="w-44"
+            />
           ))}
         </ScrollView>
       )}

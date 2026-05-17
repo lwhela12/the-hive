@@ -44,6 +44,7 @@ export interface Attachment extends Record<string, unknown> {
   mime_type: string;
   width?: number;
   height?: number;
+  duration_ms?: number;
 }
 
 export interface Community extends Record<string, unknown> {
