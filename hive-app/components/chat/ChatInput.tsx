@@ -10,56 +10,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { MentionSuggestions } from '../ui/MentionSuggestions';
+import { fileToSelectedFile, fileToSelectedImage, isImageFile } from '../../lib/webFileAttachments';
 import type { Profile } from '../../types';
 
 const DRAFT_KEY = 'clive-message';
 const MAX_IMAGES = 5;
 const MAX_FILES = 5;
-
-const isImageFile = (file: File) =>
-  file.type.startsWith('image/') || /\.(gif|jpe?g|png|webp)$/i.test(file.name);
-
-const getFallbackImageMimeType = (file: File) => {
-  if (file.type) return file.type;
-  if (/\.png$/i.test(file.name)) return 'image/png';
-  if (/\.gif$/i.test(file.name)) return 'image/gif';
-  if (/\.webp$/i.test(file.name)) return 'image/webp';
-  return 'image/jpeg';
-};
-
-const readImageSize = (uri: string): Promise<{ width: number; height: number }> => {
-  if (Platform.OS !== 'web' || typeof globalThis.Image === 'undefined') {
-    return Promise.resolve({ width: 0, height: 0 });
-  }
-
-  return new Promise((resolve) => {
-    const image = new globalThis.Image();
-    image.onload = () => resolve({ width: image.naturalWidth || image.width || 0, height: image.naturalHeight || image.height || 0 });
-    image.onerror = () => resolve({ width: 0, height: 0 });
-    image.src = uri;
-  });
-};
-
-const fileToSelectedImage = async (file: File): Promise<SelectedImage> => {
-  const uri = URL.createObjectURL(file);
-  const { width, height } = await readImageSize(uri);
-  return {
-    uri,
-    width,
-    height,
-    fileName: file.name,
-    fileSize: file.size,
-    mimeType: getFallbackImageMimeType(file),
-  };
-};
-
-const fileToSelectedFile = (file: File): SelectedFile => ({
-  uri: URL.createObjectURL(file),
-  name: file.name || 'attachment',
-  size: file.size,
-  mimeType: file.type || 'application/octet-stream',
-  file,
-});
 
 export interface ChatInputAttachments {
   images?: SelectedImage[];

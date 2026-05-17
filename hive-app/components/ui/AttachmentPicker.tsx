@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, Image, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SelectedImage, pickMultipleImages, takePhoto } from '../../lib/imagePicker';
 import { SelectedFile, pickMultipleFiles } from '../../lib/filePicker';
+import { fileToSelectedFile, fileToSelectedImage, isImageFile, isTouchWebDevice } from '../../lib/webFileAttachments';
 
 const MAX_IMAGES = 5;
 const MAX_FILES = 5;
@@ -29,10 +30,12 @@ export function AttachmentPicker({
   compact = false,
 }: AttachmentPickerProps) {
   const [showCompactMenu, setShowCompactMenu] = useState(false);
+  const webAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const remainingSlots = maxImages - selectedImages.length;
   const canAddMore = remainingSlots > 0 && !disabled;
   const remainingFileSlots = maxFiles - selectedFiles.length;
   const canAddFiles = remainingFileSlots > 0 && !disabled && !!onFilesChange;
+  const useNativeWebAttachmentPicker = compact && isTouchWebDevice();
 
   const handlePickImages = async () => {
     if (!canAddMore) return;
@@ -77,6 +80,41 @@ export function AttachmentPicker({
     onFilesChange(updated);
   };
 
+  const handleWebAttachmentInputChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+
+    if (files.length === 0 || disabled) return;
+
+    const imageSlots = Math.max(0, maxImages - selectedImages.length);
+    const fileSlots = Math.max(0, maxFiles - selectedFiles.length);
+    const imageFiles = files.filter(isImageFile).slice(0, imageSlots);
+    const documentFiles = onFilesChange
+      ? files.filter((file) => !isImageFile(file)).slice(0, fileSlots)
+      : [];
+
+    if (imageFiles.length > 0) {
+      const images = await Promise.all(imageFiles.map(fileToSelectedImage));
+      onImagesChange([...selectedImages, ...images].slice(0, maxImages));
+    }
+
+    if (documentFiles.length > 0 && onFilesChange) {
+      const attachments = documentFiles.map(fileToSelectedFile);
+      onFilesChange([...selectedFiles, ...attachments].slice(0, maxFiles));
+    }
+  };
+
+  const handleCompactAttachmentPress = () => {
+    if (useNativeWebAttachmentPicker) {
+      setShowCompactMenu(false);
+      webAttachmentInputRef.current?.click();
+      return;
+    }
+
+    setShowCompactMenu((current) => !current);
+  };
+
   const totalCount = selectedImages.length + selectedFiles.length;
 
   if (compact) {
@@ -84,7 +122,23 @@ export function AttachmentPicker({
 
     return (
       <View className="relative flex-row items-center">
-        {showCompactMenu && (
+        {useNativeWebAttachmentPicker && React.createElement('input', {
+          ref: webAttachmentInputRef,
+          type: 'file',
+          multiple: true,
+          accept: onFilesChange ? '*/*' : 'image/*',
+          tabIndex: -1,
+          'aria-hidden': true,
+          style: {
+            position: 'absolute',
+            width: 1,
+            height: 1,
+            opacity: 0,
+            pointerEvents: 'none',
+          },
+          onChange: handleWebAttachmentInputChange,
+        })}
+        {showCompactMenu && !useNativeWebAttachmentPicker && (
           <View
             className="absolute left-0 bottom-10 bg-white border border-gold/20 rounded-2xl shadow-lg overflow-hidden"
             style={{ minWidth: 178, zIndex: 50, elevation: 10 }}
@@ -133,7 +187,7 @@ export function AttachmentPicker({
           </View>
         )}
         <Pressable
-          onPress={() => setShowCompactMenu((current) => !current)}
+          onPress={handleCompactAttachmentPress}
           disabled={compactDisabled}
           className="p-1 mr-1 rounded-full"
           accessibilityRole="button"
