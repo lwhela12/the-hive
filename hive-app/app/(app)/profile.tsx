@@ -85,7 +85,7 @@ function ProfileHeaderActionPill({ label, onPress }: { label: string; onPress: (
 
 export default function ProfileScreen() {
   const { profile, communityId, communityRole, refreshProfile } = useAuth();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { permissionStatus, requestPermissions } = useNotifications({ enableListeners: false });
   const { grantWish } = useWishes();
   const { pendingSurveys, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
@@ -103,6 +103,7 @@ export default function ProfileScreen() {
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const scrollViewRef = useRef<ScrollView>(null);
+  const compactProfileLandscape = screenWidth > screenHeight && screenHeight < 540;
   const skillsGardenY = useRef(0);
 
   // Editable profile fields
@@ -1387,13 +1388,13 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
-      <AppHeader title="Profile" />
+      {!compactProfileLandscape && <AppHeader title="Profile" />}
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <ScrollView
         ref={scrollViewRef}
         className="flex-1"
-        contentContainerClassName="p-4"
+        contentContainerClassName={compactProfileLandscape ? 'p-1' : 'p-4'}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#bd9348" />
         }
@@ -2062,17 +2063,24 @@ export default function ProfileScreen() {
         {/* Skills Garden */}
         {!initialLoading && <FadeIn delay={50}>
         <View
-          className="mb-6"
+          className={compactProfileLandscape ? 'mb-2' : 'mb-6'}
           onLayout={(event) => {
             skillsGardenY.current = event.nativeEvent.layout.y;
           }}
         >
-          <View className="flex-row items-center justify-between mb-1">
+          <View className={compactProfileLandscape ? 'flex-row items-center justify-between mb-0 px-1' : 'flex-row items-center justify-between mb-1'}>
             <View>
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
+              <Text
+                style={{
+                  fontFamily: 'Lato_700Bold',
+                  fontSize: compactProfileLandscape ? 14 : undefined,
+                  lineHeight: compactProfileLandscape ? 18 : undefined,
+                }}
+                className={compactProfileLandscape ? 'text-charcoal' : 'text-lg text-charcoal'}
+              >
                 Skills Garden 🌸
               </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: compactProfileLandscape ? 9 : 11, color: '#9ca3af', marginTop: compactProfileLandscape ? 0 : 2 }}>
                 {bloomingSkillCount > 0
                   ? `${bloomingSkillCount} skill flower${bloomingSkillCount !== 1 ? 's' : ''} blooming`
                   : 'Seed your Skills Garden'}
