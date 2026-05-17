@@ -906,6 +906,24 @@ export default function ProfileScreen() {
       value: fact,
     })),
   ];
+  const activeWishes = wishes.filter(wish => wish.status !== 'fulfilled');
+  const grantedWishes = wishes.filter(wish => wish.status === 'fulfilled');
+  const renderWishCard = (wish: Wish) => (
+    <WishCombCard
+      key={wish.id}
+      wish={wish}
+      expanded={expandedWishId === wish.id}
+      linkedBoardLabel={
+        wish.board_category_id || wish.source_board_post_id
+          ? getLinkedBoardLabel(wish.board_category) || 'Linked HD board'
+          : null
+      }
+      onToggle={(selectedWish) => {
+        setExpandedWishId(current => current === selectedWish.id ? null : selectedWish.id);
+      }}
+      onManage={setManagingWish}
+    />
+  );
 
   const managingWishIsLinked = !!(managingWish?.board_category_id || managingWish?.source_board_post_id);
   const wishManageModal = (
@@ -1791,22 +1809,29 @@ export default function ProfileScreen() {
               </View>
             ) : (
               <View style={{ gap: 12 }}>
-                {wishes.map((wish) => (
-                  <WishCombCard
-                    key={wish.id}
-                    wish={wish}
-                    expanded={expandedWishId === wish.id}
-                    linkedBoardLabel={
-                      wish.board_category_id || wish.source_board_post_id
-                        ? getLinkedBoardLabel(wish.board_category) || 'Linked HD board'
-                        : null
-                    }
-                    onToggle={(selectedWish) => {
-                      setExpandedWishId(current => current === selectedWish.id ? null : selectedWish.id);
+                {activeWishes.map(renderWishCard)}
+                {grantedWishes.length > 0 ? (
+                  <View
+                    key="granted-divider"
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderTopWidth: activeWishes.length > 0 ? 1 : 0,
+                      borderBottomWidth: 1,
+                      borderColor: 'rgba(222,193,129,0.28)',
+                      backgroundColor: '#fbf1dc',
                     }}
-                    onManage={setManagingWish}
-                  />
-                ))}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8e7a5e' }}>
+                      Granted ({grantedWishes.length})
+                    </Text>
+                    <Ionicons name="sparkles-outline" size={14} color="#bd9348" />
+                  </View>
+                ) : null}
+                {grantedWishes.map(renderWishCard)}
               </View>
             )}
             </View>
