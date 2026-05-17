@@ -215,6 +215,24 @@ const SEED_SURVEY: SurveyQuestion[] = [
     ],
   },
   {
+    prompt: 'What feels most satisfying to finish?',
+    choices: [
+      { icon: '🧺', label: 'A beautifully reset home', detail: 'Everything lands where it belongs', seeds: ['Home Repairs', 'Painting Walls', 'Furniture Building', 'Assembling IKEA', 'Moving Heavy Things'] },
+      { icon: '📋', label: 'A plan that actually works', detail: 'Steps, timing, people, done', seeds: ['Meal Prep', 'Party Planning', 'Surprise Orchestration', 'Budget Magic', 'Spreadsheet Sorcery'] },
+      { icon: '🎬', label: 'A polished little artifact', detail: 'The final edit sings', seeds: ['Video Editing', 'Photography', 'Graphic Design', 'Writing', 'Proofreading'] },
+      { icon: '🌱', label: 'Something living and tended', detail: 'Slow care that shows', seeds: ['Gardening', 'Plant Parenting', 'Composting', 'Foraging', 'Beekeeping'] },
+    ],
+  },
+  {
+    prompt: 'Choose your favorite kind of brave.',
+    choices: [
+      { icon: '🎤', label: 'Being seen', detail: 'Voice out, heart open', seeds: ['Singing', 'Voice Acting', 'Stand-up Comedy', 'Storytelling', 'Karaoke Domination'] },
+      { icon: '🧗', label: 'Trying the hard move', detail: 'Body first, doubt second', seeds: ['Rock Climbing', 'Pole Dancing', 'Trapeze', 'Aerial Acrobatics', 'Handstands'] },
+      { icon: '💌', label: 'Saying the true thing', detail: 'Tender honesty, clean signal', seeds: ['Deep Listening', 'Couples Counseling', 'Intimacy Coaching', 'Pep Talks', 'Tough Love Delivery'] },
+      { icon: '🛸', label: 'Following the weird idea', detail: 'A little impossible, a little perfect', seeds: ['Ocean Boiling', 'Starship Navigation', 'Time Travel Planning', 'Parallel Universe Hopping', 'Dream Interpretation'] },
+    ],
+  },
+  {
     prompt: 'A future-you badge would say...',
     choices: [
       { icon: '🏡', label: 'Builder of cozy worlds', detail: 'Homes, rituals, care systems', seeds: ['Cooking', 'Home Repairs', 'Furniture Building', 'Plant Parenting', 'Party Planning'] },
@@ -1332,8 +1350,8 @@ function SkillPlant({
     Animated.timing(grow, {
       toValue: 1,
       useNativeDriver: true,
-      duration: justPlanted ? 1280 : 780,
-      easing: justPlanted ? Easing.bezier(0.16, 0.86, 0.18, 1) : Easing.out(Easing.cubic),
+      duration: justPlanted ? 2060 : 780,
+      easing: justPlanted ? Easing.bezier(0.22, 0.78, 0.1, 1) : Easing.out(Easing.cubic),
     }).start(({ finished }) => {
       if (finished && justPlanted) {
         onEntryComplete(skill);
@@ -1414,8 +1432,8 @@ function SkillPlant({
     Animated.timing(depart, {
       toValue: 1,
       useNativeDriver: true,
-      duration: 1680,
-      easing: Easing.bezier(0.54, 0.02, 0.12, 1),
+      duration: 1980,
+      easing: Easing.bezier(0.52, 0.02, 0.1, 1),
     }).start(({ finished }) => {
       if (finished) {
         onReturnToSeed(skill, returnSlotIndex);
@@ -1446,20 +1464,28 @@ function SkillPlant({
   };
 
   const showReseedButton = editable && !isReseeding && (selected || isHovered);
-  const entryLift = justPlanted ? Math.max(138, GROUND_HEIGHT * 1.42) : 28;
+  const entryLift = justPlanted ? Math.max(190, GROUND_HEIGHT * 1.82) : 28;
   const soilDrop = Math.max(138, height - top - GROUND_HEIGHT * 0.03 - plantHeight * 0.48);
   const entryOriginOffset = justPlanted && entryOriginX !== undefined
     ? entryOriginX * width - centerX
     : 0;
   const entryTranslateX = grow.interpolate({ inputRange: [0, 1], outputRange: [entryOriginOffset, 0] });
-  const entryTranslateY = grow.interpolate({ inputRange: [0, 1], outputRange: [entryLift, 0] });
-  const entryScaleX = grow.interpolate({ inputRange: [0, 0.48, 0.78, 1], outputRange: [justPlanted ? 0.12 : 0.84, 0.36, 1.08, 1] });
-  const entryScaleY = grow.interpolate({ inputRange: [0, 0.48, 0.78, 1], outputRange: [justPlanted ? 0.06 : 0.84, 1.22, 0.96, 1] });
-  const entryOpacity = grow.interpolate({ inputRange: [0, 0.16, 0.52, 1], outputRange: [0, 0.72, 1, 1] });
+  const entryTranslateY = justPlanted
+    ? grow.interpolate({ inputRange: [0, 0.34, 0.72, 0.9, 1], outputRange: [entryLift, entryLift * 0.58, entryLift * 0.14, -7, 0] })
+    : grow.interpolate({ inputRange: [0, 1], outputRange: [entryLift, 0] });
+  const entryScaleX = justPlanted
+    ? grow.interpolate({ inputRange: [0, 0.2, 0.48, 0.76, 1], outputRange: [0.18, 0.14, 0.32, 1.12, 1] })
+    : grow.interpolate({ inputRange: [0, 0.48, 0.78, 1], outputRange: [0.84, 0.36, 1.08, 1] });
+  const entryScaleY = justPlanted
+    ? grow.interpolate({ inputRange: [0, 0.2, 0.48, 0.76, 1], outputRange: [0.08, 0.5, 1.44, 0.92, 1] })
+    : grow.interpolate({ inputRange: [0, 0.48, 0.78, 1], outputRange: [0.84, 1.22, 0.96, 1] });
+  const entryOpacity = justPlanted
+    ? grow.interpolate({ inputRange: [0, 0.02, 0.18, 1], outputRange: [0.6, 0.78, 1, 1] })
+    : grow.interpolate({ inputRange: [0, 0.16, 0.52, 1], outputRange: [0.72, 0.86, 1, 1] });
   const departTranslateY = depart.interpolate({ inputRange: [0, 1], outputRange: [0, soilDrop] });
-  const departScaleX = depart.interpolate({ inputRange: [0, 0.42, 0.76, 0.92, 1], outputRange: [1, 1.12, 0.72, 0.38, 0.16] });
-  const departScaleY = depart.interpolate({ inputRange: [0, 0.42, 0.76, 0.92, 1], outputRange: [1, 0.9, 0.24, 0.11, 0.04] });
-  const departOpacity = depart.interpolate({ inputRange: [0, 0.84, 0.96, 1], outputRange: [1, 0.9, 0.5, 0] });
+  const departScaleX = depart.interpolate({ inputRange: [0, 0.38, 0.72, 0.9, 1], outputRange: [1, 1.16, 0.8, 0.44, 0.16] });
+  const departScaleY = depart.interpolate({ inputRange: [0, 0.38, 0.72, 0.9, 1], outputRange: [1, 0.86, 0.28, 0.12, 0.04] });
+  const departOpacity = depart.interpolate({ inputRange: [0, 0.86, 0.97, 1], outputRange: [1, 0.92, 0.58, 0] });
 
   const label = showLabel ? (
     <View
@@ -2060,19 +2086,30 @@ function getSurveySuggestions(
   questions: SurveyQuestion[] = SEED_SURVEY
 ) {
   const scores = new Map<string, number>();
+  const registerSeed = (seed: string, score: number) => {
+    const normalized = normalizeSkillName(seed);
+    if (!normalized || plantedNames.has(normalized)) return;
+    scores.set(seed, (scores.get(seed) ?? 0) + score);
+  };
 
   answers.forEach((choiceIndex, questionIndex) => {
     const choice = questions[questionIndex]?.choices[choiceIndex];
     if (!choice) return;
 
     choice.seeds.forEach((seed, seedIndex) => {
-      const normalized = normalizeSkillName(seed);
-      if (plantedNames.has(normalized)) return;
-      scores.set(seed, (scores.get(seed) ?? 0) + 12 - seedIndex);
+      registerSeed(seed, 12 - seedIndex);
     });
   });
 
-  const ranked = [...scores.entries()]
+  const surveyBackfillSeeds = questions.flatMap(question =>
+    question.choices.flatMap(choice => choice.seeds)
+  );
+  const categoryBackfillSeeds = CATEGORY_DEFS.flatMap(category => category.skills);
+  [...surveyBackfillSeeds, ...categoryBackfillSeeds].forEach((seed, index) => {
+    registerSeed(seed, -1000 - index);
+  });
+
+  return [...scores.entries()]
     .map(([description, score]) => ({
       description,
       score: score * 100000 + hashString(description),
@@ -2083,8 +2120,6 @@ function getSurveySuggestions(
       description: item.description,
       enthusiasmLevel: index < 3 ? 5 : index < 6 ? 3 : 1,
     }));
-
-  return ranked;
 }
 
 function SeedSurvey({
