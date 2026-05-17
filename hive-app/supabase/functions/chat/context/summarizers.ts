@@ -1,5 +1,5 @@
 // Claude-Powered Summarizers for Smart Context Management
-// Generates concise summaries of conversations, board activity, messages, and meetings
+// Generates concise summaries of conversations, board activity, and meetings.
 
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -141,94 +141,6 @@ Summary:`;
     return { summary: textBlock?.text || '', count: posts.length };
   } catch (error) {
     console.error('Error summarizing board activity:', error);
-    return { summary: '', count: 0 };
-  }
-}
-
-/**
- * Summarize recent human-to-human chat messages
- * Focuses on rooms the user is a member of
- */
-export async function summarizeRoomMessages(
-  supabase: SupabaseClient,
-  communityId: string,
-  userId: string
-): Promise<{ summary: string; count: number }> {
-  // Get rooms the user is a member of
-  const { data: memberships } = await supabase
-    .from('chat_room_members')
-    .select('room_id')
-    .eq('user_id', userId);
-
-  if (!memberships || memberships.length === 0) {
-    return { summary: '', count: 0 };
-  }
-
-  const roomIds = memberships.map((m) => m.room_id);
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-  // Get recent messages from these rooms
-  const { data: messages } = await supabase
-    .from('room_messages')
-    .select(
-      `
-      content,
-      created_at,
-      room:chat_rooms(name, room_type),
-      sender:profiles(name)
-    `
-    )
-    .in('room_id', roomIds)
-    .eq('community_id', communityId)
-    .is('deleted_at', null)
-    .gte('created_at', sevenDaysAgo.toISOString())
-    .order('created_at', { ascending: false })
-    .limit(50);
-
-  if (!messages || messages.length === 0) {
-    return { summary: '', count: 0 };
-  }
-
-  // Group by room and format
-  const roomGroups: Record<string, string[]> = {};
-  messages.forEach((m: any) => {
-    const roomName = m.room?.name || (m.room?.room_type === 'dm' ? 'DM' : 'Unknown');
-    if (!roomGroups[roomName]) {
-      roomGroups[roomName] = [];
-    }
-    roomGroups[roomName].push(`${m.sender?.name || 'Unknown'}: ${m.content.slice(0, 100)}`);
-  });
-
-  const formattedMessages = Object.entries(roomGroups)
-    .map(([room, msgs]) => `[${room}]\n${msgs.slice(0, 10).join('\n')}`)
-    .join('\n\n');
-
-  const prompt = `Summarize recent chat activity in HIVE community chat rooms from the last 7 days.
-
-For community rooms: Summarize main discussion topics, any decisions made, questions asked, and important info shared.
-For DMs/group chats: Note who the user has been chatting with and the key topics discussed.
-
-Be specific about what was discussed - include names, topics, and any action items or plans mentioned.
-Keep summary under 200 words but be informative.
-
-Recent chat activity:
-${formattedMessages}
-
-Summary:`;
-
-  try {
-    const anthropic = getAnthropicClient();
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 400,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const textBlock = response.content.find((block): block is Anthropic.TextBlock => block.type === 'text');
-    return { summary: textBlock?.text || '', count: messages.length };
-  } catch (error) {
-    console.error('Error summarizing room messages:', error);
     return { summary: '', count: 0 };
   }
 }

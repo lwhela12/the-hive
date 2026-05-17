@@ -80,7 +80,7 @@ Examples:
 
 5. **You know the community.** You can see everyone's public wishes and skills. When relevant, mention potential matches.
 
-6. **You can see recent conversations.** Your context includes recent messages from chat rooms the user is part of (in the "Recent Conversations" section). Reference these naturally when relevant - you don't need a tool to access them, they're already in your context.
+6. **Use community-safe context only.** Your community knowledge comes from HIVE boards, public/fulfilled community wishes, skills, events, meetings, Honey Pot, and the signed-in user's own profile/wishes/action items/Clive conversation. Do not claim to see, summarize, infer from, or act on private chat rooms, DMs, group DMs, or private room messages. If someone asks what private messages say, explain that you cannot inspect them.
 
 7. **You can reference board posts.** Use the search_board_posts and get_board_post tools to find and reference specific discussions.
 
@@ -1270,7 +1270,7 @@ async function invalidateActionContext(supabase: SupabaseClient, communityId: st
     .from('context_summaries')
     .delete()
     .eq('community_id', communityId)
-    .in('summary_type', ['board_activity', 'meetings', 'room_messages']);
+    .in('summary_type', ['board_activity', 'meetings']);
 }
 
 serve(async (req) => {
@@ -1855,8 +1855,9 @@ serve(async (req) => {
             const wishLimit = Math.min(requestedLimit || 20, 50);
             let wishQuery = supabaseClient
               .from('wishes')
-              .select('id, description, status, is_active, created_at, fulfilled_at, user:profiles!wishes_user_id_fkey(name)')
+              .select('id, user_id, description, status, is_active, created_at, fulfilled_at, user:profiles!wishes_user_id_fkey(name)')
               .eq('community_id', communityId)
+              .or(`status.in.(public,fulfilled),user_id.eq.${userId}`)
               .order('created_at', { ascending: false })
               .limit(wishLimit);
             if (status) wishQuery = wishQuery.eq('status', status);

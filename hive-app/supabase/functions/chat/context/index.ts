@@ -1,5 +1,5 @@
 // Smart Context Builder for LLM Conversations
-// Assembles comprehensive context from all user-visible data
+// Assembles approved user and community context for Clive.
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import type {
@@ -10,9 +10,8 @@ import type {
   UserContextData,
   CommunityContextData,
   CachedSummary,
-  ContextSummaryType,
+  CommunityContextSummaryType,
   BoardPostIndexItem,
-  RecentRoomMessage,
 } from './types.ts';
 
 // Rough token estimation (1 token ~= 4 characters)
@@ -26,6 +25,11 @@ function trimToTokens(text: string, maxTokens: number): string {
   if (text.length <= maxChars) return text;
   return text.slice(0, maxChars - 20) + '... [truncated]';
 }
+
+const COMMUNITY_CONTEXT_SUMMARY_TYPES: CommunityContextSummaryType[] = [
+  'board_activity',
+  'meetings',
+];
 
 // Check if a cached summary is still valid
 function isCacheValid(summary: CachedSummary | null): boolean {
@@ -64,28 +68,25 @@ export async function buildContext(params: BuildContextParams): Promise<ContextR
   );
   metadata.conversationMessageCount = messageCount;
 
-  // 4. Get cached summaries, board post index, and recent room messages (only for default mode)
+  // 4. Get community-safe cached summaries and board post index (only for default mode).
+  // Private chat room messages are intentionally excluded from Clive context.
   let boardSummary = '';
-  let messagesSummary = '';
   let meetingsSummary = '';
   let boardPostIndex: BoardPostIndexItem[] = [];
-  let recentRoomMessages: RecentRoomMessage[] = [];
 
   if (mode === 'default') {
-    // Fetch cached summaries, board post index, and recent room messages in parallel.
+    // Fetch cached summaries and board post index in parallel.
     // Keep live chat fast: never generate LLM summaries on the request path.
-    const [boardSummaryResult, messagesSummaryResult, meetingsSummaryResult, boardIndexResult, roomMessagesResult] = await Promise.all([
-      getOrGenerateSummary(supabase, communityId, userId, 'board_activity', metadata),
-      getOrGenerateSummary(supabase, communityId, userId, 'room_messages', metadata),
-      getOrGenerateSummary(supabase, communityId, userId, 'meetings', metadata),
+    const [summaryResults, boardIndexResult] = await Promise.all([
+      Promise.all(
+        COMMUNITY_CONTEXT_SUMMARY_TYPES.map((summaryType) =>
+          getOrGenerateSummary(supabase, communityId, summaryType, metadata)
+        )
+      ),
       fetchBoardPostIndex(supabase, communityId),
-      fetchRecentRoomMessages(supabase, userId, communityId),
     ]);
-    boardSummary = boardSummaryResult;
-    messagesSummary = messagesSummaryResult;
-    meetingsSummary = meetingsSummaryResult;
+    [boardSummary, meetingsSummary] = summaryResults;
     boardPostIndex = boardIndexResult;
-    recentRoomMessages = roomMessagesResult;
   }
 
   // 5. Assemble the final context string
@@ -97,9 +98,7 @@ export async function buildContext(params: BuildContextParams): Promise<ContextR
     communityContext,
     conversationSummary,
     boardPostIndex,
-    recentRoomMessages,
     boardSummary,
-    messagesSummary,
     meetingsSummary,
     mode,
   });
@@ -231,69 +230,6 @@ async function fetchCommunityContext(
       description: s.description,
     })),
   };
-}
-
-/**
- * Fetch recent room messages that the user can see
- * Returns raw messages from rooms the user is a member of (last 3 days)
- */
-async function fetchRecentRoomMessages(
-  supabase: SupabaseClient,
-  userId: string,
-  communityId: string
-): Promise<RecentRoomMessage[]> {
-  // Get rooms the user is a member of
-  const { data: memberships } = await supabase
-    .from('chat_room_members')
-    .select('room_id')
-    .eq('user_id', userId);
-
-  if (!memberships || memberships.length === 0) {
-    console.log('[Context] User has no room memberships');
-    return [];
-  }
-
-  const roomIds = memberships.map((m) => m.room_id);
-  const threeDaysAgo = new Date();
-  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-
-  console.log('[Context] Fetching room messages for user from', roomIds.length, 'rooms');
-
-  // Get recent messages from these rooms
-  const { data: messages, error } = await supabase
-    .from('room_messages')
-    .select(`
-      content,
-      created_at,
-      room:chat_rooms(name, room_type),
-      sender:profiles(name)
-    `)
-    .in('room_id', roomIds)
-    .eq('community_id', communityId)
-    .is('deleted_at', null)
-    .gte('created_at', threeDaysAgo.toISOString())
-    .order('created_at', { ascending: false })
-    .limit(30);
-
-  if (error) {
-    console.error('[Context] Error fetching room messages:', error);
-    return [];
-  }
-
-  if (!messages || messages.length === 0) {
-    console.log('[Context] No recent room messages found');
-    return [];
-  }
-
-  console.log('[Context] Found', messages.length, 'recent room messages');
-
-  return messages.map((m: any) => ({
-    roomName: m.room?.name || (m.room?.room_type === 'dm' ? 'DM' : 'Chat'),
-    roomType: m.room?.room_type || 'community',
-    senderName: m.sender?.name || 'Unknown',
-    content: m.content,
-    createdAt: m.created_at,
-  }));
 }
 
 /**
@@ -461,13 +397,12 @@ async function getOrGenerateConversationSummary(
 }
 
 /**
- * Get or generate a cached summary (board, messages, meetings)
+ * Get or generate a cached community-safe summary.
  */
 async function getOrGenerateSummary(
   supabase: SupabaseClient,
   communityId: string,
-  userId: string,
-  summaryType: ContextSummaryType,
+  summaryType: CommunityContextSummaryType,
   metadata: ContextMetadata
 ): Promise<string> {
   // Check for cached summary
@@ -475,7 +410,7 @@ async function getOrGenerateSummary(
     .from('context_summaries')
     .select('summary_content, expires_at')
     .eq('community_id', communityId)
-    .eq('user_id', summaryType === 'room_messages' ? userId : null)
+    .is('user_id', null)
     .eq('summary_type', summaryType)
     .is('conversation_id', null)
     .single();
@@ -497,9 +432,7 @@ function assembleContext(data: {
   communityContext: CommunityContextData;
   conversationSummary: string;
   boardPostIndex: BoardPostIndexItem[];
-  recentRoomMessages: RecentRoomMessage[];
   boardSummary: string;
-  messagesSummary: string;
   meetingsSummary: string;
   mode: 'default' | 'onboarding';
 }): string {
@@ -595,43 +528,10 @@ ${JSON.stringify(postIndex, null, 2)}
       console.log('[Context] No board posts to add to context');
     }
 
-    // Recent room messages (raw messages from last 3 days for detail)
-    if (data.recentRoomMessages.length > 0) {
-      // Group messages by room
-      const messagesByRoom: Record<string, string[]> = {};
-      for (const msg of data.recentRoomMessages) {
-        const roomKey = msg.roomName;
-        if (!messagesByRoom[roomKey]) {
-          messagesByRoom[roomKey] = [];
-        }
-        // Format: "Name: message content (timestamp)"
-        const timeStr = new Date(msg.createdAt).toLocaleString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-        });
-        messagesByRoom[roomKey].push(`${msg.senderName}: ${msg.content.slice(0, 200)}${msg.content.length > 200 ? '...' : ''} (${timeStr})`);
-      }
-
-      const formattedRoomMessages = Object.entries(messagesByRoom)
-        .map(([room, msgs]) => `### ${room}\n${msgs.join('\n')}`)
-        .join('\n\n');
-
-      sections.push(`## Recent Conversations (Last 3 Days)
-${formattedRoomMessages}`);
-      console.log('[Context] Added', data.recentRoomMessages.length, 'recent room messages to context');
-    }
-
     // Cached summaries (only include if we have content)
     if (data.boardSummary) {
       sections.push(`## Recent Board Activity Summary
 ${data.boardSummary}`);
-    }
-
-    if (data.messagesSummary) {
-      sections.push(`## Chat Activity Summary (Last 7 Days)
-${data.messagesSummary}`);
     }
 
     if (data.meetingsSummary) {

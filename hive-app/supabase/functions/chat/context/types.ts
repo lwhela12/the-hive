@@ -1,9 +1,9 @@
 // Context Builder Types for Smart LLM Context Management
 
-import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
 // Summary types matching the database enum
+// room_messages is a legacy enum value and is not fed into Clive context.
 export type ContextSummaryType = 'conversation' | 'board_activity' | 'room_messages' | 'meetings';
+export type CommunityContextSummaryType = 'board_activity' | 'meetings';
 
 // Parameters for building context
 export interface BuildContextParams {
@@ -101,15 +101,6 @@ export interface CommunitySkillData {
   description: string;
 }
 
-// Recent room message for context
-export interface RecentRoomMessage {
-  roomName: string;
-  roomType: 'community' | 'dm' | 'group';
-  senderName: string;
-  content: string;
-  createdAt: string;
-}
-
 // Board post index for quick reference
 export interface BoardPostIndexItem {
   id: string;
@@ -143,7 +134,6 @@ export interface TokenBudget {
   eventsAndHoneyPot: number;
   boardPostIndex: number;
   boardSummary: number;
-  messagesSummary: number;
   meetingsSummary: number;
   conversationSummary: number;
   recentMessages: number;
@@ -158,7 +148,6 @@ export const DEFAULT_TOKEN_BUDGET: TokenBudget = {
   eventsAndHoneyPot: 150,
   boardPostIndex: 300,
   boardSummary: 200,
-  messagesSummary: 150,
   meetingsSummary: 150,
   conversationSummary: 300,
   recentMessages: 1000,
@@ -168,6 +157,6 @@ export const DEFAULT_TOKEN_BUDGET: TokenBudget = {
 export const CACHE_EXPIRATION = {
   conversation: 0, // Invalidated by trigger on new message
   board_activity: 60 * 60 * 1000, // 1 hour
-  room_messages: 60 * 60 * 1000, // 1 hour
+  room_messages: 60 * 60 * 1000, // Legacy only; Clive context excludes chat rooms/DMs.
   meetings: 24 * 60 * 60 * 1000, // 24 hours
 };
