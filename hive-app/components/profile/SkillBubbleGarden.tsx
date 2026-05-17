@@ -306,22 +306,23 @@ function getStage(level: number) {
 
 function getEmbeddedLabelLines(label: string) {
   const words = label.trim().split(/\s+/).filter(Boolean);
-  if (words.length <= 1) return [label.trim().slice(0, 14)];
+  const truncate = (line: string, max = 15) => line.length > max ? `${line.slice(0, max - 1)}…` : line;
+  if (words.length <= 1) return [truncate(label.trim())];
 
   const lines: string[] = [];
   let current = '';
   words.forEach(word => {
     const next = current ? `${current} ${word}` : word;
-    if (next.length <= 12 || lines.length === 0 && words.length === 2) {
+    if (next.length <= 11) {
       current = next;
       return;
     }
-    lines.push(current);
+    if (current) lines.push(current);
     current = word;
   });
   if (current) lines.push(current);
 
-  return lines.slice(0, 2).map(line => line.length > 14 ? `${line.slice(0, 12)}…` : line);
+  return lines.slice(0, 3).map(line => truncate(line));
 }
 
 function getDefaultPosition(skill: GardenSkill, index: number, count: number) {
@@ -360,9 +361,9 @@ function getFrontRowScale(width: number) {
   const effectiveWidth = Math.max(width || 0, 360);
   const fullBloomWidth = STAGES[STAGES.length - 1].labelWidth;
   const sidePadding = clamp(effectiveWidth * 0.045, effectiveWidth < 520 ? 18 : 30, effectiveWidth > 1280 ? 96 : 58);
-  const idealScale = ((effectiveWidth - sidePadding * 2) / (GARDEN_CAPACITY * fullBloomWidth)) * 1.38;
-  const minScale = effectiveWidth < 520 ? 0.46 : 0.66;
-  const maxScale = effectiveWidth > 1280 ? 1.28 : effectiveWidth > 860 ? 1.08 : 0.88;
+  const idealScale = ((effectiveWidth - sidePadding * 2) / (GARDEN_CAPACITY * fullBloomWidth)) * 1.78;
+  const minScale = effectiveWidth < 520 ? 0.54 : 0.82;
+  const maxScale = effectiveWidth > 1280 ? 1.46 : effectiveWidth > 860 ? 1.22 : 0.98;
 
   return clamp(idealScale, minScale, maxScale);
 }
@@ -377,14 +378,17 @@ function getFrontRowCenterX(index: number, count: number, width: number) {
   return sidePadding + (usableWidth * slotIndex) / (GARDEN_CAPACITY - 1);
 }
 
-function getFrontRowAnchorY(height: number, width: number) {
-  return height - clamp(width < 520 ? 34 : 48, 32, 58);
+function getFrontRowAnchorY(height: number, width: number, index: number) {
+  const baseAnchor = height - clamp(width < 520 ? 34 : 48, 32, 58);
+  const stagger = index % 2 === 0 ? clamp(width < 520 ? 28 : 54, 28, 68) : 0;
+
+  return baseAnchor - stagger;
 }
 
 function getMeadowHeight(skillCount: number, width: number) {
-  const base = skillCount === 0 ? (width < 420 ? 310 : 350) : (width < 420 ? 430 : 480);
+  const base = skillCount === 0 ? (width < 420 ? 330 : 370) : (width < 420 ? 500 : 560);
   const extra = Math.max(0, skillCount - (width < 420 ? 10 : 18)) * (width < 420 ? 8 : 5);
-  return clamp(base + extra, base, width < 420 ? 660 : 720);
+  return clamp(base + extra, base, width < 420 ? 720 : 780);
 }
 
 function normalizeSkillName(skill: string) {
@@ -447,7 +451,15 @@ function useWildflowerStyles() {
   }, []);
 }
 
-function MeadowAtmosphere({ width, height }: { width: number; height: number }) {
+function MeadowAtmosphere({
+  width,
+  height,
+  showSun = true,
+}: {
+  width: number;
+  height: number;
+  showSun?: boolean;
+}) {
   const hillHeight = Math.max(260, height - GROUND_HEIGHT + 28);
 
   return (
@@ -494,22 +506,24 @@ function MeadowAtmosphere({ width, height }: { width: number; height: number }) 
           opacity="0.78"
         />
       </Svg>
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          left: Math.max(16, width * 0.06),
-          top: Math.max(18, height * 0.06),
-          width: Math.min(190, width * 0.28),
-          height: Math.min(190, width * 0.28),
-          borderRadius: 999,
-          backgroundColor: 'rgba(255,229,110,0.38)',
-          shadowColor: '#f2c85a',
-          shadowOpacity: 0.36,
-          shadowRadius: 52,
-          shadowOffset: { width: 0, height: 0 },
-        }}
-      />
+      {showSun && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: Math.max(16, width * 0.06),
+            top: Math.max(18, height * 0.06),
+            width: Math.min(190, width * 0.28),
+            height: Math.min(190, width * 0.28),
+            borderRadius: 999,
+            backgroundColor: 'rgba(255,229,110,0.38)',
+            shadowColor: '#f2c85a',
+            shadowOpacity: 0.36,
+            shadowRadius: 52,
+            shadowOffset: { width: 0, height: 0 },
+          }}
+        />
+      )}
       {width > 0 && DISTANT_BLOOMS.map((bloom, index) => (
         <View
           pointerEvents="none"
@@ -613,8 +627,8 @@ function renderFlowerCenterLabel({
 
   const lines = getEmbeddedLabelLines(label);
   const longestLine = lines.reduce((longest, line) => Math.max(longest, line.length), 0);
-  const fontSize = clamp(radius * 0.27 - Math.max(0, longestLine - 9) * 0.12, 4.8, 13.5);
-  const lineGap = fontSize * 1.08;
+  const fontSize = clamp(radius * (lines.length > 2 ? 0.23 : 0.27) - Math.max(0, longestLine - 9) * 0.12, 4.8, 13.8);
+  const lineGap = fontSize * 1.02;
   const firstLineY = cy - ((lines.length - 1) * lineGap) / 2 + fontSize * 0.34;
 
   return (
@@ -810,8 +824,9 @@ function WildflowerSvg({
   }
 
   const full = level >= 4;
-  const bloomRadius = [0, 18, 25, 33, 43, 54][level] ?? 33;
-  const topY = baseY - (48 + level * 18);
+  const bloomRadius = [0, 24, 36, 50, 64, 78][level] ?? 50;
+  const stemLift = [0, 58, 76, 92, 108, 124][level] ?? 92;
+  const topY = baseY - stemLift;
   const flowerX = cx + (species === 'poppy' ? -3 : species === 'lavender' ? 2 : 0);
   const flowerY = topY;
 
@@ -1041,7 +1056,7 @@ function SkillPlant({
   const spriteHeight = (stage.height + 18) * rowScale * (level >= 4 ? 1.04 : 1);
   const plantHeight = spriteHeight + (showLabel ? LABEL_HEIGHT : 8);
   const centerX = getFrontRowCenterX(index, count, width);
-  const anchorY = getFrontRowAnchorY(height, width);
+  const anchorY = getFrontRowAnchorY(height, width, index);
   const left = clamp(centerX - plantWidth / 2, -plantWidth * 0.28, Math.max(-plantWidth * 0.28, width - plantWidth * 0.72));
   const top = clamp(anchorY - plantHeight, 6, Math.max(6, height - plantHeight - 4));
   const labelFont = clamp(12 * rowScale - Math.max(0, skill.description.length - 22) * 0.06, 8.4, 12);
@@ -1665,70 +1680,73 @@ function SeedSurvey({
         accessibilityRole="button"
         accessibilityLabel="Seed your garden"
         style={{
-          minHeight: hasSkills ? 72 : 178,
-          borderRadius: hasSkills ? 22 : 24,
+          width: hasSkills ? 214 : undefined,
+          maxWidth: '100%',
+          minHeight: hasSkills ? 214 : 190,
+          borderRadius: hasSkills ? 999 : 28,
           borderWidth: 1,
-          borderColor: hasSkills ? 'rgba(255,253,247,0.68)' : 'rgba(255,253,247,0.62)',
-          backgroundColor: hasSkills ? 'rgba(255,253,247,0.92)' : 'rgba(255,253,247,0.9)',
-          paddingHorizontal: hasSkills ? 13 : 18,
-          paddingVertical: hasSkills ? 12 : 18,
+          borderColor: hasSkills ? 'rgba(255,253,247,0.54)' : 'rgba(255,253,247,0.62)',
+          backgroundColor: hasSkills ? 'rgba(255,224,105,0.82)' : 'rgba(255,244,187,0.92)',
+          paddingHorizontal: hasSkills ? 22 : 18,
+          paddingVertical: hasSkills ? 18 : 18,
           marginBottom: hasSkills ? 0 : 0,
-          alignItems: hasSkills ? 'stretch' : 'center',
+          alignItems: 'center',
           justifyContent: 'center',
-          gap: hasSkills ? 12 : 14,
-          shadowColor: '#315d4e',
-          shadowOpacity: hasSkills ? 0.14 : 0.16,
-          shadowRadius: hasSkills ? 18 : 28,
-          shadowOffset: { width: 0, height: hasSkills ? 8 : 12 },
+          gap: hasSkills ? 10 : 14,
+          shadowColor: hasSkills ? '#f2c85a' : '#315d4e',
+          shadowOpacity: hasSkills ? 0.3 : 0.16,
+          shadowRadius: hasSkills ? 36 : 28,
+          shadowOffset: { width: 0, height: hasSkills ? 10 : 12 },
           elevation: hasSkills ? 3 : 0,
           ...(Platform.OS === 'web'
             ? ({
                 cursor: 'pointer',
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
+                backgroundImage: hasSkills
+                  ? 'radial-gradient(circle at 42% 35%, rgba(255,253,210,0.96) 0%, rgba(255,228,111,0.88) 48%, rgba(255,207,81,0.68) 100%)'
+                  : 'radial-gradient(circle at 48% 34%, rgba(255,253,226,0.98) 0%, rgba(255,237,152,0.92) 100%)',
               } as any)
             : {}),
         }}
       >
         {hasSkills ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <>
             <View
               style={{
-                width: 34,
-                height: 34,
-                borderRadius: 17,
-                backgroundColor: '#eef8e8',
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: 'rgba(255,253,247,0.66)',
                 borderWidth: 1,
-                borderColor: 'rgba(92,157,91,0.2)',
+                borderColor: 'rgba(92,157,91,0.18)',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <BloomMark category={FALLBACK_CATEGORY} size={22} />
+              <BloomMark category={FALLBACK_CATEGORY} size={30} />
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text selectable={false} numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: 13 }}>
-                Skills Garden
-              </Text>
-              <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 11, lineHeight: 14, marginTop: 2 }}>
-                Need help? Take the quiz to populate your garden.
-              </Text>
-            </View>
+            <Text selectable={false} numberOfLines={2} style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: 15, lineHeight: 18, textAlign: 'center' }}>
+              Skills Garden Quiz
+            </Text>
+            <Text selectable={false} numberOfLines={3} style={{ fontFamily: 'Lato_400Regular', color: '#52755b', fontSize: 11.5, lineHeight: 15, textAlign: 'center' }}>
+              Need help? Let the sun pick a few blooms.
+            </Text>
             <View
               style={{
-                minHeight: 30,
+                minHeight: 34,
                 borderRadius: 999,
                 backgroundColor: '#315d4e',
-                paddingHorizontal: 11,
+                paddingHorizontal: 16,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 11 }}>
+              <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 12 }}>
                 Begin
               </Text>
             </View>
-          </View>
+          </>
         ) : (
           <>
             <View style={{ flexDirection: 'row', gap: 9 }}>
@@ -1775,16 +1793,16 @@ function SeedSurvey({
   return (
     <View
       style={{
-        borderRadius: 18,
+        borderRadius: hasSkills ? 32 : 24,
         borderWidth: 1,
-        borderColor: hasSkills ? 'rgba(92,157,91,0.24)' : 'rgba(255,253,247,0.62)',
-        backgroundColor: hasSkills ? '#eef8e8' : 'rgba(255,253,247,0.92)',
-        padding: hasSkills ? 12 : 14,
+        borderColor: hasSkills ? 'rgba(255,223,118,0.62)' : 'rgba(255,253,247,0.62)',
+        backgroundColor: hasSkills ? 'rgba(255,250,215,0.97)' : 'rgba(255,253,247,0.92)',
+        padding: hasSkills ? 14 : 14,
         marginBottom: hasSkills ? 12 : 0,
-        shadowColor: hasSkills ? '#5b3a22' : '#315d4e',
-        shadowOpacity: hasSkills ? 0.04 : 0.12,
-        shadowRadius: hasSkills ? 8 : 24,
-        shadowOffset: { width: 0, height: hasSkills ? 2 : 10 },
+        shadowColor: hasSkills ? '#f2c85a' : '#315d4e',
+        shadowOpacity: hasSkills ? 0.18 : 0.12,
+        shadowRadius: hasSkills ? 28 : 24,
+        shadowOffset: { width: 0, height: hasSkills ? 10 : 10 },
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
@@ -2090,6 +2108,9 @@ export function SkillBubbleGarden({
     );
   }, [visibleSkills]);
   const meadowHeight = getMeadowHeight(visibleSkills.length, width || 680);
+  const surveyPanelWidth = width > 760
+    ? Math.min(520, Math.max(0, width - 36))
+    : Math.max(0, width - 28);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     setWidth(event.nativeEvent.layout.width);
@@ -2119,7 +2140,7 @@ export function SkillBubbleGarden({
             : {}),
         }}
       >
-        <MeadowAtmosphere width={width} height={meadowHeight} />
+        <MeadowAtmosphere width={width} height={meadowHeight} showSun={!editable} />
         <View
           style={{
             position: 'absolute',
@@ -2133,40 +2154,19 @@ export function SkillBubbleGarden({
 
         <GroundStrip width={width} />
 
-        {editable && displaySkills.length === 0 && (
+        {editable && (
           <View
             style={{
               position: 'absolute',
-              left: 14,
-              right: 14,
-              top: 18,
+              left: width > 620 ? 18 : 14,
+              top: width > 620 ? 18 : 14,
+              width: surveyPanelWidth,
               zIndex: 500,
             }}
           >
             <SeedSurvey
               plantedNames={plantedNames}
-              hasSkills={false}
-              openSlots={openSlots}
-              onPlantSkill={onPlantSkill}
-              onPlantSkills={onPlantSkills}
-            />
-          </View>
-        )}
-
-        {editable && displaySkills.length > 0 && (
-          <View
-            style={{
-              position: 'absolute',
-              left: 14,
-              right: width > 620 ? undefined : 14,
-              top: 14,
-              width: width > 620 ? Math.min(380, Math.max(0, width - 28)) : undefined,
-              zIndex: 500,
-            }}
-          >
-            <SeedSurvey
-              plantedNames={plantedNames}
-              hasSkills
+              hasSkills={displaySkills.length > 0}
               openSlots={openSlots}
               onPlantSkill={onPlantSkill}
               onPlantSkills={onPlantSkills}
