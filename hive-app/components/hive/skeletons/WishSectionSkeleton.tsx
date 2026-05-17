@@ -29,7 +29,7 @@ function WishCardSkeleton() {
 }
 
 /**
- * Skeleton for the Community Wishes section
+ * Skeleton for the HD Wishes section
  * Includes tab bar and wish card placeholders
  */
 export function WishSectionSkeleton() {

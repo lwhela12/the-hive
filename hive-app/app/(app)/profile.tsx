@@ -458,7 +458,7 @@ export default function ProfileScreen() {
 
     Alert.alert(
       'Archive Wish',
-      `Archive this wish from Community Wishes?\n\n"${wish.description}"`,
+      `Archive this wish from HD Wishes?\n\n"${wish.description}"`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Archive', onPress: archiveWish },
@@ -1782,7 +1782,7 @@ export default function ProfileScreen() {
           <View style={{ marginBottom: 0, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
             <View style={{ alignSelf: 'flex-start', flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
               <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: isProfilePhone ? 16 : 17, color: '#2d2d2d' }}>
-                Your Wishes ({wishes.length})
+                Your HD Wishes ({wishes.length})
               </Text>
             </View>
             <ProfileHeaderActionPill label="+ Wish" onPress={() => setAddWishModalVisible(true)} />

@@ -34,9 +34,10 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
       onPress={onPress}
       className="rounded-xl p-4 shadow-sm mb-3 active:opacity-80"
       style={{
-        backgroundColor: isGranted ? '#f6e8c4' : '#fff8e8',
+        backgroundColor: isGranted ? '#fffdf5' : '#fff8e8',
         borderWidth: 1,
-        borderColor: isGranted ? 'rgba(189,147,72,0.28)' : 'rgba(222,193,129,0.45)',
+        borderColor: isGranted ? 'rgba(222,193,129,0.28)' : 'rgba(222,193,129,0.5)',
+        shadowOpacity: isGranted ? 0.04 : 0.1,
       }}
     >
       <View className="flex-row items-start">
@@ -44,20 +45,14 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
         <View className="flex-1 ml-3">
           <View className="flex-row items-center">
             <View className="flex-1 flex-row items-center">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
+              <Text
+                style={{
+                  fontFamily: isGranted ? 'Lato_400Regular' : 'Lato_700Bold',
+                  color: isGranted ? '#7f715f' : '#2d2d2d',
+                }}
+              >
                 {wish.user.name}
               </Text>
-              {isGranted && (
-                <View className="ml-2 bg-gold px-2 py-0.5 rounded-full flex-row items-center">
-                  <Ionicons name="checkmark-circle" size={10} color="#fff" />
-                  <Text
-                    style={{ fontFamily: 'Lato_700Bold' }}
-                    className="text-white text-xs ml-1"
-                  >
-                    Granted
-                  </Text>
-                </View>
-              )}
             </View>
             {showManageButton ? (
               <Pressable
@@ -101,13 +96,35 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
               </View>
             )}
           </View>
-          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/80 mt-1">
+          <Text
+            style={{
+              fontFamily: isGranted ? 'Lato_400Regular' : 'Lato_700Bold',
+              color: isGranted ? '#7f715f' : '#2d2d2d',
+              fontStyle: isGranted ? 'italic' : 'normal',
+              textDecorationLine: isGranted ? 'line-through' : 'none',
+            }}
+            className="mt-1"
+          >
             {wish.description}
           </Text>
           {linkedBoardLabel && (
-            <View className="self-start flex-row items-center bg-white/70 border border-gold/20 rounded-full px-2 py-1 mt-2">
-              <Ionicons name="link-outline" size={12} color="#bd9348" />
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
+            <View
+              className="self-start flex-row items-center rounded-full px-2 py-1 mt-2"
+              style={{
+                backgroundColor: isGranted ? 'rgba(245,234,209,0.34)' : 'rgba(255,255,255,0.72)',
+                borderWidth: 1,
+                borderColor: isGranted ? 'rgba(189,147,72,0.16)' : 'rgba(189,147,72,0.2)',
+              }}
+            >
+              <Ionicons name="link-outline" size={12} color={isGranted ? '#9a8060' : '#bd9348'} />
+              <Text
+                style={{
+                  fontFamily: 'Lato_700Bold',
+                  color: isGranted ? '#9a8060' : '#bd9348',
+                  fontSize: 12,
+                  marginLeft: 4,
+                }}
+              >
                 {linkedBoardLabel}
               </Text>
             </View>
@@ -116,7 +133,7 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
           <View className="flex-row items-center mt-3">
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40">
               {isGranted && wish.fulfilled_at
-                ? `Granted ${formatDateShort(wish.fulfilled_at)}`
+                ? `Granted · ${formatDateShort(wish.fulfilled_at)}`
                 : formatDateShort(wish.created_at)}
             </Text>
 

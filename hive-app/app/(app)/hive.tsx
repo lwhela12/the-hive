@@ -38,8 +38,6 @@ import {
 } from '../../lib/dues';
 import type { Profile, Wish, WishGranter, Event, ActionItem } from '../../types';
 
-type WishTab = 'open' | 'granted';
-
 type WishWithGranters = Wish & {
   user: Profile;
   granters?: (WishGranter & { granter?: Profile })[];
@@ -550,7 +548,6 @@ export default function HiveScreen() {
   const [managingWish, setManagingWish] = useState<WishWithGranters | null>(null);
   const [wishToGrant, setWishToGrant] = useState<WishWithGranters | null>(null);
   const [showAddWishModal, setShowAddWishModal] = useState(false);
-  const [wishTab, setWishTab] = useState<WishTab>('open');
 
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
@@ -1265,7 +1262,7 @@ export default function HiveScreen() {
       }
     };
 
-    const message = `Archive this wish from Community Wishes?\n\n"${wish.description}"`;
+    const message = `Archive this wish from HD Wishes?\n\n"${wish.description}"`;
 
     if (typeof window !== 'undefined' && window.confirm) {
       if (window.confirm(message)) {
@@ -2158,12 +2155,12 @@ export default function HiveScreen() {
           />
         </View>
 
-        {/* Community Wishes */}
+        {/* HD Wishes */}
         <View style={{ marginBottom: 24 }}>
           <View style={{ marginBottom: 0, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
             <View style={{ alignSelf: 'flex-start', flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
               <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: useMobileLayout ? 16 : 17, color: '#2d2d2d' }}>
-                Community Wishes
+                HD Wishes ({publicWishes.length + grantedWishes.length})
               </Text>
             </View>
             <HeaderActionPill label="+ Wish" onPress={() => setShowAddWishModal(true)} />
@@ -2185,102 +2182,57 @@ export default function HiveScreen() {
               elevation: 3,
               padding: 12,
             }}>
-              {/* Tabs */}
-              <View style={{ flexDirection: 'row', marginBottom: 12, backgroundColor: '#fff8e8', borderRadius: 12, padding: 4, borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)' }}>
-                <Pressable
-                  onPress={() => setWishTab('open')}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 8,
-                    borderRadius: 9,
-                    backgroundColor: wishTab === 'open' ? '#ffffff' : 'transparent',
-                    shadowColor: wishTab === 'open' ? '#bd9348' : 'transparent',
-                    shadowOpacity: wishTab === 'open' ? 0.10 : 0,
-                    shadowRadius: 5,
-                    shadowOffset: { width: 0, height: 2 },
-                  }}
-                >
-                  <Text
-                    style={{ fontFamily: wishTab === 'open' ? 'Lato_700Bold' : 'Lato_400Regular' }}
-                    className={`text-center text-sm ${
-                      wishTab === 'open' ? 'text-charcoal' : 'text-charcoal/60'
-                    }`}
-                  >
-                    Open ({publicWishes.length})
+              {publicWishes.length + grantedWishes.length === 0 ? (
+                <View className="bg-white rounded-xl p-6 shadow-sm items-center">
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
+                    No HD wishes yet
                   </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setWishTab('granted')}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 8,
-                    borderRadius: 9,
-                    backgroundColor: wishTab === 'granted' ? '#ffffff' : 'transparent',
-                    shadowColor: wishTab === 'granted' ? '#bd9348' : 'transparent',
-                    shadowOpacity: wishTab === 'granted' ? 0.10 : 0,
-                    shadowRadius: 5,
-                    shadowOffset: { width: 0, height: 2 },
-                  }}
-                >
-                  <Text
-                    style={{ fontFamily: wishTab === 'granted' ? 'Lato_700Bold' : 'Lato_400Regular' }}
-                    className={`text-center text-sm ${
-                      wishTab === 'granted' ? 'text-charcoal' : 'text-charcoal/60'
-                    }`}
-                  >
-                    Granted ({grantedWishes.length})
-                  </Text>
-                </Pressable>
-              </View>
-
-              {/* Open Wishes */}
-              {wishTab === 'open' && (
+                </View>
+              ) : (
                 <>
-                  {publicWishes.length === 0 ? (
-                    <View className="bg-white rounded-xl p-6 shadow-sm items-center">
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
-                        No open wishes yet
+                  {publicWishes.map((wish) => (
+                    <WishCard
+                      key={wish.id}
+                      wish={wish}
+                      onPress={() => setSelectedWish(wish)}
+                      canEdit={canOpenWishActions(wish)}
+                      canDelete={canDeleteWish(wish)}
+                      onManage={() => setManagingWish(wish)}
+                    />
+                  ))}
+                  {grantedWishes.length > 0 ? (
+                    <View
+                      key="granted-divider"
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderTopWidth: publicWishes.length > 0 ? 1 : 0,
+                        borderBottomWidth: 1,
+                        borderColor: 'rgba(222,193,129,0.28)',
+                        backgroundColor: '#fbf1dc',
+                        marginBottom: 12,
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e7a5e' }}>
+                        Granted ({grantedWishes.length})
                       </Text>
+                      <Ionicons name="sparkles-outline" size={14} color="#bd9348" />
                     </View>
-                  ) : (
-                    publicWishes.map((wish) => (
-                      <WishCard
-                        key={wish.id}
-                        wish={wish}
-                        onPress={() => setSelectedWish(wish)}
-                        canEdit={canOpenWishActions(wish)}
-                        canDelete={canDeleteWish(wish)}
-                        onManage={() => setManagingWish(wish)}
-                      />
-                    ))
-                  )}
-                </>
-              )}
-
-              {/* Granted Wishes */}
-              {wishTab === 'granted' && (
-                <>
-                  {grantedWishes.length === 0 ? (
-                    <View className="bg-white rounded-xl p-6 shadow-sm items-center">
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
-                        No granted wishes yet
-                      </Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40 text-sm mt-1">
-                        Wishes that are fulfilled will appear here
-                      </Text>
-                    </View>
-                  ) : (
-                    grantedWishes.map((wish) => (
-                      <WishCard
-                        key={wish.id}
-                        wish={wish}
-                        onPress={() => setSelectedWish(wish)}
-                        canEdit={canOpenWishActions(wish)}
-                        canDelete={canDeleteWish(wish)}
-                        onManage={() => setManagingWish(wish)}
-                      />
-                    ))
-                  )}
+                  ) : null}
+                  {grantedWishes.map((wish) => (
+                    <WishCard
+                      key={wish.id}
+                      wish={wish}
+                      onPress={() => setSelectedWish(wish)}
+                      canEdit={canOpenWishActions(wish)}
+                      canDelete={canDeleteWish(wish)}
+                      onManage={() => setManagingWish(wish)}
+                    />
+                  ))}
                 </>
               )}
             </View>

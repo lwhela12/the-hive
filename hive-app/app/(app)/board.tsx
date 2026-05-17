@@ -1038,7 +1038,7 @@ export default function BoardScreen() {
       }
     };
 
-    const message = `Archive this wish from Community Wishes?\n\n"${wish.description}"`;
+    const message = `Archive this wish from HD Wishes?\n\n"${wish.description}"`;
     if (typeof window !== 'undefined' && window.confirm) {
       if (window.confirm(message)) archive();
       return;

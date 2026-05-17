@@ -211,7 +211,7 @@ export function AddWishModal({
                       style={{ fontFamily: 'Lato_400Regular' }}
                       className="text-charcoal/60 text-sm mt-1"
                     >
-                      This wish will show up here and in Community Wishes.
+                      This wish will show up here and in HD Wishes.
                       {wishOwnerName ? ` It will belong to ${wishOwnerName}.` : ''}
                     </Text>
                   </View>

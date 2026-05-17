@@ -390,7 +390,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
 
     confirmBoardAction({
       title: 'Wish Granted',
-      message: `Mark "${post.title}" as granted? It will show as Granted here and be added to Completed Community Wishes.`,
+      message: `Mark "${post.title}" as granted? It will show as Granted here and be added to granted HD Wishes.`,
       confirmLabel: 'Mark Granted',
       onConfirm: async () => {
         await markBoardThreadGranted({
