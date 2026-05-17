@@ -320,7 +320,7 @@ function MemberDetailModal({
 }) {
   const router = useRouter();
   const { profile, session } = useAuth();
-  const currentAuthId = profile?.id ?? session?.user?.id ?? null;
+  const currentAuthId = session?.user?.id ?? profile?.id ?? null;
   const isCurrentUser = !!currentAuthId && member.id === currentAuthId;
   const publicWishes = member.wishes.filter(w => w.status === 'public');
   const roleLabel = ROLE_LABELS[member.role];
@@ -1569,7 +1569,7 @@ export default function MembersScreen() {
   const [selected, setSelected] = useState<MemberData | null>(null);
   const [search, setSearch] = useState('');
   const [memberViewMode, setMemberViewMode] = useState<MemberViewMode>('directory');
-  const currentUserId = profile?.id ?? session?.user?.id ?? null;
+  const currentUserId = session?.user?.id ?? profile?.id ?? null;
 
   const loadMembers = useCallback(async (isRefresh = false) => {
     if (!communityId) return;

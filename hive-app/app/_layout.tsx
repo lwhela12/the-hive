@@ -107,13 +107,16 @@ export default function RootLayout() {
     Lato_700Bold,
   });
 
-  // Guard against concurrent calls from getSession + onAuthStateChange
+  // Guard same-user duplicate loads while still allowing account switches to win.
   const initializingRef = useRef(false);
+  const initializingUserIdRef = useRef<string | null>(null);
 
   // Optimized: Fetch profile and memberships in parallel to reduce startup latency
   const initializeUserData = useCallback(async (userId: string, authUser: User) => {
-    if (initializingRef.current) return;
+    if (initializingRef.current && initializingUserIdRef.current === userId) return;
     initializingRef.current = true;
+    initializingUserIdRef.current = userId;
+    const isCurrentLoad = () => initializingUserIdRef.current === userId;
     try {
     // Fetch profile AND all memberships (with community data) in parallel
     // This reduces 4-5 sequential calls to just 1 parallel batch
@@ -152,9 +155,8 @@ export default function RootLayout() {
       console.error('[Auth] Profile fetch error:', profileResult.error.message);
     }
 
-    if (profileData) {
-      setProfile(profileData);
-    }
+    if (!isCurrentLoad()) return;
+    setProfile(profileData);
 
     // Handle community context
     if (membershipsResult.error) {
@@ -187,6 +189,7 @@ export default function RootLayout() {
     }
 
     if (memberships.length === 0) {
+      if (!isCurrentLoad()) return;
       setCommunity(null);
       setCommunityId(null);
       setCommunityRole(null);
@@ -214,6 +217,7 @@ export default function RootLayout() {
         .then();
     }
 
+    if (!isCurrentLoad()) return;
     // Set all community context at once
     setCommunityId(activeMembership.community_id);
     setCommunityRole(activeMembership.role);
@@ -221,9 +225,14 @@ export default function RootLayout() {
     setLoading(false);
     } catch (err) {
       console.error('[Auth] initializeUserData failed:', err);
-      setLoading(false);
+      if (isCurrentLoad()) {
+        setLoading(false);
+      }
     } finally {
-      initializingRef.current = false;
+      if (isCurrentLoad()) {
+        initializingRef.current = false;
+        initializingUserIdRef.current = null;
+      }
     }
   }, []);
 
@@ -232,6 +241,10 @@ export default function RootLayout() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
+        setProfile(prev => prev?.id === session.user.id ? prev : null);
+        setCommunity(null);
+        setCommunityId(null);
+        setCommunityRole(null);
         initializeUserData(session.user.id, session.user);
       } else {
         setLoading(false);
@@ -243,8 +256,14 @@ export default function RootLayout() {
       setSession(session);
       if (session?.user) {
         setLoading(true); // Re-enter loading state while we fetch user data
+        setProfile(prev => prev?.id === session.user.id ? prev : null);
+        setCommunity(null);
+        setCommunityId(null);
+        setCommunityRole(null);
         initializeUserData(session.user.id, session.user);
       } else {
+        initializingUserIdRef.current = null;
+        initializingRef.current = false;
         if (event === 'SIGNED_OUT') {
           clearLastAppPath();
         }
@@ -263,6 +282,7 @@ export default function RootLayout() {
     if (session?.user) {
       // Reset guard so refresh can proceed
       initializingRef.current = false;
+      initializingUserIdRef.current = null;
       await initializeUserData(session.user.id, session.user);
     }
   }, [session, initializeUserData]);
