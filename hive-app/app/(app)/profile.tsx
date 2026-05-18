@@ -104,6 +104,7 @@ export default function ProfileScreen() {
   const [initialLoading, setInitialLoading] = useState(true);
   const scrollViewRef = useRef<ScrollView>(null);
   const compactProfileLandscape = screenWidth > screenHeight && screenHeight < 540;
+  const immersiveSkillsGarden = compactProfileLandscape;
   const skillsGardenY = useRef(0);
 
   // Editable profile fields
@@ -1387,18 +1388,22 @@ export default function ProfileScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+    <SafeAreaView className="flex-1 bg-cream" edges={immersiveSkillsGarden ? [] : ['top']}>
       {!compactProfileLandscape && <AppHeader title="Profile" />}
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <ScrollView
         ref={scrollViewRef}
         className="flex-1"
-        contentContainerClassName={compactProfileLandscape ? 'p-1' : 'p-4'}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#bd9348" />
-        }
+        contentContainerClassName={immersiveSkillsGarden ? 'p-0' : compactProfileLandscape ? 'p-1' : 'p-4'}
+        contentContainerStyle={immersiveSkillsGarden ? { flexGrow: 1 } : undefined}
+        scrollEnabled={!immersiveSkillsGarden}
+        refreshControl={!immersiveSkillsGarden
+          ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#bd9348" />
+          : undefined}
       >
+        {!immersiveSkillsGarden && (
+        <>
         {/* Profile Header with Bee Progress Arc */}
         <FadeIn>
           {(() => {
@@ -2034,9 +2039,11 @@ export default function ProfileScreen() {
           )}
         </View>
         </FadeIn>
+        </>
+        )}
 
         {/* Loading skeletons for dynamic sections */}
-        {initialLoading && (
+        {!immersiveSkillsGarden && initialLoading && (
           <>
             <ListSectionSkeleton count={2} />
             <ListSectionSkeleton count={2} />
@@ -2044,7 +2051,7 @@ export default function ProfileScreen() {
         )}
 
         {/* Personality Notes - How HIVE Sees You */}
-        {!initialLoading && userInsights?.personality_notes && (
+        {!immersiveSkillsGarden && !initialLoading && userInsights?.personality_notes && (
           <View className="mb-6">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
               How HIVE Sees You
@@ -2061,13 +2068,15 @@ export default function ProfileScreen() {
         )}
 
         {/* Skills Garden */}
-        {!initialLoading && <FadeIn delay={50}>
+        {!initialLoading && <FadeIn delay={50} style={immersiveSkillsGarden ? { flex: 1 } : undefined}>
         <View
-          className={compactProfileLandscape ? 'mb-2' : 'mb-6'}
+          className={immersiveSkillsGarden ? 'mb-0' : compactProfileLandscape ? 'mb-2' : 'mb-6'}
+          style={immersiveSkillsGarden ? { flex: 1 } : undefined}
           onLayout={(event) => {
             skillsGardenY.current = event.nativeEvent.layout.y;
           }}
         >
+          {!immersiveSkillsGarden && (
           <View className={compactProfileLandscape ? 'flex-row items-center justify-between mb-0 px-1' : 'flex-row items-center justify-between mb-1'}>
             <View>
               <Text
@@ -2087,6 +2096,7 @@ export default function ProfileScreen() {
               </Text>
             </View>
           </View>
+          )}
           <SkillBubbleGarden
             skills={skills}
             editable
@@ -2100,6 +2110,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Wishes */}
+        {!immersiveSkillsGarden && (
         <View style={{ marginBottom: 24 }}>
           <View style={{ marginBottom: 0, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
             <View style={{ alignSelf: 'flex-start', flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
@@ -2169,10 +2180,11 @@ export default function ProfileScreen() {
             </ScrollView>
             </View>
         </View>
+        )}
         </FadeIn>}
 
         {/* Notification Settings */}
-        {Platform.OS !== 'web' && (
+        {!immersiveSkillsGarden && Platform.OS !== 'web' && (
           <View className="mb-6">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
               Notifications
@@ -2221,12 +2233,14 @@ export default function ProfileScreen() {
         )}
 
         {/* Sign Out Button */}
+        {!immersiveSkillsGarden && (
         <Pressable
           onPress={handleSignOut}
           className="bg-red-50 p-4 rounded-xl items-center active:bg-red-100"
         >
           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-600">Sign Out</Text>
         </Pressable>
+        )}
       </ScrollView>
       </KeyboardAvoidingView>
 

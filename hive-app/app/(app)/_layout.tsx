@@ -89,9 +89,10 @@ export default function AppLayout() {
   const pathname = usePathname();
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const showAdminTab = isAdmin || communityRole === 'treasurer' || profile?.role === 'treasurer';
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   // Use mobile layout for narrow screens (< 768px) regardless of platform
   const useMobileLayout = width < 768;
+  const useImmersiveProfileGarden = pathname === '/profile' && width > height && height < 540;
   const { isBrowserMode } = useWebAppDisplayMode();
   const useBrowserCompactTabs = Platform.OS === 'web' && useMobileLayout && isBrowserMode;
   const mobileTabHeight = useBrowserCompactTabs ? 62 : 78;
@@ -136,7 +137,9 @@ export default function AppLayout() {
         initialRouteName={getLastAppTabName()}
         screenOptions={{
           headerShown: false,
-          tabBarStyle: useMobileLayout
+          tabBarStyle: useImmersiveProfileGarden
+            ? { display: 'none' }
+            : useMobileLayout
             ? {
                 height: mobileTabHeight,
                 paddingTop: mobileTabPaddingTop,

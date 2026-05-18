@@ -132,7 +132,7 @@ const SEED_TRAY_SIZE = GARDEN_CAPACITY;
 const SEED_STRIP_LIMIT = GARDEN_CAPACITY * 3;
 const VISIBLE_BLOOM_LIMIT = GARDEN_CAPACITY;
 const BLOOM_CANVAS_EXTRA = 38;
-const PHONE_LANDSCAPE_SCALE = 0.5625;
+const PHONE_LANDSCAPE_SCALE = 0.64;
 
 type SurveyChoice = {
   icon: string;
@@ -2774,7 +2774,7 @@ export function SkillBubbleGarden({
   const groundHeight = compactLandscape ? GROUND_HEIGHT * 0.75 : GROUND_HEIGHT;
   const meadowHeight = getMeadowHeight(visibleSkills.length, width || 680, compactLandscape);
   const showLandscapeHint = editable && width > 0 && width < 560;
-  const seedLaneWidth = compactLandscape ? 64 : 112;
+  const seedLaneWidth = compactLandscape ? 72 : 112;
   const seedGap = compactLandscape ? 4 : 7;
   const seedPageWidth = Math.max(width - 24, SEED_TRAY_SIZE * seedLaneWidth + (SEED_TRAY_SIZE - 1) * seedGap);
   const seedContentWidth = seedPageWidth * Math.max(1, seedPages.length);
@@ -2924,6 +2924,7 @@ export function SkillBubbleGarden({
     <View
       onLayout={handleLayout}
       style={{
+        flex: compactLandscape ? 1 : undefined,
         borderRadius: 18,
         backgroundColor: '#fffdf7',
         borderWidth: 1,
@@ -2933,6 +2934,7 @@ export function SkillBubbleGarden({
     >
       <View
         style={{
+          flex: compactLandscape ? 1 : undefined,
           minHeight: meadowHeight,
           position: 'relative',
           overflow: 'hidden',
