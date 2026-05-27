@@ -3,6 +3,10 @@
 alter table public.notifications
   add column if not exists metadata jsonb default '{}'::jsonb;
 
+create index if not exists notifications_user_activity_idx
+  on public.notifications (community_id, user_id, created_at desc)
+  where notification_type in ('board_mention', 'wish_mention', 'chat_mention');
+
 create or replace function public.create_board_broadcast_mention_notifications()
 returns trigger
 language plpgsql
