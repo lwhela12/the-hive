@@ -1,5 +1,5 @@
-import { useState, memo } from 'react';
-import { View, Text, Pressable, Modal, useWindowDimensions } from 'react-native';
+import { useRef, useState, memo } from 'react';
+import { View, Text, Pressable, Modal, useWindowDimensions, ScrollView, TextInput } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../ui/Avatar';
@@ -19,7 +19,13 @@ interface RoomMessageItemProps {
   reactionAccentColor?: string;
 }
 
-const REACTIONS = ['👍', '❤️', '😂', '🐝', '🎉', '👀'];
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '🐝', '🎉', '👀'];
+const MORE_REACTIONS = [
+  '😍', '😊', '🥰', '👏', '🙌', '🔥',
+  '😢', '😭', '😮', '😱', '🤔', '🙏',
+  '💛', '💚', '💙', '💜', '🧡', '🩷',
+  '✨', '🌟', '💯', '🐶', '🐾', '🍯',
+];
 
 export const RoomMessageItem = memo(function RoomMessageItem({
   message,
@@ -33,6 +39,8 @@ export const RoomMessageItem = memo(function RoomMessageItem({
   reactionAccentColor = '#bd9348',
 }: RoomMessageItemProps) {
   const [showActions, setShowActions] = useState(false);
+  const [customEmoji, setCustomEmoji] = useState('');
+  const lastTapRef = useRef(0);
   const { width: screenWidth } = useWindowDimensions();
   // Constrain image width for chat - max 250px or 60% of screen, whichever is smaller
   const maxImageWidth = Math.min(250, screenWidth * 0.6);
@@ -71,6 +79,26 @@ export const RoomMessageItem = memo(function RoomMessageItem({
     }
   };
 
+  const addReaction = (emoji: string) => {
+    const trimmed = emoji.trim();
+    if (!trimmed) return;
+    onReact(trimmed);
+    setCustomEmoji('');
+    setShowActions(false);
+  };
+
+  const handleMessagePress = () => {
+    if (isDeleted) return;
+
+    const now = Date.now();
+    if (now - lastTapRef.current < 280) {
+      onReact('❤️');
+      lastTapRef.current = 0;
+      return;
+    }
+    lastTapRef.current = now;
+  };
+
   const handleCopy = async () => {
     if (message.content) {
       await Clipboard.setStringAsync(message.content);
@@ -102,7 +130,14 @@ export const RoomMessageItem = memo(function RoomMessageItem({
           </View>
         )}
 
-        <Pressable onLongPress={handleLongPress} delayLongPress={300} className="flex-shrink">
+        <Pressable
+          onLongPress={handleLongPress}
+          onPress={handleMessagePress}
+          delayLongPress={300}
+          className="flex-shrink"
+          accessibilityRole="button"
+          accessibilityLabel="Message. Double tap to love, long press for reactions and actions"
+        >
           {/* Text bubble - only show if there's content or deleted */}
           {(hasContent || isDeleted) && (
             <View
@@ -140,10 +175,11 @@ export const RoomMessageItem = memo(function RoomMessageItem({
       {hasAttachments && (
         <Pressable
           onLongPress={handleLongPress}
+          onPress={handleMessagePress}
           delayLongPress={300}
           className={(hasContent || isDeleted) ? 'mt-2' : ''}
           accessibilityRole="button"
-          accessibilityLabel="Open message actions"
+          accessibilityLabel="Attachment. Double tap to love, long press for reactions and actions"
         >
           {renderAttachments()}
         </Pressable>
@@ -164,12 +200,13 @@ export const RoomMessageItem = memo(function RoomMessageItem({
         {!isDeleted && (
           <Pressable
             onPress={() => setShowActions(true)}
-            className="ml-2 w-8 h-8 rounded-full items-center justify-center"
-            style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: `${reactionAccentColor}33` }}
+            className="ml-2 flex-row items-center rounded-full px-2.5 py-1.5"
+            style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: `${reactionAccentColor}55` }}
             accessibilityRole="button"
-            accessibilityLabel="React to message"
-            hitSlop={8}
+            accessibilityLabel="Add emoji reaction"
+            hitSlop={10}
           >
+            <Text style={{ fontSize: 14, lineHeight: 18, color: reactionAccentColor, fontFamily: 'Lato_700Bold', marginRight: 2 }}>+</Text>
             <Text style={{ fontSize: 18, lineHeight: 22 }}>😊</Text>
           </Pressable>
         )}
@@ -203,22 +240,80 @@ export const RoomMessageItem = memo(function RoomMessageItem({
           onPress={() => setShowActions(false)}
           className="flex-1 justify-center items-center bg-black/50"
         >
-          <View className="bg-white rounded-2xl p-4 shadow-lg mx-8 w-64">
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            className="bg-white rounded-2xl p-4 shadow-lg mx-8 w-80 max-h-[82%]"
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-base mb-1 text-center">
+              Add a reaction
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs mb-3 text-center">
+              Double tap a message to send ❤️, or long press for this menu.
+            </Text>
+
             {/* Quick reactions */}
-            <View className="flex-row justify-around mb-4 pb-4 border-b border-cream">
-              {REACTIONS.slice(0, 6).map((emoji) => (
+            <View className="flex-row justify-around mb-3 pb-3 border-b border-cream">
+              {QUICK_REACTIONS.map((emoji) => (
                 <Pressable
                   key={emoji}
-                  onPress={() => {
-                    onReact(emoji);
-                    setShowActions(false);
-                  }}
-                  className="p-2"
+                  onPress={() => addReaction(emoji)}
+                  className="w-10 h-10 rounded-full items-center justify-center"
+                  style={{ backgroundColor: '#f8f1e3' }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`React with ${emoji}`}
                 >
-                  <Text className="text-xl">{emoji}</Text>
+                  <Text className="text-2xl">{emoji}</Text>
                 </Pressable>
               ))}
             </View>
+
+            <ScrollView style={{ maxHeight: 190 }} showsVerticalScrollIndicator={false}>
+              <View className="flex-row flex-wrap justify-center mb-3">
+                {MORE_REACTIONS.map((emoji) => (
+                  <Pressable
+                    key={emoji}
+                    onPress={() => addReaction(emoji)}
+                    className="w-10 h-10 rounded-full items-center justify-center m-1"
+                    style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#f0e2c8' }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`React with ${emoji}`}
+                  >
+                    <Text className="text-2xl">{emoji}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View className="mb-3 p-3 rounded-2xl" style={{ backgroundColor: '#fff8ed' }}>
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-xs mb-2">
+                  Want another emoji?
+                </Text>
+                <View className="flex-row items-center">
+                  <TextInput
+                    value={customEmoji}
+                    onChangeText={setCustomEmoji}
+                    placeholder="Paste/type any emoji"
+                    placeholderTextColor="#9ca3af"
+                    className="flex-1 bg-white rounded-xl px-3 py-2 text-base"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    maxLength={8}
+                    returnKeyType="done"
+                    onSubmitEditing={() => addReaction(customEmoji)}
+                    style={{ fontFamily: 'Lato_400Regular' }}
+                  />
+                  <Pressable
+                    onPress={() => addReaction(customEmoji)}
+                    className="ml-2 px-3 py-2 rounded-xl"
+                    style={{ backgroundColor: customEmoji.trim() ? reactionAccentColor : '#e5e7eb' }}
+                    disabled={!customEmoji.trim()}
+                    accessibilityRole="button"
+                    accessibilityLabel="Use custom emoji reaction"
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', color: '#FFFFFF' }}>Add</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </ScrollView>
 
             {/* Actions */}
             {hasContent && !isDeleted && (
@@ -264,7 +359,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
                 Cancel
               </Text>
             </Pressable>
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </View>
