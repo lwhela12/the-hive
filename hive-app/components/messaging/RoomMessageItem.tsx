@@ -91,7 +91,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
     if (isDeleted) return;
 
     const now = Date.now();
-    if (now - lastTapRef.current < 280) {
+    if (now - lastTapRef.current < 500) {
       onReact('❤️');
       lastTapRef.current = 0;
       return;
@@ -117,7 +117,10 @@ export const RoomMessageItem = memo(function RoomMessageItem({
   };
 
   return (
-    <View className={`max-w-[85%] mb-3 ${isOwnMessage ? 'self-end items-end' : 'self-start items-start'}`}>
+    <View
+      className={`max-w-[85%] mb-4 ${isOwnMessage ? 'self-end items-end' : 'self-start items-start'}`}
+      style={{ position: 'relative', paddingTop: reactionGroups.size > 0 ? 10 : 0 }}
+    >
       <View className={`flex-row items-end ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
         {/* Avatar */}
         {message.sender && (
@@ -212,17 +215,30 @@ export const RoomMessageItem = memo(function RoomMessageItem({
         )}
       </View>
 
-      {/* Reactions display */}
+      {/* Reactions display - iMessage-style overlay on the upper-right corner */}
       {reactionGroups.size > 0 && (
-        <View className={`flex-row flex-wrap gap-1 mt-1 ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
+        <View
+          className="flex-row flex-wrap gap-1"
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            zIndex: 5,
+            maxWidth: maxImageWidth,
+          }}
+        >
           {Array.from(reactionGroups.entries()).map(([emoji, { count, hasReacted }]) => (
             <Pressable
               key={emoji}
               onPress={() => handleReactionPress(emoji, hasReacted)}
-              className="flex-row items-center px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: hasReacted ? `${reactionAccentColor}22` : '#FFFFFF' }}
+              className="flex-row items-center px-2 py-1 rounded-full shadow-sm"
+              style={{
+                backgroundColor: hasReacted ? '#fff8ed' : '#FFFFFF',
+                borderWidth: 1,
+                borderColor: hasReacted ? reactionAccentColor : '#f0e2c8',
+              }}
             >
-              <Text className="text-xs">{emoji}</Text>
+              <Text className="text-sm">{emoji}</Text>
               <Text
                 className="text-xs ml-1"
                 style={{ fontFamily: 'Lato_700Bold', color: hasReacted ? reactionAccentColor : '#313130' }}
