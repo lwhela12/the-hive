@@ -164,12 +164,13 @@ export const RoomMessageItem = memo(function RoomMessageItem({
         {!isDeleted && (
           <Pressable
             onPress={() => setShowActions(true)}
-            className="ml-2 px-2 py-0.5 rounded-full"
-            style={{ backgroundColor: '#FFFFFF' }}
+            className="ml-2 w-8 h-8 rounded-full items-center justify-center"
+            style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: `${reactionAccentColor}33` }}
             accessibilityRole="button"
             accessibilityLabel="React to message"
+            hitSlop={8}
           >
-            <Text style={{ fontSize: 12, color: reactionAccentColor }}>☺︎</Text>
+            <Text style={{ fontSize: 18, lineHeight: 22 }}>😊</Text>
           </Pressable>
         )}
       </View>

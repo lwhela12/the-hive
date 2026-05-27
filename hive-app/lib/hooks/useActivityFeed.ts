@@ -3,7 +3,7 @@ import { supabase } from '../supabase';
 
 export interface ActivityItem {
   id: string;
-  type: 'wish_posted' | 'wish_granted' | 'event_added' | 'board_post' | 'board_reply' | 'member_joined' | 'app_update' | 'mention';
+  type: 'wish_posted' | 'wish_granted' | 'event_added' | 'board_post' | 'board_reply' | 'chat_message' | 'member_joined' | 'app_update' | 'mention';
   emoji: string;
   text: string;
   timestamp: string; // ISO string
@@ -68,6 +68,29 @@ async function fetchBoardReplyActivity(communityId: string, since: string) {
   return data ?? [];
 }
 
+async function fetchGeneralDiscussionActivity(communityId: string, since: string) {
+  const { data, error } = await supabase
+    .from('room_messages')
+    .select(
+      'id, room_id, content, attachments, created_at, sender:profiles!room_messages_sender_id_fkey(name), room:chat_rooms!room_messages_room_id_fkey(id, name, room_type)'
+    )
+    .eq('community_id', communityId)
+    .is('deleted_at', null)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  if (error) {
+    console.warn('Activity general discussion messages error:', error);
+    return [];
+  }
+
+  return (data ?? []).filter((message: any) => {
+    const room = firstRelation(message.room);
+    return room?.room_type === 'community' && String(room?.name ?? '').toLowerCase() === 'general discussion';
+  });
+}
+
 function firstRelation<T = any>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
@@ -76,7 +99,7 @@ function firstRelation<T = any>(value: T | T[] | null | undefined): T | null {
 async function fetchActivityItems(communityId: string, userId?: string): Promise<ActivityItem[]> {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [wishesRes, grantedRes, eventsRes, postsRes, boardReplies, membersRes, mentionNotifications] = await Promise.all([
+  const [wishesRes, grantedRes, eventsRes, postsRes, boardReplies, generalMessages, membersRes, mentionNotifications] = await Promise.all([
     // New public wishes
     supabase
       .from('wishes')
@@ -121,6 +144,8 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       .limit(20),
 
     fetchBoardReplyActivity(communityId, thirtyDaysAgo),
+
+    fetchGeneralDiscussionActivity(communityId, thirtyDaysAgo),
 
     // Recent member joins
     supabase
@@ -238,6 +263,29 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       sourceId: (r as any).post_id,
       categoryId: (post as any)?.category_id,
       navigatesTo: 'board',
+    });
+  }
+
+  // General Discussion messages are public community conversation, so they can
+  // safely show in Activity. DMs and group DMs stay private and are filtered out.
+  for (const message of generalMessages ?? []) {
+    const authorName: string = (message as any).sender?.name ?? 'Someone';
+    const content = String((message as any).content ?? '').trim();
+    const attachments = Array.isArray((message as any).attachments) ? (message as any).attachments : [];
+    const preview = content
+      ? truncate(content, 72)
+      : attachments.length > 0
+        ? `shared ${attachments.length === 1 ? 'a photo/file' : `${attachments.length} photos/files`}`
+        : 'posted in General Discussion';
+
+    items.push({
+      id: `general_message_${(message as any).id}`,
+      type: 'chat_message',
+      emoji: attachments.length > 0 ? '📸' : '💬',
+      text: `${authorName} posted in General Discussion: ${preview}`,
+      timestamp: (message as any).created_at,
+      sourceId: (message as any).room_id,
+      navigatesTo: 'messages',
     });
   }
 
