@@ -138,22 +138,41 @@ export const RoomMessageItem = memo(function RoomMessageItem({
 
       {/* Attachments - floating outside bubble */}
       {hasAttachments && (
-        <View className={(hasContent || isDeleted) ? 'mt-2' : ''}>
+        <Pressable
+          onLongPress={handleLongPress}
+          delayLongPress={300}
+          className={(hasContent || isDeleted) ? 'mt-2' : ''}
+          accessibilityRole="button"
+          accessibilityLabel="Open message actions"
+        >
           {renderAttachments()}
-        </View>
+        </Pressable>
       )}
 
-      {/* Time and edited indicator - outside bubble */}
-      <Text
-        style={{ fontFamily: 'Lato_400Regular' }}
-        className={`text-xs text-charcoal/40 mt-1 ${isOwnMessage ? 'text-right' : 'text-left'}`}
-      >
-        {message.edited_at && !isDeleted && 'edited · '}
-        {new Date(message.created_at).toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-        })}
-      </Text>
+      {/* Time, edited indicator, and quick reaction affordance - outside bubble */}
+      <View className={`flex-row items-center mt-1 ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
+        <Text
+          style={{ fontFamily: 'Lato_400Regular' }}
+          className={`text-xs text-charcoal/40 ${isOwnMessage ? 'text-right' : 'text-left'}`}
+        >
+          {message.edited_at && !isDeleted && 'edited · '}
+          {new Date(message.created_at).toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+          })}
+        </Text>
+        {!isDeleted && (
+          <Pressable
+            onPress={() => setShowActions(true)}
+            className="ml-2 px-2 py-0.5 rounded-full"
+            style={{ backgroundColor: '#FFFFFF' }}
+            accessibilityRole="button"
+            accessibilityLabel="React to message"
+          >
+            <Text style={{ fontSize: 12, color: reactionAccentColor }}>☺︎</Text>
+          </Pressable>
+        )}
+      </View>
 
       {/* Reactions display */}
       {reactionGroups.size > 0 && (

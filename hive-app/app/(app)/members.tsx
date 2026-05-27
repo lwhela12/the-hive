@@ -744,9 +744,17 @@ function MemberDetailModal({
           onPress={(event: any) => event.stopPropagation()}
           style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%' }}
         >
-          {/* Handle */}
-          <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+          {/* Handle + close */}
+          <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4, position: 'relative' }}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close member profile"
+              style={{ position: 'absolute', right: 18, top: 8, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ee' }}
+            >
+              <Ionicons name="close" size={20} color="#6b7280" />
+            </Pressable>
           </View>
 
           {/* ── Skill Picker Sheet ── */}

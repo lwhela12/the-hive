@@ -602,11 +602,13 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
     if (!profile) return;
 
     try {
-      await supabase.from('message_reactions').insert({
-        message_id: messageId,
-        user_id: profile.id,
-        emoji,
-      });
+      await supabase
+        .from('message_reactions')
+        .upsert({
+          message_id: messageId,
+          user_id: profile.id,
+          emoji,
+        }, { onConflict: 'message_id,user_id,emoji', ignoreDuplicates: true });
       await refetchMessages();
     } catch (error) {
       console.error('Error adding reaction:', error);
