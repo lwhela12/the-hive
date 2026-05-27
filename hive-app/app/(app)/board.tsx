@@ -23,6 +23,7 @@ import { setBoardThreadArchiveState } from '../../lib/boardThreadArchive';
 import { BOARD_HOME_EVENT } from '../../lib/boardNavigation';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { linkThreadToCommunityWish, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
+import { matchesMemberSearchText } from '../../lib/memberAliases';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 
 type BoardListView = 'active' | 'archive';
@@ -136,6 +137,7 @@ export default function BoardScreen() {
   const [boardListView, setBoardListView] = useState<BoardListView>('active');
   const [threadListView, setThreadListView] = useState<BoardThreadListView>('active');
   const [boardSearch, setBoardSearch] = useState('');
+  const [threadSearch, setThreadSearch] = useState('');
   const [showAddLinkedWishModal, setShowAddLinkedWishModal] = useState(false);
   const [selectedLinkedWish, setSelectedLinkedWish] = useState<LinkedWish | null>(null);
   const [managingLinkedWish, setManagingLinkedWish] = useState<LinkedWish | null>(null);
@@ -197,7 +199,7 @@ export default function BoardScreen() {
   const listSourceCategories = boardListView === 'archive' ? archivedCategories : activeCategories;
   const visibleCategories = boardSearchQuery
     ? listSourceCategories
-        .filter((category) => getCategorySearchText(category).includes(boardSearchQuery))
+        .filter((category) => matchesMemberSearchText([getCategorySearchText(category)], boardSearchQuery))
         .sort((a, b) => sortCategoriesForBoard(a, b, postCounts))
     : listSourceCategories;
 
@@ -210,7 +212,12 @@ export default function BoardScreen() {
   } = useBoardPostsQuery(communityId ?? undefined, selectedCategory?.id);
   const activePosts = posts.filter((post) => !post.archived_at);
   const archivedPosts = posts.filter((post) => !!post.archived_at);
-  const visiblePosts = threadListView === 'archive' ? archivedPosts : activePosts;
+  const listSourcePosts = threadListView === 'archive' ? archivedPosts : activePosts;
+  const visiblePosts = threadSearch.trim()
+    ? listSourcePosts.filter((post) =>
+        matchesMemberSearchText([post.title, post.content, post.author?.name], threadSearch)
+      )
+    : listSourcePosts;
   const {
     wishes: linkedWishes,
     refetch: refetchLinkedWishes,
@@ -252,6 +259,7 @@ export default function BoardScreen() {
     setEditingLinkedWish(null);
     setLinkedWishToGrant(null);
     setGrantThreadContext(null);
+    setThreadSearch('');
     if (boardCategoryStorageKey) removeStoredItem(boardCategoryStorageKey);
     if (boardPostStorageKey) removeStoredItem(boardPostStorageKey);
     if (boardComposerStorageKey) removeStoredItem(boardComposerStorageKey);
@@ -263,6 +271,7 @@ export default function BoardScreen() {
 
     const handleBoardsHome = () => {
       setBoardSearch('');
+      setThreadSearch('');
       setBoardListView('active');
       setThreadListView('active');
       resetBoardToList();
@@ -288,12 +297,15 @@ export default function BoardScreen() {
         return;
       }
 
+      const savedCategoryId = boardCategoryStorageKey ? getStoredItem(boardCategoryStorageKey) : null;
+      const savedPostId = boardPostStorageKey ? getStoredItem(boardPostStorageKey) : null;
+      if (savedCategoryId) setSelectedCategoryId(savedCategoryId);
+      if (savedPostId) setSelectedPostId(savedPostId);
+
       const isComposing = boardComposerStorageKey
         ? getStoredItem(boardComposerStorageKey) === 'true'
         : false;
-      if (!isComposing) {
-        resetBoardToList();
-      }
+      if (isComposing) setShowComposer(true);
     }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey, hasRouteTarget, resetBoardToList])
   );
 
@@ -301,6 +313,7 @@ export default function BoardScreen() {
     if (!communityId || !hasRouteTarget) return;
 
     setBoardSearch('');
+    setThreadSearch('');
     setBoardListView('active');
     setThreadListView('active');
     setShowComposer(false);
@@ -411,6 +424,7 @@ export default function BoardScreen() {
   const handleCategorySelect = useCallback((category: BoardCategory) => {
     setSelectedCategoryId(category.id);
     setThreadListView('active');
+    setThreadSearch('');
     if (boardCategoryStorageKey) {
       setStoredItem(boardCategoryStorageKey, category.id);
     }
@@ -1712,11 +1726,30 @@ export default function BoardScreen() {
                 </Text>
               </View>
             ) : null}
+            {(listSourcePosts.length > 0 || threadSearch.trim().length > 0) && (
+              <View className="flex-row items-center bg-white border border-gold/15 rounded-2xl px-3 py-2 mb-3">
+                <Ionicons name="search" size={16} color="rgba(49,49,48,0.38)" />
+                <TextInput
+                  value={threadSearch}
+                  onChangeText={setThreadSearch}
+                  placeholder="Search threads"
+                  placeholderTextColor="rgba(49,49,48,0.38)"
+                  className="flex-1 ml-2 text-sm text-charcoal"
+                  style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none' } as any}
+                  returnKeyType="search"
+                />
+                {threadSearch.length > 0 && (
+                  <Pressable onPress={() => setThreadSearch('')} hitSlop={8}>
+                    <Ionicons name="close-circle" size={18} color="rgba(49,49,48,0.32)" />
+                  </Pressable>
+                )}
+              </View>
+            )}
             <View className="flex-row items-center justify-between mb-3">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/50 text-xs uppercase tracking-wide">
                 {threadListView === 'archive'
-                  ? `Archived Threads (${archivedPosts.length})`
-                  : `Threads (${activePosts.length})`}
+                  ? `Archived Threads (${threadSearch.trim() ? `${visiblePosts.length}/` : ''}${archivedPosts.length})`
+                  : `Threads (${threadSearch.trim() ? `${visiblePosts.length}/` : ''}${activePosts.length})`}
               </Text>
               <View className="flex-row items-center" style={{ gap: 8 }}>
                 {canAddLinkedWish && (
@@ -1766,10 +1799,12 @@ export default function BoardScreen() {
             <View className="bg-white rounded-xl p-8 shadow-sm items-center">
               <Text className="text-4xl mb-4">📝</Text>
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
-                No threads in this board yet.
-                {threadListView === 'archive'
+                {threadSearch.trim()
+                  ? `No threads found for "${threadSearch.trim()}".`
+                  : 'No threads in this board yet.'}
+                {!threadSearch.trim() && threadListView === 'archive'
                   ? '\nArchived threads will appear here.'
-                  : canPost() && '\nStart the first one!'}
+                  : !threadSearch.trim() && canPost() && '\nStart the first one!'}
               </Text>
             </View>
           )

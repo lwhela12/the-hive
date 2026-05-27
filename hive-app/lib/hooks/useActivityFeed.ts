@@ -3,23 +3,80 @@ import { supabase } from '../supabase';
 
 export interface ActivityItem {
   id: string;
-  type: 'wish_posted' | 'wish_granted' | 'event_added' | 'board_post' | 'member_joined' | 'app_update';
+  type: 'wish_posted' | 'wish_granted' | 'event_added' | 'board_post' | 'board_reply' | 'member_joined' | 'app_update' | 'mention';
   emoji: string;
   text: string;
   timestamp: string; // ISO string
   sourceId: string;  // the DB record ID (post id, event id, wish id, user id)
-  categoryId?: string; // board_post only — to deep-link into the right topic
-  navigatesTo?: 'board' | 'members' | 'wish'; // screens that can be navigated to
+  categoryId?: string; // board activity only — to deep-link into the right topic
+  navigatesTo?: 'board' | 'members' | 'wish' | 'messages'; // screens that can be navigated to
 }
 
 function truncate(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) + '…' : text;
 }
 
-async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> {
+async function fetchMentionNotifications(communityId: string, userId: string | undefined, since: string) {
+  if (!userId) return [];
+
+  const baseQuery = () => supabase
+    .from('notifications')
+    .select('id, notification_type, title, content, created_at, related_wish_id, metadata')
+    .eq('community_id', communityId)
+    .eq('user_id', userId)
+    .in('notification_type', ['board_mention', 'wish_mention', 'chat_mention'])
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  const { data, error } = await baseQuery();
+  if (!error) return data ?? [];
+
+  if (String(error.message ?? '').includes('metadata')) {
+    const fallback = await supabase
+      .from('notifications')
+      .select('id, notification_type, title, content, created_at, related_wish_id')
+      .eq('community_id', communityId)
+      .eq('user_id', userId)
+      .in('notification_type', ['board_mention', 'wish_mention', 'chat_mention'])
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (!fallback.error) return fallback.data ?? [];
+  }
+
+  console.warn('Activity mention notifications error:', error);
+  return [];
+}
+
+async function fetchBoardReplyActivity(communityId: string, since: string) {
+  const { data, error } = await supabase
+    .from('board_replies')
+    .select(
+      'id, post_id, parent_reply_id, content, created_at, author:profiles!board_replies_author_id_fkey(name), post:board_posts!board_replies_post_id_fkey(id, title, category_id, category:board_categories!board_posts_category_id_fkey(name))'
+    )
+    .eq('community_id', communityId)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  if (error) {
+    console.warn('Activity board replies error:', error);
+    return [];
+  }
+
+  return data ?? [];
+}
+
+function firstRelation<T = any>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+async function fetchActivityItems(communityId: string, userId?: string): Promise<ActivityItem[]> {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [wishesRes, grantedRes, eventsRes, postsRes, membersRes] = await Promise.all([
+  const [wishesRes, grantedRes, eventsRes, postsRes, boardReplies, membersRes, mentionNotifications] = await Promise.all([
     // New public wishes
     supabase
       .from('wishes')
@@ -63,6 +120,8 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
       .order('created_at', { ascending: false })
       .limit(20),
 
+    fetchBoardReplyActivity(communityId, thirtyDaysAgo),
+
     // Recent member joins
     supabase
       .from('community_memberships')
@@ -71,6 +130,8 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
       .gte('created_at', thirtyDaysAgo)
       .order('created_at', { ascending: false })
       .limit(10),
+
+    fetchMentionNotifications(communityId, userId, thirtyDaysAgo),
   ]);
 
   const items: ActivityItem[] = [];
@@ -157,6 +218,29 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
     });
   }
 
+  // Board replies/comments. Activity should reflect the work happening inside
+  // threads, not only brand-new thread creation.
+  for (const r of boardReplies ?? []) {
+    const authorName: string = (r as any).author?.name ?? 'Someone';
+    const post = firstRelation((r as any).post);
+    const category = firstRelation((post as any)?.category);
+    const categoryName: string = (category as any)?.name ?? 'the board';
+    const postTitle: string = (post as any)?.title ?? 'a board thread';
+    const replyPreview = String((r as any).content ?? '').trim();
+    const preview = replyPreview ? ` — ${truncate(replyPreview, 58)}` : '';
+
+    items.push({
+      id: `reply_${(r as any).id}`,
+      type: 'board_reply',
+      emoji: '💬',
+      text: `${authorName} replied in ${categoryName}: ${truncate(postTitle, 42)}${preview}`,
+      timestamp: (r as any).created_at,
+      sourceId: (r as any).post_id,
+      categoryId: (post as any)?.category_id,
+      navigatesTo: 'board',
+    });
+  }
+
   // Recent member joins
   for (const m of membersRes.data ?? []) {
     const name: string = (m as any).profiles?.name ?? 'Someone';
@@ -168,6 +252,37 @@ async function fetchActivityItems(communityId: string): Promise<ActivityItem[]> 
       timestamp: m.created_at,
       sourceId: m.user_id,
       navigatesTo: 'members',
+    });
+  }
+
+  // Personal mentions from boards, wishes, and chat. These are only fetched for
+  // the signed-in user, so private mention notifications do not become community activity.
+  for (const notification of mentionNotifications ?? []) {
+    const metadata = ((notification as any).metadata ?? {}) as Record<string, unknown>;
+    const notificationType = String((notification as any).notification_type ?? '');
+    const postId = typeof metadata.post_id === 'string' ? metadata.post_id : null;
+    const wishId = typeof metadata.wish_id === 'string'
+      ? metadata.wish_id
+      : ((notification as any).related_wish_id ?? null);
+    const roomId = typeof metadata.room_id === 'string' ? metadata.room_id : null;
+    const sourceId = postId || wishId || roomId || (notification as any).id;
+    const navigatesTo =
+      notificationType === 'board_mention' && postId ? 'board'
+        : notificationType === 'wish_mention' && wishId ? 'wish'
+          : notificationType === 'chat_mention' && roomId ? 'messages'
+            : undefined;
+    const content = (notification as any).content
+      ? `: ${truncate(String((notification as any).content), 64)}`
+      : '';
+
+    items.push({
+      id: `notification_${(notification as any).id}`,
+      type: 'mention',
+      emoji: '@',
+      text: `${(notification as any).title}${content}`,
+      timestamp: (notification as any).created_at,
+      sourceId,
+      navigatesTo,
     });
   }
 
@@ -184,7 +299,7 @@ function formatTime(timeStr: string): string {
   return min === '00' ? `${h}${ampm}` : `${h}:${min}${ampm}`;
 }
 
-export function useActivityFeed(communityId?: string) {
+export function useActivityFeed(communityId?: string, userId?: string) {
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -192,7 +307,7 @@ export function useActivityFeed(communityId?: string) {
     if (!communityId) return;
     setLoading(true);
     try {
-      const data = await fetchActivityItems(communityId);
+      const data = await fetchActivityItems(communityId, userId);
       setItems(data);
       return data;
     } catch (e) {
@@ -201,7 +316,7 @@ export function useActivityFeed(communityId?: string) {
     } finally {
       setLoading(false);
     }
-  }, [communityId]);
+  }, [communityId, userId]);
 
   useEffect(() => {
     fetch();

@@ -3,6 +3,8 @@ import { getStoredItem, removeStoredItem, setStoredItem } from './webStorage';
 export const LAST_APP_PATH_KEY = 'the-hive:last-app-path';
 
 const APP_PATHS = new Set([
+  '/',
+  '/index',
   '/hive',
   '/board',
   '/messages',

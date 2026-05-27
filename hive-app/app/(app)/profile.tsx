@@ -13,6 +13,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { clearLastAppPath } from '../../lib/navigationState';
+import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { getLinkedBoardLabel } from '../../lib/boardWishLinks';
 import { linkWishToHdBoard, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
 import { FadeIn } from '../../components/ui/FadeIn';
@@ -60,6 +61,34 @@ const hasProfileListItem = (value: unknown) =>
 
 const SKILLS_GARDEN_CAPACITY = 10;
 const DEEP_PROFILE_STEPS = ['Basics', 'Now', 'Favorites', '3MIQ'] as const;
+const PROFILE_FORM_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+type ProfileFormDraftFields = {
+  name: string;
+  phone: string;
+  birthday: string;
+  occupation: string;
+  profileTitle: string;
+  preferredContact: string;
+  bio: string;
+  currentProject: string;
+  hometown: string;
+  favoriteBook: string;
+  favoriteFood: string;
+  favoriteHobby: string;
+  knownFor: string;
+  miqExperiences: string;
+  miqGrowth: string;
+  miqContribution: string;
+  funFacts: string[];
+};
+
+type ProfileFormDraft = {
+  activeSurface: 'edit' | 'deepQuiz' | null;
+  deepQuizStep: number;
+  fields: ProfileFormDraftFields;
+  updatedAt: number;
+};
 
 function ProfileHeaderActionPill({ label, onPress }: { label: string; onPress: () => void }) {
   return (
@@ -106,6 +135,9 @@ export default function ProfileScreen() {
   const compactProfileLandscape = screenWidth > screenHeight && screenHeight < 540;
   const immersiveSkillsGarden = compactProfileLandscape;
   const skillsGardenY = useRef(0);
+  const restoredProfileDraftRef = useRef(false);
+  const profileFormDraftKey = profile?.id ? `the-hive:profile-form-draft:${profile.id}` : null;
+  const activeSurveyStorageKey = profile?.id ? `the-hive:active-survey:${profile.id}` : null;
 
   // Editable profile fields
   const [isEditing, setIsEditing] = useState(false);
@@ -191,6 +223,8 @@ export default function ProfileScreen() {
 
   // Initialize edit fields when profile loads or changes
   useEffect(() => {
+    if (isEditing || deepQuizVisible) return;
+
     if (profile) {
       setEditName(profile.name || '');
       setEditPhone(formatPhoneNumber(profile.phone || ''));
@@ -211,7 +245,7 @@ export default function ProfileScreen() {
       setEditMiqContribution((profile as any).miq_contribution || '');
       setEditFunFacts(((profile as any).fun_facts as string[] | null) ?? ['', '', '']);
     }
-  }, [profile]);
+  }, [deepQuizVisible, isEditing, profile]);
 
   const resetProfileDrafts = () => {
     if (profile) {
@@ -235,28 +269,188 @@ export default function ProfileScreen() {
     }
   };
 
+  const getProfileDraftFields = (): ProfileFormDraftFields => ({
+    name: editName,
+    phone: editPhone,
+    birthday: editBirthday,
+    occupation: editOccupation,
+    profileTitle: editProfileTitle,
+    preferredContact: editPreferredContact,
+    bio: editBio,
+    currentProject: editCurrentProject,
+    hometown: editHometown,
+    favoriteBook: editFavBook,
+    favoriteFood: editFavFood,
+    favoriteHobby: editFavHobby,
+    knownFor: editKnownFor,
+    miqExperiences: editMiqExperiences,
+    miqGrowth: editMiqGrowth,
+    miqContribution: editMiqContribution,
+    funFacts: editFunFacts,
+  });
+
+  const applyProfileDraftFields = (fields: ProfileFormDraftFields) => {
+    setEditName(fields.name);
+    setEditPhone(fields.phone);
+    setEditBirthday(fields.birthday);
+    setEditOccupation(fields.occupation);
+    setEditProfileTitle(fields.profileTitle);
+    setEditPreferredContact(fields.preferredContact);
+    setEditBio(fields.bio);
+    setEditCurrentProject(fields.currentProject);
+    setEditHometown(fields.hometown);
+    setEditFavBook(fields.favoriteBook);
+    setEditFavFood(fields.favoriteFood);
+    setEditFavHobby(fields.favoriteHobby);
+    setEditKnownFor(fields.knownFor);
+    setEditMiqExperiences(fields.miqExperiences);
+    setEditMiqGrowth(fields.miqGrowth);
+    setEditMiqContribution(fields.miqContribution);
+    setEditFunFacts(fields.funFacts.length > 0 ? fields.funFacts : ['', '', '']);
+  };
+
+  const readProfileFormDraft = (): ProfileFormDraft | null => {
+    if (!profileFormDraftKey) return null;
+
+    const rawDraft = getStoredItem(profileFormDraftKey);
+    if (!rawDraft) return null;
+
+    try {
+      const draft = JSON.parse(rawDraft) as ProfileFormDraft;
+      if (!draft?.fields || Date.now() - Number(draft.updatedAt ?? 0) > PROFILE_FORM_DRAFT_TTL_MS) {
+        removeStoredItem(profileFormDraftKey);
+        return null;
+      }
+      return draft;
+    } catch {
+      removeStoredItem(profileFormDraftKey);
+      return null;
+    }
+  };
+
+  const writeProfileFormDraft = (activeSurface: ProfileFormDraft['activeSurface'], step = deepQuizStep) => {
+    if (!profileFormDraftKey) return;
+
+    setStoredItem(profileFormDraftKey, JSON.stringify({
+      activeSurface,
+      deepQuizStep: step,
+      fields: getProfileDraftFields(),
+      updatedAt: Date.now(),
+    } satisfies ProfileFormDraft));
+  };
+
+  const clearProfileFormDraft = () => {
+    if (profileFormDraftKey) removeStoredItem(profileFormDraftKey);
+  };
+
   const startEditing = () => {
-    resetProfileDrafts();
+    const savedDraft = readProfileFormDraft();
+    if (savedDraft) {
+      applyProfileDraftFields(savedDraft.fields);
+    } else {
+      resetProfileDrafts();
+    }
     setIsEditing(true);
+    setDeepQuizVisible(false);
   };
 
   const cancelEditing = () => {
     setIsEditing(false);
     resetProfileDrafts();
+    clearProfileFormDraft();
   };
 
   const startDeepQuiz = (step = 0) => {
-    resetProfileDrafts();
+    const savedDraft = readProfileFormDraft();
+    if (savedDraft) {
+      applyProfileDraftFields(savedDraft.fields);
+    } else {
+      resetProfileDrafts();
+    }
     setIsEditing(false);
-    setDeepQuizStep(Math.max(0, Math.min(DEEP_PROFILE_STEPS.length - 1, step)));
+    const nextStep = savedDraft?.activeSurface === 'deepQuiz'
+      ? savedDraft.deepQuizStep
+      : step;
+    setDeepQuizStep(Math.max(0, Math.min(DEEP_PROFILE_STEPS.length - 1, nextStep)));
     setDeepQuizVisible(true);
   };
 
   const closeDeepQuiz = () => {
+    writeProfileFormDraft(null);
     setDeepQuizVisible(false);
     setDeepQuizStep(0);
-    resetProfileDrafts();
   };
+
+  useEffect(() => {
+    if (restoredProfileDraftRef.current || !profile || !profileFormDraftKey) return;
+
+    restoredProfileDraftRef.current = true;
+    const savedDraft = readProfileFormDraft();
+    if (!savedDraft?.activeSurface) return;
+
+    applyProfileDraftFields(savedDraft.fields);
+    if (savedDraft.activeSurface === 'deepQuiz') {
+      setIsEditing(false);
+      setDeepQuizStep(Math.max(0, Math.min(DEEP_PROFILE_STEPS.length - 1, savedDraft.deepQuizStep)));
+      setDeepQuizVisible(true);
+    } else {
+      setDeepQuizVisible(false);
+      setIsEditing(true);
+    }
+  }, [profile?.id, profileFormDraftKey]);
+
+  useEffect(() => {
+    if (!profile || !profileFormDraftKey) return;
+
+    if (isEditing) {
+      writeProfileFormDraft('edit');
+      return;
+    }
+
+    if (deepQuizVisible) {
+      writeProfileFormDraft('deepQuiz');
+    }
+  }, [
+    deepQuizStep,
+    deepQuizVisible,
+    editBio,
+    editBirthday,
+    editCurrentProject,
+    editFavBook,
+    editFavFood,
+    editFavHobby,
+    editFunFacts,
+    editHometown,
+    editKnownFor,
+    editMiqContribution,
+    editMiqExperiences,
+    editMiqGrowth,
+    editName,
+    editOccupation,
+    editPhone,
+    editPreferredContact,
+    editProfileTitle,
+    isEditing,
+    profile?.id,
+    profileFormDraftKey,
+  ]);
+
+  useEffect(() => {
+    if (!activeSurveyStorageKey || !activeSurvey) return;
+    setStoredItem(activeSurveyStorageKey, activeSurvey.id);
+  }, [activeSurvey, activeSurveyStorageKey]);
+
+  useEffect(() => {
+    if (!activeSurveyStorageKey || activeSurvey || pendingSurveys.length === 0) return;
+
+    const savedSurveyId = getStoredItem(activeSurveyStorageKey);
+    const savedSurvey = pendingSurveys.find((survey) => survey.id === savedSurveyId);
+    if (savedSurvey) {
+      setActiveSurvey(savedSurvey);
+    } else if (savedSurveyId) {
+      removeStoredItem(activeSurveyStorageKey);
+    }
+  }, [activeSurvey, activeSurveyStorageKey, pendingSurveys]);
 
   const buildProfileUpdate = () => {
     const cleanBirthday = editBirthday.trim();
@@ -321,6 +515,7 @@ export default function ProfileScreen() {
     const saved = await saveProfileDraft('Failed to save profile. Please try again.');
     if (saved) {
       setIsEditing(false);
+      clearProfileFormDraft();
     }
   };
 
@@ -329,6 +524,7 @@ export default function ProfileScreen() {
     if (saved && closeAfterSave) {
       setDeepQuizVisible(false);
       setDeepQuizStep(0);
+      clearProfileFormDraft();
     }
     return saved;
   };
@@ -2106,6 +2302,7 @@ export default function ProfileScreen() {
             onPlantSkill={handlePlantSkill}
             onPlantSkills={handlePlantSkills}
             onAddCustomSkill={() => setSkillsModalVisible(true)}
+            draftKey={profile?.id ? `the-hive:skills-garden:${profile.id}` : null}
           />
         </View>
 
@@ -2288,8 +2485,17 @@ export default function ProfileScreen() {
       {activeSurvey && (
         <SurveyModal
           survey={activeSurvey}
-          onSubmit={(answers) => submitResponse(activeSurvey.id, answers)}
-          onClose={() => setActiveSurvey(null)}
+          onSubmit={async (answers) => {
+            const result = await submitResponse(activeSurvey.id, answers);
+            if (!result.error && activeSurveyStorageKey) {
+              removeStoredItem(activeSurveyStorageKey);
+            }
+            return result;
+          }}
+          onClose={() => {
+            if (activeSurveyStorageKey) removeStoredItem(activeSurveyStorageKey);
+            setActiveSurvey(null);
+          }}
         />
       )}
 

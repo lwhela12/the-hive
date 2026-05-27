@@ -29,6 +29,8 @@ import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getMentionedMembers } from '../../lib/mentions';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
+import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
+import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
 import { Avatar } from '../ui/Avatar';
 import { MentionSuggestions } from '../ui/MentionSuggestions';
@@ -86,7 +88,10 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
     refetch: refetchMessages,
   } = useRoomMessagesQuery(room.id);
 
-  const [newMessage, setNewMessage] = useState('');
+  const messageDraftKey = profile?.id
+    ? `the-hive:room-message-draft:${profile.id}:${room.id}`
+    : null;
+  const [newMessage, setNewMessage, clearNewMessageDraft] = usePersistentTextDraft(messageDraftKey);
   const [sending, setSending] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Array<TypingIndicator & { user?: Profile }>>([]);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -579,7 +584,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
         });
       }
 
-      setNewMessage('');
+      clearNewMessageDraft();
       setSelectedImages([]);
       setSelectedFiles([]);
       voiceBaseTextRef.current = null;
@@ -660,6 +665,13 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
   const messageEnterToSubmitCaptureProps = Platform.OS === 'web'
     ? ({ onKeyDownCapture: submitOnEnter(handleSend) } as any)
     : {};
+  const { dragDropProps: messageDragDropProps, isDragActive: isMessageDragActive } = useWebAttachmentDropZone({
+    selectedImages,
+    selectedFiles,
+    onImagesChange: setSelectedImages,
+    onFilesChange: setSelectedFiles,
+    disabled: sending || uploading,
+  });
 
   const handleDelete = useCallback(async (messageId: string) => {
     Alert.alert('Delete Message', 'Are you sure you want to delete this message?', [
@@ -1069,7 +1081,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
           </View>
         ) : (
           /* Message input - matching ChatInput styling */
-          <View className="px-4 py-3" style={{ backgroundColor: roomTheme.header }}>
+          <View className="px-4 py-3" style={{ backgroundColor: roomTheme.header }} {...messageDragDropProps}>
             {/* Attachment previews */}
             {(selectedImages.length > 0 || selectedFiles.length > 0) && (
               <ScrollView
@@ -1103,6 +1115,17 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
               </ScrollView>
             )}
 
+            {isMessageDragActive && (
+              <View
+                className="mb-2 rounded-xl border px-3 py-2"
+                style={{ backgroundColor: roomTheme.accentSoft, borderColor: roomTheme.accent }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', color: roomTheme.accent }} className="text-sm">
+                  Drop photos, videos, or files to attach
+                </Text>
+              </View>
+            )}
+
             <MentionSuggestions
               active={messageMentionInput.mentionQuery !== null}
               query={messageMentionInput.mentionQuery}
@@ -1125,7 +1148,11 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
 
             <View
               className="flex-row items-end rounded-2xl px-3 py-2"
-              style={{ backgroundColor: roomTheme.input }}
+              style={{
+                backgroundColor: isMessageDragActive ? roomTheme.accentSoft : roomTheme.input,
+                borderColor: isMessageDragActive ? roomTheme.accent : 'transparent',
+                borderWidth: 1,
+              }}
               {...messageEnterToSubmitCaptureProps}
             >
               <AttachmentPicker

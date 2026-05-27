@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 
 interface NotifyBoardMentionPayload {
   post_id: string;
@@ -52,11 +53,48 @@ serve(async (req) => {
   );
 
   try {
+    const auth = await verifySupabaseJwt(req.headers.get('Authorization'));
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
+    }
+
     const payload: NotifyBoardMentionPayload = await req.json();
     const { post_id, sender_id, recipient_id, message_preview, community_id, board_name } = payload;
 
+    if (auth.userId !== sender_id) {
+      return errorResponse('Authenticated user does not match sender', 403);
+    }
+
     if (sender_id === recipient_id) {
       return jsonResponse({ skipped: true, reason: 'self_mention' });
+    }
+
+    const { data: post, error: postError } = await supabaseAdmin
+      .from('board_posts')
+      .select('id')
+      .eq('id', post_id)
+      .eq('community_id', community_id)
+      .single();
+
+    if (postError || !post) {
+      console.error('Failed to verify board post:', postError);
+      return errorResponse('Board post not found', 404);
+    }
+
+    const { data: memberships, error: membershipError } = await supabaseAdmin
+      .from('community_memberships')
+      .select('user_id')
+      .eq('community_id', community_id)
+      .in('user_id', [sender_id, recipient_id]);
+
+    if (membershipError) {
+      console.error('Failed to verify memberships:', membershipError);
+      return errorResponse('Could not verify memberships', 500);
+    }
+
+    const memberIds = new Set((memberships ?? []).map((membership: any) => membership.user_id));
+    if (!memberIds.has(sender_id) || !memberIds.has(recipient_id)) {
+      return errorResponse('Sender or recipient is not in this community', 403);
     }
 
     const { data: sender, error: senderError } = await supabaseAdmin
@@ -86,18 +124,53 @@ serve(async (req) => {
     const boardLabel = board_name || 'a message board';
     const title = `${sender.name} mentioned you on ${boardLabel}`;
 
-    const results: { push_sent: boolean; notification_created: boolean } = {
+    const results: { push_sent: boolean; notification_created: boolean; duplicate_skipped?: boolean } = {
       push_sent: false,
       notification_created: false,
     };
 
-    const { error: notifError } = await supabaseAdmin.from('notifications').insert({
+    const notificationPayload = {
       user_id: recipient_id,
       community_id,
       notification_type: 'board_mention',
       title,
       content: preview,
-    });
+      metadata: {
+        post_id,
+        sender_id,
+        board_name: board_name ?? null,
+      },
+    };
+
+    const since = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: recentNotifications } = await supabaseAdmin
+      .from('notifications')
+      .select('id, metadata')
+      .eq('user_id', recipient_id)
+      .eq('community_id', community_id)
+      .eq('notification_type', 'board_mention')
+      .gte('created_at', since)
+      .limit(10);
+
+    const alreadyCreated = (recentNotifications ?? []).some((notification: any) =>
+      notification?.metadata?.post_id === post_id &&
+      notification?.metadata?.sender_id === sender_id
+    );
+
+    let notifError: any = null;
+    if (alreadyCreated) {
+      results.notification_created = true;
+      results.duplicate_skipped = true;
+    } else {
+      const insertResult = await supabaseAdmin.from('notifications').insert(notificationPayload);
+      notifError = insertResult.error;
+    }
+
+    if (notifError && String(notifError.message ?? '').includes('metadata')) {
+      const { metadata: _metadata, ...legacyPayload } = notificationPayload;
+      const retry = await supabaseAdmin.from('notifications').insert(legacyPayload);
+      notifError = retry.error;
+    }
 
     if (!notifError) {
       results.notification_created = true;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, ActivityIndicator, Animated } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
 import Svg, { Polygon } from 'react-native-svg';
@@ -841,7 +841,10 @@ export default function HiveScreen() {
   }, [communityId, homeActionItems, profile?.id, triggerCompletion]);
 
   // Activity feed
-  const { items: activityItems, loading: activityLoading, refetch: refetchActivity } = useActivityFeed(communityId ?? undefined);
+  const { items: activityItems, loading: activityLoading, refetch: refetchActivity } = useActivityFeed(
+    communityId ?? undefined,
+    currentUserId ?? undefined
+  );
   const [currentMembershipStartedAt, setCurrentMembershipStartedAt] = useState<string | null>(null);
 
   // Read state — timestamp-based (for auto-clear) + per-item set (for tap-to-clear)
@@ -860,6 +863,7 @@ export default function HiveScreen() {
   const [showActivityConfetti, setShowActivityConfetti] = useState(false);
   const [isActivityChecking, setIsActivityChecking] = useState(false);
   const [showActivityPullSpace, setShowActivityPullSpace] = useState(false);
+  const activityLastFocusRefreshRef = useRef(0);
   const activityRefreshSpin = useRef(new Animated.Value(0)).current;
   const activityRefreshRotation = activityRefreshSpin.interpolate({
     inputRange: [0, 1],
@@ -979,6 +983,12 @@ export default function HiveScreen() {
       router.push('/members');
     } else if (destination === 'wish') {
       openWishFromActivity(item.sourceId);
+    } else if (destination === 'messages') {
+      if (item.sourceId) {
+        router.push({ pathname: '/messages', params: { roomId: item.sourceId } });
+      } else {
+        router.push('/messages');
+      }
     }
   }, [communityId, getActivityDestination, openWishFromActivity, router]);
 
@@ -1045,6 +1055,16 @@ export default function HiveScreen() {
       setTimeout(() => setShowActivityPullSpace(false), 420);
     }
   }, [activityItems, activityRefreshSpin, readItemIds, refetchActivity, sessionReadAt, triggerActivityConfetti]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const now = Date.now();
+      if (now - activityLastFocusRefreshRef.current < 3000) return;
+
+      activityLastFocusRefreshRef.current = now;
+      refetchActivity();
+    }, [refetchActivity])
+  );
 
   // Member carousel state
   const [carouselMembers, setCarouselMembers] = useState<{ id: string; name: string; avatar_url?: string | null; role: string }[]>([]);

@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 
 interface NotifyWishMentionPayload {
   wish_id: string;
@@ -52,11 +53,48 @@ serve(async (req) => {
   );
 
   try {
+    const auth = await verifySupabaseJwt(req.headers.get('Authorization'));
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
+    }
+
     const payload: NotifyWishMentionPayload = await req.json();
     const { wish_id, sender_id, recipient_id, message_preview, community_id, wish_owner_name } = payload;
 
+    if (auth.userId !== sender_id) {
+      return errorResponse('Authenticated user does not match sender', 403);
+    }
+
     if (sender_id === recipient_id) {
       return jsonResponse({ skipped: true, reason: 'self_mention' });
+    }
+
+    const { data: wish, error: wishError } = await supabaseAdmin
+      .from('wishes')
+      .select('id')
+      .eq('id', wish_id)
+      .eq('community_id', community_id)
+      .single();
+
+    if (wishError || !wish) {
+      console.error('Failed to verify wish:', wishError);
+      return errorResponse('Wish not found', 404);
+    }
+
+    const { data: memberships, error: membershipError } = await supabaseAdmin
+      .from('community_memberships')
+      .select('user_id')
+      .eq('community_id', community_id)
+      .in('user_id', [sender_id, recipient_id]);
+
+    if (membershipError) {
+      console.error('Failed to verify memberships:', membershipError);
+      return errorResponse('Could not verify memberships', 500);
+    }
+
+    const memberIds = new Set((memberships ?? []).map((membership: any) => membership.user_id));
+    if (!memberIds.has(sender_id) || !memberIds.has(recipient_id)) {
+      return errorResponse('Sender or recipient is not in this community', 403);
     }
 
     const { data: sender, error: senderError } = await supabaseAdmin
@@ -91,13 +129,26 @@ serve(async (req) => {
       notification_created: false,
     };
 
-    const { error: notifError } = await supabaseAdmin.from('notifications').insert({
+    const notificationPayload = {
       user_id: recipient_id,
       community_id,
       notification_type: 'wish_mention',
       title,
       content: preview,
-    });
+      related_wish_id: wish_id,
+      metadata: {
+        wish_id,
+        sender_id,
+        wish_owner_name: wish_owner_name ?? null,
+      },
+    };
+
+    let { error: notifError } = await supabaseAdmin.from('notifications').insert(notificationPayload);
+    if (notifError && String(notifError.message ?? '').includes('metadata')) {
+      const { metadata: _metadata, ...legacyPayload } = notificationPayload;
+      const retry = await supabaseAdmin.from('notifications').insert(legacyPayload);
+      notifError = retry.error;
+    }
 
     if (!notifError) {
       results.notification_created = true;

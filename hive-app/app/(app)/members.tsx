@@ -12,7 +12,9 @@ import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useChatRooms } from '../../lib/hooks/useChatRooms';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import { SKILL_CATEGORIES } from '../../lib/skillsList';
+import { DAILY_QUESTIONS } from '../../lib/dailyQuestions';
 import { notifyWishMentions } from '../../lib/wishMentions';
+import { matchesMemberSearchText } from '../../lib/memberAliases';
 import { setStoredItem } from '../../lib/webStorage';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileHoneycombCluster } from '../../components/profile/ProfileHoneycombCluster';
@@ -47,6 +49,7 @@ interface MemberData {
   wishes: MemberWish[];
   introPost?: { title: string; content: string } | null;
   questionAnswerCount: number;
+  dailyAnswers: MemberDailyAnswer[];
   dailyMatchPercent?: number;
   dailyMatchSharedCount?: number;
   dailyMatchSimilarCount?: number;
@@ -70,8 +73,20 @@ const PROFILE_PROMPT_LIMITS = {
 
 type DailyAnswerRow = {
   user_id: string;
+  question_index: number;
   question_date: string;
   answer: string;
+  created_at?: string | null;
+};
+
+type MemberDailyAnswer = {
+  questionIndex: number;
+  questionDate: string;
+  questionText: string;
+  questionCategory: string;
+  questionEmoji: string;
+  answer: string;
+  createdAt?: string | null;
 };
 
 type DailyMatchStats = {
@@ -159,6 +174,21 @@ function buildDailyMatchStats(userId: string | null, answers: DailyAnswerRow[]) 
   });
 
   return stats;
+}
+
+function getDailyAnswerPrompt(questionIndex: number) {
+  return DAILY_QUESTIONS[questionIndex] ?? {
+    text: `Daily question ${questionIndex + 1}`,
+    category: 'daily question',
+    emoji: '✨',
+  };
+}
+
+function formatDailyAnswerDate(value: string) {
+  if (!value) return '';
+  const parsed = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function buildHoneycombPlacements(
@@ -354,6 +384,7 @@ function MemberDetailModal({
   const [showSkillPicker, setShowSkillPicker] = useState(false);
   const [skillSearch, setSkillSearch] = useState('');
   const [showWishesSheet, setShowWishesSheet] = useState(false);
+  const [showDailyAnswersSheet, setShowDailyAnswersSheet] = useState(false);
   // Wishes management (for current user only)
   const [myWishes, setMyWishes] = useState<MemberWish[]>([]);
   const [wishesLoading, setWishesLoading] = useState(false);
@@ -376,6 +407,7 @@ function MemberDetailModal({
   const visibleIntro = introExpanded || !introNeedsToggle
     ? introContent
     : `${introContent.slice(0, 320).trimEnd()}...`;
+  const dailyAnswers = member.dailyAnswers ?? [];
 
   useEffect(() => {
     setIntroExpanded(false);
@@ -404,6 +436,7 @@ function MemberDetailModal({
     setShowSkillPicker(false);
     setSkillSearch('');
     setShowWishesSheet(false);
+    setShowDailyAnswersSheet(false);
   }, [member]);
 
   // Fetch current user's own wishes (all statuses) when modal opens
@@ -957,6 +990,71 @@ function MemberDetailModal({
             </View>
           )}
 
+          {/* ── Daily Answers Sheet ── */}
+          {showDailyAnswersSheet && (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, zIndex: 12 }}>
+              <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 24, paddingBottom: 12 }}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>
+                    {member.name.split(' ')[0]}'s Daily Answers
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
+                    {dailyAnswers.length} question{dailyAnswers.length !== 1 ? 's' : ''} answered
+                  </Text>
+                </View>
+                <Pressable onPress={() => setShowDailyAnswersSheet(false)} style={{ padding: 6 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#9ca3af' }}>Close</Text>
+                </Pressable>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
+                {dailyAnswers.length === 0 ? (
+                  <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 22, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 26, marginBottom: 8 }}>✨</Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center', lineHeight: 19 }}>
+                      No daily answers to peek at yet.
+                    </Text>
+                  </View>
+                ) : (
+                  dailyAnswers.map(answer => (
+                    <View
+                      key={`${answer.questionDate}-${answer.questionIndex}`}
+                      style={{
+                        backgroundColor: '#fffbf0',
+                        borderWidth: 1,
+                        borderColor: 'rgba(222,193,129,0.45)',
+                        borderRadius: 18,
+                        padding: 16,
+                        marginBottom: 12,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                        <Text style={{ fontSize: 16 }}>{answer.questionEmoji}</Text>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          {answer.questionCategory}
+                        </Text>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#b5a898' }}>
+                          {formatDailyAnswerDate(answer.questionDate)}
+                        </Text>
+                      </View>
+                      <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 14, lineHeight: 21, color: '#2d2d2d', marginBottom: 10 }}>
+                        {answer.questionText}
+                      </Text>
+                      <View style={{ backgroundColor: 'white', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: 'rgba(222,193,129,0.25)' }}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#4b5563' }}>
+                          {answer.answer}
+                        </Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+          )}
+
           <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}>
             {/* Header */}
             <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 16 }}>
@@ -1406,10 +1504,19 @@ function MemberDetailModal({
 
             {/* Question engagement */}
             {member.questionAnswerCount > 0 && (
-              <View style={{ marginBottom: 20, alignItems: 'center', backgroundColor: '#faf8f3', borderRadius: 16, padding: 14 }}>
+              <Pressable
+                onPress={() => setShowDailyAnswersSheet(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${member.name}'s daily question answers`}
+                style={{ marginBottom: 20, alignItems: 'center', backgroundColor: '#faf8f3', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(222,193,129,0.28)' }}
+              >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 22, color: '#bd9348' }}>{member.questionAnswerCount}</Text>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 2 }}>daily questions answered</Text>
-              </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Read Q&A</Text>
+                  <Ionicons name="chevron-forward" size={12} color="#bd9348" />
+                </View>
+              </Pressable>
             )}
 
             {!hasDetails && !member.introPost && member.skills.length === 0 && publicWishes.length === 0 && (
@@ -1636,6 +1743,7 @@ export default function MembersScreen() {
           wishes: [],
           introPost: null,
           questionAnswerCount: 0,
+          dailyAnswers: [],
         };
       });
 
@@ -1659,7 +1767,7 @@ export default function MembersScreen() {
           .in('author_id', userIds),
         supabase
           .from('daily_question_answers')
-          .select('user_id, question_date, answer')
+          .select('user_id, question_index, question_date, answer, created_at')
           .eq('community_id', communityId)
           .in('user_id', userIds),
       ]);
@@ -1694,9 +1802,28 @@ export default function MembersScreen() {
         }
       });
 
-      const answerCountByUser = new Map<string, number>();
+      const answersByUser = new Map<string, MemberDailyAnswer[]>();
       (answersRes.data ?? []).forEach((a: any) => {
-        answerCountByUser.set(a.user_id, (answerCountByUser.get(a.user_id) ?? 0) + 1);
+        if (!a.user_id) return;
+        const questionIndex = Number(a.question_index ?? 0);
+        const question = getDailyAnswerPrompt(questionIndex);
+        if (!answersByUser.has(a.user_id)) answersByUser.set(a.user_id, []);
+        answersByUser.get(a.user_id)!.push({
+          questionIndex,
+          questionDate: a.question_date,
+          questionText: question.text,
+          questionCategory: question.category,
+          questionEmoji: question.emoji,
+          answer: a.answer,
+          createdAt: a.created_at,
+        });
+      });
+      answersByUser.forEach(answers => {
+        answers.sort((a, b) => {
+          const dateDiff = (b.questionDate ?? '').localeCompare(a.questionDate ?? '');
+          if (dateDiff !== 0) return dateDiff;
+          return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+        });
       });
       const dailyMatches = buildDailyMatchStats(currentUserId, (answersRes.data ?? []) as DailyAnswerRow[]);
 
@@ -1704,7 +1831,8 @@ export default function MembersScreen() {
         m.skills = skillsByUser.get(m.id) ?? [];
         m.wishes = wishesByUser.get(m.id) ?? [];
         m.introPost = introByUser.get(m.id) ?? null;
-        m.questionAnswerCount = answerCountByUser.get(m.id) ?? 0;
+        m.dailyAnswers = answersByUser.get(m.id) ?? [];
+        m.questionAnswerCount = m.dailyAnswers.length;
         const match = dailyMatches.get(m.id);
         if (match && match.sharedCount > 0) {
           m.dailyMatchPercent = match.percent;
@@ -1762,8 +1890,7 @@ export default function MembersScreen() {
   const filtered = useMemo(() => {
     if (!search.trim()) return members;
     return members.filter(m => {
-      const query = search.trim().toLowerCase();
-      return [
+      return matchesMemberSearchText([
         m.name,
         m.role,
         ROLE_LABELS[m.role],
@@ -1781,7 +1908,7 @@ export default function MembersScreen() {
         m.favorite_hobby,
         ...m.skills.map(s => s.description),
         ...m.wishes.map(w => w.description),
-      ].some(value => value?.toLowerCase().includes(query));
+      ], search);
     });
   }, [members, search]);
   const matchedMemberCount = filtered.filter(member =>

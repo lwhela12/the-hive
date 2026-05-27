@@ -96,6 +96,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const [showEditComposer, setShowEditComposer] = useState(false);
   const editComposerStorageKey = communityId ? `the-hive:board-edit-open:${communityId}:${postId}` : null;
   const editDraftStorageKey = communityId ? `the-hive:board-edit-draft:${communityId}:${postId}` : null;
+  const replyingToStorageKey = profile?.id ? `the-hive:board-reply-target:${profile.id}:${postId}` : null;
 
   const isAuthor = profile?.id === post?.author_id;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
@@ -105,6 +106,32 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     && post.status !== 'completed'
     && !post.archived_at
     && (isAdmin || (post.category?.owner_user_id ? post.category.owner_user_id === profile?.id : isAuthor));
+
+  useEffect(() => {
+    if (!replyingToStorageKey) return;
+
+    const rawTarget = getStoredItem(replyingToStorageKey);
+    if (!rawTarget) return;
+
+    try {
+      const target = JSON.parse(rawTarget) as { id?: string; authorName?: string };
+      if (target.id && target.authorName) {
+        setReplyingTo({ id: target.id, authorName: target.authorName });
+      }
+    } catch {
+      removeStoredItem(replyingToStorageKey);
+    }
+  }, [replyingToStorageKey]);
+
+  useEffect(() => {
+    if (!replyingToStorageKey) return;
+
+    if (replyingTo) {
+      setStoredItem(replyingToStorageKey, JSON.stringify(replyingTo));
+    } else {
+      removeStoredItem(replyingToStorageKey);
+    }
+  }, [replyingTo, replyingToStorageKey]);
 
   const fetchPost = useCallback(async () => {
     const { data, error } = await supabase

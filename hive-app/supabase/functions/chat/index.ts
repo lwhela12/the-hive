@@ -485,7 +485,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "search_board_posts",
-    description: "Search and retrieve board posts from HIVE message board. Use this to find specific discussions, reference threads in conversation, or look up what members have posted. Returns post details including ID, title, content snippet, author, category, reply count, and whether it's pinned.",
+    description: "Search and retrieve HIVE board posts and replies by title, content, board/category, HD board owner, author, and common member nicknames. Use this to find specific discussions, reference threads in conversation, or look up what members have posted. Returns post details including ID, title, content snippet, author, category, reply count, and whether it's pinned.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -500,6 +500,10 @@ const tools: Anthropic.Tool[] = [
         author_name: {
           type: "string",
           description: "Filter by author name"
+        },
+        owner_name: {
+          type: "string",
+          description: "Filter by HD board owner name or nickname, such as Fin for Infiniti"
         },
         limit: {
           type: "number",
@@ -676,6 +680,7 @@ const MEMBER_ALIASES: Record<string, string> = {
   infinite: 'infiniti',
   ems: 'emmeline',
 };
+const SEARCH_STOP_WORDS = new Set(['a', 'an', 'and', 'for', 'in', 'of', 'on', 's', 'the', 'to']);
 
 const normalizeText = (value?: string | null) =>
   (value || '')
@@ -693,6 +698,51 @@ const firstName = (name?: string | null) => {
 const normalizedNameQuery = (name?: string | null) => {
   const normalized = normalizeText(name);
   return MEMBER_ALIASES[normalized] || normalized;
+};
+
+const expandSearchTermAliases = (term?: string | null) => {
+  const normalized = normalizeText(term);
+  const compact = normalized.replace(/\s+/g, '');
+  if (!normalized && !compact) return [];
+
+  const terms = new Set<string>();
+  if (normalized) terms.add(normalized);
+  if (compact && compact !== normalized) terms.add(compact);
+
+  const directTarget = MEMBER_ALIASES[normalized] || MEMBER_ALIASES[compact];
+  if (directTarget) terms.add(directTarget);
+
+  Object.entries(MEMBER_ALIASES).forEach(([alias, target]) => {
+    if (target === normalized || target === compact || normalized.includes(target) || compact.includes(target)) {
+      terms.add(alias);
+    }
+  });
+
+  return Array.from(terms).filter(Boolean);
+};
+
+const searchTokenGroups = (query?: string | null) => {
+  const normalized = normalizeText(query);
+  if (!normalized) return [];
+
+  const groups = normalized
+    .split(/\s+/)
+    .filter((token) => token.length > 1 && !SEARCH_STOP_WORDS.has(token))
+    .map(expandSearchTermAliases);
+
+  return groups.length > 0 ? groups : [expandSearchTermAliases(normalized)];
+};
+
+const matchesSearchQuery = (values: Array<string | null | undefined>, query?: string | null) => {
+  const groups = searchTokenGroups(query);
+  if (groups.length === 0) return true;
+
+  const haystack = normalizeText(values.filter(Boolean).join(' '));
+  const compactHaystack = haystack.replace(/\s+/g, '');
+
+  return groups.every((terms) =>
+    terms.some((term) => haystack.includes(term) || compactHaystack.includes(term.replace(/\s+/g, '')))
+  );
 };
 
 const hasExplicitApproval = (message?: string | null) => {
@@ -826,10 +876,9 @@ async function listBoardCategories(
   const { data } = await query;
   let categories = (data || []) as BoardCategoryRecord[];
 
-  const textQuery = normalizeText(options.query);
-  if (textQuery) {
+  if (normalizeText(options.query)) {
     categories = categories.filter((category) =>
-      normalizeText(`${category.name} ${category.goal_title || ''} ${category.description || ''}`).includes(textQuery)
+      matchesSearchQuery([category.name, category.goal_title, category.description, category.owner?.name], options.query)
     );
   }
 
@@ -1645,13 +1694,15 @@ serve(async (req) => {
           }
 
           case 'search_board_posts': {
-            const { query, category, author_name, limit: requestedLimit } = toolUse.input as {
+            const { query, category, author_name, owner_name, limit: requestedLimit } = toolUse.input as {
               query?: string;
               category?: string;
               author_name?: string;
+              owner_name?: string;
               limit?: number;
             };
             const postLimit = Math.min(requestedLimit || 10, 20);
+            const fetchLimit = query || category || author_name || owner_name ? 100 : postLimit;
 
             let postQuery = supabaseClient
               .from('board_posts')
@@ -1668,12 +1719,7 @@ serve(async (req) => {
               .eq('community_id', communityId)
               .order('is_pinned', { ascending: false })
               .order('created_at', { ascending: false })
-              .limit(postLimit);
-
-            // Apply search filter if query provided
-            if (query) {
-              postQuery = postQuery.or(`title.ilike.%${query}%,content.ilike.%${query}%`);
-            }
+              .limit(fetchLimit);
 
             const { data: posts, error: postsError } = await postQuery;
 
@@ -1682,35 +1728,85 @@ serve(async (req) => {
               break;
             }
 
-            // Filter by category name if provided (post-query since it's a joined field)
+            const repliesByPost = new Map<string, any[]>();
+            const postIds = (posts || []).map((post: any) => post.id).filter(Boolean);
+            if (postIds.length > 0) {
+              const { data: replies } = await supabaseClient
+                .from('board_replies')
+                .select('post_id, content, created_at, author:profiles!board_replies_author_id_fkey(name)')
+                .in('post_id', postIds)
+                .order('created_at', { ascending: true })
+                .limit(200);
+
+              (replies || []).forEach((reply: any) => {
+                const existing = repliesByPost.get(reply.post_id) || [];
+                existing.push(reply);
+                repliesByPost.set(reply.post_id, existing);
+              });
+            }
+
             let filteredPosts = posts || [];
+            if (query) {
+              filteredPosts = filteredPosts.filter((p: any) => {
+                const replies = repliesByPost.get(p.id) || [];
+                return matchesSearchQuery([
+                  p.title,
+                  p.content,
+                  p.category?.name,
+                  p.category?.goal_title,
+                  p.category?.owner?.name,
+                  p.author?.name,
+                  ...replies.map((reply: any) => `${reply.content || ''} ${reply.author?.name || ''}`),
+                ], query);
+              });
+            }
+
             if (category) {
               filteredPosts = filteredPosts.filter((p: any) =>
-                p.category?.name?.toLowerCase().includes(category.toLowerCase())
+                matchesSearchQuery([p.category?.name, p.category?.goal_title, p.category?.owner?.name], category)
               );
             }
 
-            // Filter by author name if provided
             if (author_name) {
               filteredPosts = filteredPosts.filter((p: any) =>
-                p.author?.name?.toLowerCase().includes(author_name.toLowerCase())
+                matchesSearchQuery([p.author?.name], author_name)
               );
             }
 
-            // Format results with content snippets
-            const formattedPosts = filteredPosts.map((p: any) => ({
-              id: p.id,
-              title: p.title,
-              content_snippet: p.content?.substring(0, 200) + (p.content?.length > 200 ? '...' : ''),
-              author: p.author?.name || 'Unknown',
-              category: p.category?.name || 'General',
-              board_type: p.category?.topic_kind || 'discussion',
-              goal: p.category?.goal_title || null,
-              owner: p.category?.owner?.name || null,
-              is_pinned: p.is_pinned,
-              reply_count: p.reply_count || 0,
-              created_at: p.created_at
-            }));
+            if (owner_name) {
+              filteredPosts = filteredPosts.filter((p: any) =>
+                matchesSearchQuery([p.category?.owner?.name, p.category?.name, p.category?.goal_title], owner_name)
+              );
+            }
+
+            const formattedPosts = filteredPosts.slice(0, postLimit).map((p: any) => {
+              const replies = repliesByPost.get(p.id) || [];
+              const matchingReplies = query
+                ? replies
+                    .filter((reply: any) => matchesSearchQuery([reply.content, reply.author?.name], query))
+                    .slice(0, 2)
+                    .map((reply: any) => ({
+                      content_snippet: (reply.content || '').substring(0, 160) + ((reply.content || '').length > 160 ? '...' : ''),
+                      author: reply.author?.name || 'Unknown',
+                      created_at: reply.created_at,
+                    }))
+                : [];
+
+              return {
+                id: p.id,
+                title: p.title,
+                content_snippet: (p.content || '').substring(0, 200) + ((p.content || '').length > 200 ? '...' : ''),
+                author: p.author?.name || 'Unknown',
+                category: p.category?.name || 'General',
+                board_type: p.category?.topic_kind || 'discussion',
+                goal: p.category?.goal_title || null,
+                owner: p.category?.owner?.name || null,
+                is_pinned: p.is_pinned,
+                reply_count: p.reply_count || 0,
+                created_at: p.created_at,
+                matching_replies: matchingReplies,
+              };
+            });
 
             result = JSON.stringify(formattedPosts);
             break;
@@ -1853,15 +1949,15 @@ serve(async (req) => {
               limit?: number;
             };
             const wishLimit = Math.min(requestedLimit || 20, 50);
+            const wishFetchLimit = query || member_name ? 100 : wishLimit;
             let wishQuery = supabaseClient
               .from('wishes')
               .select('id, user_id, description, status, is_active, created_at, fulfilled_at, user:profiles!wishes_user_id_fkey(name)')
               .eq('community_id', communityId)
               .or(`status.in.(public,fulfilled),user_id.eq.${userId}`)
               .order('created_at', { ascending: false })
-              .limit(wishLimit);
+              .limit(wishFetchLimit);
             if (status) wishQuery = wishQuery.eq('status', status);
-            if (query) wishQuery = wishQuery.ilike('description', `%${query}%`);
 
             const { data: wishes, error: wishesError } = await wishQuery;
             if (wishesError) {
@@ -1869,11 +1965,20 @@ serve(async (req) => {
               break;
             }
 
-            const memberQuery = normalizedNameQuery(member_name);
-            const filtered = memberQuery
-              ? (wishes || []).filter((wish: any) => normalizeText(wish.user?.name || '').includes(memberQuery))
-              : (wishes || []);
-            result = JSON.stringify(filtered.map((wish: any) => ({
+            let filtered = wishes || [];
+            if (query) {
+              filtered = filtered.filter((wish: any) =>
+                matchesSearchQuery([wish.description, wish.user?.name], query)
+              );
+            }
+
+            if (member_name) {
+              filtered = filtered.filter((wish: any) =>
+                matchesSearchQuery([wish.user?.name], member_name)
+              );
+            }
+
+            result = JSON.stringify(filtered.slice(0, wishLimit).map((wish: any) => ({
               id: wish.id,
               description: wish.description,
               owner: wish.user?.name || null,

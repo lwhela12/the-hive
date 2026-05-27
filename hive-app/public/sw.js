@@ -1,8 +1,8 @@
 // Cache names: bump these when a deployed app shell must replace old clients.
-const APP_CACHE = 'hive-app-v34-skills-garden-immersive';
-const STATIC_CACHE = 'hive-static-v34-skills-garden-immersive';
+const APP_CACHE = 'hive-app-v39-broadcast-mentions';
+const STATIC_CACHE = 'hive-static-v39-broadcast-mentions';
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'skills-garden-immersive-v34';
+const REFRESH_TOKEN = 'broadcast-mentions-v39';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant

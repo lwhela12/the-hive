@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line, Path, Text as SvgText, TSpan } from 'react-native-svg';
+import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import type { Skill } from '../../types';
 
 type GardenSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
@@ -33,6 +34,7 @@ type SkillBubbleGardenProps = {
   onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
   onPlantSkills?: (skills: PlantSkillSelection[], options?: PlantSkillsOptions) => void;
   onAddCustomSkill?: () => void;
+  draftKey?: string | null;
 };
 
 type SkillCategoryDef = {
@@ -144,6 +146,13 @@ type SurveyChoice = {
 type SurveyQuestion = {
   prompt: string;
   choices: SurveyChoice[];
+};
+
+type SeedSurveyDraft = {
+  active: boolean;
+  surveySeed: number;
+  answers: number[];
+  updatedAt: number;
 };
 
 type SeedSlot = string | undefined;
@@ -1894,15 +1903,51 @@ function CustomSeedButton({
   suggestedSkills = [],
   disabled = false,
   compact = false,
+  draftKey,
 }: {
   onPlantSkill?: (skillDescription: string, options?: PlantSkillOptions) => void;
   onPress?: () => void;
   suggestedSkills?: string[];
   disabled?: boolean;
   compact?: boolean;
+  draftKey?: string | null;
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [draft, setDraft] = useState('');
+
+  useEffect(() => {
+    if (!draftKey) return;
+
+    const rawDraft = getStoredItem(draftKey);
+    if (!rawDraft) return;
+
+    try {
+      const savedDraft = JSON.parse(rawDraft) as { isAdding?: boolean; draft?: string; updatedAt?: number };
+      if (Date.now() - Number(savedDraft.updatedAt ?? 0) > 7 * 24 * 60 * 60 * 1000) {
+        removeStoredItem(draftKey);
+        return;
+      }
+      setDraft(savedDraft.draft ?? '');
+      setIsAdding(!!savedDraft.isAdding || !!savedDraft.draft);
+    } catch {
+      removeStoredItem(draftKey);
+    }
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!draftKey) return;
+
+    if (!isAdding && !draft.trim()) {
+      removeStoredItem(draftKey);
+      return;
+    }
+
+    setStoredItem(draftKey, JSON.stringify({
+      isAdding,
+      draft,
+      updatedAt: Date.now(),
+    }));
+  }, [draft, draftKey, isAdding]);
 
   const autocompleteSeeds = useMemo(() => {
     const query = normalizeSkillName(draft);
@@ -1922,6 +1967,7 @@ function CustomSeedButton({
       onPlantSkill(trimmedSkill, { enthusiasmLevel: 1 });
       setDraft('');
       setIsAdding(false);
+      if (draftKey) removeStoredItem(draftKey);
       return;
     }
 
@@ -2011,6 +2057,7 @@ function CustomSeedButton({
             onPress={() => {
               setDraft('');
               setIsAdding(false);
+              if (draftKey) removeStoredItem(draftKey);
             }}
             accessibilityRole="button"
             accessibilityLabel="Cancel custom skill"
@@ -2211,6 +2258,7 @@ function SeedSurvey({
   onPlantSkills,
   compact = false,
   narrow = false,
+  draftKey,
 }: {
   plantedNames: Set<string>;
   hasSkills: boolean;
@@ -2219,6 +2267,7 @@ function SeedSurvey({
   onPlantSkills?: (skills: PlantSkillSelection[], options?: PlantSkillsOptions) => void;
   compact?: boolean;
   narrow?: boolean;
+  draftKey?: string | null;
 }) {
   const [active, setActive] = useState(false);
   const [surveySeed, setSurveySeed] = useState(() => Date.now());
@@ -2234,15 +2283,58 @@ function SeedSurvey({
   const question = surveyQuestions[answers.length];
   const complete = answers.length >= surveyQuestions.length;
 
-  const resetSurvey = (refresh = false) => {
+  useEffect(() => {
+    if (!draftKey) return;
+
+    const rawDraft = getStoredItem(draftKey);
+    if (!rawDraft) return;
+
+    try {
+      const draft = JSON.parse(rawDraft) as SeedSurveyDraft;
+      if (!Array.isArray(draft.answers) || Date.now() - Number(draft.updatedAt ?? 0) > 7 * 24 * 60 * 60 * 1000) {
+        removeStoredItem(draftKey);
+        return;
+      }
+
+      setSurveySeed(Number.isFinite(draft.surveySeed) ? draft.surveySeed : Date.now());
+      setAnswers(draft.answers);
+      setActive(!!draft.active);
+    } catch {
+      removeStoredItem(draftKey);
+    }
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!draftKey) return;
+
+    if (!active && answers.length === 0) {
+      removeStoredItem(draftKey);
+      return;
+    }
+
+    setStoredItem(draftKey, JSON.stringify({
+      active,
+      surveySeed,
+      answers,
+      updatedAt: Date.now(),
+    } satisfies SeedSurveyDraft));
+  }, [active, answers, draftKey, surveySeed]);
+
+  useEffect(() => {
+    if (!complete || suggestions.length > 0) return;
+    setSuggestions(getSurveySuggestions(answers, plantedNames, GARDEN_CAPACITY, surveyQuestions));
+  }, [answers, complete, plantedNames, suggestions.length, surveyQuestions]);
+
+  const resetSurvey = (refresh = false, clearStored = false) => {
     setAnswers([]);
     setSuggestions([]);
     if (refresh) setSurveySeed(Date.now());
+    if (clearStored && draftKey) removeStoredItem(draftKey);
   };
 
   const plantSuggestions = (mode: PlantSkillsOptions['mode']) => {
     if (suggestions.length === 0) {
-      resetSurvey();
+      resetSurvey(false, true);
       return;
     }
 
@@ -2257,7 +2349,7 @@ function SeedSurvey({
     }
 
     setActive(false);
-    resetSurvey();
+    resetSurvey(false, true);
   };
 
   const sunSize = compact ? 78 : narrow ? 132 : 206;
@@ -2277,7 +2369,9 @@ function SeedSurvey({
       <Pressable
         className={Platform.OS === 'web' ? 'skill-garden-soft-open' : undefined}
         onPress={() => {
-          resetSurvey(true);
+          if (answers.length === 0) {
+            resetSurvey(true);
+          }
           setActive(true);
         }}
         accessibilityRole="button"
@@ -2444,7 +2538,6 @@ function SeedSurvey({
         <Pressable
           onPress={() => {
             setActive(false);
-            resetSurvey(true);
           }}
           accessibilityRole="button"
           accessibilityLabel="Close garden survey"
@@ -2631,7 +2724,7 @@ function SeedSurvey({
             </View>
           ) : (
             <Pressable
-              onPress={() => resetSurvey(true)}
+              onPress={() => resetSurvey(true, true)}
               accessibilityRole="button"
               accessibilityLabel="Try another garden path"
               style={{
@@ -2670,6 +2763,7 @@ export function SkillBubbleGarden({
   onPlantSkill,
   onPlantSkills,
   onAddCustomSkill,
+  draftKey,
 }: SkillBubbleGardenProps) {
   useWildflowerStyles();
 
@@ -2982,6 +3076,7 @@ export function SkillBubbleGarden({
               openSlots={openSlots}
               compact={compactLandscape}
               narrow={narrowPortrait}
+              draftKey={draftKey ? `${draftKey}:seed-survey` : null}
               onPlantSkill={onPlantSkill ? handlePlantSeed : undefined}
               onPlantSkills={onPlantSkills || onPlantSkill ? handlePlantSeeds : undefined}
             />
@@ -3212,6 +3307,7 @@ export function SkillBubbleGarden({
                   suggestedSkills={seedSourceSkills.filter(skill => !plantedNames.has(normalizeSkillName(skill)))}
                   disabled={!canPlantSeeds}
                   compact={compactLandscape}
+                  draftKey={draftKey ? `${draftKey}:custom-seed` : null}
                 />
               ) : null}
               <Pressable

@@ -7,8 +7,11 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
-import { getActiveMentionQuery, getMentionedMembers, getMentionSuggestions, insertMention } from '../../lib/mentions';
+import { getActiveMentionQuery, getMentionedMembers, getMentionSuggestions, hasBroadcastMention, insertMention, type MentionTarget } from '../../lib/mentions';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { fetchCommunityMentionableMembers } from '../../lib/mentionableMembers';
+import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
+import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import type { Attachment, Profile } from '../../types';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
@@ -40,7 +43,10 @@ export function BoardReplyComposer({
   placeholder = 'Write a reply...',
 }: BoardReplyComposerProps) {
   const { profile, communityId } = useAuth();
-  const [reply, setReply] = useState('');
+  const replyDraftKey = profile?.id
+    ? `the-hive:board-reply-draft:${profile.id}:${postId}:${parentReplyId ?? 'root'}`
+    : null;
+  const [reply, setReply, clearReplyDraft] = usePersistentTextDraft(replyDraftKey);
   const [replySelection, setReplySelection] = useState({ start: 0, end: 0 });
   const [replySelectionOverride, setReplySelectionOverride] = useState<{ start: number; end: number } | null>(null);
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
@@ -60,6 +66,7 @@ export function BoardReplyComposer({
   const mentionSuggestions = mentionQuery === null
     ? []
     : getMentionSuggestions(mentionQuery, activeMentionableMembers, profile?.id);
+  const selectedMentionsEveryone = hasBroadcastMention(reply);
   const selectedMentionMembers = getMentionedMembers(reply, activeMentionableMembers, profile?.id);
   const hasContent = reply.trim().length > 0 || selectedImages.length > 0 || selectedFiles.length > 0;
 
@@ -71,7 +78,7 @@ export function BoardReplyComposer({
   }, [replySelectionOverride]);
 
   const reset = () => {
-    setReply('');
+    clearReplyDraft();
     setReplySelection({ start: 0, end: 0 });
     setReplySelectionOverride(null);
     setSelectedImages([]);
@@ -91,7 +98,7 @@ export function BoardReplyComposer({
     });
   };
 
-  const handleSelectMention = (member: Pick<Profile, 'id' | 'name'>) => {
+  const handleSelectMention = (member: MentionTarget) => {
     const inserted = insertMention(reply, replyCursorIndex, member);
     const nextSelection = { start: inserted.cursorIndex, end: inserted.cursorIndex };
     setReply(inserted.text);
@@ -145,8 +152,12 @@ export function BoardReplyComposer({
         },
       }).catch((err) => console.log('Board reply notification error (non-blocking):', err));
 
-      const mentionedMembers = getMentionedMembers(replyText, activeMentionableMembers, profile.id)
-        .filter((member) => member.id !== postAuthorId);
+      const replyMentionsEveryone = hasBroadcastMention(replyText);
+      const mentionableMembersForNotification = replyMentionsEveryone && activeMentionableMembers.length === 0
+        ? await fetchCommunityMentionableMembers(communityId)
+        : activeMentionableMembers;
+      const mentionedMembers = getMentionedMembers(replyText, mentionableMembersForNotification, profile.id)
+        .filter((member) => replyMentionsEveryone || member.id !== postAuthorId);
       mentionedMembers.forEach((member) => {
         supabase.functions.invoke('notify-board-mention', {
           body: {
@@ -174,9 +185,16 @@ export function BoardReplyComposer({
   const enterToSubmitCaptureProps = Platform.OS === 'web'
     ? ({ onKeyDownCapture: submitOnEnter(handleSubmit) } as any)
     : {};
+  const { dragDropProps, isDragActive } = useWebAttachmentDropZone({
+    selectedImages,
+    selectedFiles,
+    onImagesChange: setSelectedImages,
+    onFilesChange: setSelectedFiles,
+    disabled: submitting,
+  });
 
   return (
-    <View>
+    <View {...dragDropProps}>
       {replyingToName && (
         <View className="flex-row items-center bg-cream/50 px-3 py-2 rounded-xl mb-2">
           <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal">
@@ -201,7 +219,15 @@ export function BoardReplyComposer({
         onSelect={handleSelectMention}
         placement="above"
       />
-      {selectedMentionMembers.length > 0 && (
+      {selectedMentionsEveryone ? (
+        <View className="flex-row flex-wrap mb-2" style={{ gap: 6 }}>
+          <View className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
+              Tagged everyone in HIVE
+            </Text>
+          </View>
+        </View>
+      ) : selectedMentionMembers.length > 0 && (
         <View className="flex-row flex-wrap mb-2" style={{ gap: 6 }}>
           {selectedMentionMembers.map((member) => (
             <View key={member.id} className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
@@ -247,7 +273,20 @@ export function BoardReplyComposer({
         </ScrollView>
       )}
 
-      <View className="flex-row items-end bg-cream rounded-2xl px-3 py-2" {...enterToSubmitCaptureProps}>
+      {isDragActive && (
+        <View className="mb-2 rounded-xl border border-gold/30 bg-gold/10 px-3 py-2">
+          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+            Drop photos, videos, or files to attach
+          </Text>
+        </View>
+      )}
+
+      <View
+        className={`flex-row items-end rounded-2xl px-3 py-2 border ${
+          isDragActive ? 'bg-gold/10 border-gold' : 'bg-cream border-transparent'
+        }`}
+        {...enterToSubmitCaptureProps}
+      >
         <AttachmentPicker
           compact
           selectedImages={selectedImages}

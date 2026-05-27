@@ -6,7 +6,11 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "doctor": "npx expo-doctor",
+    "export:ios": "expo export --platform ios --output-dir .expo-export/ios",
+    "release:check": "npm run typecheck && npm run doctor"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Profile } from '../../types';
-import { getActiveMentionQuery, getMentionedMembers, getMentionSuggestions, insertMention } from '../mentions';
+import {
+  getActiveMentionQuery,
+  getMentionedMembers,
+  getMentionSuggestions,
+  hasBroadcastMention,
+  insertMention,
+  type MentionTarget,
+} from '../mentions';
 
 type MentionMember = Pick<Profile, 'id' | 'name'>;
 type TextSelection = { start: number; end: number };
@@ -33,6 +40,7 @@ export function useMentionInput({
       : getMentionSuggestions(mentionQuery, members, currentUserId, suggestionLimit),
     [currentUserId, members, mentionQuery, suggestionLimit]
   );
+  const mentionsEveryone = useMemo(() => hasBroadcastMention(value), [value]);
   const mentionedMembers = useMemo(
     () => getMentionedMembers(value, members, currentUserId),
     [currentUserId, members, value]
@@ -57,7 +65,7 @@ export function useMentionInput({
     });
   };
 
-  const handleSelectMention = (member: MentionMember) => {
+  const handleSelectMention = (member: MentionTarget) => {
     const inserted = insertMention(value, cursorIndex, member);
     const nextSelection = { start: inserted.cursorIndex, end: inserted.cursorIndex };
     onChangeText(inserted.text);
@@ -74,6 +82,7 @@ export function useMentionInput({
     cursorIndex,
     mentionQuery,
     mentionSuggestions,
+    mentionsEveryone,
     mentionedMembers,
     resetMentionSelection,
     selectMention: handleSelectMention,

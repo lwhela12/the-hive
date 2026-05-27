@@ -1,10 +1,14 @@
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { Profile } from '../../types';
+import {
+  getBroadcastMentionSuggestion,
+  getMentionTargetHandle,
+  type MentionTarget,
+} from '../../lib/mentions';
 
 interface MentionSuggestionsProps {
-  suggestions: Pick<Profile, 'id' | 'name'>[];
-  onSelect: (member: Pick<Profile, 'id' | 'name'>) => void;
+  suggestions: MentionTarget[];
+  onSelect: (member: MentionTarget) => void;
   placement?: 'above' | 'below';
   active?: boolean;
   query?: string | null;
@@ -19,7 +23,12 @@ export function MentionSuggestions({
   query = null,
   loading = false,
 }: MentionSuggestionsProps) {
-  if (!active && suggestions.length === 0) return null;
+  const broadcastFallback = active && suggestions.length === 0
+    ? getBroadcastMentionSuggestion(query)
+    : null;
+  const visibleSuggestions = broadcastFallback ? [broadcastFallback] : suggestions;
+
+  if (!active && visibleSuggestions.length === 0) return null;
 
   const emptyLabel = loading
     ? 'Loading people...'
@@ -34,7 +43,7 @@ export function MentionSuggestions({
       }`}
       style={{ zIndex: 100, elevation: 20 }}
     >
-      {suggestions.length === 0 ? (
+      {visibleSuggestions.length === 0 ? (
         <View className="flex-row items-center px-3 py-2">
           <Ionicons
             name={loading ? 'hourglass-outline' : 'person-add-outline'}
@@ -49,30 +58,44 @@ export function MentionSuggestions({
         <>
           <View className="px-3 py-1.5 bg-gold/10">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs uppercase">
-              Tag someone
+              Tag someone or everyone
             </Text>
           </View>
-          {suggestions.map((member, index) => (
-            <Pressable
-              key={member.id}
-              onPress={() => onSelect(member)}
-              className={`flex-row items-center px-3 py-2 active:bg-cream ${
-                index < suggestions.length - 1 ? 'border-b border-cream' : ''
-              }`}
-            >
-              <View className="w-7 h-7 rounded-full bg-gold/15 items-center justify-center mr-2">
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                  {member.name.charAt(0)}
+          {visibleSuggestions.map((member, index) => {
+            const handle = getMentionTargetHandle(member);
+            return (
+              <Pressable
+                key={member.id}
+                onPress={() => onSelect(member)}
+                className={`flex-row items-center px-3 py-2 active:bg-cream ${
+                  index < visibleSuggestions.length - 1 ? 'border-b border-cream' : ''
+                }`}
+              >
+                <View className="w-7 h-7 rounded-full bg-gold/15 items-center justify-center mr-2">
+                  {member.isBroadcast ? (
+                    <Ionicons name="people-outline" size={16} color="#bd9348" />
+                  ) : (
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
+                      {member.name.charAt(0)}
+                    </Text>
+                  )}
+                </View>
+                <View className="flex-1">
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-sm">
+                    {member.name}
+                  </Text>
+                  {member.description && (
+                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs">
+                      {member.description}
+                    </Text>
+                  )}
+                </View>
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-gold text-sm ml-2">
+                  @{handle}
                 </Text>
-              </View>
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-sm">
-                {member.name}
-              </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-gold text-sm ml-auto">
-                @{member.name.split(/\s+/)[0]}
-              </Text>
-            </Pressable>
-          ))}
+              </Pressable>
+            );
+          })}
         </>
       )}
     </View>

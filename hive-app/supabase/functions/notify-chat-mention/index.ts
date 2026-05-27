@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 
 interface NotifyChatMentionPayload {
   room_id: string;
@@ -52,8 +53,53 @@ serve(async (req) => {
   );
 
   try {
+    const auth = await verifySupabaseJwt(req.headers.get('Authorization'));
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
+    }
+
     const payload: NotifyChatMentionPayload = await req.json();
     const { room_id, sender_id, recipient_id, message_preview, community_id, room_name } = payload;
+
+    if (auth.userId !== sender_id) {
+      return errorResponse('Authenticated user does not match sender', 403);
+    }
+
+    if (sender_id === recipient_id) {
+      return jsonResponse({ skipped: true, reason: 'self_mention' });
+    }
+
+    const { data: memberships, error: membershipError } = await supabaseAdmin
+      .from('community_memberships')
+      .select('user_id')
+      .eq('community_id', community_id)
+      .in('user_id', [sender_id, recipient_id]);
+
+    if (membershipError) {
+      console.error('Failed to verify memberships:', membershipError);
+      return errorResponse('Could not verify memberships', 500);
+    }
+
+    const communityMemberIds = new Set((memberships ?? []).map((membership: any) => membership.user_id));
+    if (!communityMemberIds.has(sender_id) || !communityMemberIds.has(recipient_id)) {
+      return errorResponse('Sender or recipient is not in this community', 403);
+    }
+
+    const { data: roomMembers, error: roomMemberError } = await supabaseAdmin
+      .from('chat_room_members')
+      .select('user_id')
+      .eq('room_id', room_id)
+      .in('user_id', [sender_id, recipient_id]);
+
+    if (roomMemberError) {
+      console.error('Failed to verify room members:', roomMemberError);
+      return errorResponse('Could not verify room members', 500);
+    }
+
+    const roomMemberIds = new Set((roomMembers ?? []).map((member: any) => member.user_id));
+    if (!roomMemberIds.has(sender_id) || !roomMemberIds.has(recipient_id)) {
+      return errorResponse('Sender or recipient is not in this room', 403);
+    }
 
     const { data: sender, error: senderError } = await supabaseAdmin
       .from('profiles')
@@ -87,13 +133,25 @@ serve(async (req) => {
       notification_created: false,
     };
 
-    const { error: notifError } = await supabaseAdmin.from('notifications').insert({
+    const notificationPayload = {
       user_id: recipient_id,
       community_id,
       notification_type: 'chat_mention',
       title,
       content: preview,
-    });
+      metadata: {
+        room_id,
+        sender_id,
+        room_name: room_name ?? null,
+      },
+    };
+
+    let { error: notifError } = await supabaseAdmin.from('notifications').insert(notificationPayload);
+    if (notifError && String(notifError.message ?? '').includes('metadata')) {
+      const { metadata: _metadata, ...legacyPayload } = notificationPayload;
+      const retry = await supabaseAdmin.from('notifications').insert(legacyPayload);
+      notifError = retry.error;
+    }
 
     if (!notifError) {
       results.notification_created = true;

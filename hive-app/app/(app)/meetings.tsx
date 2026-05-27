@@ -14,6 +14,7 @@ import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../componen
 import { formatDateLong, parseAmericanDate } from '../../lib/dateUtils';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { submitOnEnter } from '../../lib/submitOnEnter';
+import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import type { Meeting, Event } from '../../types';
 
 interface MeetingSummaryPreview {
@@ -31,8 +32,31 @@ interface NotesImportFile {
   fileBase64: string;
 }
 
+type NotesImportForm = {
+  title: string;
+  date: string;
+  notes: string;
+  linkedEventId: string | null;
+  files: NotesImportFile[];
+};
+
+type EventEditForm = {
+  title: string;
+  description: string;
+  location: string;
+  event_date: string;
+  event_time: string;
+};
+
+type MeetingFormDraft<T> = {
+  active: boolean;
+  form: T;
+  updatedAt: number;
+};
+
 const DEFAULT_HIVE_DECK_VIEW_URL = 'https://www.canva.com/d/CQkVqOMhwuO06qe';
 const DEFAULT_HIVE_DECK_EDIT_URL = 'https://www.canva.com/d/QPpy59P1sGtp6Al';
+const MEETING_FORM_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const getIsMobileWeb = () => {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
@@ -176,7 +200,7 @@ export default function MeetingsScreen() {
   const [showNotesImport, setShowNotesImport] = useState(false);
   const [showMeetingPicker, setShowMeetingPicker] = useState(false);
   const [importingNotes, setImportingNotes] = useState(false);
-  const [notesImportForm, setNotesImportForm] = useState({
+  const [notesImportForm, setNotesImportForm] = useState<NotesImportForm>({
     title: 'HIVE Meeting',
     date: toAmericanDate(getTodayIsoDate()),
     notes: '',
@@ -185,7 +209,7 @@ export default function MeetingsScreen() {
   });
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<EventEditForm>({
     title: '',
     description: '',
     location: '',
@@ -193,6 +217,45 @@ export default function MeetingsScreen() {
     event_time: '',
   });
   const [savingEdit, setSavingEdit] = useState(false);
+  const notesImportDraftKey = communityId ? `the-hive:meeting-notes-import-draft:${communityId}` : null;
+  const activeMeetingEditKey = communityId ? `the-hive:meeting-edit-active:${communityId}` : null;
+  const eventEditDraftKey = communityId && editingEvent
+    ? `the-hive:meeting-edit-draft:${communityId}:${editingEvent.id}`
+    : null;
+
+  function readMeetingFormDraft<T>(key: string | null): MeetingFormDraft<T> | null {
+    if (!key) return null;
+
+    const rawDraft = getStoredItem(key);
+    if (!rawDraft) return null;
+
+    try {
+      const draft = JSON.parse(rawDraft) as MeetingFormDraft<T>;
+      if (!draft?.form || Date.now() - Number(draft.updatedAt ?? 0) > MEETING_FORM_DRAFT_TTL_MS) {
+        removeStoredItem(key);
+        return null;
+      }
+      return draft;
+    } catch {
+      removeStoredItem(key);
+      return null;
+    }
+  }
+
+  const getDefaultNotesImportForm = (event?: Event | null): NotesImportForm => {
+    const date = event?.event_date ?? getTodayIsoDate();
+    return {
+      title: getImportTitle(event),
+      date: toAmericanDate(date),
+      notes: '',
+      linkedEventId: event?.id ?? null,
+      files: [],
+    };
+  };
+
+  const getEventEditDraftKey = (eventId: string) => (
+    communityId ? `the-hive:meeting-edit-draft:${communityId}:${eventId}` : null
+  );
 
   const fetchMeetings = useCallback(async () => {
     if (!communityId) return;
@@ -248,6 +311,59 @@ export default function MeetingsScreen() {
   useEffect(() => {
     fetchMeetings();
   }, [fetchMeetings]);
+
+  useEffect(() => {
+    const savedDraft = readMeetingFormDraft<NotesImportForm>(notesImportDraftKey);
+    if (!savedDraft) return;
+
+    setNotesImportForm(savedDraft.form);
+    if (savedDraft.active) {
+      setShowNotesImport(true);
+    }
+  }, [notesImportDraftKey]);
+
+  useEffect(() => {
+    if (!notesImportDraftKey) return;
+
+    const hasDraftContent =
+      notesImportForm.notes.trim().length > 0 ||
+      notesImportForm.files.length > 0 ||
+      notesImportForm.title.trim() !== 'HIVE Meeting';
+
+    if (!showNotesImport && !hasDraftContent) {
+      removeStoredItem(notesImportDraftKey);
+      return;
+    }
+
+    setStoredItem(notesImportDraftKey, JSON.stringify({
+      active: showNotesImport,
+      form: notesImportForm,
+      updatedAt: Date.now(),
+    } satisfies MeetingFormDraft<NotesImportForm>));
+  }, [notesImportDraftKey, notesImportForm, showNotesImport]);
+
+  useEffect(() => {
+    if (!activeMeetingEditKey || editingEvent || meetingEvents.length === 0) return;
+
+    const activeEventId = getStoredItem(activeMeetingEditKey);
+    const activeEvent = activeEventId ? meetingEvents.find((event) => event.id === activeEventId) : null;
+    if (activeEvent) {
+      handleEditEvent(activeEvent);
+    } else if (activeEventId) {
+      removeStoredItem(activeMeetingEditKey);
+    }
+  }, [activeMeetingEditKey, editingEvent, meetingEvents]);
+
+  useEffect(() => {
+    if (!eventEditDraftKey || !editingEvent) return;
+
+    setStoredItem(eventEditDraftKey, JSON.stringify({
+      active: true,
+      form: editForm,
+      updatedAt: Date.now(),
+    } satisfies MeetingFormDraft<EventEditForm>));
+    if (activeMeetingEditKey) setStoredItem(activeMeetingEditKey, editingEvent.id);
+  }, [activeMeetingEditKey, editForm, editingEvent, eventEditDraftKey]);
 
   // Poll for updates when there are meetings being processed
   // This is more reliable than Realtime for status updates
@@ -404,7 +520,8 @@ export default function MeetingsScreen() {
   };
 
   const handleEditEvent = (event: Event) => {
-    setEditForm({
+    const savedDraft = readMeetingFormDraft<EventEditForm>(getEventEditDraftKey(event.id));
+    setEditForm(savedDraft?.form ?? {
       title: normalizeHiveBrandText(event.title),
       description: event.description || '',
       location: event.location || '',
@@ -415,6 +532,19 @@ export default function MeetingsScreen() {
       event_time: event.event_time || '',
     });
     setEditingEvent(event);
+    if (activeMeetingEditKey) setStoredItem(activeMeetingEditKey, event.id);
+  };
+
+  const closeEventEdit = () => {
+    if (eventEditDraftKey && editingEvent) {
+      setStoredItem(eventEditDraftKey, JSON.stringify({
+        active: false,
+        form: editForm,
+        updatedAt: Date.now(),
+      } satisfies MeetingFormDraft<EventEditForm>));
+    }
+    if (activeMeetingEditKey) removeStoredItem(activeMeetingEditKey);
+    setEditingEvent(null);
   };
 
   const handleSaveEdit = async () => {
@@ -437,6 +567,8 @@ export default function MeetingsScreen() {
 
       if (error) throw error;
 
+      if (eventEditDraftKey) removeStoredItem(eventEditDraftKey);
+      if (activeMeetingEditKey) removeStoredItem(activeMeetingEditKey);
       setEditingEvent(null);
       await fetchMeetings();
       Alert.alert('Success', 'Meeting updated');
@@ -449,16 +581,24 @@ export default function MeetingsScreen() {
   };
 
   const openNotesImport = (event?: Event | null) => {
-    const date = event?.event_date ?? getTodayIsoDate();
-    setNotesImportForm({
-      title: getImportTitle(event),
-      date: toAmericanDate(date),
-      notes: '',
-      linkedEventId: event?.id ?? null,
-      files: [],
-    });
+    const savedDraft = readMeetingFormDraft<NotesImportForm>(notesImportDraftKey);
+    const matchesRequestedMeeting =
+      savedDraft?.form.linkedEventId === (event?.id ?? null)
+      || (!event && !!savedDraft?.form);
+    setNotesImportForm(matchesRequestedMeeting ? savedDraft.form : getDefaultNotesImportForm(event));
     setShowMeetingPicker(false);
     setShowNotesImport(true);
+  };
+
+  const closeNotesImport = () => {
+    if (notesImportDraftKey) {
+      setStoredItem(notesImportDraftKey, JSON.stringify({
+        active: false,
+        form: notesImportForm,
+        updatedAt: Date.now(),
+      } satisfies MeetingFormDraft<NotesImportForm>));
+    }
+    setShowNotesImport(false);
   };
 
   const selectNotesImportMeeting = (event: Event | null) => {
@@ -633,6 +773,7 @@ export default function MeetingsScreen() {
 
       if (error) throw error;
 
+      if (notesImportDraftKey) removeStoredItem(notesImportDraftKey);
       setShowNotesImport(false);
       setNotesImportForm({
         title: 'HIVE Meeting',
@@ -972,12 +1113,12 @@ export default function MeetingsScreen() {
         visible={showNotesImport}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowNotesImport(false)}
+        onRequestClose={closeNotesImport}
       >
         <SafeAreaView className="flex-1 bg-white" edges={['top']}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
             <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
-              <Pressable onPress={() => setShowNotesImport(false)} disabled={importingNotes}>
+              <Pressable onPress={closeNotesImport} disabled={importingNotes}>
                 <Text className="text-gray-500 text-base">Cancel</Text>
               </Pressable>
               <Text className="text-lg font-bold text-hive-dark">Import Notes</Text>
@@ -1138,12 +1279,12 @@ export default function MeetingsScreen() {
         visible={!!editingEvent}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setEditingEvent(null)}
+        onRequestClose={closeEventEdit}
       >
         <SafeAreaView className="flex-1 bg-white" edges={['top']}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
-            <Pressable onPress={() => setEditingEvent(null)}>
+            <Pressable onPress={closeEventEdit}>
               <Text className="text-gray-500 text-base">Cancel</Text>
             </Pressable>
             <Text className="text-lg font-bold text-hive-dark">Edit Meeting</Text>

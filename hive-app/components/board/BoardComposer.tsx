@@ -5,8 +5,9 @@ import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types'
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
-import { getActiveMentionQuery, getMentionedMembers, getMentionSuggestions, insertMention } from '../../lib/mentions';
+import { getActiveMentionQuery, getMentionedMembers, getMentionSuggestions, hasBroadcastMention, insertMention, type MentionTarget } from '../../lib/mentions';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
@@ -57,6 +58,7 @@ export function BoardComposer({
   const mentionSuggestions = mentionQuery === null
     ? []
     : getMentionSuggestions(mentionQuery, activeMentionableMembers, userId);
+  const selectedMentionsEveryone = hasBroadcastMention(content);
   const selectedMentionMembers = getMentionedMembers(content, activeMentionableMembers, userId);
 
   // Pre-fill fields when editing
@@ -168,7 +170,7 @@ export function BoardComposer({
 
   const isValid = title.trim().length > 0 && content.trim().length > 0;
 
-  const handleSelectMention = (member: Pick<Profile, 'id' | 'name'>) => {
+  const handleSelectMention = (member: MentionTarget) => {
     const inserted = insertMention(content, contentCursorIndex, member);
     setContent(inserted.text);
     const nextSelection = { start: inserted.cursorIndex, end: inserted.cursorIndex };
@@ -194,6 +196,13 @@ export function BoardComposer({
   const contentEnterToSubmitCaptureProps = Platform.OS === 'web'
     ? ({ onKeyDownCapture: submitOnEnter(handleSubmit) } as any)
     : {};
+  const { dragDropProps, isDragActive } = useWebAttachmentDropZone({
+    selectedImages,
+    selectedFiles,
+    onImagesChange: setSelectedImages,
+    onFilesChange: setSelectedFiles,
+    disabled: submitting,
+  });
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
@@ -300,7 +309,15 @@ export function BoardComposer({
                 suggestions={mentionSuggestions}
                 onSelect={handleSelectMention}
               />
-              {selectedMentionMembers.length > 0 && (
+              {selectedMentionsEveryone ? (
+                <View className="flex-row flex-wrap mt-2" style={{ gap: 6 }}>
+                  <View className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
+                      Tagged everyone in HIVE
+                    </Text>
+                  </View>
+                </View>
+              ) : selectedMentionMembers.length > 0 && (
                 <View className="flex-row flex-wrap mt-2" style={{ gap: 6 }}>
                   {selectedMentionMembers.map((member) => (
                     <View key={member.id} className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
@@ -314,10 +331,20 @@ export function BoardComposer({
             </View>
 
             {/* Attachments */}
-            <View className="mb-4">
+            <View
+              className={`mb-4 rounded-2xl border p-3 ${
+                isDragActive ? 'border-gold bg-gold/10' : 'border-transparent'
+              }`}
+              {...dragDropProps}
+            >
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
                 Attachments
               </Text>
+              {isDragActive && (
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm mb-2">
+                  Drop photos, videos, or files to attach
+                </Text>
+              )}
               <AttachmentPicker
                 selectedImages={selectedImages}
                 onImagesChange={setSelectedImages}

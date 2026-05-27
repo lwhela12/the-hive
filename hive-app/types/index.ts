@@ -306,6 +306,7 @@ export interface Notification extends Record<string, unknown> {
   related_wish_id?: string;
   related_meeting_id?: string;
   related_action_item_id?: string;
+  metadata?: Record<string, unknown> | null;
   read_at?: string;
   email_sent: boolean;
   created_at: string;

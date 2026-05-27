@@ -1,17 +1,16 @@
 import { useState, memo, useRef } from 'react';
-import { Alert, View, TextInput, Pressable, Text, Image as RNImage, ScrollView, Platform } from 'react-native';
+import { View, TextInput, Pressable, Text, Image as RNImage, ScrollView, Platform } from 'react-native';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { VoiceMicButton } from '../ui/VoiceMicButton';
-import { getDraft, setDraft, clearDraft } from '../../lib/draftStore';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
+import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
 import { MentionSuggestions } from '../ui/MentionSuggestions';
-import { fileToSelectedFile, fileToSelectedImage, isImageFile } from '../../lib/webFileAttachments';
-import { getShortVideoLimitLabel, partitionAllowedShortVideos } from '../../lib/mediaAttachments';
+import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
 import type { Profile } from '../../types';
 import { SelectedFilePreview } from '../ui/SelectedFilePreview';
 
@@ -44,12 +43,10 @@ export const ChatInput = memo(function ChatInput({
   currentUserId,
   mentionableMembers = [],
 }: ChatInputProps) {
-  const [inputText, setInputText] = useState(() => getDraft(draftKey));
+  const [inputText, setInputText, clearInputDraft] = usePersistentTextDraft(draftKey);
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
-  const [isDragActive, setIsDragActive] = useState(false);
   const voiceBaseTextRef = useRef<string | null>(null);
-  const dragDepthRef = useRef(0);
   const { members: activeMentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(
     communityId,
     mentionableMembers
@@ -77,8 +74,7 @@ export const ChatInput = memo(function ChatInput({
         ? { images: selectedImages, files: selectedFiles }
         : undefined;
     onSend(inputText.trim(), attachments);
-    setInputText('');
-    clearDraft(draftKey);
+    clearInputDraft();
     setSelectedImages([]);
     setSelectedFiles([]);
     voiceBaseTextRef.current = null;
@@ -87,7 +83,6 @@ export const ChatInput = memo(function ChatInput({
 
   const handleTextChange = (text: string) => {
     setInputText(text);
-    setDraft(draftKey, text);
   };
 
   const mentionInput = useMentionInput({
@@ -101,65 +96,15 @@ export const ChatInput = memo(function ChatInput({
   const enterToSubmitCaptureProps = Platform.OS === 'web'
     ? ({ onKeyDownCapture: submitOnEnter(handleSend) } as any)
     : {};
-
-  const attachDroppedFiles = async (files: File[]) => {
-    if (isLoading || files.length === 0) return;
-
-    const imageSlots = Math.max(0, MAX_IMAGES - selectedImages.length);
-    const fileSlots = Math.max(0, MAX_FILES - selectedFiles.length);
-    const droppedImages = files.filter(isImageFile).slice(0, imageSlots);
-    const droppedFiles = files.filter((file) => !isImageFile(file)).slice(0, fileSlots);
-
-    if (droppedImages.length > 0) {
-      const images = await Promise.all(droppedImages.map(fileToSelectedImage));
-      setSelectedImages((prev) => [...prev, ...images].slice(0, MAX_IMAGES));
-    }
-
-    if (droppedFiles.length > 0) {
-      const fileAttachments = droppedFiles.map(fileToSelectedFile);
-      const { accepted, rejected } = partitionAllowedShortVideos(fileAttachments);
-      if (rejected.length > 0) {
-        Alert.alert('Video Too Large', `Please choose short clips: ${getShortVideoLimitLabel()}.`);
-      }
-      if (accepted.length > 0) {
-        setSelectedFiles((prev) => [...prev, ...accepted].slice(0, MAX_FILES));
-      }
-    }
-  };
-
-  const dragDropProps = Platform.OS === 'web'
-    ? ({
-        onDragEnter: (event: any) => {
-          if (isLoading) return;
-          event.preventDefault?.();
-          event.stopPropagation?.();
-          dragDepthRef.current += 1;
-          setIsDragActive(true);
-        },
-        onDragOver: (event: any) => {
-          if (isLoading) return;
-          event.preventDefault?.();
-          event.stopPropagation?.();
-          if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-          setIsDragActive(true);
-        },
-        onDragLeave: (event: any) => {
-          event.preventDefault?.();
-          event.stopPropagation?.();
-          dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-          if (dragDepthRef.current === 0) {
-            setIsDragActive(false);
-          }
-        },
-        onDrop: async (event: any) => {
-          event.preventDefault?.();
-          event.stopPropagation?.();
-          dragDepthRef.current = 0;
-          setIsDragActive(false);
-          await attachDroppedFiles(Array.from(event.dataTransfer?.files ?? []));
-        },
-      } as any)
-    : {};
+  const { dragDropProps, isDragActive } = useWebAttachmentDropZone({
+    selectedImages,
+    selectedFiles,
+    onImagesChange: setSelectedImages,
+    onFilesChange: setSelectedFiles,
+    maxImages: MAX_IMAGES,
+    maxFiles: MAX_FILES,
+    disabled: isLoading,
+  });
 
   const hasContent = inputText.trim().length > 0 || selectedImages.length > 0 || selectedFiles.length > 0;
 
@@ -287,7 +232,6 @@ export const ChatInput = memo(function ChatInput({
             setInputText((prev) => {
               if (voiceBaseTextRef.current === null) voiceBaseTextRef.current = prev;
               const merged = mergeTranscript(voiceBaseTextRef.current, text);
-              setDraft(draftKey, merged);
               return merged;
             });
           }}
