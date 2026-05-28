@@ -1707,6 +1707,7 @@ export default function BoardScreen() {
               compactImages={!useMobileLayout}
               linkedWishLabel={linkedWish ? 'Community Wish' : undefined}
               onLinkedWishPress={linkedWish ? () => setSelectedLinkedWish(linkedWish) : undefined}
+              currentUserId={profile?.id}
             />
           );
         }}

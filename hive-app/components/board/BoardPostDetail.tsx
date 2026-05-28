@@ -285,12 +285,12 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     if (!profile || !communityId) return;
 
     try {
-      await supabase.from('board_reactions').insert({
+      await supabase.from('board_reactions').upsert({
         community_id: communityId,
         post_id: postId,
         user_id: profile.id,
         emoji,
-      });
+      }, { onConflict: 'post_id,user_id,emoji', ignoreDuplicates: true });
       await fetchPost();
     } catch (error) {
       console.error('Error adding reaction:', error);
@@ -317,12 +317,12 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     if (!profile || !communityId) return;
 
     try {
-      await supabase.from('board_reactions').insert({
+      await supabase.from('board_reactions').upsert({
         community_id: communityId,
         reply_id: replyId,
         user_id: profile.id,
         emoji,
-      });
+      }, { onConflict: 'reply_id,user_id,emoji', ignoreDuplicates: true });
       await fetchReplies();
     } catch (error) {
       console.error('Error adding reaction:', error);

@@ -1,10 +1,15 @@
 import { useRef, useState, memo } from 'react';
-import { View, Text, Pressable, Modal, useWindowDimensions, ScrollView, TextInput } from 'react-native';
+import { View, Text, Pressable, useWindowDimensions } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../ui/Avatar';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { LinkifiedText } from '../ui/LinkifiedText';
+import {
+  getReactionGroups,
+  HiveReactionPickerModal,
+  HiveReactionPills,
+  HiveReactionTrigger,
+} from '../ui/HiveReactions';
 import type { RoomMessage, Profile, MessageReaction } from '../../types';
 
 interface RoomMessageItemProps {
@@ -18,14 +23,6 @@ interface RoomMessageItemProps {
   ownBubbleTextColor?: string;
   reactionAccentColor?: string;
 }
-
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '🐝', '🎉', '👀'];
-const MORE_REACTIONS = [
-  '😍', '😊', '🥰', '👏', '🙌', '🔥',
-  '😢', '😭', '😮', '😱', '🤔', '🙏',
-  '💛', '💚', '💙', '💜', '🧡', '🩷',
-  '✨', '🌟', '💯', '🐶', '🐾', '🍯',
-];
 
 export const RoomMessageItem = memo(function RoomMessageItem({
   message,
@@ -50,20 +47,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
   const hasContent = message.content && message.content.trim().length > 0;
   const hasAttachments = !isDeleted && message.attachments && message.attachments.length > 0;
 
-  // Group reactions by emoji
-  const reactionGroups = new Map<string, { count: number; hasReacted: boolean }>();
-  message.reactions?.forEach((r) => {
-    const existing = reactionGroups.get(r.emoji);
-    if (existing) {
-      existing.count++;
-      if (r.user_id === currentUserId) existing.hasReacted = true;
-    } else {
-      reactionGroups.set(r.emoji, {
-        count: 1,
-        hasReacted: r.user_id === currentUserId,
-      });
-    }
-  });
+  const reactionGroups = getReactionGroups(message.reactions || [], currentUserId);
 
   const handleLongPress = () => {
     if (!isDeleted) {
@@ -119,7 +103,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
   return (
     <View
       className={`max-w-[85%] mb-4 ${isOwnMessage ? 'self-end items-end' : 'self-start items-start'}`}
-      style={{ position: 'relative', paddingTop: reactionGroups.size > 0 ? 10 : 0 }}
+      style={{ position: 'relative', paddingTop: reactionGroups.length > 0 ? 10 : 0 }}
     >
       <View className={`flex-row items-end ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
         {/* Avatar */}
@@ -201,24 +185,18 @@ export const RoomMessageItem = memo(function RoomMessageItem({
           })}
         </Text>
         {!isDeleted && (
-          <Pressable
-            onPress={() => setShowActions(true)}
-            className="ml-2 flex-row items-center rounded-full px-2.5 py-1.5"
-            style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: `${reactionAccentColor}55` }}
-            accessibilityRole="button"
-            accessibilityLabel="Add emoji reaction"
-            hitSlop={10}
-          >
-            <Text style={{ fontSize: 14, lineHeight: 18, color: reactionAccentColor, fontFamily: 'Lato_700Bold', marginRight: 2 }}>+</Text>
-            <Text style={{ fontSize: 18, lineHeight: 22 }}>😊</Text>
-          </Pressable>
+          <View className="ml-2">
+            <HiveReactionTrigger
+              onPress={() => setShowActions(true)}
+              accentColor={reactionAccentColor}
+            />
+          </View>
         )}
       </View>
 
       {/* Reactions display - iMessage-style overlay on the upper-right corner */}
-      {reactionGroups.size > 0 && (
+      {reactionGroups.length > 0 && (
         <View
-          className="flex-row flex-wrap gap-1"
           style={{
             position: 'absolute',
             top: 0,
@@ -227,111 +205,24 @@ export const RoomMessageItem = memo(function RoomMessageItem({
             maxWidth: maxImageWidth,
           }}
         >
-          {Array.from(reactionGroups.entries()).map(([emoji, { count, hasReacted }]) => (
-            <Pressable
-              key={emoji}
-              onPress={() => handleReactionPress(emoji, hasReacted)}
-              className="flex-row items-center px-2 py-1 rounded-full shadow-sm"
-              style={{
-                backgroundColor: hasReacted ? '#fff8ed' : '#FFFFFF',
-                borderWidth: 1,
-                borderColor: hasReacted ? reactionAccentColor : '#f0e2c8',
-              }}
-            >
-              <Text className="text-sm">{emoji}</Text>
-              <Text
-                className="text-xs ml-1"
-                style={{ fontFamily: 'Lato_700Bold', color: hasReacted ? reactionAccentColor : '#313130' }}
-              >
-                {count}
-              </Text>
-            </Pressable>
-          ))}
+          <HiveReactionPills
+            groups={reactionGroups}
+            onReactionPress={handleReactionPress}
+            accentColor={reactionAccentColor}
+          />
         </View>
       )}
 
       {/* Actions modal (iMessage style) */}
-      <Modal visible={showActions} transparent animationType="fade">
-        <Pressable
-          onPress={() => setShowActions(false)}
-          className="flex-1 justify-center items-center bg-black/50"
-        >
-          <Pressable
-            onPress={(event) => event.stopPropagation()}
-            className="bg-white rounded-2xl p-4 shadow-lg mx-8 w-80 max-h-[82%]"
-          >
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-base mb-1 text-center">
-              Add a reaction
-            </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs mb-3 text-center">
-              Double tap a message to send ❤️, or long press for this menu.
-            </Text>
-
-            {/* Quick reactions */}
-            <View className="flex-row justify-around mb-3 pb-3 border-b border-cream">
-              {QUICK_REACTIONS.map((emoji) => (
-                <Pressable
-                  key={emoji}
-                  onPress={() => addReaction(emoji)}
-                  className="w-10 h-10 rounded-full items-center justify-center"
-                  style={{ backgroundColor: '#f8f1e3' }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`React with ${emoji}`}
-                >
-                  <Text className="text-2xl">{emoji}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <ScrollView style={{ maxHeight: 190 }} showsVerticalScrollIndicator={false}>
-              <View className="flex-row flex-wrap justify-center mb-3">
-                {MORE_REACTIONS.map((emoji) => (
-                  <Pressable
-                    key={emoji}
-                    onPress={() => addReaction(emoji)}
-                    className="w-10 h-10 rounded-full items-center justify-center m-1"
-                    style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#f0e2c8' }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`React with ${emoji}`}
-                  >
-                    <Text className="text-2xl">{emoji}</Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <View className="mb-3 p-3 rounded-2xl" style={{ backgroundColor: '#fff8ed' }}>
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-xs mb-2">
-                  Want another emoji?
-                </Text>
-                <View className="flex-row items-center">
-                  <TextInput
-                    value={customEmoji}
-                    onChangeText={setCustomEmoji}
-                    placeholder="Paste/type any emoji"
-                    placeholderTextColor="#9ca3af"
-                    className="flex-1 bg-white rounded-xl px-3 py-2 text-base"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    maxLength={8}
-                    returnKeyType="done"
-                    onSubmitEditing={() => addReaction(customEmoji)}
-                    style={{ fontFamily: 'Lato_400Regular' }}
-                  />
-                  <Pressable
-                    onPress={() => addReaction(customEmoji)}
-                    className="ml-2 px-3 py-2 rounded-xl"
-                    style={{ backgroundColor: customEmoji.trim() ? reactionAccentColor : '#e5e7eb' }}
-                    disabled={!customEmoji.trim()}
-                    accessibilityRole="button"
-                    accessibilityLabel="Use custom emoji reaction"
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', color: '#FFFFFF' }}>Add</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </ScrollView>
-
-            {/* Actions */}
+      <HiveReactionPickerModal
+        visible={showActions}
+        onClose={() => setShowActions(false)}
+        onAddReaction={addReaction}
+        customEmoji={customEmoji}
+        onCustomEmojiChange={setCustomEmoji}
+        accentColor={reactionAccentColor}
+        actions={(
+          <>
             {hasContent && !isDeleted && (
               <Pressable onPress={handleCopy} className="py-3">
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -366,18 +257,9 @@ export const RoomMessageItem = memo(function RoomMessageItem({
                 </Pressable>
               </>
             )}
-
-            <Pressable
-              onPress={() => setShowActions(false)}
-              className="py-3"
-            >
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
-                Cancel
-              </Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </>
+        )}
+      />
     </View>
   );
 });

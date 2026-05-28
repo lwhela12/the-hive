@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatDateShort } from '../../lib/dateUtils';
 import { isVideoAttachment } from '../../lib/mediaAttachments';
 import { LinkifiedText } from '../ui/LinkifiedText';
+import { getReactionGroups, HiveReactionPills } from '../ui/HiveReactions';
 import type { BoardPost, BoardReaction, Profile } from '../../types';
 
 interface BoardPostCardProps {
@@ -14,15 +15,7 @@ interface BoardPostCardProps {
   compactImages?: boolean;
   linkedWishLabel?: string;
   onLinkedWishPress?: () => void;
-}
-
-// Group reactions by emoji and count them
-function getReactionCounts(reactions: BoardReaction[]): { emoji: string; count: number }[] {
-  const counts = new Map<string, number>();
-  reactions.forEach((r) => {
-    counts.set(r.emoji, (counts.get(r.emoji) || 0) + 1);
-  });
-  return Array.from(counts.entries()).map(([emoji, count]) => ({ emoji, count }));
+  currentUserId?: string;
 }
 
 function createContentPreview(content: string, maxLength = 120): string {
@@ -55,6 +48,7 @@ export function BoardPostCard({
   compactImages = false,
   linkedWishLabel,
   onLinkedWishPress,
+  currentUserId,
 }: BoardPostCardProps) {
   const timeAgo = getTimeAgo(new Date(post.created_at));
   const isCompleted = post.status === 'completed';
@@ -66,7 +60,7 @@ export function BoardPostCard({
   const firstAttachment = previewAttachments[0] || null;
   const isVideoPreview = firstAttachment ? isVideoAttachment(firstAttachment) : false;
   const extraCount = hasAttachments ? post.attachments!.length - 1 : 0;
-  const reactionCounts = getReactionCounts(post.reactions || []);
+  const reactionGroups = getReactionGroups(post.reactions || [], currentUserId);
   const contentPreview = createContentPreview(post.content);
   const useCompactImage = compactImages && !!firstAttachment;
   const imageStyle = useCompactImage
@@ -198,14 +192,7 @@ export function BoardPostCard({
                     </Text>
                   </View>
                 )}
-                {reactionCounts.map(({ emoji, count }) => (
-                  <View key={emoji} className="flex-row items-center bg-cream px-2 py-1 rounded-full">
-                    <Text className="text-xs">{emoji}</Text>
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-xs ml-1">
-                      {count}
-                    </Text>
-                  </View>
-                ))}
+
                 <View className="flex-row items-center bg-cream px-2 py-1 rounded-full">
                   <Text className="text-xs mr-1">💬</Text>
                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-xs">
@@ -217,6 +204,20 @@ export function BoardPostCard({
           </View>
         </View>
       </Pressable>
+      {reactionGroups.length > 0 && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: canEdit && onEdit ? 52 : 12,
+            zIndex: 3,
+            maxWidth: '72%',
+          }}
+          pointerEvents="none"
+        >
+          <HiveReactionPills groups={reactionGroups} compact />
+        </View>
+      )}
       {canEdit && onEdit && (
         <Pressable
           onPress={() => onEdit(post)}

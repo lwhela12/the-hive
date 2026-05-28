@@ -1,51 +1,33 @@
 import { useState } from 'react';
-import { View, Text, Pressable, Modal } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View } from 'react-native';
 import type { BoardReaction } from '../../types';
-
-interface ReactionCount {
-  emoji: string;
-  count: number;
-  hasReacted: boolean;
-}
+import {
+  getReactionGroups,
+  HiveReactionPickerModal,
+  HiveReactionPills,
+  HiveReactionTrigger,
+} from '../ui/HiveReactions';
 
 interface BoardReactionBarProps {
   reactions: BoardReaction[];
   currentUserId?: string;
   onReact: (emoji: string) => void;
   onRemoveReaction: (emoji: string) => void;
+  accentColor?: string;
+  compact?: boolean;
 }
-
-const AVAILABLE_REACTIONS = ['👍', '❤️', '🐝', '🎉', '🤔', '👀'];
 
 export function BoardReactionBar({
   reactions,
   currentUserId,
   onReact,
   onRemoveReaction,
+  accentColor = '#bd9348',
+  compact = false,
 }: BoardReactionBarProps) {
   const [showPicker, setShowPicker] = useState(false);
-
-  // Group reactions by emoji
-  const reactionCounts: ReactionCount[] = [];
-  const emojiMap = new Map<string, { count: number; hasReacted: boolean }>();
-
-  reactions.forEach((r) => {
-    const existing = emojiMap.get(r.emoji);
-    if (existing) {
-      existing.count++;
-      if (r.user_id === currentUserId) existing.hasReacted = true;
-    } else {
-      emojiMap.set(r.emoji, {
-        count: 1,
-        hasReacted: r.user_id === currentUserId,
-      });
-    }
-  });
-
-  emojiMap.forEach((value, emoji) => {
-    reactionCounts.push({ emoji, ...value });
-  });
+  const [customEmoji, setCustomEmoji] = useState('');
+  const reactionGroups = getReactionGroups(reactions || [], currentUserId);
 
   const handleReactionPress = (emoji: string, hasReacted: boolean) => {
     if (hasReacted) {
@@ -55,58 +37,36 @@ export function BoardReactionBar({
     }
   };
 
+  const addReaction = (emoji: string) => {
+    const trimmed = emoji.trim();
+    if (!trimmed) return;
+    onReact(trimmed);
+    setCustomEmoji('');
+    setShowPicker(false);
+  };
+
   return (
-    <View className="flex-row items-center flex-wrap gap-2">
-      {reactionCounts.map(({ emoji, count, hasReacted }) => (
-        <Pressable
-          key={emoji}
-          onPress={() => handleReactionPress(emoji, hasReacted)}
-          className={`flex-row items-center px-2 py-1 rounded-full ${
-            hasReacted ? 'bg-gold/20 border border-gold' : 'bg-cream'
-          }`}
-        >
-          <Text className="text-sm">{emoji}</Text>
-          <Text
-            style={{ fontFamily: 'Lato_700Bold' }}
-            className={`text-xs ml-1 ${hasReacted ? 'text-gold' : 'text-charcoal'}`}
-          >
-            {count}
-          </Text>
-        </Pressable>
-      ))}
-
-      <Pressable
+    <View className="flex-row items-center flex-wrap" style={{ gap: compact ? 4 : 6 }}>
+      <HiveReactionPills
+        groups={reactionGroups}
+        onReactionPress={handleReactionPress}
+        accentColor={accentColor}
+        compact={compact}
+      />
+      <HiveReactionTrigger
         onPress={() => setShowPicker(true)}
-        className="px-2 py-1 rounded-full bg-cream flex-row items-center"
-        accessibilityRole="button"
-        accessibilityLabel="Add reaction"
-      >
-        <Ionicons name="happy-outline" size={16} color="#bd9348" />
-      </Pressable>
-
-      <Modal visible={showPicker} transparent animationType="fade">
-        <Pressable
-          onPress={() => setShowPicker(false)}
-          className="flex-1 justify-center items-center bg-black/50"
-        >
-          <View className="bg-white rounded-2xl p-4 shadow-lg">
-            <View className="flex-row flex-wrap gap-3">
-              {AVAILABLE_REACTIONS.map((emoji) => (
-                <Pressable
-                  key={emoji}
-                  onPress={() => {
-                    onReact(emoji);
-                    setShowPicker(false);
-                  }}
-                  className="p-2 active:bg-cream rounded-lg"
-                >
-                  <Text className="text-2xl">{emoji}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </Pressable>
-      </Modal>
+        accentColor={accentColor}
+        compact={compact}
+      />
+      <HiveReactionPickerModal
+        visible={showPicker}
+        onClose={() => setShowPicker(false)}
+        onAddReaction={addReaction}
+        customEmoji={customEmoji}
+        onCustomEmojiChange={setCustomEmoji}
+        accentColor={accentColor}
+        showHint={false}
+      />
     </View>
   );
 }
