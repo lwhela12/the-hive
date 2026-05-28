@@ -1682,6 +1682,7 @@ export default function MembersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<MemberData | null>(null);
+  const [dismissedRouteMemberId, setDismissedRouteMemberId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [memberViewMode, setMemberViewMode] = useState<MemberViewMode>('directory');
   const currentUserId = session?.user?.id ?? profile?.id ?? null;
@@ -1873,9 +1874,23 @@ export default function MembersScreen() {
     setSelected(member);
   }, [router]);
 
+  const closeMemberProfile = useCallback(() => {
+    setSelected(null);
+    if (memberId) {
+      setDismissedRouteMemberId(memberId);
+      router.replace('/members');
+    }
+  }, [memberId, router]);
+
+  useEffect(() => {
+    if (!memberId) {
+      setDismissedRouteMemberId(null);
+    }
+  }, [memberId]);
+
   // Auto-open member detail when navigated here with a memberId param
   useEffect(() => {
-    if (memberId && members.length > 0 && !selected) {
+    if (memberId && memberId !== dismissedRouteMemberId && members.length > 0 && !selected) {
       const target = members.find(m => m.id === memberId);
       if (!target) return;
 
@@ -1886,7 +1901,7 @@ export default function MembersScreen() {
 
       setSelected(target);
     }
-  }, [currentUserId, memberId, members, router, selected]);
+  }, [currentUserId, dismissedRouteMemberId, memberId, members, router, selected]);
 
   useEffect(() => {
     if (selected && currentUserId && selected.id === currentUserId) {
@@ -2223,7 +2238,7 @@ export default function MembersScreen() {
         <MemberDetailModal
           member={selected}
           communityId={communityId}
-          onClose={() => setSelected(null)}
+          onClose={closeMemberProfile}
           onMemberUpdated={(updatedMember) => {
             setSelected(updatedMember);
             setMembers(current => current.map(member => member.id === updatedMember.id ? updatedMember : member));
