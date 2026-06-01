@@ -129,7 +129,7 @@ export function BoardReplyItem({
           </View>
 
           <View className="flex-row items-center gap-4">
-            {!isNested && onReply && (
+            {onReply && (
               <Pressable onPress={() => onReply(reply.id, reply.author?.name || 'Unknown')}>
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-gold text-sm">
                   Reply
@@ -161,6 +161,7 @@ export function BoardReplyItem({
               isNested
               onReact={onReact}
               onRemoveReaction={onRemoveReaction}
+              onReply={onReply}
               onEdit={onEdit}
               onDelete={onDelete}
               canModerate={canModerate}

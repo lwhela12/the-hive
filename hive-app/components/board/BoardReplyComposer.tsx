@@ -40,7 +40,7 @@ export function BoardReplyComposer({
   replyingToName,
   onCancelReplyingTo,
   onSubmitted,
-  placeholder = 'Write a reply...',
+  placeholder = 'Reply to the thread...',
 }: BoardReplyComposerProps) {
   const { profile, communityId } = useAuth();
   const replyDraftKey = profile?.id
@@ -69,6 +69,7 @@ export function BoardReplyComposer({
   const selectedMentionsEveryone = hasBroadcastMention(reply);
   const selectedMentionMembers = getMentionedMembers(reply, activeMentionableMembers, profile?.id);
   const hasContent = reply.trim().length > 0 || selectedImages.length > 0 || selectedFiles.length > 0;
+  const inputPlaceholder = replyingToName ? 'Write your reply...' : placeholder;
 
   useEffect(() => {
     if (!replySelectionOverride) return;
@@ -300,7 +301,7 @@ export function BoardReplyComposer({
           onChangeText={handleReplyChange}
           onSelectionChange={(event) => setReplySelection(event.nativeEvent.selection)}
           selection={replySelectionOverride ?? undefined}
-          placeholder={placeholder}
+          placeholder={inputPlaceholder}
           placeholderTextColor="#9CA3AF"
           selectionColor="#313130"
           multiline
