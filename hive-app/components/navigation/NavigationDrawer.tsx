@@ -11,6 +11,7 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
+import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
 interface NavigationDrawerProps {
   isOpen: boolean;
@@ -79,6 +80,9 @@ export const NavigationDrawer = memo(function NavigationDrawer({
   }));
 
   const handleNavigation = (route: string) => {
+    if (route === '/hive') {
+      resetHomeNavigationState();
+    }
     if (route === '/board') {
       clearBoardNavigationState(communityId);
     }

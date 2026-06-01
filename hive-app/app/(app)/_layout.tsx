@@ -9,6 +9,7 @@ import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
 import { getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
+import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
 function TabIcon({
   icon,
@@ -162,6 +163,11 @@ export default function AppLayout() {
       >
         <Tabs.Screen
           name="hive"
+          listeners={{
+            tabPress: () => {
+              resetHomeNavigationState();
+            },
+          }}
           options={{
             title: 'Home',
             tabBarAccessibilityLabel: 'Home',

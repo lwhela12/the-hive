@@ -28,6 +28,7 @@ import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { linkWishToHdBoard, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+import { addHomeResetListener } from '../../lib/homeNavigation';
 import {
   QUARTERLY_DUES_AMOUNT,
   type DuesPeriod,
@@ -385,6 +386,7 @@ export default function HiveScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
+  const homeScrollRef = useRef<ScrollView>(null);
   const currentUserId = session?.user?.id ?? profile?.id ?? null;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const canManageDues = isAdmin || communityRole === 'treasurer' || profile?.role === 'treasurer';
@@ -755,6 +757,27 @@ export default function HiveScreen() {
   const selectedActionItem = selectedActionItemId
     ? homeActionItems.find(item => item.id === selectedActionItemId) ?? null
     : null;
+
+  const resetHomeToRoot = useCallback(() => {
+    setSelectedWish(null);
+    setEditingWish(null);
+    setManagingWish(null);
+    setWishToGrant(null);
+    setShowAddWishModal(false);
+    setShowEventModal(false);
+    setEditingEvent(null);
+    setEventError(null);
+    setShowAddTaskModal(false);
+    setSelectedActionItemId(null);
+    setTaskError(null);
+    setShowCatchUpModal(false);
+    setShowAnswerModal(false);
+    setShowAddHomeGuide(false);
+    setActiveAnswerPrompt(null);
+    homeScrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, []);
+
+  useEffect(() => addHomeResetListener(resetHomeToRoot), [resetHomeToRoot]);
 
   const markQuarterlyDuesReminderDone = useCallback(async () => {
     if (!profile?.id || !communityId) return;
@@ -1754,6 +1777,7 @@ export default function HiveScreen() {
       <AppHeader title="HIVE" />
 
       <ScrollView
+        ref={homeScrollRef}
         className="flex-1"
         contentContainerClassName="pb-4"
         contentContainerStyle={{ paddingBottom: useMobileLayout ? 104 : 16 }}
