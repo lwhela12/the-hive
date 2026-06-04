@@ -86,6 +86,11 @@ export function WishCombCard({
   const dateLabel = isGranted && wish.fulfilled_at
     ? `Granted · ${formatDateShort(wish.fulfilled_at)}`
     : formatDateShort(wish.created_at);
+  const cardStyle = [
+    styles.card,
+    isPrivate ? styles.cardPrivate : styles.cardPublic,
+    isGranted ? styles.cardGranted : null,
+  ];
 
   const content = (
     <>
@@ -156,8 +161,24 @@ export function WishCombCard({
     </>
   );
 
+  if (onManage) {
+    return (
+      <Pressable
+        onPress={() => onManage(wish)}
+        accessibilityRole="button"
+        accessibilityLabel="Manage wish"
+        style={({ pressed }) => [
+          ...cardStyle,
+          pressed ? styles.cardPressed : null,
+        ]}
+      >
+        {content}
+      </Pressable>
+    );
+  }
+
   return (
-    <View style={[styles.card, isPrivate ? styles.cardPrivate : styles.cardPublic, isGranted ? styles.cardGranted : null]}>
+    <View style={cardStyle}>
       {content}
     </View>
   );
@@ -176,6 +197,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
+  },
+  cardPressed: {
+    opacity: 0.84,
   },
   cardPublic: {
     borderColor: 'rgba(222,193,129,0.5)',
