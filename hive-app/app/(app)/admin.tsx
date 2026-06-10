@@ -68,6 +68,20 @@ const ROLE_LABELS: Record<UserRole, string> = {
 
 const DUES_QUARTERS = [1, 2, 3, 4] as const;
 
+const formatMemberList = (names: string[]) => {
+  if (names.length === 0) return 'members';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+};
+
+const getDuesAmountLabel = (amount: number) =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+  }).format(amount);
+
 const getInviteKey = (invite: InviteRow) => `${invite.community_id}:${invite.email.trim().toLowerCase()}`;
 const getInviteTime = (invite: InviteRow) => new Date(invite.created_at).getTime() || 0;
 
@@ -399,15 +413,15 @@ export default function AdminScreen() {
   const [recordingHoneyPot, setRecordingHoneyPot] = useState(false);
   const [honeyPotFeedback, setHoneyPotFeedback] = useState<HoneyPotFeedback | null>(null);
   const [duesCoverage, setDuesCoverage] = useState<DuesCoverage>('none');
-  const [duesMemberId, setDuesMemberId] = useState('');
+  const [duesMemberIds, setDuesMemberIds] = useState<string[]>([]);
   const [duesYear, setDuesYear] = useState(String(currentDuesPeriod.year));
   const [duesQuarter, setDuesQuarter] = useState(String(currentDuesPeriod.quarter));
 
   useEffect(() => {
     if (honeyPotType !== 'deposit') return;
     const duesAmount = getDuesAmountForCoverage(duesCoverage);
-    if (duesAmount) setHoneyPotAmount(String(duesAmount));
-  }, [duesCoverage, honeyPotType]);
+    if (duesAmount) setHoneyPotAmount(String(duesAmount * Math.max(duesMemberIds.length, 1)));
+  }, [duesCoverage, duesMemberIds.length, honeyPotType]);
 
   const fetchData = useCallback(async () => {
     if (!communityId || !canEditHoneyPot) return;
@@ -811,7 +825,7 @@ export default function AdminScreen() {
     const duesYearValue = Number(duesYear);
     const duesQuarterValue = Number(duesQuarter);
 
-    if (taggedAsDues && !duesMemberId) {
+    if (taggedAsDues && selectedDuesMembers.length === 0) {
       showHoneyPotFeedback('error', 'Error', 'Please choose who this dues payment is for.');
       return;
     }
@@ -824,7 +838,19 @@ export default function AdminScreen() {
       return;
     }
 
+    const perMemberDuesAmount = taggedAsDues ? getDuesAmountForCoverage(duesCoverage) : null;
+    const expectedDuesAmount = perMemberDuesAmount ? perMemberDuesAmount * selectedDuesMembers.length : null;
+    if (taggedAsDues && expectedDuesAmount !== null && Math.abs(amount - expectedDuesAmount) >= 0.005) {
+      showHoneyPotFeedback(
+        'error',
+        'Error',
+        `Dues amount should be ${getDuesAmountLabel(expectedDuesAmount)} for ${selectedDuesMembers.length} member${selectedDuesMembers.length === 1 ? '' : 's'}.`
+      );
+      return;
+    }
+
     const signedAmount = honeyPotType === 'withdrawal' ? -amount : amount;
+    const duesMembersToRecord = taggedAsDues ? selectedDuesMembers : [];
 
     try {
       setRecordingHoneyPot(true);
@@ -832,24 +858,42 @@ export default function AdminScreen() {
         tone: 'info',
         message: `Recording Honey Pot ${honeyPotType === 'deposit' ? 'deposit' : 'withdrawal'}...`,
       });
-      const result = await recordHoneyPotTransaction({
-        communityId,
-        signedAmount,
-        transactionType: honeyPotType,
-        note: honeyPotNote,
-        paymentMethod: honeyPotPaymentMethod,
-        externalCounterpartyName: taggedAsDues ? null : honeyPotCounterparty,
-        recordedBy: profile?.id ?? null,
-        relatedUserId: taggedAsDues ? duesMemberId : null,
-        duesYear: taggedAsDues ? duesYearValue : null,
-        duesQuarter: duesCoverage === 'quarter' ? duesQuarterValue : null,
-        duesCoveredQuarters: duesCoverage === 'year' ? 4 : duesCoverage === 'quarter' ? 1 : null,
-        fallbackDuesLabel: taggedAsDues
-          ? `${selectedDuesMember?.name ?? 'Member'} · ${duesCoverage === 'year' ? `${duesYearValue} full year` : `Q${duesQuarterValue} ${duesYearValue}`}`
-          : null,
-      });
-      const savedBalance = result.balance;
-      const savedStructuredDues = taggedAsDues && result.savedStructuredDues;
+      const results = [];
+      if (taggedAsDues) {
+        for (const duesMember of duesMembersToRecord) {
+          results.push(await recordHoneyPotTransaction({
+            communityId,
+            signedAmount: perMemberDuesAmount ?? amount,
+            transactionType: honeyPotType,
+            note: honeyPotNote,
+            paymentMethod: honeyPotPaymentMethod,
+            externalCounterpartyName: null,
+            recordedBy: profile?.id ?? null,
+            relatedUserId: duesMember.id,
+            duesYear: duesYearValue,
+            duesQuarter: duesCoverage === 'quarter' ? duesQuarterValue : null,
+            duesCoveredQuarters: duesCoverage === 'year' ? 4 : 1,
+            fallbackDuesLabel: `${duesMember.name} · ${duesCoverage === 'year' ? `${duesYearValue} full year` : `Q${duesQuarterValue} ${duesYearValue}`}`,
+          }));
+        }
+      } else {
+        results.push(await recordHoneyPotTransaction({
+          communityId,
+          signedAmount,
+          transactionType: honeyPotType,
+          note: honeyPotNote,
+          paymentMethod: honeyPotPaymentMethod,
+          externalCounterpartyName: honeyPotCounterparty,
+          recordedBy: profile?.id ?? null,
+          relatedUserId: null,
+          duesYear: null,
+          duesQuarter: null,
+          duesCoveredQuarters: null,
+          fallbackDuesLabel: null,
+        }));
+      }
+      const savedBalance = results[results.length - 1]?.balance ?? honeyPotBalance;
+      const savedStructuredDues = !taggedAsDues || results.every((result) => result.savedStructuredDues);
 
       setHoneyPotBalance(savedBalance);
       queryClient.setQueryData(queryKeys.honeyPot(communityId), savedBalance);
@@ -859,7 +903,7 @@ export default function AdminScreen() {
       setHoneyPotNote('');
       setHoneyPotCounterparty('');
       if (duesCoverage !== 'none') {
-        setDuesMemberId('');
+        setDuesMemberIds([]);
       }
       const ledger = await fetchHoneyPotLedger(communityId);
       setHoneyPotBalance(ledger.balance);
@@ -868,7 +912,9 @@ export default function AdminScreen() {
         'success',
         'Success',
         savedStructuredDues || !taggedAsDues
-          ? `Honey Pot ${honeyPotType === 'deposit' ? 'deposit' : 'withdrawal'} recorded`
+          ? taggedAsDues
+            ? `Dues recorded for ${formatMemberList(duesMembersToRecord.map((member) => member.name))}.`
+            : `Honey Pot ${honeyPotType === 'deposit' ? 'deposit' : 'withdrawal'} recorded`
           : 'Deposit recorded. The dues tag was saved in the note, but reminder tracking needs the latest database migration.'
       );
     } catch (err) {
@@ -879,7 +925,16 @@ export default function AdminScreen() {
     }
   };
 
-  const selectedDuesMember = members.find((member) => member.profiles.id === duesMemberId)?.profiles;
+  const selectedDuesMembers = members
+    .map((member) => member.profiles)
+    .filter((member) => duesMemberIds.includes(member.id));
+  const toggleDuesMember = useCallback((memberId: string) => {
+    setDuesMemberIds((current) => (
+      current.includes(memberId)
+        ? current.filter((id) => id !== memberId)
+        : [...current, memberId]
+    ));
+  }, []);
   const desktopPanelHeight = Math.max(320, Math.floor((height - 180) / 2));
   const mobilePanelHeight = Math.min(430, Math.max(340, Math.floor(height * 0.46)));
   const dashboardOuterContentStyle: ViewStyle = useMobileLayout
@@ -946,7 +1001,7 @@ export default function AdminScreen() {
                               setHoneyPotType(type);
                               if (type === 'withdrawal') {
                                 setDuesCoverage('none');
-                                setDuesMemberId('');
+                                setDuesMemberIds([]);
                               }
                             }}
                             accessibilityRole="button"
@@ -1105,27 +1160,32 @@ export default function AdminScreen() {
                             </View>
 
                             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                              {members.map((member) => (
-                                <Pressable
-                                  key={member.profiles.id}
-                                  onPress={() => setDuesMemberId(member.profiles.id)}
-                                  className={`mr-2 px-3 py-2 rounded-lg border ${
-                                    duesMemberId === member.profiles.id
-                                      ? 'bg-honey-500 border-honey-500'
-                                      : 'bg-white border-honey-100'
-                                  }`}
-                                >
-                                  <Text className={`text-xs font-semibold ${
-                                    duesMemberId === member.profiles.id ? 'text-white' : 'text-gray-700'
-                                  }`}>
-                                    {member.profiles.name}
-                                  </Text>
-                                </Pressable>
-                              ))}
+                              {members.map((member) => {
+                                const selected = duesMemberIds.includes(member.profiles.id);
+                                return (
+                                  <Pressable
+                                    key={member.profiles.id}
+                                    onPress={() => toggleDuesMember(member.profiles.id)}
+                                    accessibilityRole="checkbox"
+                                    accessibilityState={{ checked: selected }}
+                                    className={`mr-2 px-3 py-2 rounded-lg border ${
+                                      selected
+                                        ? 'bg-honey-500 border-honey-500'
+                                        : 'bg-white border-honey-100'
+                                    }`}
+                                  >
+                                    <Text className={`text-xs font-semibold ${
+                                      selected ? 'text-white' : 'text-gray-700'
+                                    }`}>
+                                      {selected ? '✓ ' : ''}{member.profiles.name}
+                                    </Text>
+                                  </Pressable>
+                                );
+                              })}
                             </ScrollView>
-                            {selectedDuesMember && (
+                            {selectedDuesMembers.length > 0 && (
                               <Text className="text-xs text-gray-500 mt-2">
-                                Tagging this deposit as dues for {selectedDuesMember.name}.
+                                Tagging this deposit as dues for {formatMemberList(selectedDuesMembers.map((member) => member.name))}.
                               </Text>
                             )}
                           </View>

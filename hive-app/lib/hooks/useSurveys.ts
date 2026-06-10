@@ -35,7 +35,7 @@ const RETIRED_SURVEY_PATTERNS = [
   /q1\s+review/i,
 ];
 
-const MONTHLY_CHECK_IN_WINDOW_DAYS = 5;
+const MONTHLY_CHECK_IN_WINDOW_DAYS = 3;
 const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
 
 function isRetiredSurvey(survey: Survey) {
@@ -60,17 +60,38 @@ function startOfLocalDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+function getSurveyAvailableAt(survey: Survey) {
+  const dueDate = getLocalDateFromSurveyDueDate(survey.due_date);
+  if (!dueDate) return null;
+
+  const availableAt = startOfLocalDay(dueDate);
+  availableAt.setDate(availableAt.getDate() - MONTHLY_CHECK_IN_WINDOW_DAYS);
+  return availableAt;
+}
+
 function isSurveyAvailableToMembers(survey: Survey) {
   const label = `${survey.title} ${survey.description ?? ''}`;
   if (!MONTHLY_CHECK_IN_PATTERN.test(label)) return true;
 
-  const dueDate = getLocalDateFromSurveyDueDate(survey.due_date);
-  if (!dueDate) return true;
-
-  const availableAt = startOfLocalDay(dueDate);
-  availableAt.setDate(availableAt.getDate() - MONTHLY_CHECK_IN_WINDOW_DAYS);
+  const availableAt = getSurveyAvailableAt(survey);
+  if (!availableAt) return true;
 
   return startOfLocalDay(new Date()) >= availableAt;
+}
+
+function isSurveyPendingForMember(survey: Survey, response?: SurveyResponse) {
+  if (!response) return true;
+
+  const label = `${survey.title} ${survey.description ?? ''}`;
+  if (!MONTHLY_CHECK_IN_PATTERN.test(label)) return false;
+
+  const availableAt = getSurveyAvailableAt(survey);
+  if (!availableAt) return false;
+
+  const submittedAt = new Date(response.submitted_at);
+  if (Number.isNaN(submittedAt.getTime())) return false;
+
+  return submittedAt < availableAt;
 }
 
 export function useSurveys(communityId?: string, userId?: string) {
@@ -115,7 +136,7 @@ export function useSurveys(communityId?: string, userId?: string) {
 
   const activeSurveys = allSurveys.filter(s => s.is_active && !isRetiredSurvey(s));
   const availableSurveys = activeSurveys.filter(isSurveyAvailableToMembers);
-  const pendingSurveys = availableSurveys.filter(s => !myResponses.has(s.id));
+  const pendingSurveys = availableSurveys.filter(s => isSurveyPendingForMember(s, myResponses.get(s.id)));
 
   const submitResponse = async (
     surveyId: string,
