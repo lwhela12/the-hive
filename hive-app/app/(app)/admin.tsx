@@ -39,7 +39,7 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { useSurveys } from '../../lib/hooks/useSurveys';
-import type { Survey } from '../../lib/hooks/useSurveys';
+import type { Survey, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { parseAmericanDate } from '../../lib/dateUtils';
 import type { Profile, QueenBee, UserRole, CommunityInvite } from '../../types';
 
@@ -150,6 +150,92 @@ const HONEY_POT_FEEDBACK_STYLE: Record<HoneyPotFeedback['tone'], {
     borderColor: '#cbd5e1',
     color: '#475569',
   },
+};
+
+const SURVEY_QUESTION_TYPES: SurveyQuestion['type'][] = ['short', 'long', 'scale', 'choice'];
+const SURVEY_TYPE_LABELS: Record<SurveyQuestion['type'], string> = {
+  short: 'Short',
+  long: 'Long',
+  scale: 'Scale',
+  choice: 'Choice',
+};
+
+const MONTHLY_CHECK_IN_TEMPLATE: SurveyQuestion[] = [
+  {
+    id: 'q_health_energy',
+    text: 'How are your health and energy right now?',
+    type: 'long',
+    required: false,
+  },
+  {
+    id: 'q_hive_value',
+    text: 'What felt most valuable in HIVE this month?',
+    type: 'long',
+    required: false,
+  },
+  {
+    id: 'q_heavy_or_confusing',
+    text: 'What felt confusing, heavy, or not worth the energy?',
+    type: 'long',
+    required: false,
+  },
+  {
+    id: 'q_meeting_format',
+    text: 'Did the meeting format work for you this month?',
+    type: 'long',
+    required: false,
+  },
+  {
+    id: 'q_repeat_or_change',
+    text: 'What should we protect or repeat next month, and what should we change or drop?',
+    type: 'long',
+    required: false,
+  },
+  {
+    id: 'q_app_connection',
+    text: 'Did the app, board, or notifications help you stay connected? What would make it easier?',
+    type: 'long',
+    required: false,
+  },
+  {
+    id: 'q_wish_hummdinger',
+    text: 'What is one wish, goal, or HummDinger you want carried into the next meeting?',
+    type: 'long',
+    required: false,
+  },
+  {
+    id: 'q_optional_note',
+    text: 'Optional: anything else you want Nat/the group to know?',
+    type: 'long',
+    required: false,
+  },
+];
+
+const MONTHLY_CHECK_IN_DESCRIPTION =
+  'A quick 2-3 minute check-in so HIVE and Clive know where everyone is before we gather.';
+
+const createSurveyQuestionId = () => `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+const cloneQuestion = (question: SurveyQuestion): SurveyQuestion => ({
+  ...question,
+  options: question.options ? [...question.options] : undefined,
+});
+
+const getSurveyDateInputValue = (dueDate?: string | null) => dueDate?.slice(0, 10) ?? '';
+
+const normalizeSurveyDueDateInput = (value: string) => {
+  const clean = value.trim();
+  if (!clean) return { dueDate: null as string | null, error: null as string | null };
+
+  const parsed = parseAmericanDate(clean);
+  if (!parsed) {
+    return {
+      dueDate: null,
+      error: 'Use MM-DD-YYYY or YYYY-MM-DD for the due date.',
+    };
+  }
+
+  return { dueDate: parsed, error: null };
 };
 
 function AdminPanel({
@@ -384,6 +470,13 @@ export default function AdminScreen() {
   const [surveyDescription, setSurveyDescription] = useState('');
   const [surveyDueDate, setSurveyDueDate] = useState('');
   const [savingSurvey, setSavingSurvey] = useState(false);
+  const [editingSurvey, setEditingSurvey] = useState<Survey | null>(null);
+  const [surveyEditorTitle, setSurveyEditorTitle] = useState('');
+  const [surveyEditorDescription, setSurveyEditorDescription] = useState('');
+  const [surveyEditorDueDate, setSurveyEditorDueDate] = useState('');
+  const [surveyEditorQuestions, setSurveyEditorQuestions] = useState<SurveyQuestion[]>([]);
+  const [savingSurveyEditor, setSavingSurveyEditor] = useState(false);
+  const [surveyEditorError, setSurveyEditorError] = useState<string | null>(null);
 
   // Form states
   const [selectedMember, setSelectedMember] = useState<Profile | null>(null);
@@ -499,15 +592,125 @@ export default function AdminScreen() {
     refetchSurveys();
   };
 
+  const openSurveyEditor = (survey: Survey) => {
+    setEditingSurvey(survey);
+    setSurveyEditorTitle(survey.title);
+    setSurveyEditorDescription(survey.description ?? '');
+    setSurveyEditorDueDate(getSurveyDateInputValue(survey.due_date));
+    setSurveyEditorQuestions((survey.questions ?? []).map(cloneQuestion));
+    setSurveyEditorError(null);
+  };
+
+  const closeSurveyEditor = () => {
+    setEditingSurvey(null);
+    setSurveyEditorTitle('');
+    setSurveyEditorDescription('');
+    setSurveyEditorDueDate('');
+    setSurveyEditorQuestions([]);
+    setSurveyEditorError(null);
+  };
+
+  const updateSurveyQuestion = (
+    index: number,
+    updater: (question: SurveyQuestion) => SurveyQuestion
+  ) => {
+    setSurveyEditorQuestions(prev => prev.map((question, questionIndex) => (
+      questionIndex === index ? updater(question) : question
+    )));
+  };
+
+  const addSurveyQuestion = () => {
+    setSurveyEditorQuestions(prev => ([
+      ...prev,
+      {
+        id: createSurveyQuestionId(),
+        text: '',
+        type: 'long',
+        required: false,
+      },
+    ]));
+  };
+
+  const removeSurveyQuestion = (index: number) => {
+    setSurveyEditorQuestions(prev => prev.filter((_, questionIndex) => questionIndex !== index));
+  };
+
+  const applyMonthlyCheckInTemplate = () => {
+    setSurveyEditorTitle(prev => prev.trim() || 'Monthly Check-in');
+    setSurveyEditorDescription(prev => prev.trim() || MONTHLY_CHECK_IN_DESCRIPTION);
+    setSurveyEditorQuestions(MONTHLY_CHECK_IN_TEMPLATE.map(cloneQuestion));
+    setSurveyEditorError(null);
+  };
+
+  const saveSurveyEdits = async () => {
+    if (!editingSurvey || !communityId) return;
+
+    const title = surveyEditorTitle.trim();
+    if (!title) {
+      setSurveyEditorError('Add a survey title before saving.');
+      return;
+    }
+
+    const { dueDate, error: dueDateError } = normalizeSurveyDueDateInput(surveyEditorDueDate);
+    if (dueDateError) {
+      setSurveyEditorError(dueDateError);
+      return;
+    }
+
+    const questions = surveyEditorQuestions
+      .map((question) => ({
+        ...question,
+        id: question.id || createSurveyQuestionId(),
+        text: question.text.trim(),
+        options: question.options?.map(option => option.trim()).filter(Boolean),
+      }))
+      .filter(question => question.text.length > 0)
+      .map(question => ({
+        ...question,
+        options: question.type === 'choice' ? question.options : undefined,
+      }));
+
+    setSavingSurveyEditor(true);
+    setSurveyEditorError(null);
+    try {
+      const { error } = await supabase
+        .from('surveys')
+        .update({
+          title,
+          description: surveyEditorDescription.trim() || null,
+          due_date: dueDate,
+          questions,
+        })
+        .eq('id', editingSurvey.id)
+        .eq('community_id', communityId);
+
+      if (error) {
+        setSurveyEditorError('Could not save this survey. Please try again.');
+        return;
+      }
+
+      closeSurveyEditor();
+      await refetchSurveys();
+    } finally {
+      setSavingSurveyEditor(false);
+    }
+  };
+
   const createQuickSurvey = async () => {
     if (!surveyTitle.trim() || !communityId) return;
+    const { dueDate, error: dueDateError } = normalizeSurveyDueDateInput(surveyDueDate);
+    if (dueDateError) {
+      Alert.alert('Due date', dueDateError);
+      return;
+    }
+
     setSavingSurvey(true);
     try {
       await supabase.from('surveys').insert({
         community_id: communityId,
         title: surveyTitle.trim(),
         description: surveyDescription.trim() || null,
-        due_date: surveyDueDate || null,
+        due_date: dueDate,
         questions: [],
         is_active: true,
         created_by: profile?.id,
@@ -1491,11 +1694,12 @@ export default function AdminScreen() {
                     </View>
                   ) : (
                     allSurveys.map((survey, i) => (
-                      <View key={survey.id} style={{
+                      <Pressable key={survey.id} onPress={() => openSurveyEditor(survey)} style={({ pressed }) => ({
                         flexDirection: 'row', alignItems: 'center', padding: 14,
                         borderBottomWidth: i < allSurveys.length - 1 ? 1 : 0,
                         borderBottomColor: 'rgba(222,193,129,0.3)',
-                      }}>
+                        backgroundColor: pressed ? '#fbf4e3' : 'transparent',
+                      })}>
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>{survey.title}</Text>
                           {survey.due_date && (
@@ -1503,9 +1707,15 @@ export default function AdminScreen() {
                               Due {new Date(survey.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                             </Text>
                           )}
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 2 }}>
+                            {(survey.questions ?? []).length} question{(survey.questions ?? []).length === 1 ? '' : 's'} - Tap to edit
+                          </Text>
                         </View>
                         <Pressable
-                          onPress={() => toggleSurveyActive(survey)}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            toggleSurveyActive(survey);
+                          }}
                           style={({ pressed }: { pressed: boolean }) => ({
                             backgroundColor: pressed ? (survey.is_active ? '#f5e0b0' : '#e5e7eb') : (survey.is_active ? '#fdf3dc' : '#f3f4f6'),
                             paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10,
@@ -1515,7 +1725,7 @@ export default function AdminScreen() {
                             {survey.is_active ? 'Active' : 'Inactive'}
                           </Text>
                         </Pressable>
-                      </View>
+                      </Pressable>
                     ))
                   )}
                 </ScrollView>
@@ -1569,6 +1779,211 @@ export default function AdminScreen() {
                 </Text>
               </Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Survey Editor Modal */}
+      <Modal visible={!!editingSurvey} animationType="slide" transparent onRequestClose={closeSurveyEditor}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '94%' }}>
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={{ padding: 24, paddingBottom: 32 }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 20, color: '#2d2d2d' }}>
+                    Survey Settings
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginTop: 4 }}>
+                    {(surveyEditorQuestions ?? []).length} question{surveyEditorQuestions.length === 1 ? '' : 's'}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={closeSurveyEditor}
+                  hitSlop={10}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, padding: 4 })}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 20, color: '#9a8060' }}>x</Text>
+                </Pressable>
+              </View>
+
+              <TextInput
+                placeholder="Survey title"
+                value={surveyEditorTitle}
+                onChangeText={setSurveyEditorTitle}
+                style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 15, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3' }}
+                placeholderTextColor="#b5ad9f"
+              />
+              <TextInput
+                placeholder="Description"
+                value={surveyEditorDescription}
+                onChangeText={setSurveyEditorDescription}
+                multiline
+                style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3', minHeight: 72, textAlignVertical: 'top' }}
+                placeholderTextColor="#b5ad9f"
+              />
+              <TextInput
+                placeholder="Due date, e.g. 2026-06-15 or 06-15-2026"
+                value={surveyEditorDueDate}
+                onChangeText={setSurveyEditorDueDate}
+                style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 12, backgroundColor: '#faf8f3' }}
+                placeholderTextColor="#b5ad9f"
+              />
+
+              <Pressable
+                onPress={applyMonthlyCheckInTemplate}
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? '#f5e0b0' : '#fdf3dc',
+                  borderColor: 'rgba(222,193,129,0.72)',
+                  borderWidth: 1,
+                  borderRadius: 14,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  marginBottom: 16,
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#8a6b30', textAlign: 'center' }}>
+                  Use 2-3 min monthly template
+                </Text>
+              </Pressable>
+
+              <View style={{ gap: 12 }}>
+                {surveyEditorQuestions.map((question, index) => (
+                  <View
+                    key={`${question.id}-${index}`}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: 'rgba(222,193,129,0.45)',
+                      borderRadius: 14,
+                      backgroundColor: '#fff8e8',
+                      padding: 12,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
+                        Question {index + 1}
+                      </Text>
+                      <Pressable
+                        onPress={() => removeSurveyQuestion(index)}
+                        hitSlop={8}
+                        style={({ pressed }) => ({
+                          opacity: pressed ? 0.55 : 1,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#b45309' }}>
+                          Remove
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    <TextInput
+                      value={question.text}
+                      onChangeText={(text) => updateSurveyQuestion(index, current => ({ ...current, text }))}
+                      placeholder="Question text"
+                      multiline
+                      style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 10, padding: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', backgroundColor: 'white', minHeight: 58, textAlignVertical: 'top', marginBottom: 10 }}
+                      placeholderTextColor="#b5ad9f"
+                    />
+
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: question.type === 'choice' ? 10 : 0 }}>
+                      {SURVEY_QUESTION_TYPES.map((type) => {
+                        const active = question.type === type;
+                        return (
+                          <Pressable
+                            key={type}
+                            onPress={() => updateSurveyQuestion(index, current => ({ ...current, type }))}
+                            style={({ pressed }) => ({
+                              backgroundColor: active ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
+                              borderColor: active ? '#bd9348' : 'rgba(222,193,129,0.55)',
+                              borderWidth: 1,
+                              borderRadius: 999,
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                            })}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: active ? 'white' : '#8a6b30' }}>
+                              {SURVEY_TYPE_LABELS[type]}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                      <Pressable
+                        onPress={() => updateSurveyQuestion(index, current => ({ ...current, required: !current.required }))}
+                        style={({ pressed }) => ({
+                          backgroundColor: question.required ? '#fdf3dc' : pressed ? '#fbf0d7' : '#fffdf5',
+                          borderColor: question.required ? '#bd9348' : 'rgba(222,193,129,0.55)',
+                          borderWidth: 1,
+                          borderRadius: 999,
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>
+                          {question.required ? 'Required' : 'Optional'}
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    {question.type === 'choice' && (
+                      <TextInput
+                        value={(question.options ?? []).join('\n')}
+                        onChangeText={(text) => updateSurveyQuestion(index, current => ({
+                          ...current,
+                          options: text.split('\n'),
+                        }))}
+                        placeholder="One choice per line"
+                        multiline
+                        style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 10, padding: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', backgroundColor: 'white', minHeight: 78, textAlignVertical: 'top' }}
+                        placeholderTextColor="#b5ad9f"
+                      />
+                    )}
+                  </View>
+                ))}
+              </View>
+
+              <Pressable
+                onPress={addSurveyQuestion}
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+                  borderColor: 'rgba(222,193,129,0.72)',
+                  borderWidth: 1,
+                  borderRadius: 14,
+                  paddingVertical: 12,
+                  marginTop: 12,
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#8a6b30', textAlign: 'center' }}>
+                  Add Question
+                </Text>
+              </Pressable>
+
+              {surveyEditorError ? (
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#ef4444', marginTop: 14 }}>
+                  {surveyEditorError}
+                </Text>
+              ) : null}
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+                <Pressable onPress={closeSurveyEditor} style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={saveSurveyEdits}
+                  disabled={savingSurveyEditor}
+                  style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: savingSurveyEditor ? 0.65 : 1 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white', textAlign: 'center' }}>
+                    {savingSurveyEditor ? 'Saving...' : 'Save Survey'}
+                  </Text>
+                </Pressable>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>

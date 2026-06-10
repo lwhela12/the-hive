@@ -66,11 +66,9 @@ function getLocalDateFromSurveyDueDate(dueDate?: string | null) {
 function getSurveyResponsePeriod(survey: Survey) {
   if (!isMonthlyCheckInSurvey(survey)) return DEFAULT_RESPONSE_PERIOD;
 
-  const dueDate = getLocalDateFromSurveyDueDate(survey.due_date);
-  if (!dueDate) return DEFAULT_RESPONSE_PERIOD;
-
-  const year = dueDate.getFullYear();
-  const month = String(dueDate.getMonth() + 1).padStart(2, '0');
+  const periodDate = getLocalDateFromSurveyDueDate(survey.due_date) ?? new Date();
+  const year = periodDate.getFullYear();
+  const month = String(periodDate.getMonth() + 1).padStart(2, '0');
   return `${year}-${month}`;
 }
 
@@ -90,6 +88,10 @@ function shouldRetryLegacyResponseUpsert(error: any) {
 
 function startOfLocalDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function startOfLocalMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
 function getSurveyAvailableAt(survey: Survey) {
@@ -125,10 +127,12 @@ function isSurveyPendingForMember(survey: Survey, response?: SurveyResponse) {
   }
 
   const availableAt = getSurveyAvailableAt(survey);
-  if (!availableAt) return false;
-
   const submittedAt = new Date(response.submitted_at);
   if (Number.isNaN(submittedAt.getTime())) return false;
+
+  if (!availableAt) {
+    return submittedAt < startOfLocalMonth(new Date());
+  }
 
   return submittedAt < availableAt;
 }
