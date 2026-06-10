@@ -1,12 +1,12 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, Alert, ActivityIndicator, TextInput, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { useBoardCategoriesQuery, useBoardPostsQuery, useBoardPostCountsQuery } from '../../lib/hooks/useBoardQuery';
-import { BoardCategoryList } from '../../components/board/BoardCategoryList';
+import { useBoardCategoriesQuery, useBoardPostsQuery, useBoardPostCountsQuery, useBoardSearchIndexQuery, type BoardSearchThreadMatch } from '../../lib/hooks/useBoardQuery';
+import { BoardCategoryList, type BoardCategorySearchMatchSummary } from '../../components/board/BoardCategoryList';
 import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
 import { BoardComposer } from '../../components/board/BoardComposer';
@@ -113,6 +113,25 @@ function getCategorySearchText(category: BoardCategory) {
   ].filter(Boolean).join(' ').toLowerCase();
 }
 
+function getThreadActivity(thread: BoardSearchThreadMatch) {
+  return thread.last_reply_at || thread.created_at;
+}
+
+function getThreadSearchValues(thread: BoardSearchThreadMatch) {
+  return [
+    thread.title,
+    thread.content,
+    thread.author?.name,
+    ...thread.replies.map((reply) => `${reply.content || ''} ${reply.author?.name || ''}`),
+  ];
+}
+
+function getThreadReplyMatchCount(thread: BoardSearchThreadMatch, query: string) {
+  return thread.replies.filter((reply) => (
+    matchesMemberSearchText([reply.content, reply.author?.name], query)
+  )).length;
+}
+
 function getRouteParam(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
@@ -189,6 +208,7 @@ export default function BoardScreen() {
   }, [isAdmin, profile, selectedCategory]);
 
   const { data: postCounts, refetch: refetchPostCounts } = useBoardPostCountsQuery(communityId ?? undefined);
+  const { data: boardSearchIndex = {}, refetch: refetchBoardSearchIndex } = useBoardSearchIndexQuery(communityId ?? undefined);
   const activeCategories = categories
     .filter((category) => !isArchivedCategory(category))
     .sort((a, b) => sortCategoriesForBoard(a, b, postCounts));
@@ -196,10 +216,31 @@ export default function BoardScreen() {
     .filter(isArchivedCategory)
     .sort((a, b) => sortCategoriesForBoard(a, b, postCounts));
   const boardSearchQuery = boardSearch.trim().toLowerCase();
+  const boardSearchMatchesByCategory = useMemo(() => {
+    if (!boardSearchQuery) return {};
+
+    return Object.entries(boardSearchIndex).reduce<Record<string, BoardCategorySearchMatchSummary>>((matches, [categoryId, threads]) => {
+      const matchingThreads = threads
+        .filter((thread) => matchesMemberSearchText(getThreadSearchValues(thread), boardSearchQuery))
+        .sort((a, b) => getThreadActivity(b).localeCompare(getThreadActivity(a)));
+
+      if (matchingThreads.length === 0) return matches;
+
+      matches[categoryId] = {
+        threadTitles: matchingThreads.map((thread) => thread.title),
+        replyMatchCount: matchingThreads.reduce((total, thread) => total + getThreadReplyMatchCount(thread, boardSearchQuery), 0),
+        archivedOnly: matchingThreads.every((thread) => !!thread.archived_at),
+      };
+      return matches;
+    }, {});
+  }, [boardSearchIndex, boardSearchQuery]);
   const listSourceCategories = boardListView === 'archive' ? archivedCategories : activeCategories;
   const visibleCategories = boardSearchQuery
     ? listSourceCategories
-        .filter((category) => matchesMemberSearchText([getCategorySearchText(category)], boardSearchQuery))
+        .filter((category) => (
+          matchesMemberSearchText([getCategorySearchText(category)], boardSearchQuery)
+          || !!boardSearchMatchesByCategory[category.id]
+        ))
         .sort((a, b) => sortCategoriesForBoard(a, b, postCounts))
     : listSourceCategories;
 
@@ -213,9 +254,20 @@ export default function BoardScreen() {
   const activePosts = posts.filter((post) => !post.archived_at);
   const archivedPosts = posts.filter((post) => !!post.archived_at);
   const listSourcePosts = threadListView === 'archive' ? archivedPosts : activePosts;
-  const visiblePosts = threadSearch.trim()
+  const threadSearchQuery = threadSearch.trim();
+  const selectedCategorySearchPostIds = useMemo(() => {
+    if (!selectedCategory?.id || !threadSearchQuery) return new Set<string>();
+
+    const matchingThreads = (boardSearchIndex[selectedCategory.id] || [])
+      .filter((thread) => matchesMemberSearchText(getThreadSearchValues(thread), threadSearchQuery))
+      .map((thread) => thread.id);
+
+    return new Set(matchingThreads);
+  }, [boardSearchIndex, selectedCategory?.id, threadSearchQuery]);
+  const visiblePosts = threadSearchQuery
     ? listSourcePosts.filter((post) =>
         matchesMemberSearchText([post.title, post.content, post.author?.name], threadSearch)
+        || selectedCategorySearchPostIds.has(post.id)
       )
     : listSourcePosts;
   const {
@@ -240,6 +292,7 @@ export default function BoardScreen() {
     await Promise.all([
       refetchCategories(),
       refetchPostCounts(),
+      refetchBoardSearchIndex(),
       ...(selectedCategory ? [refetchPosts()] : []),
       ...(selectedCategory ? [refetchLinkedWishes()] : []),
     ]);
@@ -423,12 +476,13 @@ export default function BoardScreen() {
 
   const handleCategorySelect = useCallback((category: BoardCategory) => {
     setSelectedCategoryId(category.id);
-    setThreadListView('active');
-    setThreadSearch('');
+    const searchMatch = boardSearchQuery ? boardSearchMatchesByCategory[category.id] : null;
+    setThreadListView(searchMatch?.archivedOnly ? 'archive' : 'active');
+    setThreadSearch(searchMatch ? boardSearch.trim() : '');
     if (boardCategoryStorageKey) {
       setStoredItem(boardCategoryStorageKey, category.id);
     }
-  }, [boardCategoryStorageKey]);
+  }, [boardCategoryStorageKey, boardSearch, boardSearchMatchesByCategory, boardSearchQuery]);
 
   const handleBack = useCallback(() => {
     resetBoardToList();
@@ -1558,7 +1612,7 @@ export default function BoardScreen() {
             <TextInput
               value={boardSearch}
               onChangeText={setBoardSearch}
-              placeholder="Search boards"
+              placeholder="Search boards or threads"
               placeholderTextColor="rgba(49,49,48,0.38)"
               autoCapitalize="none"
               autoCorrect={false}
@@ -1644,8 +1698,9 @@ export default function BoardScreen() {
               categories={visibleCategories}
               onSelect={handleCategorySelect}
               postCounts={postCounts}
+              searchMatches={boardSearchQuery ? boardSearchMatchesByCategory : undefined}
               emptyLabel={boardSearchQuery
-                ? `No ${boardListView === 'archive' ? 'archived' : 'active'} boards found for "${boardSearch.trim()}".`
+                ? `No ${boardListView === 'archive' ? 'archived' : 'active'} boards or threads found for "${boardSearch.trim()}".`
                 : boardListView === 'archive'
                   ? 'No archived boards yet.'
                   : 'No boards here yet.'}

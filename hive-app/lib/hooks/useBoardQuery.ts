@@ -2,9 +2,21 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
-import type { BoardCategory, BoardPost, BoardReaction, Profile } from '../../types';
+import type { BoardCategory, BoardPost, BoardReaction, BoardReply, Profile } from '../../types';
 
 export type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardReaction[] };
+export type BoardSearchReplyMatch = Pick<BoardReply, 'id' | 'post_id' | 'content' | 'created_at'> & {
+  author?: Pick<Profile, 'name'> | null;
+};
+export type BoardSearchThreadMatch = Pick<
+  BoardPost,
+  'id' | 'category_id' | 'title' | 'content' | 'archived_at' | 'created_at' | 'last_reply_at'
+> & {
+  author?: Pick<Profile, 'name'> | null;
+  replies: BoardSearchReplyMatch[];
+};
+export type BoardSearchIndex = Record<string, BoardSearchThreadMatch[]>;
+type BoardSearchPostRow = Omit<BoardSearchThreadMatch, 'replies'>;
 
 async function fetchCategories(communityId: string): Promise<BoardCategory[]> {
   const { data, error } = await supabase
@@ -74,6 +86,53 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
   }
 
   return stats;
+}
+
+async function fetchBoardSearchIndex(communityId: string): Promise<BoardSearchIndex> {
+  const { data, error } = await supabase
+    .from('board_posts')
+    .select('id, category_id, title, content, archived_at, created_at, last_reply_at, author:profiles!board_posts_author_id_fkey(name)')
+    .eq('community_id', communityId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching board search index:', error);
+    throw error;
+  }
+
+  const posts = ((data || []) as unknown as BoardSearchPostRow[]);
+  const postIds = posts.map((post) => post.id);
+  const repliesByPost = new Map<string, BoardSearchReplyMatch[]>();
+
+  if (postIds.length > 0) {
+    const { data: replies, error: repliesError } = await supabase
+      .from('board_replies')
+      .select('id, post_id, content, created_at, author:profiles!board_replies_author_id_fkey(name)')
+      .eq('community_id', communityId)
+      .in('post_id', postIds)
+      .order('created_at', { ascending: false });
+
+    if (repliesError) {
+      console.warn('Error fetching board search replies:', repliesError);
+    } else {
+      (((replies || []) as unknown as BoardSearchReplyMatch[])).forEach((reply) => {
+        const existing = repliesByPost.get(reply.post_id) || [];
+        existing.push(reply);
+        repliesByPost.set(reply.post_id, existing);
+      });
+    }
+  }
+
+  return posts.reduce<BoardSearchIndex>((index, post) => {
+    const thread = {
+      ...post,
+      replies: repliesByPost.get(post.id) || [],
+    };
+    const existing = index[post.category_id] || [];
+    existing.push(thread);
+    index[post.category_id] = existing;
+    return index;
+  }, {});
 }
 
 async function fetchPosts(
@@ -156,6 +215,15 @@ export function useBoardPostCountsQuery(communityId?: string) {
   });
 }
 
+export function useBoardSearchIndexQuery(communityId?: string) {
+  return useQuery({
+    queryKey: queryKeys.boardSearchIndex(communityId || ''),
+    queryFn: () => fetchBoardSearchIndex(communityId!),
+    enabled: !!communityId,
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
 export function useBoardCategoriesQuery(communityId?: string) {
   const queryClient = useQueryClient();
 
@@ -222,6 +290,9 @@ export function useBoardPostsQuery(communityId?: string, categoryId?: string) {
   const invalidatePosts = useCallback(() => {
     queryClient.invalidateQueries({
       queryKey: queryKeys.boardPosts(communityId || '', categoryId || ''),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.boardSearchIndex(communityId || ''),
     });
   }, [communityId, categoryId, queryClient]);
 

@@ -672,6 +672,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
     selectedFiles,
     onImagesChange: setSelectedImages,
     onFilesChange: setSelectedFiles,
+    captureDocumentDrops: true,
     disabled: sending || uploading,
   });
 

@@ -201,7 +201,8 @@ export function BoardComposer({
     selectedFiles,
     onImagesChange: setSelectedImages,
     onFilesChange: setSelectedFiles,
-    disabled: submitting,
+    captureDocumentDrops: visible,
+    disabled: submitting || !visible,
   });
 
   return (

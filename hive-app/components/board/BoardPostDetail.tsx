@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { queryKeys } from '../../lib/queryClient';
 import { formatDateMedium } from '../../lib/dateUtils';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
 import { setBoardThreadArchiveState } from '../../lib/boardThreadArchive';
@@ -88,6 +90,7 @@ function confirmBoardAction({
 
 export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const { profile, communityId, communityRole } = useAuth();
+  const queryClient = useQueryClient();
   const [post, setPost] = useState<PostWithAuthor | null>(null);
   const [replies, setReplies] = useState<ReplyWithAuthor[]>([]);
   const [mentionableMembers, setMentionableMembers] = useState<Pick<Profile, 'id' | 'name'>[]>([]);
@@ -106,6 +109,13 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     && post.status !== 'completed'
     && !post.archived_at
     && (isAdmin || (post.category?.owner_user_id ? post.category.owner_user_id === profile?.id : isAuthor));
+
+  const invalidateBoardSearchIndex = useCallback(() => {
+    if (!communityId) return;
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.boardSearchIndex(communityId),
+    });
+  }, [communityId, queryClient]);
 
   useEffect(() => {
     if (!replyingToStorageKey) return;
@@ -353,6 +363,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         .eq('id', replyId);
 
       if (error) throw error;
+      invalidateBoardSearchIndex();
       await fetchReplies();
     } catch (error) {
       console.error('Error editing reply:', error);
@@ -377,6 +388,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
           throw new Error('Reply was not deleted. You may not have permission to delete it.');
         }
 
+        invalidateBoardSearchIndex();
         await fetchReplies();
       },
     });
@@ -398,6 +410,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
       if (error) throw error;
 
       await fetchPost();
+      invalidateBoardSearchIndex();
       if (editComposerStorageKey) {
         removeStoredItem(editComposerStorageKey);
       }
@@ -428,6 +441,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
           completionNote: `Granted from ${post.category?.name || 'Boards'}.`,
         });
         await fetchPost();
+        invalidateBoardSearchIndex();
         onDone?.();
       },
     });
@@ -461,6 +475,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             : current
         ));
         await fetchPost();
+        invalidateBoardSearchIndex();
         onDone?.();
       },
     });
@@ -490,6 +505,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
           throw new Error('Thread was not deleted. You may not have permission to delete it, or it may already be gone.');
         }
 
+        invalidateBoardSearchIndex();
         onDone?.();
         onBack();
       },

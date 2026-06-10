@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import type { SelectedFile } from '../filePicker';
 import type { SelectedImage } from '../imagePicker';
@@ -15,6 +15,7 @@ interface UseWebAttachmentDropZoneOptions {
   onFilesChange?: (files: SelectedFile[]) => void;
   maxImages?: number;
   maxFiles?: number;
+  captureDocumentDrops?: boolean;
   disabled?: boolean;
 }
 
@@ -36,6 +37,7 @@ export function useWebAttachmentDropZone({
   onFilesChange,
   maxImages = DEFAULT_MAX_IMAGES,
   maxFiles = DEFAULT_MAX_FILES,
+  captureDocumentDrops = false,
   disabled = false,
 }: UseWebAttachmentDropZoneOptions) {
   const [isDragActive, setIsDragActive] = useState(false);
@@ -76,20 +78,73 @@ export function useWebAttachmentDropZone({
     selectedImages,
   ]);
 
+  const claimFileDropEvent = useCallback((event: any) => {
+    if (!dataTransferHasFiles(event)) return false;
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = disabled ? 'none' : 'copy';
+    return true;
+  }, [disabled]);
+
+  const handleDropEvent = useCallback(async (event: any) => {
+    if (!claimFileDropEvent(event)) return;
+    if (event.__hiveAttachmentDropHandled) return;
+    event.__hiveAttachmentDropHandled = true;
+    dragDepthRef.current = 0;
+    setIsDragActive(false);
+    if (disabled) return;
+    await attachDroppedFiles(Array.from(event.dataTransfer?.files ?? []));
+  }, [attachDroppedFiles, claimFileDropEvent, disabled]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !captureDocumentDrops || typeof document === 'undefined') return;
+
+    const handleDocumentDragEnter = (event: DragEvent) => {
+      if (!claimFileDropEvent(event)) return;
+      if (!disabled) setIsDragActive(true);
+    };
+    const handleDocumentDragOver = (event: DragEvent) => {
+      if (!claimFileDropEvent(event)) return;
+      if (!disabled) setIsDragActive(true);
+    };
+    const handleDocumentDragLeave = (event: DragEvent) => {
+      if (!dataTransferHasFiles(event)) return;
+      const leavingWindow =
+        event.clientX <= 0 ||
+        event.clientY <= 0 ||
+        event.clientX >= window.innerWidth ||
+        event.clientY >= window.innerHeight;
+      if (leavingWindow) {
+        dragDepthRef.current = 0;
+        setIsDragActive(false);
+      }
+    };
+    const handleDocumentDrop = (event: DragEvent) => {
+      void handleDropEvent(event);
+    };
+
+    document.addEventListener('dragenter', handleDocumentDragEnter, true);
+    document.addEventListener('dragover', handleDocumentDragOver, true);
+    document.addEventListener('dragleave', handleDocumentDragLeave, true);
+    document.addEventListener('drop', handleDocumentDrop, true);
+
+    return () => {
+      document.removeEventListener('dragenter', handleDocumentDragEnter, true);
+      document.removeEventListener('dragover', handleDocumentDragOver, true);
+      document.removeEventListener('dragleave', handleDocumentDragLeave, true);
+      document.removeEventListener('drop', handleDocumentDrop, true);
+    };
+  }, [attachDroppedFiles, captureDocumentDrops, claimFileDropEvent, disabled, handleDropEvent]);
+
   const dragDropProps = Platform.OS === 'web'
     ? ({
         onDragEnter: (event: any) => {
-          if (disabled || !dataTransferHasFiles(event)) return;
-          event.preventDefault?.();
-          event.stopPropagation?.();
+          if (!claimFileDropEvent(event) || disabled) return;
           dragDepthRef.current += 1;
           setIsDragActive(true);
         },
         onDragOver: (event: any) => {
-          if (disabled || !dataTransferHasFiles(event)) return;
-          event.preventDefault?.();
-          event.stopPropagation?.();
-          if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+          if (!claimFileDropEvent(event) || disabled) return;
           setIsDragActive(true);
         },
         onDragLeave: (event: any) => {
@@ -102,12 +157,7 @@ export function useWebAttachmentDropZone({
           }
         },
         onDrop: async (event: any) => {
-          if (!dataTransferHasFiles(event)) return;
-          event.preventDefault?.();
-          event.stopPropagation?.();
-          dragDepthRef.current = 0;
-          setIsDragActive(false);
-          await attachDroppedFiles(Array.from(event.dataTransfer?.files ?? []));
+          await handleDropEvent(event);
         },
       } as any)
     : {};

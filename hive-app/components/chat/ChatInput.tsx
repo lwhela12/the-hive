@@ -103,6 +103,7 @@ export const ChatInput = memo(function ChatInput({
     onFilesChange: setSelectedFiles,
     maxImages: MAX_IMAGES,
     maxFiles: MAX_FILES,
+    captureDocumentDrops: true,
     disabled: isLoading,
   });
 

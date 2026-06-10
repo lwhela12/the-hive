@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { queryKeys } from '../../lib/queryClient';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
@@ -43,6 +45,7 @@ export function BoardReplyComposer({
   placeholder = 'Reply to the thread...',
 }: BoardReplyComposerProps) {
   const { profile, communityId } = useAuth();
+  const queryClient = useQueryClient();
   const replyDraftKey = profile?.id
     ? `the-hive:board-reply-draft:${profile.id}:${postId}:${parentReplyId ?? 'root'}`
     : null;
@@ -144,6 +147,10 @@ export function BoardReplyComposer({
 
       if (error) throw error;
 
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.boardSearchIndex(communityId),
+      });
+
       supabase.functions.invoke('notify-board-reply', {
         body: {
           post_id: postId,
@@ -191,6 +198,7 @@ export function BoardReplyComposer({
     selectedFiles,
     onImagesChange: setSelectedImages,
     onFilesChange: setSelectedFiles,
+    captureDocumentDrops: true,
     disabled: submitting,
   });
 

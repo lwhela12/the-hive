@@ -34,11 +34,18 @@ interface CategoryStats {
   latestActivity: string | null;
 }
 
+export interface BoardCategorySearchMatchSummary {
+  threadTitles: string[];
+  replyMatchCount: number;
+  archivedOnly: boolean;
+}
+
 interface BoardCategoryListProps {
   categories: BoardCategory[];
   onSelect: (category: BoardCategory) => void;
   postCounts?: Record<string, CategoryStats>;
   emptyLabel?: string;
+  searchMatches?: Record<string, BoardCategorySearchMatchSummary>;
 }
 
 export const BoardCategoryList = memo(function BoardCategoryList({
@@ -46,6 +53,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   onSelect,
   postCounts,
   emptyLabel = 'No boards here yet.',
+  searchMatches,
 }: BoardCategoryListProps) {
   return (
     <FlatList
@@ -80,6 +88,17 @@ export const BoardCategoryList = memo(function BoardCategoryList({
         const subtitleParts = [statusLabel, boardKindLabel, goalLabel, item.description, countLabel].filter(Boolean);
         const subtitle = subtitleParts.join(' · ');
         const isCompleted = item.status === 'completed' || item.status === 'archived';
+        const searchMatch = searchMatches?.[item.id];
+        const titleMatches = searchMatch?.threadTitles ?? [];
+        const titleMatchLabel = titleMatches.length > 0
+          ? `Matches ${titleMatches.slice(0, 2).join(', ')}${titleMatches.length > 2 ? ` +${titleMatches.length - 2} more` : ''}`
+          : null;
+        const replyMatchLabel = searchMatch && searchMatch.replyMatchCount > 0
+          ? `${searchMatch.replyMatchCount} matching ${searchMatch.replyMatchCount === 1 ? 'reply' : 'replies'}`
+          : null;
+        const matchLabel = [titleMatchLabel, replyMatchLabel, searchMatch?.archivedOnly ? 'archived threads' : null]
+          .filter(Boolean)
+          .join(' · ');
 
         return (
           <Pressable
@@ -102,6 +121,15 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                 >
                   {subtitle}
                 </Text>
+                {matchLabel ? (
+                  <Text
+                    style={{ fontFamily: 'Lato_700Bold' }}
+                    className="text-gold text-xs mt-1"
+                    numberOfLines={1}
+                  >
+                    {matchLabel}
+                  </Text>
+                ) : null}
               </View>
               <Text className="text-charcoal/30 text-xl ml-2">›</Text>
             </View>
