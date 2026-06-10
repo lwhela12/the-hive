@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Modal,
   useWindowDimensions,
   ActivityIndicator,
+  PanResponder,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -131,6 +132,11 @@ type HoneyPotFeedback = {
   message: string;
 };
 
+type QuestionLayout = {
+  y: number;
+  height: number;
+};
+
 const HONEY_POT_FEEDBACK_STYLE: Record<HoneyPotFeedback['tone'], {
   backgroundColor: string;
   borderColor: string;
@@ -233,6 +239,23 @@ const cloneQuestion = (question: SurveyQuestion): SurveyQuestion => ({
   ...question,
   options: question.options ? [...question.options] : undefined,
 });
+
+function moveQuestion(questions: SurveyQuestion[], fromIndex: number, toIndex: number) {
+  if (
+    fromIndex === toIndex
+    || fromIndex < 0
+    || toIndex < 0
+    || fromIndex >= questions.length
+    || toIndex >= questions.length
+  ) {
+    return questions;
+  }
+
+  const next = [...questions];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+}
 
 function formatClockTime(totalMinutes: number) {
   const normalized = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
@@ -677,6 +700,10 @@ export default function AdminScreen() {
   const [savingSurveyEditor, setSavingSurveyEditor] = useState(false);
   const [surveyEditorError, setSurveyEditorError] = useState<string | null>(null);
   const [nextSurveyMeeting, setNextSurveyMeeting] = useState<Pick<Event, 'event_date' | 'event_time' | 'title'> | null>(null);
+  const surveyEditorQuestionsRef = useRef<SurveyQuestion[]>([]);
+  const questionLayoutsRef = useRef<Record<string, QuestionLayout>>({});
+  const activeQuestionDragRef = useRef<{ id: string; startCenterY: number } | null>(null);
+  const [draggingQuestionId, setDraggingQuestionId] = useState<string | null>(null);
 
   // Form states
   const [selectedMember, setSelectedMember] = useState<Profile | null>(null);
@@ -783,6 +810,10 @@ export default function AdminScreen() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    surveyEditorQuestionsRef.current = surveyEditorQuestions;
+  }, [surveyEditorQuestions]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([fetchData(), refetchSurveys()]);
@@ -816,16 +847,23 @@ export default function AdminScreen() {
 
   const openSurveyEditor = (survey: Survey) => {
     const defaultDueAt = getDefaultSurveyDue();
+    questionLayoutsRef.current = {};
     setEditingSurvey(survey);
     setSurveyEditorTitle(survey.title);
     setSurveyEditorDescription(survey.description ?? '');
     setSurveyEditorDueDate(survey.due_date ? getSurveyDateInputValue(survey.due_date) : toAmericanDate(defaultDueAt));
     setSurveyEditorDueTime(getSurveyTimeInputValue(survey.due_date, defaultDueAt));
-    setSurveyEditorQuestions((survey.questions ?? []).map(cloneQuestion));
+    setSurveyEditorQuestions((survey.questions ?? []).map(question => ({
+      ...cloneQuestion(question),
+      id: question.id || createSurveyQuestionId(),
+    })));
     setSurveyEditorError(null);
   };
 
   const closeSurveyEditor = () => {
+    questionLayoutsRef.current = {};
+    activeQuestionDragRef.current = null;
+    setDraggingQuestionId(null);
     setEditingSurvey(null);
     setSurveyEditorTitle('');
     setSurveyEditorDescription('');
@@ -860,7 +898,67 @@ export default function AdminScreen() {
     setSurveyEditorQuestions(prev => prev.filter((_, questionIndex) => questionIndex !== index));
   };
 
+  const moveSurveyQuestion = (fromIndex: number, toIndex: number) => {
+    setSurveyEditorQuestions(prev => moveQuestion(prev, fromIndex, toIndex));
+  };
+
+  const reorderDraggingQuestion = (questionId: string, targetIndex: number) => {
+    setSurveyEditorQuestions(prev => {
+      const currentIndex = prev.findIndex(question => question.id === questionId);
+      if (currentIndex === -1 || currentIndex === targetIndex) return prev;
+      return moveQuestion(prev, currentIndex, targetIndex);
+    });
+  };
+
+  const createQuestionDragResponder = (questionId: string, index: number) => (
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_event, gestureState) => Math.abs(gestureState.dy) > 3,
+      onPanResponderGrant: () => {
+        const layout = questionLayoutsRef.current[questionId];
+        activeQuestionDragRef.current = {
+          id: questionId,
+          startCenterY: layout ? layout.y + layout.height / 2 : index * 120,
+        };
+        setDraggingQuestionId(questionId);
+      },
+      onPanResponderMove: (_event, gestureState) => {
+        const activeDrag = activeQuestionDragRef.current;
+        if (!activeDrag) return;
+
+        const currentCenterY = activeDrag.startCenterY + gestureState.dy;
+        const questions = surveyEditorQuestionsRef.current;
+        let targetIndex = questions.findIndex(question => question.id === activeDrag.id);
+        let closestDistance = Number.POSITIVE_INFINITY;
+
+        questions.forEach((question, questionIndex) => {
+          const layout = questionLayoutsRef.current[question.id];
+          if (!layout) return;
+
+          const distance = Math.abs(currentCenterY - (layout.y + layout.height / 2));
+          if (distance < closestDistance) {
+            closestDistance = distance;
+            targetIndex = questionIndex;
+          }
+        });
+
+        if (targetIndex >= 0) {
+          reorderDraggingQuestion(activeDrag.id, targetIndex);
+        }
+      },
+      onPanResponderRelease: () => {
+        activeQuestionDragRef.current = null;
+        setDraggingQuestionId(null);
+      },
+      onPanResponderTerminate: () => {
+        activeQuestionDragRef.current = null;
+        setDraggingQuestionId(null);
+      },
+    })
+  );
+
   const applyMonthlyCheckInTemplate = () => {
+    questionLayoutsRef.current = {};
     setSurveyEditorTitle(prev => prev.trim() || 'Monthly Check-in');
     setSurveyEditorDescription(prev => prev.trim() || MONTHLY_CHECK_IN_DESCRIPTION);
     setSurveyEditorQuestions(MONTHLY_CHECK_IN_TEMPLATE.map(cloneQuestion));
@@ -2086,35 +2184,92 @@ export default function AdminScreen() {
               </Pressable>
 
               <View style={{ gap: 12 }}>
-                {surveyEditorQuestions.map((question, index) => (
-                  <View
-                    key={`${question.id}-${index}`}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: 'rgba(222,193,129,0.45)',
-                      borderRadius: 14,
-                      backgroundColor: '#fff8e8',
-                      padding: 12,
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
-                        Question {index + 1}
-                      </Text>
-                      <Pressable
-                        onPress={() => removeSurveyQuestion(index)}
-                        hitSlop={8}
-                        style={({ pressed }) => ({
-                          opacity: pressed ? 0.55 : 1,
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                        })}
-                      >
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#b45309' }}>
-                          Remove
-                        </Text>
-                      </Pressable>
-                    </View>
+                {surveyEditorQuestions.map((question, index) => {
+                  const isDragging = draggingQuestionId === question.id;
+                  const dragResponder = createQuestionDragResponder(question.id, index);
+                  return (
+                    <View
+                      key={`${question.id}-${index}`}
+                      onLayout={(event) => {
+                        questionLayoutsRef.current[question.id] = event.nativeEvent.layout;
+                      }}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: isDragging ? '#bd9348' : 'rgba(222,193,129,0.45)',
+                        borderRadius: 14,
+                        backgroundColor: isDragging ? '#fdf3dc' : '#fff8e8',
+                        padding: 12,
+                        opacity: isDragging ? 0.78 : 1,
+                        shadowColor: '#bd9348',
+                        shadowOpacity: isDragging ? 0.2 : 0,
+                        shadowRadius: isDragging ? 10 : 0,
+                        shadowOffset: { width: 0, height: 4 },
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                          <View
+                            {...dragResponder.panHandlers}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Drag question ${index + 1}`}
+                            style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: 15,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: isDragging ? '#bd9348' : '#fffdf5',
+                              borderWidth: 1,
+                              borderColor: isDragging ? '#bd9348' : 'rgba(222,193,129,0.55)',
+                            }}
+                          >
+                            <Ionicons name="reorder-three-outline" size={18} color={isDragging ? 'white' : '#8a6b30'} />
+                          </View>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
+                            Question {index + 1}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                          <Pressable
+                            onPress={() => moveSurveyQuestion(index, index - 1)}
+                            disabled={index === 0}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Move question ${index + 1} up`}
+                            hitSlop={8}
+                            style={({ pressed }) => ({
+                              opacity: index === 0 ? 0.3 : pressed ? 0.55 : 1,
+                              padding: 5,
+                            })}
+                          >
+                            <Ionicons name="chevron-up" size={16} color="#8a6b30" />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => moveSurveyQuestion(index, index + 1)}
+                            disabled={index === surveyEditorQuestions.length - 1}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Move question ${index + 1} down`}
+                            hitSlop={8}
+                            style={({ pressed }) => ({
+                              opacity: index === surveyEditorQuestions.length - 1 ? 0.3 : pressed ? 0.55 : 1,
+                              padding: 5,
+                            })}
+                          >
+                            <Ionicons name="chevron-down" size={16} color="#8a6b30" />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => removeSurveyQuestion(index)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove question ${index + 1}`}
+                            hitSlop={8}
+                            style={({ pressed }) => ({
+                              opacity: pressed ? 0.55 : 1,
+                              padding: 5,
+                            })}
+                          >
+                            <Ionicons name="trash-outline" size={16} color="#b45309" />
+                          </Pressable>
+                        </View>
+                      </View>
 
                     <TextInput
                       value={question.text}
@@ -2178,7 +2333,8 @@ export default function AdminScreen() {
                       />
                     )}
                   </View>
-                ))}
+                );
+                })}
               </View>
 
               <Pressable
