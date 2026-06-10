@@ -10,7 +10,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
-import { useSurveys } from '../../lib/hooks/useSurveys';
+import { useSurveys, type Survey } from '../../lib/hooks/useSurveys';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { WishCard } from '../../components/hive/WishCard';
 import { WishDetail } from '../../components/hive/WishDetail';
@@ -405,6 +405,14 @@ export default function HiveScreen() {
   const currentUserId = session?.user?.id ?? profile?.id ?? null;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const canManageDues = isAdmin || communityRole === 'treasurer' || profile?.role === 'treasurer';
+  const activeSurveyStorageKey = profile?.id && communityId
+    ? `the-hive:home-active-survey:${communityId}:${profile.id}`
+    : null;
+  const activeWishStorageKey = profile?.id && communityId
+    ? `the-hive:home-active-wish:${communityId}:${profile.id}`
+    : null;
+  const restoredSurveyStorageKeyRef = useRef<string | null>(null);
+  const restoredWishStorageKeyRef = useRef<string | null>(null);
 
   const [refreshing, setRefreshing] = useState(false);
   const [showAnswerModal, setShowAnswerModal] = useState(false);
@@ -566,6 +574,22 @@ export default function HiveScreen() {
   const [managingWish, setManagingWish] = useState<WishWithGranters | null>(null);
   const [wishToGrant, setWishToGrant] = useState<WishWithGranters | null>(null);
   const [showAddWishModal, setShowAddWishModal] = useState(false);
+
+  const clearSelectedWishResume = useCallback(() => {
+    if (activeWishStorageKey) removeStoredItem(activeWishStorageKey);
+  }, [activeWishStorageKey]);
+
+  const openWishDetail = useCallback((wish: WishWithGranters) => {
+    setSelectedWish(wish);
+    if (activeWishStorageKey) {
+      setStoredItem(activeWishStorageKey, wish.id);
+    }
+  }, [activeWishStorageKey]);
+
+  const closeWishDetail = useCallback(() => {
+    setSelectedWish(null);
+    clearSelectedWishResume();
+  }, [clearSelectedWishResume]);
 
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
@@ -835,7 +859,10 @@ export default function HiveScreen() {
     : null;
 
   const resetHomeToRoot = useCallback(() => {
+    if (activeSurveyStorageKey) removeStoredItem(activeSurveyStorageKey);
+    clearSelectedWishResume();
     setSelectedWish(null);
+    setActiveSurvey(null);
     setEditingWish(null);
     setManagingWish(null);
     setWishToGrant(null);
@@ -851,7 +878,7 @@ export default function HiveScreen() {
     setShowAddHomeGuide(false);
     setActiveAnswerPrompt(null);
     homeScrollRef.current?.scrollTo({ y: 0, animated: true });
-  }, []);
+  }, [activeSurveyStorageKey, clearSelectedWishResume]);
 
   useEffect(() => addHomeResetListener(resetHomeToRoot), [resetHomeToRoot]);
 
@@ -1024,7 +1051,10 @@ export default function HiveScreen() {
     return undefined;
   }, []);
 
-  const openWishFromActivity = useCallback(async (wishId: string) => {
+  const openWishById = useCallback(async (
+    wishId: string,
+    options: { alertOnUnavailable?: boolean; clearResumeOnUnavailable?: boolean } = {}
+  ) => {
     if (!communityId) return;
 
     try {
@@ -1051,12 +1081,35 @@ export default function HiveScreen() {
       }
 
       if (error || !data) throw error ?? new Error('Wish not found');
-      setSelectedWish(data as WishWithGranters);
+      openWishDetail(data as WishWithGranters);
     } catch (error) {
-      console.warn('Could not open activity wish', error);
-      Alert.alert('Wish unavailable', 'That wish may have been archived or moved.');
+      console.warn('Could not open wish', error);
+      if (options.clearResumeOnUnavailable) {
+        clearSelectedWishResume();
+      }
+      if (options.alertOnUnavailable) {
+        Alert.alert('Wish unavailable', 'That wish may have been archived or moved.');
+      }
     }
-  }, [communityId]);
+  }, [clearSelectedWishResume, communityId, openWishDetail]);
+
+  const openWishFromActivity = useCallback((wishId: string) => {
+    void openWishById(wishId, { alertOnUnavailable: true });
+  }, [openWishById]);
+
+  useEffect(() => {
+    if (!activeWishStorageKey) {
+      restoredWishStorageKeyRef.current = null;
+      return;
+    }
+    if (selectedWish || restoredWishStorageKeyRef.current === activeWishStorageKey) return;
+
+    const storedWishId = getStoredItem(activeWishStorageKey);
+    restoredWishStorageKeyRef.current = activeWishStorageKey;
+    if (!storedWishId) return;
+
+    void openWishById(storedWishId, { clearResumeOnUnavailable: true });
+  }, [activeWishStorageKey, openWishById, selectedWish]);
 
   const navigateFromActivityItem = useCallback((item: ActivityItem) => {
     const destination = getActivityDestination(item);
@@ -1209,8 +1262,60 @@ export default function HiveScreen() {
   } = useHiveDataQuery(communityId ?? undefined, profile?.id);
 
   // Surveys
-  const { pendingSurveys, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
-  const [activeSurvey, setActiveSurvey] = useState<import('../../lib/hooks/useSurveys').Survey | null>(null);
+  const { pendingSurveys, submitResponse, loading: surveysLoading } = useSurveys(communityId ?? undefined, profile?.id);
+  const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
+
+  const openSurvey = useCallback((survey: Survey) => {
+    setActiveSurvey(survey);
+    if (activeSurveyStorageKey) {
+      setStoredItem(activeSurveyStorageKey, survey.id);
+    }
+  }, [activeSurveyStorageKey]);
+
+  const closeSurvey = useCallback(() => {
+    setActiveSurvey(null);
+    if (activeSurveyStorageKey) {
+      removeStoredItem(activeSurveyStorageKey);
+    }
+  }, [activeSurveyStorageKey]);
+
+  const handleSurveySubmit = useCallback(async (answers: Record<string, string | string[] | number>) => {
+    if (!activeSurvey) return { error: 'No active survey' };
+
+    const result = await submitResponse(activeSurvey.id, answers);
+    if (!result.error && activeSurveyStorageKey) {
+      removeStoredItem(activeSurveyStorageKey);
+    }
+    return result;
+  }, [activeSurvey, activeSurveyStorageKey, submitResponse]);
+
+  useEffect(() => {
+    if (!activeSurveyStorageKey) {
+      restoredSurveyStorageKeyRef.current = null;
+      return;
+    }
+    if (surveysLoading || restoredSurveyStorageKeyRef.current === activeSurveyStorageKey) return;
+
+    const storedSurveyId = getStoredItem(activeSurveyStorageKey);
+    restoredSurveyStorageKeyRef.current = activeSurveyStorageKey;
+    if (!storedSurveyId) return;
+
+    const survey = pendingSurveys.find((item) => item.id === storedSurveyId);
+    if (survey) {
+      setActiveSurvey(survey);
+    } else {
+      removeStoredItem(activeSurveyStorageKey);
+    }
+  }, [activeSurveyStorageKey, pendingSurveys, surveysLoading]);
+
+  useEffect(() => {
+    if (!activeSurvey || surveysLoading) return;
+
+    const currentSurvey = pendingSurveys.find((item) => item.id === activeSurvey.id);
+    if (currentSurvey && currentSurvey !== activeSurvey) {
+      setActiveSurvey(currentSurvey);
+    }
+  }, [activeSurvey, pendingSurveys, surveysLoading]);
 
   // For granting wishes
   const { grantWish } = useWishes();
@@ -1406,7 +1511,7 @@ export default function HiveScreen() {
   const handleEditWishSave = async () => {
     await refetch();
     setEditingWish(null);
-    setSelectedWish(null);
+    closeWishDetail();
   };
 
   const canEditWish = useCallback((wish: Wish) => wish.user_id === profile?.id, [profile?.id]);
@@ -1450,7 +1555,7 @@ export default function HiveScreen() {
 
       await refetch();
       if (selectedWish?.id === wish.id) {
-        setSelectedWish(null);
+        closeWishDetail();
       }
       if (managingWish?.id === wish.id) {
         setManagingWish(null);
@@ -1470,7 +1575,7 @@ export default function HiveScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Archive', onPress: archiveWish },
     ]);
-  }, [canArchiveWish, communityId, isAdmin, managingWish?.id, profile, refetch, selectedWish?.id]);
+  }, [canArchiveWish, closeWishDetail, communityId, isAdmin, managingWish?.id, profile, refetch, selectedWish?.id]);
 
   const handleDeleteWish = (wish: Wish) => {
     if (!profile || !communityId) return;
@@ -1496,7 +1601,7 @@ export default function HiveScreen() {
 
       await refetch();
       if (selectedWish?.id === wish.id) {
-        setSelectedWish(null);
+        closeWishDetail();
       }
       if (managingWish?.id === wish.id) {
         setManagingWish(null);
@@ -1523,7 +1628,7 @@ export default function HiveScreen() {
     setStoredItem(`the-hive:last-board-category:${communityId}`, categoryId);
     removeStoredItem(`the-hive:last-board-post:${communityId}`);
     setStoredItem(`the-hive:board-direct-open:${communityId}`, 'true');
-    setSelectedWish(null);
+    closeWishDetail();
     router.push({
       pathname: '/board',
       params: {
@@ -1531,7 +1636,7 @@ export default function HiveScreen() {
         open: String(Date.now()),
       },
     });
-  }, [communityId, router]);
+  }, [closeWishDetail, communityId, router]);
 
   const createBoardFromWish = useCallback(async (wish: WishWithGranters) => {
     if (!profile || !communityId) return;
@@ -1565,7 +1670,7 @@ export default function HiveScreen() {
         await refetch();
         setManagingWish(null);
         if (selectedWish?.id === wish.id) {
-          setSelectedWish(null);
+          closeWishDetail();
         }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unknown error';
@@ -1583,7 +1688,7 @@ export default function HiveScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Unlink', onPress: unlink },
     ]);
-  }, [communityId, profile, refetch, selectedWish?.id]);
+  }, [closeWishDetail, communityId, profile, refetch, selectedWish?.id]);
 
   const homeTodos: HomeTodo[] = [
     ...pendingSurveys.map(s => ({
@@ -1594,7 +1699,7 @@ export default function HiveScreen() {
         ? `Due ${formatSurveyDueDate(s.due_date)}`
         : 'Awaiting your response',
       cta: 'Fill out →',
-      onPress: () => setActiveSurvey(s),
+      onPress: () => openSurvey(s),
     })),
     ...homeActionItems.map(a => ({
       id: `action-${a.id}`,
@@ -1834,12 +1939,12 @@ export default function HiveScreen() {
       <SafeAreaView className="flex-1 bg-white" edges={['top']}>
         <WishDetail
           wish={selectedWish}
-          onClose={() => setSelectedWish(null)}
+          onClose={closeWishDetail}
           onGrant={handleGrantWish}
           canManage={canOpenWishActions(selectedWish)}
           onManage={() => {
             const wish = selectedWish;
-            setSelectedWish(null);
+            closeWishDetail();
             setManagingWish(wish);
           }}
           onOpenBoard={openBoardFromWish}
@@ -2428,7 +2533,7 @@ export default function HiveScreen() {
                       <WishCard
                         key={wish.id}
                         wish={wish}
-                        onPress={() => setSelectedWish(wish)}
+                        onPress={() => openWishDetail(wish)}
                         canEdit={canOpenWishActions(wish)}
                         canDelete={canDeleteWish(wish)}
                         onManage={() => setManagingWish(wish)}
@@ -2461,7 +2566,7 @@ export default function HiveScreen() {
                       <WishCard
                         key={wish.id}
                         wish={wish}
-                        onPress={() => setSelectedWish(wish)}
+                        onPress={() => openWishDetail(wish)}
                         canEdit={canOpenWishActions(wish)}
                         canDelete={canDeleteWish(wish)}
                         onManage={() => setManagingWish(wish)}
@@ -3259,8 +3364,8 @@ export default function HiveScreen() {
       {activeSurvey && (
         <SurveyModal
           survey={activeSurvey}
-          onSubmit={(answers) => submitResponse(activeSurvey.id, answers)}
-          onClose={() => setActiveSurvey(null)}
+          onSubmit={handleSurveySubmit}
+          onClose={closeSurvey}
         />
       )}
     </SafeAreaView>
