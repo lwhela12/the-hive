@@ -32,7 +32,7 @@ import { addHomeResetListener } from '../../lib/homeNavigation';
 import {
   QUARTERLY_DUES_AMOUNT,
   type DuesPeriod,
-  duesTransactionCoversQuarter,
+  duesTransactionsCoverMember,
   getCurrentDuesPeriod,
   getDuesPeriodStartDate,
   isDuesPeriodStartDay,
@@ -182,6 +182,9 @@ const formatDateKey = (date: Date) => {
 
 const getQuarterlyDuesActionTitle = (period: DuesPeriod) =>
   `Quarterly dues for Q${period.quarter} ${period.year}`;
+
+const getDuesPeriodKey = (period: DuesPeriod) =>
+  `${period.year}-q${period.quarter}`;
 
 const isQuarterlyDuesActionItem = (
   item: ActionItem,
@@ -567,6 +570,7 @@ export default function HiveScreen() {
   const [duesCoveredThisQuarter, setDuesCoveredThisQuarter] = useState(false);
   const [duesStatusLoading, setDuesStatusLoading] = useState(false);
   const [duesStatusChecked, setDuesStatusChecked] = useState(false);
+  const [dismissedDuesPeriodKeys, setDismissedDuesPeriodKeys] = useState<Set<string>>(() => new Set());
 
   const fetchMyActionItems = useCallback(async () => {
     if (!profile?.id || !communityId) return;
@@ -576,7 +580,6 @@ export default function HiveScreen() {
       .select('*')
       .eq('assigned_to', profile.id)
       .eq('community_id', communityId)
-      .is('archived_at', null)
       .order('due_date', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false });
 
@@ -595,8 +598,21 @@ export default function HiveScreen() {
     if (error) {
       console.warn('Could not load action items', error);
       setHomeActionItems([]);
+      setDismissedDuesPeriodKeys(new Set());
     } else {
-      setHomeActionItems((data ?? []) as ActionItem[]);
+      const items = (data ?? []) as ActionItem[];
+      setHomeActionItems(items.filter((item) => !item.archived_at));
+
+      const currentPeriod = getCurrentDuesPeriod();
+      const currentDueDateKey = formatDateKey(getDuesPeriodStartDate(currentPeriod));
+      setDismissedDuesPeriodKeys(new Set(
+        items
+          .filter((item) => (
+            isQuarterlyDuesActionItem(item, currentPeriod, currentDueDateKey)
+            && (item.completed || !!item.archived_at)
+          ))
+          .map(() => getDuesPeriodKey(currentPeriod))
+      ));
     }
     setHomeActionLoading(false);
   }, [profile?.id, communityId]);
@@ -613,25 +629,35 @@ export default function HiveScreen() {
     setDuesStatusLoading(true);
     setDuesStatusChecked(false);
 
-    const { data, error } = await (supabase as any)
+    const runDuesQuery = (columns: string) => (supabase as any)
       .from('honey_pot_transactions')
-      .select('dues_year, dues_quarter, dues_covered_quarters, transaction_type, amount')
+      .select(columns)
       .eq('community_id', communityId)
-      .eq('related_user_id', profile.id)
-      .eq('dues_year', year)
-      .eq('transaction_type', 'deposit');
+      .eq('transaction_type', 'deposit')
+      .order('created_at', { ascending: false })
+      .limit(300);
+
+    let { data, error } = await runDuesQuery(
+      'related_user_id, dues_year, dues_quarter, dues_covered_quarters, transaction_type, amount, note, external_counterparty_name, created_at'
+    );
+
+    if (error && String(error.message ?? '').includes('external_counterparty_name')) {
+      const fallback = await runDuesQuery(
+        'related_user_id, dues_year, dues_quarter, dues_covered_quarters, transaction_type, amount, note, created_at'
+      );
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       console.warn('Could not load dues status', error);
       setDuesCoveredThisQuarter(false);
     } else {
-      setDuesCoveredThisQuarter(
-        (data ?? []).some((row: any) => duesTransactionCoversQuarter(row, { year, quarter }))
-      );
+      setDuesCoveredThisQuarter(duesTransactionsCoverMember(data ?? [], profile, { year, quarter }));
     }
     setDuesStatusChecked(true);
     setDuesStatusLoading(false);
-  }, [profile?.id, communityId]);
+  }, [profile, communityId]);
 
   useEffect(() => { fetchMyDuesStatus(); }, [fetchMyDuesStatus]);
 
@@ -645,6 +671,40 @@ export default function HiveScreen() {
   const triggerCompletion = useCallback(() => {
     setShowConfetti(true);
   }, []);
+
+  const getCurrentDuesReminderPeriodKey = useCallback((item: ActionItem) => {
+    const currentPeriod = getCurrentDuesPeriod();
+    const currentDueDateKey = formatDateKey(getDuesPeriodStartDate(currentPeriod));
+    return isQuarterlyDuesActionItem(item, currentPeriod, currentDueDateKey)
+      ? getDuesPeriodKey(currentPeriod)
+      : null;
+  }, []);
+
+  const rememberDismissedDuesReminder = useCallback((items: ActionItem[]) => {
+    const dismissedKeys = items
+      .map(getCurrentDuesReminderPeriodKey)
+      .filter(Boolean) as string[];
+    if (dismissedKeys.length === 0) return;
+
+    setDismissedDuesPeriodKeys((current) => {
+      const next = new Set(current);
+      dismissedKeys.forEach((key) => next.add(key));
+      return next;
+    });
+  }, [getCurrentDuesReminderPeriodKey]);
+
+  const forgetDismissedDuesReminder = useCallback((items: ActionItem[]) => {
+    const dismissedKeys = items
+      .map(getCurrentDuesReminderPeriodKey)
+      .filter(Boolean) as string[];
+    if (dismissedKeys.length === 0) return;
+
+    setDismissedDuesPeriodKeys((current) => {
+      const next = new Set(current);
+      dismissedKeys.forEach((key) => next.delete(key));
+      return next;
+    });
+  }, [getCurrentDuesReminderPeriodKey]);
 
   const toggleActionItem = useCallback(async (item: ActionItem) => {
     const completed = !item.completed;
@@ -673,6 +733,7 @@ export default function HiveScreen() {
   const archiveActionItem = useCallback((item: ActionItem) => {
     const archive = async () => {
       setHomeActionItems(prev => prev.filter(action => action.id !== item.id));
+      rememberDismissedDuesReminder([item]);
       const { error } = await supabase
         .from('action_items')
         .update({ archived_at: new Date().toISOString() } as any)
@@ -681,6 +742,7 @@ export default function HiveScreen() {
       if (error) {
         console.warn('Could not archive action item', error);
         setHomeActionItems(prev => [item, ...prev]);
+        forgetDismissedDuesReminder([item]);
         Alert.alert('Could not archive task', 'Please try again.');
       }
     };
@@ -695,7 +757,7 @@ export default function HiveScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Archive', style: 'destructive', onPress: archive },
     ]);
-  }, []);
+  }, [forgetDismissedDuesReminder, rememberDismissedDuesReminder]);
 
   const archiveCompletedActionItems = useCallback(() => {
     const completedItems = homeActionItems.filter(item => item.completed);
@@ -705,6 +767,7 @@ export default function HiveScreen() {
     const archive = async () => {
       const previousItems = homeActionItems;
       setHomeActionItems(prev => prev.filter(action => !completedIds.includes(action.id)));
+      rememberDismissedDuesReminder(completedItems);
       const { error } = await supabase
         .from('action_items')
         .update({ archived_at: new Date().toISOString() } as any)
@@ -713,6 +776,7 @@ export default function HiveScreen() {
       if (error) {
         console.warn('Could not archive completed action items', error);
         setHomeActionItems(previousItems);
+        forgetDismissedDuesReminder(completedItems);
         Alert.alert('Could not archive tasks', 'Please try again.');
       }
     };
@@ -728,7 +792,7 @@ export default function HiveScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Archive', style: 'destructive', onPress: archive },
     ]);
-  }, [homeActionItems]);
+  }, [forgetDismissedDuesReminder, homeActionItems, rememberDismissedDuesReminder]);
 
   const handleAddTask = async () => {
     if (!newTaskText.trim() || !profile?.id || !communityId) return;
@@ -1540,11 +1604,12 @@ export default function HiveScreen() {
       const period = { year, quarter };
       const dueDate = getDuesPeriodStartDate(period);
       const dueDateKey = formatDateKey(dueDate);
+      const duesReminderDismissed = dismissedDuesPeriodKeys.has(getDuesPeriodKey(period));
       const duesReminderAction = homeActionItems.find(item => (
         isQuarterlyDuesActionItem(item, period, dueDateKey)
       ));
 
-      if (!duesStatusChecked || duesCoveredThisQuarter || duesReminderAction) return [];
+      if (!duesStatusChecked || duesCoveredThisQuarter || duesReminderAction || duesReminderDismissed) return [];
 
       const dueDateLabel = formatDateShort(dueDate);
       const isDueToday = isDuesPeriodStartDay(today, period);
