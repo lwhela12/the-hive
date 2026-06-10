@@ -16,6 +16,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { queryKeys } from '../../lib/queryClient';
@@ -41,7 +42,7 @@ import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { useSurveys } from '../../lib/hooks/useSurveys';
 import type { Survey, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { parseAmericanDate } from '../../lib/dateUtils';
-import type { Profile, QueenBee, UserRole, CommunityInvite } from '../../types';
+import type { Profile, QueenBee, UserRole, CommunityInvite, Event } from '../../types';
 
 type MemberRow = {
   id: string;
@@ -216,15 +217,127 @@ const MONTHLY_CHECK_IN_DESCRIPTION =
 
 const createSurveyQuestionId = () => `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+const DEFAULT_MEETING_ARRIVAL_MINUTES = 17 * 60 + 30;
+const DEFAULT_SURVEY_DUE_MINUTES = 17 * 60;
+const SURVEY_TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_, index) => {
+  const totalMinutes = index * 15;
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  return {
+    value: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+    label: formatClockTime(totalMinutes),
+  };
+});
+
 const cloneQuestion = (question: SurveyQuestion): SurveyQuestion => ({
   ...question,
   options: question.options ? [...question.options] : undefined,
 });
 
-const getSurveyDateInputValue = (dueDate?: string | null) => dueDate?.slice(0, 10) ?? '';
+function formatClockTime(totalMinutes: number) {
+  const normalized = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+  const hour24 = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
+}
 
-const normalizeSurveyDueDateInput = (value: string) => {
-  const clean = value.trim();
+function getLocalIsoDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function toAmericanDate(date: Date) {
+  return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-${date.getFullYear()}`;
+}
+
+function getTimeInputValue(date: Date) {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function parseEventTimeToMinutes(value?: string | null) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*(am|pm)?$/i);
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2] ?? 0);
+  const period = match[3]?.toLowerCase();
+  if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute > 59) return null;
+
+  if (period === 'pm' && hour < 12) hour += 12;
+  if (period === 'am' && hour === 12) hour = 0;
+  if (hour > 23) return null;
+  return hour * 60 + minute;
+}
+
+function getSecondWednesday(year: number, monthIndex: number) {
+  const firstOfMonth = new Date(year, monthIndex, 1);
+  const firstWednesdayOffset = (3 - firstOfMonth.getDay() + 7) % 7;
+  return new Date(year, monthIndex, 1 + firstWednesdayOffset + 7);
+}
+
+function getNextSecondWednesdayDueAt(from = new Date()) {
+  for (let offset = 0; offset < 18; offset += 1) {
+    const candidate = getSecondWednesday(from.getFullYear(), from.getMonth() + offset);
+    candidate.setHours(
+      Math.floor(DEFAULT_SURVEY_DUE_MINUTES / 60),
+      DEFAULT_SURVEY_DUE_MINUTES % 60,
+      0,
+      0
+    );
+    if (candidate > from) return candidate;
+  }
+
+  const fallback = new Date(from);
+  fallback.setDate(fallback.getDate() + 30);
+  fallback.setHours(17, 0, 0, 0);
+  return fallback;
+}
+
+function getSurveyDefaultDueAt(nextMeeting?: Pick<Event, 'event_date' | 'event_time'> | null) {
+  if (nextMeeting?.event_date) {
+    const [year, month, day] = nextMeeting.event_date.split('-').map(Number);
+    if (Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) {
+      const meetingMinutes = parseEventTimeToMinutes(nextMeeting.event_time) ?? DEFAULT_MEETING_ARRIVAL_MINUTES;
+      const dueAt = new Date(year, month - 1, day, Math.floor(meetingMinutes / 60), meetingMinutes % 60, 0, 0);
+      dueAt.setMinutes(dueAt.getMinutes() - 30);
+      return dueAt;
+    }
+  }
+
+  return getNextSecondWednesdayDueAt();
+}
+
+function parseSurveyDueAt(dueDate?: string | null) {
+  if (!dueDate) return null;
+  const parsed = new Date(dueDate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getSurveyDateInputValue(dueDate?: string | null) {
+  const parsed = parseSurveyDueAt(dueDate);
+  return parsed ? toAmericanDate(parsed) : dueDate?.slice(0, 10) ?? '';
+}
+
+function getSurveyTimeInputValue(dueDate?: string | null, fallback?: Date) {
+  return getTimeInputValue(parseSurveyDueAt(dueDate) ?? fallback ?? getNextSecondWednesdayDueAt());
+}
+
+function formatSurveyDueAt(dueDate?: string | null) {
+  const parsed = parseSurveyDueAt(dueDate);
+  if (!parsed) return dueDate ?? '';
+  return parsed.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+const normalizeSurveyDueDateInput = (dateValue: string, timeValue: string) => {
+  const clean = dateValue.trim();
   if (!clean) return { dueDate: null as string | null, error: null as string | null };
 
   const parsed = parseAmericanDate(clean);
@@ -235,8 +348,92 @@ const normalizeSurveyDueDateInput = (value: string) => {
     };
   }
 
-  return { dueDate: parsed, error: null };
+  const [year, month, day] = parsed.split('-').map(Number);
+  const timeMinutes = parseEventTimeToMinutes(timeValue) ?? DEFAULT_SURVEY_DUE_MINUTES;
+  const dueAt = new Date(year, month - 1, day, Math.floor(timeMinutes / 60), timeMinutes % 60, 0, 0);
+  return { dueDate: dueAt.toISOString(), error: null };
 };
+
+function SurveyTimePicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = SURVEY_TIME_OPTIONS.find(option => option.value === value);
+
+  return (
+    <View style={{ flex: 1, minWidth: 150 }}>
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7f715f', marginBottom: 4 }}>
+        Time
+      </Text>
+      <Pressable
+        onPress={() => setOpen(true)}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: pressed ? '#fbf0d7' : '#faf8f3',
+          borderColor: 'rgba(222,193,129,0.5)',
+          borderWidth: 1,
+          borderRadius: 12,
+          paddingHorizontal: 12,
+          paddingVertical: 12,
+        })}
+      >
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: selected ? '#2d2d2d' : '#b5ad9f' }}>
+          {selected?.label ?? 'Select time'}
+        </Text>
+        <Ionicons name="time-outline" size={18} color="#bd9348" />
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable
+          onPress={() => setOpen(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{ width: '100%', maxWidth: 320, maxHeight: 460, backgroundColor: 'white', borderRadius: 18, overflow: 'hidden' }}
+          >
+            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.3)' }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#2d2d2d', textAlign: 'center' }}>
+                Select Time
+              </Text>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={true}>
+              {SURVEY_TIME_OPTIONS.map(option => {
+                const active = option.value === value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                    }}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: 18,
+                      paddingVertical: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: 'rgba(222,193,129,0.18)',
+                      backgroundColor: active ? '#fdf3dc' : pressed ? '#fbf4e3' : 'white',
+                    })}
+                  >
+                    <Text style={{ fontFamily: active ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 15, color: active ? '#8a6b30' : '#2d2d2d' }}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
 
 function AdminPanel({
   title,
@@ -469,14 +666,17 @@ export default function AdminScreen() {
   const [surveyTitle, setSurveyTitle] = useState('');
   const [surveyDescription, setSurveyDescription] = useState('');
   const [surveyDueDate, setSurveyDueDate] = useState('');
+  const [surveyDueTime, setSurveyDueTime] = useState('');
   const [savingSurvey, setSavingSurvey] = useState(false);
   const [editingSurvey, setEditingSurvey] = useState<Survey | null>(null);
   const [surveyEditorTitle, setSurveyEditorTitle] = useState('');
   const [surveyEditorDescription, setSurveyEditorDescription] = useState('');
   const [surveyEditorDueDate, setSurveyEditorDueDate] = useState('');
+  const [surveyEditorDueTime, setSurveyEditorDueTime] = useState('');
   const [surveyEditorQuestions, setSurveyEditorQuestions] = useState<SurveyQuestion[]>([]);
   const [savingSurveyEditor, setSavingSurveyEditor] = useState(false);
   const [surveyEditorError, setSurveyEditorError] = useState<string | null>(null);
+  const [nextSurveyMeeting, setNextSurveyMeeting] = useState<Pick<Event, 'event_date' | 'event_time' | 'title'> | null>(null);
 
   // Form states
   const [selectedMember, setSelectedMember] = useState<Profile | null>(null);
@@ -551,6 +751,19 @@ export default function AdminScreen() {
       setPendingInvites(visibleInvites);
     }
 
+    const today = getLocalIsoDate(new Date());
+    const { data: nextMeetingData } = await supabase
+      .from('events')
+      .select('event_date, event_time, title')
+      .eq('community_id', communityId)
+      .eq('event_type', 'meeting')
+      .gte('event_date', today)
+      .or('status.is.null,status.eq.scheduled')
+      .order('event_date', { ascending: true })
+      .limit(1);
+
+    setNextSurveyMeeting((nextMeetingData?.[0] as Pick<Event, 'event_date' | 'event_time' | 'title'> | undefined) ?? null);
+
     // Fetch honey pot balance and transparent ledger
     try {
       setHoneyPotLedgerLoading(true);
@@ -592,11 +805,22 @@ export default function AdminScreen() {
     refetchSurveys();
   };
 
+  const getDefaultSurveyDue = () => getSurveyDefaultDueAt(nextSurveyMeeting);
+
+  const openSurveyCreateModal = () => {
+    const defaultDueAt = getDefaultSurveyDue();
+    setSurveyDueDate(toAmericanDate(defaultDueAt));
+    setSurveyDueTime(getTimeInputValue(defaultDueAt));
+    setShowSurveyModal(true);
+  };
+
   const openSurveyEditor = (survey: Survey) => {
+    const defaultDueAt = getDefaultSurveyDue();
     setEditingSurvey(survey);
     setSurveyEditorTitle(survey.title);
     setSurveyEditorDescription(survey.description ?? '');
-    setSurveyEditorDueDate(getSurveyDateInputValue(survey.due_date));
+    setSurveyEditorDueDate(survey.due_date ? getSurveyDateInputValue(survey.due_date) : toAmericanDate(defaultDueAt));
+    setSurveyEditorDueTime(getSurveyTimeInputValue(survey.due_date, defaultDueAt));
     setSurveyEditorQuestions((survey.questions ?? []).map(cloneQuestion));
     setSurveyEditorError(null);
   };
@@ -606,6 +830,7 @@ export default function AdminScreen() {
     setSurveyEditorTitle('');
     setSurveyEditorDescription('');
     setSurveyEditorDueDate('');
+    setSurveyEditorDueTime('');
     setSurveyEditorQuestions([]);
     setSurveyEditorError(null);
   };
@@ -651,7 +876,7 @@ export default function AdminScreen() {
       return;
     }
 
-    const { dueDate, error: dueDateError } = normalizeSurveyDueDateInput(surveyEditorDueDate);
+    const { dueDate, error: dueDateError } = normalizeSurveyDueDateInput(surveyEditorDueDate, surveyEditorDueTime);
     if (dueDateError) {
       setSurveyEditorError(dueDateError);
       return;
@@ -698,7 +923,7 @@ export default function AdminScreen() {
 
   const createQuickSurvey = async () => {
     if (!surveyTitle.trim() || !communityId) return;
-    const { dueDate, error: dueDateError } = normalizeSurveyDueDateInput(surveyDueDate);
+    const { dueDate, error: dueDateError } = normalizeSurveyDueDateInput(surveyDueDate, surveyDueTime);
     if (dueDateError) {
       Alert.alert('Due date', dueDateError);
       return;
@@ -718,6 +943,7 @@ export default function AdminScreen() {
       setSurveyTitle('');
       setSurveyDescription('');
       setSurveyDueDate('');
+      setSurveyDueTime('');
       setShowSurveyModal(false);
       refetchSurveys();
     } catch (e) {
@@ -1677,7 +1903,7 @@ export default function AdminScreen() {
                 action={(
                   <AdminHeaderAction
                     label="+ Create"
-                    onPress={() => setShowSurveyModal(true)}
+                    onPress={openSurveyCreateModal}
                   />
                 )}
               >
@@ -1704,7 +1930,7 @@ export default function AdminScreen() {
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>{survey.title}</Text>
                           {survey.due_date && (
                             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-                              Due {new Date(survey.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              Due {formatSurveyDueAt(survey.due_date)}
                             </Text>
                           )}
                           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 2 }}>
@@ -1755,13 +1981,18 @@ export default function AdminScreen() {
               style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3', minHeight: 72, textAlignVertical: 'top' }}
               placeholderTextColor="#b5ad9f"
             />
-            <TextInput
-              placeholder="Due date (optional, e.g. 2026-06-01)"
-              value={surveyDueDate}
-              onChangeText={setSurveyDueDate}
-              style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 16, backgroundColor: '#faf8f3' }}
-              placeholderTextColor="#b5ad9f"
-            />
+            <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 16 }}>
+              <View style={{ flex: 2, minWidth: 180 }}>
+                <EventDatePicker
+                  value={surveyDueDate}
+                  onChange={setSurveyDueDate}
+                />
+              </View>
+              <SurveyTimePicker
+                value={surveyDueTime}
+                onChange={setSurveyDueTime}
+              />
+            </View>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginBottom: 16 }}>
               💡 After creating, ask Clive to help you build questions for this survey.
             </Text>
@@ -1824,13 +2055,18 @@ export default function AdminScreen() {
                 style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3', minHeight: 72, textAlignVertical: 'top' }}
                 placeholderTextColor="#b5ad9f"
               />
-              <TextInput
-                placeholder="Due date, e.g. 2026-06-15 or 06-15-2026"
-                value={surveyEditorDueDate}
-                onChangeText={setSurveyEditorDueDate}
-                style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 12, backgroundColor: '#faf8f3' }}
-                placeholderTextColor="#b5ad9f"
-              />
+              <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 12 }}>
+                <View style={{ flex: 2, minWidth: 180 }}>
+                  <EventDatePicker
+                    value={surveyEditorDueDate}
+                    onChange={setSurveyEditorDueDate}
+                  />
+                </View>
+                <SurveyTimePicker
+                  value={surveyEditorDueTime}
+                  onChange={setSurveyEditorDueTime}
+                />
+              </View>
 
               <Pressable
                 onPress={applyMonthlyCheckInTemplate}

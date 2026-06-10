@@ -53,8 +53,7 @@ function isMonthlyCheckInSurvey(survey: Survey) {
 function getLocalDateFromSurveyDueDate(dueDate?: string | null) {
   if (!dueDate) return null;
 
-  const dateOnly = dueDate.slice(0, 10);
-  const match = dateOnly.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const match = dueDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (match) {
     return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
   }

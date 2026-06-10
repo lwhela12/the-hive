@@ -79,6 +79,18 @@ function ChoiceInput({ options, value, onChange, multi }: { options: string[]; v
 
 const DRAFT_KEY = (surveyId: string) => `survey-draft:${surveyId}`;
 
+function formatSurveyDueDate(dueDate: string) {
+  const parsed = new Date(dueDate);
+  if (Number.isNaN(parsed.getTime())) return dueDate;
+
+  return parsed.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -220,7 +232,7 @@ export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
                 {survey.due_date && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, backgroundColor: '#fdf3dc', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
-                      📅 Due {new Date(survey.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      📅 Due {formatSurveyDueDate(survey.due_date)}
                     </Text>
                   </View>
                 )}

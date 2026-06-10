@@ -80,6 +80,18 @@ const formatGoogleCalendarDate = (date: Date) => {
 
 const formatIcsDate = (date: Date) => formatGoogleCalendarDate(date);
 
+const formatSurveyDueDate = (dueDate: string) => {
+  const parsed = new Date(dueDate);
+  if (Number.isNaN(parsed.getTime())) return dueDate;
+
+  return parsed.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
 const normalizeEventTimeInput = (value: string) => {
   const raw = value.trim();
   if (!raw) return { time: null, note: '' };
@@ -1579,7 +1591,7 @@ export default function HiveScreen() {
       emoji: '📋',
       title: s.title,
       detail: s.due_date
-        ? `Due ${new Date(s.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+        ? `Due ${formatSurveyDueDate(s.due_date)}`
         : 'Awaiting your response',
       cta: 'Fill out →',
       onPress: () => setActiveSurvey(s),
