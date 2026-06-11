@@ -51,7 +51,6 @@ interface MeetingAnalysis {
     goal_title: string;
     description?: string | null;
   }>;
-  queen_bee_highlights?: string[];
   board_suggestions?: Array<{
     person_name?: string | null;
     title: string;
@@ -162,7 +161,6 @@ function normalizeMeetingAnalysis(value: Record<string, any>): MeetingAnalysis {
         description: typeof board.description === 'string' && board.description.trim() ? board.description.trim() : null,
       }))
       .filter((board) => board.person_name && board.goal_title),
-    queen_bee_highlights: cleanStringArray(value.queen_bee_highlights),
     board_suggestions: boardSuggestions
       .filter((suggestion: Record<string, any>) => typeof suggestion?.title === 'string' && typeof suggestion?.content === 'string')
       .map((suggestion: Record<string, any>) => ({
@@ -189,7 +187,6 @@ function getStoredAnalysis(summary: Record<string, any>): MeetingAnalysis {
     events: summary.events,
     wishes_surfaced: summary.wishes_surfaced,
     hd_boards: summary.hd_boards,
-    queen_bee_highlights: summary.queen_bee_highlights,
     board_suggestions: summary.board_suggestions,
   });
 }
@@ -485,7 +482,9 @@ ${boardTopicList || '- None yet'}
 
 Turn these meeting notes into app-ready structured data. Use only information supported by the notes. Do not invent dates, assignees, or commitments. Prefer exact member names when assigning work.
 
-HD boards are durable project boards for a member's current HummDinger/High Definition wish. Create one hd_boards entry for each distinct member goal that should get its own board. Reuse existing HD boards when the same person is still working on the same goal. Use the "15min HIVE Helpers" board for quick acts of help people completed or offered. Use "HIVE Approved" for trusted recommendations, favorite providers, brands, places, and community-approved resources.
+HD boards are durable project boards for a member's current HummDinger/High Definition wish. Create one hd_boards entry for each distinct member goal that should get its own board. Reuse existing HD boards when the same person is still working on the same goal. For HummDinger or High Definition session resources, asks, offers, and blockers tied to a specific member, create board_suggestions with that member as person_name and use their exact HD board name as category_hint when it exists. Use shared boards only for explicitly group-wide topics: "15min HIVE Helpers" for quick acts of help people completed or offered, "HIVE Approved" for trusted recommendations, favorite providers, brands, places, and community-approved resources, and "HIVE Hangs" for group social planning.
+
+Wishes surfaced are meeting-summary candidates only. Capture the wish or need in wishes_surfaced, but do not turn it into a formal wish record here. Use board_suggestions only when the notes support a concrete discussion thread, resource request, or follow-up post for the reviewer to approve.
 
 Return strict JSON only:
 {
@@ -497,7 +496,6 @@ Return strict JSON only:
   "events": [{"title": "event title", "event_date": "YYYY-MM-DD", "event_time": "HH:MM:SS or null", "event_type": "meeting or custom", "description": "optional", "location": "optional"}],
   "wishes_surfaced": [{"person_name": "member name", "description": "specific wish or need"}],
   "hd_boards": [{"person_name": "member name", "goal_title": "short project/goal name", "description": "what help belongs on this board"}],
-  "queen_bee_highlights": ["highlight"],
   "board_suggestions": [{"person_name": "member name or null", "title": "suggested board post title", "content": "draft board update/resource note", "category_hint": "existing board name, HD goal title, 15min HIVE Helpers, HIVE Approved, Announcements, or member/project area"}]
 }`,
     },
@@ -760,8 +758,10 @@ serve(async (req) => {
       ? getStoredAnalysis(existingSummary)
       : await analyzeMeetingNotes(supabaseAdmin, meeting, existingSummary, members, sourceFiles);
     const title = analysis.title?.trim() || existingSummary.title || 'HIVE Meeting';
+    const summaryBase = { ...existingSummary };
+    delete summaryBase.queen_bee_highlights;
     const commonSummaryPayload = {
-      ...existingSummary,
+      ...summaryBase,
       imported_file: sourceFiles[0]?.base64 ? stripFileData(sourceFiles[0]) : sourceFiles[0] ?? null,
       imported_files: sourceFiles.map((file: Record<string, any>) => file?.base64 ? stripFileData(file) : file),
       source: existingSummary.source || 'meeting_notes',
@@ -773,7 +773,6 @@ serve(async (req) => {
       action_items: analysis.action_items ?? [],
       events: analysis.events ?? [],
       hd_boards: analysis.hd_boards ?? [],
-      queen_bee_highlights: analysis.queen_bee_highlights ?? [],
       board_suggestions: analysis.board_suggestions ?? [],
       preview_counts: countAnalysisItems(analysis),
     };

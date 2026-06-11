@@ -91,15 +91,13 @@ Available members: ${members?.map(m => m.name).join(', ')}
 Analyze the transcript and provide:
 1. A concise summary (2-3 paragraphs)
 2. Action items extracted with assigned person if mentioned
-3. Any wishes that surfaced during the meeting
-4. Queen Bee highlights - specific progress updates, accomplishments, or blockers mentioned about the current Queen Bee's project. Each highlight should be a concise bullet point (1-2 sentences max).
+3. Any wishes or needs that surfaced during the meeting. Treat these as summary candidates only, not automatic wish records.
 
 Format your response as JSON:
 {
   "summary": "string",
   "action_items": [{"description": "string", "assigned_to_name": "string or null", "due_date": "YYYY-MM-DD or null"}],
-  "wishes_surfaced": [{"person_name": "string", "description": "string"}],
-  "queen_bee_highlights": ["string"]
+  "wishes_surfaced": [{"person_name": "string", "description": "string"}]
 }`,
         messages: [
           {
@@ -121,14 +119,13 @@ Format your response as JSON:
         jsonText = jsonText.replace(/^```\s*\n?/, '').replace(/\n?```\s*$/, '');
         analysis = JSON.parse(jsonText);
       } catch {
-        analysis = { summary: textBlock?.text, action_items: [], wishes_surfaced: [], queen_bee_highlights: [] };
+        analysis = { summary: textBlock?.text, action_items: [], wishes_surfaced: [] };
       }
 
       // Store the full analysis as JSON so frontend can display all parts
       const summaryData = {
         summary: analysis.summary,
         wishes_surfaced: analysis.wishes_surfaced || [],
-        queen_bee_highlights: analysis.queen_bee_highlights || []
       };
 
       // Update meeting with summary
@@ -159,37 +156,6 @@ Format your response as JSON:
             assigned_to: assignedTo,
             due_date: item.due_date
           });
-        }
-      }
-
-      // Persist Queen Bee highlights
-      if (analysis.queen_bee_highlights?.length > 0) {
-        const currentMonth = new Date().toISOString().slice(0, 7);
-        const { data: currentQueenBee } = await supabaseAdmin
-          .from('queen_bees')
-          .select('id')
-          .eq('community_id', meeting.community_id)
-          .eq('month', currentMonth)
-          .single();
-
-        if (currentQueenBee) {
-          // Delete existing highlights from this meeting (allows reprocessing)
-          await supabaseAdmin
-            .from('monthly_highlights')
-            .delete()
-            .eq('meeting_id', meeting.id);
-
-          const highlightsToInsert = analysis.queen_bee_highlights.map(
-            (highlight: string, index: number) => ({
-              queen_bee_id: currentQueenBee.id,
-              meeting_id: meeting.id,
-              community_id: meeting.community_id,
-              highlight,
-              display_order: index
-            })
-          );
-
-          await supabaseAdmin.from('monthly_highlights').insert(highlightsToInsert);
         }
       }
 

@@ -244,7 +244,6 @@ serve(async (req) => {
       decisions: [],
       details: [],
       wishes_surfaced: [],
-      queen_bee_highlights: [],
       board_suggestions: [],
       board_posts_created: [],
       action_items_created: 0,

@@ -39,7 +39,6 @@ interface ParsedSummary {
     goal_title: string;
     description?: string | null;
   }[];
-  queen_bee_highlights?: string[];
   board_suggestions?: {
     person_name?: string | null;
     title: string;
@@ -830,23 +829,6 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                 <View key={index} className={index > 0 ? 'mt-3 pt-3 border-t border-honey-200' : ''}>
                   <Text className="font-medium text-honey-800">{wish.person_name}</Text>
                   <Text className="text-gray-700 mt-1">{wish.description}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Queen Bee Highlights */}
-        {parsedSummary.queen_bee_highlights && parsedSummary.queen_bee_highlights.length > 0 && (
-          <View className="mb-6">
-            <Text className="text-lg font-semibold text-gray-700 mb-2">
-              Queen Bee Highlights
-            </Text>
-            <View className="bg-purple-50 rounded-xl p-4">
-              {parsedSummary.queen_bee_highlights.map((highlight, index) => (
-                <View key={index} className="flex-row mb-2 last:mb-0">
-                  <Text className="text-purple-600 mr-2">•</Text>
-                  <Text className="text-gray-700 flex-1">{highlight}</Text>
                 </View>
               ))}
             </View>
