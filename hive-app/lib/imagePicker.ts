@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 
 export interface SelectedImage {
   uri: string;
@@ -8,6 +8,7 @@ export interface SelectedImage {
   fileName?: string;
   fileSize?: number;
   mimeType?: string;
+  base64?: string;
 }
 
 export interface PickImagesOptions {
@@ -54,6 +55,7 @@ export async function pickSingleImage(
     mediaTypes: ['images'],
     allowsEditing: options.allowsEditing ?? false,
     quality: options.quality ?? DEFAULT_QUALITY,
+    base64: Platform.OS === 'web',
   });
 
   if (result.canceled || !result.assets[0]) {
@@ -68,6 +70,7 @@ export async function pickSingleImage(
     fileName: asset.fileName ?? undefined,
     fileSize: asset.fileSize ?? undefined,
     mimeType: asset.mimeType ?? undefined,
+    base64: asset.base64 ?? undefined,
   };
 }
 
@@ -89,6 +92,7 @@ export async function pickMultipleImages(
     selectionLimit: maxImages,
     quality: options.quality ?? DEFAULT_QUALITY,
     orderedSelection: true,
+    base64: Platform.OS === 'web',
   });
 
   if (result.canceled || !result.assets.length) {
@@ -102,6 +106,7 @@ export async function pickMultipleImages(
     fileName: asset.fileName ?? undefined,
     fileSize: asset.fileSize ?? undefined,
     mimeType: asset.mimeType ?? undefined,
+    base64: asset.base64 ?? undefined,
   }));
 }
 

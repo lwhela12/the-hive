@@ -641,6 +641,34 @@ export default function MeetingsScreen() {
     });
   };
 
+  const readPhotoAsBase64 = async (photo: { uri: string; base64?: string }) => {
+    if (photo.base64) {
+      return photo.base64.includes(',') ? photo.base64.split(',').pop() ?? photo.base64 : photo.base64;
+    }
+
+    if (Platform.OS === 'web') {
+      if (photo.uri.startsWith('data:')) {
+        return photo.uri.split(',').pop() ?? photo.uri;
+      }
+
+      const response = await fetch(photo.uri);
+      const blob = await response.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = typeof reader.result === 'string' ? reader.result : '';
+          resolve(result.includes(',') ? result.split(',').pop() ?? result : result);
+        };
+        reader.onerror = () => reject(reader.error ?? new Error('Could not read the selected photo.'));
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    return await FileSystem.readAsStringAsync(photo.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  };
+
   const handlePickNotesFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -688,9 +716,7 @@ export default function MeetingsScreen() {
           return {
             fileName: photo.fileName ?? `handwritten-notes-${Date.now()}-${index + 1}.${extension}`,
             fileMimeType: photo.mimeType ?? getContentType(extension),
-            fileBase64: await FileSystem.readAsStringAsync(photo.uri, {
-              encoding: FileSystem.EncodingType.Base64,
-            }),
+            fileBase64: await readPhotoAsBase64(photo),
           };
         })
       );
@@ -714,9 +740,7 @@ export default function MeetingsScreen() {
       const photoFile = {
         fileName: photo.fileName ?? `handwritten-notes-${Date.now()}.${extension}`,
         fileMimeType: photo.mimeType ?? getContentType(extension),
-        fileBase64: await FileSystem.readAsStringAsync(photo.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        }),
+        fileBase64: await readPhotoAsBase64(photo),
       };
 
       setNotesImportForm((form) => ({
