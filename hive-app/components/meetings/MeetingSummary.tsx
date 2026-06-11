@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
-import { Alert, View, Text, ScrollView, Pressable, Modal } from 'react-native';
+import { Alert, View, Text, ScrollView, Pressable, Modal, TextInput } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { formatDateLong, formatDateShort } from '../../lib/dateUtils';
@@ -64,6 +64,14 @@ type PreviewSelectionKey =
 
 type PreviewSelection = Record<PreviewSelectionKey, number[]>;
 
+type ProposalEditKind = 'action_items' | 'events' | 'hd_boards' | 'board_suggestions';
+
+interface EditingProposal {
+  kind: ProposalEditKind;
+  index: number;
+  draft: Record<string, string>;
+}
+
 const EMPTY_PREVIEW_SELECTION: PreviewSelection = {
   action_item_indices: [],
   event_indices: [],
@@ -94,6 +102,12 @@ const countPreviewItems = (summary: ParsedSummary) => (
   + (summary.board_suggestions?.length ?? 0)
 );
 
+const isIsoDate = (value?: string | null) => Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+const trimToNull = (value?: string | null) => {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed : null;
+};
+
 function PreviewReviewSection<T>({
   title,
   items,
@@ -103,6 +117,7 @@ function PreviewReviewSection<T>({
   renderTitle,
   renderMeta,
   renderBody,
+  onEdit,
 }: {
   title: string;
   items: T[];
@@ -112,6 +127,7 @@ function PreviewReviewSection<T>({
   renderTitle: (item: T) => string;
   renderMeta?: (item: T) => string | null | undefined;
   renderBody?: (item: T) => ReactNode;
+  onEdit?: (item: T, index: number) => void;
 }) {
   if (items.length === 0) return null;
 
@@ -124,18 +140,18 @@ function PreviewReviewSection<T>({
         {items.map((item, index) => {
           const selected = selection[selectionKey].includes(index);
           return (
-            <Pressable
+            <View
               key={`${selectionKey}-${index}`}
-              onPress={() => onToggle(selectionKey, index)}
-              className={`flex-row items-start p-4 active:bg-honey-50 ${index > 0 ? 'border-t border-honey-100' : ''}`}
+              className={`flex-row items-start p-4 ${index > 0 ? 'border-t border-honey-100' : ''}`}
             >
-              <View
+              <Pressable
+                onPress={() => onToggle(selectionKey, index)}
                 className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${
                   selected ? 'bg-honey-500 border-honey-500' : 'border-gray-300'
                 }`}
               >
                 {selected && <Text className="text-white text-xs">✓</Text>}
-              </View>
+              </Pressable>
               <View className="flex-1">
                 <Text className="font-medium text-gray-800">
                   {renderTitle(item)}
@@ -146,8 +162,16 @@ function PreviewReviewSection<T>({
                   </Text>
                 ) : null}
                 {renderBody?.(item)}
+                {onEdit && (
+                  <Pressable
+                    onPress={() => onEdit(item, index)}
+                    className="bg-gray-100 px-3 py-2 rounded-lg active:bg-gray-200 self-start mt-3"
+                  >
+                    <Text className="text-gray-700 font-semibold text-sm">Edit</Text>
+                  </Pressable>
+                )}
               </View>
-            </Pressable>
+            </View>
           );
         })}
       </View>
@@ -165,6 +189,9 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const [saving, setSaving] = useState(false);
   const [applyingNotes, setApplyingNotes] = useState(false);
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection>(EMPTY_PREVIEW_SELECTION);
+  const [previewSelectionSource, setPreviewSelectionSource] = useState<string | null>(null);
+  const [editingProposal, setEditingProposal] = useState<EditingProposal | null>(null);
+  const [savingProposalEdit, setSavingProposalEdit] = useState(false);
 
   // Extract unique speakers from transcript
   const speakers = useMemo(() => {
@@ -251,14 +278,19 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const notesHavePreview = parsedSummary.import_status === 'preview';
   const previewItemCount = countPreviewItems(parsedSummary);
   const selectedPreviewCount = countPreviewSelection(previewSelection);
+  const currentPreviewSelectionSource = notesHavePreview
+    ? `${meeting.id}:${parsedSummary.preview_generated_at ?? 'preview'}`
+    : null;
 
   useEffect(() => {
-    if (parsedSummary.import_status === 'preview') {
+    if (currentPreviewSelectionSource && currentPreviewSelectionSource !== previewSelectionSource) {
       setPreviewSelection(getPreviewSelection(parsedSummary));
-    } else {
+      setPreviewSelectionSource(currentPreviewSelectionSource);
+    } else if (!currentPreviewSelectionSource && previewSelectionSource) {
       setPreviewSelection(EMPTY_PREVIEW_SELECTION);
+      setPreviewSelectionSource(null);
     }
-  }, [meeting.id, meeting.summary]);
+  }, [currentPreviewSelectionSource, parsedSummary, previewSelectionSource]);
 
   const loadActionItems = async () => {
     const { data } = await supabase
@@ -297,6 +329,115 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           : [...current[key], index].sort((a, b) => a - b),
       };
     });
+  };
+
+  const openProposalEditor = (kind: ProposalEditKind, index: number, item: Record<string, any>) => {
+    const draft: Record<string, string> = {};
+    Object.entries(item).forEach(([key, value]) => {
+      draft[key] = value === null || value === undefined ? '' : String(value);
+    });
+    setEditingProposal({ kind, index, draft });
+  };
+
+  const updateProposalDraft = (field: string, value: string) => {
+    setEditingProposal((current) => current
+      ? { ...current, draft: { ...current.draft, [field]: value } }
+      : current);
+  };
+
+  const saveProposalEdit = async () => {
+    if (!editingProposal || savingProposalEdit) return;
+
+    const { kind, index, draft } = editingProposal;
+    const nextSummary: ParsedSummary = { ...parsedSummary };
+    const currentItems = ([...(nextSummary[kind] ?? [])] as Record<string, any>[]);
+
+    if (!currentItems[index]) {
+      setEditingProposal(null);
+      return;
+    }
+
+    if (kind === 'action_items') {
+      const description = draft.description?.trim();
+      if (!description) {
+        Alert.alert('Description Needed', 'Action items need a description.');
+        return;
+      }
+      currentItems[index] = {
+        description,
+        assigned_to_name: trimToNull(draft.assigned_to_name),
+        due_date: isIsoDate(draft.due_date) ? draft.due_date : null,
+      };
+    } else if (kind === 'events') {
+      const title = draft.title?.trim();
+      if (!title) {
+        Alert.alert('Title Needed', 'Calendar events need a title.');
+        return;
+      }
+      if (draft.event_date?.trim() && !isIsoDate(draft.event_date.trim())) {
+        Alert.alert('Date Format', 'Use YYYY-MM-DD for event dates.');
+        return;
+      }
+      currentItems[index] = {
+        title,
+        event_date: draft.event_date?.trim() || '',
+        event_time: trimToNull(draft.event_time),
+        event_type: draft.event_type === 'meeting' ? 'meeting' : 'custom',
+        description: trimToNull(draft.description),
+        location: trimToNull(draft.location),
+      };
+    } else if (kind === 'hd_boards') {
+      const personName = draft.person_name?.trim();
+      const goalTitle = draft.goal_title?.trim();
+      if (!personName || !goalTitle) {
+        Alert.alert('Board Details Needed', 'HD boards need a person and goal title.');
+        return;
+      }
+      currentItems[index] = {
+        person_name: personName,
+        goal_title: goalTitle,
+        description: trimToNull(draft.description),
+      };
+    } else {
+      const title = draft.title?.trim();
+      const content = draft.content?.trim();
+      if (!title || !content) {
+        Alert.alert('Post Details Needed', 'Board posts need a title and content.');
+        return;
+      }
+      currentItems[index] = {
+        person_name: trimToNull(draft.person_name),
+        title,
+        content,
+        category_hint: trimToNull(draft.category_hint),
+      };
+    }
+
+    (nextSummary as any)[kind] = currentItems;
+    nextSummary.preview_generated_at = parsedSummary.preview_generated_at ?? new Date().toISOString();
+
+    setSavingProposalEdit(true);
+    try {
+      const { data, error } = await supabase
+        .from('meetings')
+        .update({ summary: JSON.stringify(nextSummary) })
+        .eq('id', meeting.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setMeeting(data as Meeting);
+        onMeetingUpdated?.(data as Meeting);
+      }
+      setEditingProposal(null);
+    } catch (error) {
+      console.error('Error saving proposal edit:', error);
+      Alert.alert('Edit Not Saved', 'Could not save that proposal edit. Please try again.');
+    } finally {
+      setSavingProposalEdit(false);
+    }
   };
 
   const previewNotes = async () => {
@@ -431,6 +572,34 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     }
   };
 
+  const renderProposalInput = (
+    field: string,
+    label: string,
+    placeholder?: string,
+    options: { multiline?: boolean } = {}
+  ) => (
+    <View className="mb-4">
+      <Text className="text-sm font-medium text-gray-700 mb-1">{label}</Text>
+      <TextInput
+        value={editingProposal?.draft[field] ?? ''}
+        onChangeText={(value) => updateProposalDraft(field, value)}
+        placeholder={placeholder}
+        multiline={options.multiline}
+        textAlignVertical={options.multiline ? 'top' : 'center'}
+        className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+        style={options.multiline ? { minHeight: 120 } : undefined}
+      />
+    </View>
+  );
+
+  const getProposalEditorTitle = () => {
+    if (!editingProposal) return 'Edit Proposal';
+    if (editingProposal.kind === 'action_items') return 'Edit Action Item';
+    if (editingProposal.kind === 'events') return 'Edit Event';
+    if (editingProposal.kind === 'hd_boards') return 'Edit HD Board';
+    return 'Edit Board Post';
+  };
+
   return (
     <View className="flex-1 bg-white">
       {/* Header */}
@@ -538,6 +707,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                     item.assigned_to_name ? `Assigned to ${item.assigned_to_name}` : null,
                     item.due_date ? `Due ${formatDateShort(item.due_date)}` : null,
                   ].filter(Boolean).join(' · ')}
+                  onEdit={(item, index) => openProposalEditor('action_items', index, item)}
                 />
 
                 <PreviewReviewSection
@@ -555,6 +725,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                   renderBody={(item) => item.description ? (
                     <Text className="text-gray-700 mt-2">{item.description}</Text>
                   ) : null}
+                  onEdit={(item, index) => openProposalEditor('events', index, item)}
                 />
 
                 <PreviewReviewSection
@@ -568,6 +739,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                   renderBody={(item) => item.description ? (
                     <Text className="text-gray-700 mt-2">{item.description}</Text>
                   ) : null}
+                  onEdit={(item, index) => openProposalEditor('hd_boards', index, item)}
                 />
 
                 <PreviewReviewSection
@@ -584,6 +756,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                   renderBody={(item) => (
                     <Text className="text-gray-700 mt-2">{item.content}</Text>
                   )}
+                  onEdit={(item, index) => openProposalEditor('board_suggestions', index, item)}
                 />
 
                 {previewItemCount === 0 && (
@@ -820,6 +993,70 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
       </ScrollView>
+
+      {/* Proposal Edit Modal */}
+      <Modal
+        visible={!!editingProposal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setEditingProposal(null)}
+      >
+        <View className="flex-1 bg-white">
+          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <Pressable onPress={() => setEditingProposal(null)} disabled={savingProposalEdit}>
+              <Text className="text-gray-500 text-base">Cancel</Text>
+            </Pressable>
+            <Text className="text-lg font-bold text-hive-dark">{getProposalEditorTitle()}</Text>
+            <Pressable
+              onPress={saveProposalEdit}
+              disabled={savingProposalEdit}
+              className={savingProposalEdit ? 'opacity-50' : ''}
+            >
+              <Text className="text-honey-600 text-base font-semibold">
+                {savingProposalEdit ? 'Saving...' : 'Save'}
+              </Text>
+            </Pressable>
+          </View>
+
+          <ScrollView className="flex-1 p-4" keyboardShouldPersistTaps="handled">
+            {editingProposal?.kind === 'action_items' && (
+              <>
+                {renderProposalInput('description', 'Task', 'What needs to happen?', { multiline: true })}
+                {renderProposalInput('assigned_to_name', 'Assigned To', 'Member name or The group')}
+                {renderProposalInput('due_date', 'Due Date', 'YYYY-MM-DD')}
+              </>
+            )}
+
+            {editingProposal?.kind === 'events' && (
+              <>
+                {renderProposalInput('title', 'Event Title', 'Event title')}
+                {renderProposalInput('event_date', 'Date', 'YYYY-MM-DD')}
+                {renderProposalInput('event_time', 'Time', 'HH:MM:SS or blank')}
+                {renderProposalInput('location', 'Location', 'Optional location')}
+                {renderProposalInput('description', 'Description', 'Optional event details', { multiline: true })}
+                {renderProposalInput('event_type', 'Type', 'meeting or custom')}
+              </>
+            )}
+
+            {editingProposal?.kind === 'hd_boards' && (
+              <>
+                {renderProposalInput('person_name', 'Person', 'Member name')}
+                {renderProposalInput('goal_title', 'HD Board Goal', 'Short goal title')}
+                {renderProposalInput('description', 'Description', 'What help belongs on this board?', { multiline: true })}
+              </>
+            )}
+
+            {editingProposal?.kind === 'board_suggestions' && (
+              <>
+                {renderProposalInput('title', 'Post Title', 'Board post title')}
+                {renderProposalInput('person_name', 'Person', 'Optional member name')}
+                {renderProposalInput('category_hint', 'Board / Category Hint', 'HD goal, HIVE Approved, 15min HIVE Helpers...')}
+                {renderProposalInput('content', 'Post Content', 'What should the board post say?', { multiline: true })}
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
 
       {/* Speaker Attribution Modal */}
       <Modal
