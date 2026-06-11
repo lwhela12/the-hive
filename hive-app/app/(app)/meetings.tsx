@@ -20,7 +20,7 @@ import type { Meeting, Event } from '../../types';
 interface MeetingSummaryPreview {
   title?: string;
   source?: string;
-  import_status?: 'pending' | 'applied';
+  import_status?: 'pending' | 'preview' | 'applied';
   summary?: string;
   decisions?: string[];
   board_suggestions?: unknown[];
@@ -822,7 +822,8 @@ export default function MeetingsScreen() {
 
   const getMeetingCardStatus = (meeting: Meeting) => {
     const parsed = parseMeetingSummaryPreview(meeting.summary);
-    if (parsed.import_status === 'pending') return 'needs apply';
+    if (parsed.import_status === 'pending') return 'needs preview';
+    if (parsed.import_status === 'preview') return 'needs review';
     if (parsed.import_status === 'applied') return 'applied';
     return meeting.processing_status;
   };
@@ -1072,7 +1073,7 @@ export default function MeetingsScreen() {
                   </Text>
                 </View>
                 <Text className="text-2xl">
-                  {cardStatus === 'needs apply'
+                  {cardStatus === 'needs preview' || cardStatus === 'needs review'
                     ? '↪'
                     : meeting.processing_status === 'complete'
                     ? '✓'

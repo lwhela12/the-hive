@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { Alert, View, Text, ScrollView, Pressable, Modal } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -14,12 +14,31 @@ interface MeetingSummaryProps {
 interface ParsedSummary {
   title?: string;
   source?: string;
-  import_status?: 'pending' | 'applied';
+  import_status?: 'pending' | 'preview' | 'applied';
+  preview_generated_at?: string;
   applied_at?: string;
   summary?: string;
   decisions?: string[];
   details?: string[];
+  action_items?: {
+    description: string;
+    assigned_to_name?: string | null;
+    due_date?: string | null;
+  }[];
+  events?: {
+    title: string;
+    event_date: string;
+    event_time?: string | null;
+    event_type?: 'meeting' | 'custom';
+    description?: string | null;
+    location?: string | null;
+  }[];
   wishes_surfaced?: { person_name: string; description: string }[];
+  hd_boards?: {
+    person_name: string;
+    goal_title: string;
+    description?: string | null;
+  }[];
   queen_bee_highlights?: string[];
   board_suggestions?: {
     person_name?: string | null;
@@ -37,7 +56,104 @@ interface ParsedSummary {
   events_created?: number;
 }
 
+type PreviewSelectionKey =
+  | 'action_item_indices'
+  | 'event_indices'
+  | 'hd_board_indices'
+  | 'board_suggestion_indices';
+
+type PreviewSelection = Record<PreviewSelectionKey, number[]>;
+
+const EMPTY_PREVIEW_SELECTION: PreviewSelection = {
+  action_item_indices: [],
+  event_indices: [],
+  hd_board_indices: [],
+  board_suggestion_indices: [],
+};
+
 const normalizeHiveBrandText = (text?: string | null) => (text ?? '').replace(/\bHive\b/g, 'HIVE');
+
+const getPreviewSelection = (summary: ParsedSummary): PreviewSelection => ({
+  action_item_indices: (summary.action_items ?? []).map((_, index) => index),
+  event_indices: (summary.events ?? []).map((_, index) => index),
+  hd_board_indices: (summary.hd_boards ?? []).map((_, index) => index),
+  board_suggestion_indices: (summary.board_suggestions ?? []).map((_, index) => index),
+});
+
+const countPreviewSelection = (selection: PreviewSelection) => (
+  selection.action_item_indices.length
+  + selection.event_indices.length
+  + selection.hd_board_indices.length
+  + selection.board_suggestion_indices.length
+);
+
+const countPreviewItems = (summary: ParsedSummary) => (
+  (summary.action_items?.length ?? 0)
+  + (summary.events?.length ?? 0)
+  + (summary.hd_boards?.length ?? 0)
+  + (summary.board_suggestions?.length ?? 0)
+);
+
+function PreviewReviewSection<T>({
+  title,
+  items,
+  selectionKey,
+  selection,
+  onToggle,
+  renderTitle,
+  renderMeta,
+  renderBody,
+}: {
+  title: string;
+  items: T[];
+  selectionKey: PreviewSelectionKey;
+  selection: PreviewSelection;
+  onToggle: (key: PreviewSelectionKey, index: number) => void;
+  renderTitle: (item: T) => string;
+  renderMeta?: (item: T) => string | null | undefined;
+  renderBody?: (item: T) => ReactNode;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <View className="mt-4">
+      <Text className="text-sm font-semibold text-gray-700 mb-2">
+        {title} ({items.length})
+      </Text>
+      <View className="bg-white rounded-xl overflow-hidden border border-honey-100">
+        {items.map((item, index) => {
+          const selected = selection[selectionKey].includes(index);
+          return (
+            <Pressable
+              key={`${selectionKey}-${index}`}
+              onPress={() => onToggle(selectionKey, index)}
+              className={`flex-row items-start p-4 active:bg-honey-50 ${index > 0 ? 'border-t border-honey-100' : ''}`}
+            >
+              <View
+                className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${
+                  selected ? 'bg-honey-500 border-honey-500' : 'border-gray-300'
+                }`}
+              >
+                {selected && <Text className="text-white text-xs">✓</Text>}
+              </View>
+              <View className="flex-1">
+                <Text className="font-medium text-gray-800">
+                  {renderTitle(item)}
+                </Text>
+                {renderMeta?.(item) ? (
+                  <Text className="text-xs text-honey-700 mt-1">
+                    {renderMeta(item)}
+                  </Text>
+                ) : null}
+                {renderBody?.(item)}
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
 
 export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdated }: MeetingSummaryProps) {
   const { communityId } = useAuth();
@@ -48,6 +164,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const [speakerAssignments, setSpeakerAssignments] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [applyingNotes, setApplyingNotes] = useState(false);
+  const [previewSelection, setPreviewSelection] = useState<PreviewSelection>(EMPTY_PREVIEW_SELECTION);
 
   // Extract unique speakers from transcript
   const speakers = useMemo(() => {
@@ -130,7 +247,18 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const parsedSummary = parseSummary(meeting.summary);
   const isImportedNotes = Boolean(parsedSummary.source?.includes('notes') || parsedSummary.source?.includes('upload'));
   const sourceNotesLabel = isImportedNotes ? 'Imported Notes' : 'Transcript';
-  const notesNeedApplying = parsedSummary.import_status === 'pending';
+  const notesNeedPreview = parsedSummary.import_status === 'pending';
+  const notesHavePreview = parsedSummary.import_status === 'preview';
+  const previewItemCount = countPreviewItems(parsedSummary);
+  const selectedPreviewCount = countPreviewSelection(previewSelection);
+
+  useEffect(() => {
+    if (parsedSummary.import_status === 'preview') {
+      setPreviewSelection(getPreviewSelection(parsedSummary));
+    } else {
+      setPreviewSelection(EMPTY_PREVIEW_SELECTION);
+    }
+  }, [meeting.id, meeting.summary]);
 
   const loadActionItems = async () => {
     const { data } = await supabase
@@ -159,13 +287,67 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     return data as Meeting | null;
   };
 
-  const applyNotes = async () => {
+  const togglePreviewItem = (key: PreviewSelectionKey, index: number) => {
+    setPreviewSelection((current) => {
+      const selected = current[key].includes(index);
+      return {
+        ...current,
+        [key]: selected
+          ? current[key].filter((selectedIndex) => selectedIndex !== index)
+          : [...current[key], index].sort((a, b) => a - b),
+      };
+    });
+  };
+
+  const previewNotes = async () => {
     if (applyingNotes) return;
 
     setApplyingNotes(true);
     try {
       const { data, error } = await supabase.functions.invoke('apply-meeting-notes', {
-        body: { meetingId: meeting.id },
+        body: { meetingId: meeting.id, mode: 'preview' },
+      });
+
+      if (error) throw error;
+
+      if (data?.meeting) {
+        setMeeting(data.meeting as Meeting);
+        onMeetingUpdated?.(data.meeting as Meeting);
+      } else {
+        await reloadMeeting();
+      }
+
+      const counts = data?.preview_counts ?? {};
+      const total = counts.total ?? 0;
+
+      Alert.alert(
+        'Preview Ready',
+        `Clive found ${total} proposed app update${total === 1 ? '' : 's'} to review before anything is created.`
+      );
+    } catch (error) {
+      console.error('Error previewing meeting notes:', error);
+      Alert.alert('Preview Failed', 'Clive could not preview those notes yet. Please try again.');
+    } finally {
+      setApplyingNotes(false);
+    }
+  };
+
+  const applyApprovedNotes = async () => {
+    if (applyingNotes) return;
+
+    if (selectedPreviewCount === 0) {
+      Alert.alert('Nothing Selected', 'Select at least one proposed update to apply.');
+      return;
+    }
+
+    setApplyingNotes(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('apply-meeting-notes', {
+        body: {
+          meetingId: meeting.id,
+          mode: 'apply',
+          selection: previewSelection,
+        },
       });
 
       if (error) throw error;
@@ -297,21 +479,130 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         {/* Apply imported notes */}
         {isImportedNotes && (
           <View className="mb-6">
-            {notesNeedApplying ? (
+            {notesNeedPreview ? (
               <View className="bg-honey-50 border border-honey-200 rounded-xl p-4">
                 <Text className="text-honey-900 font-semibold">
                   Notes imported
                 </Text>
                 <Text className="text-honey-800 mt-1">
-                  Apply them when you are ready to create action items, calendar events, and board posts.
+                  Generate a preview to review proposed action items, calendar events, HD boards, and board posts before anything is created.
                 </Text>
                 <Pressable
-                  onPress={applyNotes}
+                  onPress={previewNotes}
                   disabled={applyingNotes}
                   className={`mt-4 bg-honey-500 px-4 py-3 rounded-lg self-start active:bg-honey-600 ${applyingNotes ? 'opacity-60' : ''}`}
                 >
                   <Text className="text-white font-semibold">
-                    {applyingNotes ? 'Applying...' : 'Apply Notes'}
+                    {applyingNotes ? 'Generating...' : 'Generate Preview'}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : notesHavePreview ? (
+              <View className="bg-honey-50 border border-honey-200 rounded-xl p-4">
+                <Text className="text-honey-900 font-semibold">
+                  Review Proposed Updates
+                </Text>
+                <Text className="text-honey-800 mt-1">
+                  {selectedPreviewCount} of {previewItemCount} proposed update{previewItemCount === 1 ? '' : 's'} selected.
+                </Text>
+                <View className="flex-row flex-wrap gap-2 mt-4">
+                  <Pressable
+                    onPress={() => setPreviewSelection(getPreviewSelection(parsedSummary))}
+                    className="bg-white border border-honey-200 px-3 py-2 rounded-lg active:bg-honey-100"
+                  >
+                    <Text className="text-honey-800 font-semibold text-sm">Select All</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setPreviewSelection(EMPTY_PREVIEW_SELECTION)}
+                    className="bg-white border border-honey-200 px-3 py-2 rounded-lg active:bg-honey-100"
+                  >
+                    <Text className="text-honey-800 font-semibold text-sm">Clear</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={previewNotes}
+                    disabled={applyingNotes}
+                    className={`bg-white border border-honey-200 px-3 py-2 rounded-lg active:bg-honey-100 ${applyingNotes ? 'opacity-60' : ''}`}
+                  >
+                    <Text className="text-honey-800 font-semibold text-sm">Regenerate</Text>
+                  </Pressable>
+                </View>
+
+                <PreviewReviewSection
+                  title="Action Items"
+                  items={parsedSummary.action_items ?? []}
+                  selectionKey="action_item_indices"
+                  selection={previewSelection}
+                  onToggle={togglePreviewItem}
+                  renderTitle={(item) => item.description}
+                  renderMeta={(item) => [
+                    item.assigned_to_name ? `Assigned to ${item.assigned_to_name}` : null,
+                    item.due_date ? `Due ${formatDateShort(item.due_date)}` : null,
+                  ].filter(Boolean).join(' · ')}
+                />
+
+                <PreviewReviewSection
+                  title="Calendar Events"
+                  items={parsedSummary.events ?? []}
+                  selectionKey="event_indices"
+                  selection={previewSelection}
+                  onToggle={togglePreviewItem}
+                  renderTitle={(item) => item.title}
+                  renderMeta={(item) => [
+                    item.event_date ? formatDateShort(item.event_date) : null,
+                    item.event_time ?? null,
+                    item.location ?? null,
+                  ].filter(Boolean).join(' · ')}
+                  renderBody={(item) => item.description ? (
+                    <Text className="text-gray-700 mt-2">{item.description}</Text>
+                  ) : null}
+                />
+
+                <PreviewReviewSection
+                  title="HD Boards"
+                  items={parsedSummary.hd_boards ?? []}
+                  selectionKey="hd_board_indices"
+                  selection={previewSelection}
+                  onToggle={togglePreviewItem}
+                  renderTitle={(item) => item.goal_title}
+                  renderMeta={(item) => item.person_name}
+                  renderBody={(item) => item.description ? (
+                    <Text className="text-gray-700 mt-2">{item.description}</Text>
+                  ) : null}
+                />
+
+                <PreviewReviewSection
+                  title="Board Posts"
+                  items={parsedSummary.board_suggestions ?? []}
+                  selectionKey="board_suggestion_indices"
+                  selection={previewSelection}
+                  onToggle={togglePreviewItem}
+                  renderTitle={(item) => item.title}
+                  renderMeta={(item) => [
+                    item.person_name ?? null,
+                    item.category_hint ?? null,
+                  ].filter(Boolean).join(' · ')}
+                  renderBody={(item) => (
+                    <Text className="text-gray-700 mt-2">{item.content}</Text>
+                  )}
+                />
+
+                {previewItemCount === 0 && (
+                  <View className="bg-white rounded-xl border border-honey-100 p-4 mt-4">
+                    <Text className="text-gray-700">
+                      No tasks, events, HD boards, or board posts were proposed from these notes.
+                    </Text>
+                  </View>
+                )}
+
+                <Pressable
+                  onPress={applyApprovedNotes}
+                  disabled={applyingNotes || selectedPreviewCount === 0}
+                  className={`mt-4 bg-honey-500 px-4 py-3 rounded-lg self-start active:bg-honey-600 ${
+                    applyingNotes || selectedPreviewCount === 0 ? 'opacity-60' : ''
+                  }`}
+                >
+                  <Text className="text-white font-semibold">
+                    {applyingNotes ? 'Applying...' : 'Apply Selected'}
                   </Text>
                 </Pressable>
               </View>
@@ -390,7 +681,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         )}
 
         {/* Suggested Board Updates */}
-        {parsedSummary.board_suggestions && parsedSummary.board_suggestions.length > 0 && (
+        {!notesHavePreview && parsedSummary.board_suggestions && parsedSummary.board_suggestions.length > 0 && (
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-700 mb-2">
               Suggested Board Updates
