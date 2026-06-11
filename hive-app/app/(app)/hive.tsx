@@ -1262,8 +1262,17 @@ export default function HiveScreen() {
   } = useHiveDataQuery(communityId ?? undefined, profile?.id);
 
   // Surveys
-  const { pendingSurveys, submitResponse, loading: surveysLoading } = useSurveys(communityId ?? undefined, profile?.id);
+  const {
+    availableSurveys,
+    pendingSurveys,
+    myResponses,
+    submitResponse,
+    loading: surveysLoading,
+  } = useSurveys(communityId ?? undefined, profile?.id);
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
+  const pendingSurveyIds = new Set(pendingSurveys.map((survey) => survey.id));
+  const activeSurveyResponse = activeSurvey ? myResponses.get(activeSurvey.id) : undefined;
+  const activeSurveyIsEditing = !!activeSurvey && !!activeSurveyResponse && !pendingSurveyIds.has(activeSurvey.id);
 
   const openSurvey = useCallback((survey: Survey) => {
     setActiveSurvey(survey);
@@ -1691,16 +1700,26 @@ export default function HiveScreen() {
   }, [closeWishDetail, communityId, profile, refetch, selectedWish?.id]);
 
   const homeTodos: HomeTodo[] = [
-    ...pendingSurveys.map(s => ({
-      id: `survey-${s.id}`,
-      emoji: '📋',
-      title: s.title,
-      detail: s.due_date
-        ? `Due ${formatSurveyDueDate(s.due_date)}`
-        : 'Awaiting your response',
-      cta: 'Fill out →',
-      onPress: () => openSurvey(s),
-    })),
+    ...availableSurveys.map(s => {
+      const response = myResponses.get(s.id);
+      const submittedAt = response?.submitted_at ?? null;
+      const isDone = !!submittedAt && !pendingSurveyIds.has(s.id);
+
+      return {
+        id: `survey-${s.id}`,
+        emoji: '📋',
+        title: s.title,
+        detail: isDone
+          ? `Submitted ${formatDateShort(submittedAt)} · Tap to edit`
+          : s.due_date
+            ? `Due ${formatSurveyDueDate(s.due_date)}`
+            : 'Awaiting your response',
+        cta: isDone ? undefined : 'Fill out →',
+        isDone,
+        completedAt: isDone ? submittedAt : null,
+        onPress: () => openSurvey(s),
+      };
+    }),
     ...homeActionItems.map(a => ({
       id: `action-${a.id}`,
       emoji: '📝',
@@ -3364,6 +3383,8 @@ export default function HiveScreen() {
       {activeSurvey && (
         <SurveyModal
           survey={activeSurvey}
+          initialAnswers={activeSurveyIsEditing ? activeSurveyResponse?.answers : undefined}
+          isEditingResponse={activeSurveyIsEditing}
           onSubmit={handleSurveySubmit}
           onClose={closeSurvey}
         />

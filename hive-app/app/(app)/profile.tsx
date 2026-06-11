@@ -28,7 +28,7 @@ import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { PREDEFINED_SKILLS } from '../../components/skills/constants';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { Ionicons } from '@expo/vector-icons';
-import { formatDateLong, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
+import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import type { Skill, Wish, UserInsights, Profile } from '../../types';
 
 const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
@@ -117,7 +117,7 @@ export default function ProfileScreen() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { permissionStatus, requestPermissions } = useNotifications({ enableListeners: false });
   const { grantWish } = useWishes();
-  const { pendingSurveys, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
+  const { availableSurveys, pendingSurveys, myResponses, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
   const isNotificationEnabled =
     permissionStatus === 'granted' || permissionStatus === 'provisional';
   const [refreshing, setRefreshing] = useState(false);
@@ -138,6 +138,16 @@ export default function ProfileScreen() {
   const restoredProfileDraftRef = useRef(false);
   const profileFormDraftKey = profile?.id ? `the-hive:profile-form-draft:${profile.id}` : null;
   const activeSurveyStorageKey = profile?.id ? `the-hive:active-survey:${profile.id}` : null;
+  const pendingSurveyIds = new Set(pendingSurveys.map((survey) => survey.id));
+  const monthlyCheckInSurvey = availableSurveys.find((survey) => (
+    `${survey.title} ${survey.description ?? ''}`.match(/monthly\s+check-?in/i)
+  )) ?? availableSurveys[0] ?? null;
+  const monthlyCheckInResponse = monthlyCheckInSurvey ? myResponses.get(monthlyCheckInSurvey.id) : undefined;
+  const monthlyCheckInIsEditing = !!monthlyCheckInSurvey
+    && !!monthlyCheckInResponse
+    && !pendingSurveyIds.has(monthlyCheckInSurvey.id);
+  const activeSurveyResponse = activeSurvey ? myResponses.get(activeSurvey.id) : undefined;
+  const activeSurveyIsEditing = !!activeSurvey && !!activeSurveyResponse && !pendingSurveyIds.has(activeSurvey.id);
 
   // Editable profile fields
   const [isEditing, setIsEditing] = useState(false);
@@ -1126,7 +1136,7 @@ export default function ProfileScreen() {
       return;
     }
     if (label === "Complete this month's check-in") {
-      const nextSurvey = pendingSurveys[0];
+      const nextSurvey = pendingSurveys[0] ?? monthlyCheckInSurvey;
       if (nextSurvey) {
         setActiveSurvey(nextSurvey);
       }
@@ -1716,6 +1726,52 @@ export default function ProfileScreen() {
                     ))}
                   </View>
                 </>
+              ) : null}
+
+              {monthlyCheckInSurvey ? (
+                <Pressable
+                  onPress={() => setActiveSurvey(monthlyCheckInSurvey)}
+                  className="active:opacity-75"
+                  style={{
+                    marginTop: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: monthlyCheckInIsEditing ? '#fffdf5' : '#fffaf0',
+                    borderWidth: 1,
+                    borderColor: monthlyCheckInIsEditing ? 'rgba(142,122,94,0.24)' : 'rgba(222,193,129,0.65)',
+                    borderRadius: 14,
+                    paddingHorizontal: 13,
+                    paddingVertical: 9,
+                    maxWidth: Math.min(screenWidth - 28, 420),
+                  }}
+                >
+                  <Ionicons
+                    name={monthlyCheckInIsEditing ? 'create-outline' : 'clipboard-outline'}
+                    size={17}
+                    color={monthlyCheckInIsEditing ? '#8e7a5e' : '#bd9348'}
+                  />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        fontFamily: 'Lato_700Bold',
+                        fontSize: 12,
+                        color: monthlyCheckInIsEditing ? '#7f715f' : '#bd9348',
+                      }}
+                    >
+                      {monthlyCheckInIsEditing ? "Edit this month's check-in" : "Complete this month's check-in"}
+                    </Text>
+                    {monthlyCheckInIsEditing && monthlyCheckInResponse?.submitted_at ? (
+                      <Text
+                        numberOfLines={1}
+                        style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8e7a5e', marginTop: 2 }}
+                      >
+                        Submitted {formatDateShort(monthlyCheckInResponse.submitted_at)}
+                      </Text>
+                    ) : null}
+                  </View>
+                </Pressable>
               ) : null}
             </View>
           );
@@ -2485,6 +2541,8 @@ export default function ProfileScreen() {
       {activeSurvey && (
         <SurveyModal
           survey={activeSurvey}
+          initialAnswers={activeSurveyIsEditing ? activeSurveyResponse?.answers : undefined}
+          isEditingResponse={activeSurveyIsEditing}
           onSubmit={async (answers) => {
             const result = await submitResponse(activeSurvey.id, answers);
             if (!result.error && activeSurveyStorageKey) {

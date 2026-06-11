@@ -9,6 +9,8 @@ import type { Survey, SurveyQuestion } from '../../lib/hooks/useSurveys';
 
 interface SurveyModalProps {
   survey: Survey;
+  initialAnswers?: Record<string, string | string[] | number>;
+  isEditingResponse?: boolean;
   onSubmit: (answers: Record<string, string | string[] | number>) => Promise<{ error: any }>;
   onClose: () => void;
 }
@@ -91,7 +93,7 @@ function formatSurveyDueDate(dueDate: string) {
   });
 }
 
-export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
+export function SurveyModal({ survey, initialAnswers, isEditingResponse = false, onSubmit, onClose }: SurveyModalProps) {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -100,12 +102,25 @@ export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
 
   // Restore saved draft on open
   useEffect(() => {
+    let active = true;
+    setAnswers({});
+    setSubmitted(false);
+    setError(null);
+    setDraftLoaded(false);
+
     AsyncStorage.getItem(DRAFT_KEY(survey.id)).then(raw => {
+      if (!active) return;
       if (raw) {
         try { setAnswers(JSON.parse(raw)); } catch {}
+      } else {
+        setAnswers(initialAnswers ?? {});
       }
       setDraftLoaded(true);
     });
+
+    return () => {
+      active = false;
+    };
   }, [survey.id]);
 
   const setAnswer = useCallback((questionId: string, value: any) => {
@@ -215,7 +230,9 @@ export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
               <Image source={cliveIcon} style={{ width: 72, height: 72, borderRadius: 36, marginBottom: 16 }} contentFit="cover" cachePolicy="memory-disk" />
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', textAlign: 'center', marginBottom: 10 }}>All done!</Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
-                Your answers are saved. Clive and HIVE will be better prepared for the meeting.
+                {isEditingResponse
+                  ? 'Your updated answers are saved. Clive and HIVE will be working from the latest version.'
+                  : 'Your answers are saved. Clive and HIVE will be better prepared for the meeting.'}
               </Text>
               <Pressable onPress={onClose} style={{ backgroundColor: '#bd9348', borderRadius: 14, paddingHorizontal: 32, paddingVertical: 14 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>Back to HIVE</Text>
@@ -251,7 +268,7 @@ export function SurveyModal({ survey, onSubmit, onClose }: SurveyModalProps) {
                 style={{ backgroundColor: '#bd9348', borderRadius: 16, paddingVertical: 16, alignItems: 'center', opacity: submitting ? 0.7 : 1 }}
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: 'white' }}>
-                  {submitting ? 'Saving...' : 'Submit answers'}
+                  {submitting ? 'Saving...' : isEditingResponse ? 'Update answers' : 'Submit answers'}
                 </Text>
               </Pressable>
             </ScrollView>
