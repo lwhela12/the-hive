@@ -154,6 +154,8 @@ export function SurveyModal({ survey, initialAnswers, isEditingResponse = false,
 
   const renderQuestion = (q: SurveyQuestion, index: number) => {
     const val = answers[q.id];
+    const textValue = typeof val === 'string' ? val : '';
+
     return (
       <View key={q.id} style={{ marginBottom: 24 }}>
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
@@ -168,7 +170,7 @@ export function SurveyModal({ survey, initialAnswers, isEditingResponse = false,
 
         {(q.type === 'short') && (
           <TextInput
-            value={val ?? ''}
+            value={textValue}
             onChangeText={text => setAnswer(q.id, text)}
             placeholder="Your answer..."
             placeholderTextColor="#b5ad9f"
@@ -177,7 +179,7 @@ export function SurveyModal({ survey, initialAnswers, isEditingResponse = false,
         )}
         {(q.type === 'long') && (
           <TextInput
-            value={val ?? ''}
+            value={textValue}
             onChangeText={text => setAnswer(q.id, text)}
             placeholder="Your answer..."
             placeholderTextColor="#b5ad9f"
@@ -197,14 +199,9 @@ export function SurveyModal({ survey, initialAnswers, isEditingResponse = false,
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable
-        onPress={onClose}
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
-      >
-        <Pressable
-          onPress={(event) => event.stopPropagation()}
-          style={{ backgroundColor: '#faf8f3', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '94%' }}
-        >
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <Pressable onPress={onClose} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
+        <View style={{ backgroundColor: '#faf8f3', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '94%' }}>
           {/* Handle + close button */}
           <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
@@ -239,7 +236,12 @@ export function SurveyModal({ survey, initialAnswers, isEditingResponse = false,
               </Pressable>
             </View>
           ) : (
-            <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}
+            >
               {/* Header */}
               <View style={{ marginBottom: 28 }}>
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 8 }}>{survey.title}</Text>
@@ -273,8 +275,8 @@ export function SurveyModal({ survey, initialAnswers, isEditingResponse = false,
               </Pressable>
             </ScrollView>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
