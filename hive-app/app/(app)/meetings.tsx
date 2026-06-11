@@ -707,6 +707,34 @@ export default function MeetingsScreen() {
 
   const addNotesPhotos = async () => {
     try {
+      if (Platform.OS === 'web') {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/*'],
+          copyToCacheDirectory: true,
+          multiple: true,
+          base64: true,
+        });
+
+        if (result.canceled || !result.assets?.length) return;
+
+        const photoFiles = await Promise.all(
+          result.assets.slice(0, 5).map(async (asset, index) => {
+            const extension = getImageExtension(asset.name || asset.uri, asset.mimeType ?? undefined);
+            return {
+              fileName: asset.name || `handwritten-notes-${Date.now()}-${index + 1}.${extension}`,
+              fileMimeType: asset.mimeType ?? getContentType(extension),
+              fileBase64: await readAssetAsBase64(asset),
+            };
+          })
+        );
+
+        setNotesImportForm((form) => ({
+          ...form,
+          files: [...form.files, ...photoFiles],
+        }));
+        return;
+      }
+
       const photos = await pickMultipleImages({ maxImages: 5, quality: 0.85 });
       if (photos.length === 0) return;
 
