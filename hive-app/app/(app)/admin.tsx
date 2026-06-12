@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import {
   View,
   Text,
@@ -41,7 +41,7 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { useSurveys } from '../../lib/hooks/useSurveys';
-import type { Survey, SurveyQuestion } from '../../lib/hooks/useSurveys';
+import type { Survey, SurveyQuestion, SurveyResponse } from '../../lib/hooks/useSurveys';
 import { parseAmericanDate } from '../../lib/dateUtils';
 import type { Profile, QueenBee, UserRole, CommunityInvite, Event } from '../../types';
 
@@ -49,6 +49,10 @@ type MemberRow = {
   id: string;
   role: UserRole;
   profiles: Profile;
+};
+
+type SurveyResponseWithUser = SurveyResponse & {
+  user?: Pick<Profile, 'id' | 'name' | 'email' | 'avatar_url'> | null;
 };
 
 type InviteRow = CommunityInvite & {
@@ -167,16 +171,37 @@ const SURVEY_TYPE_LABELS: Record<SurveyQuestion['type'], string> = {
   choice: 'Choice',
 };
 
+const DEFAULT_RESPONSE_PERIOD = 'default';
+const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
+
 const MONTHLY_CHECK_IN_TEMPLATE: SurveyQuestion[] = [
   {
-    id: 'q_health_energy',
-    text: 'How are your health and energy right now?',
+    id: 'q_energy_level',
+    text: 'What is your energy level right now?',
+    type: 'scale',
+    required: false,
+  },
+  {
+    id: 'q_support_mode',
+    text: 'What would feel best from HIVE this month?',
+    type: 'choice',
+    options: [
+      'I could use support',
+      'I could use space',
+      'I am steady',
+      'I have energy to offer help',
+    ],
+    required: false,
+  },
+  {
+    id: 'q_month_focus',
+    text: 'What are you focusing on this month?',
     type: 'long',
     required: false,
   },
   {
-    id: 'q_attention',
-    text: 'What has been taking up most of your attention lately, personally or professionally?',
+    id: 'q_roster_updates',
+    text: 'What from your current or previous HIVE projects should stay on the roster, get attention, be marked complete, or be archived?',
     type: 'long',
     required: false,
   },
@@ -193,33 +218,21 @@ const MONTHLY_CHECK_IN_TEMPLATE: SurveyQuestion[] = [
     required: false,
   },
   {
-    id: 'q_wish_hummdinger',
-    text: 'What wish, goal, or HummDinger should HIVE keep in view for you?',
+    id: 'q_meeting_topic',
+    text: 'Anything you want HIVE to mull over at the meeting, even if you might miss it?',
     type: 'long',
     required: false,
   },
   {
-    id: 'q_meeting_priority',
-    text: 'What would make today\'s gathering feel useful for you?',
-    type: 'long',
-    required: false,
-  },
-  {
-    id: 'q_tender_context',
-    text: 'Anything heavy, confusing, or tender that the HIVE hosts or Clive should know before we gather?',
-    type: 'long',
-    required: false,
-  },
-  {
-    id: 'q_sharing_permission',
-    text: 'What from this check-in is okay to share with the group, and what should stay with the hosts or Clive?',
+    id: 'q_group_note',
+    text: 'Anything else HIVE should know before we gather?',
     type: 'long',
     required: false,
   },
 ];
 
 const MONTHLY_CHECK_IN_DESCRIPTION =
-  'A quick 2-3 minute check-in so HIVE and Clive know where everyone is before we gather.';
+  'A quick 2-3 minute check-in that helps shape the group view, monthly roster, and meeting prep.';
 
 const createSurveyQuestionId = () => `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -357,6 +370,75 @@ function formatSurveyDueAt(dueDate?: string | null) {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function getSurveyResponsePeriodForSurvey(survey: Survey) {
+  const label = `${survey.title} ${survey.description ?? ''}`;
+  if (!MONTHLY_CHECK_IN_PATTERN.test(label)) return DEFAULT_RESPONSE_PERIOD;
+
+  const periodDate = parseSurveyDueAt(survey.due_date) ?? new Date();
+  return `${periodDate.getFullYear()}-${String(periodDate.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function sortSurveyResponsePeriods(a: string, b: string) {
+  if (a === DEFAULT_RESPONSE_PERIOD && b !== DEFAULT_RESPONSE_PERIOD) return 1;
+  if (b === DEFAULT_RESPONSE_PERIOD && a !== DEFAULT_RESPONSE_PERIOD) return -1;
+  return b.localeCompare(a);
+}
+
+function formatSurveyResponsePeriod(period?: string | null) {
+  if (!period || period === DEFAULT_RESPONSE_PERIOD) return 'Default';
+
+  const match = period.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return period;
+
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, 1);
+  return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function formatSurveySubmittedAt(submittedAt?: string | null) {
+  if (!submittedAt) return '';
+  const parsed = new Date(submittedAt);
+  if (Number.isNaN(parsed.getTime())) return submittedAt;
+  return parsed.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function hasSurveyAnswer(value: unknown) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim().length > 0;
+  return value !== null && value !== undefined;
+}
+
+function formatSurveyAnswer(value: unknown) {
+  if (!hasSurveyAnswer(value)) return 'No answer';
+  if (Array.isArray(value)) return value.map(String).join(', ');
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'string') return value.trim() || 'No answer';
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function getAnsweredQuestionCount(
+  answers: Record<string, string | string[] | number>,
+  questions: SurveyQuestion[]
+) {
+  const questionIds = new Set(questions.map(question => question.id));
+  const answeredKnown = questions.filter(question => hasSurveyAnswer(answers[question.id])).length;
+  const answeredUnknown = Object.entries(answers)
+    .filter(([questionId, answer]) => !questionIds.has(questionId) && hasSurveyAnswer(answer))
+    .length;
+
+  return answeredKnown + answeredUnknown;
 }
 
 const normalizeSurveyDueDateInput = (dateValue: string, timeValue: string) => {
@@ -700,6 +782,10 @@ export default function AdminScreen() {
   const [savingSurveyEditor, setSavingSurveyEditor] = useState(false);
   const [surveyEditorError, setSurveyEditorError] = useState<string | null>(null);
   const [nextSurveyMeeting, setNextSurveyMeeting] = useState<Pick<Event, 'event_date' | 'event_time' | 'title'> | null>(null);
+  const [surveyResponses, setSurveyResponses] = useState<SurveyResponseWithUser[]>([]);
+  const [surveyResponsesLoading, setSurveyResponsesLoading] = useState(false);
+  const [surveyResponsesError, setSurveyResponsesError] = useState<string | null>(null);
+  const [selectedSurveyResponsePeriod, setSelectedSurveyResponsePeriod] = useState<string | null>(null);
   const surveyEditorQuestionsRef = useRef<SurveyQuestion[]>([]);
   const questionLayoutsRef = useRef<Record<string, QuestionLayout>>({});
   const activeQuestionDragRef = useRef<{ id: string; startCenterY: number } | null>(null);
@@ -814,11 +900,90 @@ export default function AdminScreen() {
     surveyEditorQuestionsRef.current = surveyEditorQuestions;
   }, [surveyEditorQuestions]);
 
+  const memberProfilesById = useMemo(() => {
+    const next = new Map<string, Profile>();
+    members.forEach((member) => next.set(member.profiles.id, member.profiles));
+    return next;
+  }, [members]);
+
+  const surveyResponsePeriods = useMemo(() => {
+    if (!editingSurvey) return [];
+
+    const periods = new Set<string>([getSurveyResponsePeriodForSurvey(editingSurvey)]);
+    surveyResponses.forEach((response) => {
+      periods.add(response.response_period ?? DEFAULT_RESPONSE_PERIOD);
+    });
+
+    return Array.from(periods).sort(sortSurveyResponsePeriods);
+  }, [editingSurvey, surveyResponses]);
+
+  const activeSurveyResponsePeriod = (
+    selectedSurveyResponsePeriod && surveyResponsePeriods.includes(selectedSurveyResponsePeriod)
+      ? selectedSurveyResponsePeriod
+      : surveyResponsePeriods[0] ?? null
+  );
+
+  const activeSurveyResponses = useMemo(() => {
+    if (!activeSurveyResponsePeriod) return [];
+
+    return surveyResponses.filter((response) => (
+      (response.response_period ?? DEFAULT_RESPONSE_PERIOD) === activeSurveyResponsePeriod
+    ));
+  }, [activeSurveyResponsePeriod, surveyResponses]);
+
+  const activeSurveySubmittedMemberIds = useMemo(() => new Set(
+    activeSurveyResponses.map((response) => response.user_id)
+  ), [activeSurveyResponses]);
+
+  const missingSurveyMembers = useMemo(() => (
+    members.filter((member) => !activeSurveySubmittedMemberIds.has(member.profiles.id))
+  ), [activeSurveySubmittedMemberIds, members]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([fetchData(), refetchSurveys()]);
     setRefreshing(false);
   };
+
+  const loadSurveyResponses = useCallback(async (survey: Survey) => {
+    if (!communityId) return;
+
+    setSurveyResponses([]);
+    setSurveyResponsesLoading(true);
+    setSurveyResponsesError(null);
+
+    try {
+      let { data, error } = await (supabase as any)
+        .from('survey_responses')
+        .select('*, user:profiles(id, name, email, avatar_url)')
+        .eq('survey_id', survey.id)
+        .eq('community_id', communityId)
+        .order('submitted_at', { ascending: false });
+
+      if (error) {
+        const fallback = await (supabase as any)
+          .from('survey_responses')
+          .select('*')
+          .eq('survey_id', survey.id)
+          .eq('community_id', communityId)
+          .order('submitted_at', { ascending: false });
+        data = fallback.data;
+        error = fallback.error;
+      }
+
+      if (error) {
+        setSurveyResponsesError('Could not load responses for this survey.');
+        return;
+      }
+
+      setSurveyResponses((data ?? []) as SurveyResponseWithUser[]);
+    } catch (error) {
+      console.warn('Could not load survey responses', error);
+      setSurveyResponsesError('Could not load responses for this survey.');
+    } finally {
+      setSurveyResponsesLoading(false);
+    }
+  }, [communityId]);
 
   const showHoneyPotFeedback = useCallback((
     tone: HoneyPotFeedback['tone'],
@@ -849,6 +1014,9 @@ export default function AdminScreen() {
     const defaultDueAt = getDefaultSurveyDue();
     questionLayoutsRef.current = {};
     setEditingSurvey(survey);
+    setSurveyResponses([]);
+    setSurveyResponsesError(null);
+    setSelectedSurveyResponsePeriod(getSurveyResponsePeriodForSurvey(survey));
     setSurveyEditorTitle(survey.title);
     setSurveyEditorDescription(survey.description ?? '');
     setSurveyEditorDueDate(survey.due_date ? getSurveyDateInputValue(survey.due_date) : toAmericanDate(defaultDueAt));
@@ -858,6 +1026,7 @@ export default function AdminScreen() {
       id: question.id || createSurveyQuestionId(),
     })));
     setSurveyEditorError(null);
+    void loadSurveyResponses(survey);
   };
 
   const closeSurveyEditor = () => {
@@ -871,6 +1040,9 @@ export default function AdminScreen() {
     setSurveyEditorDueTime('');
     setSurveyEditorQuestions([]);
     setSurveyEditorError(null);
+    setSurveyResponses([]);
+    setSurveyResponsesError(null);
+    setSelectedSurveyResponsePeriod(null);
   };
 
   const updateSurveyQuestion = (
@@ -2164,6 +2336,185 @@ export default function AdminScreen() {
                   value={surveyEditorDueTime}
                   onChange={setSurveyEditorDueTime}
                 />
+              </View>
+
+              <View
+                style={{
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.55)',
+                  borderRadius: 16,
+                  backgroundColor: '#faf8f3',
+                  padding: 14,
+                  marginBottom: 16,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d' }}>
+                      Responses
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7f715f', lineHeight: 17, marginTop: 2 }}>
+                      See who filled this out and what their answers said.
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => editingSurvey && loadSurveyResponses(editingSurvey)}
+                    disabled={!editingSurvey || surveyResponsesLoading}
+                    accessibilityRole="button"
+                    accessibilityLabel="Refresh survey responses"
+                    style={({ pressed }) => ({
+                      width: 34,
+                      height: 34,
+                      borderRadius: 17,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+                      borderWidth: 1,
+                      borderColor: 'rgba(222,193,129,0.55)',
+                      opacity: surveyResponsesLoading ? 0.5 : 1,
+                    })}
+                  >
+                    <Ionicons name="refresh-outline" size={17} color="#8a6b30" />
+                  </Pressable>
+                </View>
+
+                {surveyResponsePeriods.length > 1 ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
+                  >
+                    {surveyResponsePeriods.map((period) => {
+                      const active = period === activeSurveyResponsePeriod;
+                      return (
+                        <Pressable
+                          key={period}
+                          onPress={() => setSelectedSurveyResponsePeriod(period)}
+                          style={({ pressed }) => ({
+                            backgroundColor: active ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
+                            borderColor: active ? '#bd9348' : 'rgba(222,193,129,0.55)',
+                            borderWidth: 1,
+                            borderRadius: 999,
+                            paddingHorizontal: 12,
+                            paddingVertical: 7,
+                          })}
+                        >
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: active ? 'white' : '#8a6b30' }}>
+                            {formatSurveyResponsePeriod(period)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                ) : null}
+
+                {surveyResponsesLoading ? (
+                  <View style={{ paddingVertical: 18, alignItems: 'center' }}>
+                    <ActivityIndicator color="#bd9348" />
+                  </View>
+                ) : surveyResponsesError ? (
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#ef4444' }}>
+                    {surveyResponsesError}
+                  </Text>
+                ) : (
+                  <View style={{ gap: 12 }}>
+                    <View
+                      style={{
+                        backgroundColor: '#fffdf5',
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: 'rgba(222,193,129,0.35)',
+                        padding: 12,
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', marginBottom: 4 }}>
+                        {activeSurveyResponses.length} of {members.length} member{members.length === 1 ? '' : 's'} submitted
+                        {activeSurveyResponsePeriod ? ` for ${formatSurveyResponsePeriod(activeSurveyResponsePeriod)}` : ''}
+                      </Text>
+                      {missingSurveyMembers.length > 0 ? (
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7f715f', lineHeight: 17 }}>
+                          Waiting on {formatMemberList(missingSurveyMembers.map(member => member.profiles.name))}.
+                        </Text>
+                      ) : (
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#3f7f4c', lineHeight: 17 }}>
+                          Everyone on the member list has a response for this period.
+                        </Text>
+                      )}
+                    </View>
+
+                    {activeSurveyResponses.length === 0 ? (
+                      <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center', lineHeight: 18 }}>
+                          No responses for this period yet.
+                        </Text>
+                      </View>
+                    ) : (
+                      activeSurveyResponses.map((response) => {
+                        const responseUser = response.user ?? memberProfilesById.get(response.user_id);
+                        const responseName = responseUser?.name ?? 'Unknown member';
+                        const questionIds = new Set(surveyEditorQuestions.map(question => question.id));
+                        const answeredQuestions = surveyEditorQuestions.filter(question => hasSurveyAnswer(response.answers?.[question.id]));
+                        const extraAnswers = Object.entries(response.answers ?? {})
+                          .filter(([questionId, answer]) => !questionIds.has(questionId) && hasSurveyAnswer(answer));
+                        const answeredCount = getAnsweredQuestionCount(response.answers ?? {}, surveyEditorQuestions);
+
+                        return (
+                          <View
+                            key={response.id}
+                            style={{
+                              backgroundColor: 'white',
+                              borderRadius: 14,
+                              borderWidth: 1,
+                              borderColor: 'rgba(222,193,129,0.35)',
+                              padding: 12,
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                              <Avatar name={responseName} url={responseUser?.avatar_url} size={34} />
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>
+                                  {responseName}
+                                </Text>
+                                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 1 }}>
+                                  {answeredCount} answer{answeredCount === 1 ? '' : 's'} - Submitted {formatSurveySubmittedAt(response.submitted_at)}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {answeredQuestions.length === 0 && extraAnswers.length === 0 ? (
+                              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', lineHeight: 18 }}>
+                                This response was submitted without written answers.
+                              </Text>
+                            ) : (
+                              <View style={{ gap: 10 }}>
+                                {answeredQuestions.map((question) => (
+                                  <View key={question.id}>
+                                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30', lineHeight: 17 }}>
+                                      {question.text}
+                                    </Text>
+                                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#2d2d2d', lineHeight: 19, marginTop: 2 }}>
+                                      {formatSurveyAnswer(response.answers?.[question.id])}
+                                    </Text>
+                                  </View>
+                                ))}
+                                {extraAnswers.map(([questionId, answer]) => (
+                                  <View key={questionId}>
+                                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30', lineHeight: 17 }}>
+                                      Saved answer: {questionId}
+                                    </Text>
+                                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#2d2d2d', lineHeight: 19, marginTop: 2 }}>
+                                      {formatSurveyAnswer(answer)}
+                                    </Text>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })
+                    )}
+                  </View>
+                )}
               </View>
 
               <Pressable
