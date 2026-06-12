@@ -252,6 +252,82 @@ function normalizeText(value: string | null | undefined) {
     .trim();
 }
 
+const EVENT_TITLE_STOP_WORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'at',
+  'for',
+  'in',
+  'of',
+  'on',
+  'or',
+  'the',
+  'to',
+  'with',
+  'event',
+  'tentative',
+  'tentatively',
+]);
+
+function eventTitleTokens(title: string | null | undefined) {
+  return normalizeText(title)
+    .split(/\s+/)
+    .filter((token) => token.length > 1 && !EVENT_TITLE_STOP_WORDS.has(token));
+}
+
+function titlesLikelyMatch(left: string | null | undefined, right: string | null | undefined) {
+  const leftTitle = normalizeText(left);
+  const rightTitle = normalizeText(right);
+  if (!leftTitle || !rightTitle) return false;
+  if (leftTitle === rightTitle) return true;
+
+  const [shorter, longer] = leftTitle.length <= rightTitle.length
+    ? [leftTitle, rightTitle]
+    : [rightTitle, leftTitle];
+  if (shorter.length >= 6 && longer.includes(shorter)) return true;
+
+  const leftTokens = eventTitleTokens(left);
+  const rightTokens = eventTitleTokens(right);
+  if (leftTokens.length === 0 || rightTokens.length === 0) return false;
+
+  const rightTokenSet = new Set(rightTokens);
+  const overlap = leftTokens.filter((token) => rightTokenSet.has(token)).length;
+  const smallerTokenCount = Math.min(leftTokens.length, rightTokens.length);
+  const combinedTokenCount = new Set([...leftTokens, ...rightTokens]).size;
+
+  return overlap >= 2 && (overlap === smallerTokenCount || overlap / combinedTokenCount >= 0.5);
+}
+
+function parseEventTimeMinutes(value: string | null | undefined) {
+  if (!value) return null;
+  const match = value.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+function eventTimesCompatible(left: string | null | undefined, right: string | null | undefined) {
+  const leftMinutes = parseEventTimeMinutes(left);
+  const rightMinutes = parseEventTimeMinutes(right);
+  if (leftMinutes === null || rightMinutes === null) return true;
+  return Math.abs(leftMinutes - rightMinutes) <= 90;
+}
+
+function eventsLikelyMatch(
+  existing: { title?: string | null; event_time?: string | null; event_type?: string | null },
+  proposal: { title?: string | null; event_time?: string | null; event_type?: string | null }
+) {
+  const existingType = existing.event_type ?? 'custom';
+  const proposalType = proposal.event_type ?? 'custom';
+  return existingType === proposalType
+    && eventTimesCompatible(existing.event_time, proposal.event_time)
+    && titlesLikelyMatch(existing.title, proposal.title);
+}
+
 function expandMemberQueryTerms(value: string | null | undefined) {
   const normalized = normalizeText(value);
   const compact = normalized.replace(/\s+/g, '');
@@ -706,15 +782,24 @@ async function writeApprovedMeetingNotes(
   for (const event of analysis.events ?? []) {
     if (!event.title?.trim() || !isIsoDate(event.event_date)) continue;
 
-    const { data: existing } = await supabaseAdmin
+    const eventType = event.event_type === 'meeting' ? 'meeting' : 'custom';
+    const { data: existingEvents, error: existingEventsError } = await supabaseAdmin
       .from('events')
-      .select('id')
+      .select('id, title, event_time, event_type')
       .eq('community_id', communityId)
       .eq('event_date', event.event_date)
-      .eq('title', event.title.trim())
-      .maybeSingle();
+      .eq('event_type', eventType)
+      .or('status.is.null,status.eq.scheduled');
 
-    if (existing) continue;
+    if (existingEventsError) {
+      console.error('Failed to check existing events from notes:', existingEventsError);
+    } else if ((existingEvents ?? []).some((existing: any) => eventsLikelyMatch(existing, {
+      title: event.title,
+      event_time: event.event_time || null,
+      event_type: eventType,
+    }))) {
+      continue;
+    }
 
     const { data: created, error } = await supabaseAdmin
       .from('events')
@@ -724,7 +809,7 @@ async function writeApprovedMeetingNotes(
         description: event.description?.trim() || null,
         event_date: event.event_date,
         event_time: event.event_time || null,
-        event_type: event.event_type === 'meeting' ? 'meeting' : 'custom',
+        event_type: eventType,
         location: event.location?.trim() || null,
         created_by: userId,
         status: 'scheduled',
