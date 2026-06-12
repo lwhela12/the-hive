@@ -177,13 +177,13 @@ const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
 const MONTHLY_CHECK_IN_TEMPLATE: SurveyQuestion[] = [
   {
     id: 'q_energy_level',
-    text: 'What is your energy level right now?',
+    text: 'Energy: what is your energy level right now?',
     type: 'scale',
     required: false,
   },
   {
-    id: 'q_support_mode',
-    text: 'What would feel best from HIVE this month?',
+    id: 'q_energy_mode',
+    text: 'Energy: what would feel best from HIVE this month?',
     type: 'choice',
     options: [
       'I could use support',
@@ -194,26 +194,26 @@ const MONTHLY_CHECK_IN_TEMPLATE: SurveyQuestion[] = [
     required: false,
   },
   {
-    id: 'q_month_focus',
-    text: 'What are you focusing on this month?',
+    id: 'q_pop_progress',
+    text: 'Progress: what moved forward since last HIVE? Give yourself a little pat on the back.',
     type: 'long',
     required: false,
   },
   {
-    id: 'q_roster_updates',
-    text: 'What from your current or previous HIVE projects should stay on the roster, get attention, be marked complete, or be archived?',
+    id: 'q_pop_obstacles',
+    text: 'Obstacles: where are you stuck, and how could HIVE help?',
     type: 'long',
     required: false,
   },
   {
-    id: 'q_hive_need',
-    text: 'What is one thing you would love help, advice, an introduction, or a resource for this month?',
+    id: 'q_pop_priorities',
+    text: 'Priorities: what are you focusing on before the next HIVE?',
     type: 'long',
     required: false,
   },
   {
-    id: 'q_hive_offer',
-    text: 'What is something you could offer, share, teach, recommend, or connect someone with this month?',
+    id: 'q_carry_forward',
+    text: 'Carry-forward: anything from your HD boards, wishes, to-do list, or previous notes that should stay active, get attention, be marked complete, or be archived?',
     type: 'long',
     required: false,
   },
@@ -232,7 +232,7 @@ const MONTHLY_CHECK_IN_TEMPLATE: SurveyQuestion[] = [
 ];
 
 const MONTHLY_CHECK_IN_DESCRIPTION =
-  'A quick 2-3 minute check-in that helps shape the group view, monthly roster, and meeting prep.';
+  'A quick POP + Energy check-in so HIVE can celebrate progress, spot obstacles, choose priorities, and keep the right things on the roster.';
 
 const createSurveyQuestionId = () => `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -1131,7 +1131,7 @@ export default function AdminScreen() {
 
   const applyMonthlyCheckInTemplate = () => {
     questionLayoutsRef.current = {};
-    setSurveyEditorTitle(prev => prev.trim() || 'Monthly Check-in');
+    setSurveyEditorTitle(prev => prev.trim() || 'Monthly Check-in: POP + Energy');
     setSurveyEditorDescription(prev => prev.trim() || MONTHLY_CHECK_IN_DESCRIPTION);
     setSurveyEditorQuestions(MONTHLY_CHECK_IN_TEMPLATE.map(cloneQuestion));
     setSurveyEditorError(null);
