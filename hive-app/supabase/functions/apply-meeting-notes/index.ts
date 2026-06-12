@@ -24,6 +24,17 @@ interface Member {
   name: string;
 }
 
+const MEMBER_ALIASES: Record<string, string> = {
+  brit: 'brittany',
+  izzy: 'isabelle',
+  fin: 'infiniti',
+  infinite: 'infiniti',
+  nat: 'natalie',
+  nic: 'nicole',
+  ollie: 'oliver',
+  ems: 'emmeline',
+};
+
 interface MeetingAnalysis {
   title?: string;
   summary?: string;
@@ -232,28 +243,86 @@ function countAnalysisItems(analysis: MeetingAnalysis) {
   };
 }
 
-function matchMemberByName(name: string | null | undefined, members: Member[]) {
-  if (!name) return null;
-  const normalized = name.toLowerCase().trim();
-  if (!normalized || normalized === 'the group' || normalized === 'group') return null;
+function normalizeText(value: string | null | undefined) {
+  return (value ?? '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
 
-  const exact = members.find((member) => member.name.toLowerCase() === normalized);
+function expandMemberQueryTerms(value: string | null | undefined) {
+  const normalized = normalizeText(value);
+  const compact = normalized.replace(/\s+/g, '');
+  if (!normalized && !compact) return [];
+
+  const terms = new Set<string>();
+  if (normalized) terms.add(normalized);
+  if (compact && compact !== normalized) terms.add(compact);
+
+  const directTarget = MEMBER_ALIASES[normalized] || MEMBER_ALIASES[compact];
+  if (directTarget) terms.add(directTarget);
+
+  Object.entries(MEMBER_ALIASES).forEach(([alias, target]) => {
+    if (target === normalized || target === compact || normalized.includes(target) || compact.includes(target)) {
+      terms.add(alias);
+    }
+  });
+
+  return Array.from(terms).filter(Boolean);
+}
+
+function getMemberNameTerms(member: Member) {
+  const normalizedName = normalizeText(member.name);
+  const normalizedFirst = normalizeText(firstName(member.name));
+  const terms = new Set([normalizedName, normalizedFirst].filter(Boolean));
+
+  Object.entries(MEMBER_ALIASES).forEach(([alias, target]) => {
+    if (target === normalizedFirst || normalizedName.includes(target)) {
+      terms.add(alias);
+    }
+  });
+
+  return Array.from(terms).filter(Boolean);
+}
+
+function matchMemberByName(name: string | null | undefined, members: Member[]) {
+  const normalized = normalizeText(name);
+  if (!normalized || normalized === 'the group' || normalized === 'group') return null;
+  const queryTerms = expandMemberQueryTerms(normalized);
+
+  const exact = members.find((member) => {
+    const memberTerms = getMemberNameTerms(member);
+    return queryTerms.some((term) => memberTerms.includes(term));
+  });
   if (exact) return exact.id;
 
   const partial = members.find((member) => {
-    const memberName = member.name.toLowerCase();
-    return memberName.includes(normalized) || normalized.includes(memberName);
+    const memberTerms = getMemberNameTerms(member);
+    return queryTerms.some((term) =>
+      memberTerms.some((memberTerm) => memberTerm.includes(term) || term.includes(memberTerm))
+    );
   });
 
   return partial?.id ?? null;
 }
 
-function firstName(name: string | null | undefined) {
-  return name?.trim().split(/\s+/)[0] || 'Someone';
+function matchMemberMention(text: string | null | undefined, members: Member[]) {
+  const normalized = normalizeText(text);
+  if (!normalized) return null;
+
+  const tokens = new Set(normalized.split(/\s+/).filter(Boolean));
+  const mentioned = members.find((member) => {
+    const memberTerms = getMemberNameTerms(member);
+    return memberTerms.some((term) => tokens.has(term) || normalized.includes(`${term} hd board`));
+  });
+
+  return mentioned?.id ?? null;
 }
 
-function normalizeText(value: string | null | undefined) {
-  return value?.trim().toLowerCase() ?? '';
+function firstName(name: string | null | undefined) {
+  return name?.trim().split(/\s+/)[0] || 'Someone';
 }
 
 async function getNextBoardDisplayOrder(supabaseAdmin: any, communityId: string) {
@@ -310,10 +379,18 @@ async function findOrCreateHdBoard(
 
   const { data: existingBoards } = await supabaseAdmin
     .from('board_categories')
-    .select('id, name, goal_title')
+    .select('id, name, goal_title, status')
     .eq('community_id', communityId)
     .eq('topic_kind', 'hd_board')
     .eq('owner_user_id', ownerId);
+
+  const memberBoard = (existingBoards ?? []).find((category: any) =>
+    !normalizeText(category.goal_title) && (!category.status || category.status === 'active')
+  );
+  if (memberBoard?.id) {
+    await ensureBoardMemberTag(supabaseAdmin, communityId, memberBoard.id, ownerId, userId);
+    return memberBoard.id;
+  }
 
   const existing = (existingBoards ?? []).find((category: any) => {
     const existingGoal = normalizeText(category.goal_title);
@@ -327,13 +404,13 @@ async function findOrCreateHdBoard(
   }
 
   const displayOrder = await getNextBoardDisplayOrder(supabaseAdmin, communityId);
-  const name = `${firstName(owner?.name)}'s HD: ${goalTitle}`;
+  const name = `${firstName(owner?.name)}'s HD Board`;
   const { data: created, error } = await supabaseAdmin
     .from('board_categories')
     .insert({
       community_id: communityId,
       name,
-      description: board.description?.trim() || `${firstName(owner?.name)}'s HummDinger/High Definition wish: ${goalTitle}`,
+      description: board.description?.trim() || `${firstName(owner?.name)}'s home base for HD wishes, asks, updates, recommendations, and helper threads.`,
       category_type: 'custom',
       icon: '💎',
       audience: 'members',
@@ -344,7 +421,8 @@ async function findOrCreateHdBoard(
       created_by: userId,
       topic_kind: 'hd_board',
       owner_user_id: ownerId,
-      goal_title: goalTitle,
+      goal_title: null,
+      status: 'active',
     })
     .select('id')
     .single();
@@ -360,15 +438,55 @@ async function findOrCreateHdBoard(
   return created?.id ?? null;
 }
 
+async function findMemberHdBoardCategory(
+  supabaseAdmin: any,
+  communityId: string,
+  memberId: string,
+  categoryHint?: string | null
+) {
+  const { data: categories } = await supabaseAdmin
+    .from('board_categories')
+    .select('id, name, topic_kind, goal_title, status, display_order, created_at')
+    .eq('community_id', communityId)
+    .eq('topic_kind', 'hd_board')
+    .eq('owner_user_id', memberId)
+    .order('display_order', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  const activeCategories = (categories ?? []).filter((category: any) => !category.status || category.status === 'active');
+  const candidates = activeCategories.length > 0 ? activeCategories : categories ?? [];
+  if (candidates.length === 0) return null;
+
+  const hint = normalizeText(categoryHint);
+  if (hint) {
+    const exactNameMatch = candidates.find((category: any) => normalizeText(category.name) === hint);
+    if (exactNameMatch?.id) return exactNameMatch.id;
+  }
+
+  const memberBoard = candidates.find((category: any) => !normalizeText(category.goal_title));
+  if (memberBoard?.id) return memberBoard.id;
+
+  if (hint) {
+    const matchingBoard = candidates.find((category: any) =>
+      normalizeText(category.goal_title).includes(hint) || normalizeText(category.name).includes(hint)
+    );
+    if (matchingBoard?.id) return matchingBoard.id;
+  }
+
+  return candidates[0]?.id ?? null;
+}
+
 async function findBoardCategory(
   supabaseAdmin: any,
   communityId: string,
   suggestion: { person_name?: string | null; category_hint?: string | null },
   members: Member[]
 ) {
-  const targetMemberId = matchMemberByName(suggestion.person_name, members);
   const categoryHint = suggestion.category_hint?.trim();
   const normalizedHint = normalizeText(categoryHint);
+  const targetMemberId = matchMemberByName(suggestion.person_name, members)
+    ?? matchMemberByName(categoryHint, members)
+    ?? matchMemberMention(categoryHint, members);
 
   if (normalizedHint.includes('15min') || normalizedHint.includes('helper')) {
     const { data: helperCategory } = await supabaseAdmin
@@ -383,6 +501,14 @@ async function findBoardCategory(
   }
 
   if (targetMemberId) {
+    const memberHdCategoryId = await findMemberHdBoardCategory(
+      supabaseAdmin,
+      communityId,
+      targetMemberId,
+      categoryHint
+    );
+    if (memberHdCategoryId) return memberHdCategoryId;
+
     const { data: tags } = await supabaseAdmin
       .from('board_category_member_tags')
       .select('category_id')
@@ -482,7 +608,7 @@ ${boardTopicList || '- None yet'}
 
 Turn these meeting notes into app-ready structured data. Use only information supported by the notes. Do not invent dates, assignees, or commitments. Prefer exact member names when assigning work.
 
-HD boards are durable project boards for a member's current HummDinger/High Definition wish. Create one hd_boards entry for each distinct member goal that should get its own board. Reuse existing HD boards when the same person is still working on the same goal. For HummDinger or High Definition session resources, asks, offers, and blockers tied to a specific member, create board_suggestions with that member as person_name and use their exact HD board name as category_hint when it exists. Use shared boards only for explicitly group-wide topics: "15min HIVE Helpers" for quick acts of help people completed or offered, "HIVE Approved" for trusted recommendations, favorite providers, brands, places, and community-approved resources, and "HIVE Hangs" for group social planning.
+HD boards are member-owned containers for each person's HummDinger/High Definition wishes. Each member should have one active HD board, with individual asks, offers, blockers, and updates living as board_suggestions/posts inside that member board. Use hd_boards only when the notes clearly reveal a member needs an HD board and no matching existing member HD board appears in Existing board topics. For HummDinger or High Definition session resources, asks, offers, and blockers tied to a specific member, create board_suggestions with that member as person_name and the member's exact HD board name as category_hint when it exists. Use shared boards only for explicitly group-wide topics: "15min HIVE Helpers" for quick acts of help people completed or offered, "HIVE Approved" for trusted recommendations, favorite providers, brands, places, and community-approved resources, and "HIVE Hangs" for group social planning. If a resource or recommendation is for one member's HD ask, put it in that member's HD board rather than HIVE Approved.
 
 Wishes surfaced are meeting-summary candidates only. Capture the wish or need in wishes_surfaced, but do not turn it into a formal wish record here. Use board_suggestions only when the notes support a concrete discussion thread, resource request, or follow-up post for the reviewer to approve.
 
@@ -495,8 +621,8 @@ Return strict JSON only:
   "action_items": [{"description": "specific task", "assigned_to_name": "member name, The group, or null", "due_date": "YYYY-MM-DD or null"}],
   "events": [{"title": "event title", "event_date": "YYYY-MM-DD", "event_time": "HH:MM:SS or null", "event_type": "meeting or custom", "description": "optional", "location": "optional"}],
   "wishes_surfaced": [{"person_name": "member name", "description": "specific wish or need"}],
-  "hd_boards": [{"person_name": "member name", "goal_title": "short project/goal name", "description": "what help belongs on this board"}],
-  "board_suggestions": [{"person_name": "member name or null", "title": "suggested board post title", "content": "draft board update/resource note", "category_hint": "existing board name, HD goal title, 15min HIVE Helpers, HIVE Approved, Announcements, or member/project area"}]
+  "hd_boards": [{"person_name": "member name", "goal_title": "member HD board or short goal label", "description": "why this member needs an HD board"}],
+  "board_suggestions": [{"person_name": "member name or null", "title": "suggested board post title", "content": "draft board update/resource note", "category_hint": "existing board name such as Brit's HD Board, 15min HIVE Helpers, HIVE Approved, Announcements, or member/project area"}]
 }`,
     },
   ];
