@@ -8,7 +8,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useWishes } from '../../lib/hooks/useWishes';
-import { useSurveys, type Survey } from '../../lib/hooks/useSurveys';
+import { useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
+import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
 import { Avatar } from '../../components/ui/Avatar';
 import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
@@ -148,6 +149,15 @@ export default function ProfileScreen() {
     && !pendingSurveyIds.has(monthlyCheckInSurvey.id);
   const activeSurveyResponse = activeSurvey ? myResponses.get(activeSurvey.id) : undefined;
   const activeSurveyIsEditing = !!activeSurvey && !!activeSurveyResponse && !pendingSurveyIds.has(activeSurvey.id);
+  const {
+    items: carryForwardItems,
+    loading: carryForwardLoading,
+    error: carryForwardError,
+  } = useCarryForwardContext({
+    communityId,
+    userId: profile?.id,
+    survey: activeSurvey,
+  });
 
   // Editable profile fields
   const [isEditing, setIsEditing] = useState(false);
@@ -2543,7 +2553,10 @@ export default function ProfileScreen() {
           survey={activeSurvey}
           initialAnswers={activeSurveyIsEditing ? activeSurveyResponse?.answers : undefined}
           isEditingResponse={activeSurveyIsEditing}
-          onSubmit={async (answers) => {
+          carryForwardItems={carryForwardItems}
+          carryForwardLoading={carryForwardLoading}
+          carryForwardError={carryForwardError}
+          onSubmit={async (answers: SurveyAnswers) => {
             const result = await submitResponse(activeSurvey.id, answers);
             if (!result.error && activeSurveyStorageKey) {
               removeStoredItem(activeSurveyStorageKey);

@@ -22,11 +22,22 @@ export interface Survey {
   is_active: boolean;
 }
 
+export type SurveyAnswerValue =
+  | string
+  | string[]
+  | number
+  | boolean
+  | null
+  | Record<string, unknown>
+  | Record<string, unknown>[];
+
+export type SurveyAnswers = Record<string, SurveyAnswerValue>;
+
 export interface SurveyResponse {
   id: string;
   survey_id: string;
   user_id: string;
-  answers: Record<string, string | string[] | number>;
+  answers: SurveyAnswers;
   submitted_at: string;
   response_period?: string | null;
 }
@@ -45,7 +56,7 @@ function isRetiredSurvey(survey: Survey) {
   return RETIRED_SURVEY_PATTERNS.some(pattern => pattern.test(label));
 }
 
-function isMonthlyCheckInSurvey(survey: Survey) {
+export function isMonthlyCheckInSurvey(survey: Survey) {
   const label = `${survey.title} ${survey.description ?? ''}`;
   return MONTHLY_CHECK_IN_PATTERN.test(label);
 }
@@ -62,7 +73,7 @@ function getLocalDateFromSurveyDueDate(dueDate?: string | null) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function getSurveyResponsePeriod(survey: Survey) {
+export function getSurveyResponsePeriod(survey: Survey) {
   if (!isMonthlyCheckInSurvey(survey)) return DEFAULT_RESPONSE_PERIOD;
 
   const periodDate = getLocalDateFromSurveyDueDate(survey.due_date) ?? new Date();
@@ -204,7 +215,7 @@ export function useSurveys(communityId?: string, userId?: string) {
 
   const submitResponse = async (
     surveyId: string,
-    answers: Record<string, string | string[] | number>
+    answers: SurveyAnswers
   ) => {
     if (!communityId || !userId) return { error: 'Not authenticated' };
 

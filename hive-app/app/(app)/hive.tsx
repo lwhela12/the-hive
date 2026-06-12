@@ -10,7 +10,8 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
-import { useSurveys, type Survey } from '../../lib/hooks/useSurveys';
+import { useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
+import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { WishCard } from '../../components/hive/WishCard';
 import { WishDetail } from '../../components/hive/WishDetail';
@@ -1273,6 +1274,15 @@ export default function HiveScreen() {
   const pendingSurveyIds = new Set(pendingSurveys.map((survey) => survey.id));
   const activeSurveyResponse = activeSurvey ? myResponses.get(activeSurvey.id) : undefined;
   const activeSurveyIsEditing = !!activeSurvey && !!activeSurveyResponse && !pendingSurveyIds.has(activeSurvey.id);
+  const {
+    items: carryForwardItems,
+    loading: carryForwardLoading,
+    error: carryForwardError,
+  } = useCarryForwardContext({
+    communityId,
+    userId: profile?.id,
+    survey: activeSurvey,
+  });
 
   const openSurvey = useCallback((survey: Survey) => {
     setActiveSurvey(survey);
@@ -1288,7 +1298,7 @@ export default function HiveScreen() {
     }
   }, [activeSurveyStorageKey]);
 
-  const handleSurveySubmit = useCallback(async (answers: Record<string, string | string[] | number>) => {
+  const handleSurveySubmit = useCallback(async (answers: SurveyAnswers) => {
     if (!activeSurvey) return { error: 'No active survey' };
 
     const result = await submitResponse(activeSurvey.id, answers);
@@ -3385,6 +3395,9 @@ export default function HiveScreen() {
           survey={activeSurvey}
           initialAnswers={activeSurveyIsEditing ? activeSurveyResponse?.answers : undefined}
           isEditingResponse={activeSurveyIsEditing}
+          carryForwardItems={carryForwardItems}
+          carryForwardLoading={carryForwardLoading}
+          carryForwardError={carryForwardError}
           onSubmit={handleSurveySubmit}
           onClose={closeSurvey}
         />

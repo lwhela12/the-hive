@@ -41,7 +41,13 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { useSurveys } from '../../lib/hooks/useSurveys';
-import type { Survey, SurveyQuestion, SurveyResponse } from '../../lib/hooks/useSurveys';
+import {
+  CARRY_FORWARD_ANSWER_KEY,
+  getCarryForwardStatusLabel,
+  normalizeCarryForwardResponse,
+  type CarryForwardResponseItem,
+} from '../../lib/carryForward';
+import type { Survey, SurveyAnswers, SurveyQuestion, SurveyResponse } from '../../lib/hooks/useSurveys';
 import { parseAmericanDate } from '../../lib/dateUtils';
 import type { Profile, QueenBee, UserRole, CommunityInvite, Event } from '../../types';
 
@@ -53,6 +59,28 @@ type MemberRow = {
 
 type SurveyResponseWithUser = SurveyResponse & {
   user?: Pick<Profile, 'id' | 'name' | 'email' | 'avatar_url'> | null;
+};
+
+type PopPreviewTextItem = {
+  memberName: string;
+  text: string;
+};
+
+type PopPreviewCarryForwardItem = {
+  memberName: string;
+  item: CarryForwardResponseItem;
+};
+
+type SurveyPopPreview = {
+  energyAverage: number | null;
+  energyCount: number;
+  modes: { label: string; count: number }[];
+  progress: PopPreviewTextItem[];
+  obstacles: PopPreviewTextItem[];
+  priorities: PopPreviewTextItem[];
+  meetingTopics: PopPreviewTextItem[];
+  carryForward: PopPreviewCarryForwardItem[];
+  hasContent: boolean;
 };
 
 type InviteRow = CommunityInvite & {
@@ -429,7 +457,7 @@ function formatSurveyAnswer(value: unknown) {
 }
 
 function getAnsweredQuestionCount(
-  answers: Record<string, string | string[] | number>,
+  answers: SurveyAnswers,
   questions: SurveyQuestion[]
 ) {
   const questionIds = new Set(questions.map(question => question.id));
@@ -439,6 +467,129 @@ function getAnsweredQuestionCount(
     .length;
 
   return answeredKnown + answeredUnknown;
+}
+
+function getResponseMemberName(
+  response: SurveyResponseWithUser,
+  memberProfilesById: Map<string, Profile>
+) {
+  return response.user?.name ?? memberProfilesById.get(response.user_id)?.name ?? 'Unknown member';
+}
+
+function getTextAnswer(answers: SurveyAnswers, key: string) {
+  const value = answers[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function buildSurveyPopPreview(
+  responses: SurveyResponseWithUser[],
+  memberProfilesById: Map<string, Profile>
+): SurveyPopPreview {
+  const energyValues: number[] = [];
+  const modeCounts = new Map<string, number>();
+  const progress: PopPreviewTextItem[] = [];
+  const obstacles: PopPreviewTextItem[] = [];
+  const priorities: PopPreviewTextItem[] = [];
+  const meetingTopics: PopPreviewTextItem[] = [];
+  const carryForward: PopPreviewCarryForwardItem[] = [];
+
+  responses.forEach((response) => {
+    const memberName = getResponseMemberName(response, memberProfilesById);
+    const answers = response.answers ?? {};
+    const energy = answers.q_energy_level;
+    if (typeof energy === 'number' && Number.isFinite(energy)) {
+      energyValues.push(energy);
+    }
+
+    const mode = getTextAnswer(answers, 'q_energy_mode');
+    if (mode) modeCounts.set(mode, (modeCounts.get(mode) ?? 0) + 1);
+
+    const progressText = getTextAnswer(answers, 'q_pop_progress');
+    if (progressText) progress.push({ memberName, text: progressText });
+
+    const obstaclesText = getTextAnswer(answers, 'q_pop_obstacles');
+    if (obstaclesText) obstacles.push({ memberName, text: obstaclesText });
+
+    const prioritiesText = getTextAnswer(answers, 'q_pop_priorities');
+    if (prioritiesText) priorities.push({ memberName, text: prioritiesText });
+
+    const meetingTopicText = getTextAnswer(answers, 'q_meeting_topic');
+    if (meetingTopicText) meetingTopics.push({ memberName, text: meetingTopicText });
+
+    normalizeCarryForwardResponse(answers[CARRY_FORWARD_ANSWER_KEY]).forEach((item) => {
+      carryForward.push({ memberName, item });
+    });
+  });
+
+  const energyAverage = energyValues.length
+    ? energyValues.reduce((sum, value) => sum + value, 0) / energyValues.length
+    : null;
+  const modes = Array.from(modeCounts.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+
+  return {
+    energyAverage,
+    energyCount: energyValues.length,
+    modes,
+    progress,
+    obstacles,
+    priorities,
+    meetingTopics,
+    carryForward,
+    hasContent: (
+      energyValues.length > 0
+      || modes.length > 0
+      || progress.length > 0
+      || obstacles.length > 0
+      || priorities.length > 0
+      || meetingTopics.length > 0
+      || carryForward.length > 0
+    ),
+  };
+}
+
+function PopPreviewList({ title, items }: { title: string; items: PopPreviewTextItem[] }) {
+  if (items.length === 0) return null;
+
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>
+        {title}
+      </Text>
+      {items.map((item, index) => (
+        <Text key={`${title}-${item.memberName}-${index}`} style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#2d2d2d', lineHeight: 18 }}>
+          <Text style={{ fontFamily: 'Lato_700Bold' }}>{item.memberName}: </Text>
+          {item.text}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+function CarryForwardPreviewList({ items }: { items: PopPreviewCarryForwardItem[] }) {
+  if (items.length === 0) return null;
+
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>
+        Carry-forward decisions
+      </Text>
+      {items.map(({ memberName, item }, index) => (
+        <View key={`${memberName}-${item.type}-${item.id}-${index}`} style={{ gap: 2 }}>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#2d2d2d', lineHeight: 18 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold' }}>{memberName}: </Text>
+            {getCarryForwardStatusLabel(item.status)} - {item.sourceLabel}: {item.label}
+          </Text>
+          {item.note ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#6b7280', lineHeight: 17, marginLeft: 10 }}>
+              {item.note}
+            </Text>
+          ) : null}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 const normalizeSurveyDueDateInput = (dateValue: string, timeValue: string) => {
@@ -930,6 +1081,10 @@ export default function AdminScreen() {
       (response.response_period ?? DEFAULT_RESPONSE_PERIOD) === activeSurveyResponsePeriod
     ));
   }, [activeSurveyResponsePeriod, surveyResponses]);
+
+  const activeSurveyPopPreview = useMemo(() => (
+    buildSurveyPopPreview(activeSurveyResponses, memberProfilesById)
+  ), [activeSurveyResponses, memberProfilesById]);
 
   const activeSurveySubmittedMemberIds = useMemo(() => new Set(
     activeSurveyResponses.map((response) => response.user_id)
@@ -2442,6 +2597,52 @@ export default function AdminScreen() {
                       )}
                     </View>
 
+                    {activeSurveyPopPreview.hasContent ? (
+                      <View
+                        style={{
+                          backgroundColor: '#fffdf5',
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: 'rgba(222,193,129,0.35)',
+                          padding: 12,
+                          gap: 12,
+                        }}
+                      >
+                        <View>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>
+                            Meeting POP Preview
+                          </Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7f715f', lineHeight: 17, marginTop: 2 }}>
+                            Deck-ready readout from this month's responses.
+                          </Text>
+                        </View>
+
+                        {(activeSurveyPopPreview.energyAverage !== null || activeSurveyPopPreview.modes.length > 0) ? (
+                          <View style={{ gap: 6 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>
+                              Energy
+                            </Text>
+                            {activeSurveyPopPreview.energyAverage !== null ? (
+                              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#2d2d2d', lineHeight: 18 }}>
+                                Average {activeSurveyPopPreview.energyAverage.toFixed(1)} from {activeSurveyPopPreview.energyCount} response{activeSurveyPopPreview.energyCount === 1 ? '' : 's'}.
+                              </Text>
+                            ) : null}
+                            {activeSurveyPopPreview.modes.length > 0 ? (
+                              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#2d2d2d', lineHeight: 18 }}>
+                                {activeSurveyPopPreview.modes.map(mode => `${mode.label}: ${mode.count}`).join(' - ')}
+                              </Text>
+                            ) : null}
+                          </View>
+                        ) : null}
+
+                        <PopPreviewList title="Progress" items={activeSurveyPopPreview.progress} />
+                        <PopPreviewList title="Obstacles" items={activeSurveyPopPreview.obstacles} />
+                        <PopPreviewList title="Priorities" items={activeSurveyPopPreview.priorities} />
+                        <PopPreviewList title="Meeting topics" items={activeSurveyPopPreview.meetingTopics} />
+                        <CarryForwardPreviewList items={activeSurveyPopPreview.carryForward} />
+                      </View>
+                    ) : null}
+
                     {activeSurveyResponses.length === 0 ? (
                       <View style={{ paddingVertical: 16, alignItems: 'center' }}>
                         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center', lineHeight: 18 }}>
@@ -2454,8 +2655,13 @@ export default function AdminScreen() {
                         const responseName = responseUser?.name ?? 'Unknown member';
                         const questionIds = new Set(surveyEditorQuestions.map(question => question.id));
                         const answeredQuestions = surveyEditorQuestions.filter(question => hasSurveyAnswer(response.answers?.[question.id]));
+                        const carryForwardAnswers = normalizeCarryForwardResponse(response.answers?.[CARRY_FORWARD_ANSWER_KEY]);
                         const extraAnswers = Object.entries(response.answers ?? {})
-                          .filter(([questionId, answer]) => !questionIds.has(questionId) && hasSurveyAnswer(answer));
+                          .filter(([questionId, answer]) => (
+                            questionId !== CARRY_FORWARD_ANSWER_KEY
+                            && !questionIds.has(questionId)
+                            && hasSurveyAnswer(answer)
+                          ));
                         const answeredCount = getAnsweredQuestionCount(response.answers ?? {}, surveyEditorQuestions);
 
                         return (
@@ -2481,7 +2687,7 @@ export default function AdminScreen() {
                               </View>
                             </View>
 
-                            {answeredQuestions.length === 0 && extraAnswers.length === 0 ? (
+                            {answeredQuestions.length === 0 && extraAnswers.length === 0 && carryForwardAnswers.length === 0 ? (
                               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', lineHeight: 18 }}>
                                 This response was submitted without written answers.
                               </Text>
@@ -2497,6 +2703,9 @@ export default function AdminScreen() {
                                     </Text>
                                   </View>
                                 ))}
+                                <CarryForwardPreviewList
+                                  items={carryForwardAnswers.map(item => ({ memberName: responseName, item }))}
+                                />
                                 {extraAnswers.map(([questionId, answer]) => (
                                   <View key={questionId}>
                                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30', lineHeight: 17 }}>
