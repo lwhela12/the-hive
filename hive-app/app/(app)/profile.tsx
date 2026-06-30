@@ -2307,6 +2307,52 @@ export default function ProfileScreen() {
           </FadeIn>
         )}
 
+        {/* Skills Garden */}
+        {!initialLoading && (
+          <FadeIn delay={50} style={immersiveSkillsGarden ? { flex: 1 } : undefined}>
+            <View
+              className={immersiveSkillsGarden ? 'mb-0' : compactProfileLandscape ? 'mb-2' : 'mb-6'}
+              style={immersiveSkillsGarden ? { flex: 1 } : undefined}
+              onLayout={(event) => {
+                skillsGardenY.current = event.nativeEvent.layout.y;
+              }}
+            >
+              {!immersiveSkillsGarden && (
+                <View className={compactProfileLandscape ? 'flex-row items-center justify-between mb-0 px-1' : 'flex-row items-center justify-between mb-1'}>
+                  <View>
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_700Bold',
+                        fontSize: compactProfileLandscape ? 14 : undefined,
+                        lineHeight: compactProfileLandscape ? 18 : undefined,
+                      }}
+                      className={compactProfileLandscape ? 'text-charcoal' : 'text-lg text-charcoal'}
+                    >
+                      Skills Garden 🌸
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: compactProfileLandscape ? 9 : 11, color: '#9ca3af', marginTop: compactProfileLandscape ? 0 : 2 }}>
+                      {bloomingSkillCount > 0
+                        ? `${bloomingSkillCount} skill flower${bloomingSkillCount !== 1 ? 's' : ''} blooming`
+                        : 'Seed your Skills Garden'}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              <SkillBubbleGarden
+                skills={skills}
+                editable
+                onUpdateSkill={handleSkillBubbleUpdate}
+                onDeleteSkill={handleDeleteSkill}
+                seedSkills={PREDEFINED_SKILLS}
+                onPlantSkill={handlePlantSkill}
+                onPlantSkills={handlePlantSkills}
+                onAddCustomSkill={() => setSkillsModalVisible(true)}
+                draftKey={profile?.id ? `the-hive:skills-garden:${profile.id}` : null}
+              />
+            </View>
+          </FadeIn>
+        )}
+
         {/* Notification Settings */}
         {!immersiveSkillsGarden && Platform.OS !== 'web' && (
           <View className="mb-6">
@@ -2364,52 +2410,6 @@ export default function ProfileScreen() {
         >
           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-600">Sign Out</Text>
         </Pressable>
-        )}
-
-        {/* Skills Garden */}
-        {!initialLoading && (
-          <FadeIn delay={50} style={immersiveSkillsGarden ? { flex: 1 } : undefined}>
-            <View
-              className={immersiveSkillsGarden ? 'mb-0' : compactProfileLandscape ? 'mb-2' : 'mb-6'}
-              style={immersiveSkillsGarden ? { flex: 1 } : undefined}
-              onLayout={(event) => {
-                skillsGardenY.current = event.nativeEvent.layout.y;
-              }}
-            >
-              {!immersiveSkillsGarden && (
-                <View className={compactProfileLandscape ? 'flex-row items-center justify-between mb-0 px-1' : 'flex-row items-center justify-between mb-1'}>
-                  <View>
-                    <Text
-                      style={{
-                        fontFamily: 'Lato_700Bold',
-                        fontSize: compactProfileLandscape ? 14 : undefined,
-                        lineHeight: compactProfileLandscape ? 18 : undefined,
-                      }}
-                      className={compactProfileLandscape ? 'text-charcoal' : 'text-lg text-charcoal'}
-                    >
-                      Skills Garden 🌸
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: compactProfileLandscape ? 9 : 11, color: '#9ca3af', marginTop: compactProfileLandscape ? 0 : 2 }}>
-                      {bloomingSkillCount > 0
-                        ? `${bloomingSkillCount} skill flower${bloomingSkillCount !== 1 ? 's' : ''} blooming`
-                        : 'Seed your Skills Garden'}
-                    </Text>
-                  </View>
-                </View>
-              )}
-              <SkillBubbleGarden
-                skills={skills}
-                editable
-                onUpdateSkill={handleSkillBubbleUpdate}
-                onDeleteSkill={handleDeleteSkill}
-                seedSkills={PREDEFINED_SKILLS}
-                onPlantSkill={handlePlantSkill}
-                onPlantSkills={handlePlantSkills}
-                onAddCustomSkill={() => setSkillsModalVisible(true)}
-                draftKey={profile?.id ? `the-hive:skills-garden:${profile.id}` : null}
-              />
-            </View>
-          </FadeIn>
         )}
       </ScrollView>
       </KeyboardAvoidingView>
