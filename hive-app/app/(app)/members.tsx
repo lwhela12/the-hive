@@ -17,7 +17,7 @@ import { notifyWishMentions } from '../../lib/wishMentions';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
 import { setStoredItem } from '../../lib/webStorage';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
-import { ProfileHoneycombCluster } from '../../components/profile/ProfileHoneycombCluster';
+import { ProfileShowcase } from '../../components/profile/ProfileShowcase';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
 import { LinkifiedText } from '../../components/ui/LinkifiedText';
@@ -401,13 +401,32 @@ function MemberDetailModal({
   });
 
   const hasFavorites = member.favorite_book || member.favorite_food || member.favorite_hobby;
-  const hasDetails = member.profile_title || member.bio || member.current_project || member.hometown || member.known_for || member.miq_experiences || member.miq_growth || member.miq_contribution || hasFavorites;
+  const hasFunFacts = (member.fun_facts ?? []).some(fact => fact.trim().length > 0);
+  const hasDetails = member.profile_title || member.occupation || member.birthday || member.bio || member.current_project || member.hometown || member.known_for || member.miq_experiences || member.miq_growth || member.miq_contribution || hasFavorites || hasFunFacts;
   const introContent = member.introPost?.content ?? '';
   const introNeedsToggle = introContent.length > 320;
   const visibleIntro = introExpanded || !introNeedsToggle
     ? introContent
     : `${introContent.slice(0, 320).trimEnd()}...`;
   const dailyAnswers = member.dailyAnswers ?? [];
+  const memberHoneycombItems = [
+    { label: 'Title', value: member.profile_title || member.occupation },
+    { label: 'From', value: member.hometown },
+    {
+      label: 'Birthday',
+      value: member.birthday
+        ? new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })
+        : null,
+    },
+    { label: 'Project', value: member.current_project },
+    { label: 'Book', value: member.favorite_book },
+    { label: 'Food', value: member.favorite_food },
+    { label: 'Hobby', value: member.favorite_hobby },
+    ...(member.fun_facts ?? []).map((fact, i) => ({
+      label: `Fun Fact ${i + 1}`,
+      value: fact,
+    })),
+  ];
 
   useEffect(() => {
     setIntroExpanded(false);
@@ -1063,7 +1082,11 @@ function MemberDetailModal({
             </View>
           )}
 
-          <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}>
+          <ScrollView
+            showsVerticalScrollIndicator={true}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48, alignItems: 'center' }}
+          >
+            <View style={{ width: '100%', maxWidth: 1240 }}>
             {/* Header */}
             <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 16 }}>
               {/* Avatar — wrapped in BeeProgressArc for other members */}
@@ -1383,86 +1406,12 @@ function MemberDetailModal({
               </View>
             )}
 
-            {/* ── Profile Honeycomb — visual snapshot, shown before bio ── */}
-            <ProfileHoneycombCluster
-              size="compact"
-              showEmptyCells
-              items={[
-                { label: 'Title', value: member.profile_title || member.occupation },
-                { label: 'From', value: member.hometown },
-                { label: 'Birthday', value: member.birthday ? new Date(`${member.birthday}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric' }) : null },
-                { label: 'Project', value: member.current_project },
-                { label: 'Book', value: member.favorite_book },
-                { label: 'Food', value: member.favorite_food },
-                { label: 'Hobby', value: member.favorite_hobby },
-                ...(member.fun_facts ?? []).map((fact, i) => ({
-                  label: `Fun Fact ${i + 1}`,
-                  value: fact,
-                })),
-              ]}
+            <ProfileShowcase
+              honeycombItems={memberHoneycombItems}
+              knownFor={member.known_for}
+              bio={member.bio}
+              style={{ marginBottom: 20 }}
             />
-
-            {/* Skills Garden */}
-            {(member.skills.length > 0 || isCurrentUser) && (
-              <View style={{ marginBottom: 24 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <View>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>
-                      SKILLS GARDEN 🌸
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#b5a898', marginTop: 2 }}>
-                      {member.skills.filter(s => Number(s.enthusiasm_level ?? 0) > 0).length} skill flowers blooming
-                    </Text>
-                  </View>
-                  {isCurrentUser && (
-                    <Pressable
-                      onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
-                      style={{ backgroundColor: '#fdf3dc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Edit</Text>
-                    </Pressable>
-                  )}
-                </View>
-
-                {member.skills.length === 0 && isCurrentUser ? (
-                  <Pressable
-                    onPress={() => {
-                      setDraftSkillList(member.skills.map(s => s.description));
-                      setShowSkillPicker(true);
-                    }}
-                    style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed', alignSelf: 'flex-start' }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Seed your Skills Garden 🌱</Text>
-                  </Pressable>
-                ) : member.skills.length === 0 ? (
-                  <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 32, marginBottom: 8 }}>🌱</Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
-                      No skills planted yet — garden coming soon!
-                    </Text>
-                  </View>
-                ) : (
-                  <SkillBubbleGarden skills={member.skills} />
-                )}
-              </View>
-            )}
-
-            {/* ── Bio ── */}
-            {member.bio && (
-              <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16, marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#4b5563', lineHeight: 22 }}>
-                  {member.bio}
-                </Text>
-              </View>
-            )}
-
-            {/* Ask me about */}
-            {member.known_for && (
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 6 }}>ASK ME ABOUT</Text>
-                <Text style={{ fontFamily: 'LibreBaskerville_400Regular', fontSize: 15, color: '#2d2d2d', fontStyle: 'italic', lineHeight: 22 }}>"{member.known_for}"</Text>
-              </View>
-            )}
 
             {(member.miq_experiences || member.miq_growth || member.miq_contribution) && (
               <View style={{ marginBottom: 20 }}>
@@ -1662,9 +1611,55 @@ function MemberDetailModal({
               </View>
             )}
 
+            {/* Skills Garden */}
+            {(member.skills.length > 0 || isCurrentUser) && (
+              <View style={{ marginBottom: 24 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <View>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>
+                      SKILLS GARDEN 🌸
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#b5a898', marginTop: 2 }}>
+                      {member.skills.filter(s => Number(s.enthusiasm_level ?? 0) > 0).length} skill flowers blooming
+                    </Text>
+                  </View>
+                  {isCurrentUser && (
+                    <Pressable
+                      onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
+                      style={{ backgroundColor: '#fdf3dc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Edit</Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                {member.skills.length === 0 && isCurrentUser ? (
+                  <Pressable
+                    onPress={() => {
+                      setDraftSkillList(member.skills.map(s => s.description));
+                      setShowSkillPicker(true);
+                    }}
+                    style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed', alignSelf: 'flex-start' }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Seed your Skills Garden 🌱</Text>
+                  </Pressable>
+                ) : member.skills.length === 0 ? (
+                  <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 32, marginBottom: 8 }}>🌱</Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
+                      No skills planted yet — garden coming soon!
+                    </Text>
+                  </View>
+                ) : (
+                  <SkillBubbleGarden skills={member.skills} />
+                )}
+              </View>
+            )}
+
             <Pressable onPress={onClose} style={{ backgroundColor: '#faf8f3', borderRadius: 14, paddingVertical: 14, marginTop: 4 }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
             </Pressable>
+            </View>
           </ScrollView>
         </Pressable>
       </Pressable>

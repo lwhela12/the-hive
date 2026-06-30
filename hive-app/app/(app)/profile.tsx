@@ -21,7 +21,7 @@ import { FadeIn } from '../../components/ui/FadeIn';
 import { ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
-import { ProfileHoneycombCluster } from '../../components/profile/ProfileHoneycombCluster';
+import { ProfileShowcase } from '../../components/profile/ProfileShowcase';
 import { WishCombCard } from '../../components/profile/WishCombCard';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
@@ -1180,12 +1180,9 @@ export default function ProfileScreen() {
 
   if (!profile) return null;
 
-  const isProfileDesktop = screenWidth >= 1240;
   const isProfilePhone = screenWidth < 640;
   const profileWishPanelHeight = isProfilePhone ? 500 : 520;
   const bloomingSkillCount = skills.filter(hasBloomingSkill).length;
-  const profileKnownFor = ((profile as any).known_for as string | null | undefined)?.trim() || '';
-  const profileBio = ((profile as any).bio as string | null | undefined)?.trim() || '';
   const deepQuizCanGoBack = deepQuizStep > 0;
   const deepQuizIsLastStep = deepQuizStep === DEEP_PROFILE_STEPS.length - 1;
   const deepQuizProgress = `${deepQuizStep + 1}/${DEEP_PROFILE_STEPS.length}`;
@@ -1816,109 +1813,13 @@ export default function ProfileScreen() {
 
           {!isEditing ? (
             <View className="gap-4">
-              {isProfileDesktop ? (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'stretch',
-                    justifyContent: 'center',
-                    gap: 18,
-                    marginTop: 4,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 290,
-                      minHeight: 560,
-                      borderRadius: 34,
-                      backgroundColor: '#fffdf5',
-                      borderWidth: 1,
-                      borderColor: 'rgba(222,193,129,0.35)',
-                      paddingHorizontal: 24,
-                      paddingVertical: 28,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.9, textTransform: 'uppercase', color: '#bd9348', marginBottom: 12 }}>
-                      People should ask me about
-                    </Text>
-                    <Text style={{ fontFamily: 'LibreBaskerville_400Regular', fontSize: 18, lineHeight: 28, color: '#2d2d2d', fontStyle: 'italic' }}>
-                      {profileKnownFor ? `"${profileKnownFor}"` : 'Add the one thing people should ask you about.'}
-                    </Text>
-                  </View>
-
-                  <View style={{ width: 540, alignSelf: 'center' }}>
-                    <ProfileHoneycombCluster
-                      size="roomy"
-                      preferredColumns={3}
-                      items={profileHoneycombItems}
-                    />
-                  </View>
-
-                  <View
-                    style={{
-                      width: 330,
-                      minHeight: 560,
-                      borderRadius: 34,
-                      backgroundColor: '#fff',
-                      borderWidth: 1,
-                      borderColor: 'rgba(45,45,45,0.08)',
-                      paddingHorizontal: 24,
-                      paddingVertical: 28,
-                      justifyContent: 'center',
-                      shadowColor: '#2d2d2d',
-                      shadowOpacity: 0.06,
-                      shadowRadius: 18,
-                      shadowOffset: { width: 0, height: 8 },
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.9, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 12 }}>
-                      Bio
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 24, color: '#2d2d2d' }}>
-                      {profileBio || 'Add your bio here.'}
-                    </Text>
-                  </View>
-                </View>
-              ) : (
-                <>
-                  <View style={{ paddingVertical: 2 }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase', color: '#bd9348', marginBottom: 8 }}>
-                      People should ask me about
-                    </Text>
-                    <Text style={{ fontFamily: 'LibreBaskerville_400Regular', fontSize: isProfilePhone ? 19 : 20, lineHeight: isProfilePhone ? 28 : 30, color: '#2d2d2d', fontStyle: 'italic' }}>
-                      {profileKnownFor ? `"${profileKnownFor}"` : 'Add the one thing people should ask you about.'}
-                    </Text>
-                  </View>
-
-                  <ProfileHoneycombCluster
-                    size="compact"
-                    preferredColumns={isProfilePhone ? 3 : undefined}
-                    items={profileHoneycombItems}
-                  />
-
-                  <View
-                    style={{
-                      borderRadius: 28,
-                      backgroundColor: '#fff',
-                      borderWidth: 1,
-                      borderColor: 'rgba(45,45,45,0.08)',
-                      padding: 18,
-                      shadowColor: '#2d2d2d',
-                      shadowOpacity: 0.05,
-                      shadowRadius: 12,
-                      shadowOffset: { width: 0, height: 5 },
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 8 }}>
-                      Bio
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14.5, lineHeight: 23, color: '#2d2d2d' }}>
-                      {profileBio || 'Add your bio here.'}
-                    </Text>
-                  </View>
-                </>
-              )}
+              <ProfileShowcase
+                honeycombItems={profileHoneycombItems}
+                knownFor={(profile as any).known_for}
+                bio={(profile as any).bio}
+                knownForPlaceholder="Add the one thing people should ask you about."
+                bioPlaceholder="Add your bio here."
+              />
 
               {((profile as any).miq_experiences || (profile as any).miq_growth || (profile as any).miq_contribution) ? (
                 <View className="bg-white rounded-xl shadow-sm p-4">
@@ -2329,122 +2230,82 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Skills Garden */}
-        {!initialLoading && <FadeIn delay={50} style={immersiveSkillsGarden ? { flex: 1 } : undefined}>
-        <View
-          className={immersiveSkillsGarden ? 'mb-0' : compactProfileLandscape ? 'mb-2' : 'mb-6'}
-          style={immersiveSkillsGarden ? { flex: 1 } : undefined}
-          onLayout={(event) => {
-            skillsGardenY.current = event.nativeEvent.layout.y;
-          }}
-        >
-          {!immersiveSkillsGarden && (
-          <View className={compactProfileLandscape ? 'flex-row items-center justify-between mb-0 px-1' : 'flex-row items-center justify-between mb-1'}>
-            <View>
-              <Text
-                style={{
-                  fontFamily: 'Lato_700Bold',
-                  fontSize: compactProfileLandscape ? 14 : undefined,
-                  lineHeight: compactProfileLandscape ? 18 : undefined,
-                }}
-                className={compactProfileLandscape ? 'text-charcoal' : 'text-lg text-charcoal'}
-              >
-                Skills Garden 🌸
-              </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: compactProfileLandscape ? 9 : 11, color: '#9ca3af', marginTop: compactProfileLandscape ? 0 : 2 }}>
-                {bloomingSkillCount > 0
-                  ? `${bloomingSkillCount} skill flower${bloomingSkillCount !== 1 ? 's' : ''} blooming`
-                  : 'Seed your Skills Garden'}
-              </Text>
-            </View>
-          </View>
-          )}
-          <SkillBubbleGarden
-            skills={skills}
-            editable
-            onUpdateSkill={handleSkillBubbleUpdate}
-            onDeleteSkill={handleDeleteSkill}
-            seedSkills={PREDEFINED_SKILLS}
-            onPlantSkill={handlePlantSkill}
-            onPlantSkills={handlePlantSkills}
-            onAddCustomSkill={() => setSkillsModalVisible(true)}
-            draftKey={profile?.id ? `the-hive:skills-garden:${profile.id}` : null}
-          />
-        </View>
-
         {/* Wishes */}
-        {!immersiveSkillsGarden && (
-        <View style={{ marginBottom: 24 }}>
-          <View style={{ marginBottom: 0, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-            <View style={{ alignSelf: 'flex-start', flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
-              <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: isProfilePhone ? 16 : 17, color: '#2d2d2d' }}>
-                Your HD Wishes ({wishes.length})
-              </Text>
-            </View>
-            <ProfileHeaderActionPill label="+ Wish" onPress={() => setAddWishModalVisible(true)} />
-          </View>
+        {!initialLoading && (
+          <FadeIn delay={50}>
+            {!immersiveSkillsGarden && (
+              <View style={{ marginBottom: 24 }}>
+                <View style={{ marginBottom: 0, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+                  <View style={{ alignSelf: 'flex-start', flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
+                    <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: isProfilePhone ? 16 : 17, color: '#2d2d2d' }}>
+                      Your HD Wishes ({wishes.length})
+                    </Text>
+                  </View>
+                  <ProfileHeaderActionPill label="+ Wish" onPress={() => setAddWishModalVisible(true)} />
+                </View>
 
-          <View style={{
-            backgroundColor: '#fdf3dc',
-            borderRadius: 20,
-            borderTopLeftRadius: 0,
-            borderWidth: 1,
-            borderColor: 'rgba(222,193,129,0.7)',
-            shadowColor: '#bd9348',
-            shadowOpacity: 0.12,
-            shadowRadius: 18,
-            shadowOffset: { width: 0, height: 5 },
-            elevation: 3,
-            height: profileWishPanelHeight,
-            overflow: 'hidden',
-          }}>
-            <ScrollView
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={true}
-              contentContainerStyle={{
-                padding: 12,
-                paddingBottom: 12,
-                flexGrow: wishes.length === 0 ? 1 : undefined,
-              }}
-            >
-              {wishes.length === 0 ? (
-                <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
-                  <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
-                    No wishes yet. What do you need help with?
-                  </Text>
+                <View style={{
+                  backgroundColor: '#fdf3dc',
+                  borderRadius: 20,
+                  borderTopLeftRadius: 0,
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.7)',
+                  shadowColor: '#bd9348',
+                  shadowOpacity: 0.12,
+                  shadowRadius: 18,
+                  shadowOffset: { width: 0, height: 5 },
+                  elevation: 3,
+                  height: profileWishPanelHeight,
+                  overflow: 'hidden',
+                }}>
+                  <ScrollView
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator={true}
+                    contentContainerStyle={{
+                      padding: 12,
+                      paddingBottom: 12,
+                      flexGrow: wishes.length === 0 ? 1 : undefined,
+                    }}
+                  >
+                    {wishes.length === 0 ? (
+                      <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
+                          No wishes yet. What do you need help with?
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={{ gap: 12 }}>
+                        {activeWishes.map(renderWishCard)}
+                        {grantedWishes.length > 0 ? (
+                          <View
+                            key="granted-divider"
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                              borderTopWidth: activeWishes.length > 0 ? 1 : 0,
+                              borderBottomWidth: 1,
+                              borderColor: 'rgba(222,193,129,0.28)',
+                              backgroundColor: '#fbf1dc',
+                            }}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8e7a5e' }}>
+                              Granted ({grantedWishes.length})
+                            </Text>
+                            <Ionicons name="sparkles-outline" size={14} color="#bd9348" />
+                          </View>
+                        ) : null}
+                        {grantedWishes.map(renderWishCard)}
+                      </View>
+                    )}
+                  </ScrollView>
                 </View>
-              ) : (
-                <View style={{ gap: 12 }}>
-                  {activeWishes.map(renderWishCard)}
-                  {grantedWishes.length > 0 ? (
-                    <View
-                      key="granted-divider"
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderTopWidth: activeWishes.length > 0 ? 1 : 0,
-                        borderBottomWidth: 1,
-                        borderColor: 'rgba(222,193,129,0.28)',
-                        backgroundColor: '#fbf1dc',
-                      }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8e7a5e' }}>
-                        Granted ({grantedWishes.length})
-                      </Text>
-                      <Ionicons name="sparkles-outline" size={14} color="#bd9348" />
-                    </View>
-                  ) : null}
-                  {grantedWishes.map(renderWishCard)}
-                </View>
-              )}
-            </ScrollView>
-            </View>
-        </View>
+              </View>
+            )}
+          </FadeIn>
         )}
-        </FadeIn>}
 
         {/* Notification Settings */}
         {!immersiveSkillsGarden && Platform.OS !== 'web' && (
@@ -2499,10 +2360,56 @@ export default function ProfileScreen() {
         {!immersiveSkillsGarden && (
         <Pressable
           onPress={handleSignOut}
-          className="bg-red-50 p-4 rounded-xl items-center active:bg-red-100"
+          className="bg-red-50 p-4 rounded-xl items-center active:bg-red-100 mb-6"
         >
           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-600">Sign Out</Text>
         </Pressable>
+        )}
+
+        {/* Skills Garden */}
+        {!initialLoading && (
+          <FadeIn delay={50} style={immersiveSkillsGarden ? { flex: 1 } : undefined}>
+            <View
+              className={immersiveSkillsGarden ? 'mb-0' : compactProfileLandscape ? 'mb-2' : 'mb-6'}
+              style={immersiveSkillsGarden ? { flex: 1 } : undefined}
+              onLayout={(event) => {
+                skillsGardenY.current = event.nativeEvent.layout.y;
+              }}
+            >
+              {!immersiveSkillsGarden && (
+                <View className={compactProfileLandscape ? 'flex-row items-center justify-between mb-0 px-1' : 'flex-row items-center justify-between mb-1'}>
+                  <View>
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_700Bold',
+                        fontSize: compactProfileLandscape ? 14 : undefined,
+                        lineHeight: compactProfileLandscape ? 18 : undefined,
+                      }}
+                      className={compactProfileLandscape ? 'text-charcoal' : 'text-lg text-charcoal'}
+                    >
+                      Skills Garden 🌸
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: compactProfileLandscape ? 9 : 11, color: '#9ca3af', marginTop: compactProfileLandscape ? 0 : 2 }}>
+                      {bloomingSkillCount > 0
+                        ? `${bloomingSkillCount} skill flower${bloomingSkillCount !== 1 ? 's' : ''} blooming`
+                        : 'Seed your Skills Garden'}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              <SkillBubbleGarden
+                skills={skills}
+                editable
+                onUpdateSkill={handleSkillBubbleUpdate}
+                onDeleteSkill={handleDeleteSkill}
+                seedSkills={PREDEFINED_SKILLS}
+                onPlantSkill={handlePlantSkill}
+                onPlantSkills={handlePlantSkills}
+                onAddCustomSkill={() => setSkillsModalVisible(true)}
+                draftKey={profile?.id ? `the-hive:skills-garden:${profile.id}` : null}
+              />
+            </View>
+          </FadeIn>
         )}
       </ScrollView>
       </KeyboardAvoidingView>
