@@ -1155,7 +1155,7 @@ export default function ProfileScreen() {
     if (
       label === 'Choose your title'
       || label === 'Add your birthday'
-      || label === 'Share what people should ask you about'
+      || label === 'Share what HIVErs should ask you about'
       || label === 'Add your hometown'
     ) {
       startDeepQuiz(0);
@@ -1207,6 +1207,12 @@ export default function ProfileScreen() {
       value: fact,
     })),
   ];
+  const profileMiq = {
+    experiences: (profile as any).miq_experiences as string | null | undefined,
+    growth: (profile as any).miq_growth as string | null | undefined,
+    contribution: (profile as any).miq_contribution as string | null | undefined,
+  };
+  const hasProfileMiq = Object.values(profileMiq).some(value => hasProfileText(value));
   const activeWishes = wishes.filter(wish => wish.status !== 'fulfilled');
   const grantedWishes = wishes.filter(wish => wish.status === 'fulfilled');
   const renderDeepQuizField = ({
@@ -1311,7 +1317,7 @@ export default function ProfileScreen() {
           })}
           {renderDeepQuizBirthdayField()}
           {renderDeepQuizField({
-            label: 'People should ask me about',
+            label: 'HIVErs should ask me about',
             value: editKnownFor,
             onChangeText: setEditKnownFor,
             placeholder: 'Digital organization, party planning, weirdly good pep talks...',
@@ -1627,7 +1633,7 @@ export default function ProfileScreen() {
               { label: 'Add your birthday', actionLabel: 'Birthday', done: !!profile.birthday },
               { label: 'Add your phone', actionLabel: 'Phone', done: hasProfileText(profile.phone) },
               { label: 'Add your hometown', actionLabel: 'Hometown', done: hasProfileText((profile as any).hometown) },
-              { label: 'Share what people should ask you about', actionLabel: 'Ask me about', done: hasProfileText((profile as any).known_for) },
+              { label: 'Share what HIVErs should ask you about', actionLabel: 'Ask me about', done: hasProfileText((profile as any).known_for) },
               { label: 'Write a bio', actionLabel: 'Bio', done: hasProfileText((profile as any).bio) },
               { label: 'Add your current focus', actionLabel: 'Current focus', done: hasProfileText((profile as any).current_project) },
               {
@@ -1817,46 +1823,14 @@ export default function ProfileScreen() {
                 honeycombItems={profileHoneycombItems}
                 knownFor={(profile as any).known_for}
                 bio={(profile as any).bio}
-                knownForPlaceholder="Add the one thing people should ask you about."
+                miq={profileMiq}
+                knownForPlaceholder="Add the thing HIVErs should ask you about."
                 bioPlaceholder="Add your bio here."
+                miqPlaceholder="Experiences, growth, and contribution are still open. Clive can walk you through them."
+                miqActionLabel={hasProfileMiq ? 'Find with Clive' : 'Start'}
+                onMiqAction={handleFind3MiqWithClive}
+                showMiqWhenEmpty
               />
-
-              {((profile as any).miq_experiences || (profile as any).miq_growth || (profile as any).miq_contribution) ? (
-                <View className="bg-white rounded-xl shadow-sm p-4">
-                  <View className="flex-row items-center justify-between mb-3">
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/50">3 Most Important Questions</Text>
-                    <Pressable onPress={handleFind3MiqWithClive} className="bg-gold-light px-3 py-1 rounded-full active:opacity-70">
-                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">Find with Clive</Text>
-                    </Pressable>
-                  </View>
-                  {[
-                    ['Experiences', (profile as any).miq_experiences],
-                    ['Growth', (profile as any).miq_growth],
-                    ['Contribution', (profile as any).miq_contribution],
-                  ].map(([label, value]) => (
-                    <View key={label as string} className="mb-3 last:mb-0">
-                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-xs text-gold mb-1">{label as string}</Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className={value ? 'text-charcoal leading-6' : 'text-charcoal/40'}>
-                        {(value as string) || 'Not set'}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Pressable onPress={handleFind3MiqWithClive} className="bg-white rounded-xl shadow-sm p-4 active:opacity-80">
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-1 pr-3">
-                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-1">Answer your 3MIQ</Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 leading-5">
-                        Experiences, growth, and contribution are still open. Clive can walk you through them.
-                      </Text>
-                    </View>
-                    <View className="bg-gold-light px-3 py-2 rounded-full">
-                      <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">Start</Text>
-                    </View>
-                  </View>
-                </Pressable>
-              )}
             </View>
           ) : (
           <View className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -2017,16 +1991,16 @@ export default function ProfileScreen() {
               )}
             </View>
 
-            {/* Ask me about */}
+            {/* HIVE ask */}
             <View className="p-4 border-b border-cream">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Ask me about</Text>
+              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">HIVErs should ask me about</Text>
               {isEditing ? (
                 <TextInput
                   value={editKnownFor}
                   onChangeText={setEditKnownFor}
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal text-base p-0"
-                  placeholder="What should people come to you for?"
+                  placeholder="What should HIVErs come to you for?"
                   placeholderTextColor="#9CA3AF"
                 />
               ) : (

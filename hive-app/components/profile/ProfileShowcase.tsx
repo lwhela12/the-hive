@@ -1,12 +1,24 @@
-import { StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
 import { ProfileHoneycombCluster, type HoneycombItem } from './ProfileHoneycombCluster';
+
+type ProfileMiqAnswers = {
+  experiences?: string | null;
+  growth?: string | null;
+  contribution?: string | null;
+};
 
 type ProfileShowcaseProps = {
   honeycombItems: HoneycombItem[];
   knownFor?: string | null;
   bio?: string | null;
+  miq?: ProfileMiqAnswers;
   knownForPlaceholder?: string;
   bioPlaceholder?: string;
+  miqPlaceholder?: string;
+  miqActionLabel?: string;
+  onMiqAction?: () => void;
+  showMiqWhenEmpty?: boolean;
   showEmptyCells?: boolean;
   style?: StyleProp<ViewStyle>;
 };
@@ -18,27 +30,168 @@ function clean(value?: string | null) {
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
+function cleanKnownFor(value?: string | null) {
+  const text = clean(value);
+  if (!text) return null;
+
+  const stripped = text
+    .replace(/^["']?\s*(?:hivers|people)\s+should\s+ask\s+me\s+about[\s:,.!-]*/i, '')
+    .replace(/["']$/, '')
+    .trim();
+
+  return stripped.length > 0 ? stripped : text;
+}
+
+function StoryCard({
+  label,
+  children,
+  canExpand,
+  expanded,
+  onToggle,
+  actionLabel,
+  onAction,
+  style,
+}: {
+  label: string;
+  children: ReactNode;
+  canExpand?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={[styles.storyCard, style]}>
+      <View style={styles.storyHeader}>
+        <Text style={[styles.sectionLabel, styles.storyLabel]}>
+          {label}
+        </Text>
+        {onAction ? (
+          <Pressable
+            onPress={onAction}
+            accessibilityRole="button"
+            style={styles.storyAction}
+          >
+            <Text style={styles.storyActionText}>
+              {actionLabel || 'Open'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {children}
+
+      {canExpand && onToggle ? (
+        <Pressable
+          onPress={onToggle}
+          accessibilityRole="button"
+          style={styles.expandButton}
+        >
+          <Text style={styles.expandButtonText}>
+            {expanded ? 'Show less' : 'Read more'}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export function ProfileShowcase({
   honeycombItems,
   knownFor,
   bio,
+  miq,
   knownForPlaceholder = 'Not shared yet.',
   bioPlaceholder = 'No bio shared yet.',
+  miqPlaceholder = '3MIQ answers are not shared yet.',
+  miqActionLabel,
+  onMiqAction,
+  showMiqWhenEmpty = false,
   showEmptyCells = true,
   style,
 }: ProfileShowcaseProps) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= DESKTOP_BREAKPOINT;
   const isPhone = width < 640;
-  const knownForText = clean(knownFor);
+  const [bioExpanded, setBioExpanded] = useState(false);
+  const [miqExpanded, setMiqExpanded] = useState(false);
+  const knownForText = cleanKnownFor(knownFor);
   const bioText = clean(bio);
+  const miqItems = [
+    { label: 'Experiences', value: clean(miq?.experiences) },
+    { label: 'Growth', value: clean(miq?.growth) },
+    { label: 'Contribution', value: clean(miq?.contribution) },
+  ].filter(item => item.value);
+  const hasMiq = miqItems.length > 0;
+  const showMiqCard = hasMiq || showMiqWhenEmpty || !!onMiqAction;
+  const bioCanExpand = !!bioText && bioText.length > (isDesktop ? 360 : 220);
+  const miqCanExpand = hasMiq && (
+    miqItems.reduce((total, item) => total + (item.value?.length ?? 0), 0) > (isDesktop ? 280 : 190)
+    || miqItems.some(item => (item.value?.length ?? 0) > 95)
+  );
+  const bioLines = bioExpanded ? undefined : isDesktop ? 6 : 4;
+  const miqLines = miqExpanded ? undefined : isDesktop ? 2 : 2;
+  const bioCard = (
+    <StoryCard
+      label="Bio"
+      canExpand={bioCanExpand}
+      expanded={bioExpanded}
+      onToggle={() => setBioExpanded(value => !value)}
+      style={isDesktop && showMiqCard ? styles.desktopSplitStoryCard : undefined}
+    >
+      <Text
+        numberOfLines={bioLines}
+        style={[
+          styles.storyText,
+          isPhone && styles.mobileStoryText,
+          !bioText && styles.placeholderText,
+        ]}
+      >
+        {bioText || bioPlaceholder}
+      </Text>
+    </StoryCard>
+  );
+  const miqCard = showMiqCard ? (
+    <StoryCard
+      label="3MIQ"
+      actionLabel={miqActionLabel}
+      onAction={onMiqAction}
+      canExpand={miqCanExpand}
+      expanded={miqExpanded}
+      onToggle={() => setMiqExpanded(value => !value)}
+      style={isDesktop ? styles.desktopSplitStoryCard : undefined}
+    >
+      {hasMiq ? (
+        <View style={styles.miqList}>
+          {miqItems.map(item => (
+            <View key={item.label} style={styles.miqItem}>
+              <Text style={styles.miqLabel}>
+                {item.label}
+              </Text>
+              <Text
+                numberOfLines={miqLines}
+                style={[styles.storyText, isPhone && styles.mobileStoryText]}
+              >
+                {item.value}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={[styles.storyText, isPhone && styles.mobileStoryText, styles.placeholderText]}>
+          {miqPlaceholder}
+        </Text>
+      )}
+    </StoryCard>
+  ) : null;
 
   if (isDesktop) {
     return (
       <View style={[styles.desktopRow, style]}>
         <View style={[styles.desktopSideCard, styles.askCard]}>
           <Text style={[styles.sectionLabel, styles.askLabel]}>
-            People should ask me about
+            HIVErs should ask me about
           </Text>
           <Text style={[styles.askText, !knownForText && styles.placeholderText]}>
             {knownForText ? `"${knownForText}"` : knownForPlaceholder}
@@ -54,13 +207,9 @@ export function ProfileShowcase({
           />
         </View>
 
-        <View style={[styles.desktopSideCard, styles.bioCard]}>
-          <Text style={[styles.sectionLabel, styles.bioLabel]}>
-            Bio
-          </Text>
-          <Text style={[styles.bioText, !bioText && styles.placeholderText]}>
-            {bioText || bioPlaceholder}
-          </Text>
+        <View style={styles.desktopStoryStack}>
+          {bioCard}
+          {miqCard}
         </View>
       </View>
     );
@@ -70,7 +219,7 @@ export function ProfileShowcase({
     <View style={[styles.mobileStack, style]}>
       <View style={styles.mobileAskSection}>
         <Text style={[styles.sectionLabel, styles.askLabel]}>
-          People should ask me about
+          HIVErs should ask me about
         </Text>
         <Text
           style={[
@@ -90,13 +239,9 @@ export function ProfileShowcase({
         items={honeycombItems}
       />
 
-      <View style={styles.mobileBioCard}>
-        <Text style={[styles.sectionLabel, styles.bioLabel]}>
-          Bio
-        </Text>
-        <Text style={[styles.mobileBioText, !bioText && styles.placeholderText]}>
-          {bioText || bioPlaceholder}
-        </Text>
+      <View style={styles.mobileStoryStack}>
+        {bioCard}
+        {miqCard}
       </View>
     </View>
   );
@@ -123,15 +268,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#fffdf5',
     borderColor: 'rgba(222,193,129,0.35)',
   },
-  bioCard: {
+  desktopStoryStack: {
     width: 330,
-    borderRadius: 34,
-    backgroundColor: '#fff',
-    borderColor: 'rgba(45,45,45,0.08)',
-    shadowColor: '#2d2d2d',
-    shadowOpacity: 0.06,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
+    minHeight: 560,
+    gap: 14,
   },
   desktopHoneycomb: {
     width: 540,
@@ -147,8 +287,9 @@ const styles = StyleSheet.create({
   askLabel: {
     color: '#bd9348',
   },
-  bioLabel: {
+  storyLabel: {
     color: '#9ca3af',
+    marginBottom: 0,
   },
   askText: {
     fontFamily: 'LibreBaskerville_400Regular',
@@ -156,12 +297,6 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     color: '#2d2d2d',
     fontStyle: 'italic',
-  },
-  bioText: {
-    fontFamily: 'Lato_400Regular',
-    fontSize: 15,
-    lineHeight: 24,
-    color: '#2d2d2d',
   },
   mobileStack: {
     gap: 16,
@@ -180,22 +315,74 @@ const styles = StyleSheet.create({
     fontSize: 19,
     lineHeight: 28,
   },
-  mobileBioCard: {
-    borderRadius: 28,
+  mobileStoryStack: {
+    gap: 12,
+  },
+  storyCard: {
+    borderRadius: 24,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: 'rgba(45,45,45,0.08)',
-    padding: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
     shadowColor: '#2d2d2d',
     shadowOpacity: 0.05,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 },
   },
-  mobileBioText: {
+  desktopSplitStoryCard: {
+    flex: 1,
+  },
+  storyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 10,
+  },
+  storyAction: {
+    backgroundColor: '#fffaf0',
+    borderWidth: 1,
+    borderColor: 'rgba(222,193,129,0.55)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  storyActionText: {
+    fontFamily: 'Lato_700Bold',
+    fontSize: 11,
+    color: '#bd9348',
+  },
+  storyText: {
     fontFamily: 'Lato_400Regular',
+    fontSize: 14,
+    lineHeight: 22,
+    color: '#2d2d2d',
+  },
+  mobileStoryText: {
     fontSize: 14.5,
     lineHeight: 23,
-    color: '#2d2d2d',
+  },
+  miqList: {
+    gap: 10,
+  },
+  miqItem: {
+    gap: 3,
+  },
+  miqLabel: {
+    fontFamily: 'Lato_700Bold',
+    fontSize: 11,
+    color: '#bd9348',
+    textTransform: 'uppercase',
+  },
+  expandButton: {
+    alignSelf: 'flex-start',
+    marginTop: 12,
+  },
+  expandButtonText: {
+    fontFamily: 'Lato_700Bold',
+    fontSize: 12,
+    color: '#bd9348',
   },
   placeholderText: {
     opacity: 0.52,

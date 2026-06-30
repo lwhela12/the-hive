@@ -280,16 +280,6 @@ function Avatar({ uri, name, size }: { uri?: string | null; name: string; size: 
   );
 }
 
-function InfoRow({ label, value }: { label: string; value?: string | null }) {
-  if (!value) return null;
-  return (
-    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', width: 92 }}>{label}</Text>
-      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#2d2d2d', flex: 1, lineHeight: 18 }}>{value}</Text>
-    </View>
-  );
-}
-
 function ProfilePromptInput({
   label,
   placeholder,
@@ -1241,8 +1231,8 @@ function MemberDetailModal({
                       maxLength={PROFILE_PROMPT_LIMITS.short}
                     />
                     <ProfilePromptInput
-                      label="Ask me about"
-                      placeholder="What should HIVE members come to you for?"
+                      label="HIVErs should ask me about"
+                      placeholder="What should HIVErs come to you for?"
                       value={draftKnownFor}
                       onChangeText={setDraftKnownFor}
                       maxLength={PROFILE_PROMPT_LIMITS.short}
@@ -1410,19 +1400,13 @@ function MemberDetailModal({
               honeycombItems={memberHoneycombItems}
               knownFor={member.known_for}
               bio={member.bio}
+              miq={{
+                experiences: member.miq_experiences,
+                growth: member.miq_growth,
+                contribution: member.miq_contribution,
+              }}
               style={{ marginBottom: 20 }}
             />
-
-            {(member.miq_experiences || member.miq_growth || member.miq_contribution) && (
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 10 }}>3 MOST IMPORTANT QUESTIONS</Text>
-                <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16 }}>
-                  <InfoRow label="Experiences" value={member.miq_experiences} />
-                  <InfoRow label="Growth" value={member.miq_growth} />
-                  <InfoRow label="Contribution" value={member.miq_contribution} />
-                </View>
-              </View>
-            )}
 
             {/* Wishes */}
             {publicWishes.length > 0 && (
