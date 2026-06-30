@@ -24,6 +24,7 @@ import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileShowcase } from '../../components/profile/ProfileShowcase';
 import { WishCombCard } from '../../components/profile/WishCombCard';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
+import { WishStatusTabs, type WishStatusTabKey } from '../../components/hive/WishStatusTabs';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { PREDEFINED_SKILLS } from '../../components/skills/constants';
@@ -129,6 +130,7 @@ export default function ProfileScreen() {
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [managingWish, setManagingWish] = useState<Wish | null>(null);
+  const [wishStatusTab, setWishStatusTab] = useState<WishStatusTabKey>('public');
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -1215,6 +1217,12 @@ export default function ProfileScreen() {
   const hasProfileMiq = Object.values(profileMiq).some(value => hasProfileText(value));
   const activeWishes = wishes.filter(wish => wish.status !== 'fulfilled');
   const grantedWishes = wishes.filter(wish => wish.status === 'fulfilled');
+  const visibleProfileWishes = wishStatusTab === 'granted' ? grantedWishes : activeWishes;
+  const profileWishEmptyText = wishes.length === 0
+    ? 'No wishes yet. What do you need help with?'
+    : wishStatusTab === 'granted'
+      ? 'No granted wishes yet.'
+      : 'No open wishes yet.';
   const renderDeepQuizField = ({
     label,
     value,
@@ -2232,46 +2240,43 @@ export default function ProfileScreen() {
                   height: profileWishPanelHeight,
                   overflow: 'hidden',
                 }}>
+                  <WishStatusTabs
+                    activeTab={wishStatusTab}
+                    onChange={setWishStatusTab}
+                    tabs={[
+                      {
+                        key: 'public',
+                        label: 'Open',
+                        count: activeWishes.length,
+                        icon: 'megaphone-outline',
+                      },
+                      {
+                        key: 'granted',
+                        label: 'Granted',
+                        count: grantedWishes.length,
+                        icon: 'sparkles-outline',
+                      },
+                    ]}
+                  />
                   <ScrollView
                     nestedScrollEnabled
                     showsVerticalScrollIndicator={true}
+                    style={{ flex: 1 }}
                     contentContainerStyle={{
                       padding: 12,
                       paddingBottom: 12,
-                      flexGrow: wishes.length === 0 ? 1 : undefined,
+                      flexGrow: visibleProfileWishes.length === 0 ? 1 : undefined,
                     }}
                   >
-                    {wishes.length === 0 ? (
+                    {visibleProfileWishes.length === 0 ? (
                       <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
                         <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
-                          No wishes yet. What do you need help with?
+                          {profileWishEmptyText}
                         </Text>
                       </View>
                     ) : (
                       <View style={{ gap: 12 }}>
-                        {activeWishes.map(renderWishCard)}
-                        {grantedWishes.length > 0 ? (
-                          <View
-                            key="granted-divider"
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              paddingHorizontal: 12,
-                              paddingVertical: 8,
-                              borderTopWidth: activeWishes.length > 0 ? 1 : 0,
-                              borderBottomWidth: 1,
-                              borderColor: 'rgba(222,193,129,0.28)',
-                              backgroundColor: '#fbf1dc',
-                            }}
-                          >
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8e7a5e' }}>
-                              Granted ({grantedWishes.length})
-                            </Text>
-                            <Ionicons name="sparkles-outline" size={14} color="#bd9348" />
-                          </View>
-                        ) : null}
-                        {grantedWishes.map(renderWishCard)}
+                        {visibleProfileWishes.map(renderWishCard)}
                       </View>
                     )}
                   </ScrollView>

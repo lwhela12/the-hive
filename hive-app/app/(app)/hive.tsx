@@ -16,6 +16,7 @@ import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { WishCard } from '../../components/hive/WishCard';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
+import { WishStatusTabs, type WishStatusTabKey } from '../../components/hive/WishStatusTabs';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import {
   EventsListSkeleton,
@@ -1271,6 +1272,7 @@ export default function HiveScreen() {
     loading: surveysLoading,
   } = useSurveys(communityId ?? undefined, profile?.id);
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
+  const [wishStatusTab, setWishStatusTab] = useState<WishStatusTabKey>('public');
   const pendingSurveyIds = new Set(pendingSurveys.map((survey) => survey.id));
   const activeSurveyResponse = activeSurvey ? myResponses.get(activeSurvey.id) : undefined;
   const activeSurveyIsEditing = !!activeSurvey && !!activeSurveyResponse && !pendingSurveyIds.has(activeSurvey.id);
@@ -1283,6 +1285,10 @@ export default function HiveScreen() {
     userId: profile?.id,
     survey: activeSurvey,
   });
+  const visibleHdWishes = wishStatusTab === 'granted' ? grantedWishes : publicWishes;
+  const hdWishesEmptyText = wishStatusTab === 'granted'
+    ? 'No granted HD wishes yet'
+    : 'No public HD wishes yet';
 
   const openSurvey = useCallback((survey: Survey) => {
     setActiveSurvey(survey);
@@ -2541,67 +2547,51 @@ export default function HiveScreen() {
               height: wishPanelHeight,
               overflow: 'hidden',
             }}>
+              <WishStatusTabs
+                activeTab={wishStatusTab}
+                onChange={setWishStatusTab}
+                tabs={[
+                  {
+                    key: 'public',
+                    label: 'Public HD Wishes',
+                    count: publicWishes.length,
+                    icon: 'megaphone-outline',
+                  },
+                  {
+                    key: 'granted',
+                    label: 'Granted',
+                    count: grantedWishes.length,
+                    icon: 'sparkles-outline',
+                  },
+                ]}
+              />
               <ScrollView
                 nestedScrollEnabled
                 showsVerticalScrollIndicator={true}
+                style={{ flex: 1 }}
                 contentContainerStyle={{
                   padding: 12,
                   paddingBottom: 12,
-                  flexGrow: publicWishes.length + grantedWishes.length === 0 ? 1 : undefined,
+                  flexGrow: visibleHdWishes.length === 0 ? 1 : undefined,
                 }}
               >
-                {publicWishes.length + grantedWishes.length === 0 ? (
+                {visibleHdWishes.length === 0 ? (
                   <View className="bg-white rounded-xl p-6 shadow-sm items-center">
                     <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
-                      No HD wishes yet
+                      {hdWishesEmptyText}
                     </Text>
                   </View>
                 ) : (
-                  <>
-                    {publicWishes.map((wish) => (
-                      <WishCard
-                        key={wish.id}
-                        wish={wish}
-                        onPress={() => openWishDetail(wish)}
-                        canEdit={canOpenWishActions(wish)}
-                        canDelete={canDeleteWish(wish)}
-                        onManage={() => setManagingWish(wish)}
-                      />
-                    ))}
-                    {grantedWishes.length > 0 ? (
-                      <View
-                        key="granted-divider"
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 10,
-                          paddingHorizontal: 14,
-                          paddingVertical: 8,
-                          borderTopWidth: publicWishes.length > 0 ? 1 : 0,
-                          borderBottomWidth: 1,
-                          borderColor: 'rgba(222,193,129,0.28)',
-                          backgroundColor: '#fbf1dc',
-                          marginBottom: 12,
-                        }}
-                      >
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e7a5e' }}>
-                          Granted ({grantedWishes.length})
-                        </Text>
-                        <Ionicons name="sparkles-outline" size={14} color="#bd9348" />
-                      </View>
-                    ) : null}
-                    {grantedWishes.map((wish) => (
-                      <WishCard
-                        key={wish.id}
-                        wish={wish}
-                        onPress={() => openWishDetail(wish)}
-                        canEdit={canOpenWishActions(wish)}
-                        canDelete={canDeleteWish(wish)}
-                        onManage={() => setManagingWish(wish)}
-                      />
-                    ))}
-                  </>
+                  visibleHdWishes.map((wish) => (
+                    <WishCard
+                      key={wish.id}
+                      wish={wish}
+                      onPress={() => openWishDetail(wish)}
+                      canEdit={canOpenWishActions(wish)}
+                      canDelete={canDeleteWish(wish)}
+                      onManage={() => setManagingWish(wish)}
+                    />
+                  ))
                 )}
               </ScrollView>
             </View>
