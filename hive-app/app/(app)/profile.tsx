@@ -182,7 +182,7 @@ export default function ProfileScreen() {
         .order('created_at', { ascending: true }),
       supabase
         .from('wishes')
-        .select('*, board_category:board_categories(id,name,topic_kind)')
+        .select('*, board_category:board_categories(id,name,topic_kind), granters:wish_granters(*, granter:profiles!granter_id(*))')
         .eq('user_id', profile.id)
         .eq('community_id', communityId)
         .order('created_at', { ascending: false }),
@@ -200,6 +200,8 @@ export default function ProfileScreen() {
     if (
       wishesError &&
       (String(wishesError.message ?? '').includes('board_categories') ||
+        String(wishesError.message ?? '').includes('wish_granters') ||
+        String(wishesError.message ?? '').includes('granter') ||
         String(wishesError.message ?? '').includes('relationship') ||
         String(wishesError.message ?? '').includes('schema cache'))
     ) {

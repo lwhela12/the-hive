@@ -3,13 +3,15 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDateShort } from '../../lib/dateUtils';
 import { getHdWishStatusLabel, getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
 import { Avatar } from '../ui/Avatar';
-import type { Wish } from '../../types';
+import type { Profile, Wish, WishGranter } from '../../types';
 
 const publicBeeIcon = require('../../assets/BEE ONLY IN GOLD BG.png');
 const ACTIVE_WISH_CARD_BACKGROUND = '#fff8e8';
 const GRANTED_WISH_CARD_BACKGROUND = '#fffdf5';
 
-type WishCombCardWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish>;
+type WishCombCardWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish> & {
+  granters?: (WishGranter & { granter?: Profile })[];
+};
 
 type WishCombCardProps = {
   wish: WishCombCardWish;
@@ -95,6 +97,10 @@ export function WishCombCard({
   const isPrivate = wish.status === 'private';
   const ownerDisplayName = (ownerName ?? wish.user?.name ?? '').trim();
   const ownerAvatarUrl = ownerAvatarUrlProp ?? wish.user?.avatar_url ?? null;
+  const granters = wish.granters || [];
+  const displayGranters = granters.filter((g) => g.granter).slice(0, 3);
+  const extraGranters = Math.max(granters.filter((g) => g.granter).length - displayGranters.length, 0);
+  const showGranters = isGranted && displayGranters.length > 0;
   const useHomeWishLayout = !isPrivate && ownerDisplayName.length > 0;
   const showStatusPill = !useHomeWishLayout && !compact;
   const quickTitle = getWishQuickTitle(wish);
@@ -173,6 +179,30 @@ export function WishCombCard({
             <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
               {dateLabel}
             </Text>
+            {showGranters && (
+              <View style={styles.granterRow}>
+                <Text style={styles.granterLabel}>by</Text>
+                <View style={styles.granterAvatars}>
+                  {displayGranters.map((g, index) => (
+                    <View
+                      key={g.id}
+                      style={{ marginLeft: index > 0 ? -8 : 0, zIndex: 10 - index }}
+                    >
+                      <Avatar
+                        name={g.granter?.name || 'Unknown'}
+                        url={g.granter?.avatar_url}
+                        size={24}
+                      />
+                    </View>
+                  ))}
+                  {extraGranters > 0 && (
+                    <View style={styles.extraGranterCount}>
+                      <Text style={styles.extraGranterText}>+{extraGranters}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -234,6 +264,30 @@ export function WishCombCard({
             <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
               {dateLabel}
             </Text>
+            {showGranters && (
+              <View style={styles.granterRow}>
+                <Text style={styles.granterLabel}>by</Text>
+                <View style={styles.granterAvatars}>
+                  {displayGranters.map((g, index) => (
+                    <View
+                      key={g.id}
+                      style={{ marginLeft: index > 0 ? -8 : 0, zIndex: 10 - index }}
+                    >
+                      <Avatar
+                        name={g.granter?.name || 'Unknown'}
+                        url={g.granter?.avatar_url}
+                        size={24}
+                      />
+                    </View>
+                  ))}
+                  {extraGranters > 0 && (
+                    <View style={styles.extraGranterCount}>
+                      <Text style={styles.extraGranterText}>+{extraGranters}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -401,6 +455,35 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
     marginTop: 12,
+  },
+  granterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 'auto',
+  },
+  granterLabel: {
+    fontFamily: 'Lato_400Regular',
+    color: 'rgba(45,45,45,0.5)',
+    fontSize: 12,
+    marginRight: 8,
+  },
+  granterAvatars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  extraGranterCount: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(45,45,45,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -8,
+  },
+  extraGranterText: {
+    fontFamily: 'Lato_700Bold',
+    color: '#2d2d2d',
+    fontSize: 11,
   },
   dateText: {
     fontFamily: 'Lato_400Regular',

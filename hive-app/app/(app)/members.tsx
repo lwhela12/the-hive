@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { Profile, Skill, UserRole, Wish } from '../../types';
+import type { Profile, Skill, UserRole, Wish, WishGranter } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
@@ -26,7 +26,9 @@ import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
 
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
-type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish>;
+type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish> & {
+  granters?: (WishGranter & { granter?: Profile })[];
+};
 type WishStatusTabKey = HdWishTabKey;
 
 interface MemberData {
@@ -496,16 +498,46 @@ function MemberDetailModal({
     setMyWishes(allVisibleMemberWishes);
 
     const fetchVisibleWishes = async () => {
-      let { data, error } = await supabase
+      let { data, error } = await (supabase as any)
         .from('wishes')
-        .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+        .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
         .eq('user_id', member.id)
         .eq('community_id', communityId)
         .in('status', ['public', 'fulfilled'])
         .order('created_at', { ascending: false });
 
       if (error && String(error.message ?? '').includes('title')) {
-        const fallback = await supabase
+        const fallback = await (supabase as any)
+          .from('wishes')
+          .select('id, description, status, is_active, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+          .eq('user_id', member.id)
+          .eq('community_id', communityId)
+          .in('status', ['public', 'fulfilled'])
+          .order('created_at', { ascending: false });
+        data = (fallback.data ?? []).map((wish: any) => ({ ...wish, title: null }));
+        error = fallback.error;
+      }
+
+      if (
+        error &&
+        (String(error.message ?? '').includes('wish_granters') ||
+          String(error.message ?? '').includes('granter') ||
+          String(error.message ?? '').includes('relationship') ||
+          String(error.message ?? '').includes('schema cache'))
+      ) {
+        const fallback = await (supabase as any)
+          .from('wishes')
+          .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+          .eq('user_id', member.id)
+          .eq('community_id', communityId)
+          .in('status', ['public', 'fulfilled'])
+          .order('created_at', { ascending: false });
+        data = fallback.data;
+        error = fallback.error;
+      }
+
+      if (error && String(error.message ?? '').includes('title')) {
+        const fallback = await (supabase as any)
           .from('wishes')
           .select('id, description, status, is_active, created_at, fulfilled_at, thank_you_message')
           .eq('user_id', member.id)
@@ -519,7 +551,7 @@ function MemberDetailModal({
       if (error) {
         console.warn('[Members] my wishes refresh failed', error);
       } else if (data) {
-        setMyWishes(data);
+        setMyWishes(data as MemberWish[]);
       }
       setWishesLoading(false);
     };
@@ -1905,7 +1937,7 @@ export default function MembersScreen() {
           .in('user_id', userIds),
         supabase
           .from('wishes')
-          .select('user_id, id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+          .select('user_id, id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
           .eq('community_id', communityId)
           .in('user_id', userIds)
           .in('status', ['public', 'fulfilled'])
@@ -1925,6 +1957,36 @@ export default function MembersScreen() {
 
       let wishesData = (wishesRes.data ?? null) as any[] | null;
       let wishesError = wishesRes.error;
+      if (wishesError && String(wishesError.message ?? '').includes('title')) {
+        const fallback = await supabase
+          .from('wishes')
+          .select('user_id, id, description, status, is_active, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+          .eq('community_id', communityId)
+          .in('user_id', userIds)
+          .in('status', ['public', 'fulfilled'])
+          .order('created_at', { ascending: false });
+        wishesData = (fallback.data ?? []).map((wish: any) => ({ ...wish, title: null }));
+        wishesError = fallback.error;
+      }
+
+      if (
+        wishesError &&
+        (String(wishesError.message ?? '').includes('wish_granters') ||
+          String(wishesError.message ?? '').includes('granter') ||
+          String(wishesError.message ?? '').includes('relationship') ||
+          String(wishesError.message ?? '').includes('schema cache'))
+      ) {
+        const fallback = await supabase
+          .from('wishes')
+          .select('user_id, id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+          .eq('community_id', communityId)
+          .in('user_id', userIds)
+          .in('status', ['public', 'fulfilled'])
+          .order('created_at', { ascending: false });
+        wishesData = fallback.data ?? [];
+        wishesError = fallback.error;
+      }
+
       if (wishesError && String(wishesError.message ?? '').includes('title')) {
         const fallback = await supabase
           .from('wishes')
@@ -1966,6 +2028,7 @@ export default function MembersScreen() {
           created_at: w.created_at,
           fulfilled_at: w.fulfilled_at,
           thank_you_message: w.thank_you_message,
+          granters: w.granters ?? [],
         });
       });
 
