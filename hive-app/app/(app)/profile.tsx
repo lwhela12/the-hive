@@ -1377,6 +1377,8 @@ export default function ProfileScreen() {
     <WishCombCard
       key={wish.id}
       wish={wish}
+      ownerName={profile.name}
+      ownerAvatarUrl={profile.avatar_url}
       compact={isProfilePhone}
       onOpen={(selectedWish) => openWishDetail(selectedWish as Wish)}
       onManage={(selectedWish) => setManagingWish(selectedWish as Wish)}

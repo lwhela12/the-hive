@@ -85,7 +85,7 @@ function PublicBeesIcon({ compact = false }: { compact?: boolean }) {
 export function WishCombCard({
   wish,
   ownerName,
-  ownerAvatarUrl,
+  ownerAvatarUrl: ownerAvatarUrlProp,
   compact = false,
   onOpen,
   onManage,
@@ -93,12 +93,13 @@ export function WishCombCard({
   const status = getStatusMeta(wish.status);
   const isGranted = wish.status === 'fulfilled';
   const isPrivate = wish.status === 'private';
-  const ownerDisplayName = (ownerName ?? '').trim();
+  const ownerDisplayName = (ownerName ?? wish.user?.name ?? '').trim();
+  const ownerAvatarUrl = ownerAvatarUrlProp ?? wish.user?.avatar_url ?? null;
   const useHomeWishLayout = !isPrivate && ownerDisplayName.length > 0;
   const showStatusPill = !useHomeWishLayout && !compact;
   const quickTitle = getWishQuickTitle(wish);
   const bodyPreview = getWishBodyPreview(wish);
-  const showBodyPreview = !compact && hasSeparateWishTitle(wish);
+  const showBodyPreview = (useHomeWishLayout || !compact) && hasSeparateWishTitle(wish);
   const dateLabel = isGranted && wish.fulfilled_at
     ? `${getHdWishStatusLabel('fulfilled')} · ${formatDateShort(wish.fulfilled_at)}`
     : wish.created_at
@@ -106,7 +107,8 @@ export function WishCombCard({
       : null;
   const cardStyle = [
     styles.card,
-    compact ? styles.cardCompact : null,
+    useHomeWishLayout ? styles.cardHome : null,
+    compact && !useHomeWishLayout ? styles.cardCompact : null,
     isPrivate ? styles.cardPrivate : styles.cardPublic,
     isGranted ? styles.cardGranted : null,
   ];
@@ -149,7 +151,7 @@ export function WishCombCard({
             styles.homeWishTitle,
             isGranted ? styles.descriptionGranted : styles.descriptionOpen,
           ]}
-          numberOfLines={compact ? 1 : 2}
+          numberOfLines={2}
         >
           {quickTitle}
         </Text>
@@ -166,7 +168,7 @@ export function WishCombCard({
           </Text>
         )}
 
-        {!compact && dateLabel && (
+        {dateLabel && (
           <View style={styles.footerRow}>
             <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
               {dateLabel}
@@ -276,6 +278,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
+  },
+  cardHome: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
   cardPressed: {
     opacity: 0.84,

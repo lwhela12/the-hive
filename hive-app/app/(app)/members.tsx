@@ -955,6 +955,8 @@ function MemberDetailModal({
                       <View key={wish.id} style={{ marginBottom: 12 }}>
                         <WishCombCard
                           wish={wish}
+                          ownerName={member.name}
+                          ownerAvatarUrl={member.avatar_url}
                           compact={isPhoneProfile}
                           onOpen={openWishDetail}
                         />
@@ -1420,6 +1422,8 @@ function MemberDetailModal({
                     <View key={w.id} style={{ marginBottom: 8 }}>
                       <WishCombCard
                         wish={w}
+                        ownerName={member.name}
+                        ownerAvatarUrl={member.avatar_url}
                         compact={isPhoneProfile}
                         onOpen={openWishDetail}
                       />
@@ -1440,6 +1444,8 @@ function MemberDetailModal({
                       <View key={w.id} style={{ marginBottom: 8 }}>
                         <WishCombCard
                           wish={w}
+                          ownerName={member.name}
+                          ownerAvatarUrl={member.avatar_url}
                           compact={isPhoneProfile}
                           onOpen={openWishDetail}
                         />
@@ -1511,6 +1517,8 @@ function MemberDetailModal({
                       <View key={wish.id} style={{ marginBottom: 10 }}>
                         <WishCombCard
                           wish={wish}
+                          ownerName={member.name}
+                          ownerAvatarUrl={member.avatar_url}
                           compact={isPhoneProfile}
                           onOpen={openWishDetail}
                         />
