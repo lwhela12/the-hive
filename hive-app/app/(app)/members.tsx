@@ -2145,7 +2145,7 @@ export default function MembersScreen() {
                     );
                     const matchBadgeTop = Math.round(honeycombCardHeight * (isCompactHoneycomb ? 0.11 : 0.12));
                     const wishChip = `${publicWishes.length} wish${publicWishes.length === 1 ? '' : 'es'}`;
-                    const sharedAnswerCount = hasDailyMatch ? member.dailyMatchSharedCount ?? 0 : 0;
+                    const sharedAnswerCount = member.questionAnswerCount;
                     const connectionChip = sharedAnswerCount > 0
                       ? isCompactHoneycomb
                         ? `${sharedAnswerCount} shared`
