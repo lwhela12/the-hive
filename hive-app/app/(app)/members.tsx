@@ -22,9 +22,12 @@ import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { WishCombCard } from '../../components/profile/WishCombCard';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
+import { HeaderTabs } from '../../components/ui/HeaderTabs';
+import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
 
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish>;
+type WishStatusTabKey = HdWishTabKey;
 
 interface MemberData {
   id: string;
@@ -365,9 +368,10 @@ function MemberDetailModal({
   const isPhoneProfile = viewportWidth < 640;
   const currentWishes = member.wishes.filter(w => w.status === 'public' && w.is_active !== false);
   const grantedWishes = member.wishes.filter(w => w.status === 'fulfilled');
-  const visibleMemberWishes = [...currentWishes, ...grantedWishes].sort((a, b) => (
+  const allVisibleMemberWishes = [...currentWishes, ...grantedWishes].sort((a, b) => (
     (b.created_at ?? '').localeCompare(a.created_at ?? '')
   ));
+  const memberWishPanelHeight = isPhoneProfile ? 500 : 520;
   const roleLabel = ROLE_LABELS[member.role];
   const { getOrCreateDMRoom } = useChatRooms(communityId ?? undefined, currentAuthId ?? undefined);
   const [introExpanded, setIntroExpanded] = useState(false);
@@ -401,6 +405,8 @@ function MemberDetailModal({
   const [showWishesSheet, setShowWishesSheet] = useState(false);
   const [showDailyAnswersSheet, setShowDailyAnswersSheet] = useState(false);
   const [selectedWish, setSelectedWish] = useState<(Wish & { user: Profile }) | null>(null);
+  const [wishStatusTab, setWishStatusTab] = useState<WishStatusTabKey>('public');
+  const [managingWish, setManagingWish] = useState<MemberWish | null>(null);
   // Wishes management (for current user only)
   const [myWishes, setMyWishes] = useState<MemberWish[]>([]);
   const [wishesLoading, setWishesLoading] = useState(false);
@@ -423,6 +429,10 @@ function MemberDetailModal({
   const visibleIntro = introExpanded || !introNeedsToggle
     ? introContent
     : `${introContent.slice(0, 320).trimEnd()}...`;
+  const visibleMemberWishes = wishStatusTab === 'granted' ? grantedWishes : currentWishes;
+  const myPublicWishes = myWishes.filter(w => w.status === 'public' && w.is_active !== false);
+  const myGrantedWishes = myWishes.filter(w => w.status === 'fulfilled');
+  const visibleMyWishes = wishStatusTab === 'granted' ? myGrantedWishes : myPublicWishes;
   const dailyAnswers = member.dailyAnswers ?? [];
   const memberHoneycombItems = [
     { label: 'Title', value: member.profile_title || member.occupation },
@@ -472,7 +482,9 @@ function MemberDetailModal({
     setShowWishesSheet(false);
     setShowDailyAnswersSheet(false);
     setSelectedWish(null);
-    setMyWishes(isCurrentUser ? visibleMemberWishes : []);
+    setManagingWish(null);
+    setWishStatusTab('public');
+    setMyWishes(isCurrentUser ? allVisibleMemberWishes : []);
   }, [member]);
 
   // Fetch current user's own visible wishes when modal opens. Seed from
@@ -481,7 +493,7 @@ function MemberDetailModal({
   useEffect(() => {
     if (!isCurrentUser || !communityId) return;
     setWishesLoading(true);
-    setMyWishes(visibleMemberWishes);
+    setMyWishes(allVisibleMemberWishes);
 
     const fetchVisibleWishes = async () => {
       let { data, error } = await supabase
@@ -567,6 +579,7 @@ function MemberDetailModal({
         onPress: async () => {
           await (supabase as any).from('wishes').delete().eq('id', wishId);
           setMyWishes(prev => prev.filter(w => w.id !== wishId));
+          setManagingWish(null);
         },
       },
     ]);
@@ -604,10 +617,16 @@ function MemberDetailModal({
     setNewWishInput('');
     wishMentionInput.resetMentionSelection();
     setAddingWish(false);
+    setWishStatusTab('public');
   };
 
   const refineWithClive = (description: string) => {
     router.push({ pathname: '/(app)', params: { refineWish: description } });
+  };
+
+  const startAddingWish = () => {
+    setWishStatusTab('public');
+    setAddingWish(true);
   };
 
   const openWishDetail = (wish: MemberWish) => {
@@ -946,47 +965,96 @@ function MemberDetailModal({
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#9ca3af' }}>Close</Text>
                 </Pressable>
               </View>
-              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 120 }}>
+              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
+                <HeaderTabs
+                  activeTab={wishStatusTab}
+                  onChange={setWishStatusTab}
+                  actionLabel="+ Wish"
+                  onAction={startAddingWish}
+                  compact={isPhoneProfile}
+                  compactAction={false}
+                  stretchTabs={false}
+                  tabs={[
+                    {
+                      key: 'public',
+                      label: getHdWishTabLabel('public'),
+                      count: myPublicWishes.length,
+                    },
+                    {
+                      key: 'granted',
+                      label: getHdWishTabLabel('granted'),
+                      count: myGrantedWishes.length,
+                    },
+                  ]}
+                />
+
                 {wishesLoading ? (
-                  <ActivityIndicator size="small" color="#bd9348" style={{ marginVertical: 20 }} />
+                  <View style={{
+                    backgroundColor: '#fdf3dc',
+                    borderRadius: 20,
+                    borderTopLeftRadius: 0,
+                    borderWidth: 1,
+                    borderColor: 'rgba(222,193,129,0.7)',
+                    height: memberWishPanelHeight,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <ActivityIndicator size="small" color="#bd9348" />
+                  </View>
                 ) : (
                   <>
-                    {myWishes.map(wish => (
-                      <View key={wish.id} style={{ marginBottom: 12 }}>
-                        <WishCombCard
-                          wish={wish}
-                          ownerName={member.name}
-                          ownerAvatarUrl={member.avatar_url}
-                          compact={isPhoneProfile}
-                          onOpen={openWishDetail}
-                        />
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                          <Pressable
-                            onPress={() => refineWithClive(wish.description)}
-                            style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7 }}
-                          >
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>Refine with Clive ✨</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => deleteWish(wish.id)}
-                            style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 }}
-                          >
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#ef4444' }}>Delete</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    ))}
-                    {myWishes.length === 0 && !addingWish && (
-                      <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 24, alignItems: 'center' }}>
-                        <Text style={{ fontSize: 32, marginBottom: 10 }}>🌟</Text>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', marginBottom: 6 }}>No wishes yet</Text>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center', lineHeight: 18 }}>
-                          Add something below, or chat with Clive to discover what you really want.
-                        </Text>
-                      </View>
-                    )}
+                    <View style={{
+                      backgroundColor: '#fdf3dc',
+                      borderRadius: 20,
+                      borderTopLeftRadius: 0,
+                      borderWidth: 1,
+                      borderColor: 'rgba(222,193,129,0.7)',
+                      shadowColor: '#bd9348',
+                      shadowOpacity: 0.12,
+                      shadowRadius: 18,
+                      shadowOffset: { width: 0, height: 5 },
+                      elevation: 3,
+                      height: memberWishPanelHeight,
+                      overflow: 'hidden',
+                    }}>
+                      <ScrollView
+                        nestedScrollEnabled
+                        showsVerticalScrollIndicator={true}
+                        style={{ flex: 1 }}
+                        contentContainerStyle={{
+                          padding: 12,
+                          paddingBottom: 12,
+                          flexGrow: visibleMyWishes.length === 0 ? 1 : undefined,
+                        }}
+                      >
+                        {visibleMyWishes.length === 0 ? (
+                          <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
+                            <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
+                              {myWishes.length === 0
+                                ? 'No HD wishes yet. Tap "+ Wish" to add your first one, or chat with Clive to discover what you really want.'
+                                : wishStatusTab === 'granted'
+                                  ? 'No granted HD wishes yet.'
+                                  : 'No HD wishes yet.'}
+                            </Text>
+                          </View>
+                        ) : (
+                          visibleMyWishes.map(wish => (
+                            <WishCombCard
+                              key={wish.id}
+                              wish={wish}
+                              ownerName={member.name}
+                              ownerAvatarUrl={member.avatar_url}
+                              compact={isPhoneProfile}
+                              onOpen={openWishDetail}
+                              onManage={setManagingWish}
+                            />
+                          ))
+                        )}
+                      </ScrollView>
+                    </View>
+
                     {addingWish && (
-                      <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16, marginBottom: 12 }}>
+                      <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16, marginTop: 12, marginBottom: 12 }}>
                         <TextInput
                           value={newWishInput}
                           onChangeText={wishMentionInput.textInputMentionProps.onChangeText}
@@ -1015,18 +1083,50 @@ function MemberDetailModal({
                   </>
                 )}
               </ScrollView>
-              {/* Add wish bar */}
-              {!addingWish && (
-                <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.3)', padding: 20, paddingBottom: 32 }}>
-                  <Pressable
-                    onPress={() => setAddingWish(true)}
-                    style={{ backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>+ Add a wish</Text>
-                  </Pressable>
-                </View>
-              )}
             </View>
+          )}
+
+          {managingWish && (
+            <Pressable
+              onPress={() => setManagingWish(null)}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.34)', justifyContent: 'flex-end', zIndex: 20 }}
+            >
+              <Pressable
+                onPress={(event) => event.stopPropagation()}
+                style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 34, borderTopWidth: 1, borderColor: 'rgba(222,193,129,0.5)' }}
+              >
+                <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.28)', borderRadius: 2, alignSelf: 'center', marginBottom: 18 }} />
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d' }}>Manage Wish</Text>
+                <Text
+                  numberOfLines={2}
+                  style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#7d715f', marginTop: 6, marginBottom: 16 }}
+                >
+                  {managingWish.description}
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    const wish = managingWish;
+                    setManagingWish(null);
+                    refineWithClive(wish.description);
+                  }}
+                  style={{ borderRadius: 14, borderWidth: 1, borderColor: 'rgba(222,193,129,0.54)', backgroundColor: '#fffaf0', paddingVertical: 13, paddingHorizontal: 14, marginBottom: 10 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#bd9348', textAlign: 'center' }}>Refine with Clive ✨</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => deleteWish(managingWish.id)}
+                  style={{ borderRadius: 14, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', backgroundColor: '#fff7f7', paddingVertical: 13, paddingHorizontal: 14, marginBottom: 10 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#ef4444', textAlign: 'center' }}>Delete</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setManagingWish(null)}
+                  style={{ borderRadius: 14, backgroundColor: '#f5f3ee', paddingVertical: 13, paddingHorizontal: 14 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#6b7280', textAlign: 'center' }}>Cancel</Text>
+                </Pressable>
+              </Pressable>
+            </Pressable>
           )}
 
           {/* ── Daily Answers Sheet ── */}
@@ -1416,43 +1516,70 @@ function MemberDetailModal({
             {/* Wishes for other members. Your own wishes are managed below. */}
             {!isCurrentUser && (
               <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>HD WISHES</Text>
-                {currentWishes.length > 0 ? (
-                  currentWishes.map(w => (
-                    <View key={w.id} style={{ marginBottom: 8 }}>
-                      <WishCombCard
-                        wish={w}
-                        ownerName={member.name}
-                        ownerAvatarUrl={member.avatar_url}
-                        compact={isPhoneProfile}
-                        onOpen={openWishDetail}
-                      />
-                    </View>
-                  ))
-                ) : (
-                  <View style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.28)', borderRadius: 12, padding: 14, borderStyle: 'dashed' }}>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af', lineHeight: 20 }}>
-                      {PROFILE_EMPTY_COPY.wishes}
-                    </Text>
-                  </View>
-                )}
+                <HeaderTabs
+                  activeTab={wishStatusTab}
+                  onChange={setWishStatusTab}
+                  compact={isPhoneProfile}
+                  compactAction={false}
+                  stretchTabs={false}
+                  tabs={[
+                    {
+                      key: 'public',
+                      label: getHdWishTabLabel('public'),
+                      count: currentWishes.length,
+                    },
+                    {
+                      key: 'granted',
+                      label: getHdWishTabLabel('granted'),
+                      count: grantedWishes.length,
+                    },
+                  ]}
+                />
 
-                {grantedWishes.length > 0 && (
-                  <View style={{ marginTop: 16 }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>GRANTED</Text>
-                    {grantedWishes.map(w => (
-                      <View key={w.id} style={{ marginBottom: 8 }}>
+                <View style={{
+                  backgroundColor: '#fdf3dc',
+                  borderRadius: 20,
+                  borderTopLeftRadius: 0,
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.7)',
+                  shadowColor: '#bd9348',
+                  shadowOpacity: 0.12,
+                  shadowRadius: 18,
+                  shadowOffset: { width: 0, height: 5 },
+                  elevation: 3,
+                  height: memberWishPanelHeight,
+                  overflow: 'hidden',
+                }}>
+                  <ScrollView
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator={true}
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{
+                      padding: 12,
+                      paddingBottom: 12,
+                      flexGrow: visibleMemberWishes.length === 0 ? 1 : undefined,
+                    }}
+                  >
+                    {visibleMemberWishes.length === 0 ? (
+                      <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
+                          {wishStatusTab === 'granted' ? 'No granted HD wishes yet.' : PROFILE_EMPTY_COPY.wishes}
+                        </Text>
+                      </View>
+                    ) : (
+                      visibleMemberWishes.map(w => (
                         <WishCombCard
+                          key={w.id}
                           wish={w}
                           ownerName={member.name}
                           ownerAvatarUrl={member.avatar_url}
                           compact={isPhoneProfile}
                           onOpen={openWishDetail}
                         />
-                      </View>
-                    ))}
-                  </View>
-                )}
+                      ))
+                    )}
+                  </ScrollView>
+                </View>
               </View>
             )}
 
@@ -1499,57 +1626,87 @@ function MemberDetailModal({
             {/* Wishes management — current user only */}
             {isCurrentUser && (
               <View style={{ marginBottom: 24 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>MY HD WISHES</Text>
-                  <Pressable
-                    onPress={() => setAddingWish(true)}
-                    style={{ backgroundColor: '#fdf3dc', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5 }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>+ New HD Wish</Text>
-                  </Pressable>
+                <HeaderTabs
+                  activeTab={wishStatusTab}
+                  onChange={setWishStatusTab}
+                  actionLabel="+ Wish"
+                  onAction={startAddingWish}
+                  compact={isPhoneProfile}
+                  compactAction={false}
+                  stretchTabs={false}
+                  tabs={[
+                    {
+                      key: 'public',
+                      label: getHdWishTabLabel('public'),
+                      count: myPublicWishes.length,
+                    },
+                    {
+                      key: 'granted',
+                      label: getHdWishTabLabel('granted'),
+                      count: myGrantedWishes.length,
+                    },
+                  ]}
+                />
+
+                <View style={{
+                  backgroundColor: '#fdf3dc',
+                  borderRadius: 20,
+                  borderTopLeftRadius: 0,
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.7)',
+                  shadowColor: '#bd9348',
+                  shadowOpacity: 0.12,
+                  shadowRadius: 18,
+                  shadowOffset: { width: 0, height: 5 },
+                  elevation: 3,
+                  height: memberWishPanelHeight,
+                  overflow: 'hidden',
+                }}>
+                  {wishesLoading ? (
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                      <ActivityIndicator size="small" color="#bd9348" />
+                    </View>
+                  ) : (
+                    <ScrollView
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator={true}
+                      style={{ flex: 1 }}
+                      contentContainerStyle={{
+                        padding: 12,
+                        paddingBottom: 12,
+                        flexGrow: visibleMyWishes.length === 0 ? 1 : undefined,
+                      }}
+                    >
+                      {visibleMyWishes.length === 0 ? (
+                        <View style={{ backgroundColor: '#fffdf5', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.32)' }}>
+                          <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(45,45,45,0.48)', textAlign: 'center' }}>
+                            {myWishes.length === 0
+                              ? 'No HD wishes yet. Tap "+ Wish" to add your first one, or chat with Clive to discover what you really want.'
+                              : wishStatusTab === 'granted'
+                                ? 'No granted HD wishes yet.'
+                                : 'No HD wishes yet.'}
+                          </Text>
+                        </View>
+                      ) : (
+                        visibleMyWishes.map(wish => (
+                          <WishCombCard
+                            key={wish.id}
+                            wish={wish}
+                            ownerName={member.name}
+                            ownerAvatarUrl={member.avatar_url}
+                            compact={isPhoneProfile}
+                            onOpen={openWishDetail}
+                            onManage={setManagingWish}
+                          />
+                        ))
+                      )}
+                    </ScrollView>
+                  )}
                 </View>
 
-                {wishesLoading ? (
-                  <ActivityIndicator size="small" color="#bd9348" style={{ marginVertical: 12 }} />
-                ) : (
-                  <>
-                    {myWishes.map(wish => (
-                      <View key={wish.id} style={{ marginBottom: 10 }}>
-                        <WishCombCard
-                          wish={wish}
-                          ownerName={member.name}
-                          ownerAvatarUrl={member.avatar_url}
-                          compact={isPhoneProfile}
-                          onOpen={openWishDetail}
-                        />
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                          <Pressable
-                            onPress={() => refineWithClive(wish.description)}
-                            style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}
-                          >
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>Refine with Clive ✨</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => deleteWish(wish.id)}
-                            style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
-                          >
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#ef4444' }}>Delete</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    ))}
-
-                    {myWishes.length === 0 && !addingWish && (
-                      <View style={{ backgroundColor: '#faf8f3', borderRadius: 14, padding: 16, alignItems: 'center' }}>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
-                          No HD wishes yet.{'\n'}Tap "+ New HD Wish" to add your first one, or chat with Clive to discover what you really want.
-                        </Text>
-                      </View>
-                    )}
-
-                    {/* Inline new wish composer */}
-                    {addingWish && (
-                      <View style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 14, padding: 14 }}>
+                {/* Inline new wish composer */}
+                {addingWish && (
+                  <View style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 14, padding: 14, marginTop: 12 }}>
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginBottom: 8 }}>New HD wish</Text>
                         <TextInput
                           value={newWishInput}
@@ -1585,8 +1742,6 @@ function MemberDetailModal({
                           <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', fontSize: 13 }}>Refine with Clive ✨</Text>
                         </Pressable>
                       </View>
-                    )}
-                  </>
                 )}
               </View>
             )}

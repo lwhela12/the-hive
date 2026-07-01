@@ -10,8 +10,8 @@ type HeaderTabsProps<T extends string> = {
   tabs: HeaderTabItem<T>[];
   activeTab: T;
   onChange: (tab: T) => void;
-  actionLabel: string;
-  onAction: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
   compact?: boolean;
   compactAction?: boolean;
   stretchTabs?: boolean;
@@ -61,24 +61,26 @@ export function HeaderTabs<T extends string>({
         );
       })}
 
-      <Pressable
-        onPress={onAction}
-        accessibilityRole="button"
-        style={({ pressed }) => [
-          styles.actionButton,
-          compact && compactAction ? styles.compactItem : null,
-          pressed ? styles.pressedTab : null,
-        ]}
-      >
-        <Text
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.78}
-          style={[styles.actionText, compact ? styles.compactActionText : null]}
+      {actionLabel && onAction ? (
+        <Pressable
+          onPress={onAction}
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.actionButton,
+            compact && compactAction ? styles.compactItem : null,
+            pressed ? styles.pressedTab : null,
+          ]}
         >
-          {actionLabel}
-        </Text>
-      </Pressable>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
+            style={[styles.actionText, compact ? styles.compactActionText : null]}
+          >
+            {actionLabel}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
