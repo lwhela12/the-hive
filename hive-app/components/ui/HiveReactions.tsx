@@ -73,23 +73,15 @@ export function HiveReactionPills({
       {groups.map(({ emoji, count, hasReacted, reactors }) => {
         const visibleReactors = reactors.slice(0, 3);
         const avatarSize = compact ? 14 : 18;
-
-        return (
-          <Pressable
-            key={emoji}
-            onPress={() => onReactionPress?.(emoji, hasReacted)}
-            disabled={!onReactionPress}
-            className="flex-row items-center rounded-full shadow-sm"
-            style={{
-              paddingHorizontal: compact ? 7 : 8,
-              paddingVertical: compact ? 3 : 4,
-              backgroundColor: hasReacted ? '#fff8ed' : '#FFFFFF',
-              borderWidth: 1,
-              borderColor: hasReacted ? accentColor : '#f0e2c8',
-            }}
-            accessibilityRole={onReactionPress ? 'button' : undefined}
-            accessibilityLabel={`${count} ${emoji} reaction${count === 1 ? '' : 's'}`}
-          >
+        const pillStyle = {
+          paddingHorizontal: compact ? 7 : 8,
+          paddingVertical: compact ? 3 : 4,
+          backgroundColor: hasReacted ? '#fff8ed' : '#FFFFFF',
+          borderWidth: 1,
+          borderColor: hasReacted ? accentColor : '#f0e2c8',
+        };
+        const content = (
+          <>
             <Text style={{ fontSize: compact ? 12 : 14, lineHeight: compact ? 16 : 18 }}>{emoji}</Text>
             {visibleReactors.length > 0 && (
               <View className="flex-row items-center ml-1">
@@ -124,6 +116,32 @@ export function HiveReactionPills({
             >
               {count}
             </Text>
+          </>
+        );
+
+        if (!onReactionPress) {
+          return (
+            <View
+              key={emoji}
+              className="flex-row items-center rounded-full shadow-sm"
+              style={pillStyle}
+              accessibilityLabel={`${count} ${emoji} reaction${count === 1 ? '' : 's'}`}
+            >
+              {content}
+            </View>
+          );
+        }
+
+        return (
+          <Pressable
+            key={emoji}
+            onPress={() => onReactionPress(emoji, hasReacted)}
+            className="flex-row items-center rounded-full shadow-sm"
+            style={pillStyle}
+            accessibilityRole="button"
+            accessibilityLabel={`${count} ${emoji} reaction${count === 1 ? '' : 's'}`}
+          >
+            {content}
           </Pressable>
         );
       })}
