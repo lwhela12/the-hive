@@ -2182,6 +2182,8 @@ export default function ProfileScreen() {
                   actionLabel="+ Wish"
                   onAction={() => setAddWishModalVisible(true)}
                   compact={isProfilePhone}
+                  compactAction={false}
+                  stretchTabs={false}
                   tabs={[
                     {
                       key: 'public',
