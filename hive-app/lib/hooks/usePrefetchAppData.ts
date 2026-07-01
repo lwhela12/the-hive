@@ -44,7 +44,7 @@ export function usePrefetchAppData(
           .from('wishes')
           .select('*, user:profiles!user_id(*)')
           .eq('status', 'public')
-          .eq('is_active', true)
+          .or('is_active.is.true,is_active.is.null')
           .eq('community_id', communityId)
           .order('created_at', { ascending: false });
         return (data as (Wish & { user: Profile })[]) || [];

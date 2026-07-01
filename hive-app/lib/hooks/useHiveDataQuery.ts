@@ -157,7 +157,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
             .from('wishes')
             .select('*, user:profiles!user_id(*), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status)')
             .eq('status', 'public')
-            .eq('is_active', true)
+            .or('is_active.is.true,is_active.is.null')
             .eq('community_id', communityId!)
             .order('created_at', { ascending: false });
           if (
@@ -169,7 +169,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
               .from('wishes')
               .select('*, user:profiles!user_id(*)')
               .eq('status', 'public')
-              .eq('is_active', true)
+              .or('is_active.is.true,is_active.is.null')
               .eq('community_id', communityId!)
               .order('created_at', { ascending: false });
             data = fallback.data;

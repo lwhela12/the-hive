@@ -6,6 +6,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Profile, Skill, UserRole, Wish, WishGranter } from '../../types';
 import { supabase } from '../../lib/supabase';
+import { invalidateWishQueries } from '../../lib/queryClient';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
@@ -610,6 +611,7 @@ function MemberDetailModal({
         text: 'Delete', style: 'destructive',
         onPress: async () => {
           await (supabase as any).from('wishes').delete().eq('id', wishId);
+          await invalidateWishQueries(communityId, member.id);
           setMyWishes(prev => prev.filter(w => w.id !== wishId));
           setManagingWish(null);
         },
@@ -645,6 +647,7 @@ function MemberDetailModal({
         members: mentionableMembers,
         wishOwnerName: member.name,
       });
+      await invalidateWishQueries(communityId, member.id);
     }
     setNewWishInput('');
     wishMentionInput.resetMentionSelection();
@@ -677,7 +680,12 @@ function MemberDetailModal({
   };
 
   const startDirectMessage = async () => {
-    if (isCurrentUser || startingMessage) return;
+    if (startingMessage) return;
+    if (isCurrentUser) {
+      onClose();
+      router.push('/messages');
+      return;
+    }
     if (!currentAuthId || !communityId) {
       Alert.alert('Could not open message', 'Please refresh HIVE and try again.');
       return;
@@ -833,7 +841,6 @@ function MemberDetailModal({
 
   // Profile richness score — how filled-out is this member's profile?
   const memberRichness = (() => {
-    if (isCurrentUser) return null;
     let score = 0;
     if (member.profile_title || member.occupation) score++;
     if (member.bio) score++;
@@ -868,6 +875,10 @@ function MemberDetailModal({
               <WishDetail
                 wish={selectedWish}
                 onClose={() => setSelectedWish(null)}
+                onBeforeProfileNavigate={() => {
+                  setSelectedWish(null);
+                  onClose();
+                }}
               />
             </View>
           )}
@@ -1074,6 +1085,7 @@ function MemberDetailModal({
                             <WishCombCard
                               key={wish.id}
                               wish={wish}
+                              ownerId={member.id}
                               ownerName={member.name}
                               ownerAvatarUrl={member.avatar_url}
                               compact={isPhoneProfile}
@@ -1233,21 +1245,15 @@ function MemberDetailModal({
             <View style={{ width: '100%', maxWidth: 1240 }}>
             {/* Header */}
             <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 16 }}>
-              {/* Avatar — wrapped in BeeProgressArc for other members */}
-              {!isCurrentUser && memberRichness !== null ? (
-                <View style={{ alignItems: 'center' }}>
-                  <BeeProgressArc profileCompletionPercent={memberRichness} size={200} />
-                  <View style={{ marginTop: -34, alignItems: 'center', zIndex: 1 }}>
-                    <View style={{ borderRadius: 50, borderWidth: 2.5, borderColor: '#dec181', padding: 3, backgroundColor: 'white', shadowColor: '#bd9348', shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }}>
-                      <Avatar uri={member.avatar_url} name={member.name} size={84} />
-                    </View>
+              {/* Avatar + profile completion route */}
+              <View style={{ alignItems: 'center' }}>
+                <BeeProgressArc profileCompletionPercent={memberRichness} size={200} />
+                <View style={{ marginTop: -34, alignItems: 'center', zIndex: 1 }}>
+                  <View style={{ borderRadius: 50, borderWidth: 2.5, borderColor: '#dec181', padding: 3, backgroundColor: 'white', shadowColor: '#bd9348', shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }}>
+                    <Avatar uri={member.avatar_url} name={member.name} size={84} />
                   </View>
                 </View>
-              ) : (
-                <View style={{ borderRadius: 56, borderWidth: 2, borderColor: '#dec181', padding: 3, marginBottom: 12, marginTop: 12, shadowColor: '#bd9348', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } }}>
-                  <Avatar uri={member.avatar_url} name={member.name} size={100} />
-                </View>
-              )}
+              </View>
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginTop: 6 }}>{member.name}</Text>
               {(member.profile_title || member.occupation) && (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', marginTop: 3 }}>{member.profile_title || member.occupation}</Text>
@@ -1286,33 +1292,31 @@ function MemberDetailModal({
                   </View>
                 )}
               </View>
-              {!isCurrentUser && (
-                <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 14, width: '100%' }}>
-                  <Pressable
-                    onPress={startDirectMessage}
-                    disabled={startingMessage}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Message ${member.name}`}
-                    style={{
-                      backgroundColor: '#bd9348',
-                      borderRadius: 999,
-                      paddingVertical: 8,
-                      paddingHorizontal: 22,
-                      minWidth: 148,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexDirection: 'row',
-                      gap: 6,
-                      opacity: startingMessage ? 0.6 : 1,
-                    }}
-                  >
-                    <Ionicons name="chatbubble-ellipses-outline" size={15} color="white" />
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>
-                      {startingMessage ? 'Opening...' : 'Message'}
-                    </Text>
-                  </Pressable>
-                </View>
-              )}
+              <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 14, width: '100%' }}>
+                <Pressable
+                  onPress={startDirectMessage}
+                  disabled={startingMessage}
+                  accessibilityRole="button"
+                  accessibilityLabel={isCurrentUser ? 'Open your messages' : `Message ${member.name}`}
+                  style={{
+                    backgroundColor: '#bd9348',
+                    borderRadius: 999,
+                    paddingVertical: 8,
+                    paddingHorizontal: 22,
+                    minWidth: 148,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 6,
+                    opacity: startingMessage ? 0.6 : 1,
+                  }}
+                >
+                  <Ionicons name="chatbubble-ellipses-outline" size={15} color="white" />
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>
+                    {startingMessage ? 'Opening...' : 'Message'}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
 
             {isCurrentUser && editing && (
@@ -1603,6 +1607,7 @@ function MemberDetailModal({
                         <WishCombCard
                           key={w.id}
                           wish={w}
+                          ownerId={member.id}
                           ownerName={member.name}
                           ownerAvatarUrl={member.avatar_url}
                           compact={isPhoneProfile}
@@ -1724,6 +1729,7 @@ function MemberDetailModal({
                           <WishCombCard
                             key={wish.id}
                             wish={wish}
+                            ownerId={member.id}
                             ownerName={member.name}
                             ownerAvatarUrl={member.avatar_url}
                             compact={isPhoneProfile}

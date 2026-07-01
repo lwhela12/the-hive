@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { invalidateWishQueries } from './queryClient';
 import type { BoardCategory, BoardPost } from '../types';
 
 function createGrantedWishDescription(post: Pick<BoardPost, 'title' | 'content'>) {
@@ -118,6 +119,8 @@ export async function markBoardThreadGranted({
     .eq('community_id', communityId);
 
   if (postError) throw postError;
+
+  await invalidateWishQueries(communityId, wishOwnerId);
 
   return grantedWishId;
 }

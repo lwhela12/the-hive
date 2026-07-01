@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
+import { invalidateWishQueries } from '../../lib/queryClient';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { notifyWishMentions } from '../../lib/wishMentions';
@@ -28,7 +29,7 @@ interface AddWishModalProps {
   onClose: () => void;
   communityId: string | null;
   userId: string | undefined;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
   onRefineWithClive?: (roughWish: string) => void;
   existingWish?: Wish | null;
   linkedBoardCategory?: Pick<BoardCategory, 'id' | 'name'> | null;
@@ -184,12 +185,17 @@ export function AddWishModal({
         });
       }
 
+      await invalidateWishQueries(
+        communityId,
+        wishOwnerUserId || existingWish?.user_id || userId
+      );
+
       if (!existingWish) {
         AsyncStorage.removeItem(WISH_DRAFT_KEY).catch(() => {});
         AsyncStorage.removeItem(WISH_TITLE_DRAFT_KEY).catch(() => {});
       }
       wishMentionInput.resetMentionSelection();
-      onSave();
+      await onSave();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : (isEditMode ? 'Failed to update wish' : 'Failed to save wish'));

@@ -49,3 +49,24 @@ export const queryKeys = {
   boardLinkedWishes: (communityId: string, categoryId: string) =>
     ['boardLinkedWishes', communityId, categoryId] as const,
 };
+
+export async function invalidateWishQueries(
+  communityId?: string | null,
+  userId?: string | null
+) {
+  if (!communityId) return;
+
+  const invalidations = [
+    queryClient.invalidateQueries({ queryKey: queryKeys.publicWishes(communityId) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.grantedWishes(communityId) }),
+    queryClient.invalidateQueries({ queryKey: ['boardLinkedWishes', communityId] }),
+  ];
+
+  if (userId) {
+    invalidations.push(
+      queryClient.invalidateQueries({ queryKey: queryKeys.userWishes(communityId, userId) })
+    );
+  }
+
+  await Promise.all(invalidations);
+}

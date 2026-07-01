@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
+import { invalidateWishQueries } from '../../lib/queryClient';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
 import { useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
 import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
@@ -1589,6 +1590,7 @@ export default function HiveScreen() {
         return;
       }
 
+      await invalidateWishQueries(communityId, wish.user_id);
       await refetch();
       if (selectedWish?.id === wish.id) {
         closeWishDetail();
@@ -1635,6 +1637,7 @@ export default function HiveScreen() {
         return;
       }
 
+      await invalidateWishQueries(communityId, wish.user_id);
       await refetch();
       if (selectedWish?.id === wish.id) {
         closeWishDetail();

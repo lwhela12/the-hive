@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDateShort } from '../../lib/dateUtils';
 import { getHdWishStatusLabel, getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
 import { Avatar } from '../ui/Avatar';
+import { MemberProfileLink } from '../ui/MemberProfileLink';
 import type { Profile, Wish, WishGranter } from '../../types';
 
 const publicBeeIcon = require('../../assets/BEE ONLY IN GOLD BG.png');
@@ -15,6 +16,7 @@ type WishCombCardWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wi
 
 type WishCombCardProps = {
   wish: WishCombCardWish;
+  ownerId?: string | null;
   ownerName?: string | null;
   ownerAvatarUrl?: string | null;
   compact?: boolean;
@@ -86,6 +88,7 @@ function PublicBeesIcon({ compact = false }: { compact?: boolean }) {
 
 export function WishCombCard({
   wish,
+  ownerId,
   ownerName,
   ownerAvatarUrl: ownerAvatarUrlProp,
   compact = false,
@@ -96,10 +99,12 @@ export function WishCombCard({
   const isGranted = wish.status === 'fulfilled';
   const isPrivate = wish.status === 'private';
   const ownerDisplayName = (ownerName ?? wish.user?.name ?? '').trim();
+  const ownerProfileId = ownerId ?? wish.user?.id ?? wish.user_id ?? null;
   const ownerAvatarUrl = ownerAvatarUrlProp ?? wish.user?.avatar_url ?? null;
   const granters = wish.granters || [];
-  const displayGranters = granters.filter((g) => g.granter).slice(0, 3);
-  const extraGranters = Math.max(granters.filter((g) => g.granter).length - displayGranters.length, 0);
+  const validGranters = granters.filter((g) => g.granter);
+  const displayGranters = validGranters.slice(0, 3);
+  const extraGranters = Math.max(validGranters.length - displayGranters.length, 0);
   const showGranters = isGranted && displayGranters.length > 0;
   const useHomeWishLayout = !isPrivate && ownerDisplayName.length > 0;
   const showStatusPill = !useHomeWishLayout && !compact;
@@ -136,18 +141,35 @@ export function WishCombCard({
 
   const content = useHomeWishLayout ? (
     <View style={styles.homeRow}>
-      <Avatar name={ownerDisplayName} url={ownerAvatarUrl} size={44} />
+      <MemberProfileLink
+        memberId={ownerProfileId}
+        memberName={ownerDisplayName}
+        stopPropagation
+        hitSlop={8}
+        className="active:opacity-70"
+      >
+        <Avatar name={ownerDisplayName} url={ownerAvatarUrl} size={44} />
+      </MemberProfileLink>
       <View style={styles.homeBody}>
         <View style={styles.homeOwnerRow}>
-          <Text
-            style={[
-              styles.homeOwnerName,
-              isGranted ? styles.homeOwnerNameGranted : styles.homeOwnerNameOpen,
-            ]}
-            numberOfLines={1}
+          <MemberProfileLink
+            memberId={ownerProfileId}
+            memberName={ownerDisplayName}
+            stopPropagation
+            hitSlop={8}
+            style={styles.homeOwnerLink}
+            className="active:opacity-70"
           >
-            {ownerDisplayName}
-          </Text>
+            <Text
+              style={[
+                styles.homeOwnerName,
+                isGranted ? styles.homeOwnerNameGranted : styles.homeOwnerNameOpen,
+              ]}
+              numberOfLines={1}
+            >
+              {ownerDisplayName}
+            </Text>
+          </MemberProfileLink>
           {manageButton}
         </View>
 
@@ -184,8 +206,12 @@ export function WishCombCard({
                 <Text style={styles.granterLabel}>by</Text>
                 <View style={styles.granterAvatars}>
                   {displayGranters.map((g, index) => (
-                    <View
+                    <MemberProfileLink
                       key={g.id}
+                      memberId={g.granter?.id ?? g.granter_id}
+                      memberName={g.granter?.name}
+                      stopPropagation
+                      hitSlop={6}
                       style={{ marginLeft: index > 0 ? -8 : 0, zIndex: 10 - index }}
                     >
                       <Avatar
@@ -193,7 +219,7 @@ export function WishCombCard({
                         url={g.granter?.avatar_url}
                         size={24}
                       />
-                    </View>
+                    </MemberProfileLink>
                   ))}
                   {extraGranters > 0 && (
                     <View style={styles.extraGranterCount}>
@@ -269,8 +295,12 @@ export function WishCombCard({
                 <Text style={styles.granterLabel}>by</Text>
                 <View style={styles.granterAvatars}>
                   {displayGranters.map((g, index) => (
-                    <View
+                    <MemberProfileLink
                       key={g.id}
+                      memberId={g.granter?.id ?? g.granter_id}
+                      memberName={g.granter?.name}
+                      stopPropagation
+                      hitSlop={6}
                       style={{ marginLeft: index > 0 ? -8 : 0, zIndex: 10 - index }}
                     >
                       <Avatar
@@ -278,7 +308,7 @@ export function WishCombCard({
                         url={g.granter?.avatar_url}
                         size={24}
                       />
-                    </View>
+                    </MemberProfileLink>
                   ))}
                   {extraGranters > 0 && (
                     <View style={styles.extraGranterCount}>
@@ -374,9 +404,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  homeOwnerName: {
+  homeOwnerLink: {
     flex: 1,
     minWidth: 0,
+  },
+  homeOwnerName: {
     fontSize: 15,
     lineHeight: 21,
   },

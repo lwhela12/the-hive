@@ -122,7 +122,7 @@ export function useCarryForwardContext({
         .eq('community_id', communityId)
         .eq('user_id', userId)
         .eq('status', 'public')
-        .eq('is_active', true)
+        .or('is_active.is.true,is_active.is.null')
         .order('created_at', { ascending: false })
         .limit(8);
 

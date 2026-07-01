@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
+import { invalidateWishQueries } from '../queryClient';
 import type { Wish, Profile } from '../../types';
 
 export function useWishes() {
@@ -32,7 +33,7 @@ export function useWishes() {
       .from('wishes')
       .select('*, user:profiles(*)')
       .eq('status', 'public')
-      .eq('is_active', true)
+      .or('is_active.is.true,is_active.is.null')
       .eq('community_id', communityId)
       .neq('user_id', profile.id)
       .order('created_at', { ascending: false });
@@ -60,6 +61,7 @@ export function useWishes() {
 
     if (!error) {
       await fetchWishes();
+      await invalidateWishQueries(communityId, profile.id);
     }
 
     return { error };
@@ -84,6 +86,7 @@ export function useWishes() {
 
     if (!error) {
       await fetchWishes();
+      await invalidateWishQueries(communityId, profile.id);
     }
 
     return { error };
@@ -172,11 +175,14 @@ export function useWishes() {
         .upsert(granterInserts, { onConflict: 'wish_id,granter_id' });
 
       if (granterError) {
+        await fetchWishes();
+        await invalidateWishQueries(communityId, profile.id);
         return { error: granterError };
       }
     }
 
     await fetchWishes();
+    await invalidateWishQueries(communityId, profile.id);
     return { error: null };
   };
 

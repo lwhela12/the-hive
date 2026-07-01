@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { requestMediaLibraryPermission } from '../../lib/imagePicker';
 import { supabase } from '../../lib/supabase';
+import { invalidateWishQueries } from '../../lib/queryClient';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useWishes } from '../../lib/hooks/useWishes';
@@ -222,9 +223,11 @@ export default function ProfileScreen() {
     setInitialLoading(false);
   }, [profile?.id, communityId]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useFocusEffect(
+    useCallback(() => {
+      void fetchData();
+    }, [fetchData])
+  );
 
   // Initialize edit fields when profile loads or changes
   useEffect(() => {
@@ -672,6 +675,7 @@ export default function ProfileScreen() {
         return;
       }
 
+      await invalidateWishQueries(communityId, profile.id);
       await fetchData();
       setManagingWish(null);
     };
@@ -1016,6 +1020,7 @@ export default function ProfileScreen() {
         return;
       }
 
+      await invalidateWishQueries(communityId, profile.id);
       await fetchData();
       setManagingWish(null);
     };
@@ -1379,6 +1384,7 @@ export default function ProfileScreen() {
     <WishCombCard
       key={wish.id}
       wish={wish}
+      ownerId={profile.id}
       ownerName={profile.name}
       ownerAvatarUrl={profile.avatar_url}
       compact={isProfilePhone}

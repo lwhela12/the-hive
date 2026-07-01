@@ -1,6 +1,7 @@
 import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../ui/Avatar';
+import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { formatDateShort } from '../../lib/dateUtils';
 import { getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
 import type { Wish, Profile, WishGranter } from '../../types';
@@ -24,8 +25,9 @@ interface WishCardProps {
 export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, canEdit, canDelete }: WishCardProps) {
   const isGranted = wish.status === 'fulfilled';
   const granters = wish.granters || [];
-  const displayGranters = granters.filter((g) => g.granter).slice(0, 3);
-  const extraGranters = granters.length - 3;
+  const validGranters = granters.filter((g) => g.granter);
+  const displayGranters = validGranters.slice(0, 3);
+  const extraGranters = Math.max(validGranters.length - displayGranters.length, 0);
   const showManageButton = !!onManage && (canEdit || canDelete);
   const quickTitle = getWishQuickTitle(wish);
   const bodyPreview = getWishBodyPreview(wish);
@@ -43,18 +45,34 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
       }}
     >
       <View className="flex-row items-start">
-        <Avatar name={wish.user.name} url={wish.user.avatar_url} size={44} />
+        <MemberProfileLink
+          memberId={wish.user?.id ?? wish.user_id}
+          memberName={wish.user?.name}
+          stopPropagation
+          hitSlop={8}
+          className="active:opacity-70"
+        >
+          <Avatar name={wish.user.name} url={wish.user.avatar_url} size={44} />
+        </MemberProfileLink>
         <View className="flex-1 ml-3">
           <View className="flex-row items-center">
             <View className="flex-1 flex-row items-center">
-              <Text
-                style={{
-                  fontFamily: isGranted ? 'Lato_400Regular' : 'Lato_700Bold',
-                  color: isGranted ? '#7f715f' : '#2d2d2d',
-                }}
+              <MemberProfileLink
+                memberId={wish.user?.id ?? wish.user_id}
+                memberName={wish.user?.name}
+                stopPropagation
+                hitSlop={8}
+                className="active:opacity-70"
               >
-                {wish.user.name}
-              </Text>
+                <Text
+                  style={{
+                    fontFamily: isGranted ? 'Lato_400Regular' : 'Lato_700Bold',
+                    color: isGranted ? '#7f715f' : '#2d2d2d',
+                  }}
+                >
+                  {wish.user.name}
+                </Text>
+              </MemberProfileLink>
             </View>
             {showManageButton ? (
               <Pressable
@@ -136,7 +154,7 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
             </Text>
 
             {/* Granter avatars for granted wishes */}
-            {isGranted && granters.length > 0 && (
+            {isGranted && displayGranters.length > 0 && (
               <View className="flex-row items-center ml-auto">
                 <Text
                   style={{ fontFamily: 'Lato_400Regular' }}
@@ -146,8 +164,12 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
                 </Text>
                 <View className="flex-row">
                   {displayGranters.map((g, index) => (
-                    <View
+                    <MemberProfileLink
                       key={g.id}
+                      memberId={g.granter?.id ?? g.granter_id}
+                      memberName={g.granter?.name}
+                      stopPropagation
+                      hitSlop={6}
                       style={{ marginLeft: index > 0 ? -8 : 0, zIndex: 10 - index }}
                     >
                       <Avatar
@@ -155,7 +177,7 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
                         url={g.granter?.avatar_url}
                         size={24}
                       />
-                    </View>
+                    </MemberProfileLink>
                   ))}
                   {extraGranters > 0 && (
                     <View

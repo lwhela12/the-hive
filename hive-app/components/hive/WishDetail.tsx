@@ -9,11 +9,11 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../ui/Avatar';
+import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { formatDateShort } from '../../lib/dateUtils';
 import { GrantWishModal } from './GrantWishModal';
 import { submitOnEnter } from '../../lib/submitOnEnter';
@@ -40,6 +40,7 @@ interface WishDetailProps {
   }) => Promise<{ error: Error | null }>;
   canManage?: boolean;
   onManage?: () => void;
+  onBeforeProfileNavigate?: () => void;
 }
 
 export function WishDetail({
@@ -48,8 +49,8 @@ export function WishDetail({
   onGrant,
   canManage = false,
   onManage,
+  onBeforeProfileNavigate,
 }: WishDetailProps) {
-  const router = useRouter();
   const { profile, communityId } = useAuth();
   const [comments, setComments] = useState<(WishComment & { user: Profile })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,18 +72,7 @@ export function WishDetail({
   const wishTitle = getWishQuickTitle(wish, 90);
   const showDescription = shouldShowWishDescription(wish);
   const wishOwnerId = wish.user?.id ?? wish.user_id;
-  const isWishOwnerCurrentUser = profile?.id === wishOwnerId;
-
-  const openWishOwnerProfile = () => {
-    if (!wishOwnerId) return;
-
-    onClose();
-    router.push(
-      isWishOwnerCurrentUser
-        ? '/profile'
-        : { pathname: '/(app)/members', params: { memberId: wishOwnerId } }
-    );
-  };
+  const handleBeforeProfileNavigate = onBeforeProfileNavigate ?? onClose;
 
   useEffect(() => {
     fetchComments();
@@ -173,28 +163,28 @@ export function WishDetail({
         {/* Wish Card */}
         <View className={`rounded-xl p-4 mb-6 ${isGranted ? 'bg-gold/10' : 'bg-cream/30'}`}>
           <View className="flex-row items-start">
-            <Pressable
-              onPress={openWishOwnerProfile}
-              accessibilityRole="button"
-              accessibilityLabel={`Open ${isWishOwnerCurrentUser ? 'your' : `${wish.user.name}'s`} profile`}
+            <MemberProfileLink
+              memberId={wishOwnerId}
+              memberName={wish.user.name}
+              onBeforeNavigate={handleBeforeProfileNavigate}
               hitSlop={8}
               className="active:opacity-70"
             >
               <Avatar name={wish.user.name} url={wish.user.avatar_url} size={48} />
-            </Pressable>
+            </MemberProfileLink>
             <View className="flex-1 ml-3">
               <View className="flex-row items-center">
-                <Pressable
-                  onPress={openWishOwnerProfile}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open ${isWishOwnerCurrentUser ? 'your' : `${wish.user.name}'s`} profile`}
+                <MemberProfileLink
+                  memberId={wishOwnerId}
+                  memberName={wish.user.name}
+                  onBeforeNavigate={handleBeforeProfileNavigate}
                   hitSlop={8}
                   className="active:opacity-70"
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-base">
                     {wish.user.name}
                   </Text>
-                </Pressable>
+                </MemberProfileLink>
                 {isGranted && (
                   <View className="ml-2 bg-gold px-2 py-0.5 rounded-full flex-row items-center">
                     <Ionicons name="checkmark-circle" size={12} color="#fff" />
@@ -244,8 +234,12 @@ export function WishDetail({
                 </Text>
                 <View className="flex-row flex-wrap gap-2">
                   {wish.granters.filter((g) => g.granter).map((g) => (
-                    <View
+                    <MemberProfileLink
                       key={g.id}
+                      memberId={g.granter?.id ?? g.granter_id}
+                      memberName={g.granter?.name}
+                      onBeforeNavigate={handleBeforeProfileNavigate}
+                      hitSlop={4}
                       className="flex-row items-center bg-cream px-3 py-2 rounded-full"
                     >
                       <Avatar
@@ -259,7 +253,7 @@ export function WishDetail({
                       >
                         {g.granter?.name || 'Unknown'}
                       </Text>
-                    </View>
+                    </MemberProfileLink>
                   ))}
                 </View>
               </View>
@@ -304,7 +298,15 @@ export function WishDetail({
         ) : (
           comments.map((comment) => (
             <View key={comment.id} className="flex-row mb-4">
-              <Avatar name={comment.user.name} url={comment.user.avatar_url} size={36} />
+              <MemberProfileLink
+                memberId={comment.user?.id ?? comment.user_id}
+                memberName={comment.user?.name}
+                onBeforeNavigate={handleBeforeProfileNavigate}
+                hitSlop={8}
+                className="active:opacity-70"
+              >
+                <Avatar name={comment.user.name} url={comment.user.avatar_url} size={36} />
+              </MemberProfileLink>
               <View className="flex-1 ml-3 bg-gray-50 rounded-xl p-3">
                 <View className="flex-row items-center justify-between">
                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-sm">
