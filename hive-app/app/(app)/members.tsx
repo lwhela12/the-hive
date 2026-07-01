@@ -1916,15 +1916,9 @@ export default function MembersScreen() {
     loadMembers();
   }, [loadMembers]);
 
-  const openMemberProfile = useCallback((member: MemberData, isCurrentUser: boolean) => {
-    if (isCurrentUser) {
-      setSelected(null);
-      router.push('/profile');
-      return;
-    }
-
+  const openMemberProfile = useCallback((member: MemberData) => {
     setSelected(member);
-  }, [router]);
+  }, []);
 
   const closeMemberProfile = useCallback(() => {
     setSelected(null);
@@ -1946,21 +1940,9 @@ export default function MembersScreen() {
       const target = members.find(m => m.id === memberId);
       if (!target) return;
 
-      if (target.id === currentUserId) {
-        router.replace('/profile');
-        return;
-      }
-
       setSelected(target);
     }
-  }, [currentUserId, dismissedRouteMemberId, memberId, members, router, selected]);
-
-  useEffect(() => {
-    if (selected && currentUserId && selected.id === currentUserId) {
-      setSelected(null);
-      router.replace('/profile');
-    }
-  }, [currentUserId, router, selected]);
+  }, [dismissedRouteMemberId, memberId, members, selected]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return members;
@@ -2179,7 +2161,7 @@ export default function MembersScreen() {
                     return (
                       <Pressable
                         key={member.id}
-                        onPress={() => openMemberProfile(member, isMe)}
+                        onPress={() => openMemberProfile(member)}
                         style={{
                           position: 'absolute',
                           left,
@@ -2286,7 +2268,7 @@ export default function MembersScreen() {
 
       </ScrollView>
 
-      {selected && selected.id !== currentUserId && (
+      {selected && (
         <MemberDetailModal
           member={selected}
           communityId={communityId}
