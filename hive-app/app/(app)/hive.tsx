@@ -2518,6 +2518,8 @@ export default function HiveScreen() {
             actionLabel="+ Wish"
             onAction={() => setShowAddWishModal(true)}
             compact={useMobileLayout}
+            compactAction={false}
+            stretchTabs={false}
             tabs={[
               {
                 key: 'public',
