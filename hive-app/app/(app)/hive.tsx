@@ -23,7 +23,7 @@ import {
   WishSectionSkeleton,
 } from '../../components/hive/skeletons';
 import { AppHeader } from '../../components/navigation';
-import { getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
+import { DAILY_QUESTIONS, getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
@@ -66,8 +66,12 @@ type HomeTodo = {
 };
 
 const CALENDAR_DURATION_MS = 2.5 * 60 * 60 * 1000; // 30-min arrival + 2-hour meeting
-const getRecentDailyQuestions = (days = 7) => {
-  return Array.from({ length: days }, (_, offset) => {
+const CATCH_UP_BATCH_SIZE = 7;
+const CATCH_UP_MAX_DAYS = DAILY_QUESTIONS.length;
+
+const getRecentDailyQuestions = (days = CATCH_UP_BATCH_SIZE) => {
+  const dayCount = Math.min(Math.max(days, 1), CATCH_UP_MAX_DAYS);
+  return Array.from({ length: dayCount }, (_, offset) => {
     const date = new Date();
     date.setDate(date.getDate() - offset);
     return getQuestionForDate(date);
@@ -423,6 +427,7 @@ export default function HiveScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAnswerModal, setShowAnswerModal] = useState(false);
   const [showCatchUpModal, setShowCatchUpModal] = useState(false);
+  const [catchUpDayCount, setCatchUpDayCount] = useState(CATCH_UP_BATCH_SIZE);
   const [showAddHomeGuide, setShowAddHomeGuide] = useState(false);
   const [myAnswer, setMyAnswer] = useState('');
   const [mySubmittedAnswer, setMySubmittedAnswer] = useState('');
@@ -453,7 +458,9 @@ export default function HiveScreen() {
 
   const { question: todayQuestion, index: todayIndex, dateKey: todayDateKey } = getTodayQuestion();
   const currentAnswerPrompt = activeAnswerPrompt ?? { question: todayQuestion, index: todayIndex, dateKey: todayDateKey };
-  const recentDailyQuestions = getRecentDailyQuestions(7);
+  const recentDailyQuestions = getRecentDailyQuestions(catchUpDayCount);
+  const canShowMoreDailyQuestions = catchUpDayCount < CATCH_UP_MAX_DAYS;
+  const nextCatchUpBatchSize = Math.min(CATCH_UP_BATCH_SIZE, CATCH_UP_MAX_DAYS - catchUpDayCount);
 
   const fetchTodayAnswers = useCallback(async () => {
     if (!communityId) return;
@@ -487,7 +494,7 @@ export default function HiveScreen() {
 
   const fetchRecentAnswers = useCallback(async () => {
     if (!communityId) return;
-    const dates = getRecentDailyQuestions(7).map(item => item.dateKey);
+    const dates = getRecentDailyQuestions(catchUpDayCount).map(item => item.dateKey);
     const { data, error } = await supabase
       .from('daily_question_answers')
       .select('user_id, answer, question_date')
@@ -507,7 +514,7 @@ export default function HiveScreen() {
       next.set(date, answersForDate);
     });
     setRecentAnswerMaps(next);
-  }, [communityId]);
+  }, [communityId, catchUpDayCount]);
 
   useEffect(() => { fetchTodayAnswers(); }, [fetchTodayAnswers]);
   useEffect(() => { fetchRecentAnswers(); }, [fetchRecentAnswers]);
@@ -3100,7 +3107,7 @@ export default function HiveScreen() {
                 Catch up
               </Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#6b7280', lineHeight: 20, marginBottom: 14 }}>
-                Answer the questions you missed this week, or peek at the days you already joined.
+                Answer the questions you missed, or peek at the days you already joined.
               </Text>
               <ScrollView
                 nestedScrollEnabled
@@ -3163,6 +3170,24 @@ export default function HiveScreen() {
                     </Pressable>
                   );
                 })}
+                {canShowMoreDailyQuestions ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Show ${nextCatchUpBatchSize} more daily questions`}
+                    onPress={() => setCatchUpDayCount(prev => Math.min(prev + CATCH_UP_BATCH_SIZE, CATCH_UP_MAX_DAYS))}
+                    style={({ pressed }) => ({
+                      backgroundColor: pressed ? '#fbf0d7' : '#f5f3ee',
+                      borderRadius: 14,
+                      paddingVertical: 14,
+                      marginTop: 2,
+                      marginBottom: 10,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', textAlign: 'center' }}>
+                      Show {nextCatchUpBatchSize} more
+                    </Text>
+                  </Pressable>
+                ) : null}
               </ScrollView>
               <Pressable
                 onPress={() => setShowCatchUpModal(false)}
