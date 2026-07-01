@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import { Text, View, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
@@ -7,7 +7,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
-import { getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
+import { getLastAppPathAsync, getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
@@ -101,15 +101,58 @@ export default function AppLayout() {
   const mobileTabPaddingTop = useBrowserCompactTabs ? 2 : 4;
   const tabIconSize = useMobileLayout ? (useBrowserCompactTabs ? 20 : 22) : 26;
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
+  const restoredNativePathRef = useRef(false);
 
   // Initialize push notification listeners and state (no permission prompt on load)
   useNotifications({ autoRequestPermission: false });
 
   useEffect(() => {
+    if (Platform.OS !== 'web' && !restoredNativePathRef.current) return;
+
     if (!loading && session && communityId) {
       saveLastAppPath(pathname);
     }
   }, [loading, session, communityId, pathname]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (restoredNativePathRef.current || loading || !session || !communityId) return;
+    restoredNativePathRef.current = true;
+
+    let cancelled = false;
+    getLastAppPathAsync().then((lastPath) => {
+      if (cancelled || pathname !== '/hive' || lastPath === pathname) return;
+
+      switch (lastPath) {
+        case '/':
+        case '/index':
+          router.replace('/');
+          break;
+        case '/board':
+          router.replace('/board');
+          break;
+        case '/messages':
+          router.replace('/messages');
+          break;
+        case '/meetings':
+          router.replace('/meetings');
+          break;
+        case '/profile':
+          router.replace('/profile');
+          break;
+        case '/admin':
+          router.replace('/admin');
+          break;
+        case '/hive':
+        default:
+          break;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [communityId, loading, pathname, router, session]);
 
   // Guard: redirect to login/join if auth resolves without a valid session.
   // This runs for any deep link that bypasses the index.tsx routing logic

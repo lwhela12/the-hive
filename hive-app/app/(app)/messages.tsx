@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useChatRooms, RoomWithData } from '../../lib/hooks/useChatRooms';
 import { prefetchRoomMessages } from '../../lib/hooks/useRoomMessagesQuery';
-import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+import { getStoredItemAsync, removeStoredItemAsync, setStoredItemAsync } from '../../lib/webStorage';
 import { ChatRoomItem } from '../../components/messaging/ChatRoomItem';
 import { RoomChatView } from '../../components/messaging/RoomChatView';
 import { MemberPicker } from '../../components/messaging/MemberPicker';
@@ -55,16 +55,38 @@ export default function MessagesScreen() {
     }
     if (selectedRoom || rooms.length === 0) return;
 
-    const savedRoomId = selectedRoomStorageKey
-      ? getStoredItem(selectedRoomStorageKey)
-      : null;
     const directRoomId = roomId && roomId !== ignoredDirectRoomIdRef.current ? roomId : null;
-    const roomToRestore = rooms.find((room) => room.id === (directRoomId || savedRoomId));
 
-    if (roomToRestore) {
-      setSelectedRoom(roomToRestore);
-      markRoomAsRead(roomToRestore.id);
+    if (directRoomId) {
+      const directRoom = rooms.find((room) => room.id === directRoomId);
+      if (directRoom) {
+        setSelectedRoom(directRoom);
+        markRoomAsRead(directRoom.id);
+        if (selectedRoomStorageKey) {
+          void setStoredItemAsync(selectedRoomStorageKey, directRoom.id);
+        }
+      }
+      return;
     }
+
+    if (!selectedRoomStorageKey) return;
+
+    let cancelled = false;
+    getStoredItemAsync(selectedRoomStorageKey).then((savedRoomId) => {
+      if (cancelled || !savedRoomId) return;
+
+      const savedRoom = rooms.find((room) => room.id === savedRoomId);
+      if (savedRoom) {
+        setSelectedRoom(savedRoom);
+        markRoomAsRead(savedRoom.id);
+      } else {
+        void removeStoredItemAsync(selectedRoomStorageKey);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [markRoomAsRead, roomId, rooms, selectedRoom, selectedRoomStorageKey]);
 
   const openRoom = useCallback((room: RoomWithData) => {
@@ -73,7 +95,7 @@ export default function MessagesScreen() {
     setCustomizeRoomOnOpen(false);
 
     if (selectedRoomStorageKey) {
-      setStoredItem(selectedRoomStorageKey, room.id);
+      void setStoredItemAsync(selectedRoomStorageKey, room.id);
     }
   }, [markRoomAsRead, selectedRoomStorageKey]);
 
@@ -83,7 +105,7 @@ export default function MessagesScreen() {
     setSelectedRoom(room);
 
     if (selectedRoomStorageKey) {
-      setStoredItem(selectedRoomStorageKey, room.id);
+      void setStoredItemAsync(selectedRoomStorageKey, room.id);
     }
   }, [markRoomAsRead, selectedRoomStorageKey]);
 
@@ -137,7 +159,7 @@ export default function MessagesScreen() {
           setSelectedRoom(null);
           setCustomizeRoomOnOpen(false);
           if (selectedRoomStorageKey) {
-            removeStoredItem(selectedRoomStorageKey);
+            void removeStoredItemAsync(selectedRoomStorageKey);
           }
         }}
       />

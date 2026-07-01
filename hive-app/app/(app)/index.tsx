@@ -7,7 +7,7 @@ import { ConversationSidebar } from '../../components/chat/ConversationSidebar';
 import { AppHeader } from '../../components/navigation';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useConversations } from '../../lib/hooks/useConversations';
-import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+import { getStoredItemAsync, removeStoredItemAsync, setStoredItemAsync } from '../../lib/webStorage';
 import type { Conversation } from '../../types';
 
 export default function ChatScreen() {
@@ -46,7 +46,7 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!selectedConversationStorageKey || !currentConversation?.id) return;
     if (currentConversation.mode !== 'default' || currentConversation.is_active === false) return;
-    setStoredItem(selectedConversationStorageKey, currentConversation.id);
+    void setStoredItemAsync(selectedConversationStorageKey, currentConversation.id);
   }, [
     currentConversation?.id,
     currentConversation?.is_active,
@@ -60,18 +60,29 @@ export default function ChatScreen() {
     if (restoredConversationKeyRef.current === selectedConversationStorageKey) return;
 
     restoredConversationKeyRef.current = selectedConversationStorageKey;
-    const savedConversationId = getStoredItem(selectedConversationStorageKey);
-    const savedConversation = savedConversationId
-      ? conversations.find((conversation) => conversation.id === savedConversationId && conversation.mode === 'default')
-      : null;
-    const fallbackConversation = conversations.find((conversation) => conversation.mode === 'default') ?? null;
-    const conversationToRestore = savedConversation ?? fallbackConversation;
+    let cancelled = false;
+    getStoredItemAsync(selectedConversationStorageKey).then((savedConversationId) => {
+      if (cancelled) return;
 
-    if (conversationToRestore) {
-      setCurrentConversation(conversationToRestore);
-    } else if (savedConversationId) {
-      removeStoredItem(selectedConversationStorageKey);
-    }
+      const savedConversation = savedConversationId
+        ? conversations.find((conversation) => conversation.id === savedConversationId && conversation.mode === 'default')
+        : null;
+      const fallbackConversation = conversations.find((conversation) => conversation.mode === 'default') ?? null;
+      const conversationToRestore = savedConversation ?? fallbackConversation;
+
+      if (conversationToRestore) {
+        setCurrentConversation(conversationToRestore);
+      } else if (savedConversationId) {
+        void removeStoredItemAsync(selectedConversationStorageKey);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      if (restoredConversationKeyRef.current === selectedConversationStorageKey) {
+        restoredConversationKeyRef.current = null;
+      }
+    };
   }, [
     conversations,
     currentConversation,
@@ -109,8 +120,11 @@ export default function ChatScreen() {
   }, [currentConversation, setCurrentConversation, loadConversations]);
 
   const handleDeleteConversation = useCallback(async (id: string) => {
-    if (selectedConversationStorageKey && getStoredItem(selectedConversationStorageKey) === id) {
-      removeStoredItem(selectedConversationStorageKey);
+    if (selectedConversationStorageKey) {
+      const savedConversationId = await getStoredItemAsync(selectedConversationStorageKey);
+      if (savedConversationId === id) {
+        await removeStoredItemAsync(selectedConversationStorageKey);
+      }
     }
     await deleteConversation(id);
   }, [deleteConversation, selectedConversationStorageKey]);
