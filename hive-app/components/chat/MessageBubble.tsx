@@ -97,13 +97,27 @@ export const MessageBubble = memo(function MessageBubble({
             <Pressable
               onPress={handleCopy}
               hitSlop={8}
-              style={{ opacity: copied ? 1 : 0.45 }}
+              accessibilityRole="button"
+              accessibilityLabel={copied ? 'Message copied' : 'Copy full message'}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 3,
+                minHeight: 24,
+                paddingHorizontal: 4,
+                opacity: copied ? 1 : 0.58,
+              }}
             >
               <Ionicons
                 name={copied ? 'checkmark' : 'copy-outline'}
-                size={13}
+                size={14}
                 color={copied ? '#bd9348' : '#2d2d2d'}
               />
+              <Text
+                style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: copied ? '#bd9348' : '#2d2d2d' }}
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </Text>
             </Pressable>
           )}
         </View>

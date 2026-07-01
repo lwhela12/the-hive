@@ -17,6 +17,8 @@ import { SelectedFilePreview } from '../ui/SelectedFilePreview';
 const DRAFT_KEY = 'clive-message';
 const MAX_IMAGES = 5;
 const MAX_FILES = 5;
+const DEFAULT_MESSAGE_MAX_LENGTH = 12000;
+const CHARACTER_LIMIT_WARNING_THRESHOLD = 1000;
 
 export interface ChatInputAttachments {
   images?: SelectedImage[];
@@ -32,6 +34,7 @@ interface ChatInputProps {
   communityId?: string | null;
   currentUserId?: string;
   mentionableMembers?: Pick<Profile, 'id' | 'name'>[];
+  messageMaxLength?: number;
 }
 
 export const ChatInput = memo(function ChatInput({
@@ -42,6 +45,7 @@ export const ChatInput = memo(function ChatInput({
   communityId,
   currentUserId,
   mentionableMembers = [],
+  messageMaxLength = DEFAULT_MESSAGE_MAX_LENGTH,
 }: ChatInputProps) {
   const [inputText, setInputText, clearInputDraft] = usePersistentTextDraft(draftKey);
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
@@ -108,6 +112,8 @@ export const ChatInput = memo(function ChatInput({
   });
 
   const hasContent = inputText.trim().length > 0 || selectedImages.length > 0 || selectedFiles.length > 0;
+  const remainingCharacters = messageMaxLength - inputText.length;
+  const showCharacterLimit = remainingCharacters <= CHARACTER_LIMIT_WARNING_THRESHOLD;
 
   return (
     <View className="px-4 py-3 bg-white" {...dragDropProps}>
@@ -200,7 +206,7 @@ export const ChatInput = memo(function ChatInput({
           returnKeyType="send"
           enterKeyHint="send"
           onKeyPress={handleKeyPress}
-          maxLength={2000}
+          maxLength={messageMaxLength}
           className="flex-1 max-h-32 text-base text-charcoal py-1 px-1"
           style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none', caretColor: '#313130' } as any}
           editable={!isLoading}
@@ -238,6 +244,15 @@ export const ChatInput = memo(function ChatInput({
           }}
         />
       </View>
+
+      {showCharacterLimit && (
+        <Text
+          style={{ fontFamily: 'Lato_400Regular' }}
+          className={`mt-1 text-right text-xs ${remainingCharacters <= 100 ? 'text-red-500' : 'text-charcoal/45'}`}
+        >
+          {remainingCharacters.toLocaleString()} characters left
+        </Text>
+      )}
     </View>
   );
 });
