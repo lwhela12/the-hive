@@ -1365,11 +1365,30 @@ serve(async (req) => {
       });
     }
 
-    if (isQuickSurpriseRequest(message, mode, refine_wish, attachments)) {
+    const conversationId = typeof conversation_id === 'string' ? conversation_id.trim() : '';
+    if (!conversationId) {
+      return errorResponse('Missing conversation_id', 400);
+    }
+
+    const { data: conversation, error: conversationError } = await supabaseClient
+      .from('conversations')
+      .select('id, is_active')
+      .eq('id', conversationId)
+      .eq('user_id', userId)
+      .eq('community_id', communityId)
+      .single();
+
+    if (conversationError || !conversation || conversation.is_active === false) {
+      return errorResponse('Conversation not found', 404);
+    }
+
+    const effectiveMode = mode || 'default';
+
+    if (isQuickSurpriseRequest(message, effectiveMode, refine_wish, attachments)) {
       const quickResponse = getQuickSurpriseResponse();
       return stream ? quickStreamResponse(quickResponse) : quickJsonResponse(quickResponse);
     }
-    const quickPlayfulResponse = getQuickPlayfulResponse(message, mode, refine_wish, attachments);
+    const quickPlayfulResponse = getQuickPlayfulResponse(message, effectiveMode, refine_wish, attachments);
     if (quickPlayfulResponse) {
       return stream ? quickStreamResponse(quickPlayfulResponse) : quickJsonResponse(quickPlayfulResponse);
     }
@@ -1379,8 +1398,8 @@ serve(async (req) => {
       supabase: supabaseClient,
       userId,
       communityId,
-      conversationId: conversation_id,
-      mode: mode || 'default',
+      conversationId,
+      mode: effectiveMode,
     });
 
     // Check if this is a wish refinement request (refine_wish contains the rough wish)
@@ -1391,11 +1410,11 @@ serve(async (req) => {
     if (isRefineWish) {
       // Use the refine wish prompt with the rough wish inserted
       systemPrompt = REFINE_WISH_PROMPT.replace('{rough_wish}', refine_wish);
-    } else if (mode === 'onboarding' && context === 'skills') {
+    } else if (effectiveMode === 'onboarding' && context === 'skills') {
       systemPrompt = ONBOARDING_SKILLS_PROMPT;
-    } else if (mode === 'onboarding' && context === 'wishes') {
+    } else if (effectiveMode === 'onboarding' && context === 'wishes') {
       systemPrompt = ONBOARDING_WISHES_PROMPT;
-    } else if (mode === 'onboarding' && !context) {
+    } else if (effectiveMode === 'onboarding' && !context) {
       // Unified onboarding flow
       systemPrompt = UNIFIED_ONBOARDING_PROMPT;
     }
@@ -2001,7 +2020,7 @@ serve(async (req) => {
               .insert({
                 community_id: communityId,
                 user_id: userId,
-                conversation_id: conversation_id || null,
+                conversation_id: conversationId,
                 summary,
                 action_plan: actionPlan,
                 status: 'pending',
@@ -2047,12 +2066,12 @@ serve(async (req) => {
 
             if (request_id) {
               requestQuery = requestQuery.eq('id', request_id);
-            } else if (conversation_id) {
-              requestQuery = requestQuery.eq('conversation_id', conversation_id);
+            } else {
+              requestQuery = requestQuery.eq('conversation_id', conversationId);
             }
 
             let { data: pendingRows, error: pendingError } = await requestQuery;
-            if ((!pendingRows || pendingRows.length === 0) && !request_id && conversation_id) {
+            if ((!pendingRows || pendingRows.length === 0) && !request_id) {
               const fallback = await supabaseClient
                 .from('agent_action_requests')
                 .select('id, summary, action_plan')
