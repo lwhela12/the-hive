@@ -145,7 +145,38 @@ function answerSimilarity(a: string, b: string) {
 }
 
 function normalizeProfileStoryText(value?: string | null) {
-  return (value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return (value ?? '')
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function sharedPrefixLength(a: string, b: string) {
+  const limit = Math.min(a.length, b.length);
+  let index = 0;
+  while (index < limit && a[index] === b[index]) index += 1;
+  return index;
+}
+
+function profileStoriesAreDuplicate(bio?: string | null, intro?: string | null) {
+  const normalizedBio = normalizeProfileStoryText(bio);
+  const normalizedIntro = normalizeProfileStoryText(intro);
+  if (!normalizedBio || !normalizedIntro) return false;
+  if (normalizedBio === normalizedIntro) return true;
+
+  const shorterLength = Math.min(normalizedBio.length, normalizedIntro.length);
+  const longerLength = Math.max(normalizedBio.length, normalizedIntro.length);
+  if (shorterLength < 80) return false;
+
+  if (normalizedBio.startsWith(normalizedIntro) || normalizedIntro.startsWith(normalizedBio)) {
+    return shorterLength / longerLength >= 0.35;
+  }
+
+  const sharedPrefix = sharedPrefixLength(normalizedBio, normalizedIntro);
+  return sharedPrefix >= 160 || sharedPrefix / shorterLength >= 0.75;
 }
 
 function buildDailyMatchStats(userId: string | null, answers: DailyAnswerRow[]) {
@@ -403,9 +434,8 @@ function MemberDetailModal({
   });
 
   const introContent = member.introPost?.content ?? '';
-  const normalizedBioContent = normalizeProfileStoryText(member.bio);
   const normalizedIntroContent = normalizeProfileStoryText(introContent);
-  const showIntroPost = !!member.introPost && !!normalizedIntroContent && (!normalizedBioContent || normalizedIntroContent !== normalizedBioContent);
+  const showIntroPost = !!member.introPost && !!normalizedIntroContent && !profileStoriesAreDuplicate(member.bio, introContent);
   const introNeedsToggle = introContent.length > 320;
   const visibleIntro = introExpanded || !introNeedsToggle
     ? introContent
