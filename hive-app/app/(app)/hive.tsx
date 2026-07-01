@@ -1793,7 +1793,7 @@ export default function HiveScreen() {
     ? { width: '100%' as const }
     : { flex: 1, minWidth: 0 };
   const dashboardPanelHeight = useMobileLayout ? 300 : 280;
-  const todoPanelHeight = useMobileLayout ? 420 : 280;
+  const todoPanelMaxHeight = useMobileLayout ? 420 : 280;
   const wishPanelHeight = useMobileLayout ? 460 : 360;
 
   const renderTodoRow = (todo: HomeTodo, isLast: boolean) => {
@@ -2421,17 +2421,17 @@ export default function HiveScreen() {
               shadowOffset: { width: 0, height: 5 },
               elevation: 3,
               overflow: 'hidden',
-              height: todoPanelHeight,
+              maxHeight: todoPanelMaxHeight,
               position: 'relative',
             }}>
               <ConfettiBurst visible={showConfetti} onDone={() => setShowConfetti(false)} />
               <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10 }} />
               {homeActionLoading ? (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 32 }}>
                   <ActivityIndicator size="small" color="#bd9348" />
                 </View>
               ) : visibleTodos.length === 0 ? (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                <View style={{ alignItems: 'center', justifyContent: 'center', padding: 20, paddingVertical: 28 }}>
                   <Text style={{ fontSize: 32, marginBottom: 8 }}>✅</Text>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', marginBottom: 4, textAlign: 'center' }}>All clear!</Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center', lineHeight: 18 }}>
@@ -2441,7 +2441,7 @@ export default function HiveScreen() {
                   </Text>
                 </View>
               ) : (
-                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true}>
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true} style={{ maxHeight: todoPanelMaxHeight }}>
                   {renderTodoList()}
                 </ScrollView>
               )}
