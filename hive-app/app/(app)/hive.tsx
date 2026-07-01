@@ -47,7 +47,7 @@ type WishWithGranters = Wish & {
   granters?: (WishGranter & { granter?: Profile })[];
 };
 
-type WishStatusTabKey = Exclude<HdWishTabKey, 'private'>;
+type WishStatusTabKey = HdWishTabKey;
 type TodoStatusTabKey = 'open' | 'done';
 
 type HomeTodo = {
@@ -1567,7 +1567,7 @@ export default function HiveScreen() {
     const archiveWish = async () => {
       let query = supabase
         .from('wishes')
-        .update({ status: 'private', is_active: false } as any)
+        .update({ status: 'replaced', is_active: false, replaced_at: new Date().toISOString() } as any)
         .eq('id', wish.id)
         .eq('community_id', communityId);
 

@@ -1184,7 +1184,7 @@ export default function BoardScreen() {
       try {
         const { error } = await (supabase as any)
           .from('wishes')
-          .update({ status: 'private', is_active: false })
+          .update({ status: 'replaced', is_active: false, replaced_at: new Date().toISOString() })
           .eq('id', wish.id)
           .eq('community_id', communityId);
 

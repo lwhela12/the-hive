@@ -15,6 +15,7 @@ type WishCombCardProps = {
   wish: WishCombCardWish;
   ownerName?: string | null;
   ownerAvatarUrl?: string | null;
+  compact?: boolean;
   onOpen?: (wish: WishCombCardWish) => void;
   onManage?: (wish: WishCombCardWish) => void;
 };
@@ -85,6 +86,7 @@ export function WishCombCard({
   wish,
   ownerName,
   ownerAvatarUrl,
+  compact = false,
   onOpen,
   onManage,
 }: WishCombCardProps) {
@@ -93,10 +95,10 @@ export function WishCombCard({
   const isPrivate = wish.status === 'private';
   const ownerDisplayName = (ownerName ?? '').trim();
   const useHomeWishLayout = !isPrivate && ownerDisplayName.length > 0;
-  const showStatusPill = !useHomeWishLayout;
+  const showStatusPill = !useHomeWishLayout && !compact;
   const quickTitle = getWishQuickTitle(wish);
   const bodyPreview = getWishBodyPreview(wish);
-  const showBodyPreview = hasSeparateWishTitle(wish);
+  const showBodyPreview = !compact && hasSeparateWishTitle(wish);
   const dateLabel = isGranted && wish.fulfilled_at
     ? `${getHdWishStatusLabel('fulfilled')} · ${formatDateShort(wish.fulfilled_at)}`
     : wish.created_at
@@ -104,6 +106,7 @@ export function WishCombCard({
       : null;
   const cardStyle = [
     styles.card,
+    compact ? styles.cardCompact : null,
     isPrivate ? styles.cardPrivate : styles.cardPublic,
     isGranted ? styles.cardGranted : null,
   ];
@@ -146,7 +149,7 @@ export function WishCombCard({
             styles.homeWishTitle,
             isGranted ? styles.descriptionGranted : styles.descriptionOpen,
           ]}
-          numberOfLines={2}
+          numberOfLines={compact ? 1 : 2}
         >
           {quickTitle}
         </Text>
@@ -163,7 +166,7 @@ export function WishCombCard({
           </Text>
         )}
 
-        {dateLabel && (
+        {!compact && dateLabel && (
           <View style={styles.footerRow}>
             <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
               {dateLabel}
@@ -206,7 +209,7 @@ export function WishCombCard({
             isGranted ? styles.descriptionGranted : styles.descriptionOpen,
             isPrivate ? styles.descriptionPrivate : null,
           ]}
-          numberOfLines={2}
+          numberOfLines={compact ? 1 : 2}
         >
           {quickTitle}
         </Text>
@@ -224,7 +227,7 @@ export function WishCombCard({
           </Text>
         )}
 
-        {dateLabel && (
+        {!compact && dateLabel && (
           <View style={styles.footerRow}>
             <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
               {dateLabel}
@@ -276,6 +279,10 @@ const styles = StyleSheet.create({
   },
   cardPressed: {
     opacity: 0.84,
+  },
+  cardCompact: {
+    paddingHorizontal: 14,
+    paddingVertical: 13,
   },
   cardPublic: {
     borderColor: 'rgba(222,193,129,0.5)',

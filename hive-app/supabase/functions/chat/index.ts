@@ -74,13 +74,13 @@ Examples:
 
 2. **Listen for latent wishes.** When someone says "I'm having a rough day"—that might lead to a wish. Probe gently.
 
-3. **Never push wishes public.** When a wish is well-articulated and confirmed, ASK if they want to share it with HIVE. Respect if they say no.
+3. **Be clear about visibility.** Saved wishes are HD Wishes visible to HIVE members. Before saving, make sure the user has confirmed the wording and understands it will be shared with HIVE.
 
 4. **You have tools.** Use them naturally. Don't announce tool usage—just use them and continue conversationally. But ALWAYS confirm wishes before saving.
 
 5. **You know the community.** You can see everyone's public wishes and skills. When relevant, mention potential matches.
 
-6. **Separate community knowledge from private user context.** Your community knowledge comes from HIVE boards, public/fulfilled community wishes, skills, events, meetings, and Honey Pot. The signed-in user's own profile, wishes, action items, and Clive conversation are private context for helping that user only; do not treat them as community knowledge or reveal them to other members unless the user explicitly publishes them to a public board, public wish, event, or other shared HIVE surface. Do not claim to see, summarize, infer from, or act on private chat rooms, DMs, group DMs, or private room messages. If someone asks what private messages say, explain that you cannot inspect them.
+6. **Separate community knowledge from private user context.** Your community knowledge comes from HIVE boards, visible current/granted community wishes, skills, events, meetings, and Honey Pot. The signed-in user's own profile, action items, and Clive conversation are private context for helping that user only; do not treat them as community knowledge or reveal them to other members unless the user shares them to a public board, wish, event, or other shared HIVE surface. Do not claim to see, summarize, infer from, or act on private chat rooms, DMs, group DMs, or private room messages. If someone asks what private messages say, explain that you cannot inspect them.
 
 7. **You can reference board posts.** Use the search_board_posts and get_board_post tools to find and reference specific discussions.
 
@@ -132,7 +132,7 @@ You maintain a private personality profile for each user. The user CAN see these
 - Don't be sycophantic or overly enthusiastic
 - Don't lecture about the "high definition wishing framework"—just use it
 - Don't save wishes without explicit user confirmation
-- Don't share private wishes with others
+- Don't save wishes without confirming that they will be visible to HIVE members
 - Don't make the user feel analyzed or processed
 - Don't rush to solutions before the wish is clear
 - Don't project what you think they should want
@@ -152,7 +152,7 @@ const ONBOARDING_WISHES_PROMPT = `You are helping a new member of HIVE discover 
 
 **IMPORTANT: Use "H.I.V.E." for the formal brand name and "HIVE" in product copy. Avoid article-prefixed, mixed-case, or lowercase brand variants.**
 
-These wishes will stay PRIVATE unless they choose to share. Help them feel comfortable expressing needs.
+Saved wishes become HD Wishes visible to HIVE members, so help them feel comfortable shaping a wish they are ready to share.
 
 Use the HD wishing process: explore what they really want through curious questioning, then transform vague wishes into specific, actionable ones.
 
@@ -161,7 +161,7 @@ Use the HD wishing process: explore what they really want through curious questi
 2. Ask: "Does that capture it? Should I save this?"
 3. Only call store_wish after they confirm
 
-Remind them these stay private and they can refine them later.`;
+Remind them they can refine the wording before saving and edit it later.`;
 
 const UNIFIED_ONBOARDING_PROMPT = `You are welcoming a new member to HIVE. Guide them through getting to know each other in a single flowing conversation.
 
@@ -172,7 +172,7 @@ const UNIFIED_ONBOARDING_PROMPT = `You are welcoming a new member to HIVE. Guide
 
 2. **Discover their skills** - What are they good at? What do they enjoy doing? Aim for 2-3 skills. Use store_skill when a skill is clearly articulated. Transform vague skills into high-definition ones.
 
-3. **Surface their first wish** - What would they like help with? These stay PRIVATE. Aim for at least 1 wish. Use the HD wishing process: explore what they really want, then transform vague wishes into specific, actionable ones. **Always confirm before saving** - reflect the wish back and ask "Does that capture it?" before calling store_wish.
+3. **Surface their first wish** - What would they like help with? Saved wishes are visible HD Wishes. Aim for at least 1 wish. Use the HD wishing process: explore what they really want, then transform vague wishes into specific, actionable ones. **Always confirm before saving** - reflect the wish back and ask "Does that capture it? Should I save this as an HD Wish?" before calling store_wish.
 
 4. **Complete onboarding** - When you've captured their birthday (or they declined), 2+ skills, and 1+ wish, call complete_onboarding to signal we're done.
 
@@ -368,7 +368,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "store_wish",
-    description: "Store a wish that has emerged from conversation. Wishes start as private.",
+    description: "Store a confirmed HD Wish that will be visible to HIVE members.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -380,7 +380,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "publish_wish",
-    description: "Make a wish public to HIVE. Only call after explicit user confirmation.",
+    description: "Ensure a wish is visible as an HD Wish. Only call after explicit user confirmation.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -391,7 +391,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "get_user_wishes",
-    description: "Retrieve the current user's wishes (both private and public)",
+    description: "Retrieve the current user's wishes",
     input_schema: { type: "object" as const, properties: {} }
   },
   {
@@ -555,13 +555,13 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "search_wishes",
-    description: "Search visible wishes before proposing to mark one fulfilled. Private wishes remain private unless they belong to the current user.",
+    description: "Search visible HD Wishes before proposing to mark one fulfilled.",
     input_schema: {
       type: "object" as const,
       properties: {
         query: { type: "string", description: "Search text for wish description" },
         member_name: { type: "string", description: "Optional wish owner name" },
-        status: { type: "string", description: "Optional wish status: private, public, fulfilled, or replaced" },
+        status: { type: "string", description: "Optional wish status: public, fulfilled, or replaced" },
         limit: { type: "number", description: "Maximum wishes to return (default 20, max 50)" }
       }
     }
@@ -1524,7 +1524,8 @@ serve(async (req) => {
               community_id: communityId,
               description,
               raw_input,
-              status: 'private',
+              status: 'public',
+              is_active: true,
               extracted_from: mode === 'onboarding' ? 'onboarding' : 'chat'
             });
             result = error ? `Error: ${error.message}` : 'Wish saved successfully';

@@ -25,8 +25,6 @@ export const queryKeys = {
   // HIVE data
   queenBees: (communityId: string) => ['queenBees', communityId] as const,
   publicWishes: (communityId: string) => ['publicWishes', communityId] as const,
-  privateWishes: (communityId: string, userId: string) =>
-    ['privateWishes', communityId, userId] as const,
   grantedWishes: (communityId: string) => ['grantedWishes', communityId] as const,
   userWishes: (communityId: string, userId: string) =>
     ['userWishes', communityId, userId] as const,

@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { Skill, UserRole, Wish } from '../../types';
+import type { Profile, Skill, UserRole, Wish } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
@@ -16,13 +16,12 @@ import { DAILY_QUESTIONS } from '../../lib/dailyQuestions';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
 import { setStoredItem } from '../../lib/webStorage';
-import { getHdWishStatusLabel } from '../../lib/wishDisplay';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileShowcase } from '../../components/profile/ProfileShowcase';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { WishCombCard } from '../../components/profile/WishCombCard';
+import { WishDetail } from '../../components/hive/WishDetail';
 import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
-import { LinkifiedText } from '../../components/ui/LinkifiedText';
 
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish>;
@@ -77,7 +76,7 @@ const PROFILE_EMPTY_COPY = {
   knownFor: 'Not shared yet.',
   bio: 'No bio shared yet.',
   miq: '3MIQ answers are not shared yet.',
-  wishes: 'No HD Public wishes shared yet.',
+  wishes: 'No HD wishes shared yet.',
   skills: 'No skills planted yet — garden coming soon!',
 };
 
@@ -359,10 +358,13 @@ function MemberDetailModal({
   communityId: string | null;
 }) {
   const router = useRouter();
+  const { width: viewportWidth } = useWindowDimensions();
   const { profile, session } = useAuth();
   const currentAuthId = session?.user?.id ?? profile?.id ?? null;
   const isCurrentUser = !!currentAuthId && member.id === currentAuthId;
-  const publicWishes = member.wishes.filter(w => w.status === 'public');
+  const isPhoneProfile = viewportWidth < 640;
+  const currentWishes = member.wishes.filter(w => w.status === 'public' && w.is_active !== false);
+  const grantedWishes = member.wishes.filter(w => w.status === 'fulfilled');
   const roleLabel = ROLE_LABELS[member.role];
   const { getOrCreateDMRoom } = useChatRooms(communityId ?? undefined, currentAuthId ?? undefined);
   const [introExpanded, setIntroExpanded] = useState(false);
@@ -395,12 +397,12 @@ function MemberDetailModal({
   const [skillSearch, setSkillSearch] = useState('');
   const [showWishesSheet, setShowWishesSheet] = useState(false);
   const [showDailyAnswersSheet, setShowDailyAnswersSheet] = useState(false);
+  const [selectedWish, setSelectedWish] = useState<(Wish & { user: Profile }) | null>(null);
   // Wishes management (for current user only)
   const [myWishes, setMyWishes] = useState<MemberWish[]>([]);
   const [wishesLoading, setWishesLoading] = useState(false);
   const [addingWish, setAddingWish] = useState(false);
   const [newWishInput, setNewWishInput] = useState('');
-  const [wishActionLoading, setWishActionLoading] = useState<string | null>(null);
   const [startingMessage, setStartingMessage] = useState(false);
   const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
   const wishMentionInput = useMentionInput({
@@ -466,18 +468,19 @@ function MemberDetailModal({
     setSkillSearch('');
     setShowWishesSheet(false);
     setShowDailyAnswersSheet(false);
+    setSelectedWish(null);
   }, [member]);
 
-  // Fetch current user's own wishes (all statuses) when modal opens
+  // Fetch current user's own visible wishes when modal opens
   useEffect(() => {
     if (!isCurrentUser || !communityId) return;
     setWishesLoading(true);
     supabase
       .from('wishes')
-      .select('id, description, status')
+      .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
       .eq('user_id', member.id)
       .eq('community_id', communityId)
-      .in('status', ['private', 'public'])
+      .in('status', ['public', 'fulfilled'])
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         setMyWishes(data ?? []);
@@ -529,20 +532,6 @@ function MemberDetailModal({
     }
   };
 
-  const publishWish = async (wishId: string) => {
-    setWishActionLoading(wishId);
-    await (supabase as any).from('wishes').update({ status: 'public', is_active: true }).eq('id', wishId);
-    setMyWishes(prev => prev.map(w => w.id === wishId ? { ...w, status: 'public' } : w));
-    setWishActionLoading(null);
-  };
-
-  const makeWishPrivate = async (wishId: string) => {
-    setWishActionLoading(wishId);
-    await (supabase as any).from('wishes').update({ status: 'private', is_active: false }).eq('id', wishId);
-    setMyWishes(prev => prev.map(w => w.id === wishId ? { ...w, status: 'private' } : w));
-    setWishActionLoading(null);
-  };
-
   const deleteWish = async (wishId: string) => {
     Alert.alert('Delete wish', 'Remove this wish from your profile?', [
       { text: 'Cancel', style: 'cancel' },
@@ -562,13 +551,13 @@ function MemberDetailModal({
     wishMentionInput.resetMentionSelection();
   };
 
-  const saveNewWish = async (makePublic = false) => {
+  const saveNewWish = async () => {
     const desc = newWishInput.trim();
     if (!desc || !communityId) return;
     const { data, error } = await (supabase as any)
       .from('wishes')
-      .insert({ user_id: member.id, community_id: communityId, description: desc, raw_input: desc, status: makePublic ? 'public' : 'private', is_active: makePublic, extracted_from: 'manual' })
-      .select('id, description, status')
+      .insert({ user_id: member.id, community_id: communityId, description: desc, raw_input: desc, status: 'public', is_active: true, extracted_from: 'manual' })
+      .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
       .single();
     if (error) {
       console.warn('[Members] wish save failed', error);
@@ -576,16 +565,14 @@ function MemberDetailModal({
     }
     if (data) {
       setMyWishes(prev => [data, ...prev]);
-      if (makePublic) {
-        notifyWishMentions({
-          wishId: data.id,
-          senderId: currentAuthId ?? member.id,
-          communityId,
-          content: desc,
-          members: mentionableMembers,
-          wishOwnerName: member.name,
-        });
-      }
+      notifyWishMentions({
+        wishId: data.id,
+        senderId: currentAuthId ?? member.id,
+        communityId,
+        content: desc,
+        members: mentionableMembers,
+        wishOwnerName: member.name,
+      });
     }
     setNewWishInput('');
     wishMentionInput.resetMentionSelection();
@@ -594,6 +581,21 @@ function MemberDetailModal({
 
   const refineWithClive = (description: string) => {
     router.push({ pathname: '/(app)', params: { refineWish: description } });
+  };
+
+  const openWishDetail = (wish: MemberWish) => {
+    if (!communityId) return;
+
+    setSelectedWish({
+      ...wish,
+      user_id: member.id,
+      community_id: communityId,
+      raw_input: wish.raw_input ?? wish.description,
+      is_active: wish.is_active ?? wish.status === 'public',
+      extracted_from: wish.extracted_from ?? 'manual',
+      created_at: wish.created_at ?? new Date(0).toISOString(),
+      user: member as unknown as Profile,
+    } as Wish & { user: Profile });
   };
 
   const startDirectMessage = async () => {
@@ -762,7 +764,7 @@ function MemberDetailModal({
     if (member.known_for) score++;
     if ((member.fun_facts ?? []).filter(Boolean).length > 0) score++;
     if (member.skills.length > 0) score++;
-    if (publicWishes.length > 0) score++;
+    if (currentWishes.length > 0) score++;
     return Math.round((score / 8) * 100);
   })();
 
@@ -782,6 +784,15 @@ function MemberDetailModal({
           <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4, position: 'relative' }}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
           </View>
+
+          {selectedWish && (
+            <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden', zIndex: 30 }}>
+              <WishDetail
+                wish={selectedWish}
+                onClose={() => setSelectedWish(null)}
+              />
+            </View>
+          )}
 
           {/* ── Skill Picker Sheet ── */}
           {showSkillPicker && (
@@ -909,50 +920,18 @@ function MemberDetailModal({
                 </Pressable>
               </View>
               <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 120 }}>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', marginBottom: 16, lineHeight: 18 }}>
-                  HD Private wishes are just for you. Share as HD Public when you're ready — someone might know exactly how to help.
-                </Text>
                 {wishesLoading ? (
                   <ActivityIndicator size="small" color="#bd9348" style={{ marginVertical: 20 }} />
                 ) : (
                   <>
                     {myWishes.map(wish => (
-                      <View key={wish.id} style={{
-                        backgroundColor: wish.status === 'public' ? '#fffbf0' : '#faf8f3',
-                        borderWidth: 1,
-                        borderColor: wish.status === 'public' ? 'rgba(222,193,129,0.5)' : 'rgba(200,190,170,0.3)',
-                        borderRadius: 16, padding: 16, marginBottom: 12,
-                      }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: wish.status === 'public' ? '#22c55e' : '#d1d5db', marginRight: 8 }} />
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: wish.status === 'public' ? '#16a34a' : '#9ca3af' }}>
-                            {getHdWishStatusLabel(wish.status)}
-                          </Text>
-                        </View>
-                        <LinkifiedText
-                          style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', lineHeight: 21, marginBottom: 12 }}
-                          mentionStyle={{ color: '#1d4ed8', backgroundColor: 'rgba(37,99,235,0.1)' }}
-                        >
-                          {wish.description}
-                        </LinkifiedText>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                          {wish.status === 'private' ? (
-                            <Pressable
-                              onPress={() => publishWish(wish.id)}
-                              disabled={wishActionLoading === wish.id}
-                              style={{ backgroundColor: '#22c55e', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, opacity: wishActionLoading === wish.id ? 0.5 : 1 }}
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: 'white' }}>Share as HD Public</Text>
-                            </Pressable>
-                          ) : (
-                            <Pressable
-                              onPress={() => makeWishPrivate(wish.id)}
-                              disabled={wishActionLoading === wish.id}
-                              style={{ backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, opacity: wishActionLoading === wish.id ? 0.5 : 1 }}
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#6b7280' }}>Make HD Private</Text>
-                            </Pressable>
-                          )}
+                      <View key={wish.id} style={{ marginBottom: 12 }}>
+                        <WishCombCard
+                          wish={wish}
+                          compact={isPhoneProfile}
+                          onOpen={openWishDetail}
+                        />
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
                           <Pressable
                             onPress={() => refineWithClive(wish.description)}
                             style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7 }}
@@ -995,11 +974,8 @@ function MemberDetailModal({
                           <Pressable onPress={cancelNewWish} style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}>
                             <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
                           </Pressable>
-                          <Pressable onPress={() => saveNewWish(false)} disabled={!newWishInput.trim()} style={{ flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.5)', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', textAlign: 'center', fontSize: 13 }}>HD Private</Text>
-                          </Pressable>
-                          <Pressable onPress={() => saveNewWish(true)} disabled={!newWishInput.trim()} style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>HD Public 🐝</Text>
+                          <Pressable onPress={saveNewWish} disabled={!newWishInput.trim()} style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Add HD Wish</Text>
                           </Pressable>
                         </View>
                         <Pressable onPress={() => refineWithClive(newWishInput)} disabled={!newWishInput.trim()} style={{ alignItems: 'center', paddingVertical: 6, opacity: newWishInput.trim() ? 1 : 0.4 }}>
@@ -1408,17 +1384,17 @@ function MemberDetailModal({
               showEmptyCells
             />
 
-            {/* Public wishes for other members. Your own wishes are managed below. */}
+            {/* Wishes for other members. Your own wishes are managed below. */}
             {!isCurrentUser && (
               <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>HD PUBLIC WISHES</Text>
-                {publicWishes.length > 0 ? (
-                  publicWishes.map(w => (
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>HD WISHES</Text>
+                {currentWishes.length > 0 ? (
+                  currentWishes.map(w => (
                     <View key={w.id} style={{ marginBottom: 8 }}>
                       <WishCombCard
                         wish={w}
-                        ownerName={member.name}
-                        ownerAvatarUrl={member.avatar_url}
+                        compact={isPhoneProfile}
+                        onOpen={openWishDetail}
                       />
                     </View>
                   ))
@@ -1427,6 +1403,21 @@ function MemberDetailModal({
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af', lineHeight: 20 }}>
                       {PROFILE_EMPTY_COPY.wishes}
                     </Text>
+                  </View>
+                )}
+
+                {grantedWishes.length > 0 && (
+                  <View style={{ marginTop: 16 }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>GRANTED</Text>
+                    {grantedWishes.map(w => (
+                      <View key={w.id} style={{ marginBottom: 8 }}>
+                        <WishCombCard
+                          wish={w}
+                          compact={isPhoneProfile}
+                          onOpen={openWishDetail}
+                        />
+                      </View>
+                    ))}
                   </View>
                 )}
               </View>
@@ -1490,40 +1481,13 @@ function MemberDetailModal({
                 ) : (
                   <>
                     {myWishes.map(wish => (
-                      <View key={wish.id} style={{ backgroundColor: wish.status === 'public' ? '#fffbf0' : '#faf8f3', borderWidth: 1, borderColor: wish.status === 'public' ? 'rgba(222,193,129,0.4)' : 'rgba(200,190,170,0.3)', borderRadius: 14, padding: 14, marginBottom: 10 }}>
-                        {/* Status badge */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: wish.status === 'public' ? '#22c55e' : '#9ca3af', marginRight: 7 }} />
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: wish.status === 'public' ? '#16a34a' : '#9ca3af' }}>
-                            {getHdWishStatusLabel(wish.status)}
-                          </Text>
-                        </View>
-                        <LinkifiedText
-                          style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', lineHeight: 20, marginBottom: 10 }}
-                          mentionStyle={{ color: '#1d4ed8', backgroundColor: 'rgba(37,99,235,0.1)' }}
-                        >
-                          {wish.description}
-                        </LinkifiedText>
-                        {/* Actions */}
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                          {wish.status === 'private' && (
-                            <Pressable
-                              onPress={() => publishWish(wish.id)}
-                              disabled={wishActionLoading === wish.id}
-                              style={{ backgroundColor: '#22c55e', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, opacity: wishActionLoading === wish.id ? 0.5 : 1 }}
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: 'white' }}>Share as HD Public</Text>
-                            </Pressable>
-                          )}
-                          {wish.status === 'public' && (
-                            <Pressable
-                              onPress={() => makeWishPrivate(wish.id)}
-                              disabled={wishActionLoading === wish.id}
-                              style={{ backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, opacity: wishActionLoading === wish.id ? 0.5 : 1 }}
-                            >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#6b7280' }}>Make HD Private</Text>
-                            </Pressable>
-                          )}
+                      <View key={wish.id} style={{ marginBottom: 10 }}>
+                        <WishCombCard
+                          wish={wish}
+                          compact={isPhoneProfile}
+                          onOpen={openWishDetail}
+                        />
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
                           <Pressable
                             onPress={() => refineWithClive(wish.description)}
                             style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}
@@ -1571,18 +1535,11 @@ function MemberDetailModal({
                             <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
                           </Pressable>
                           <Pressable
-                            onPress={() => saveNewWish(false)}
-                            disabled={!newWishInput.trim()}
-                            style={{ flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.5)', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}
-                          >
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', textAlign: 'center', fontSize: 13 }}>HD Private</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => saveNewWish(true)}
+                            onPress={saveNewWish}
                             disabled={!newWishInput.trim()}
                             style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}
                           >
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>HD Public 🐝</Text>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Add HD Wish</Text>
                           </Pressable>
                         </View>
                         <Pressable
@@ -1647,16 +1604,18 @@ function MemberDetailModal({
             </Pressable>
             </View>
           </ScrollView>
-          <Pressable
-            onPress={onClose}
-            onPressIn={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close member profile"
-            hitSlop={8}
-            style={{ position: 'absolute', right: 18, top: 8, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ee', zIndex: 100, elevation: 100 }}
-          >
-            <Ionicons name="close" size={24} color="#6b7280" />
-          </Pressable>
+          {!selectedWish && (
+            <Pressable
+              onPress={onClose}
+              onPressIn={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close member profile"
+              hitSlop={8}
+              style={{ position: 'absolute', right: 18, top: 8, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ee', zIndex: 100, elevation: 100 }}
+            >
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </Pressable>
+          )}
         </View>
       </View>
     </Modal>
@@ -1756,10 +1715,11 @@ export default function MembersScreen() {
           .in('user_id', userIds),
         supabase
           .from('wishes')
-          .select('user_id, id, title, description, status, created_at, fulfilled_at, thank_you_message')
+          .select('user_id, id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
           .eq('community_id', communityId)
           .in('user_id', userIds)
-          .eq('status', 'public'),
+          .in('status', ['public', 'fulfilled'])
+          .order('created_at', { ascending: false }),
         supabase
           .from('board_posts')
           .select('author_id, title, content, board_categories!inner(category_type)')
@@ -1778,10 +1738,11 @@ export default function MembersScreen() {
       if (wishesError && String(wishesError.message ?? '').includes('title')) {
         const fallback = await supabase
           .from('wishes')
-          .select('user_id, id, description, status, created_at, fulfilled_at, thank_you_message')
+          .select('user_id, id, description, status, is_active, created_at, fulfilled_at, thank_you_message')
           .eq('community_id', communityId)
           .in('user_id', userIds)
-          .eq('status', 'public');
+          .in('status', ['public', 'fulfilled'])
+          .order('created_at', { ascending: false });
         wishesData = (fallback.data ?? []).map((wish: any) => ({ ...wish, title: null }));
         wishesError = fallback.error;
       }
@@ -1811,6 +1772,7 @@ export default function MembersScreen() {
           title: w.title,
           description: w.description,
           status: w.status,
+          is_active: w.is_active,
           created_at: w.created_at,
           fulfilled_at: w.fulfilled_at,
           thank_you_message: w.thank_you_message,
@@ -2091,11 +2053,11 @@ export default function MembersScreen() {
                   {honeycombPlacements.map(({ item: member, index, left, top }) => {
                     const isMe = member.id === currentUserId;
                     const titleLine = member.profile_title || member.occupation;
-                    const publicWishes = member.wishes.filter(w => w.status === 'public');
-                    const spotlight = member.known_for || publicWishes[0]?.description || member.current_project || member.miq_experiences || member.skills[0]?.description || member.bio;
+                    const profileCurrentWishes = member.wishes.filter(w => w.status === 'public' && w.is_active !== false);
+                    const spotlight = member.known_for || profileCurrentWishes[0]?.description || member.current_project || member.miq_experiences || member.skills[0]?.description || member.bio;
                     const spotlightLabel = member.known_for
                       ? 'Ask me about'
-                      : publicWishes[0]?.description === spotlight
+                      : profileCurrentWishes[0]?.description === spotlight
                         ? 'Wishing for'
                         : member.current_project
                           ? 'Building'
@@ -2109,7 +2071,7 @@ export default function MembersScreen() {
                       honeycombCellWidth / 2 + honeycombAvatarSize * (isCompactHoneycomb ? 0.2 : 0.3)
                     );
                     const matchBadgeTop = Math.round(honeycombCardHeight * (isCompactHoneycomb ? 0.11 : 0.12));
-                    const wishChip = `${publicWishes.length} wish${publicWishes.length === 1 ? '' : 'es'}`;
+                    const wishChip = `${profileCurrentWishes.length} wish${profileCurrentWishes.length === 1 ? '' : 'es'}`;
                     const sharedAnswerCount = member.questionAnswerCount;
                     const connectionChip = sharedAnswerCount > 0
                       ? isCompactHoneycomb

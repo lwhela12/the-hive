@@ -98,6 +98,7 @@ export function AddWishModal({
   const handleSave = async (makePublic: boolean) => {
     if (!userId || !communityId || !wishText.trim()) return;
     const ownerUserId = wishOwnerUserId || userId;
+    const shouldPublish = !existingWish || isLinkedWish || makePublic;
     const titleMissingFromSchema = (err: unknown) =>
       err instanceof Error
         ? err.message.includes('title')
@@ -142,8 +143,8 @@ export function AddWishModal({
           title: wishTitle.trim() || null,
           description: wishText.trim(),
           raw_input: wishText.trim(),
-          status: makePublic ? 'public' : 'private',
-          is_active: makePublic, // Only active if public
+          status: 'public',
+          is_active: true,
           extracted_from: 'manual',
         };
 
@@ -172,7 +173,7 @@ export function AddWishModal({
         savedWishId = insertedWish?.id;
       }
 
-      if (savedWishId && makePublic) {
+      if (savedWishId && shouldPublish) {
         notifyWishMentions({
           wishId: savedWishId,
           senderId: userId,
@@ -377,24 +378,13 @@ export function AddWishModal({
                   />
                 </View>
               ) : (
-                <View className="flex-row gap-3 mb-4">
-                  <View className="flex-1">
-                    <Button
-                      title="Save as HD Private"
-                      variant="secondary"
-                      onPress={() => handleSave(false)}
-                      loading={saving}
-                      disabled={saving || !canSubmit}
-                    />
-                  </View>
-                  <View className="flex-1">
-                    <Button
-                      title={isLinkedWish ? 'Add Linked HD Wish' : 'Make HD Public'}
-                      onPress={() => handleSave(true)}
-                      loading={saving}
-                      disabled={saving || !canSubmit}
-                    />
-                  </View>
+                <View className="mb-4">
+                  <Button
+                    title="Add HD Wish"
+                    onPress={() => handleSave(true)}
+                    loading={saving}
+                    disabled={saving || !canSubmit}
+                  />
                 </View>
               )}
 

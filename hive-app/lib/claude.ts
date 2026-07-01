@@ -15,7 +15,7 @@ Your primary role is to help users articulate what they actually want. People of
    - Low definition: "I want to learn to cook"
    - High definition: "I want someone to teach me 3 easy weeknight dinners I can make in under 30 minutes, starting with pasta dishes"
 
-4. **Never push wishes public.** When a wish is well-articulated, ASK if they want to share it with HIVE. Respect if they say no.
+4. **Be clear about visibility.** Saved wishes are HD Wishes visible to HIVE members. Before saving, make sure the user has confirmed the wording and understands it will be shared with HIVE.
 
 5. **You have tools.** Use them naturally. Don't announce "I'm going to use my store_skill tool now." Just do it and confirm conversationally: "Got it, I've noted that you're great at [skill]."
 
@@ -37,7 +37,7 @@ If the user seems unsure what to talk about:
 - Don't be sycophantic or overly enthusiastic
 - Don't lecture about the "high definition wishing framework"
 - Don't create wishes without the user's explicit involvement
-- Don't share private wishes with others
+- Don't save wishes without confirming that they will be visible to HIVE members
 - Don't make the user feel like they're being processed`;
 
 export const ONBOARDING_SKILLS_PROMPT = `You are helping a new member of HIVE discover and articulate their skills.
@@ -58,7 +58,7 @@ After capturing 2-3 skills, let them know they can always add more later and sug
 
 export const ONBOARDING_WISHES_PROMPT = `You are helping a new member of HIVE discover their first wishes.
 
-These wishes will stay PRIVATE unless they choose to share. Help them feel comfortable expressing needs.
+Saved wishes become HD Wishes visible to HIVE members, so help them feel comfortable shaping a wish they are ready to share.
 
 Good wishes to explore:
 - What are they working on that feels hard alone?
@@ -69,7 +69,7 @@ When a wish emerges clearly, use the store_wish tool to save it. Transform vague
 - Vague: "I want to get in shape"
 - HD: "I want an accountability partner who will text me every morning for 2 weeks to make sure I go for a 20-minute walk"
 
-Remind them these stay private and they can refine them later.`;
+Remind them they can refine the wording before saving and edit it later.`;
 
 export const agentTools = [
   {
@@ -92,7 +92,7 @@ export const agentTools = [
   },
   {
     name: "store_wish",
-    description: "Store a wish that has emerged from conversation. Only use when the wish is reasonably well-articulated. Wishes start as private.",
+    description: "Store a confirmed HD Wish that will be visible to HIVE members. Only use when the wish is reasonably well-articulated.",
     input_schema: {
       type: "object",
       properties: {
@@ -110,7 +110,7 @@ export const agentTools = [
   },
   {
     name: "publish_wish",
-    description: "Make a wish public to HIVE. Only call this after explicit user confirmation. This replaces any existing active public wish.",
+    description: "Ensure a wish is visible as an HD Wish. Only call this after explicit user confirmation.",
     input_schema: {
       type: "object",
       properties: {
@@ -124,7 +124,7 @@ export const agentTools = [
   },
   {
     name: "get_user_wishes",
-    description: "Retrieve the current user's wishes (both private and public)",
+    description: "Retrieve the current user's wishes",
     input_schema: {
       type: "object",
       properties: {}

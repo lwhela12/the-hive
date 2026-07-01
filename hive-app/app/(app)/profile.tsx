@@ -654,43 +654,13 @@ export default function ProfileScreen() {
     ]);
   };
 
-  const handlePublishWish = (wish: Wish) => {
-    if (!profile || !communityId) return;
-
-    Alert.alert(
-      'Share as HD Public?',
-      `This will make your HD wish visible to all HIVE members:\n\n"${wish.description}"`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Share',
-          onPress: async () => {
-            const { error } = await supabase
-              .from('wishes')
-              .update({ status: 'public', is_active: true })
-              .eq('id', wish.id)
-              .eq('user_id', profile.id)
-              .eq('community_id', communityId);
-
-            if (!error) {
-              await fetchData();
-              setManagingWish(null);
-            } else {
-              Alert.alert('Error', 'Failed to share wish. Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  };
-
   const handleArchiveWish = (wish: Wish) => {
     if (!profile || !communityId) return;
 
     const archiveWish = async () => {
       const { error } = await supabase
         .from('wishes')
-        .update({ status: 'private', is_active: false } as any)
+        .update({ status: 'replaced', is_active: false, replaced_at: new Date().toISOString() } as any)
         .eq('id', wish.id)
         .eq('user_id', profile.id)
         .eq('community_id', communityId);
@@ -1169,21 +1139,16 @@ export default function ProfileScreen() {
     contribution: (profile as any).miq_contribution as string | null | undefined,
   };
   const hasProfileMiq = Object.values(profileMiq).some(value => hasProfileText(value));
-  const publicWishes = wishes.filter(wish => wish.status === 'public');
-  const privateWishes = wishes.filter(wish => wish.status === 'private');
+  const publicWishes = wishes.filter(wish => wish.status === 'public' && wish.is_active !== false);
   const grantedWishes = wishes.filter(wish => wish.status === 'fulfilled');
   const visibleProfileWishes = wishStatusTab === 'granted'
     ? grantedWishes
-    : wishStatusTab === 'private'
-      ? privateWishes
-      : publicWishes;
+    : publicWishes;
   const profileWishEmptyText = wishes.length === 0
     ? 'No wishes yet. What do you need help with?'
     : wishStatusTab === 'granted'
       ? 'No granted HD wishes yet.'
-      : wishStatusTab === 'private'
-        ? 'No private HD wishes yet.'
-        : 'No public HD wishes yet.';
+      : 'No HD wishes yet.';
   const renderDeepQuizField = ({
     label,
     value,
@@ -1412,8 +1377,7 @@ export default function ProfileScreen() {
     <WishCombCard
       key={wish.id}
       wish={wish}
-      ownerName={profile?.name}
-      ownerAvatarUrl={profile?.avatar_url}
+      compact={isProfilePhone}
       onOpen={(selectedWish) => openWishDetail(selectedWish as Wish)}
       onManage={(selectedWish) => setManagingWish(selectedWish as Wish)}
     />
@@ -1463,25 +1427,6 @@ export default function ProfileScreen() {
                 <Ionicons name="checkmark-circle-outline" size={18} color="#bd9348" />
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm ml-2">
                   {getHdWishStatusLabel('fulfilled')}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
-            </Pressable>
-          ) : null}
-
-          {managingWish?.status === 'private' ? (
-            <Pressable
-              onPress={() => {
-                const wish = managingWish;
-                setManagingWish(null);
-                if (wish) handlePublishWish(wish);
-              }}
-              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-gold/25 bg-gold/10 active:opacity-75"
-            >
-              <View className="flex-row items-center">
-                <Ionicons name="megaphone-outline" size={18} color="#bd9348" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm ml-2">
-                  Share as {getHdWishStatusLabel('public')}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
@@ -2198,11 +2143,6 @@ export default function ProfileScreen() {
                       key: 'public',
                       label: getHdWishTabLabel('public'),
                       count: publicWishes.length,
-                    },
-                    {
-                      key: 'private',
-                      label: getHdWishTabLabel('private'),
-                      count: privateWishes.length,
                     },
                     {
                       key: 'granted',

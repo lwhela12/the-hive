@@ -378,7 +378,7 @@ What are some things you feel you're particularly good at? It could be professio
     if (mode === 'onboarding' && context === 'wishes') {
       return `Now let's talk about what you might need help with.
 
-What are you working on these days? Is there anything you've been meaning to do but haven't had the time or know-how? Remember, these stay private unless you choose to share them with HIVE.`;
+What are you working on these days? Is there anything you've been meaning to do but haven't had the time or know-how? We'll shape anything you save as an HD Wish other members can see and help with.`;
     }
 
     // Unified onboarding (no context specified)

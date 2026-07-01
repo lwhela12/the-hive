@@ -1,11 +1,10 @@
 import type { Wish } from '../types';
 
-export type HdWishTabKey = 'public' | 'private' | 'granted';
+export type HdWishTabKey = 'public' | 'granted';
 
 export const HD_WISH_TAB_LABELS: Record<HdWishTabKey, string> = {
-  public: 'HD Public',
-  private: 'HD Private',
-  granted: 'HD Granted',
+  public: 'HD Wishes',
+  granted: 'Granted',
 };
 
 export function getHdWishTabLabel(tab: HdWishTabKey) {
@@ -14,7 +13,6 @@ export function getHdWishTabLabel(tab: HdWishTabKey) {
 
 export function getHdWishStatusLabel(status: Wish['status']) {
   if (status === 'fulfilled') return getHdWishTabLabel('granted');
-  if (status === 'private') return getHdWishTabLabel('private');
   if (status === 'public') return getHdWishTabLabel('public');
   return 'HD Wish';
 }
