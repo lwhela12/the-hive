@@ -8,6 +8,12 @@ type ProfileMiqAnswers = {
   contribution?: string | null;
 };
 
+type ProfileMiqItem = {
+  label: string;
+  value: string | null;
+  placeholder: string;
+};
+
 type ProfileShowcaseProps = {
   honeycombItems: HoneycombItem[];
   knownFor?: string | null;
@@ -118,12 +124,15 @@ export function ProfileShowcase({
   const [miqExpanded, setMiqExpanded] = useState(false);
   const knownForText = cleanKnownFor(knownFor);
   const bioText = clean(bio);
-  const miqItems = [
-    { label: 'Experiences', value: clean(miq?.experiences) },
-    { label: 'Growth', value: clean(miq?.growth) },
-    { label: 'Contribution', value: clean(miq?.contribution) },
-  ].filter(item => item.value);
-  const hasMiq = miqItems.length > 0;
+  const allMiqItems: ProfileMiqItem[] = [
+    { label: 'Experiences', value: clean(miq?.experiences), placeholder: 'Not shared yet' },
+    { label: 'Growth', value: clean(miq?.growth), placeholder: 'Not shared yet' },
+    { label: 'Contribution', value: clean(miq?.contribution), placeholder: 'Not shared yet' },
+  ];
+  const miqItems = showMiqWhenEmpty
+    ? allMiqItems
+    : allMiqItems.filter(item => item.value);
+  const hasMiq = allMiqItems.some(item => item.value);
   const showMiqCard = hasMiq || showMiqWhenEmpty || !!onMiqAction;
   const bioCanExpand = !!bioText && bioText.length > (isDesktop ? 360 : 220);
   const miqCanExpand = hasMiq && (
@@ -162,7 +171,7 @@ export function ProfileShowcase({
       onToggle={() => setMiqExpanded(value => !value)}
       style={isDesktop ? styles.desktopSplitStoryCard : undefined}
     >
-      {hasMiq ? (
+      {miqItems.length > 0 ? (
         <View style={styles.miqList}>
           {miqItems.map(item => (
             <View key={item.label} style={styles.miqItem}>
@@ -171,9 +180,13 @@ export function ProfileShowcase({
               </Text>
               <Text
                 numberOfLines={miqLines}
-                style={[styles.storyText, isPhone && styles.mobileStoryText]}
+                style={[
+                  styles.storyText,
+                  isPhone && styles.mobileStoryText,
+                  !item.value && styles.placeholderText,
+                ]}
               >
-                {item.value}
+                {item.value || item.placeholder}
               </Text>
             </View>
           ))}
