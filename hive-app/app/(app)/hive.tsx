@@ -28,7 +28,7 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { submitOnEnter } from '../../lib/submitOnEnter';
-import { linkWishToHdBoard, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
+import { unlinkWishFromBoard } from '../../lib/wishBoardLinking';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { addHomeResetListener } from '../../lib/homeNavigation';
 import {
@@ -1291,8 +1291,8 @@ export default function HiveScreen() {
   });
   const visibleHdWishes = wishStatusTab === 'granted' ? grantedWishes : publicWishes;
   const hdWishesEmptyText = wishStatusTab === 'granted'
-    ? 'No granted HD wishes yet'
-    : 'No public HD wishes yet';
+    ? 'No granted wishes yet'
+    : 'No public wishes yet';
 
   const openSurvey = useCallback((survey: Survey) => {
     setActiveSurvey(survey);
@@ -1548,7 +1548,7 @@ export default function HiveScreen() {
   const canGrantWish = useCallback((wish: Wish) => wish.user_id === profile?.id && wish.status === 'public', [profile?.id]);
   const canLinkWishBoard = useCallback((wish: Wish) => (
     !!profile
-    && (wish.status !== 'fulfilled' || !!wish.board_category_id || !!wish.source_board_post_id)
+    && !!(wish.board_category_id || wish.source_board_post_id)
     && (isAdmin || wish.user_id === profile.id)
   ), [isAdmin, profile]);
   const canArchiveWish = useCallback((wish: Wish) => (
@@ -1591,7 +1591,7 @@ export default function HiveScreen() {
       }
     };
 
-    const message = `Archive this wish from HD Wishes?\n\n"${wish.description}"`;
+    const message = `Archive this wish from Wishes?\n\n"${wish.description}"`;
 
     if (typeof window !== 'undefined' && window.confirm) {
       if (window.confirm(message)) {
@@ -1667,29 +1667,6 @@ export default function HiveScreen() {
     });
   }, [closeWishDetail, communityId, router]);
 
-  const createBoardFromWish = useCallback(async (wish: WishWithGranters) => {
-    if (!profile || !communityId) return;
-
-    try {
-      if (wish.board_category_id) {
-        openBoardFromWish(wish.board_category_id);
-        return;
-      }
-
-      const category = await linkWishToHdBoard({
-        wish,
-        communityId,
-        actorId: profile.id,
-      });
-
-      await refetch();
-      openBoardFromWish(category.id);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      Alert.alert('Error', `Failed to create board: ${message}`);
-    }
-  }, [communityId, openBoardFromWish, profile, refetch]);
-
   const handleUnlinkWishFromBoard = useCallback((wish: WishWithGranters) => {
     if (!profile || !communityId) return;
 
@@ -1707,7 +1684,7 @@ export default function HiveScreen() {
       }
     };
 
-    const message = `Unlink this wish from its HD board?\n\n"${wish.description}"`;
+    const message = `Unlink this wish from its support thread?\n\n"${wish.description}"`;
     if (typeof window !== 'undefined' && window.confirm) {
       if (window.confirm(message)) unlink();
       return;
@@ -1978,7 +1955,6 @@ export default function HiveScreen() {
             setManagingWish(wish);
           }}
           onOpenBoard={openBoardFromWish}
-          onCreateBoard={createBoardFromWish}
         />
       </SafeAreaView>
     );
@@ -2510,7 +2486,7 @@ export default function HiveScreen() {
           />
         </View>
 
-        {/* HD Wishes */}
+        {/* Wishes */}
         <View style={{ marginBottom: 24 }}>
           <HeaderTabs
             activeTab={wishStatusTab}
@@ -2523,7 +2499,7 @@ export default function HiveScreen() {
             tabs={[
               {
                 key: 'public',
-                label: 'Open HD',
+                label: 'Open',
                 count: publicWishes.length,
               },
               {
@@ -2828,24 +2804,18 @@ export default function HiveScreen() {
                 onPress={() => {
                   const wish = managingWish;
                   setManagingWish(null);
-                  if (wish.board_category_id || wish.source_board_post_id) {
-                    handleUnlinkWishFromBoard(wish);
-                  } else {
-                    createBoardFromWish(wish);
-                  }
+                  handleUnlinkWishFromBoard(wish);
                 }}
                 style={manageWishActionStyle('gold')}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <Ionicons
-                    name={managingWish.board_category_id || managingWish.source_board_post_id ? 'unlink-outline' : 'albums-outline'}
+                    name="unlink-outline"
                     size={18}
                     color={manageWishToneColor('gold')}
                   />
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('gold') }}>
-                    {managingWish.board_category_id || managingWish.source_board_post_id
-                      ? 'Unlink HD board'
-                      : 'Link to my HD board'}
+                    Unlink support thread
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />

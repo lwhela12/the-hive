@@ -211,7 +211,7 @@ export function WishDetail({
                     {linkedBoardLabel}
                   </Text>
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mt-0.5">
-                    Open the working board for this wish.
+                    Open the support thread for this wish.
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="rgba(49,49,48,0.35)" />
@@ -226,10 +226,10 @@ export function WishDetail({
                 </View>
                 <View className="flex-1">
                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
-                    Add this to an HD board
+                    Create a support thread
                   </Text>
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mt-0.5">
-                    Keep the wish, and start a thread inside the member's HD board.
+                    Keep the wish, and start a focused thread for resources and updates.
                   </Text>
                 </View>
               </Pressable>

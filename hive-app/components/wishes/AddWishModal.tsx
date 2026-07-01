@@ -21,6 +21,7 @@ import { MentionSuggestions } from '../ui/MentionSuggestions';
 import type { BoardCategory, Wish } from '../../types';
 
 const WISH_DRAFT_KEY = 'add-wish-draft';
+const WISH_TITLE_DRAFT_KEY = 'add-wish-title-draft';
 
 interface AddWishModalProps {
   visible: boolean;
@@ -48,6 +49,7 @@ export function AddWishModal({
   wishOwnerName,
 }: AddWishModalProps) {
   const [wishText, setWishText] = useState('');
+  const [wishTitle, setWishTitle] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
@@ -59,6 +61,11 @@ export function AddWishModal({
     if (!existingWish) AsyncStorage.setItem(WISH_DRAFT_KEY, text).catch(() => {});
   };
 
+  const handleWishTitleChange = (text: string) => {
+    setWishTitle(text);
+    if (!existingWish) AsyncStorage.setItem(WISH_TITLE_DRAFT_KEY, text).catch(() => {});
+  };
+
   const wishMentionInput = useMentionInput({
     value: wishText,
     onChangeText: handleWishTextChange,
@@ -68,6 +75,7 @@ export function AddWishModal({
 
   useEffect(() => {
     if (visible && existingWish) {
+      setWishTitle(existingWish.title ?? '');
       setWishText(existingWish.description);
       setError('');
     } else if (visible && !existingWish) {
@@ -75,8 +83,12 @@ export function AddWishModal({
       AsyncStorage.getItem(WISH_DRAFT_KEY).then(raw => {
         if (raw) setWishText(raw);
       });
+      AsyncStorage.getItem(WISH_TITLE_DRAFT_KEY).then(raw => {
+        if (raw) setWishTitle(raw);
+      });
       setError('');
     } else if (!visible) {
+      setWishTitle('');
       setWishText('');
       setError('');
       wishMentionInput.resetMentionSelection();
@@ -86,6 +98,10 @@ export function AddWishModal({
   const handleSave = async (makePublic: boolean) => {
     if (!userId || !communityId || !wishText.trim()) return;
     const ownerUserId = wishOwnerUserId || userId;
+    const titleMissingFromSchema = (err: unknown) =>
+      err instanceof Error
+        ? err.message.includes('title')
+        : !!err && typeof err === 'object' && String((err as { message?: unknown }).message ?? '').includes('title');
 
     setSaving(true);
     setError('');
@@ -93,21 +109,37 @@ export function AddWishModal({
     try {
       let savedWishId = existingWish?.id;
       if (existingWish) {
-        const { error: updateError } = await supabase
+        const updatePayload = {
+          title: wishTitle.trim() || null,
+          description: wishText.trim(),
+          raw_input: wishText.trim(),
+        };
+        let { error: updateError } = await supabase
           .from('wishes')
-          .update({
-            description: wishText.trim(),
-            raw_input: wishText.trim(),
-          })
+          .update(updatePayload)
           .eq('id', existingWish.id)
           .eq('user_id', userId)
           .eq('community_id', communityId);
+
+        if (updateError && titleMissingFromSchema(updateError)) {
+          const { error: fallbackError } = await supabase
+            .from('wishes')
+            .update({
+              description: updatePayload.description,
+              raw_input: updatePayload.raw_input,
+            })
+            .eq('id', existingWish.id)
+            .eq('user_id', userId)
+            .eq('community_id', communityId);
+          updateError = fallbackError;
+        }
 
         if (updateError) throw updateError;
       } else {
         const insertPayload: Record<string, unknown> = {
           user_id: ownerUserId,
           community_id: communityId,
+          title: wishTitle.trim() || null,
           description: wishText.trim(),
           raw_input: wishText.trim(),
           status: makePublic ? 'public' : 'private',
@@ -119,11 +151,22 @@ export function AddWishModal({
           insertPayload.board_category_id = linkedBoardCategory.id;
         }
 
-        const { data: insertedWish, error: insertError } = await supabase
+        let { data: insertedWish, error: insertError } = await supabase
           .from('wishes')
           .insert(insertPayload)
           .select('id')
           .single();
+
+        if (insertError && titleMissingFromSchema(insertError)) {
+          delete insertPayload.title;
+          const fallback = await supabase
+            .from('wishes')
+            .insert(insertPayload)
+            .select('id')
+            .single();
+          insertedWish = fallback.data;
+          insertError = fallback.error;
+        }
 
         if (insertError) throw insertError;
         savedWishId = insertedWish?.id;
@@ -140,7 +183,10 @@ export function AddWishModal({
         });
       }
 
-      if (!existingWish) AsyncStorage.removeItem(WISH_DRAFT_KEY).catch(() => {});
+      if (!existingWish) {
+        AsyncStorage.removeItem(WISH_DRAFT_KEY).catch(() => {});
+        AsyncStorage.removeItem(WISH_TITLE_DRAFT_KEY).catch(() => {});
+      }
       wishMentionInput.resetMentionSelection();
       onSave();
       onClose();
@@ -186,7 +232,7 @@ export function AddWishModal({
                   style={{ fontFamily: 'Lato_700Bold' }}
                   className="text-xl text-charcoal"
                 >
-                  {isEditMode ? 'Edit Wish' : isLinkedWish ? 'Add Board Wish' : 'Add a Wish'}
+                  {isEditMode ? 'Edit Wish' : isLinkedWish ? 'Add Linked Wish' : 'Add a Wish'}
                 </Text>
                 <View style={{ width: 50 }} />
               </View>
@@ -211,16 +257,33 @@ export function AddWishModal({
                       style={{ fontFamily: 'Lato_400Regular' }}
                       className="text-charcoal/60 text-sm mt-1"
                     >
-                      This wish will show up here and in HD Wishes.
+                      This wish will show up on profiles and Home.
                       {wishOwnerName ? ` It will belong to ${wishOwnerName}.` : ''}
                     </Text>
                   </View>
                 )}
                 <Text
+                  style={{ fontFamily: 'Lato_700Bold' }}
+                  className="text-charcoal text-sm mb-2"
+                >
+                  Quick glance title
+                </Text>
+                <TextInput
+                  value={wishTitle}
+                  onChangeText={handleWishTitleChange}
+                  placeholder="Rose bushes, tap shoes, HIVE app suggestions..."
+                  placeholderTextColor="#9ca3af"
+                  maxLength={80}
+                  className="bg-white rounded-xl px-4 py-3 text-charcoal mb-4"
+                  style={{
+                    fontFamily: 'Lato_400Regular',
+                  }}
+                />
+                <Text
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal/60 text-sm mb-3"
                 >
-                  {isLinkedWish ? 'Make this one clear, claimable ask from the board.' : 'Describe what you need help with'}
+                  {isLinkedWish ? 'Make this one clear, claimable ask from the linked thread.' : 'Describe what you need help with'}
                 </Text>
                 <TextInput
                   value={wishText}
@@ -277,7 +340,7 @@ export function AddWishModal({
                   className="text-charcoal/70 text-sm"
                 >
                   {isLinkedWish
-                    ? 'Board wishes work best as concrete next steps: "Help hang the mirror" or "Send Iceland travel tips."'
+                    ? 'Linked wishes work best as concrete next steps: "Help hang the mirror" or "Send Iceland travel tips."'
                     : 'Be specific about what you need. "Help cooking" becomes "Teach me 3 easy weeknight meals I can prep on Sundays."'}
                 </Text>
               </View>

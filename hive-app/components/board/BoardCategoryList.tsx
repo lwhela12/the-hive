@@ -72,8 +72,8 @@ export const BoardCategoryList = memo(function BoardCategoryList({
           : taggedNames.length > 0 ? `for ${taggedNames.join(', ')}` : '';
         const boardKindLabel = item.topic_kind === 'hd_board'
           ? item.goal_title
-            ? `HD ask ${ownerLabel}`.trim()
-            : `Member HD board ${ownerLabel}`.trim()
+            ? `Wish thread ${ownerLabel}`.trim()
+            : `Member wishes ${ownerLabel}`.trim()
           : item.topic_kind === 'helper_log'
             ? '15min HIVE helper log'
             : item.audience === 'members' && taggedNames.length > 0

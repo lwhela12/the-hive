@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../ui/Avatar';
 import { formatDateShort } from '../../lib/dateUtils';
 import { getLinkedBoardLabel } from '../../lib/boardWishLinks';
+import { getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
 import type { Wish, Profile, WishGranter } from '../../types';
 
 type WishWithGranters = Wish & {
@@ -28,6 +29,9 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
   const extraGranters = granters.length - 3;
   const linkedBoardLabel = getLinkedBoardLabel(wish.board_category);
   const showManageButton = !!onManage && (canEdit || canDelete);
+  const quickTitle = getWishQuickTitle(wish);
+  const bodyPreview = getWishBodyPreview(wish);
+  const showBodyPreview = hasSeparateWishTitle(wish);
 
   return (
     <Pressable
@@ -102,11 +106,30 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
               color: isGranted ? '#7f715f' : '#2d2d2d',
               fontStyle: isGranted ? 'italic' : 'normal',
               textDecorationLine: isGranted ? 'line-through' : 'none',
+              fontSize: 15,
+              lineHeight: 21,
             }}
             className="mt-1"
+            numberOfLines={2}
           >
-            {wish.description}
+            {quickTitle}
           </Text>
+          {showBodyPreview && (
+            <Text
+              style={{
+                fontFamily: 'Lato_400Regular',
+                color: isGranted ? '#8d7d68' : 'rgba(45,45,45,0.68)',
+                fontStyle: isGranted ? 'italic' : 'normal',
+                textDecorationLine: isGranted ? 'line-through' : 'none',
+                fontSize: 14,
+                lineHeight: 20,
+                marginTop: 4,
+              }}
+              numberOfLines={3}
+            >
+              {bodyPreview}
+            </Text>
+          )}
           {linkedBoardLabel && (
             <View
               className="self-start flex-row items-center rounded-full px-2 py-1 mt-2"

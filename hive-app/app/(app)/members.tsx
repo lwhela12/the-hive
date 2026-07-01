@@ -19,6 +19,7 @@ import { setStoredItem } from '../../lib/webStorage';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileShowcase } from '../../components/profile/ProfileShowcase';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
+import { WishCombCard } from '../../components/profile/WishCombCard';
 import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
 import { LinkifiedText } from '../../components/ui/LinkifiedText';
 
@@ -1457,8 +1458,8 @@ function MemberDetailModal({
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>CURRENTLY WISHING FOR</Text>
               {publicWishes.length > 0 ? (
                 publicWishes.map(w => (
-                  <View key={w.id} style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.3)', borderRadius: 12, padding: 12, marginBottom: 6 }}>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d' }}>🌟 {w.description}</Text>
+                  <View key={w.id} style={{ marginBottom: 8 }}>
+                    <WishCombCard wish={w} />
                   </View>
                 ))
               ) : (
@@ -1794,7 +1795,7 @@ export default function MembersScreen() {
           .in('user_id', userIds),
         supabase
           .from('wishes')
-          .select('user_id, id, description, status')
+          .select('user_id, id, title, description, status, created_at, fulfilled_at, thank_you_message')
           .eq('community_id', communityId)
           .in('user_id', userIds)
           .eq('status', 'public'),
@@ -1811,8 +1812,21 @@ export default function MembersScreen() {
           .in('user_id', userIds),
       ]);
 
+      let wishesData = (wishesRes.data ?? null) as any[] | null;
+      let wishesError = wishesRes.error;
+      if (wishesError && String(wishesError.message ?? '').includes('title')) {
+        const fallback = await supabase
+          .from('wishes')
+          .select('user_id, id, description, status, created_at, fulfilled_at, thank_you_message')
+          .eq('community_id', communityId)
+          .in('user_id', userIds)
+          .eq('status', 'public');
+        wishesData = (fallback.data ?? []).map((wish: any) => ({ ...wish, title: null }));
+        wishesError = fallback.error;
+      }
+
       if (skillsRes.error) console.warn('[Members] skills load failed', skillsRes.error);
-      if (wishesRes.error) console.warn('[Members] wishes load failed', wishesRes.error);
+      if (wishesError) console.warn('[Members] wishes load failed', wishesError);
       if (introRes.error) console.warn('[Members] intro posts load failed', introRes.error);
       if (answersRes.error) console.warn('[Members] daily answers load failed', answersRes.error);
 
@@ -1829,9 +1843,17 @@ export default function MembersScreen() {
       });
 
       const wishesByUser = new Map<string, MemberWish[]>();
-      (wishesRes.data ?? []).forEach((w: any) => {
+      (wishesData ?? []).forEach((w: any) => {
         if (!wishesByUser.has(w.user_id)) wishesByUser.set(w.user_id, []);
-        wishesByUser.get(w.user_id)!.push({ id: w.id, description: w.description, status: w.status });
+        wishesByUser.get(w.user_id)!.push({
+          id: w.id,
+          title: w.title,
+          description: w.description,
+          status: w.status,
+          created_at: w.created_at,
+          fulfilled_at: w.fulfilled_at,
+          thank_you_message: w.thank_you_message,
+        });
       });
 
       const introByUser = new Map<string, { title: string; content: string }>();

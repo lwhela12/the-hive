@@ -140,6 +140,7 @@ export interface Wish extends Record<string, unknown> {
   id: string;
   user_id: string;
   community_id: string;
+  title?: string | null;
   description: string;
   raw_input?: string;
   status: WishStatus;

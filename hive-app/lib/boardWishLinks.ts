@@ -31,5 +31,5 @@ export function getBoardNameForWish(wish: Pick<Wish, 'description' | 'user'>) {
 
 export function getLinkedBoardLabel(board?: Pick<BoardCategory, 'name' | 'topic_kind'> | null) {
   if (!board) return null;
-  return board.topic_kind === 'hd_board' ? board.name : `Board: ${board.name}`;
+  return board.topic_kind === 'hd_board' ? 'Support thread' : `Board: ${board.name}`;
 }

@@ -1,16 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDateShort } from '../../lib/dateUtils';
+import { getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
 import type { Wish } from '../../types';
 
 const publicBeeIcon = require('../../assets/BEE ONLY IN GOLD BG.png');
 const ACTIVE_WISH_CARD_BACKGROUND = '#fff8e8';
 const GRANTED_WISH_CARD_BACKGROUND = '#fffdf5';
 
+type WishCombCardWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish>;
+
 type WishCombCardProps = {
-  wish: Wish;
+  wish: WishCombCardWish;
   linkedBoardLabel?: string | null;
-  onManage?: (wish: Wish) => void;
+  onManage?: (wish: WishCombCardWish) => void;
 };
 
 function getStatusMeta(status: Wish['status']) {
@@ -83,9 +86,14 @@ export function WishCombCard({
   const status = getStatusMeta(wish.status);
   const isGranted = wish.status === 'fulfilled';
   const isPrivate = wish.status === 'private';
+  const quickTitle = getWishQuickTitle(wish);
+  const bodyPreview = getWishBodyPreview(wish);
+  const showBodyPreview = hasSeparateWishTitle(wish);
   const dateLabel = isGranted && wish.fulfilled_at
     ? `Granted · ${formatDateShort(wish.fulfilled_at)}`
-    : formatDateShort(wish.created_at);
+    : wish.created_at
+      ? formatDateShort(wish.created_at)
+      : null;
   const cardStyle = [
     styles.card,
     isPrivate ? styles.cardPrivate : styles.cardPublic,
@@ -129,13 +137,27 @@ export function WishCombCard({
 
         <Text
           style={[
-            styles.description,
+            styles.quickTitle,
             isGranted ? styles.descriptionGranted : styles.descriptionOpen,
             isPrivate ? styles.descriptionPrivate : null,
           ]}
+          numberOfLines={2}
         >
-          {wish.description}
+          {quickTitle}
         </Text>
+
+        {showBodyPreview && (
+          <Text
+            style={[
+              styles.description,
+              isGranted ? styles.descriptionGranted : styles.descriptionPreview,
+              isPrivate ? styles.descriptionPrivate : null,
+            ]}
+            numberOfLines={3}
+          >
+            {bodyPreview}
+          </Text>
+        )}
 
         {linkedBoardLabel && (
           <View style={styles.linkedMeta}>
@@ -146,11 +168,13 @@ export function WishCombCard({
           </View>
         )}
 
-        <View style={styles.footerRow}>
-          <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
-            {dateLabel}
-          </Text>
-        </View>
+        {dateLabel && (
+          <View style={styles.footerRow}>
+            <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
+              {dateLabel}
+            </Text>
+          </View>
+        )}
 
         {wish.status === 'fulfilled' && wish.thank_you_message && (
           <Text style={styles.thankYou}>
@@ -250,9 +274,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  quickTitle: {
+    fontSize: 15,
+    lineHeight: 21,
+  },
   descriptionOpen: {
     fontFamily: 'Lato_700Bold',
     color: '#2d2d2d',
+  },
+  descriptionPreview: {
+    fontFamily: 'Lato_400Regular',
+    color: 'rgba(45,45,45,0.68)',
+    marginTop: 6,
   },
   descriptionPrivate: {
     color: '#49463f',

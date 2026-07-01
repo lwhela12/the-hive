@@ -16,7 +16,7 @@ import { AppHeader } from '../../components/navigation';
 import { clearLastAppPath } from '../../lib/navigationState';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { getLinkedBoardLabel } from '../../lib/boardWishLinks';
-import { linkWishToHdBoard, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
+import { unlinkWishFromBoard } from '../../lib/wishBoardLinking';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
@@ -696,29 +696,12 @@ export default function ProfileScreen() {
 
     Alert.alert(
       'Archive Wish',
-      `Archive this wish from HD Wishes?\n\n"${wish.description}"`,
+      `Archive this wish from Wishes?\n\n"${wish.description}"`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Archive', onPress: archiveWish },
       ]
     );
-  };
-
-  const handleLinkWishToBoard = async (wish: Wish) => {
-    if (!profile || !communityId) return;
-
-    try {
-      await linkWishToHdBoard({
-        wish: { ...wish, user: profile },
-        communityId,
-        actorId: profile.id,
-      });
-      await fetchData();
-      setManagingWish(null);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      Alert.alert('Error', `Failed to link wish: ${message}`);
-    }
   };
 
   const handleUnlinkWishBoard = (wish: Wish) => {
@@ -737,7 +720,7 @@ export default function ProfileScreen() {
 
     Alert.alert(
       'Unlink Wish',
-      `Unlink this wish from its HD board?\n\n"${wish.description}"`,
+      `Unlink this wish from its support thread?\n\n"${wish.description}"`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Unlink', onPress: unlink },
@@ -1433,10 +1416,10 @@ export default function ProfileScreen() {
       wish={wish}
       linkedBoardLabel={
         wish.board_category_id || wish.source_board_post_id
-          ? getLinkedBoardLabel(wish.board_category) || 'HD Board'
+          ? getLinkedBoardLabel(wish.board_category) || 'Support thread'
           : null
       }
-      onManage={setManagingWish}
+      onManage={(selectedWish) => setManagingWish(selectedWish as Wish)}
     />
   );
 
@@ -1510,23 +1493,19 @@ export default function ProfileScreen() {
             </Pressable>
           ) : null}
 
-          {managingWish && (managingWish.status !== 'fulfilled' || managingWishIsLinked) ? (
+          {managingWish && managingWishIsLinked ? (
             <Pressable
               onPress={() => {
                 const wish = managingWish;
                 if (!wish) return;
-                if (managingWishIsLinked) {
-                  handleUnlinkWishBoard(wish);
-                } else {
-                  void handleLinkWishToBoard(wish);
-                }
+                handleUnlinkWishBoard(wish);
               }}
               className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
             >
               <View className="flex-row items-center">
-                <Ionicons name={managingWishIsLinked ? 'unlink-outline' : 'albums-outline'} size={18} color="rgba(49,49,48,0.66)" />
+                <Ionicons name="unlink-outline" size={18} color="rgba(49,49,48,0.66)" />
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
-                  {managingWishIsLinked ? 'Unlink HD board' : 'Link to my HD board'}
+                  Unlink support thread
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
@@ -2206,7 +2185,7 @@ export default function ProfileScreen() {
                   tabs={[
                     {
                       key: 'public',
-                      label: 'Open HD',
+                      label: 'Open',
                       count: activeWishes.length,
                     },
                     {
