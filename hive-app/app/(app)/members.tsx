@@ -1121,6 +1121,18 @@ function MemberDetailModal({
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>You</Text>
                   </View>
                 )}
+                {isCurrentUser && (
+                  <Pressable
+                    onPress={() => setEditing(e => !e)}
+                    accessibilityRole="button"
+                    accessibilityLabel={editing ? 'Close profile editing' : 'Edit profile info'}
+                    style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)' }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>
+                      {editing ? 'Close edit' : 'Edit info'}
+                    </Text>
+                  </Pressable>
+                )}
                 {roleLabel && (
                   <View style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{roleLabel}</Text>
@@ -1165,40 +1177,6 @@ function MemberDetailModal({
                 </View>
               )}
             </View>
-
-            {/* Current user quick-action bar — three equal cards */}
-            {isCurrentUser && (
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
-                <Pressable
-                  onPress={() => setEditing(e => !e)}
-                  style={{ flex: 1, backgroundColor: '#faf8f3', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 3 }}
-                >
-                  <Text style={{ fontSize: 20 }}>✏️</Text>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2d2d2d', textAlign: 'center' }}>My Profile</Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9ca3af', textAlign: 'center' }}>Edit info</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setShowWishesSheet(true)}
-                  style={{ flex: 1, backgroundColor: '#fdf3dc', borderWidth: 1.5, borderColor: '#bd9348', borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 3 }}
-                >
-                  <Text style={{ fontSize: 20 }}>🌟</Text>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', textAlign: 'center' }}>My HD Wishes</Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9a7a3a', textAlign: 'center' }}>
-                    {myWishes.length > 0 ? `${myWishes.length} HD wish${myWishes.length !== 1 ? 'es' : ''}` : 'Add one'}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
-                  style={{ flex: 1, backgroundColor: '#f5f3ee', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 3 }}
-                >
-                  <Text style={{ fontSize: 20 }}>⚡️</Text>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2d2d2d', textAlign: 'center' }}>My Skills</Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9ca3af', textAlign: 'center' }}>
-                    {member.skills.length > 0 ? `${member.skills.length} skill${member.skills.length !== 1 ? 's' : ''}` : 'Add some'}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
 
             {isCurrentUser && editing && (
               <View style={{ backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 18, padding: 16, marginBottom: 20 }}>
@@ -1430,27 +1408,29 @@ function MemberDetailModal({
               showEmptyCells
             />
 
-            {/* Wishes */}
-            <View style={{ marginBottom: 20 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>HD PUBLIC WISHES</Text>
-              {publicWishes.length > 0 ? (
-                publicWishes.map(w => (
-                  <View key={w.id} style={{ marginBottom: 8 }}>
-                    <WishCombCard
-                      wish={w}
-                      ownerName={member.name}
-                      ownerAvatarUrl={member.avatar_url}
-                    />
+            {/* Public wishes for other members. Your own wishes are managed below. */}
+            {!isCurrentUser && (
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>HD PUBLIC WISHES</Text>
+                {publicWishes.length > 0 ? (
+                  publicWishes.map(w => (
+                    <View key={w.id} style={{ marginBottom: 8 }}>
+                      <WishCombCard
+                        wish={w}
+                        ownerName={member.name}
+                        ownerAvatarUrl={member.avatar_url}
+                      />
+                    </View>
+                  ))
+                ) : (
+                  <View style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.28)', borderRadius: 12, padding: 14, borderStyle: 'dashed' }}>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af', lineHeight: 20 }}>
+                      {PROFILE_EMPTY_COPY.wishes}
+                    </Text>
                   </View>
-                ))
-              ) : (
-                <View style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.28)', borderRadius: 12, padding: 14, borderStyle: 'dashed' }}>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af', lineHeight: 20 }}>
-                    {PROFILE_EMPTY_COPY.wishes}
-                  </Text>
-                </View>
-              )}
-            </View>
+                )}
+              </View>
+            )}
 
             {/* Intro post */}
             {showIntroPost && member.introPost && (
