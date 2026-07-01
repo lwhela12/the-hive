@@ -149,7 +149,7 @@ export function ProfileShowcase({
   const getDesktopStoryStyle = (expanded: boolean) => {
     if (!isDesktop) return undefined;
     return expanded
-      ? [styles.desktopSplitStoryCard, styles.desktopExpandedStoryCard]
+      ? styles.desktopExpandedStoryCard
       : styles.desktopSplitStoryCard;
   };
   const bioCard = (
@@ -298,6 +298,7 @@ const styles = StyleSheet.create({
     width: 330,
     minHeight: 560,
     gap: 14,
+    alignItems: 'stretch',
   },
   desktopHoneycomb: {
     width: 540,
@@ -345,6 +346,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   storyCard: {
+    alignSelf: 'stretch',
     borderRadius: 24,
     backgroundColor: '#fff',
     borderWidth: 1,
@@ -360,7 +362,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   desktopExpandedStoryCard: {
-    flex: 0,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   storyHeader: {
     flexDirection: 'row',
