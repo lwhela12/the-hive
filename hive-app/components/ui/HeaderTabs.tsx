@@ -13,6 +13,7 @@ type HeaderTabsProps<T extends string> = {
   actionLabel: string;
   onAction: () => void;
   compact?: boolean;
+  compactAction?: boolean;
 };
 
 export function HeaderTabs<T extends string>({
@@ -22,6 +23,7 @@ export function HeaderTabs<T extends string>({
   actionLabel,
   onAction,
   compact = false,
+  compactAction = compact,
 }: HeaderTabsProps<T>) {
   return (
     <View style={[styles.container, compact ? styles.compactContainer : null]}>
@@ -62,7 +64,7 @@ export function HeaderTabs<T extends string>({
         accessibilityRole="button"
         style={({ pressed }) => [
           styles.actionButton,
-          compact ? styles.compactItem : null,
+          compact && compactAction ? styles.compactItem : null,
           pressed ? styles.pressedTab : null,
         ]}
       >
