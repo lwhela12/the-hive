@@ -30,6 +30,24 @@ type ProfileShowcaseProps = {
 };
 
 const DESKTOP_BREAKPOINT = 1240;
+const BIO_PREVIEW_LINES = {
+  desktop: 11,
+  mobile: 4,
+} as const;
+const MIQ_PREVIEW_LINES = {
+  desktop: 3,
+  mobile: 2,
+} as const;
+const BIO_EXPAND_THRESHOLD = {
+  desktop: 520,
+  mobile: 220,
+} as const;
+const MIQ_EXPAND_THRESHOLD = {
+  desktopTotal: 520,
+  desktopItem: 155,
+  mobileTotal: 190,
+  mobileItem: 95,
+} as const;
 
 function clean(value?: string | null) {
   const trimmed = value?.trim();
@@ -135,17 +153,25 @@ export function ProfileShowcase({
     : allMiqItems.filter(item => item.value);
   const hasMiq = allMiqItems.some(item => item.value);
   const showMiqCard = hasMiq || showMiqWhenEmpty || !!onMiqAction;
-  const bioCanExpand = !!bioText && bioText.length > (isDesktop ? 360 : 220);
+  const bioPreviewLines = isDesktop ? BIO_PREVIEW_LINES.desktop : BIO_PREVIEW_LINES.mobile;
+  const miqPreviewLines = isDesktop ? MIQ_PREVIEW_LINES.desktop : MIQ_PREVIEW_LINES.mobile;
+  const bioCanExpand = !!bioText && bioText.length > (
+    isDesktop ? BIO_EXPAND_THRESHOLD.desktop : BIO_EXPAND_THRESHOLD.mobile
+  );
   const miqCanExpand = hasMiq && (
-    miqItems.reduce((total, item) => total + (item.value?.length ?? 0), 0) > (isDesktop ? 280 : 190)
-    || miqItems.some(item => (item.value?.length ?? 0) > 95)
+    miqItems.reduce((total, item) => total + (item.value?.length ?? 0), 0) > (
+      isDesktop ? MIQ_EXPAND_THRESHOLD.desktopTotal : MIQ_EXPAND_THRESHOLD.mobileTotal
+    )
+    || miqItems.some(item => (item.value?.length ?? 0) > (
+      isDesktop ? MIQ_EXPAND_THRESHOLD.desktopItem : MIQ_EXPAND_THRESHOLD.mobileItem
+    ))
   );
   const bioTextClampProps = bioExpanded
     ? {}
-    : { numberOfLines: isDesktop ? 6 : 4, ellipsizeMode: 'tail' as const };
+    : { numberOfLines: bioPreviewLines, ellipsizeMode: 'tail' as const };
   const miqTextClampProps = miqExpanded
     ? {}
-    : { numberOfLines: 2, ellipsizeMode: 'tail' as const };
+    : { numberOfLines: miqPreviewLines, ellipsizeMode: 'tail' as const };
   const getDesktopStoryStyle = (expanded: boolean) => {
     if (!isDesktop) return undefined;
     return expanded
