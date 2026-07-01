@@ -16,7 +16,7 @@ import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { WishCard } from '../../components/hive/WishCard';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
-import { WishStatusTabs, type WishStatusTabKey } from '../../components/hive/WishStatusTabs';
+import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import {
   EventsListSkeleton,
@@ -45,6 +45,9 @@ type WishWithGranters = Wish & {
   user: Profile;
   granters?: (WishGranter & { granter?: Profile })[];
 };
+
+type WishStatusTabKey = 'public' | 'granted';
+type TodoStatusTabKey = 'open' | 'done';
 
 type HomeTodo = {
   id: string;
@@ -1273,6 +1276,7 @@ export default function HiveScreen() {
   } = useSurveys(communityId ?? undefined, profile?.id);
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
   const [wishStatusTab, setWishStatusTab] = useState<WishStatusTabKey>('public');
+  const [todoStatusTab, setTodoStatusTab] = useState<TodoStatusTabKey>('open');
   const pendingSurveyIds = new Set(pendingSurveys.map((survey) => survey.id));
   const activeSurveyResponse = activeSurvey ? myResponses.get(activeSurvey.id) : undefined;
   const activeSurveyIsEditing = !!activeSurvey && !!activeSurveyResponse && !pendingSurveyIds.has(activeSurvey.id);
@@ -1783,7 +1787,7 @@ export default function HiveScreen() {
   const doneTodos = homeTodos
     .filter(todo => todo.isDone)
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
-  const sortedHomeTodos = [...openTodos, ...doneTodos];
+  const visibleTodos = todoStatusTab === 'done' ? doneTodos : openTodos;
   const completedActionCount = homeActionItems.filter(action => action.completed).length;
   const dashboardSectionStyle = useMobileLayout
     ? { width: '100%' as const }
@@ -1906,41 +1910,32 @@ export default function HiveScreen() {
 
   const renderTodoList = () => (
     <>
-      {openTodos.map((todo, index) => renderTodoRow(todo, doneTodos.length === 0 && index === openTodos.length - 1))}
-      {doneTodos.length > 0 ? (
-        <View
-          key="completed-divider"
-          style={{
+      {todoStatusTab === 'done' && completedActionCount > 0 ? (
+        <Pressable
+          onPress={archiveCompletedActionItems}
+          accessibilityRole="button"
+          accessibilityLabel="Archive all completed tasks"
+          style={({ pressed }) => ({
+            alignSelf: 'flex-end',
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 10,
-            paddingHorizontal: 14,
-            paddingVertical: 8,
-            borderTopWidth: openTodos.length > 0 ? 1 : 0,
-            borderBottomWidth: 1,
-            borderColor: 'rgba(222,193,129,0.28)',
-            backgroundColor: '#fbf1dc',
-          }}
+            gap: 5,
+            marginTop: 10,
+            marginRight: 12,
+            marginBottom: 2,
+            borderRadius: 999,
+            borderWidth: 1,
+            borderColor: 'rgba(189,147,72,0.34)',
+            backgroundColor: pressed ? '#fbf0d7' : '#fff8e8',
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+          })}
         >
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e7a5e' }}>
-            Completed ({doneTodos.length})
-          </Text>
-          {completedActionCount > 0 ? (
-            <Pressable
-              onPress={archiveCompletedActionItems}
-              accessibilityRole="button"
-              accessibilityLabel="Archive all completed tasks"
-              hitSlop={8}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
-            >
-              <Ionicons name="archive-outline" size={14} color="#bd9348" />
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>all</Text>
-            </Pressable>
-          ) : null}
-        </View>
+          <Ionicons name="archive-outline" size={14} color="#bd9348" />
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Archive all</Text>
+        </Pressable>
       ) : null}
-      {doneTodos.map((todo, index) => renderTodoRow(todo, index === doneTodos.length - 1))}
+      {visibleTodos.map((todo, index) => renderTodoRow(todo, index === visibleTodos.length - 1))}
     </>
   );
 
@@ -2393,17 +2388,25 @@ export default function HiveScreen() {
 
           {/* My To Do List */}
           <View style={dashboardSectionStyle}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 0 }}>
-              <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
-                <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-                  My To Do List{homeTodos.length > 0 ? ` (${openTodos.length})` : ''}
-                </Text>
-              </View>
-              <HeaderActionPill
-                label="+ Task"
-                onPress={() => { setNewTaskText(''); setTaskError(null); setShowAddTaskModal(true); }}
-              />
-            </View>
+            <HeaderTabs
+              activeTab={todoStatusTab}
+              onChange={setTodoStatusTab}
+              actionLabel="+ Task"
+              onAction={() => { setNewTaskText(''); setTaskError(null); setShowAddTaskModal(true); }}
+              compact
+              tabs={[
+                {
+                  key: 'open',
+                  label: 'Open To Do',
+                  count: openTodos.length,
+                },
+                {
+                  key: 'done',
+                  label: 'Done',
+                  count: doneTodos.length,
+                },
+              ]}
+            />
             <View style={{
               backgroundColor: '#fffdf5',
               borderRadius: 20,
@@ -2425,12 +2428,14 @@ export default function HiveScreen() {
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                   <ActivityIndicator size="small" color="#bd9348" />
                 </View>
-              ) : sortedHomeTodos.length === 0 ? (
+              ) : visibleTodos.length === 0 ? (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
                   <Text style={{ fontSize: 32, marginBottom: 8 }}>✅</Text>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', marginBottom: 4, textAlign: 'center' }}>All clear!</Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center', lineHeight: 18 }}>
-                    No pending to-dos.{'\n'}Meeting action items and{'\n'}monthly check-ins will show up here.
+                    {todoStatusTab === 'done'
+                      ? 'No completed to-dos yet.'
+                      : 'No pending to-dos.'}{'\n'}Meeting action items and{'\n'}monthly check-ins will show up here.
                   </Text>
                 </View>
               ) : (
@@ -2505,7 +2510,7 @@ export default function HiveScreen() {
 
         {/* HD Wishes */}
         <View style={{ marginBottom: 24 }}>
-          <WishStatusTabs
+          <HeaderTabs
             activeTab={wishStatusTab}
             onChange={setWishStatusTab}
             actionLabel="+ Wish"

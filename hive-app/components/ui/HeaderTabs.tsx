@@ -1,30 +1,28 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-export type WishStatusTabKey = 'public' | 'granted';
-
-type WishStatusTab = {
-  key: WishStatusTabKey;
+export type HeaderTabItem<T extends string = string> = {
+  key: T;
   label: string;
   count: number;
 };
 
-type WishStatusTabsProps = {
-  tabs: WishStatusTab[];
-  activeTab: WishStatusTabKey;
-  onChange: (tab: WishStatusTabKey) => void;
+type HeaderTabsProps<T extends string> = {
+  tabs: HeaderTabItem<T>[];
+  activeTab: T;
+  onChange: (tab: T) => void;
   actionLabel: string;
   onAction: () => void;
   compact?: boolean;
 };
 
-export function WishStatusTabs({
+export function HeaderTabs<T extends string>({
   tabs,
   activeTab,
   onChange,
   actionLabel,
   onAction,
   compact = false,
-}: WishStatusTabsProps) {
+}: HeaderTabsProps<T>) {
   return (
     <View style={[styles.container, compact ? styles.compactContainer : null]}>
       {tabs.map((tab) => {

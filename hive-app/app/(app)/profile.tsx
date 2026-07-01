@@ -24,7 +24,7 @@ import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileShowcase } from '../../components/profile/ProfileShowcase';
 import { WishCombCard } from '../../components/profile/WishCombCard';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
-import { WishStatusTabs, type WishStatusTabKey } from '../../components/hive/WishStatusTabs';
+import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { PREDEFINED_SKILLS } from '../../components/skills/constants';
@@ -64,6 +64,8 @@ const hasProfileListItem = (value: unknown) =>
 const SKILLS_GARDEN_CAPACITY = 10;
 const DEEP_PROFILE_STEPS = ['Basics', 'Now', 'Favorites', '3MIQ'] as const;
 const PROFILE_FORM_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+type WishStatusTabKey = 'public' | 'granted';
 
 type ProfileFormDraftFields = {
   name: string;
@@ -2195,7 +2197,7 @@ export default function ProfileScreen() {
           <FadeIn delay={50}>
             {!immersiveSkillsGarden && (
               <View style={{ marginBottom: 24 }}>
-                <WishStatusTabs
+                <HeaderTabs
                   activeTab={wishStatusTab}
                   onChange={setWishStatusTab}
                   actionLabel="+ Wish"
