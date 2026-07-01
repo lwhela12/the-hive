@@ -5,6 +5,8 @@ import { formatDateShort } from '../../lib/dateUtils';
 import { isVideoAttachment } from '../../lib/mediaAttachments';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import { getReactionGroups, HiveReactionPills } from '../ui/HiveReactions';
+import { Avatar } from '../ui/Avatar';
+import { MemberProfileLink } from '../ui/MemberProfileLink';
 import type { BoardPost, BoardReaction, Profile } from '../../types';
 
 interface BoardPostCardProps {
@@ -66,6 +68,8 @@ export function BoardPostCard({
   const imageStyle = useCompactImage
     ? { width: 176, height: 132 }
     : { width: '100%' as const, height: 210 };
+  const authorId = post.author?.id ?? post.author_id;
+  const authorName = post.author?.name || 'Unknown';
 
   return (
     <View className={`relative rounded-xl mb-3 shadow-sm overflow-hidden border ${
@@ -180,9 +184,24 @@ export function BoardPostCard({
               </Pressable>
             )}
             <View className="flex-row items-center justify-between">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs">
-                {post.author?.name || 'Unknown'} · {timeAgo}
-              </Text>
+              <View className="flex-row items-center flex-1 mr-2">
+                <MemberProfileLink
+                  memberId={authorId}
+                  memberName={authorName}
+                  stopPropagation
+                  hitSlop={8}
+                  className="active:opacity-70 mr-2"
+                >
+                  <Avatar name={authorName} url={post.author?.avatar_url} size={24} />
+                </MemberProfileLink>
+                <Text
+                  style={{ fontFamily: 'Lato_400Regular' }}
+                  className="text-charcoal/50 text-xs flex-1"
+                  numberOfLines={1}
+                >
+                  {authorName} · {timeAgo}
+                </Text>
+              </View>
               <View className="flex-row items-center gap-1">
                 {hasAttachments && !firstAttachment && (
                   <View className="flex-row items-center bg-cream px-2 py-1 rounded-full">
@@ -213,7 +232,7 @@ export function BoardPostCard({
             zIndex: 3,
             maxWidth: '72%',
           }}
-          pointerEvents="none"
+          pointerEvents="box-none"
         >
           <HiveReactionPills groups={reactionGroups} compact />
         </View>

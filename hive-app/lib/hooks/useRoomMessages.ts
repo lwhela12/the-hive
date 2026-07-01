@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
+import { attachReactionUsers } from '../reactionUsers';
 import type { RoomMessage, Profile, MessageReaction } from '../../types';
 
 export type MessageWithData = RoomMessage & {
@@ -27,12 +28,13 @@ export function useRoomMessages(roomId: string) {
         .select('*')
         .in('message_id', messageIds);
 
+      const messageReactions = await attachReactionUsers((reactions ?? []) as MessageReaction[]);
       const messagesWithReactions = data.map((msg) => ({
         ...msg,
-        reactions: reactions?.filter((r) => r.message_id === msg.id) || [],
+        reactions: messageReactions.filter((r) => r.message_id === msg.id),
       }));
 
-      setMessages(messagesWithReactions as MessageWithData[]);
+      setMessages(messagesWithReactions as unknown as MessageWithData[]);
     }
     setLoading(false);
   }, [roomId]);

@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
+import { attachReactionUsers } from '../reactionUsers';
 import type { BoardCategory, BoardPost, BoardReaction, BoardReply, Profile } from '../../types';
 
 export type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardReaction[] };
@@ -152,7 +153,15 @@ async function fetchPosts(
     throw error;
   }
 
-  const posts = (data as PostWithAuthor[]) || [];
+  const posts = (data as unknown as PostWithAuthor[]) || [];
+  const reactionsWithUsers = await attachReactionUsers(
+    posts.flatMap((post) => post.reactions ?? []) as BoardReaction[]
+  );
+  const reactionsById = new Map(reactionsWithUsers.map((reaction) => [reaction.id, reaction]));
+  posts.forEach((post) => {
+    post.reactions = (post.reactions ?? []).map((reaction) => reactionsById.get(reaction.id) ?? reaction);
+  });
+
   const latestReplyByPost = new Map<string, string>();
   const postIds = posts.map((post) => post.id);
 

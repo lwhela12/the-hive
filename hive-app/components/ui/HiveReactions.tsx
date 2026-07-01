@@ -1,15 +1,20 @@
 import { ReactNode } from 'react';
 import { View, Text, Pressable, Modal, ScrollView, TextInput } from 'react-native';
+import { Avatar } from './Avatar';
+import { MemberProfileLink } from './MemberProfileLink';
+import type { ReactionUserProfile } from '../../types';
 
 export interface ReactionLike {
   emoji: string;
   user_id?: string | null;
+  user?: ReactionUserProfile | null;
 }
 
 export interface ReactionGroup {
   emoji: string;
   count: number;
   hasReacted: boolean;
+  reactors: ReactionUserProfile[];
 }
 
 export const HIVE_QUICK_REACTIONS = ['👍', '❤️', '😂', '🐝', '🎉', '👀'];
@@ -24,17 +29,23 @@ export function getReactionGroups(
   reactions: ReactionLike[] = [],
   currentUserId?: string
 ): ReactionGroup[] {
-  const groups = new Map<string, { count: number; hasReacted: boolean }>();
+  const groups = new Map<string, { count: number; hasReacted: boolean; reactors: ReactionUserProfile[] }>();
 
   reactions.forEach((reaction) => {
     const existing = groups.get(reaction.emoji);
+    const reactor = reaction.user?.id && reaction.user?.name ? reaction.user : null;
+
     if (existing) {
       existing.count += 1;
       if (reaction.user_id === currentUserId) existing.hasReacted = true;
+      if (reactor && !existing.reactors.some((user) => user.id === reactor.id)) {
+        existing.reactors.push(reactor);
+      }
     } else {
       groups.set(reaction.emoji, {
         count: 1,
         hasReacted: reaction.user_id === currentUserId,
+        reactors: reactor ? [reactor] : [],
       });
     }
   });
@@ -59,35 +70,63 @@ export function HiveReactionPills({
 
   return (
     <View className="flex-row flex-wrap" style={{ gap: compact ? 4 : 6 }}>
-      {groups.map(({ emoji, count, hasReacted }) => (
-        <Pressable
-          key={emoji}
-          onPress={() => onReactionPress?.(emoji, hasReacted)}
-          disabled={!onReactionPress}
-          className="flex-row items-center rounded-full shadow-sm"
-          style={{
-            paddingHorizontal: compact ? 7 : 8,
-            paddingVertical: compact ? 3 : 4,
-            backgroundColor: hasReacted ? '#fff8ed' : '#FFFFFF',
-            borderWidth: 1,
-            borderColor: hasReacted ? accentColor : '#f0e2c8',
-          }}
-          accessibilityRole={onReactionPress ? 'button' : undefined}
-          accessibilityLabel={`${count} ${emoji} reaction${count === 1 ? '' : 's'}`}
-        >
-          <Text style={{ fontSize: compact ? 12 : 14, lineHeight: compact ? 16 : 18 }}>{emoji}</Text>
-          <Text
-            className="ml-1"
+      {groups.map(({ emoji, count, hasReacted, reactors }) => {
+        const visibleReactors = reactors.slice(0, 3);
+        const avatarSize = compact ? 14 : 18;
+
+        return (
+          <Pressable
+            key={emoji}
+            onPress={() => onReactionPress?.(emoji, hasReacted)}
+            disabled={!onReactionPress}
+            className="flex-row items-center rounded-full shadow-sm"
             style={{
-              fontFamily: 'Lato_700Bold',
-              fontSize: compact ? 11 : 12,
-              color: hasReacted ? accentColor : '#313130',
+              paddingHorizontal: compact ? 7 : 8,
+              paddingVertical: compact ? 3 : 4,
+              backgroundColor: hasReacted ? '#fff8ed' : '#FFFFFF',
+              borderWidth: 1,
+              borderColor: hasReacted ? accentColor : '#f0e2c8',
             }}
+            accessibilityRole={onReactionPress ? 'button' : undefined}
+            accessibilityLabel={`${count} ${emoji} reaction${count === 1 ? '' : 's'}`}
           >
-            {count}
-          </Text>
-        </Pressable>
-      ))}
+            <Text style={{ fontSize: compact ? 12 : 14, lineHeight: compact ? 16 : 18 }}>{emoji}</Text>
+            {visibleReactors.length > 0 && (
+              <View className="flex-row items-center ml-1">
+                {visibleReactors.map((reactor, index) => (
+                  <MemberProfileLink
+                    key={reactor.id}
+                    memberId={reactor.id}
+                    memberName={reactor.name}
+                    stopPropagation
+                    hitSlop={4}
+                    style={{
+                      marginLeft: index === 0 ? 0 : -5,
+                      borderRadius: avatarSize / 2,
+                      borderWidth: 1,
+                      borderColor: '#FFFFFF',
+                      overflow: 'hidden',
+                      zIndex: visibleReactors.length - index,
+                    }}
+                  >
+                    <Avatar name={reactor.name} url={reactor.avatar_url} size={avatarSize} />
+                  </MemberProfileLink>
+                ))}
+              </View>
+            )}
+            <Text
+              className="ml-1"
+              style={{
+                fontFamily: 'Lato_700Bold',
+                fontSize: compact ? 11 : 12,
+                color: hasReacted ? accentColor : '#313130',
+              }}
+            >
+              {count}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

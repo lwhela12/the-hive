@@ -10,12 +10,15 @@ import { formatDateMedium } from '../../lib/dateUtils';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
 import { setBoardThreadArchiveState } from '../../lib/boardThreadArchive';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+import { attachReactionUsers } from '../../lib/reactionUsers';
 import { BoardReactionBar } from './BoardReactionBar';
 import { BoardReplyItem } from './BoardReplyItem';
 import { BoardComposer } from './BoardComposer';
 import { BoardReplyComposer } from './BoardReplyComposer';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { MarkdownContent } from '../chat/MarkdownContent';
+import { Avatar } from '../ui/Avatar';
+import { MemberProfileLink } from '../ui/MemberProfileLink';
 import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment, BoardCategory } from '../../types';
 
 interface BoardPostDetailProps {
@@ -109,6 +112,8 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     && post.status !== 'completed'
     && !post.archived_at
     && (isAdmin || (post.category?.owner_user_id ? post.category.owner_user_id === profile?.id : isAuthor));
+  const postAuthorId = post?.author?.id ?? post?.author_id ?? null;
+  const postAuthorName = post?.author?.name || 'Unknown';
 
   const invalidateBoardSearchIndex = useCallback(() => {
     if (!communityId) return;
@@ -157,7 +162,8 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         .select('*')
         .eq('post_id', postId);
 
-      setPost({ ...data, reactions: reactions || [] } as PostWithAuthor);
+      const postReactions = await attachReactionUsers((reactions ?? []) as BoardReaction[]);
+      setPost({ ...data, reactions: postReactions } as unknown as PostWithAuthor);
     }
   }, [postId]);
 
@@ -177,12 +183,14 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         .select('*')
         .in('reply_id', replyIds);
 
+      const boardReactions = await attachReactionUsers((reactions ?? []) as BoardReaction[]);
+
       // Organize into nested structure
       const replyMap = new Map<string, ReplyWithAuthor>();
       const topLevelReplies: ReplyWithAuthor[] = [];
 
       allReplies.forEach((reply) => {
-        const replyReactions = reactions?.filter((r) => r.reply_id === reply.id) || [];
+        const replyReactions = boardReactions.filter((r) => r.reply_id === reply.id);
         const replyWithData: ReplyWithAuthor = {
           ...reply,
           reactions: replyReactions,
@@ -579,13 +587,16 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             {post.title}
           </Text>
           <View className="flex-row items-center mb-3">
-            <View className="w-8 h-8 rounded-full bg-gold/20 items-center justify-center mr-2">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-                {post.author?.name?.charAt(0) || '?'}
-              </Text>
-            </View>
+            <MemberProfileLink
+              memberId={postAuthorId}
+              memberName={postAuthorName}
+              hitSlop={8}
+              className="mr-2 active:opacity-70"
+            >
+              <Avatar name={postAuthorName} url={post.author?.avatar_url} size={32} />
+            </MemberProfileLink>
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
-              {post.author?.name || 'Unknown'}
+              {postAuthorName}
             </Text>
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm ml-2">
               {formatDateMedium(post.created_at)}

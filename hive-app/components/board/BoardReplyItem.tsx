@@ -5,6 +5,8 @@ import type { BoardReply, Profile } from '../../types';
 import { BoardReactionBar } from './BoardReactionBar';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { LinkifiedText } from '../ui/LinkifiedText';
+import { Avatar } from '../ui/Avatar';
+import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 
 interface BoardReplyItemProps {
@@ -36,6 +38,8 @@ export function BoardReplyItem({
   const isAuthor = currentUserId === reply.author_id;
   const canManage = isAuthor || canModerate;
   const timeAgo = getTimeAgo(new Date(reply.created_at));
+  const authorId = reply.author?.id ?? reply.author_id;
+  const authorName = reply.author?.name || 'Unknown';
 
   const handleSaveEdit = () => {
     if (editContent.trim() && onEdit) {
@@ -47,15 +51,18 @@ export function BoardReplyItem({
   return (
     <View className={`${isNested ? 'ml-6 border-l-2 border-cream pl-4' : ''} py-3`}>
       <View className="flex-row items-start">
-        <View className="w-8 h-8 rounded-full bg-gold/20 items-center justify-center mr-3">
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-            {reply.author?.name?.charAt(0) || '?'}
-          </Text>
-        </View>
+        <MemberProfileLink
+          memberId={authorId}
+          memberName={authorName}
+          hitSlop={8}
+          className="mr-3 active:opacity-70"
+        >
+          <Avatar name={authorName} url={reply.author?.avatar_url} size={32} />
+        </MemberProfileLink>
         <View className="flex-1">
           <View className="flex-row items-center mb-1">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-sm">
-              {reply.author?.name || 'Unknown'}
+              {authorName}
             </Text>
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs ml-2">
               {timeAgo}

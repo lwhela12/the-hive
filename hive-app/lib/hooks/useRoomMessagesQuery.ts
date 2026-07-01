@@ -1,6 +1,7 @@
 import { useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { supabase } from '../supabase';
+import { attachReactionUsers } from '../reactionUsers';
 import type { RoomMessage, Profile, MessageReaction } from '../../types';
 
 export type MessageWithData = RoomMessage & {
@@ -16,7 +17,7 @@ async function fetchMessagesPage(
   cursor?: string, // created_at of oldest message for pagination
   limit: number = MESSAGES_PER_PAGE
 ): Promise<{ messages: MessageWithData[]; hasMore: boolean; oldestCursor?: string }> {
-  // Join reactions and only select needed profile fields for better performance
+  // Join reactions, then hydrate compact profile data for reaction avatar pills.
   let query = supabase
     .from('room_messages')
     .select(`
@@ -41,13 +42,24 @@ async function fetchMessagesPage(
 
   const hasMore = data.length > limit;
   const messages = hasMore ? data.slice(0, limit) : data;
+  const messageRows = messages as unknown as MessageWithData[];
+  const messageReactions = await attachReactionUsers(
+    messageRows.flatMap((message) => message.reactions ?? []) as MessageReaction[]
+  );
+  const reactionsById = new Map(messageReactions.map((reaction) => [reaction.id, reaction]));
+  const messagesWithReactions = messageRows.map((message) => ({
+    ...message,
+    reactions: (message.reactions ?? []).map((reaction) => reactionsById.get(reaction.id) ?? reaction),
+  }));
 
-  if (messages.length > 0) {
+  if (messagesWithReactions.length > 0) {
+    const oldestCursor = messagesWithReactions[messagesWithReactions.length - 1]?.created_at;
+
     // Reverse to get chronological order (oldest first for display)
     return {
-      messages: messages.reverse() as MessageWithData[],
+      messages: messagesWithReactions.reverse(),
       hasMore,
-      oldestCursor: messages[messages.length - 1]?.created_at,
+      oldestCursor,
     };
   }
 

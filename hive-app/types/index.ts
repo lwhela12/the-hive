@@ -466,6 +466,10 @@ export interface BoardReply extends Record<string, unknown> {
   nested_replies?: BoardReply[];
 }
 
+export type ReactionUserProfile = Pick<Profile, 'id' | 'name'> & {
+  avatar_url?: string | null;
+};
+
 export interface BoardReaction extends Record<string, unknown> {
   id: string;
   community_id: string;
@@ -474,7 +478,7 @@ export interface BoardReaction extends Record<string, unknown> {
   user_id: string;
   emoji: string;
   created_at: string;
-  user?: Profile;
+  user?: ReactionUserProfile | null;
 }
 
 // ============================================
@@ -538,7 +542,7 @@ export interface MessageReaction extends Record<string, unknown> {
   user_id: string;
   emoji: string;
   created_at: string;
-  user?: Profile;
+  user?: ReactionUserProfile | null;
 }
 
 export interface TypingIndicator extends Record<string, unknown> {
