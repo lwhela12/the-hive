@@ -2,6 +2,23 @@ import { getWebStorage } from './webStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const memoryDrafts = new Map<string, string>();
+const pendingDraftWrites = new Map<string, Promise<void>>();
+
+function queueDraftWrite(key: string, write: () => Promise<void>) {
+  const pendingWrite = (pendingDraftWrites.get(key) ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(write);
+
+  pendingDraftWrites.set(key, pendingWrite);
+
+  pendingWrite.finally(() => {
+    if (pendingDraftWrites.get(key) === pendingWrite) {
+      pendingDraftWrites.delete(key);
+    }
+  }).catch(() => {
+    // Individual callers already handle AsyncStorage failures.
+  });
+}
 
 export function getDraft(key: string): string {
   try {
@@ -19,6 +36,8 @@ export async function getDraftAsync(key: string): Promise<string> {
   if (syncDraft) return syncDraft;
 
   try {
+    await pendingDraftWrites.get(key);
+
     const asyncDraft = await AsyncStorage.getItem(key);
     if (asyncDraft !== null) {
       memoryDrafts.set(key, asyncDraft);
@@ -48,9 +67,9 @@ export function setDraft(key: string, value: string) {
     // Memory storage already has the latest value.
   }
 
-  AsyncStorage.setItem(key, value).catch(() => {
+  queueDraftWrite(key, () => AsyncStorage.setItem(key, value).catch(() => {
     // Web/memory storage already has the latest value.
-  });
+  }));
 }
 
 export function clearDraft(key: string) {
@@ -63,7 +82,7 @@ export function clearDraft(key: string) {
     // Memory storage was cleared above.
   }
 
-  AsyncStorage.removeItem(key).catch(() => {
-    // Web/memory storage was cleared above.
-  });
+  queueDraftWrite(key, () => AsyncStorage.removeItem(key).catch(() => {
+    // Web/memory storage already has the latest value.
+  }));
 }

@@ -8,6 +8,8 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { supabase } from '../../lib/supabase';
@@ -57,6 +59,7 @@ interface ChatInterfaceProps {
 
 const SUPABASE_FUNCTIONS_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.functions.supabase.co');
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const STICKY_BOTTOM_SCROLL_THRESHOLD = 80;
 
 // Check if streaming is supported on this platform
 const supportsStreaming = (): boolean => {
@@ -218,7 +221,9 @@ export function ChatInterface({
   const [skillsCount, setSkillsCount] = useState(0);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(conversationId || null);
   const [streamingContent, setStreamingContent] = useState<string | null>(null);
+  const activeConversationIdRef = useRef<string | null>(conversationId || null);
   const flatListRef = useRef<FlatList>(null);
+  const shouldStickToBottomRef = useRef(true);
   const messageCountRef = useRef(0);
   const isInitialLoadRef = useRef(true);
   const previousMessageCountRef = useRef(0);
@@ -227,16 +232,29 @@ export function ChatInterface({
   const hasGeneratedTitleRef = useRef<Set<string>>(new Set());
   const hasInitiatedRefineRef = useRef(false);
   const hasInitiatedInitialPromptRef = useRef(false);
+  const chatDraftKey = useMemo(() => {
+    const modeKey = context ? `${mode}:${context}` : mode;
+    const conversationKey = activeConversationId ?? 'new';
+    return [
+      'clive-message',
+      session?.user?.id ?? 'anonymous',
+      communityId ?? 'no-community',
+      modeKey,
+      conversationKey,
+    ].join(':');
+  }, [activeConversationId, communityId, context, mode, session?.user?.id]);
 
   // Update activeConversationId when prop changes
   useEffect(() => {
     if (conversationId !== undefined) {
+      const nextConversationId = conversationId || null;
       // Reset tracking when conversation changes from parent
-      if (conversationId !== activeConversationId) {
+      if (nextConversationId !== activeConversationIdRef.current) {
         hasLoadedForConversationRef.current = null;
         messageCountRef.current = 0;
       }
-      setActiveConversationId(conversationId);
+      activeConversationIdRef.current = nextConversationId;
+      setActiveConversationId(nextConversationId);
       // Mark as initial load when conversation changes
       isInitialLoadRef.current = true;
     }
@@ -274,6 +292,7 @@ export function ChatInterface({
     }
 
     if (data) {
+      activeConversationIdRef.current = data.id;
       setActiveConversationId(data.id);
       messageCountRef.current = 0; // Reset for new conversation
       // Mark as already loaded to prevent loadMessages from overwriting optimistic updates
@@ -442,7 +461,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     if (!session?.user?.id || !communityId) return;
 
     // Use explicit ID if provided, otherwise fall back to state or create new
-    let convId = explicitConversationId ?? activeConversationId;
+    let convId = explicitConversationId ?? activeConversationIdRef.current;
 
     // Create conversation if none exists
     if (!convId) {
@@ -684,7 +703,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     }
 
     // Ensure we have a conversation before adding messages
-    let conversationIdToUse = activeConversationId;
+    let conversationIdToUse = activeConversationIdRef.current;
     if (!conversationIdToUse) {
       conversationIdToUse = await createConversation();
       if (!conversationIdToUse) {
@@ -852,11 +871,16 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
   // Reverse messages for inverted FlatList (newest first)
   const invertedMessages = useMemo(() => [...messages].reverse(), [messages]);
 
-  const scrollToBottom = useCallback((animated = true) => {
-    if (flatListRef.current && messages.length > 0) {
+  const scrollToBottom = useCallback((animated = true, force = false) => {
+    if (flatListRef.current && messages.length > 0 && (force || shouldStickToBottomRef.current)) {
       flatListRef.current.scrollToOffset({ offset: 0, animated });
     }
   }, [messages.length]);
+
+  const handleMessageListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const yOffset = event.nativeEvent.contentOffset?.y ?? 0;
+    shouldStickToBottomRef.current = yOffset <= STICKY_BOTTOM_SCROLL_THRESHOLD;
+  }, []);
 
   // Scroll to bottom when new messages are added (inverted: offset 0 = bottom)
   useEffect(() => {
@@ -864,7 +888,9 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     const previousCount = previousMessageCountRef.current;
 
     if (currentCount > 0 && currentCount > previousCount && !isInitialLoadRef.current) {
-      const timer = setTimeout(() => scrollToBottom(true), 100);
+      previousMessageCountRef.current = currentCount;
+      const latestMessage = messages[currentCount - 1];
+      const timer = setTimeout(() => scrollToBottom(true, latestMessage?.role === 'user'), 100);
       return () => clearTimeout(timer);
     }
 
@@ -873,11 +899,11 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     }
 
     previousMessageCountRef.current = currentCount;
-  }, [messages.length, scrollToBottom]);
+  }, [messages, scrollToBottom]);
 
   // Scroll when typing indicator appears or streaming content updates
   useEffect(() => {
-    if ((isLoading || streamingContent !== null) && !isInitialLoadRef.current) {
+    if ((isLoading || streamingContent !== null) && !isInitialLoadRef.current && shouldStickToBottomRef.current) {
       const timer = setTimeout(() => scrollToBottom(true), 100);
       return () => clearTimeout(timer);
     }
@@ -919,6 +945,8 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
           keyExtractor={keyExtractor}
           renderItem={renderMessage}
           contentContainerClassName="p-4 pb-2"
+          onScroll={handleMessageListScroll}
+          scrollEventThrottle={16}
           ListHeaderComponent={
             <ListFooter isLoading={isLoading} streamingContent={streamingContent} />
           }
@@ -933,6 +961,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
       <ChatInput
         onSend={handleSendMessage}
         isLoading={isLoading}
+        draftKey={chatDraftKey}
         placeholder="Message Clive..."
         communityId={communityId}
         currentUserId={session?.user?.id}

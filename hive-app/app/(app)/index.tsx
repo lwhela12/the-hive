@@ -1,15 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { ChatInterface } from '../../components/chat/ChatInterface';
 import { ConversationSidebar } from '../../components/chat/ConversationSidebar';
 import { AppHeader } from '../../components/navigation';
+import { useAuth } from '../../lib/hooks/useAuth';
 import { useConversations } from '../../lib/hooks/useConversations';
+import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import type { Conversation } from '../../types';
 
 export default function ChatScreen() {
   const { refineWish, prefill } = useLocalSearchParams<{ refineWish?: string; prefill?: string }>();
+  const { profile, communityId } = useAuth();
 
   const {
     conversations,
@@ -27,12 +30,55 @@ export default function ChatScreen() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const restoredConversationKeyRef = useRef<string | null>(null);
+  const shouldStartFreshFromRoute = !!refineWish || !!prefill;
+  const selectedConversationStorageKey = useMemo(() => {
+    if (!communityId || !profile?.id) return null;
+    return `the-hive:last-clive-conversation:${communityId}:${profile.id}`;
+  }, [communityId, profile?.id]);
 
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
     loadProjects();
   }, [loadConversations, loadProjects]);
+
+  useEffect(() => {
+    if (!selectedConversationStorageKey || !currentConversation?.id) return;
+    if (currentConversation.mode !== 'default' || currentConversation.is_active === false) return;
+    setStoredItem(selectedConversationStorageKey, currentConversation.id);
+  }, [
+    currentConversation?.id,
+    currentConversation?.is_active,
+    currentConversation?.mode,
+    selectedConversationStorageKey,
+  ]);
+
+  useEffect(() => {
+    if (!selectedConversationStorageKey || shouldStartFreshFromRoute) return;
+    if (currentConversation || conversations.length === 0) return;
+    if (restoredConversationKeyRef.current === selectedConversationStorageKey) return;
+
+    restoredConversationKeyRef.current = selectedConversationStorageKey;
+    const savedConversationId = getStoredItem(selectedConversationStorageKey);
+    const savedConversation = savedConversationId
+      ? conversations.find((conversation) => conversation.id === savedConversationId && conversation.mode === 'default')
+      : null;
+    const fallbackConversation = conversations.find((conversation) => conversation.mode === 'default') ?? null;
+    const conversationToRestore = savedConversation ?? fallbackConversation;
+
+    if (conversationToRestore) {
+      setCurrentConversation(conversationToRestore);
+    } else if (savedConversationId) {
+      removeStoredItem(selectedConversationStorageKey);
+    }
+  }, [
+    conversations,
+    currentConversation,
+    selectedConversationStorageKey,
+    setCurrentConversation,
+    shouldStartFreshFromRoute,
+  ]);
 
   const handleNewConversation = useCallback(async () => {
     await createConversation('default');
@@ -63,8 +109,11 @@ export default function ChatScreen() {
   }, [currentConversation, setCurrentConversation, loadConversations]);
 
   const handleDeleteConversation = useCallback(async (id: string) => {
+    if (selectedConversationStorageKey && getStoredItem(selectedConversationStorageKey) === id) {
+      removeStoredItem(selectedConversationStorageKey);
+    }
     await deleteConversation(id);
-  }, [deleteConversation]);
+  }, [deleteConversation, selectedConversationStorageKey]);
 
   const { width } = useWindowDimensions();
   // Use mobile layout for narrow screens (< 768px) regardless of platform

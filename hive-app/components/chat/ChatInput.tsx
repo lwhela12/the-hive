@@ -30,7 +30,7 @@ interface ChatInputProps {
   isLoading: boolean;
   placeholder?: string;
   /** Override the draft storage key (e.g. per-conversation) */
-  draftKey?: string;
+  draftKey?: string | null;
   communityId?: string | null;
   currentUserId?: string;
   mentionableMembers?: Pick<Profile, 'id' | 'name'>[];
@@ -108,7 +108,6 @@ export const ChatInput = memo(function ChatInput({
     maxImages: MAX_IMAGES,
     maxFiles: MAX_FILES,
     captureDocumentDrops: true,
-    disabled: isLoading,
   });
 
   const hasContent = inputText.trim().length > 0 || selectedImages.length > 0 || selectedFiles.length > 0;
@@ -190,7 +189,6 @@ export const ChatInput = memo(function ChatInput({
           onImagesChange={setSelectedImages}
           selectedFiles={selectedFiles}
           onFilesChange={setSelectedFiles}
-          disabled={isLoading}
         />
         <TextInput
           value={inputText}
@@ -209,7 +207,6 @@ export const ChatInput = memo(function ChatInput({
           maxLength={messageMaxLength}
           className="flex-1 max-h-32 text-base text-charcoal py-1 px-1"
           style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none', caretColor: '#313130' } as any}
-          editable={!isLoading}
         />
         <Pressable
           onPress={handleSend}

@@ -4,6 +4,7 @@ import { clearDraft, getDraft, getDraftAsync, setDraft } from '../draftStore';
 export function usePersistentTextDraft(key: string | null | undefined, initialValue = '') {
   const normalizedKey = useMemo(() => key || null, [key]);
   const activeKeyRef = useRef(normalizedKey);
+  const localRevisionRef = useRef(0);
   const [value, setLocalValue] = useState(() => (
     normalizedKey ? getDraft(normalizedKey) || initialValue : initialValue
   ));
@@ -19,11 +20,17 @@ export function usePersistentTextDraft(key: string | null | undefined, initialVa
       };
     }
 
+    const loadRevision = localRevisionRef.current;
     const syncDraft = getDraft(normalizedKey);
     setLocalValue(syncDraft || initialValue);
 
     getDraftAsync(normalizedKey).then((asyncDraft) => {
-      if (!cancelled && activeKeyRef.current === normalizedKey && asyncDraft) {
+      if (
+        !cancelled &&
+        activeKeyRef.current === normalizedKey &&
+        localRevisionRef.current === loadRevision &&
+        asyncDraft
+      ) {
         setLocalValue(asyncDraft);
       }
     });
@@ -34,6 +41,8 @@ export function usePersistentTextDraft(key: string | null | undefined, initialVa
   }, [initialValue, normalizedKey]);
 
   const setValue = useCallback((nextValue: string | ((previousValue: string) => string)) => {
+    localRevisionRef.current += 1;
+
     setLocalValue((previousValue) => {
       const resolvedValue = typeof nextValue === 'function'
         ? nextValue(previousValue)
@@ -48,6 +57,8 @@ export function usePersistentTextDraft(key: string | null | undefined, initialVa
   }, [normalizedKey]);
 
   const clearValue = useCallback(() => {
+    localRevisionRef.current += 1;
+
     if (normalizedKey) {
       clearDraft(normalizedKey);
     }
