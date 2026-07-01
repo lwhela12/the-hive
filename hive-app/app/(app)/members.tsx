@@ -748,10 +748,15 @@ function MemberDetailModal({
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable
-          onPress={(event: any) => event.stopPropagation()}
-          style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%' }}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close member profile backdrop"
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
+        />
+        <View
+          style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%', width: '100%', overflow: 'hidden' }}
         >
           {/* Handle + close */}
           <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4, position: 'relative' }}>
@@ -760,7 +765,8 @@ function MemberDetailModal({
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Close member profile"
-              style={{ position: 'absolute', right: 18, top: 8, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ee' }}
+              hitSlop={8}
+              style={{ position: 'absolute', right: 18, top: 8, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ee', zIndex: 30, elevation: 30 }}
             >
               <Ionicons name="close" size={20} color="#6b7280" />
             </Pressable>
@@ -1645,15 +1651,16 @@ function MemberDetailModal({
             </Pressable>
             </View>
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
 
 export default function MembersScreen() {
   const { communityId, profile, session } = useAuth();
-  const { memberId } = useLocalSearchParams<{ memberId?: string }>();
+  const { memberId: routeMemberId } = useLocalSearchParams<{ memberId?: string | string[] }>();
+  const memberId = Array.isArray(routeMemberId) ? routeMemberId[0] : routeMemberId;
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [members, setMembers] = useState<MemberData[]>([]);
