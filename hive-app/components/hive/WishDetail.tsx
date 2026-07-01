@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -48,6 +49,7 @@ export function WishDetail({
   canManage = false,
   onManage,
 }: WishDetailProps) {
+  const router = useRouter();
   const { profile, communityId } = useAuth();
   const [comments, setComments] = useState<(WishComment & { user: Profile })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +70,19 @@ export function WishDetail({
   const isGranted = wish.status === 'fulfilled';
   const wishTitle = getWishQuickTitle(wish, 90);
   const showDescription = shouldShowWishDescription(wish);
+  const wishOwnerId = wish.user?.id ?? wish.user_id;
+  const isWishOwnerCurrentUser = profile?.id === wishOwnerId;
+
+  const openWishOwnerProfile = () => {
+    if (!wishOwnerId) return;
+
+    onClose();
+    router.push(
+      isWishOwnerCurrentUser
+        ? '/profile'
+        : { pathname: '/(app)/members', params: { memberId: wishOwnerId } }
+    );
+  };
 
   useEffect(() => {
     fetchComments();
@@ -158,12 +173,28 @@ export function WishDetail({
         {/* Wish Card */}
         <View className={`rounded-xl p-4 mb-6 ${isGranted ? 'bg-gold/10' : 'bg-cream/30'}`}>
           <View className="flex-row items-start">
-            <Avatar name={wish.user.name} url={wish.user.avatar_url} size={48} />
+            <Pressable
+              onPress={openWishOwnerProfile}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${isWishOwnerCurrentUser ? 'your' : `${wish.user.name}'s`} profile`}
+              hitSlop={8}
+              className="active:opacity-70"
+            >
+              <Avatar name={wish.user.name} url={wish.user.avatar_url} size={48} />
+            </Pressable>
             <View className="flex-1 ml-3">
               <View className="flex-row items-center">
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-base">
-                  {wish.user.name}
-                </Text>
+                <Pressable
+                  onPress={openWishOwnerProfile}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${isWishOwnerCurrentUser ? 'your' : `${wish.user.name}'s`} profile`}
+                  hitSlop={8}
+                  className="active:opacity-70"
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-base">
+                    {wish.user.name}
+                  </Text>
+                </Pressable>
                 {isGranted && (
                   <View className="ml-2 bg-gold px-2 py-0.5 rounded-full flex-row items-center">
                     <Ionicons name="checkmark-circle" size={12} color="#fff" />
