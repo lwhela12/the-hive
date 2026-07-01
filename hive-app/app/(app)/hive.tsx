@@ -1968,14 +1968,24 @@ export default function HiveScreen() {
               >
                 {todayQuestion.text}
               </Text>
-              <Pressable
-                onPress={() => setShowCatchUpModal(true)}
-                style={{ alignSelf: 'flex-start', marginTop: 10, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.35)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5 }}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348' }}>
-                  Catch up
-                </Text>
-              </Pressable>
+              <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 6, alignSelf: 'flex-start', marginTop: 10 }}>
+                <Pressable
+                  onPress={() => setShowCatchUpModal(true)}
+                  style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.35)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348' }}>
+                    Catch up
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push({ pathname: '/(app)/members', params: { view: 'swarm' } })}
+                  style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.35)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348' }}>
+                    Report
+                  </Text>
+                </Pressable>
+              </View>
             </View>
 
             {/* Right: scrolling member answer bubbles */}

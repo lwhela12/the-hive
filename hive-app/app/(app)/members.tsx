@@ -1852,8 +1852,9 @@ function MemberDetailModal({
 
 export default function MembersScreen() {
   const { communityId, profile, session } = useAuth();
-  const { memberId: routeMemberId } = useLocalSearchParams<{ memberId?: string | string[] }>();
+  const { memberId: routeMemberId, view: routeViewParam } = useLocalSearchParams<{ memberId?: string | string[]; view?: string | string[] }>();
   const memberId = Array.isArray(routeMemberId) ? routeMemberId[0] : routeMemberId;
+  const routeView = Array.isArray(routeViewParam) ? routeViewParam[0] : routeViewParam;
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [members, setMembers] = useState<MemberData[]>([]);
@@ -2098,6 +2099,12 @@ export default function MembersScreen() {
     loadMembers();
   }, [loadMembers]);
 
+  useEffect(() => {
+    if (routeView === 'swarm') {
+      setMemberViewMode('swarm');
+    }
+  }, [routeView]);
+
   const openMemberProfile = useCallback((member: MemberData) => {
     setSelected(member);
   }, []);
@@ -2176,6 +2183,36 @@ export default function MembersScreen() {
       return a.name.localeCompare(b.name);
     });
   }, [currentUserId, filtered, memberViewMode]);
+  const currentMember = useMemo(
+    () => members.find(member => member.id === currentUserId) ?? null,
+    [currentUserId, members]
+  );
+  const totalDailyAnswerCount = filtered.reduce((total, member) => total + member.questionAnswerCount, 0);
+  const answeredMemberCount = filtered.filter(member => member.questionAnswerCount > 0).length;
+  const bestMatch = visibleMembers.find(member =>
+    member.id !== currentUserId &&
+    typeof member.dailyMatchPercent === 'number' &&
+    (member.dailyMatchSharedCount ?? 0) > 0
+  );
+  const swarmThemeHighlights = useMemo(() => {
+    const themes = new Map<string, { category: string; emoji: string; count: number }>();
+    filtered.forEach(member => {
+      member.dailyAnswers.forEach(answer => {
+        const key = answer.questionCategory || 'daily question';
+        const existing = themes.get(key) ?? {
+          category: key,
+          emoji: answer.questionEmoji || '✨',
+          count: 0,
+        };
+        existing.count += 1;
+        themes.set(key, existing);
+      });
+    });
+
+    return Array.from(themes.values())
+      .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category))
+      .slice(0, 3);
+  }, [filtered]);
   const desiredHoneycombColumns = width >= 1500 ? 5 : width >= 1120 ? 4 : width >= 760 ? 3 : width >= 360 ? 2 : 1;
   const honeycombColumns = Math.max(1, Math.min(desiredHoneycombColumns, Math.max(1, visibleMembers.length)));
   const honeycombOuterGutter = width < 520 ? 12 : 32;
@@ -2241,7 +2278,7 @@ export default function MembersScreen() {
           >
             {([
               { mode: 'directory' as const, label: 'Directory' },
-              { mode: 'swarm' as const, label: "Today's Swarm" },
+              { mode: 'swarm' as const, label: 'Swarm Report' },
             ]).map(option => {
               const active = memberViewMode === option.mode;
               return (
@@ -2281,7 +2318,7 @@ export default function MembersScreen() {
                 letterSpacing: 0.2,
               }}
             >
-              {matchedMemberCount} match{matchedMemberCount === 1 ? '' : 'es'} today
+              {matchedMemberCount} connection{matchedMemberCount === 1 ? '' : 's'} with overlap
             </Text>
           )}
         </View>
@@ -2301,6 +2338,105 @@ export default function MembersScreen() {
           </View>
         ) : (
           <>
+            {memberViewMode === 'swarm' && (
+              <View
+                style={{
+                  backgroundColor: '#fffdf5',
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.58)',
+                  borderRadius: 18,
+                  padding: width < 420 ? 14 : 16,
+                  marginBottom: 18,
+                  shadowColor: '#bd9348',
+                  shadowOpacity: 0.08,
+                  shadowRadius: 12,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 2,
+                }}
+              >
+                <View style={{ flexDirection: width < 620 ? 'column' : 'row', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>
+                      Swarm Report
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8a8173', lineHeight: 18, marginTop: 4 }}>
+                      Connection snapshot from Daily Questions.
+                    </Text>
+                  </View>
+                  {bestMatch ? (
+                    <View style={{ alignSelf: width < 620 ? 'flex-start' : 'center', backgroundColor: '#fdf3dc', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: 'rgba(189,147,72,0.32)' }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#9a8060', textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                        Strongest overlap
+                      </Text>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginTop: 2 }}>
+                        {bestMatch.name.split(' ')[0]} · {bestMatch.dailyMatchPercent}%
+                      </Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#7d715f', marginTop: 1 }}>
+                        {bestMatch.dailyMatchSharedCount} shared prompt{bestMatch.dailyMatchSharedCount === 1 ? '' : 's'}
+                        {(bestMatch.dailyMatchSimilarCount ?? 0) > 0 ? ` · ${bestMatch.dailyMatchSimilarCount} similar` : ''}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ alignSelf: width < 620 ? 'flex-start' : 'center', backgroundColor: '#f5f3ee', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 9 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8a8173' }}>
+                        Overlaps build as more answers come in.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {[
+                    { label: 'Deck', value: `${DAILY_QUESTIONS.length} prompts` },
+                    { label: 'HIVE answers', value: String(totalDailyAnswerCount) },
+                    { label: 'Members joined', value: String(answeredMemberCount) },
+                    { label: 'Your answers', value: String(currentMember?.questionAnswerCount ?? 0) },
+                  ].map(stat => (
+                    <View
+                      key={stat.label}
+                      style={{
+                        backgroundColor: '#faf8f3',
+                        borderWidth: 1,
+                        borderColor: 'rgba(222,193,129,0.42)',
+                        borderRadius: 12,
+                        paddingHorizontal: 11,
+                        paddingVertical: 9,
+                        minWidth: width < 420 ? '47%' : 118,
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        {stat.label}
+                      </Text>
+                      <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', marginTop: 3 }}>
+                        {stat.value}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+
+                {swarmThemeHighlights.length > 0 && (
+                  <View style={{ marginTop: 14 }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#9a8060', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+                      Most answered themes
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {swarmThemeHighlights.map(theme => (
+                        <View key={theme.category} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(222,193,129,0.34)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }}>
+                          <Text style={{ fontSize: 13 }}>{theme.emoji}</Text>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2d2d2d' }}>
+                            {theme.category}
+                          </Text>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>
+                            {theme.count}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
+
             <View style={{ alignItems: 'center', paddingTop: 8 }}>
               <View
                 style={{
