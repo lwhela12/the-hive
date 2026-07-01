@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, Alert, ActivityIndicator, TextInput, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useBoardCategoriesQuery, useBoardPostsQuery, useBoardPostCountsQuery, useBoardSearchIndexQuery, type BoardSearchThreadMatch } from '../../lib/hooks/useBoardQuery';
@@ -139,13 +139,21 @@ function getRouteParam(value: string | string[] | undefined) {
 
 export default function BoardScreen() {
   const { profile, communityId, communityRole } = useAuth();
-  const routeParams = useLocalSearchParams<{ categoryId?: string | string[]; postId?: string | string[]; open?: string | string[] }>();
+  const router = useRouter();
+  const routeParams = useLocalSearchParams<{
+    categoryId?: string | string[];
+    postId?: string | string[];
+    open?: string | string[];
+    from?: string | string[];
+  }>();
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
   const routeCategoryId = getRouteParam(routeParams.categoryId);
   const routePostId = getRouteParam(routeParams.postId);
   const routeOpenKey = getRouteParam(routeParams.open);
+  const routeOrigin = getRouteParam(routeParams.from);
   const hasRouteTarget = !!routeCategoryId || !!routePostId;
+  const shouldReturnHomeFromRoute = routeOrigin === 'home' && hasRouteTarget;
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -365,6 +373,8 @@ export default function BoardScreen() {
   useEffect(() => {
     if (!communityId || !hasRouteTarget) return;
 
+    const shouldPersistRouteTarget = routeOrigin !== 'home';
+
     setBoardSearch('');
     setThreadSearch('');
     setBoardListView('active');
@@ -380,14 +390,25 @@ export default function BoardScreen() {
     setLinkedWishToGrant(null);
     setGrantThreadContext(null);
 
+    if (!shouldPersistRouteTarget) {
+      if (boardCategoryStorageKey) removeStoredItem(boardCategoryStorageKey);
+      if (boardPostStorageKey) removeStoredItem(boardPostStorageKey);
+    }
+
     if (routeCategoryId) {
       setSelectedCategoryId(routeCategoryId);
-      if (boardCategoryStorageKey) setStoredItem(boardCategoryStorageKey, routeCategoryId);
+      if (boardCategoryStorageKey && shouldPersistRouteTarget) {
+        setStoredItem(boardCategoryStorageKey, routeCategoryId);
+      }
+    } else if (!shouldPersistRouteTarget) {
+      setSelectedCategoryId(null);
     }
 
     if (routePostId) {
       setSelectedPostId(routePostId);
-      if (boardPostStorageKey) setStoredItem(boardPostStorageKey, routePostId);
+      if (boardPostStorageKey && shouldPersistRouteTarget) {
+        setStoredItem(boardPostStorageKey, routePostId);
+      }
     } else {
       setSelectedPostId(null);
       if (boardPostStorageKey) removeStoredItem(boardPostStorageKey);
@@ -404,6 +425,7 @@ export default function BoardScreen() {
     hasRouteTarget,
     routeCategoryId,
     routeOpenKey,
+    routeOrigin,
     routePostId,
   ]);
 
@@ -484,9 +506,19 @@ export default function BoardScreen() {
     }
   }, [boardCategoryStorageKey, boardSearch, boardSearchMatchesByCategory, boardSearchQuery]);
 
-  const handleBack = useCallback(() => {
+  const returnHomeFromRouteTarget = useCallback(() => {
     resetBoardToList();
-  }, [resetBoardToList]);
+    router.replace('/hive');
+  }, [resetBoardToList, router]);
+
+  const handleBack = useCallback(() => {
+    if (shouldReturnHomeFromRoute) {
+      returnHomeFromRouteTarget();
+      return;
+    }
+
+    resetBoardToList();
+  }, [resetBoardToList, returnHomeFromRouteTarget, shouldReturnHomeFromRoute]);
 
   const handleOpenComposer = useCallback(() => {
     setEditingPost(null);
@@ -512,13 +544,18 @@ export default function BoardScreen() {
   }, [boardPostStorageKey]);
 
   const handlePostBack = useCallback(() => {
+    if (shouldReturnHomeFromRoute) {
+      returnHomeFromRouteTarget();
+      return;
+    }
+
     setSelectedPostId(null);
     invalidatePosts();
     refetchPostCounts();
     if (boardPostStorageKey) {
       removeStoredItem(boardPostStorageKey);
     }
-  }, [boardPostStorageKey, invalidatePosts, refetchPostCounts]);
+  }, [boardPostStorageKey, invalidatePosts, refetchPostCounts, returnHomeFromRouteTarget, shouldReturnHomeFromRoute]);
 
   const handleCreatePost = async (title: string, content: string, attachments?: Attachment[]) => {
     if (!profile || !communityId || !selectedCategory) {

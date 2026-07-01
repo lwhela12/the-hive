@@ -29,6 +29,7 @@ import { formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUt
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { addHomeResetListener } from '../../lib/homeNavigation';
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
 import {
@@ -1122,19 +1123,12 @@ export default function HiveScreen() {
     const destination = getActivityDestination(item);
 
     if (destination === 'board') {
-      // Pre-set the board's localStorage keys so it opens directly to the right post
-      if (communityId) {
-        if (item.categoryId) {
-          setStoredItem(`the-hive:last-board-category:${communityId}`, item.categoryId);
-        }
-        setStoredItem(`the-hive:last-board-post:${communityId}`, item.sourceId);
-        setStoredItem(`the-hive:board-direct-open:${communityId}`, 'true');
-      }
       router.push({
         pathname: '/board',
         params: {
           ...(item.categoryId ? { categoryId: item.categoryId } : {}),
           postId: item.sourceId,
+          from: 'home',
           open: String(Date.now()),
         },
       });
@@ -1149,7 +1143,7 @@ export default function HiveScreen() {
         router.push('/messages');
       }
     }
-  }, [communityId, getActivityDestination, openWishFromActivity, router]);
+  }, [getActivityDestination, openWishFromActivity, router]);
 
   const handleActivityPress = useCallback((item: ActivityItem) => {
     const wasUnread = item.timestamp > sessionReadAt && !readItemIds.has(item.id);
@@ -1170,6 +1164,11 @@ export default function HiveScreen() {
 
     navigateFromActivityItem(item);
   }, [getActivityDestination, markItemRead, navigateFromActivityItem, readItemIds, sessionReadAt, triggerActivityConfetti, unreadActivityCount]);
+
+  const openBoardsHome = useCallback(() => {
+    clearBoardNavigationState(communityId);
+    router.push('/board');
+  }, [communityId, router]);
 
   const handleActivityScroll = useCallback((event: any) => {
     const y = event.nativeEvent?.contentOffset?.y ?? 0;
@@ -2433,7 +2432,7 @@ export default function HiveScreen() {
           <HexShortcut
             emoji="📋"
             label="Boards"
-            onPress={() => router.push('/board')}
+            onPress={openBoardsHome}
           />
           <HexShortcut
             emoji="💬"
