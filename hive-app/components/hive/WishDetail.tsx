@@ -333,7 +333,7 @@ export function WishDetail({
         )}
       </ScrollView>
 
-      {/* Mark as Granted Button (for own public wishes) */}
+      {/* Mark as HD Granted Button (for own public wishes) */}
       {canGrant && (
         <View className="border-t border-gray-100 px-4 py-3">
           <Pressable
@@ -345,7 +345,7 @@ export function WishDetail({
               style={{ fontFamily: 'Lato_700Bold' }}
               className="text-white text-base ml-2"
             >
-              Mark as Granted
+              Mark as HD Granted
             </Text>
           </Pressable>
         </View>

@@ -17,6 +17,7 @@ import { clearLastAppPath } from '../../lib/navigationState';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { getLinkedBoardLabel } from '../../lib/boardWishLinks';
 import { unlinkWishFromBoard } from '../../lib/wishBoardLinking';
+import { getHdWishStatusLabel, getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
@@ -65,7 +66,7 @@ const SKILLS_GARDEN_CAPACITY = 10;
 const DEEP_PROFILE_STEPS = ['Basics', 'Now', 'Favorites', '3MIQ'] as const;
 const PROFILE_FORM_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-type WishStatusTabKey = 'public' | 'granted';
+type WishStatusTabKey = HdWishTabKey;
 
 type ProfileFormDraftFields = {
   name: string;
@@ -617,6 +618,15 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
+  const closeProfile = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/hive');
+  };
+
   const performSignOut = async () => {
     clearLastAppPath();
     const { error } = await supabase.auth.signOut({ scope: 'local' });
@@ -648,8 +658,8 @@ export default function ProfileScreen() {
     if (!profile || !communityId) return;
 
     Alert.alert(
-      'Share with HIVE?',
-      `This will make your wish visible to all HIVE members:\n\n"${wish.description}"`,
+      'Share as HD Public?',
+      `This will make your HD wish visible to all HIVE members:\n\n"${wish.description}"`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -695,8 +705,8 @@ export default function ProfileScreen() {
     };
 
     Alert.alert(
-      'Archive Wish',
-      `Archive this wish from Wishes?\n\n"${wish.description}"`,
+      'Archive HD Wish',
+      `Archive this HD wish from Wishes?\n\n"${wish.description}"`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Archive', onPress: archiveWish },
@@ -1178,14 +1188,21 @@ export default function ProfileScreen() {
     contribution: (profile as any).miq_contribution as string | null | undefined,
   };
   const hasProfileMiq = Object.values(profileMiq).some(value => hasProfileText(value));
-  const activeWishes = wishes.filter(wish => wish.status !== 'fulfilled');
+  const publicWishes = wishes.filter(wish => wish.status === 'public');
+  const privateWishes = wishes.filter(wish => wish.status === 'private');
   const grantedWishes = wishes.filter(wish => wish.status === 'fulfilled');
-  const visibleProfileWishes = wishStatusTab === 'granted' ? grantedWishes : activeWishes;
+  const visibleProfileWishes = wishStatusTab === 'granted'
+    ? grantedWishes
+    : wishStatusTab === 'private'
+      ? privateWishes
+      : publicWishes;
   const profileWishEmptyText = wishes.length === 0
     ? 'No wishes yet. What do you need help with?'
     : wishStatusTab === 'granted'
-      ? 'No granted wishes yet.'
-      : 'No open wishes yet.';
+      ? 'No granted HD wishes yet.'
+      : wishStatusTab === 'private'
+        ? 'No private HD wishes yet.'
+        : 'No public HD wishes yet.';
   const renderDeepQuizField = ({
     label,
     value,
@@ -1414,6 +1431,8 @@ export default function ProfileScreen() {
     <WishCombCard
       key={wish.id}
       wish={wish}
+      ownerName={profile?.name}
+      ownerAvatarUrl={profile?.avatar_url}
       linkedBoardLabel={
         wish.board_category_id || wish.source_board_post_id
           ? getLinkedBoardLabel(wish.board_category) || 'Support thread'
@@ -1467,7 +1486,7 @@ export default function ProfileScreen() {
               <View className="flex-row items-center">
                 <Ionicons name="checkmark-circle-outline" size={18} color="#bd9348" />
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm ml-2">
-                  Granted
+                  {getHdWishStatusLabel('fulfilled')}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
@@ -1486,7 +1505,7 @@ export default function ProfileScreen() {
               <View className="flex-row items-center">
                 <Ionicons name="megaphone-outline" size={18} color="#bd9348" />
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm ml-2">
-                  Share with HIVE
+                  Share as {getHdWishStatusLabel('public')}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
@@ -1575,7 +1594,22 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={immersiveSkillsGarden ? [] : ['top']}>
-      {!compactProfileLandscape && <AppHeader title="Profile" />}
+      {!compactProfileLandscape && (
+        <AppHeader
+          title="Profile"
+          rightElement={(
+            <Pressable
+              onPress={closeProfile}
+              accessibilityRole="button"
+              accessibilityLabel="Close profile"
+              className="w-10 h-10 items-center justify-center rounded-full active:opacity-70"
+              hitSlop={8}
+            >
+              <Ionicons name="close" size={24} color="white" />
+            </Pressable>
+          )}
+        />
+      )}
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <ScrollView
@@ -2187,12 +2221,17 @@ export default function ProfileScreen() {
                   tabs={[
                     {
                       key: 'public',
-                      label: 'Open',
-                      count: activeWishes.length,
+                      label: getHdWishTabLabel('public'),
+                      count: publicWishes.length,
+                    },
+                    {
+                      key: 'private',
+                      label: getHdWishTabLabel('private'),
+                      count: privateWishes.length,
                     },
                     {
                       key: 'granted',
-                      label: 'Granted',
+                      label: getHdWishTabLabel('granted'),
                       count: grantedWishes.length,
                     },
                   ]}

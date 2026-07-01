@@ -183,6 +183,40 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         enabled: !!communityId && !!userId,
         staleTime: 5 * 60 * 1000,
       },
+      // Private wishes for the current member only
+      {
+        queryKey: queryKeys.privateWishes(communityId || '', userId || ''),
+        queryFn: async () => {
+          let { data, error } = await (supabase as any)
+            .from('wishes')
+            .select('*, user:profiles!user_id(*), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status)')
+            .eq('status', 'private')
+            .eq('user_id', userId!)
+            .eq('community_id', communityId!)
+            .order('created_at', { ascending: false });
+          if (
+            error &&
+            (String(error.message ?? '').includes('wishes_board_category_id_fkey') ||
+              String(error.message ?? '').includes('board_category'))
+          ) {
+            const fallback = await (supabase as any)
+              .from('wishes')
+              .select('*, user:profiles!user_id(*)')
+              .eq('status', 'private')
+              .eq('user_id', userId!)
+              .eq('community_id', communityId!)
+              .order('created_at', { ascending: false });
+            data = fallback.data;
+            error = fallback.error;
+          }
+          if (error) {
+            console.error('Error fetching private wishes:', error);
+          }
+          return (data as (Wish & { user: Profile })[]) || [];
+        },
+        enabled: !!communityId && !!userId,
+        staleTime: 5 * 60 * 1000,
+      },
       // Granted wishes (fulfilled)
       {
         queryKey: queryKeys.grantedWishes(communityId || ''),
@@ -348,6 +382,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
   const [
     queenBeesResult,
     wishesResult,
+    privateWishesResult,
     grantedWishesResult,
     eventsResult,
     birthdayEventsResult,
@@ -369,6 +404,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
     },
     fallbackAdmin: adminResult.data || null,
     publicWishes: wishesResult.data || [],
+    privateWishes: privateWishesResult.data || [],
     grantedWishes: grantedWishesResult.data || [],
     upcomingEvents: [
       ...((eventsResult.data || []) as Event[]),
@@ -388,6 +424,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
     loading: {
       queenBees: queenBeesResult.isLoading,
       publicWishes: wishesResult.isLoading,
+      privateWishes: privateWishesResult.isLoading,
       grantedWishes: grantedWishesResult.isLoading,
       events: eventsResult.isLoading || birthdayEventsResult.isLoading,
       honeyPot: honeyPotResult.isLoading,

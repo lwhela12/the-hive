@@ -232,7 +232,7 @@ export function AddWishModal({
                   style={{ fontFamily: 'Lato_700Bold' }}
                   className="text-xl text-charcoal"
                 >
-                  {isEditMode ? 'Edit Wish' : isLinkedWish ? 'Add Linked Wish' : 'Add a Wish'}
+                  {isEditMode ? 'Edit HD Wish' : isLinkedWish ? 'Add Linked HD Wish' : 'Add an HD Wish'}
                 </Text>
                 <View style={{ width: 50 }} />
               </View>
@@ -243,7 +243,7 @@ export function AddWishModal({
                   style={{ fontFamily: 'Lato_700Bold' }}
                   className="text-charcoal text-base mb-2"
                 >
-                  What do you wish for?
+                  What is the HD wish?
                 </Text>
                 {isLinkedWish && (
                   <View className="bg-gold/10 border border-gold/20 rounded-xl px-4 py-3 mb-3">
@@ -257,7 +257,7 @@ export function AddWishModal({
                       style={{ fontFamily: 'Lato_400Regular' }}
                       className="text-charcoal/60 text-sm mt-1"
                     >
-                      This wish will show up on profiles and Home.
+                      This HD wish will show up on profiles and Home.
                       {wishOwnerName ? ` It will belong to ${wishOwnerName}.` : ''}
                     </Text>
                   </View>
@@ -333,14 +333,14 @@ export function AddWishModal({
                   style={{ fontFamily: 'Lato_700Bold' }}
                   className="text-gold mb-1"
                 >
-                  Tips for great wishes
+                  Tips for great HD wishes
                 </Text>
                 <Text
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal/70 text-sm"
                 >
                   {isLinkedWish
-                    ? 'Linked wishes work best as concrete next steps: "Help hang the mirror" or "Send Iceland travel tips."'
+                    ? 'Linked HD wishes work best as concrete next steps: "Help hang the mirror" or "Send Iceland travel tips."'
                     : 'Be specific about what you need. "Help cooking" becomes "Teach me 3 easy weeknight meals I can prep on Sundays."'}
                 </Text>
               </View>
@@ -371,7 +371,7 @@ export function AddWishModal({
                 <View className="flex-row gap-3 mb-4">
                   <View className="flex-1">
                     <Button
-                      title="Save as Private"
+                      title="Save as HD Private"
                       variant="secondary"
                       onPress={() => handleSave(false)}
                       loading={saving}
@@ -380,7 +380,7 @@ export function AddWishModal({
                   </View>
                   <View className="flex-1">
                     <Button
-                      title={isLinkedWish ? 'Add Linked Wish' : 'Make Public'}
+                      title={isLinkedWish ? 'Add Linked HD Wish' : 'Make HD Public'}
                       onPress={() => handleSave(true)}
                       loading={saving}
                       disabled={saving || !canSubmit}

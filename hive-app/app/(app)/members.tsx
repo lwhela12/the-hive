@@ -16,6 +16,7 @@ import { DAILY_QUESTIONS } from '../../lib/dailyQuestions';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
 import { setStoredItem } from '../../lib/webStorage';
+import { getHdWishStatusLabel } from '../../lib/wishDisplay';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileShowcase } from '../../components/profile/ProfileShowcase';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
@@ -76,7 +77,7 @@ const PROFILE_EMPTY_COPY = {
   knownFor: 'Not shared yet.',
   bio: 'No bio shared yet.',
   miq: '3MIQ answers are not shared yet.',
-  wishes: 'No public wishes shared yet.',
+  wishes: 'No HD Public wishes shared yet.',
   skills: 'No skills planted yet — garden coming soon!',
 };
 
@@ -926,14 +927,14 @@ function MemberDetailModal({
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingBottom: 12 }}>
-                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>My Wishes 🌟</Text>
+                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>My HD Wishes 🌟</Text>
                 <Pressable onPress={() => setShowWishesSheet(false)} style={{ padding: 6 }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#9ca3af' }}>Close</Text>
                 </Pressable>
               </View>
               <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 120 }}>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', marginBottom: 16, lineHeight: 18 }}>
-                  Private wishes are just for you. Share with HIVE when you're ready — someone might know exactly how to help.
+                  HD Private wishes are just for you. Share as HD Public when you're ready — someone might know exactly how to help.
                 </Text>
                 {wishesLoading ? (
                   <ActivityIndicator size="small" color="#bd9348" style={{ marginVertical: 20 }} />
@@ -949,7 +950,7 @@ function MemberDetailModal({
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: wish.status === 'public' ? '#22c55e' : '#d1d5db', marginRight: 8 }} />
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: wish.status === 'public' ? '#16a34a' : '#9ca3af' }}>
-                            {wish.status === 'public' ? 'Shared with HIVE' : 'Private'}
+                            {getHdWishStatusLabel(wish.status)}
                           </Text>
                         </View>
                         <LinkifiedText
@@ -965,7 +966,7 @@ function MemberDetailModal({
                               disabled={wishActionLoading === wish.id}
                               style={{ backgroundColor: '#22c55e', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, opacity: wishActionLoading === wish.id ? 0.5 : 1 }}
                             >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: 'white' }}>Share with HIVE</Text>
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: 'white' }}>Share as HD Public</Text>
                             </Pressable>
                           ) : (
                             <Pressable
@@ -973,7 +974,7 @@ function MemberDetailModal({
                               disabled={wishActionLoading === wish.id}
                               style={{ backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, opacity: wishActionLoading === wish.id ? 0.5 : 1 }}
                             >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#6b7280' }}>Make private</Text>
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#6b7280' }}>Make HD Private</Text>
                             </Pressable>
                           )}
                           <Pressable
@@ -1019,10 +1020,10 @@ function MemberDetailModal({
                             <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
                           </Pressable>
                           <Pressable onPress={() => saveNewWish(false)} disabled={!newWishInput.trim()} style={{ flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.5)', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', textAlign: 'center', fontSize: 13 }}>Keep private</Text>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', textAlign: 'center', fontSize: 13 }}>HD Private</Text>
                           </Pressable>
                           <Pressable onPress={() => saveNewWish(true)} disabled={!newWishInput.trim()} style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Share with HIVE 🐝</Text>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>HD Public 🐝</Text>
                           </Pressable>
                         </View>
                         <Pressable onPress={() => refineWithClive(newWishInput)} disabled={!newWishInput.trim()} style={{ alignItems: 'center', paddingVertical: 6, opacity: newWishInput.trim() ? 1 : 0.4 }}>
@@ -1205,9 +1206,9 @@ function MemberDetailModal({
                   style={{ flex: 1, backgroundColor: '#fdf3dc', borderWidth: 1.5, borderColor: '#bd9348', borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 3 }}
                 >
                   <Text style={{ fontSize: 20 }}>🌟</Text>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', textAlign: 'center' }}>My Wishes</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', textAlign: 'center' }}>My HD Wishes</Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10, color: '#9a7a3a', textAlign: 'center' }}>
-                    {myWishes.length > 0 ? `${myWishes.length} wish${myWishes.length !== 1 ? 'es' : ''}` : 'Add one'}
+                    {myWishes.length > 0 ? `${myWishes.length} HD wish${myWishes.length !== 1 ? 'es' : ''}` : 'Add one'}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -1455,11 +1456,15 @@ function MemberDetailModal({
 
             {/* Wishes */}
             <View style={{ marginBottom: 20 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>CURRENTLY WISHING FOR</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>HD PUBLIC WISHES</Text>
               {publicWishes.length > 0 ? (
                 publicWishes.map(w => (
                   <View key={w.id} style={{ marginBottom: 8 }}>
-                    <WishCombCard wish={w} />
+                    <WishCombCard
+                      wish={w}
+                      ownerName={member.name}
+                      ownerAvatarUrl={member.avatar_url}
+                    />
                   </View>
                 ))
               ) : (
@@ -1515,12 +1520,12 @@ function MemberDetailModal({
             {isCurrentUser && (
               <View style={{ marginBottom: 24 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>MY WISHES</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>MY HD WISHES</Text>
                   <Pressable
                     onPress={() => setAddingWish(true)}
                     style={{ backgroundColor: '#fdf3dc', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5 }}
                   >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>+ New Wish</Text>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>+ New HD Wish</Text>
                   </Pressable>
                 </View>
 
@@ -1534,7 +1539,7 @@ function MemberDetailModal({
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                           <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: wish.status === 'public' ? '#22c55e' : '#9ca3af', marginRight: 7 }} />
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: wish.status === 'public' ? '#16a34a' : '#9ca3af' }}>
-                            {wish.status === 'public' ? 'Shared with HIVE' : 'Private'}
+                            {getHdWishStatusLabel(wish.status)}
                           </Text>
                         </View>
                         <LinkifiedText
@@ -1551,7 +1556,7 @@ function MemberDetailModal({
                               disabled={wishActionLoading === wish.id}
                               style={{ backgroundColor: '#22c55e', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, opacity: wishActionLoading === wish.id ? 0.5 : 1 }}
                             >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: 'white' }}>Share with HIVE</Text>
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: 'white' }}>Share as HD Public</Text>
                             </Pressable>
                           )}
                           {wish.status === 'public' && (
@@ -1560,7 +1565,7 @@ function MemberDetailModal({
                               disabled={wishActionLoading === wish.id}
                               style={{ backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, opacity: wishActionLoading === wish.id ? 0.5 : 1 }}
                             >
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#6b7280' }}>Make private</Text>
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#6b7280' }}>Make HD Private</Text>
                             </Pressable>
                           )}
                           <Pressable
@@ -1582,7 +1587,7 @@ function MemberDetailModal({
                     {myWishes.length === 0 && !addingWish && (
                       <View style={{ backgroundColor: '#faf8f3', borderRadius: 14, padding: 16, alignItems: 'center' }}>
                         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
-                          No wishes yet.{'\n'}Tap "+ New Wish" to add your first one, or chat with Clive to discover what you really want.
+                          No HD wishes yet.{'\n'}Tap "+ New HD Wish" to add your first one, or chat with Clive to discover what you really want.
                         </Text>
                       </View>
                     )}
@@ -1590,13 +1595,13 @@ function MemberDetailModal({
                     {/* Inline new wish composer */}
                     {addingWish && (
                       <View style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 14, padding: 14 }}>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginBottom: 8 }}>New wish</Text>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginBottom: 8 }}>New HD wish</Text>
                         <TextInput
                           value={newWishInput}
                           onChangeText={wishMentionInput.textInputMentionProps.onChangeText}
                           onSelectionChange={wishMentionInput.textInputMentionProps.onSelectionChange}
                           selection={wishMentionInput.textInputMentionProps.selection}
-                          placeholder="What do you wish for? Describe it as specifically as you can..."
+                          placeholder="What is the HD wish? Describe it as specifically as you can..."
                           placeholderTextColor="#b5ad9f"
                           multiline
                           style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', paddingHorizontal: 12, paddingVertical: 10, minHeight: 80, marginBottom: 10, textAlignVertical: 'top' }}
@@ -1614,14 +1619,14 @@ function MemberDetailModal({
                             disabled={!newWishInput.trim()}
                             style={{ flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.5)', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}
                           >
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', textAlign: 'center', fontSize: 13 }}>Keep private</Text>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#bd9348', textAlign: 'center', fontSize: 13 }}>HD Private</Text>
                           </Pressable>
                           <Pressable
                             onPress={() => saveNewWish(true)}
                             disabled={!newWishInput.trim()}
                             style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}
                           >
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Share with HIVE 🐝</Text>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>HD Public 🐝</Text>
                           </Pressable>
                         </View>
                         <Pressable

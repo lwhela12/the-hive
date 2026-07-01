@@ -31,6 +31,7 @@ import { submitOnEnter } from '../../lib/submitOnEnter';
 import { unlinkWishFromBoard } from '../../lib/wishBoardLinking';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { addHomeResetListener } from '../../lib/homeNavigation';
+import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
 import {
   QUARTERLY_DUES_AMOUNT,
   type DuesPeriod,
@@ -46,7 +47,7 @@ type WishWithGranters = Wish & {
   granters?: (WishGranter & { granter?: Profile })[];
 };
 
-type WishStatusTabKey = 'public' | 'granted';
+type WishStatusTabKey = HdWishTabKey;
 type TodoStatusTabKey = 'open' | 'done';
 
 type HomeTodo = {
@@ -1258,6 +1259,7 @@ export default function HiveScreen() {
   // Use the optimized hive data hook (React Query with caching)
   const {
     publicWishes,
+    privateWishes,
     grantedWishes,
     upcomingEvents,
     honeyPotBalance,
@@ -1289,10 +1291,16 @@ export default function HiveScreen() {
     userId: profile?.id,
     survey: activeSurvey,
   });
-  const visibleHdWishes = wishStatusTab === 'granted' ? grantedWishes : publicWishes;
+  const visibleHdWishes = wishStatusTab === 'granted'
+    ? grantedWishes
+    : wishStatusTab === 'private'
+      ? privateWishes
+      : publicWishes;
   const hdWishesEmptyText = wishStatusTab === 'granted'
-    ? 'No granted wishes yet'
-    : 'No public wishes yet';
+    ? 'No granted HD wishes yet'
+    : wishStatusTab === 'private'
+      ? 'No private HD wishes yet'
+      : 'No public HD wishes yet';
 
   const openSurvey = useCallback((survey: Survey) => {
     setActiveSurvey(survey);
@@ -2499,18 +2507,23 @@ export default function HiveScreen() {
             tabs={[
               {
                 key: 'public',
-                label: 'Open',
+                label: getHdWishTabLabel('public'),
                 count: publicWishes.length,
               },
               {
+                key: 'private',
+                label: getHdWishTabLabel('private'),
+                count: privateWishes.length,
+              },
+              {
                 key: 'granted',
-                label: 'Granted',
+                label: getHdWishTabLabel('granted'),
                 count: grantedWishes.length,
               },
             ]}
           />
 
-          {loading.publicWishes && loading.grantedWishes ? (
+          {loading.publicWishes && loading.privateWishes && loading.grantedWishes ? (
             <View style={{
               backgroundColor: '#fdf3dc',
               borderRadius: 20,

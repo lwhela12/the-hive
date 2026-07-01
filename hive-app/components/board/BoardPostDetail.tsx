@@ -429,9 +429,9 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     if (!post || !profile || !communityId || !canCompletePost) return;
 
     confirmBoardAction({
-      title: 'Wish Granted',
-      message: `Mark "${post.title}" as granted? It will show as Granted here and be added to granted HD Wishes.`,
-      confirmLabel: 'Mark Granted',
+      title: 'HD Wish Granted',
+      message: `Mark "${post.title}" as HD Granted? It will show as HD Granted here and be added to HD Granted wishes.`,
+      confirmLabel: 'Mark HD Granted',
       onConfirm: async () => {
         await markBoardThreadGranted({
           post,
@@ -563,7 +563,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             <View className="flex-row items-center self-start bg-gold/10 border border-gold/20 rounded-full px-3 py-1 mb-3">
               <Ionicons name="checkmark-circle-outline" size={15} color="#bd9348" />
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
-                Wish Granted
+                HD Wish Granted
               </Text>
             </View>
           )}
@@ -678,7 +678,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
               >
                 <Ionicons name="checkmark-circle-outline" size={16} color="#bd9348" />
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
-                  Granted
+                  HD Granted
                 </Text>
               </Pressable>
             )}

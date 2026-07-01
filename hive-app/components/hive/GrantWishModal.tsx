@@ -156,7 +156,7 @@ export function GrantWishModal({
                   style={{ fontFamily: 'Lato_700Bold' }}
                   className="text-xl text-charcoal"
                 >
-                  Mark as Granted
+                  Mark as HD Granted
                 </Text>
                 <View style={{ width: 50 }} />
               </View>
@@ -167,7 +167,7 @@ export function GrantWishModal({
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal/60 text-xs uppercase tracking-wide mb-2"
                 >
-                  Your Wish
+                  Your HD Wish
                 </Text>
                 <Text
                   style={{ fontFamily: 'Lato_400Regular' }}
@@ -184,7 +184,7 @@ export function GrantWishModal({
                     style={{ fontFamily: 'Lato_700Bold' }}
                     className="text-charcoal text-base"
                   >
-                    Who helped grant this wish?
+                    Who helped grant this HD wish?
                   </Text>
                   <View className="flex-row gap-2">
                     <Pressable onPress={selectAll}>
@@ -319,13 +319,13 @@ export function GrantWishModal({
                   style={{ fontFamily: 'Lato_700Bold' }}
                   className="text-gold mb-1"
                 >
-                  Celebrating your granted wish!
+                  Celebrating your HD Granted wish!
                 </Text>
                 <Text
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal/70 text-sm"
                 >
-                  Your wish will be moved to the "Granted" section where the community can see how
+                  Your wish will be moved to the "HD Granted" section where the community can see how
                   HIVE came together to help.
                 </Text>
               </View>
@@ -344,7 +344,7 @@ export function GrantWishModal({
 
               {/* Submit Button */}
               <Button
-                title={loading ? 'Marking as Granted...' : 'Mark Wish as Granted'}
+                title={loading ? 'Marking as HD Granted...' : 'Mark Wish as HD Granted'}
                 onPress={handleGrant}
                 loading={loading}
                 disabled={loading}

@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDateShort } from '../../lib/dateUtils';
-import { getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
+import { getHdWishStatusLabel, getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
+import { Avatar } from '../ui/Avatar';
 import type { Wish } from '../../types';
 
 const publicBeeIcon = require('../../assets/BEE ONLY IN GOLD BG.png');
@@ -13,13 +14,15 @@ type WishCombCardWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wi
 type WishCombCardProps = {
   wish: WishCombCardWish;
   linkedBoardLabel?: string | null;
+  ownerName?: string | null;
+  ownerAvatarUrl?: string | null;
   onManage?: (wish: WishCombCardWish) => void;
 };
 
 function getStatusMeta(status: Wish['status']) {
   if (status === 'fulfilled') {
     return {
-      label: 'Granted',
+      label: getHdWishStatusLabel(status),
       color: '#bd9348',
       bg: 'rgba(255,244,211,0.72)',
       border: 'rgba(189,147,72,0.5)',
@@ -29,7 +32,7 @@ function getStatusMeta(status: Wish['status']) {
   }
   if (status === 'private') {
     return {
-      label: 'Private',
+      label: getHdWishStatusLabel(status),
       color: '#77736a',
       bg: 'rgba(244,242,235,0.78)',
       border: 'rgba(119,115,106,0.42)',
@@ -38,7 +41,7 @@ function getStatusMeta(status: Wish['status']) {
     };
   }
   return {
-    label: 'Public',
+    label: getHdWishStatusLabel(status),
     color: '#a87822',
     bg: 'rgba(255,247,220,0.78)',
     border: 'rgba(189,147,72,0.5)',
@@ -81,16 +84,21 @@ function PublicBeesIcon({ compact = false }: { compact?: boolean }) {
 export function WishCombCard({
   wish,
   linkedBoardLabel,
+  ownerName,
+  ownerAvatarUrl,
   onManage,
 }: WishCombCardProps) {
   const status = getStatusMeta(wish.status);
   const isGranted = wish.status === 'fulfilled';
   const isPrivate = wish.status === 'private';
+  const ownerDisplayName = (ownerName ?? '').trim();
+  const showOwnerRow = isGranted && ownerDisplayName.length > 0;
+  const showStatusPill = !isGranted;
   const quickTitle = getWishQuickTitle(wish);
   const bodyPreview = getWishBodyPreview(wish);
   const showBodyPreview = hasSeparateWishTitle(wish);
   const dateLabel = isGranted && wish.fulfilled_at
-    ? `Granted · ${formatDateShort(wish.fulfilled_at)}`
+    ? `${getHdWishStatusLabel('fulfilled')} · ${formatDateShort(wish.fulfilled_at)}`
     : wish.created_at
       ? formatDateShort(wish.created_at)
       : null;
@@ -103,37 +111,50 @@ export function WishCombCard({
   const content = (
     <>
       <View style={styles.content}>
-        <View style={styles.metaRow}>
-          <View
-            style={[
-              styles.statusPill,
-              {
-                backgroundColor: status.bg,
-                borderColor: status.border,
-              },
-            ]}
-          >
-            <StatusIcon status={status} compact />
-            <Text style={[styles.statusText, { color: status.color }]}>
-              {status.label}
-            </Text>
-          </View>
+        {(showOwnerRow || showStatusPill || onManage) && (
+          <View style={styles.metaRow}>
+            {showOwnerRow ? (
+              <View style={styles.ownerRow}>
+                <Avatar name={ownerDisplayName} url={ownerAvatarUrl} size={44} />
+                <Text style={styles.ownerName} numberOfLines={1}>
+                  {ownerDisplayName}
+                </Text>
+              </View>
+            ) : showStatusPill ? (
+              <View
+                style={[
+                  styles.statusPill,
+                  {
+                    backgroundColor: status.bg,
+                    borderColor: status.border,
+                  },
+                ]}
+              >
+                <StatusIcon status={status} compact />
+                <Text style={[styles.statusText, { color: status.color }]}>
+                  {status.label}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.metaSpacer} />
+            )}
 
-          {onManage && (
-            <Pressable
-              onPress={(event) => {
-                event.stopPropagation();
-                onManage(wish);
-              }}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Manage wish"
-              style={styles.manageButton}
-            >
-              <Ionicons name="pencil-outline" size={16} color="#7a6849" />
-            </Pressable>
-          )}
-        </View>
+            {onManage && (
+              <Pressable
+                onPress={(event) => {
+                  event.stopPropagation();
+                  onManage(wish);
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Manage wish"
+                style={styles.manageButton}
+              >
+                <Ionicons name="pencil-outline" size={16} color="#7a6849" />
+              </Pressable>
+            )}
+          </View>
+        )}
 
         <Text
           style={[
@@ -160,7 +181,12 @@ export function WishCombCard({
         )}
 
         {linkedBoardLabel && (
-          <View style={styles.linkedMeta}>
+          <View
+            style={[
+              styles.linkedMeta,
+              isGranted ? styles.linkedMetaGranted : styles.linkedMetaOpen,
+            ]}
+          >
             <Ionicons name="link-outline" size={13} color={isGranted ? '#9a8060' : '#b88a3c'} />
             <Text style={[styles.linkedMetaText, isGranted ? styles.linkedMetaTextGranted : null]}>
               {linkedBoardLabel}
@@ -174,12 +200,6 @@ export function WishCombCard({
               {dateLabel}
             </Text>
           </View>
-        )}
-
-        {wish.status === 'fulfilled' && wish.thank_you_message && (
-          <Text style={styles.thankYou}>
-            "{wish.thank_you_message}"
-          </Text>
         )}
       </View>
     </>
@@ -212,7 +232,7 @@ const styles = StyleSheet.create({
   card: {
     position: 'relative',
     overflow: 'hidden',
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -247,6 +267,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
     marginBottom: 9,
+  },
+  ownerRow: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  ownerName: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: 'Lato_400Regular',
+    color: '#7f715f',
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  metaSpacer: {
+    flex: 1,
   },
   statusPill: {
     flexDirection: 'row',
@@ -300,7 +338,19 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     marginTop: 9,
+  },
+  linkedMetaOpen: {
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderColor: 'rgba(189,147,72,0.2)',
+  },
+  linkedMetaGranted: {
+    backgroundColor: 'rgba(245,234,209,0.34)',
+    borderColor: 'rgba(189,147,72,0.16)',
   },
   linkedMetaText: {
     fontFamily: 'Lato_700Bold',
@@ -324,15 +374,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   dateTextGranted: {
-    color: '#9a8060',
-  },
-  thankYou: {
-    fontFamily: 'LibreBaskerville_400Regular',
-    color: 'rgba(45,45,45,0.66)',
-    fontSize: 13,
-    lineHeight: 20,
-    fontStyle: 'italic',
-    marginTop: 10,
+    color: 'rgba(45,45,45,0.4)',
   },
   beeCluster: {
     position: 'relative',
