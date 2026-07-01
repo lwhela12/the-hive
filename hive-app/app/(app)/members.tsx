@@ -365,6 +365,9 @@ function MemberDetailModal({
   const isPhoneProfile = viewportWidth < 640;
   const currentWishes = member.wishes.filter(w => w.status === 'public' && w.is_active !== false);
   const grantedWishes = member.wishes.filter(w => w.status === 'fulfilled');
+  const visibleMemberWishes = [...currentWishes, ...grantedWishes].sort((a, b) => (
+    (b.created_at ?? '').localeCompare(a.created_at ?? '')
+  ));
   const roleLabel = ROLE_LABELS[member.role];
   const { getOrCreateDMRoom } = useChatRooms(communityId ?? undefined, currentAuthId ?? undefined);
   const [introExpanded, setIntroExpanded] = useState(false);
@@ -469,23 +472,47 @@ function MemberDetailModal({
     setShowWishesSheet(false);
     setShowDailyAnswersSheet(false);
     setSelectedWish(null);
+    setMyWishes(isCurrentUser ? visibleMemberWishes : []);
   }, [member]);
 
-  // Fetch current user's own visible wishes when modal opens
+  // Fetch current user's own visible wishes when modal opens. Seed from
+  // member.wishes first so this section never blanks out if the refresh query
+  // hits an older schema while Home/member cards already have the rows.
   useEffect(() => {
     if (!isCurrentUser || !communityId) return;
     setWishesLoading(true);
-    supabase
-      .from('wishes')
-      .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
-      .eq('user_id', member.id)
-      .eq('community_id', communityId)
-      .in('status', ['public', 'fulfilled'])
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setMyWishes(data ?? []);
-        setWishesLoading(false);
-      });
+    setMyWishes(visibleMemberWishes);
+
+    const fetchVisibleWishes = async () => {
+      let { data, error } = await supabase
+        .from('wishes')
+        .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+        .eq('user_id', member.id)
+        .eq('community_id', communityId)
+        .in('status', ['public', 'fulfilled'])
+        .order('created_at', { ascending: false });
+
+      if (error && String(error.message ?? '').includes('title')) {
+        const fallback = await supabase
+          .from('wishes')
+          .select('id, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+          .eq('user_id', member.id)
+          .eq('community_id', communityId)
+          .in('status', ['public', 'fulfilled'])
+          .order('created_at', { ascending: false });
+        data = (fallback.data ?? []).map((wish: any) => ({ ...wish, title: null }));
+        error = fallback.error;
+      }
+
+      if (error) {
+        console.warn('[Members] my wishes refresh failed', error);
+      } else if (data) {
+        setMyWishes(data);
+      }
+      setWishesLoading(false);
+    };
+
+    void fetchVisibleWishes();
   }, [isCurrentUser, member.id, communityId]);
 
   const addSkillChip = () => {
