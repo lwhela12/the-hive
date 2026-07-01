@@ -2,7 +2,6 @@ import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../ui/Avatar';
 import { formatDateShort } from '../../lib/dateUtils';
-import { getLinkedBoardLabel } from '../../lib/boardWishLinks';
 import { getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
 import type { Wish, Profile, WishGranter } from '../../types';
 
@@ -27,7 +26,6 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
   const granters = wish.granters || [];
   const displayGranters = granters.filter((g) => g.granter).slice(0, 3);
   const extraGranters = granters.length - 3;
-  const linkedBoardLabel = getLinkedBoardLabel(wish.board_category);
   const showManageButton = !!onManage && (canEdit || canDelete);
   const quickTitle = getWishQuickTitle(wish);
   const bodyPreview = getWishBodyPreview(wish);
@@ -130,29 +128,6 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
               {bodyPreview}
             </Text>
           )}
-          {linkedBoardLabel && (
-            <View
-              className="self-start flex-row items-center rounded-full px-2 py-1 mt-2"
-              style={{
-                backgroundColor: isGranted ? 'rgba(245,234,209,0.34)' : 'rgba(255,255,255,0.72)',
-                borderWidth: 1,
-                borderColor: isGranted ? 'rgba(189,147,72,0.16)' : 'rgba(189,147,72,0.2)',
-              }}
-            >
-              <Ionicons name="link-outline" size={12} color={isGranted ? '#9a8060' : '#bd9348'} />
-              <Text
-                style={{
-                  fontFamily: 'Lato_700Bold',
-                  color: isGranted ? '#9a8060' : '#bd9348',
-                  fontSize: 12,
-                  marginLeft: 4,
-                }}
-              >
-                {linkedBoardLabel}
-              </Text>
-            </View>
-          )}
-
           <View className="flex-row items-center mt-3">
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40">
               {isGranted && wish.fulfilled_at

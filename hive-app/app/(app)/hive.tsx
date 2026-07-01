@@ -28,7 +28,6 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { submitOnEnter } from '../../lib/submitOnEnter';
-import { unlinkWishFromBoard } from '../../lib/wishBoardLinking';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { addHomeResetListener } from '../../lib/homeNavigation';
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
@@ -1554,11 +1553,6 @@ export default function HiveScreen() {
   const canEditWish = useCallback((wish: Wish) => wish.user_id === profile?.id, [profile?.id]);
   const canDeleteWish = useCallback((wish: Wish) => !!profile && (isAdmin || wish.user_id === profile.id), [isAdmin, profile]);
   const canGrantWish = useCallback((wish: Wish) => wish.user_id === profile?.id && wish.status === 'public', [profile?.id]);
-  const canLinkWishBoard = useCallback((wish: Wish) => (
-    !!profile
-    && !!(wish.board_category_id || wish.source_board_post_id)
-    && (isAdmin || wish.user_id === profile.id)
-  ), [isAdmin, profile]);
   const canArchiveWish = useCallback((wish: Wish) => (
     !!profile
     && wish.status === 'public'
@@ -1566,8 +1560,8 @@ export default function HiveScreen() {
     && (isAdmin || wish.user_id === profile.id)
   ), [isAdmin, profile]);
   const canOpenWishActions = useCallback((wish: Wish) => (
-    canGrantWish(wish) || canLinkWishBoard(wish) || canEditWish(wish) || canArchiveWish(wish) || canDeleteWish(wish)
-  ), [canArchiveWish, canDeleteWish, canEditWish, canGrantWish, canLinkWishBoard]);
+    canGrantWish(wish) || canEditWish(wish) || canArchiveWish(wish) || canDeleteWish(wish)
+  ), [canArchiveWish, canDeleteWish, canEditWish, canGrantWish]);
 
   const handleArchiveWish = useCallback((wish: Wish) => {
     if (!profile || !communityId || !canArchiveWish(wish)) return;
@@ -1659,50 +1653,6 @@ export default function HiveScreen() {
       { text: 'Delete', style: 'destructive', onPress: deleteWish },
     ]);
   };
-
-  const openBoardFromWish = useCallback((categoryId: string) => {
-    if (!communityId) return;
-    setStoredItem(`the-hive:last-board-category:${communityId}`, categoryId);
-    removeStoredItem(`the-hive:last-board-post:${communityId}`);
-    setStoredItem(`the-hive:board-direct-open:${communityId}`, 'true');
-    closeWishDetail();
-    router.push({
-      pathname: '/board',
-      params: {
-        categoryId,
-        open: String(Date.now()),
-      },
-    });
-  }, [closeWishDetail, communityId, router]);
-
-  const handleUnlinkWishFromBoard = useCallback((wish: WishWithGranters) => {
-    if (!profile || !communityId) return;
-
-    const unlink = async () => {
-      try {
-        await unlinkWishFromBoard({ wishId: wish.id, communityId });
-        await refetch();
-        setManagingWish(null);
-        if (selectedWish?.id === wish.id) {
-          closeWishDetail();
-        }
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        Alert.alert('Error', `Failed to unlink wish: ${message}`);
-      }
-    };
-
-    const message = `Unlink this wish from its support thread?\n\n"${wish.description}"`;
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) unlink();
-      return;
-    }
-
-    Alert.alert('Unlink Wish', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Unlink', onPress: unlink },
-    ]);
-  }, [closeWishDetail, communityId, profile, refetch, selectedWish?.id]);
 
   const homeTodos: HomeTodo[] = [
     ...availableSurveys.map(s => {
@@ -1962,7 +1912,6 @@ export default function HiveScreen() {
             closeWishDetail();
             setManagingWish(wish);
           }}
-          onOpenBoard={openBoardFromWish}
         />
       </SafeAreaView>
     );
@@ -2806,29 +2755,6 @@ export default function HiveScreen() {
                   <Ionicons name="checkmark-circle-outline" size={18} color={manageWishToneColor('gold')} />
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('gold') }}>
                     Grant
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
-              </Pressable>
-            ) : null}
-
-            {managingWish && canLinkWishBoard(managingWish) ? (
-              <Pressable
-                onPress={() => {
-                  const wish = managingWish;
-                  setManagingWish(null);
-                  handleUnlinkWishFromBoard(wish);
-                }}
-                style={manageWishActionStyle('gold')}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Ionicons
-                    name="unlink-outline"
-                    size={18}
-                    color={manageWishToneColor('gold')}
-                  />
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('gold') }}>
-                    Unlink support thread
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />

@@ -15,8 +15,6 @@ import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { clearLastAppPath } from '../../lib/navigationState';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
-import { getLinkedBoardLabel } from '../../lib/boardWishLinks';
-import { unlinkWishFromBoard } from '../../lib/wishBoardLinking';
 import { getHdWishStatusLabel, getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
@@ -24,6 +22,7 @@ import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileShowcase } from '../../components/profile/ProfileShowcase';
 import { WishCombCard } from '../../components/profile/WishCombCard';
+import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
@@ -106,6 +105,7 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [wishes, setWishes] = useState<Wish[]>([]);
+  const [selectedWish, setSelectedWish] = useState<(Wish & { user: Profile }) | null>(null);
   const [wishToGrant, setWishToGrant] = useState<(Wish & { user: Profile }) | null>(null);
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
@@ -714,30 +714,6 @@ export default function ProfileScreen() {
     );
   };
 
-  const handleUnlinkWishBoard = (wish: Wish) => {
-    if (!communityId) return;
-
-    const unlink = async () => {
-      try {
-        await unlinkWishFromBoard({ wishId: wish.id, communityId });
-        await fetchData();
-        setManagingWish(null);
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        Alert.alert('Error', `Failed to unlink wish: ${message}`);
-      }
-    };
-
-    Alert.alert(
-      'Unlink Wish',
-      `Unlink this wish from its support thread?\n\n"${wish.description}"`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Unlink', onPress: unlink },
-      ]
-    );
-  };
-
   const handleGrantWish = async (data: {
     wishId: string;
     granterIds: string[];
@@ -756,6 +732,11 @@ export default function ProfileScreen() {
     // Create wish with user profile for the modal
     setWishToGrant({ ...wish, user: profile });
   };
+
+  const openWishDetail = useCallback((wish: Wish) => {
+    if (!profile) return;
+    setSelectedWish({ ...wish, user: wish.user ?? profile });
+  }, [profile]);
 
   const handleWishSaved = async () => {
     await fetchData();
@@ -1433,16 +1414,11 @@ export default function ProfileScreen() {
       wish={wish}
       ownerName={profile?.name}
       ownerAvatarUrl={profile?.avatar_url}
-      linkedBoardLabel={
-        wish.board_category_id || wish.source_board_post_id
-          ? getLinkedBoardLabel(wish.board_category) || 'Support thread'
-          : null
-      }
+      onOpen={(selectedWish) => openWishDetail(selectedWish as Wish)}
       onManage={(selectedWish) => setManagingWish(selectedWish as Wish)}
     />
   );
 
-  const managingWishIsLinked = !!(managingWish?.board_category_id || managingWish?.source_board_post_id);
   const wishManageModal = (
     <Modal visible={!!managingWish} animationType="fade" transparent onRequestClose={() => setManagingWish(null)}>
       <Pressable
@@ -1512,25 +1488,6 @@ export default function ProfileScreen() {
             </Pressable>
           ) : null}
 
-          {managingWish && managingWishIsLinked ? (
-            <Pressable
-              onPress={() => {
-                const wish = managingWish;
-                if (!wish) return;
-                handleUnlinkWishBoard(wish);
-              }}
-              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
-            >
-              <View className="flex-row items-center">
-                <Ionicons name="unlink-outline" size={18} color="rgba(49,49,48,0.66)" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
-                  Unlink support thread
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
-            </Pressable>
-          ) : null}
-
           {managingWish?.status !== 'fulfilled' ? (
             <Pressable
               onPress={() => {
@@ -1591,6 +1548,24 @@ export default function ProfileScreen() {
       </Pressable>
     </Modal>
   );
+
+  if (selectedWish) {
+    return (
+      <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+        <WishDetail
+          wish={selectedWish}
+          onClose={() => setSelectedWish(null)}
+          onGrant={handleGrantWish}
+          canManage
+          onManage={() => {
+            const wish = selectedWish;
+            setSelectedWish(null);
+            setManagingWish(wish);
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={immersiveSkillsGarden ? [] : ['top']}>

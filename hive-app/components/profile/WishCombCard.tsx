@@ -13,9 +13,9 @@ type WishCombCardWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wi
 
 type WishCombCardProps = {
   wish: WishCombCardWish;
-  linkedBoardLabel?: string | null;
   ownerName?: string | null;
   ownerAvatarUrl?: string | null;
+  onOpen?: (wish: WishCombCardWish) => void;
   onManage?: (wish: WishCombCardWish) => void;
 };
 
@@ -83,9 +83,9 @@ function PublicBeesIcon({ compact = false }: { compact?: boolean }) {
 
 export function WishCombCard({
   wish,
-  linkedBoardLabel,
   ownerName,
   ownerAvatarUrl,
+  onOpen,
   onManage,
 }: WishCombCardProps) {
   const status = getStatusMeta(wish.status);
@@ -180,20 +180,6 @@ export function WishCombCard({
           </Text>
         )}
 
-        {linkedBoardLabel && (
-          <View
-            style={[
-              styles.linkedMeta,
-              isGranted ? styles.linkedMetaGranted : styles.linkedMetaOpen,
-            ]}
-          >
-            <Ionicons name="link-outline" size={13} color={isGranted ? '#9a8060' : '#b88a3c'} />
-            <Text style={[styles.linkedMetaText, isGranted ? styles.linkedMetaTextGranted : null]}>
-              {linkedBoardLabel}
-            </Text>
-          </View>
-        )}
-
         {dateLabel && (
           <View style={styles.footerRow}>
             <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
@@ -205,12 +191,14 @@ export function WishCombCard({
     </>
   );
 
-  if (onManage) {
+  const cardAction = onOpen ?? onManage;
+
+  if (cardAction) {
     return (
       <Pressable
-        onPress={() => onManage(wish)}
+        onPress={() => cardAction(wish)}
         accessibilityRole="button"
-        accessibilityLabel="Manage wish"
+        accessibilityLabel={onOpen ? 'Open wish' : 'Manage wish'}
         style={({ pressed }) => [
           ...cardStyle,
           pressed ? styles.cardPressed : null,
@@ -333,33 +321,6 @@ const styles = StyleSheet.create({
     color: '#7f715f',
     fontStyle: 'italic',
     textDecorationLine: 'line-through',
-  },
-  linkedMeta: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginTop: 9,
-  },
-  linkedMetaOpen: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderColor: 'rgba(189,147,72,0.2)',
-  },
-  linkedMetaGranted: {
-    backgroundColor: 'rgba(245,234,209,0.34)',
-    borderColor: 'rgba(189,147,72,0.16)',
-  },
-  linkedMetaText: {
-    fontFamily: 'Lato_700Bold',
-    color: '#b88a3c',
-    fontSize: 12,
-    marginLeft: 5,
-  },
-  linkedMetaTextGranted: {
-    color: '#9a8060',
   },
   footerRow: {
     flexDirection: 'row',

@@ -16,7 +16,7 @@ import { Avatar } from '../ui/Avatar';
 import { formatDateShort } from '../../lib/dateUtils';
 import { GrantWishModal } from './GrantWishModal';
 import { submitOnEnter } from '../../lib/submitOnEnter';
-import { getLinkedBoardLabel } from '../../lib/boardWishLinks';
+import { getWishQuickTitle, shouldShowWishDescription } from '../../lib/wishDisplay';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { notifyWishMentions } from '../../lib/wishMentions';
@@ -39,8 +39,6 @@ interface WishDetailProps {
   }) => Promise<{ error: Error | null }>;
   canManage?: boolean;
   onManage?: () => void;
-  onOpenBoard?: (categoryId: string) => void;
-  onCreateBoard?: (wish: WishWithGranters) => Promise<void>;
 }
 
 export function WishDetail({
@@ -49,8 +47,6 @@ export function WishDetail({
   onGrant,
   canManage = false,
   onManage,
-  onOpenBoard,
-  onCreateBoard,
 }: WishDetailProps) {
   const { profile, communityId } = useAuth();
   const [comments, setComments] = useState<(WishComment & { user: Profile })[]>([]);
@@ -70,8 +66,8 @@ export function WishDetail({
   const isOwnWish = profile?.id === wish.user_id;
   const canGrant = isOwnWish && wish.status === 'public' && onGrant;
   const isGranted = wish.status === 'fulfilled';
-  const linkedBoardLabel = getLinkedBoardLabel(wish.board_category);
-  const canCreateBoard = isOwnWish && !wish.board_category_id && !isGranted && !!onCreateBoard;
+  const wishTitle = getWishQuickTitle(wish, 90);
+  const showDescription = shouldShowWishDescription(wish);
 
   useEffect(() => {
     fetchComments();
@@ -180,12 +176,19 @@ export function WishDetail({
                   </View>
                 )}
               </View>
-              <LinkifiedText
-                style={{ fontFamily: 'Lato_400Regular', color: 'rgba(49,49,48,0.8)', marginTop: 4, fontSize: 16 }}
-                mentionStyle={{ color: '#1d4ed8', backgroundColor: 'rgba(37,99,235,0.1)' }}
+              <Text
+                style={{ fontFamily: 'Lato_700Bold', color: '#2d2d2d', marginTop: 8, fontSize: 20, lineHeight: 26 }}
               >
-                {wish.description}
-              </LinkifiedText>
+                {wishTitle}
+              </Text>
+              {showDescription && (
+                <LinkifiedText
+                  style={{ fontFamily: 'Lato_400Regular', color: 'rgba(49,49,48,0.8)', marginTop: 8, fontSize: 16, lineHeight: 23 }}
+                  mentionStyle={{ color: '#1d4ed8', backgroundColor: 'rgba(37,99,235,0.1)' }}
+                >
+                  {wish.description}
+                </LinkifiedText>
+              )}
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-2">
                 {formatDateShort(wish.created_at)}
                 {isGranted && wish.fulfilled_at && (
@@ -195,47 +198,6 @@ export function WishDetail({
             </View>
           </View>
         </View>
-
-        {(linkedBoardLabel || canCreateBoard) && (
-          <View className="mb-6">
-            {linkedBoardLabel && wish.board_category_id ? (
-              <Pressable
-                onPress={() => onOpenBoard?.(wish.board_category_id!)}
-                className="bg-white rounded-xl p-4 border border-gold/20 flex-row items-center active:bg-cream/50"
-              >
-                <View className="w-10 h-10 rounded-full bg-gold/10 items-center justify-center mr-3">
-                  <Ionicons name="albums-outline" size={20} color="#bd9348" />
-                </View>
-                <View className="flex-1">
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
-                    {linkedBoardLabel}
-                  </Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mt-0.5">
-                    Open the support thread for this wish.
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="rgba(49,49,48,0.35)" />
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={() => onCreateBoard?.(wish)}
-                className="bg-white rounded-xl p-4 border border-gold/20 flex-row items-center active:bg-cream/50"
-              >
-                <View className="w-10 h-10 rounded-full bg-gold/10 items-center justify-center mr-3">
-                  <Ionicons name="add-circle-outline" size={21} color="#bd9348" />
-                </View>
-                <View className="flex-1">
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
-                    Create a support thread
-                  </Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mt-0.5">
-                    Keep the wish, and start a focused thread for resources and updates.
-                  </Text>
-                </View>
-              </Pressable>
-            )}
-          </View>
-        )}
 
         {/* Granted Info Section */}
         {isGranted && (
