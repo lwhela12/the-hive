@@ -71,6 +71,14 @@ const PROFILE_PROMPT_LIMITS = {
   skills: 700,
 };
 
+const PROFILE_EMPTY_COPY = {
+  knownFor: 'Not shared yet.',
+  bio: 'No bio shared yet.',
+  miq: '3MIQ answers are not shared yet.',
+  wishes: 'No public wishes shared yet.',
+  skills: 'No skills planted yet — garden coming soon!',
+};
+
 type DailyAnswerRow = {
   user_id: string;
   question_index: number;
@@ -394,9 +402,6 @@ function MemberDetailModal({
     currentUserId: currentAuthId ?? undefined,
   });
 
-  const hasFavorites = member.favorite_book || member.favorite_food || member.favorite_hobby;
-  const hasFunFacts = (member.fun_facts ?? []).some(fact => fact.trim().length > 0);
-  const hasDetails = member.profile_title || member.occupation || member.birthday || member.bio || member.current_project || member.hometown || member.known_for || member.miq_experiences || member.miq_growth || member.miq_contribution || hasFavorites || hasFunFacts;
   const introContent = member.introPost?.content ?? '';
   const normalizedBioContent = normalizeProfileStoryText(member.bio);
   const normalizedIntroContent = normalizeProfileStoryText(introContent);
@@ -763,20 +768,11 @@ function MemberDetailModal({
           style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
         />
         <View
-          style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%', width: '100%', overflow: 'hidden' }}
+          style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%', width: '100%', overflow: 'hidden', position: 'relative' }}
         >
           {/* Handle + close */}
           <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4, position: 'relative' }}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
-            <Pressable
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel="Close member profile"
-              hitSlop={8}
-              style={{ position: 'absolute', right: 18, top: 8, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ee', zIndex: 30, elevation: 30 }}
-            >
-              <Ionicons name="close" size={20} color="#6b7280" />
-            </Pressable>
           </View>
 
           {/* ── Skill Picker Sheet ── */}
@@ -1419,19 +1415,30 @@ function MemberDetailModal({
                 contribution: member.miq_contribution,
               }}
               style={{ marginBottom: 20 }}
+              knownForPlaceholder={PROFILE_EMPTY_COPY.knownFor}
+              bioPlaceholder={PROFILE_EMPTY_COPY.bio}
+              miqPlaceholder={PROFILE_EMPTY_COPY.miq}
+              showMiqWhenEmpty
+              showEmptyCells
             />
 
             {/* Wishes */}
-            {publicWishes.length > 0 && (
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>CURRENTLY WISHING FOR</Text>
-                {publicWishes.map(w => (
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>CURRENTLY WISHING FOR</Text>
+              {publicWishes.length > 0 ? (
+                publicWishes.map(w => (
                   <View key={w.id} style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.3)', borderRadius: 12, padding: 12, marginBottom: 6 }}>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d' }}>🌟 {w.description}</Text>
                   </View>
-                ))}
-              </View>
-            )}
+                ))
+              ) : (
+                <View style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.28)', borderRadius: 12, padding: 14, borderStyle: 'dashed' }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af', lineHeight: 20 }}>
+                    {PROFILE_EMPTY_COPY.wishes}
+                  </Text>
+                </View>
+              )}
+            </View>
 
             {/* Intro post */}
             {showIntroPost && member.introPost && (
@@ -1471,14 +1478,6 @@ function MemberDetailModal({
                   <Ionicons name="chevron-forward" size={12} color="#bd9348" />
                 </View>
               </Pressable>
-            )}
-
-            {!hasDetails && !showIntroPost && member.skills.length === 0 && publicWishes.length === 0 && (
-              <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af', textAlign: 'center' }}>
-                  {member.name.split(' ')[0]} hasn't filled out their profile yet.{'\n'}Say hi at the next meeting! 🐝
-                </Text>
-              </View>
             )}
 
             {/* Wishes management — current user only */}
@@ -1609,55 +1608,63 @@ function MemberDetailModal({
             )}
 
             {/* Skills Garden */}
-            {(member.skills.length > 0 || isCurrentUser) && (
-              <View style={{ marginBottom: 24 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <View>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>
-                      SKILLS GARDEN 🌸
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#b5a898', marginTop: 2 }}>
-                      {member.skills.filter(s => Number(s.enthusiasm_level ?? 0) > 0).length} skill flowers blooming
-                    </Text>
-                  </View>
-                  {isCurrentUser && (
-                    <Pressable
-                      onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
-                      style={{ backgroundColor: '#fdf3dc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Edit</Text>
-                    </Pressable>
-                  )}
+            <View style={{ marginBottom: 24 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <View>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>
+                    SKILLS GARDEN 🌸
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#b5a898', marginTop: 2 }}>
+                    {member.skills.filter(s => Number(s.enthusiasm_level ?? 0) > 0).length} skill flowers blooming
+                  </Text>
                 </View>
-
-                {member.skills.length === 0 && isCurrentUser ? (
+                {isCurrentUser && (
                   <Pressable
-                    onPress={() => {
-                      setDraftSkillList(member.skills.map(s => s.description));
-                      setShowSkillPicker(true);
-                    }}
-                    style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed', alignSelf: 'flex-start' }}
+                    onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
+                    style={{ backgroundColor: '#fdf3dc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
                   >
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Seed your Skills Garden 🌱</Text>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Edit</Text>
                   </Pressable>
-                ) : member.skills.length === 0 ? (
-                  <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 32, marginBottom: 8 }}>🌱</Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
-                      No skills planted yet — garden coming soon!
-                    </Text>
-                  </View>
-                ) : (
-                  <SkillBubbleGarden skills={member.skills} />
                 )}
               </View>
-            )}
+
+              {member.skills.length === 0 && isCurrentUser ? (
+                <Pressable
+                  onPress={() => {
+                    setDraftSkillList(member.skills.map(s => s.description));
+                    setShowSkillPicker(true);
+                  }}
+                  style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 9, borderStyle: 'dashed', alignSelf: 'flex-start' }}
+                >
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Seed your Skills Garden 🌱</Text>
+                </Pressable>
+              ) : member.skills.length === 0 ? (
+                <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 32, marginBottom: 8 }}>🌱</Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
+                    {PROFILE_EMPTY_COPY.skills}
+                  </Text>
+                </View>
+              ) : (
+                <SkillBubbleGarden skills={member.skills} />
+              )}
+            </View>
 
             <Pressable onPress={onClose} style={{ backgroundColor: '#faf8f3', borderRadius: 14, paddingVertical: 14, marginTop: 4 }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
             </Pressable>
             </View>
           </ScrollView>
+          <Pressable
+            onPress={onClose}
+            onPressIn={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close member profile"
+            hitSlop={8}
+            style={{ position: 'absolute', right: 18, top: 8, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ee', zIndex: 100, elevation: 100 }}
+          >
+            <Ionicons name="close" size={24} color="#6b7280" />
+          </Pressable>
         </View>
       </View>
     </Modal>
