@@ -1,12 +1,30 @@
 import { memo } from 'react';
-import { Platform, StyleSheet, Linking } from 'react-native';
+import { Platform, StyleSheet, Linking, ScrollView, View } from 'react-native';
 import Markdown, { MarkdownIt } from 'react-native-markdown-display';
+import type { RenderRules } from 'react-native-markdown-display';
 import { LinkifiedText } from '../ui/LinkifiedText';
 
 interface MarkdownContentProps {
   content: string;
   isUser?: boolean;
 }
+
+type MarkdownTableNode = {
+  type: string;
+  children?: MarkdownTableNode[];
+};
+
+const MIN_TABLE_COLUMN_WIDTH = 118;
+
+const getTableColumnCount = (node: MarkdownTableNode): number => {
+  if (node.type === 'tr') {
+    return node.children?.filter((child) => child.type === 'th' || child.type === 'td').length ?? 0;
+  }
+
+  return node.children?.reduce((maxColumns, child) => {
+    return Math.max(maxColumns, getTableColumnCount(child));
+  }, 0) ?? 0;
+};
 
 const markdownIt = MarkdownIt({
   typographer: true,
@@ -31,6 +49,9 @@ export const MarkdownContent = memo(function MarkdownContent({
   const tableBorderColor = isUser
     ? 'rgba(255,255,255,0.3)'
     : 'rgba(49,49,48,0.2)';
+  const tableHeaderBackgroundColor = isUser
+    ? 'rgba(255,255,255,0.1)'
+    : 'rgba(49,49,48,0.05)';
 
   const markdownStyles = StyleSheet.create({
     body: {
@@ -174,16 +195,20 @@ export const MarkdownContent = memo(function MarkdownContent({
       color: textColor,
     },
     // Tables
+    tableScroll: {
+      maxWidth: '100%',
+      marginVertical: 8,
+    },
     table: {
       borderWidth: 1,
       borderColor: tableBorderColor,
       borderRadius: 4,
-      marginVertical: 8,
+      marginVertical: 0,
+      overflow: 'hidden',
+      alignSelf: 'flex-start',
     },
     thead: {
-      backgroundColor: isUser
-        ? 'rgba(255,255,255,0.1)'
-        : 'rgba(49,49,48,0.05)',
+      backgroundColor: tableHeaderBackgroundColor,
     },
     th: {
       padding: 8,
@@ -191,15 +216,23 @@ export const MarkdownContent = memo(function MarkdownContent({
       fontWeight: '700',
       borderRightWidth: 1,
       borderRightColor: tableBorderColor,
+      minWidth: MIN_TABLE_COLUMN_WIDTH,
+      flexBasis: MIN_TABLE_COLUMN_WIDTH,
+      flexGrow: 1,
     },
     tr: {
       borderBottomWidth: 1,
       borderBottomColor: tableBorderColor,
+      flexDirection: 'row',
+      alignItems: 'stretch',
     },
     td: {
       padding: 8,
       borderRightWidth: 1,
       borderRightColor: tableBorderColor,
+      minWidth: MIN_TABLE_COLUMN_WIDTH,
+      flexBasis: MIN_TABLE_COLUMN_WIDTH,
+      flexGrow: 1,
     },
     // Horizontal rule
     hr: {
@@ -220,22 +253,43 @@ export const MarkdownContent = memo(function MarkdownContent({
     return false; // Prevent default behavior
   };
 
+  const renderRules: RenderRules = {
+    table: (node, children, _parent, styles) => {
+      const columnCount = Math.max(1, getTableColumnCount(node));
+      const minWidth = columnCount * MIN_TABLE_COLUMN_WIDTH;
+
+      return (
+        <ScrollView
+          key={node.key}
+          horizontal
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator
+          style={styles.tableScroll}
+          contentContainerStyle={{ minWidth }}
+        >
+          <View style={[styles._VIEW_SAFE_table, { minWidth }]}>
+            {children}
+          </View>
+        </ScrollView>
+      );
+    },
+    text: (node, _children, _parent, styles, inheritedStyles = {}) => (
+      <LinkifiedText
+        key={node.key}
+        style={[inheritedStyles, styles.text]}
+        linkStyle={styles.link}
+      >
+        {node.content}
+      </LinkifiedText>
+    ),
+  };
+
   return (
     <Markdown
       style={markdownStyles}
       markdownit={markdownIt}
       onLinkPress={handleLinkPress}
-      rules={{
-        text: (node, _children, _parent, styles, inheritedStyles = {}) => (
-          <LinkifiedText
-            key={node.key}
-            style={[inheritedStyles, styles.text]}
-            linkStyle={styles.link}
-          >
-            {node.content}
-          </LinkifiedText>
-        ),
-      }}
+      rules={renderRules}
     >
       {content}
     </Markdown>
