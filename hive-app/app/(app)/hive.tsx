@@ -2395,6 +2395,7 @@ export default function HiveScreen() {
               onAction={() => { setNewTaskText(''); setTaskError(null); setShowAddTaskModal(true); }}
               compact
               compactAction={false}
+              stretchTabs={false}
               tabs={[
                 {
                   key: 'open',
