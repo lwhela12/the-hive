@@ -136,6 +136,10 @@ function answerSimilarity(a: string, b: string) {
   return shared / Math.max(1, Math.min(wordsA.size, wordsB.size));
 }
 
+function normalizeProfileStoryText(value?: string | null) {
+  return (value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 function buildDailyMatchStats(userId: string | null, answers: DailyAnswerRow[]) {
   const stats = new Map<string, DailyMatchStats>();
   if (!userId) return stats;
@@ -394,6 +398,9 @@ function MemberDetailModal({
   const hasFunFacts = (member.fun_facts ?? []).some(fact => fact.trim().length > 0);
   const hasDetails = member.profile_title || member.occupation || member.birthday || member.bio || member.current_project || member.hometown || member.known_for || member.miq_experiences || member.miq_growth || member.miq_contribution || hasFavorites || hasFunFacts;
   const introContent = member.introPost?.content ?? '';
+  const normalizedBioContent = normalizeProfileStoryText(member.bio);
+  const normalizedIntroContent = normalizeProfileStoryText(introContent);
+  const showIntroPost = !!member.introPost && !!normalizedIntroContent && (!normalizedBioContent || normalizedIntroContent !== normalizedBioContent);
   const introNeedsToggle = introContent.length > 320;
   const visibleIntro = introExpanded || !introNeedsToggle
     ? introContent
@@ -1427,7 +1434,7 @@ function MemberDetailModal({
             )}
 
             {/* Intro post */}
-            {member.introPost && (
+            {showIntroPost && member.introPost && (
               <View style={{ marginBottom: 20 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>INTRODUCTION POST</Text>
                 <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16 }}>
@@ -1466,7 +1473,7 @@ function MemberDetailModal({
               </Pressable>
             )}
 
-            {!hasDetails && !member.introPost && member.skills.length === 0 && publicWishes.length === 0 && (
+            {!hasDetails && !showIntroPost && member.skills.length === 0 && publicWishes.length === 0 && (
               <View style={{ alignItems: 'center', paddingVertical: 32 }}>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af', textAlign: 'center' }}>
                   {member.name.split(' ')[0]} hasn't filled out their profile yet.{'\n'}Say hi at the next meeting! 🐝
