@@ -92,8 +92,8 @@ export function WishCombCard({
   const isGranted = wish.status === 'fulfilled';
   const isPrivate = wish.status === 'private';
   const ownerDisplayName = (ownerName ?? '').trim();
-  const showOwnerRow = isGranted && ownerDisplayName.length > 0;
-  const showStatusPill = !isGranted;
+  const useHomeWishLayout = !isPrivate && ownerDisplayName.length > 0;
+  const showStatusPill = !useHomeWishLayout;
   const quickTitle = getWishQuickTitle(wish);
   const bodyPreview = getWishBodyPreview(wish);
   const showBodyPreview = hasSeparateWishTitle(wish);
@@ -108,19 +108,76 @@ export function WishCombCard({
     isGranted ? styles.cardGranted : null,
   ];
 
-  const content = (
+  const manageButton = onManage && (
+    <Pressable
+      onPress={(event) => {
+        event.stopPropagation();
+        onManage(wish);
+      }}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Manage wish"
+      style={styles.manageButton}
+    >
+      <Ionicons name="pencil-outline" size={16} color="#7a6849" />
+    </Pressable>
+  );
+
+  const content = useHomeWishLayout ? (
+    <View style={styles.homeRow}>
+      <Avatar name={ownerDisplayName} url={ownerAvatarUrl} size={44} />
+      <View style={styles.homeBody}>
+        <View style={styles.homeOwnerRow}>
+          <Text
+            style={[
+              styles.homeOwnerName,
+              isGranted ? styles.homeOwnerNameGranted : styles.homeOwnerNameOpen,
+            ]}
+            numberOfLines={1}
+          >
+            {ownerDisplayName}
+          </Text>
+          {manageButton}
+        </View>
+
+        <Text
+          style={[
+            styles.quickTitle,
+            styles.homeWishTitle,
+            isGranted ? styles.descriptionGranted : styles.descriptionOpen,
+          ]}
+          numberOfLines={2}
+        >
+          {quickTitle}
+        </Text>
+
+        {showBodyPreview && (
+          <Text
+            style={[
+              styles.description,
+              isGranted ? styles.descriptionGranted : styles.descriptionPreview,
+            ]}
+            numberOfLines={3}
+          >
+            {bodyPreview}
+          </Text>
+        )}
+
+        {dateLabel && (
+          <View style={styles.footerRow}>
+            <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
+              {dateLabel}
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
+  ) : (
     <>
       <View style={styles.content}>
-        {(showOwnerRow || showStatusPill || onManage) && (
+        {(showStatusPill || onManage) && (
           <View style={styles.metaRow}>
-            {showOwnerRow ? (
-              <View style={styles.ownerRow}>
-                <Avatar name={ownerDisplayName} url={ownerAvatarUrl} size={44} />
-                <Text style={styles.ownerName} numberOfLines={1}>
-                  {ownerDisplayName}
-                </Text>
-              </View>
-            ) : showStatusPill ? (
+            {showStatusPill ? (
               <View
                 style={[
                   styles.statusPill,
@@ -139,20 +196,7 @@ export function WishCombCard({
               <View style={styles.metaSpacer} />
             )}
 
-            {onManage && (
-              <Pressable
-                onPress={(event) => {
-                  event.stopPropagation();
-                  onManage(wish);
-                }}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Manage wish"
-                style={styles.manageButton}
-              >
-                <Ionicons name="pencil-outline" size={16} color="#7a6849" />
-              </Pressable>
-            )}
+            {manageButton}
           </View>
         )}
 
@@ -249,27 +293,43 @@ const styles = StyleSheet.create({
   content: {
     minWidth: 0,
   },
+  homeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  homeBody: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 12,
+  },
+  homeOwnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  homeOwnerName: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  homeOwnerNameOpen: {
+    fontFamily: 'Lato_700Bold',
+    color: '#2d2d2d',
+  },
+  homeOwnerNameGranted: {
+    fontFamily: 'Lato_400Regular',
+    color: '#7f715f',
+  },
+  homeWishTitle: {
+    marginTop: 4,
+  },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
     marginBottom: 9,
-  },
-  ownerRow: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  ownerName: {
-    flex: 1,
-    minWidth: 0,
-    fontFamily: 'Lato_400Regular',
-    color: '#7f715f',
-    fontSize: 15,
-    lineHeight: 21,
   },
   metaSpacer: {
     flex: 1,
