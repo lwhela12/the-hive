@@ -92,28 +92,6 @@ type ProfileFormDraft = {
   updatedAt: number;
 };
 
-function ProfileHeaderActionPill({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        flexShrink: 0,
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        marginBottom: 4,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: 'rgba(222,193,129,0.72)',
-        backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-      })}
-    >
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 export default function ProfileScreen() {
   const { profile, communityId, communityRole, refreshProfile } = useAuth();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -2217,14 +2195,25 @@ export default function ProfileScreen() {
           <FadeIn delay={50}>
             {!immersiveSkillsGarden && (
               <View style={{ marginBottom: 24 }}>
-                <View style={{ marginBottom: 0, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-                  <View style={{ alignSelf: 'flex-start', flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
-                    <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: isProfilePhone ? 16 : 17, color: '#2d2d2d' }}>
-                      Your HD Wishes ({wishes.length})
-                    </Text>
-                  </View>
-                  <ProfileHeaderActionPill label="+ Wish" onPress={() => setAddWishModalVisible(true)} />
-                </View>
+                <WishStatusTabs
+                  activeTab={wishStatusTab}
+                  onChange={setWishStatusTab}
+                  actionLabel="+ Wish"
+                  onAction={() => setAddWishModalVisible(true)}
+                  compact={isProfilePhone}
+                  tabs={[
+                    {
+                      key: 'public',
+                      label: 'Open HD',
+                      count: activeWishes.length,
+                    },
+                    {
+                      key: 'granted',
+                      label: 'Granted',
+                      count: grantedWishes.length,
+                    },
+                  ]}
+                />
 
                 <View style={{
                   backgroundColor: '#fdf3dc',
@@ -2240,24 +2229,6 @@ export default function ProfileScreen() {
                   height: profileWishPanelHeight,
                   overflow: 'hidden',
                 }}>
-                  <WishStatusTabs
-                    activeTab={wishStatusTab}
-                    onChange={setWishStatusTab}
-                    tabs={[
-                      {
-                        key: 'public',
-                        label: 'Open',
-                        count: activeWishes.length,
-                        icon: 'megaphone-outline',
-                      },
-                      {
-                        key: 'granted',
-                        label: 'Granted',
-                        count: grantedWishes.length,
-                        icon: 'sparkles-outline',
-                      },
-                    ]}
-                  />
                   <ScrollView
                     nestedScrollEnabled
                     showsVerticalScrollIndicator={true}

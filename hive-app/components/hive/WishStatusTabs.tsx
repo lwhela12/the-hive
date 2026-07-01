@@ -1,31 +1,32 @@
-import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
 export type WishStatusTabKey = 'public' | 'granted';
-
-type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 type WishStatusTab = {
   key: WishStatusTabKey;
   label: string;
   count: number;
-  icon: IoniconName;
 };
 
 type WishStatusTabsProps = {
   tabs: WishStatusTab[];
   activeTab: WishStatusTabKey;
   onChange: (tab: WishStatusTabKey) => void;
+  actionLabel: string;
+  onAction: () => void;
+  compact?: boolean;
 };
 
 export function WishStatusTabs({
   tabs,
   activeTab,
   onChange,
+  actionLabel,
+  onAction,
+  compact = false,
 }: WishStatusTabsProps) {
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, compact ? styles.compactContainer : null]}>
       {tabs.map((tab) => {
         const isActive = tab.key === activeTab;
 
@@ -37,34 +38,45 @@ export function WishStatusTabs({
             accessibilityState={{ selected: isActive }}
             style={({ pressed }) => [
               styles.tab,
+              compact ? styles.compactItem : styles.wideTab,
               isActive ? styles.activeTab : styles.inactiveTab,
               pressed ? styles.pressedTab : null,
             ]}
           >
-            <Ionicons
-              name={tab.icon}
-              size={15}
-              color={isActive ? '#bd9348' : '#8e7a5e'}
-            />
             <Text
               numberOfLines={1}
               adjustsFontSizeToFit
-              minimumFontScale={0.82}
+              minimumFontScale={0.74}
               style={[
                 styles.tabLabel,
+                compact ? styles.compactTabLabel : null,
                 isActive ? styles.activeLabel : styles.inactiveLabel,
               ]}
             >
-              {tab.label}
+              {tab.label} ({tab.count})
             </Text>
-            <View style={[styles.countPill, isActive ? styles.activeCountPill : styles.inactiveCountPill]}>
-              <Text style={[styles.countText, isActive ? styles.activeCountText : styles.inactiveCountText]}>
-                {tab.count}
-              </Text>
-            </View>
           </Pressable>
         );
       })}
+
+      <Pressable
+        onPress={onAction}
+        accessibilityRole="button"
+        style={({ pressed }) => [
+          styles.actionButton,
+          compact ? styles.compactItem : null,
+          pressed ? styles.pressedTab : null,
+        ]}
+      >
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+          style={[styles.actionText, compact ? styles.compactActionText : null]}
+        >
+          {actionLabel}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -73,32 +85,39 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     gap: 8,
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(222,193,129,0.28)',
+    alignItems: 'flex-end',
+    marginBottom: 0,
   },
-  tab: {
+  compactContainer: {
+    gap: 6,
+  },
+  compactItem: {
     flex: 1,
     minWidth: 0,
-    minHeight: 38,
-    borderRadius: 999,
+  },
+  tab: {
+    minWidth: 0,
+    minHeight: 44,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderBottomWidth: 0,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+  },
+  wideTab: {
+    minWidth: 150,
   },
   activeTab: {
-    backgroundColor: '#fffdf5',
-    borderColor: 'rgba(189,147,72,0.45)',
+    backgroundColor: '#fdf3dc',
+    borderColor: 'rgba(222,193,129,0.7)',
   },
   inactiveTab: {
-    backgroundColor: 'rgba(255,253,245,0.48)',
-    borderColor: 'rgba(222,193,129,0.24)',
+    backgroundColor: '#fffdf5',
+    borderColor: 'rgba(222,193,129,0.58)',
   },
   pressedTab: {
     opacity: 0.8,
@@ -107,8 +126,11 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
     fontFamily: 'Lato_700Bold',
-    fontSize: 12.5,
+    fontSize: 16,
     letterSpacing: 0,
+  },
+  compactTabLabel: {
+    fontSize: 15,
   },
   activeLabel: {
     color: '#2d2d2d',
@@ -116,29 +138,26 @@ const styles = StyleSheet.create({
   inactiveLabel: {
     color: '#8e7a5e',
   },
-  countPill: {
-    minWidth: 22,
-    height: 20,
+  actionButton: {
+    flexShrink: 0,
+    minHeight: 42,
     borderRadius: 999,
-    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(222,193,129,0.72)',
+    backgroundColor: '#fffdf5',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    marginBottom: 5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  activeCountPill: {
-    backgroundColor: 'rgba(189,147,72,0.16)',
-  },
-  inactiveCountPill: {
-    backgroundColor: 'rgba(142,122,94,0.1)',
-  },
-  countText: {
+  actionText: {
     fontFamily: 'Lato_700Bold',
-    fontSize: 11,
+    fontSize: 15,
     letterSpacing: 0,
-  },
-  activeCountText: {
     color: '#bd9348',
   },
-  inactiveCountText: {
-    color: '#8e7a5e',
+  compactActionText: {
+    fontSize: 14,
   },
 });

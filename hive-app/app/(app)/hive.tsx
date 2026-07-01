@@ -2505,14 +2505,25 @@ export default function HiveScreen() {
 
         {/* HD Wishes */}
         <View style={{ marginBottom: 24 }}>
-          <View style={{ marginBottom: 0, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-            <View style={{ alignSelf: 'flex-start', flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
-              <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: useMobileLayout ? 16 : 17, color: '#2d2d2d' }}>
-                HD Wishes ({publicWishes.length + grantedWishes.length})
-              </Text>
-            </View>
-            <HeaderActionPill label="+ Wish" onPress={() => setShowAddWishModal(true)} />
-          </View>
+          <WishStatusTabs
+            activeTab={wishStatusTab}
+            onChange={setWishStatusTab}
+            actionLabel="+ Wish"
+            onAction={() => setShowAddWishModal(true)}
+            compact={useMobileLayout}
+            tabs={[
+              {
+                key: 'public',
+                label: 'Open HD',
+                count: publicWishes.length,
+              },
+              {
+                key: 'granted',
+                label: 'Granted',
+                count: grantedWishes.length,
+              },
+            ]}
+          />
 
           {loading.publicWishes && loading.grantedWishes ? (
             <View style={{
@@ -2547,24 +2558,6 @@ export default function HiveScreen() {
               height: wishPanelHeight,
               overflow: 'hidden',
             }}>
-              <WishStatusTabs
-                activeTab={wishStatusTab}
-                onChange={setWishStatusTab}
-                tabs={[
-                  {
-                    key: 'public',
-                    label: 'Public HD Wishes',
-                    count: publicWishes.length,
-                    icon: 'megaphone-outline',
-                  },
-                  {
-                    key: 'granted',
-                    label: 'Granted',
-                    count: grantedWishes.length,
-                    icon: 'sparkles-outline',
-                  },
-                ]}
-              />
               <ScrollView
                 nestedScrollEnabled
                 showsVerticalScrollIndicator={true}
