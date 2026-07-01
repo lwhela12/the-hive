@@ -92,10 +92,11 @@ function StoryCard({
         <Pressable
           onPress={onToggle}
           accessibilityRole="button"
+          hitSlop={8}
           style={styles.expandButton}
         >
           <Text style={styles.expandButtonText}>
-            {expanded ? 'Show less' : 'Read more'}
+            {expanded ? 'Read less' : 'Read more'}
           </Text>
         </Pressable>
       ) : null}
@@ -139,18 +140,29 @@ export function ProfileShowcase({
     miqItems.reduce((total, item) => total + (item.value?.length ?? 0), 0) > (isDesktop ? 280 : 190)
     || miqItems.some(item => (item.value?.length ?? 0) > 95)
   );
-  const bioLines = bioExpanded ? undefined : isDesktop ? 6 : 4;
-  const miqLines = miqExpanded ? undefined : isDesktop ? 2 : 2;
+  const bioTextClampProps = bioExpanded
+    ? {}
+    : { numberOfLines: isDesktop ? 6 : 4, ellipsizeMode: 'tail' as const };
+  const miqTextClampProps = miqExpanded
+    ? {}
+    : { numberOfLines: 2, ellipsizeMode: 'tail' as const };
+  const getDesktopStoryStyle = (expanded: boolean) => {
+    if (!isDesktop) return undefined;
+    return expanded
+      ? [styles.desktopSplitStoryCard, styles.desktopExpandedStoryCard]
+      : styles.desktopSplitStoryCard;
+  };
   const bioCard = (
     <StoryCard
       label="Bio"
       canExpand={bioCanExpand}
       expanded={bioExpanded}
       onToggle={() => setBioExpanded(value => !value)}
-      style={isDesktop && showMiqCard ? styles.desktopSplitStoryCard : undefined}
+      style={isDesktop && showMiqCard ? getDesktopStoryStyle(bioExpanded) : undefined}
     >
       <Text
-        numberOfLines={bioLines}
+        key={bioExpanded ? 'bio-expanded' : 'bio-collapsed'}
+        {...bioTextClampProps}
         style={[
           styles.storyText,
           isPhone && styles.mobileStoryText,
@@ -169,7 +181,7 @@ export function ProfileShowcase({
       canExpand={miqCanExpand}
       expanded={miqExpanded}
       onToggle={() => setMiqExpanded(value => !value)}
-      style={isDesktop ? styles.desktopSplitStoryCard : undefined}
+      style={getDesktopStoryStyle(miqExpanded)}
     >
       {miqItems.length > 0 ? (
         <View style={styles.miqList}>
@@ -179,7 +191,8 @@ export function ProfileShowcase({
                 {item.label}
               </Text>
               <Text
-                numberOfLines={miqLines}
+                key={`${item.label}-${miqExpanded ? 'expanded' : 'collapsed'}`}
+                {...miqTextClampProps}
                 style={[
                   styles.storyText,
                   isPhone && styles.mobileStoryText,
@@ -346,6 +359,9 @@ const styles = StyleSheet.create({
   desktopSplitStoryCard: {
     flex: 1,
   },
+  desktopExpandedStoryCard: {
+    flex: 0,
+  },
   storyHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -391,6 +407,9 @@ const styles = StyleSheet.create({
   expandButton: {
     alignSelf: 'flex-start',
     marginTop: 12,
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingRight: 10,
   },
   expandButtonText: {
     fontFamily: 'Lato_700Bold',
