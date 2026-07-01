@@ -640,6 +640,7 @@ export default function BoardScreen() {
       .select('*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))')
       .eq('id', wishId)
       .eq('community_id', communityId)
+      .in('status', ['public', 'fulfilled'])
       .maybeSingle();
 
     if (error) throw error;

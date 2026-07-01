@@ -46,7 +46,7 @@ type WishWithGranters = Wish & {
   granters?: (WishGranter & { granter?: Profile })[];
 };
 
-type WishStatusTabKey = HdWishTabKey;
+type WishStatusTabKey = Exclude<HdWishTabKey, 'private'>;
 type TodoStatusTabKey = 'open' | 'done';
 
 type HomeTodo = {
@@ -1068,6 +1068,7 @@ export default function HiveScreen() {
         .select('*, user:profiles!user_id(*), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status), granters:wish_granters(*, granter:profiles!granter_id(*))')
         .eq('id', wishId)
         .eq('community_id', communityId)
+        .in('status', ['public', 'fulfilled'])
         .single();
 
       if (
@@ -1080,6 +1081,7 @@ export default function HiveScreen() {
           .select('*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))')
           .eq('id', wishId)
           .eq('community_id', communityId)
+          .in('status', ['public', 'fulfilled'])
           .single();
         data = fallback.data;
         error = fallback.error;
@@ -1258,7 +1260,6 @@ export default function HiveScreen() {
   // Use the optimized hive data hook (React Query with caching)
   const {
     publicWishes,
-    privateWishes,
     grantedWishes,
     upcomingEvents,
     honeyPotBalance,
@@ -1290,16 +1291,14 @@ export default function HiveScreen() {
     userId: profile?.id,
     survey: activeSurvey,
   });
+  const publicHdWishes = publicWishes.filter((wish) => wish.status === 'public' && wish.is_active !== false);
+  const grantedHdWishes = grantedWishes.filter((wish) => wish.status === 'fulfilled');
   const visibleHdWishes = wishStatusTab === 'granted'
-    ? grantedWishes
-    : wishStatusTab === 'private'
-      ? privateWishes
-      : publicWishes;
+    ? grantedHdWishes
+    : publicHdWishes;
   const hdWishesEmptyText = wishStatusTab === 'granted'
     ? 'No granted HD wishes yet'
-    : wishStatusTab === 'private'
-      ? 'No private HD wishes yet'
-      : 'No public HD wishes yet';
+    : 'No public HD wishes yet';
 
   const openSurvey = useCallback((survey: Survey) => {
     setActiveSurvey(survey);
@@ -2457,22 +2456,17 @@ export default function HiveScreen() {
               {
                 key: 'public',
                 label: getHdWishTabLabel('public'),
-                count: publicWishes.length,
-              },
-              {
-                key: 'private',
-                label: getHdWishTabLabel('private'),
-                count: privateWishes.length,
+                count: publicHdWishes.length,
               },
               {
                 key: 'granted',
                 label: getHdWishTabLabel('granted'),
-                count: grantedWishes.length,
+                count: grantedHdWishes.length,
               },
             ]}
           />
 
-          {loading.publicWishes && loading.privateWishes && loading.grantedWishes ? (
+          {loading.publicWishes && loading.grantedWishes ? (
             <View style={{
               backgroundColor: '#fdf3dc',
               borderRadius: 20,

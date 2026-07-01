@@ -257,7 +257,7 @@ export function AddWishModal({
                       style={{ fontFamily: 'Lato_400Regular' }}
                       className="text-charcoal/60 text-sm mt-1"
                     >
-                      This HD wish will show up on profiles and Home.
+                      This public HD wish will show up on profiles and Home.
                       {wishOwnerName ? ` It will belong to ${wishOwnerName}.` : ''}
                     </Text>
                   </View>
@@ -363,6 +363,15 @@ export function AddWishModal({
                   <Button
                     title="Save Changes"
                     onPress={() => handleSave(existingWish?.status === 'public')}
+                    loading={saving}
+                    disabled={saving || !canSubmit}
+                  />
+                </View>
+              ) : isLinkedWish ? (
+                <View className="mb-4">
+                  <Button
+                    title="Add Linked HD Wish"
+                    onPress={() => handleSave(true)}
                     loading={saving}
                     disabled={saving || !canSubmit}
                   />

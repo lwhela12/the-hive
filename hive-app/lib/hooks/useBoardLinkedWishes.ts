@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
-import type { Profile, Wish, WishGranter } from '../../types';
+import type { Profile, Wish, WishGranter, WishStatus } from '../../types';
 
 export type LinkedWish = Wish & {
   user: Profile;
@@ -10,6 +10,7 @@ export type LinkedWish = Wish & {
 };
 
 const linkedWishSelect = '*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))';
+const sharedLinkedWishStatuses: WishStatus[] = ['public', 'fulfilled'];
 
 function sortLinkedWishes(wishes: LinkedWish[]) {
   return wishes.sort((a, b) => {
@@ -29,7 +30,8 @@ async function fetchBoardLinkedWishes(
     .from('wishes')
     .select(linkedWishSelect)
     .eq('community_id', communityId)
-    .eq('board_category_id', categoryId);
+    .eq('board_category_id', categoryId)
+    .in('status', sharedLinkedWishStatuses);
 
   const [linkedByBoard, categoryResult, postsResult] = await Promise.all([
     linkedByBoardQuery,
@@ -76,6 +78,7 @@ async function fetchBoardLinkedWishes(
         .select(linkedWishSelect)
         .eq('community_id', communityId)
         .eq('id', sourceWishId)
+        .in('status', sharedLinkedWishStatuses)
     );
   }
 
@@ -86,6 +89,7 @@ async function fetchBoardLinkedWishes(
         .select(linkedWishSelect)
         .eq('community_id', communityId)
         .in('source_board_post_id', postIds)
+        .in('status', sharedLinkedWishStatuses)
     );
   }
 
