@@ -2123,14 +2123,15 @@ export default function MembersScreen() {
     }
   }, [memberId]);
 
-  // Auto-open member detail when navigated here with a memberId param
+  // Keep member detail synced when links navigate between profiles.
   useEffect(() => {
-    if (memberId && memberId !== dismissedRouteMemberId && members.length > 0 && !selected) {
-      const target = members.find(m => m.id === memberId);
-      if (!target) return;
+    if (!memberId || memberId === dismissedRouteMemberId || members.length === 0) return;
+    if (selected?.id === memberId) return;
 
-      setSelected(target);
-    }
+    const target = members.find(m => m.id === memberId);
+    if (!target) return;
+
+    setSelected(target);
   }, [dismissedRouteMemberId, memberId, members, selected]);
 
   const filtered = useMemo(() => {
