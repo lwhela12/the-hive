@@ -164,6 +164,7 @@ export interface WishComment extends Record<string, unknown> {
   user_id: string;
   community_id: string;
   content: string;
+  attachments?: Attachment[] | null;
   created_at: string;
   user?: Profile;
 }

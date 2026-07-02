@@ -28,17 +28,16 @@ export function useWishes() {
 
     if (userWishes) setWishes(userWishes);
 
-    // Fetch public wishes from others
-    const { data: othersWishes } = await supabase
+    // Fetch all public wishes in the community so Home mirrors member profiles.
+    const { data: communityWishes } = await supabase
       .from('wishes')
       .select('*, user:profiles(*)')
       .eq('status', 'public')
       .or('is_active.is.true,is_active.is.null')
       .eq('community_id', communityId)
-      .neq('user_id', profile.id)
       .order('created_at', { ascending: false });
 
-    if (othersWishes) setPublicWishes(othersWishes as (Wish & { user: Profile })[]);
+    if (communityWishes) setPublicWishes(communityWishes as (Wish & { user: Profile })[]);
 
     setLoading(false);
   }, [profile?.id, communityId]);

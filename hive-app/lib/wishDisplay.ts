@@ -25,9 +25,17 @@ const COMPACT_TITLE_STOPS = [
   /\s+with\s+(?:me|us|my|our)\b/i,
   /,\s+(?:and|but|so|because)\b/i,
 ];
+const SECONDARY_TITLE_PREFIXES = /^(?:have|having)\s+/i;
 
 function cleanWishText(value?: string | null) {
   return (value ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function getWishBlocks(value?: string | null) {
+  return (value ?? '')
+    .split(/\n\s*\n|\r\n\s*\r\n/)
+    .map(cleanWishText)
+    .filter(Boolean);
 }
 
 function truncateAtWord(value: string, maxLength: number) {
@@ -64,8 +72,20 @@ function toTitleCase(value: string) {
   }).join(' ');
 }
 
-function getCompactWishTitleSource(value: string) {
-  let source = sentenceLead(value.replace(LEADING_WISH_PHRASES, '').trim());
+function getBlockTitle(value?: string | null) {
+  const blocks = getWishBlocks(value);
+  if (blocks.length < 2) return '';
+
+  const [firstBlock] = blocks;
+  if (!firstBlock || firstBlock.length > 96) return '';
+  return firstBlock;
+}
+
+function getCompactWishTitleSource(value: string, options: { preserveLineTitle?: boolean } = {}) {
+  let source = value.replace(LEADING_WISH_PHRASES, '').replace(SECONDARY_TITLE_PREFIXES, '').trim();
+  if (!options.preserveLineTitle) {
+    source = sentenceLead(source);
+  }
   if (source.length < 4) source = value;
 
   for (const stopPattern of COMPACT_TITLE_STOPS) {
@@ -84,32 +104,45 @@ export function getWishQuickTitle(
   maxLength = 64
 ) {
   const savedTitle = cleanWishText(wish.title);
+  const blockTitle = getBlockTitle(wish.description);
   const description = cleanWishText(wish.description);
-  const source = savedTitle || description;
+  const source = savedTitle || blockTitle || description;
   if (!source) return 'Untitled wish';
 
-  const titleSource = getCompactWishTitleSource(source) || source;
+  const titleSource = getCompactWishTitleSource(source, {
+    preserveLineTitle: !!savedTitle || !!blockTitle,
+  }) || source;
   return toTitleCase(truncateAtWord(titleSource, maxLength));
+}
+
+export function getWishDetailText(wish: Pick<Wish, 'description'> & { title?: string | null }) {
+  const blocks = getWishBlocks(wish.description);
+  if (blocks.length === 0) return '';
+
+  const blockTitle = getBlockTitle(wish.description);
+
+  return blockTitle ? blocks.slice(1).join('\n\n') : cleanWishText(wish.description);
 }
 
 export function getWishBodyPreview(
   wish: Pick<Wish, 'description'> & { title?: string | null },
   maxLength = 160
 ) {
-  return truncateAtWord(cleanWishText(wish.description), maxLength);
+  return truncateAtWord(getWishDetailText(wish), maxLength);
 }
 
 export function hasSeparateWishTitle(wish: Pick<Wish, 'description'> & { title?: string | null }) {
-  const savedTitle = cleanWishText(wish.title);
-  if (!savedTitle) return false;
-  return normalizeWishText(savedTitle) !== normalizeWishText(wish.description);
+  const detailText = getWishDetailText(wish);
+  if (!detailText) return false;
+
+  return normalizeWishText(getWishQuickTitle(wish, 120)) !== normalizeWishText(detailText);
 }
 
 export function shouldShowWishDescription(wish: Pick<Wish, 'description'> & { title?: string | null }) {
-  const description = cleanWishText(wish.description);
+  const description = getWishDetailText(wish);
   if (!description) return false;
 
-  const titleSource = cleanWishText(wish.title) || description;
+  const titleSource = cleanWishText(wish.title) || getBlockTitle(wish.description) || description;
   const compactTitle = getCompactWishTitleSource(titleSource) || titleSource;
   return normalizeWishText(description) !== normalizeWishText(compactTitle);
 }

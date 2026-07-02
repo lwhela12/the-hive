@@ -2527,6 +2527,7 @@ export default function HiveScreen() {
                       canEdit={canOpenWishActions(wish)}
                       canDelete={canDeleteWish(wish)}
                       onManage={() => setManagingWish(wish)}
+                      showBodyPreview={!useMobileLayout}
                     />
                   ))
                 )}

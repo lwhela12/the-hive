@@ -20,9 +20,20 @@ interface WishCardProps {
   onManage?: () => void;
   canEdit?: boolean;
   canDelete?: boolean;
+  showBodyPreview?: boolean;
 }
 
-export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, canEdit, canDelete }: WishCardProps) {
+export function WishCard({
+  wish,
+  onHelp,
+  onPress,
+  onEdit,
+  onDelete,
+  onManage,
+  canEdit,
+  canDelete,
+  showBodyPreview: shouldShowBodyPreview = true,
+}: WishCardProps) {
   const isGranted = wish.status === 'fulfilled';
   const granters = wish.granters || [];
   const validGranters = granters.filter((g) => g.granter);
@@ -31,7 +42,7 @@ export function WishCard({ wish, onHelp, onPress, onEdit, onDelete, onManage, ca
   const showManageButton = !!onManage && (canEdit || canDelete);
   const quickTitle = getWishQuickTitle(wish);
   const bodyPreview = getWishBodyPreview(wish);
-  const showBodyPreview = hasSeparateWishTitle(wish);
+  const showBodyPreview = shouldShowBodyPreview && hasSeparateWishTitle(wish);
 
   return (
     <Pressable

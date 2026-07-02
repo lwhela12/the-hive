@@ -17,12 +17,13 @@ import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { formatDateShort } from '../../lib/dateUtils';
 import { GrantWishModal } from './GrantWishModal';
 import { submitOnEnter } from '../../lib/submitOnEnter';
-import { getWishQuickTitle, shouldShowWishDescription } from '../../lib/wishDisplay';
+import { getWishDetailText, getWishQuickTitle, shouldShowWishDescription } from '../../lib/wishDisplay';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import { MentionSuggestions } from '../ui/MentionSuggestions';
+import { AttachmentGallery } from '../ui/AttachmentGallery';
 import type { Wish, Profile, WishComment, WishGranter } from '../../types';
 
 type WishWithGranters = Wish & {
@@ -70,6 +71,7 @@ export function WishDetail({
   const canGrant = isOwnWish && wish.status === 'public' && onGrant;
   const isGranted = wish.status === 'fulfilled';
   const wishTitle = getWishQuickTitle(wish, 90);
+  const wishDetailText = getWishDetailText(wish);
   const showDescription = shouldShowWishDescription(wish);
   const wishOwnerId = wish.user?.id ?? wish.user_id;
   const handleBeforeProfileNavigate = onBeforeProfileNavigate ?? onClose;
@@ -207,7 +209,7 @@ export function WishDetail({
                   style={{ fontFamily: 'Lato_400Regular', color: 'rgba(49,49,48,0.8)', marginTop: 8, fontSize: 16, lineHeight: 23 }}
                   mentionStyle={{ color: '#1d4ed8', backgroundColor: 'rgba(37,99,235,0.1)' }}
                 >
-                  {wish.description}
+                  {wishDetailText}
                 </LinkifiedText>
               )}
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-2">
@@ -296,35 +298,42 @@ export function WishDetail({
             </Text>
           </View>
         ) : (
-          comments.map((comment) => (
-            <View key={comment.id} className="flex-row mb-4">
-              <MemberProfileLink
-                memberId={comment.user?.id ?? comment.user_id}
-                memberName={comment.user?.name}
-                onBeforeNavigate={handleBeforeProfileNavigate}
-                hitSlop={8}
-                className="active:opacity-70"
-              >
-                <Avatar name={comment.user.name} url={comment.user.avatar_url} size={36} />
-              </MemberProfileLink>
-              <View className="flex-1 ml-3 bg-gray-50 rounded-xl p-3">
-                <View className="flex-row items-center justify-between">
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-sm">
-                    {comment.user.name}
-                  </Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40">
-                    {formatDateShort(comment.created_at)}
-                  </Text>
-                </View>
-                <LinkifiedText
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  mentionStyle={{ color: '#1d4ed8', backgroundColor: 'rgba(37,99,235,0.1)' }}
+          comments.map((comment) => {
+            const commentAttachments = Array.isArray(comment.attachments) ? comment.attachments : [];
+
+            return (
+              <View key={comment.id} className="flex-row mb-4">
+                <MemberProfileLink
+                  memberId={comment.user?.id ?? comment.user_id}
+                  memberName={comment.user?.name}
+                  onBeforeNavigate={handleBeforeProfileNavigate}
+                  hitSlop={8}
+                  className="active:opacity-70"
                 >
-                  {comment.content}
-                </LinkifiedText>
+                  <Avatar name={comment.user.name} url={comment.user.avatar_url} size={36} />
+                </MemberProfileLink>
+                <View className="flex-1 ml-3 bg-gray-50 rounded-xl p-3">
+                  <View className="flex-row items-center justify-between">
+                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-sm">
+                      {comment.user.name}
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40">
+                      {formatDateShort(comment.created_at)}
+                    </Text>
+                  </View>
+                  <LinkifiedText
+                    style={{ fontFamily: 'Lato_400Regular' }}
+                    mentionStyle={{ color: '#1d4ed8', backgroundColor: 'rgba(37,99,235,0.1)' }}
+                  >
+                    {comment.content}
+                  </LinkifiedText>
+                  {commentAttachments.length > 0 && (
+                    <AttachmentGallery attachments={commentAttachments} maxWidth={260} />
+                  )}
+                </View>
               </View>
-            </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
 
