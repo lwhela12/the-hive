@@ -5,7 +5,7 @@ import { invalidateWishQueries } from '../queryClient';
 import type { Wish, Profile } from '../../types';
 
 export function useWishes() {
-  const { profile, communityId } = useAuth();
+  const { profile, communityId, communityRole } = useAuth();
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [publicWishes, setPublicWishes] = useState<(Wish & { user: Profile })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,16 +102,21 @@ export function useWishes() {
     }
 
     const fulfilledAt = new Date().toISOString();
+    const isAdmin = communityRole === 'admin' || profile.role === 'admin';
 
     const { data: wishLink } = await (supabase as any)
       .from('wishes')
-      .select('source_board_post_id')
+      .select('source_board_post_id, user_id')
       .eq('id', wishId)
       .eq('community_id', communityId)
       .maybeSingle();
 
+    if (!wishLink || (!isAdmin && wishLink.user_id !== profile.id)) {
+      return { error: new Error('You can only grant wishes you manage.') };
+    }
+
     // 1. Update wish status and thank you message
-    const { error: wishError } = await supabase
+    let wishUpdateQuery = supabase
       .from('wishes')
       .update({
         status: 'fulfilled',
@@ -121,8 +126,13 @@ export function useWishes() {
         thank_you_message: thankYouMessage || null,
       })
       .eq('id', wishId)
-      .eq('user_id', profile.id)
       .eq('community_id', communityId);
+
+    if (!isAdmin) {
+      wishUpdateQuery = wishUpdateQuery.eq('user_id', profile.id);
+    }
+
+    const { error: wishError } = await wishUpdateQuery;
 
     if (wishError) {
       return { error: wishError };

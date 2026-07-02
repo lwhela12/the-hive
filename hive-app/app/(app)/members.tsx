@@ -22,9 +22,13 @@ import { ProfileShowcase } from '../../components/profile/ProfileShowcase';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { WishCombCard } from '../../components/profile/WishCombCard';
 import { WishDetail } from '../../components/hive/WishDetail';
+import { GrantWishModal } from '../../components/hive/GrantWishModal';
+import { AddWishModal } from '../../components/wishes/AddWishModal';
+import { WishManageModal } from '../../components/wishes/WishManageModal';
 import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
+import { useWishes } from '../../lib/hooks/useWishes';
 
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish> & {
@@ -365,9 +369,12 @@ function MemberDetailModal({
 }) {
   const router = useRouter();
   const { width: viewportWidth } = useWindowDimensions();
-  const { profile, session } = useAuth();
+  const { profile, session, communityRole } = useAuth();
+  const { grantWish } = useWishes();
   const currentAuthId = session?.user?.id ?? profile?.id ?? null;
   const isCurrentUser = !!currentAuthId && member.id === currentAuthId;
+  const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+  const canManageMemberWishes = isCurrentUser || isAdmin;
   const isPhoneProfile = viewportWidth < 640;
   const currentWishes = member.wishes.filter(w => w.status === 'public' && w.is_active !== false);
   const grantedWishes = member.wishes.filter(w => w.status === 'fulfilled');
@@ -408,6 +415,8 @@ function MemberDetailModal({
   const [showWishesSheet, setShowWishesSheet] = useState(false);
   const [showDailyAnswersSheet, setShowDailyAnswersSheet] = useState(false);
   const [selectedWish, setSelectedWish] = useState<(Wish & { user: Profile }) | null>(null);
+  const [wishToGrant, setWishToGrant] = useState<(Wish & { user: Profile }) | null>(null);
+  const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [wishStatusTab, setWishStatusTab] = useState<WishStatusTabKey>('public');
   const [managingWish, setManagingWish] = useState<MemberWish | null>(null);
   // Wishes management (for current user only)
@@ -485,6 +494,8 @@ function MemberDetailModal({
     setShowWishesSheet(false);
     setShowDailyAnswersSheet(false);
     setSelectedWish(null);
+    setWishToGrant(null);
+    setEditingWish(null);
     setManagingWish(null);
     setWishStatusTab('public');
     setMyWishes(isCurrentUser ? allVisibleMemberWishes : []);
@@ -604,19 +615,155 @@ function MemberDetailModal({
     }
   };
 
-  const deleteWish = async (wishId: string) => {
-    Alert.alert('Delete wish', 'Remove this wish from your profile?', [
+  const normalizeMemberWish = (wish: MemberWish): Wish => ({
+    ...wish,
+    user_id: wish.user_id ?? member.id,
+    community_id: wish.community_id ?? communityId ?? '',
+    raw_input: wish.raw_input ?? wish.description,
+    is_active: wish.is_active ?? wish.status === 'public',
+    extracted_from: wish.extracted_from ?? 'manual',
+    created_at: wish.created_at ?? new Date(0).toISOString(),
+  } as Wish);
+
+  const canGrantWish = (wish: MemberWish) => canManageMemberWishes && wish.status === 'public';
+  const canEditWish = (wish: MemberWish) => canManageMemberWishes && wish.status !== 'fulfilled';
+  const canArchiveWish = (wish: MemberWish) => (
+    canManageMemberWishes && wish.status === 'public' && wish.is_active !== false
+  );
+  const canDeleteWish = (_wish: MemberWish) => canManageMemberWishes;
+  const canRefineWish = (wish: MemberWish) => canManageMemberWishes && wish.status !== 'fulfilled';
+  const canOpenWishActions = (wish: MemberWish) => (
+    canGrantWish(wish) || canEditWish(wish) || canArchiveWish(wish) || canDeleteWish(wish) || canRefineWish(wish)
+  );
+
+  const applyMemberWishRows = (rows: MemberWish[]) => {
+    const sortedRows = [...rows].sort((a, b) => (
+      (b.created_at ?? '').localeCompare(a.created_at ?? '')
+    ));
+    if (isCurrentUser) setMyWishes(sortedRows);
+    onMemberUpdated({ ...member, wishes: sortedRows });
+  };
+
+  const refreshManagedWishes = async () => {
+    if (!communityId) return;
+
+    let { data, error } = await (supabase as any)
+      .from('wishes')
+      .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+      .eq('user_id', member.id)
+      .eq('community_id', communityId)
+      .in('status', ['public', 'fulfilled'])
+      .order('created_at', { ascending: false });
+
+    if (
+      error &&
+      (String(error.message ?? '').includes('wish_granters') ||
+        String(error.message ?? '').includes('granter') ||
+        String(error.message ?? '').includes('relationship') ||
+        String(error.message ?? '').includes('schema cache'))
+    ) {
+      const fallback = await (supabase as any)
+        .from('wishes')
+        .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+        .eq('user_id', member.id)
+        .eq('community_id', communityId)
+        .in('status', ['public', 'fulfilled'])
+        .order('created_at', { ascending: false });
+      data = fallback.data;
+      error = fallback.error;
+    }
+
+    if (error && String(error.message ?? '').includes('title')) {
+      const fallback = await (supabase as any)
+        .from('wishes')
+        .select('id, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+        .eq('user_id', member.id)
+        .eq('community_id', communityId)
+        .in('status', ['public', 'fulfilled'])
+        .order('created_at', { ascending: false });
+      data = (fallback.data ?? []).map((wish: any) => ({ ...wish, title: null }));
+      error = fallback.error;
+    }
+
+    if (error) {
+      console.warn('[Members] managed wishes refresh failed', error);
+      return;
+    }
+
+    applyMemberWishRows((data ?? []) as MemberWish[]);
+  };
+
+  const handleGrantWish = async (data: {
+    wishId: string;
+    granterIds: string[];
+    thankYouMessage?: string;
+  }) => {
+    const result = await grantWish(data.wishId, data.granterIds, data.thankYouMessage);
+    if (!result.error) {
+      await refreshManagedWishes();
+      setWishToGrant(null);
+      if (selectedWish?.id === data.wishId) setSelectedWish(null);
+    }
+    return result;
+  };
+
+  const handleArchiveWish = (wish: MemberWish) => {
+    if (!communityId || !canArchiveWish(wish)) return;
+
+    const archiveWish = async () => {
+      const { error } = await (supabase as any)
+        .from('wishes')
+        .update({ status: 'replaced', is_active: false, replaced_at: new Date().toISOString() })
+        .eq('id', wish.id)
+        .eq('user_id', member.id)
+        .eq('community_id', communityId);
+
+      if (error) {
+        Alert.alert('Error', 'Failed to archive wish. Please try again.');
+        return;
+      }
+
+      await invalidateWishQueries(communityId, member.id);
+      await refreshManagedWishes();
+      setManagingWish(null);
+      if (selectedWish?.id === wish.id) setSelectedWish(null);
+    };
+
+    Alert.alert('Archive HD Wish', `Archive this HD wish from Wishes?\n\n"${wish.description}"`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Archive', onPress: archiveWish },
+    ]);
+  };
+
+  const handleDeleteWish = async (wish: MemberWish) => {
+    if (!communityId || !canDeleteWish(wish)) return;
+
+    Alert.alert('Delete wish', 'Remove this wish from this profile?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive',
         onPress: async () => {
-          await (supabase as any).from('wishes').delete().eq('id', wishId);
+          const { error } = await (supabase as any)
+            .from('wishes')
+            .delete()
+            .eq('id', wish.id)
+            .eq('user_id', member.id)
+            .eq('community_id', communityId);
+          if (error) {
+            Alert.alert('Error', 'Failed to delete wish. Please try again.');
+            return;
+          }
           await invalidateWishQueries(communityId, member.id);
-          setMyWishes(prev => prev.filter(w => w.id !== wishId));
-          setManagingWish(null);
+          await refreshManagedWishes();
+          if (selectedWish?.id === wish.id) setSelectedWish(null);
         },
       },
     ]);
+  };
+
+  const handleWishSaved = async () => {
+    await refreshManagedWishes();
+    setEditingWish(null);
   };
 
   const cancelNewWish = () => {
@@ -668,13 +815,7 @@ function MemberDetailModal({
     if (!communityId) return;
 
     setSelectedWish({
-      ...wish,
-      user_id: member.id,
-      community_id: communityId,
-      raw_input: wish.raw_input ?? wish.description,
-      is_active: wish.is_active ?? wish.status === 'public',
-      extracted_from: wish.extracted_from ?? 'manual',
-      created_at: wish.created_at ?? new Date(0).toISOString(),
+      ...normalizeMemberWish(wish),
       user: member as unknown as Profile,
     } as Wish & { user: Profile });
   };
@@ -875,6 +1016,13 @@ function MemberDetailModal({
               <WishDetail
                 wish={selectedWish}
                 onClose={() => setSelectedWish(null)}
+                onGrant={handleGrantWish}
+                canManage={canOpenWishActions(selectedWish)}
+                onManage={() => {
+                  const wish = selectedWish;
+                  setSelectedWish(null);
+                  setManagingWish(wish);
+                }}
                 onBeforeProfileNavigate={() => {
                   setSelectedWish(null);
                   onClose();
@@ -1090,7 +1238,7 @@ function MemberDetailModal({
                               ownerAvatarUrl={member.avatar_url}
                               compact={isPhoneProfile}
                               onOpen={openWishDetail}
-                              onManage={setManagingWish}
+                              onManage={canOpenWishActions(wish) ? setManagingWish : undefined}
                             />
                           ))
                         )}
@@ -1130,48 +1278,47 @@ function MemberDetailModal({
             </View>
           )}
 
-          {managingWish && (
-            <Pressable
-              onPress={() => setManagingWish(null)}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.34)', justifyContent: 'flex-end', zIndex: 20 }}
-            >
-              <Pressable
-                onPress={(event) => event.stopPropagation()}
-                style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 34, borderTopWidth: 1, borderColor: 'rgba(222,193,129,0.5)' }}
-              >
-                <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.28)', borderRadius: 2, alignSelf: 'center', marginBottom: 18 }} />
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d' }}>Manage Wish</Text>
-                <Text
-                  numberOfLines={2}
-                  style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#7d715f', marginTop: 6, marginBottom: 16 }}
-                >
-                  {managingWish.description}
-                </Text>
-                <Pressable
-                  onPress={() => {
-                    const wish = managingWish;
-                    setManagingWish(null);
-                    refineWithClive(wish.description);
-                  }}
-                  style={{ borderRadius: 14, borderWidth: 1, borderColor: 'rgba(222,193,129,0.54)', backgroundColor: '#fffaf0', paddingVertical: 13, paddingHorizontal: 14, marginBottom: 10 }}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#bd9348', textAlign: 'center' }}>Refine with Clive ✨</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => deleteWish(managingWish.id)}
-                  style={{ borderRadius: 14, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', backgroundColor: '#fff7f7', paddingVertical: 13, paddingHorizontal: 14, marginBottom: 10 }}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#ef4444', textAlign: 'center' }}>Delete</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setManagingWish(null)}
-                  style={{ borderRadius: 14, backgroundColor: '#f5f3ee', paddingVertical: 13, paddingHorizontal: 14 }}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#6b7280', textAlign: 'center' }}>Cancel</Text>
-                </Pressable>
-              </Pressable>
-            </Pressable>
+          <WishManageModal
+            visible={!!managingWish}
+            wish={managingWish}
+            onClose={() => setManagingWish(null)}
+            canGrant={!!managingWish && canGrantWish(managingWish)}
+            canEdit={!!managingWish && canEditWish(managingWish)}
+            canArchive={!!managingWish && canArchiveWish(managingWish)}
+            canDelete={!!managingWish && canDeleteWish(managingWish)}
+            canRefine={!!managingWish && canRefineWish(managingWish)}
+            onGrant={(wish) => {
+              setWishToGrant({
+                ...normalizeMemberWish(wish),
+                user: member as unknown as Profile,
+              });
+            }}
+            onEdit={(wish) => setEditingWish(normalizeMemberWish(wish))}
+            onArchive={handleArchiveWish}
+            onDelete={handleDeleteWish}
+            onRefine={(wish) => refineWithClive(wish.description)}
+          />
+
+          {wishToGrant && (
+            <GrantWishModal
+              visible={!!wishToGrant}
+              onClose={() => setWishToGrant(null)}
+              wish={wishToGrant}
+              communityId={communityId}
+              onGrant={handleGrantWish}
+            />
           )}
+
+          <AddWishModal
+            visible={!!editingWish}
+            onClose={() => setEditingWish(null)}
+            communityId={communityId}
+            userId={currentAuthId ?? undefined}
+            onSave={handleWishSaved}
+            existingWish={editingWish}
+            wishOwnerUserId={editingWish?.user_id}
+            wishOwnerName={member.name}
+          />
 
           {/* ── Daily Answers Sheet ── */}
           {showDailyAnswersSheet && (
@@ -1612,6 +1759,7 @@ function MemberDetailModal({
                           ownerAvatarUrl={member.avatar_url}
                           compact={isPhoneProfile}
                           onOpen={openWishDetail}
+                          onManage={canOpenWishActions(w) ? setManagingWish : undefined}
                         />
                       ))
                     )}
@@ -1734,7 +1882,7 @@ function MemberDetailModal({
                             ownerAvatarUrl={member.avatar_url}
                             compact={isPhoneProfile}
                             onOpen={openWishDetail}
-                            onManage={setManagingWish}
+                            onManage={canOpenWishActions(wish) ? setManagingWish : undefined}
                           />
                         ))
                       )}

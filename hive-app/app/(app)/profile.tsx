@@ -16,7 +16,7 @@ import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { clearLastAppPath } from '../../lib/navigationState';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
-import { getHdWishStatusLabel, getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
+import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
@@ -30,6 +30,7 @@ import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { PREDEFINED_SKILLS } from '../../components/skills/constants';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
+import { WishManageModal } from '../../components/wishes/WishManageModal';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import type { Skill, Wish, UserInsights, Profile } from '../../types';
@@ -142,6 +143,26 @@ export default function ProfileScreen() {
     userId: profile?.id,
     survey: activeSurvey,
   });
+  const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+  const canManageWish = useCallback((wish: Wish) => (
+    !!profile && (isAdmin || wish.user_id === profile.id)
+  ), [isAdmin, profile?.id]);
+  const canGrantWish = useCallback((wish: Wish) => (
+    wish.status === 'public' && canManageWish(wish)
+  ), [canManageWish]);
+  const canEditWish = useCallback((wish: Wish) => (
+    wish.status !== 'fulfilled' && canManageWish(wish)
+  ), [canManageWish]);
+  const canArchiveWish = useCallback((wish: Wish) => (
+    wish.status === 'public' && wish.is_active !== false && canManageWish(wish)
+  ), [canManageWish]);
+  const canDeleteWish = useCallback((wish: Wish) => canManageWish(wish), [canManageWish]);
+  const canRefineWish = useCallback((wish: Wish) => (
+    wish.status !== 'fulfilled' && canManageWish(wish)
+  ), [canManageWish]);
+  const canOpenWishActions = useCallback((wish: Wish) => (
+    canGrantWish(wish) || canEditWish(wish) || canArchiveWish(wish) || canDeleteWish(wish) || canRefineWish(wish)
+  ), [canArchiveWish, canDeleteWish, canEditWish, canGrantWish, canRefineWish]);
 
   // Editable profile fields
   const [isEditing, setIsEditing] = useState(false);
@@ -660,22 +681,27 @@ export default function ProfileScreen() {
   };
 
   const handleArchiveWish = (wish: Wish) => {
-    if (!profile || !communityId) return;
+    if (!profile || !communityId || !canArchiveWish(wish)) return;
 
     const archiveWish = async () => {
-      const { error } = await supabase
+      let query = supabase
         .from('wishes')
         .update({ status: 'replaced', is_active: false, replaced_at: new Date().toISOString() } as any)
         .eq('id', wish.id)
-        .eq('user_id', profile.id)
         .eq('community_id', communityId);
+
+      if (!isAdmin) {
+        query = query.eq('user_id', profile.id);
+      }
+
+      const { error } = await query;
 
       if (error) {
         Alert.alert('Error', 'Failed to archive wish. Please try again.');
         return;
       }
 
-      await invalidateWishQueries(communityId, profile.id);
+      await invalidateWishQueries(communityId, wish.user_id);
       await fetchData();
       setManagingWish(null);
     };
@@ -705,8 +731,7 @@ export default function ProfileScreen() {
 
   const openGrantModal = (wish: Wish) => {
     if (!profile) return;
-    // Create wish with user profile for the modal
-    setWishToGrant({ ...wish, user: profile });
+    setWishToGrant({ ...wish, user: (wish.user ?? profile) as Profile });
   };
 
   const openWishDetail = useCallback((wish: Wish) => {
@@ -1005,22 +1030,27 @@ export default function ProfileScreen() {
   };
 
   const handleDeleteWish = (wish: Wish) => {
-    if (!profile || !communityId || wish.user_id !== profile.id) return;
+    if (!profile || !communityId || !canDeleteWish(wish)) return;
 
     const deleteWish = async () => {
-      const { error } = await supabase
+      let query = supabase
         .from('wishes')
         .delete()
         .eq('id', wish.id)
-        .eq('user_id', profile.id)
         .eq('community_id', communityId);
+
+      if (!isAdmin) {
+        query = query.eq('user_id', profile.id);
+      }
+
+      const { error } = await query;
 
       if (error) {
         Alert.alert('Error', 'Failed to delete wish. Please try again.');
         return;
       }
 
-      await invalidateWishQueries(communityId, profile.id);
+      await invalidateWishQueries(communityId, wish.user_id);
       await fetchData();
       setManagingWish(null);
     };
@@ -1389,119 +1419,26 @@ export default function ProfileScreen() {
       ownerAvatarUrl={profile.avatar_url}
       compact={isProfilePhone}
       onOpen={(selectedWish) => openWishDetail(selectedWish as Wish)}
-      onManage={(selectedWish) => setManagingWish(selectedWish as Wish)}
+      onManage={canOpenWishActions(wish) ? (selectedWish) => setManagingWish(selectedWish as Wish) : undefined}
     />
   );
 
   const wishManageModal = (
-    <Modal visible={!!managingWish} animationType="fade" transparent onRequestClose={() => setManagingWish(null)}>
-      <Pressable
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.38)', justifyContent: 'flex-end' }}
-        onPress={() => setManagingWish(null)}
-      >
-        <Pressable
-          onPress={(event) => event.stopPropagation()}
-          style={{
-            backgroundColor: '#fffdf5',
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            padding: 22,
-            paddingBottom: 34,
-            borderTopWidth: 1,
-            borderColor: 'rgba(222,193,129,0.5)',
-          }}
-        >
-          <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.28)', borderRadius: 2, alignSelf: 'center', marginBottom: 18 }} />
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d' }}>
-            Manage Wish
-          </Text>
-          {managingWish ? (
-            <Text
-              numberOfLines={2}
-              style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 18, color: '#8a7760', marginTop: 4, marginBottom: 10 }}
-            >
-              {managingWish.description}
-            </Text>
-          ) : null}
-
-          {managingWish?.status === 'public' ? (
-            <Pressable
-              onPress={() => {
-                const wish = managingWish;
-                setManagingWish(null);
-                if (wish) openGrantModal(wish);
-              }}
-              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-gold/25 bg-gold/10 active:opacity-75"
-            >
-              <View className="flex-row items-center">
-                <Ionicons name="checkmark-circle-outline" size={18} color="#bd9348" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm ml-2">
-                  {getHdWishStatusLabel('fulfilled')}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
-            </Pressable>
-          ) : null}
-
-          {managingWish?.status !== 'fulfilled' ? (
-            <Pressable
-              onPress={() => {
-                const wish = managingWish;
-                setManagingWish(null);
-                if (wish) setEditingWish(wish);
-              }}
-              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
-            >
-              <View className="flex-row items-center">
-                <Ionicons name="pencil-outline" size={18} color="rgba(49,49,48,0.66)" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
-                  Edit
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
-            </Pressable>
-          ) : null}
-
-          {managingWish?.status === 'public' ? (
-            <Pressable
-              onPress={() => {
-                const wish = managingWish;
-                setManagingWish(null);
-                if (wish) handleArchiveWish(wish);
-              }}
-              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
-            >
-              <View className="flex-row items-center">
-                <Ionicons name="archive-outline" size={18} color="rgba(49,49,48,0.66)" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
-                  Archive
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
-            </Pressable>
-          ) : null}
-
-          {managingWish ? (
-            <Pressable
-              onPress={() => {
-                const wish = managingWish;
-                setManagingWish(null);
-                if (wish) handleDeleteWish(wish);
-              }}
-              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-red-100 bg-red-50 active:opacity-75"
-            >
-              <View className="flex-row items-center">
-                <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-500 text-sm ml-2">
-                  Delete
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(239,68,68,0.45)" />
-            </Pressable>
-          ) : null}
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <WishManageModal
+      visible={!!managingWish}
+      wish={managingWish}
+      onClose={() => setManagingWish(null)}
+      canGrant={!!managingWish && canGrantWish(managingWish)}
+      canEdit={!!managingWish && canEditWish(managingWish)}
+      canArchive={!!managingWish && canArchiveWish(managingWish)}
+      canDelete={!!managingWish && canDeleteWish(managingWish)}
+      canRefine={!!managingWish && canRefineWish(managingWish)}
+      onGrant={openGrantModal}
+      onEdit={(wish) => setEditingWish(wish)}
+      onArchive={handleArchiveWish}
+      onDelete={handleDeleteWish}
+      onRefine={(wish) => handleRefineWithClive(wish.description)}
+    />
   );
 
   if (selectedWish) {
@@ -1511,7 +1448,7 @@ export default function ProfileScreen() {
           wish={selectedWish}
           onClose={() => setSelectedWish(null)}
           onGrant={handleGrantWish}
-          canManage
+          canManage={canOpenWishActions(selectedWish)}
           onManage={() => {
             const wish = selectedWish;
             setSelectedWish(null);
@@ -2350,6 +2287,8 @@ export default function ProfileScreen() {
         userId={profile?.id}
         onSave={handleWishSaved}
         existingWish={editingWish}
+        wishOwnerUserId={editingWish?.user_id}
+        wishOwnerName={editingWish?.user?.name}
       />
 
       {activeSurvey && (

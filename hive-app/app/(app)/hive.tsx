@@ -19,6 +19,7 @@ import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
+import { WishManageModal } from '../../components/wishes/WishManageModal';
 import {
   EventsListSkeleton,
   WishSectionSkeleton,
@@ -1556,18 +1557,25 @@ export default function HiveScreen() {
     closeWishDetail();
   };
 
-  const canEditWish = useCallback((wish: Wish) => wish.user_id === profile?.id, [profile?.id]);
+  const canEditWish = useCallback((wish: Wish) => (
+    !!profile && wish.status !== 'fulfilled' && (isAdmin || wish.user_id === profile.id)
+  ), [isAdmin, profile]);
   const canDeleteWish = useCallback((wish: Wish) => !!profile && (isAdmin || wish.user_id === profile.id), [isAdmin, profile]);
-  const canGrantWish = useCallback((wish: Wish) => wish.user_id === profile?.id && wish.status === 'public', [profile?.id]);
+  const canGrantWish = useCallback((wish: Wish) => (
+    !!profile && wish.status === 'public' && (isAdmin || wish.user_id === profile.id)
+  ), [isAdmin, profile]);
   const canArchiveWish = useCallback((wish: Wish) => (
     !!profile
     && wish.status === 'public'
     && wish.is_active !== false
     && (isAdmin || wish.user_id === profile.id)
   ), [isAdmin, profile]);
+  const canRefineWish = useCallback((wish: Wish) => (
+    !!profile && wish.status !== 'fulfilled' && (isAdmin || wish.user_id === profile.id)
+  ), [isAdmin, profile]);
   const canOpenWishActions = useCallback((wish: Wish) => (
-    canGrantWish(wish) || canEditWish(wish) || canArchiveWish(wish) || canDeleteWish(wish)
-  ), [canArchiveWish, canDeleteWish, canEditWish, canGrantWish]);
+    canGrantWish(wish) || canEditWish(wish) || canArchiveWish(wish) || canDeleteWish(wish) || canRefineWish(wish)
+  ), [canArchiveWish, canDeleteWish, canEditWish, canGrantWish, canRefineWish]);
 
   const handleArchiveWish = useCallback((wish: Wish) => {
     if (!profile || !communityId || !canArchiveWish(wish)) return;
@@ -1880,30 +1888,6 @@ export default function HiveScreen() {
       ) : null}
       {visibleTodos.map((todo, index) => renderTodoRow(todo, index === visibleTodos.length - 1))}
     </>
-  );
-
-  const manageWishActionStyle = (tone: 'gold' | 'neutral' | 'danger' = 'neutral') => ({
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: tone === 'danger'
-      ? 'rgba(239,68,68,0.18)'
-      : tone === 'gold'
-        ? 'rgba(189,147,72,0.28)'
-        : 'rgba(49,49,48,0.10)',
-    backgroundColor: tone === 'danger'
-      ? '#fff1f2'
-      : tone === 'gold'
-        ? '#fff8e8'
-        : '#fffdf5',
-    marginTop: 8,
-  });
-  const manageWishToneColor = (tone: 'gold' | 'neutral' | 'danger' = 'neutral') => (
-    tone === 'danger' ? '#ef4444' : tone === 'gold' ? '#bd9348' : 'rgba(49,49,48,0.66)'
   );
 
   // Show wish detail fullscreen
@@ -2712,127 +2696,23 @@ export default function HiveScreen() {
         </Pressable>
       </Modal>
 
-      <Modal visible={!!managingWish} animationType="fade" transparent onRequestClose={() => setManagingWish(null)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.38)', justifyContent: 'flex-end' }}
-          onPress={() => setManagingWish(null)}
-        >
-          <Pressable
-            onPress={(event) => event.stopPropagation()}
-            style={{
-              backgroundColor: '#fffdf5',
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              padding: 22,
-              paddingBottom: 34,
-              borderTopWidth: 1,
-              borderColor: 'rgba(222,193,129,0.5)',
-            }}
-          >
-            <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.28)', borderRadius: 2, alignSelf: 'center', marginBottom: 18 }} />
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d' }}>
-                  Manage Wish
-                </Text>
-                {managingWish ? (
-                  <Text
-                    numberOfLines={2}
-                    style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 18, color: '#8a7760', marginTop: 4 }}
-                  >
-                    {managingWish.description}
-                  </Text>
-                ) : null}
-              </View>
-              <Pressable
-                onPress={() => setManagingWish(null)}
-                accessibilityRole="button"
-                accessibilityLabel="Close wish actions"
-                hitSlop={8}
-                style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff8e8' }}
-              >
-                <Ionicons name="close-outline" size={22} color="#8e7a5e" />
-              </Pressable>
-            </View>
-
-            {managingWish && canGrantWish(managingWish) ? (
-              <Pressable
-                onPress={() => {
-                  const wish = managingWish;
-                  setManagingWish(null);
-                  setWishToGrant(wish);
-                }}
-                style={manageWishActionStyle('gold')}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Ionicons name="checkmark-circle-outline" size={18} color={manageWishToneColor('gold')} />
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('gold') }}>
-                    Grant
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
-              </Pressable>
-            ) : null}
-
-            {managingWish && canEditWish(managingWish) ? (
-              <Pressable
-                onPress={() => {
-                  const wish = managingWish;
-                  setManagingWish(null);
-                  setEditingWish(wish);
-                }}
-                style={manageWishActionStyle('neutral')}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Ionicons name="pencil-outline" size={18} color={manageWishToneColor('neutral')} />
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('neutral') }}>
-                    Edit
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
-              </Pressable>
-            ) : null}
-
-            {managingWish && canArchiveWish(managingWish) ? (
-              <Pressable
-                onPress={() => {
-                  const wish = managingWish;
-                  setManagingWish(null);
-                  handleArchiveWish(wish);
-                }}
-                style={manageWishActionStyle('neutral')}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Ionicons name="archive-outline" size={18} color={manageWishToneColor('neutral')} />
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('neutral') }}>
-                    Archive
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
-              </Pressable>
-            ) : null}
-
-            {managingWish && canDeleteWish(managingWish) ? (
-              <Pressable
-                onPress={() => {
-                  const wish = managingWish;
-                  setManagingWish(null);
-                  handleDeleteWish(wish);
-                }}
-                style={manageWishActionStyle('danger')}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Ionicons name="trash-outline" size={18} color={manageWishToneColor('danger')} />
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: manageWishToneColor('danger') }}>
-                    Delete
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color="rgba(239,68,68,0.45)" />
-              </Pressable>
-            ) : null}
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <WishManageModal
+        visible={!!managingWish}
+        wish={managingWish}
+        onClose={() => setManagingWish(null)}
+        canGrant={!!managingWish && canGrantWish(managingWish)}
+        canEdit={!!managingWish && canEditWish(managingWish)}
+        canArchive={!!managingWish && canArchiveWish(managingWish)}
+        canDelete={!!managingWish && canDeleteWish(managingWish)}
+        canRefine={!!managingWish && canRefineWish(managingWish)}
+        onGrant={(wish) => setWishToGrant(wish)}
+        onEdit={(wish) => setEditingWish(wish)}
+        onArchive={handleArchiveWish}
+        onDelete={handleDeleteWish}
+        onRefine={(wish) => {
+          router.push({ pathname: '/(app)', params: { refineWish: wish.description } });
+        }}
+      />
 
       <AddWishModal
         visible={!!editingWish}
@@ -2841,6 +2721,8 @@ export default function HiveScreen() {
         userId={profile?.id}
         onSave={handleEditWishSave}
         existingWish={editingWish}
+        wishOwnerUserId={editingWish?.user_id}
+        wishOwnerName={editingWish?.user?.name}
       />
 
       <AddWishModal

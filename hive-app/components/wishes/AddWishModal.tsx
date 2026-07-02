@@ -98,7 +98,7 @@ export function AddWishModal({
 
   const handleSave = async (makePublic: boolean) => {
     if (!userId || !communityId || !wishText.trim()) return;
-    const ownerUserId = wishOwnerUserId || userId;
+    const ownerUserId = wishOwnerUserId || existingWish?.user_id || userId;
     const shouldPublish = !existingWish || isLinkedWish || makePublic;
     const titleMissingFromSchema = (err: unknown) =>
       err instanceof Error
@@ -120,7 +120,7 @@ export function AddWishModal({
           .from('wishes')
           .update(updatePayload)
           .eq('id', existingWish.id)
-          .eq('user_id', userId)
+          .eq('user_id', ownerUserId)
           .eq('community_id', communityId);
 
         if (updateError && titleMissingFromSchema(updateError)) {
@@ -131,7 +131,7 @@ export function AddWishModal({
               raw_input: updatePayload.raw_input,
             })
             .eq('id', existingWish.id)
-            .eq('user_id', userId)
+            .eq('user_id', ownerUserId)
             .eq('community_id', communityId);
           updateError = fallbackError;
         }
