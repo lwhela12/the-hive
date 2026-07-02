@@ -27,9 +27,11 @@ import { AttachmentGallery } from '../ui/AttachmentGallery';
 import type { Wish, Profile, WishComment, WishGranter } from '../../types';
 
 type WishWithGranters = Wish & {
-  user: Profile;
+  user?: Profile | null;
   granters?: (WishGranter & { granter?: Profile })[];
 };
+
+type WishCommentWithUser = WishComment & { user?: Profile | null };
 
 interface WishDetailProps {
   wish: WishWithGranters;
@@ -53,7 +55,7 @@ export function WishDetail({
   onBeforeProfileNavigate,
 }: WishDetailProps) {
   const { profile, communityId } = useAuth();
-  const [comments, setComments] = useState<(WishComment & { user: Profile })[]>([]);
+  const [comments, setComments] = useState<WishCommentWithUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -74,6 +76,8 @@ export function WishDetail({
   const wishDetailText = getWishDetailText(wish);
   const showDescription = shouldShowWishDescription(wish);
   const wishOwnerId = wish.user?.id ?? wish.user_id;
+  const wishOwnerName = wish.user?.name?.trim() || 'HIVE member';
+  const wishOwnerAvatarUrl = wish.user?.avatar_url;
   const handleBeforeProfileNavigate = onBeforeProfileNavigate ?? onClose;
 
   useEffect(() => {
@@ -89,7 +93,7 @@ export function WishDetail({
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      setComments((data as (WishComment & { user: Profile })[]) || []);
+      setComments((data as WishCommentWithUser[]) || []);
     } catch (error) {
       console.error('Error fetching comments:', error);
     } finally {
@@ -115,14 +119,14 @@ export function WishDetail({
 
       if (error) throw error;
 
-      setComments((prev) => [...prev, data as WishComment & { user: Profile }]);
+      setComments((prev) => [...prev, data as WishCommentWithUser]);
       notifyWishMentions({
         wishId: wish.id,
         senderId: profile.id,
         communityId,
         content: newComment.trim(),
         members: mentionableMembers,
-        wishOwnerName: wish.user?.name,
+        wishOwnerName,
       });
       setNewComment('');
       commentMentionInput.resetMentionSelection();
@@ -167,24 +171,24 @@ export function WishDetail({
           <View className="flex-row items-start">
             <MemberProfileLink
               memberId={wishOwnerId}
-              memberName={wish.user.name}
+              memberName={wishOwnerName}
               onBeforeNavigate={handleBeforeProfileNavigate}
               hitSlop={8}
               className="active:opacity-70"
             >
-              <Avatar name={wish.user.name} url={wish.user.avatar_url} size={48} />
+              <Avatar name={wishOwnerName} url={wishOwnerAvatarUrl} size={48} />
             </MemberProfileLink>
             <View className="flex-1 ml-3">
               <View className="flex-row items-center">
                 <MemberProfileLink
                   memberId={wishOwnerId}
-                  memberName={wish.user.name}
+                  memberName={wishOwnerName}
                   onBeforeNavigate={handleBeforeProfileNavigate}
                   hitSlop={8}
                   className="active:opacity-70"
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-base">
-                    {wish.user.name}
+                    {wishOwnerName}
                   </Text>
                 </MemberProfileLink>
                 {isGranted && (
@@ -270,7 +274,7 @@ export function WishDetail({
                     style={{ fontFamily: 'Lato_700Bold' }}
                     className="text-gold text-sm ml-2"
                   >
-                    Thank you from {wish.user.name}
+                    Thank you from {wishOwnerName}
                   </Text>
                 </View>
                 <Text
@@ -300,22 +304,25 @@ export function WishDetail({
         ) : (
           comments.map((comment) => {
             const commentAttachments = Array.isArray(comment.attachments) ? comment.attachments : [];
+            const commentAuthorName = comment.user?.name?.trim() || 'HIVE member';
+            const commentAuthorAvatarUrl = comment.user?.avatar_url;
+            const commentAuthorId = comment.user?.id ?? comment.user_id;
 
             return (
               <View key={comment.id} className="flex-row mb-4">
                 <MemberProfileLink
-                  memberId={comment.user?.id ?? comment.user_id}
-                  memberName={comment.user?.name}
+                  memberId={commentAuthorId}
+                  memberName={commentAuthorName}
                   onBeforeNavigate={handleBeforeProfileNavigate}
                   hitSlop={8}
                   className="active:opacity-70"
                 >
-                  <Avatar name={comment.user.name} url={comment.user.avatar_url} size={36} />
+                  <Avatar name={commentAuthorName} url={commentAuthorAvatarUrl} size={36} />
                 </MemberProfileLink>
                 <View className="flex-1 ml-3 bg-gray-50 rounded-xl p-3">
                   <View className="flex-row items-center justify-between">
                     <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-sm">
-                      {comment.user.name}
+                      {commentAuthorName}
                     </Text>
                     <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40">
                       {formatDateShort(comment.created_at)}

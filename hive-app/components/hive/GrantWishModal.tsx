@@ -19,7 +19,7 @@ import type { Wish, Profile } from '../../types';
 interface GrantWishModalProps {
   visible: boolean;
   onClose: () => void;
-  wish: Wish & { user: Profile };
+  wish: Wish & { user?: Profile | null };
   communityId: string | null;
   onGrant: (data: {
     wishId: string;

@@ -7,7 +7,7 @@ import { getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../
 import type { Wish, Profile, WishGranter } from '../../types';
 
 type WishWithGranters = Wish & {
-  user: Profile;
+  user?: Profile | null;
   granters?: (WishGranter & { granter?: Profile })[];
 };
 
@@ -43,6 +43,9 @@ export function WishCard({
   const quickTitle = getWishQuickTitle(wish);
   const bodyPreview = getWishBodyPreview(wish);
   const showBodyPreview = shouldShowBodyPreview && hasSeparateWishTitle(wish);
+  const ownerName = wish.user?.name?.trim() || 'HIVE member';
+  const ownerAvatarUrl = wish.user?.avatar_url;
+  const ownerId = wish.user?.id ?? wish.user_id;
 
   return (
     <Pressable
@@ -57,20 +60,20 @@ export function WishCard({
     >
       <View className="flex-row items-start">
         <MemberProfileLink
-          memberId={wish.user?.id ?? wish.user_id}
-          memberName={wish.user?.name}
+          memberId={ownerId}
+          memberName={ownerName}
           stopPropagation
           hitSlop={8}
           className="active:opacity-70"
         >
-          <Avatar name={wish.user.name} url={wish.user.avatar_url} size={44} />
+          <Avatar name={ownerName} url={ownerAvatarUrl} size={44} />
         </MemberProfileLink>
         <View className="flex-1 ml-3">
           <View className="flex-row items-center">
             <View className="flex-1 flex-row items-center">
               <MemberProfileLink
-                memberId={wish.user?.id ?? wish.user_id}
-                memberName={wish.user?.name}
+                memberId={ownerId}
+                memberName={ownerName}
                 stopPropagation
                 hitSlop={8}
                 className="active:opacity-70"
@@ -81,7 +84,7 @@ export function WishCard({
                     color: isGranted ? '#7f715f' : '#2d2d2d',
                   }}
                 >
-                  {wish.user.name}
+                  {ownerName}
                 </Text>
               </MemberProfileLink>
             </View>

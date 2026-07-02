@@ -45,7 +45,7 @@ import {
 import type { Profile, Wish, WishGranter, Event, ActionItem } from '../../types';
 
 type WishWithGranters = Wish & {
-  user: Profile;
+  user?: Profile | null;
   granters?: (WishGranter & { granter?: Profile })[];
 };
 
