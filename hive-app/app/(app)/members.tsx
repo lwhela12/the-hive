@@ -17,7 +17,7 @@ import { SKILL_CATEGORIES } from '../../lib/skillsList';
 import { DAILY_QUESTIONS } from '../../lib/dailyQuestions';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
-import { setStoredItem } from '../../lib/webStorage';
+import { getStoredItem, setStoredItem } from '../../lib/webStorage';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileShowcase } from '../../components/profile/ProfileShowcase';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
@@ -124,6 +124,49 @@ type HoneycombPlacement = {
 };
 
 type MemberViewMode = 'directory' | 'swarm';
+
+type MemberSortKey = 'first-name' | 'next-birthday' | 'best-match' | 'most-wishes';
+
+const MEMBER_SORT_OPTIONS: { key: MemberSortKey; label: string }[] = [
+  { key: 'first-name', label: 'First name' },
+  { key: 'next-birthday', label: 'Next birthday' },
+  { key: 'best-match', label: 'Best match' },
+  { key: 'most-wishes', label: 'Most wishes' },
+];
+
+function normalizeMemberSort(value: string | null): MemberSortKey {
+  return MEMBER_SORT_OPTIONS.some(option => option.key === value)
+    ? (value as MemberSortKey)
+    : 'first-name';
+}
+
+function memberFirstName(name: string) {
+  return name.trim().split(/\s+/)[0] ?? name;
+}
+
+// Birthdays are month/day — compute days until the next occurrence from today.
+// Returns null when there is no parseable birthday so those members sort last.
+function daysUntilNextBirthday(birthday?: string | null): number | null {
+  if (!birthday) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(birthday);
+  if (!match) return null;
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!month || !day) return null;
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Feb 29 rolls to Mar 1 in non-leap years, which is close enough for ordering.
+  let next = new Date(now.getFullYear(), month - 1, day);
+  if (next.getTime() < startOfToday.getTime()) {
+    next = new Date(now.getFullYear() + 1, month - 1, day);
+  }
+  return Math.round((next.getTime() - startOfToday.getTime()) / 86400000);
+}
+
+function countPublicMemberWishes(member: MemberData) {
+  return member.wishes.filter(w => w.status === 'public' && w.is_active !== false).length;
+}
 
 const ANSWER_STOP_WORDS = new Set([
   'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'for', 'i', 'im', 'in', 'is',
@@ -2035,6 +2078,23 @@ export default function MembersScreen() {
   const [search, setSearch] = useState('');
   const [memberViewMode, setMemberViewMode] = useState<MemberViewMode>('directory');
   const currentUserId = session?.user?.id ?? profile?.id ?? null;
+  const membersSortStorageKey = communityId && currentUserId
+    ? `the-hive:members-sort:${communityId}:${currentUserId}`
+    : null;
+  const [memberSort, setMemberSort] = useState<MemberSortKey>(() =>
+    normalizeMemberSort(membersSortStorageKey ? getStoredItem(membersSortStorageKey) : null)
+  );
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMemberSort(normalizeMemberSort(membersSortStorageKey ? getStoredItem(membersSortStorageKey) : null));
+  }, [membersSortStorageKey]);
+
+  const selectMemberSort = (key: MemberSortKey) => {
+    setMemberSort(key);
+    setSortMenuOpen(false);
+    if (membersSortStorageKey) setStoredItem(membersSortStorageKey, key);
+  };
 
   const loadMembers = useCallback(async (isRefresh = false) => {
     if (!communityId) return;
@@ -2333,7 +2393,39 @@ export default function MembersScreen() {
     (member.dailyMatchSharedCount ?? 0) > 0
   ).length;
   const visibleMembers = useMemo(() => {
-    if (memberViewMode === 'directory') return filtered;
+    if (memberViewMode === 'directory') {
+      return [...filtered].sort((a, b) => {
+        if (a.id === currentUserId) return -1;
+        if (b.id === currentUserId) return 1;
+
+        if (memberSort === 'next-birthday') {
+          const aDays = daysUntilNextBirthday(a.birthday);
+          const bDays = daysUntilNextBirthday(b.birthday);
+          if (aDays !== bDays) {
+            if (aDays === null) return 1;
+            if (bDays === null) return -1;
+            return aDays - bDays;
+          }
+        } else if (memberSort === 'best-match') {
+          const aHasMatch = typeof a.dailyMatchPercent === 'number' && (a.dailyMatchSharedCount ?? 0) > 0;
+          const bHasMatch = typeof b.dailyMatchPercent === 'number' && (b.dailyMatchSharedCount ?? 0) > 0;
+          if (aHasMatch !== bHasMatch) return aHasMatch ? -1 : 1;
+          if (aHasMatch && bHasMatch) {
+            const percentDiff = (b.dailyMatchPercent ?? 0) - (a.dailyMatchPercent ?? 0);
+            if (percentDiff !== 0) return percentDiff;
+            const sharedDiff = (b.dailyMatchSharedCount ?? 0) - (a.dailyMatchSharedCount ?? 0);
+            if (sharedDiff !== 0) return sharedDiff;
+          }
+        } else if (memberSort === 'most-wishes') {
+          const wishDiff = countPublicMemberWishes(b) - countPublicMemberWishes(a);
+          if (wishDiff !== 0) return wishDiff;
+        }
+
+        const firstNameDiff = memberFirstName(a.name).localeCompare(memberFirstName(b.name));
+        if (firstNameDiff !== 0) return firstNameDiff;
+        return a.name.localeCompare(b.name);
+      });
+    }
 
     return [...filtered].sort((a, b) => {
       if (a.id === currentUserId) return -1;
@@ -2352,7 +2444,7 @@ export default function MembersScreen() {
 
       return a.name.localeCompare(b.name);
     });
-  }, [currentUserId, filtered, memberViewMode]);
+  }, [currentUserId, filtered, memberSort, memberViewMode]);
   const currentMember = useMemo(
     () => members.find(member => member.id === currentUserId) ?? null,
     [currentUserId, members]
@@ -2383,13 +2475,17 @@ export default function MembersScreen() {
       .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category))
       .slice(0, 3);
   }, [filtered]);
-  const desiredHoneycombColumns = width >= 1500 ? 5 : width >= 1120 ? 4 : width >= 760 ? 3 : width >= 360 ? 2 : 1;
+  // Phone widths render "launcher mode": compact hexes ~3 across with avatar +
+  // first name only, so the whole hive fits roughly one screen.
+  const isPhoneHoneycomb = width < 768;
+  const desiredHoneycombColumns = width >= 1500 ? 5 : width >= 1120 ? 4 : width >= 768 ? 3 : width >= 340 ? 3 : 2;
   const honeycombColumns = Math.max(1, Math.min(desiredHoneycombColumns, Math.max(1, visibleMembers.length)));
   const honeycombOuterGutter = width < 520 ? 12 : 32;
   const honeycombMaxWidth = Math.max(280, Math.min(width - honeycombOuterGutter, 1680));
+  const honeycombCellCap = isPhoneHoneycomb ? 220 : 320;
   const honeycombCellWidth = honeycombColumns === 1
     ? Math.min(honeycombMaxWidth, 360)
-    : Math.min(320, honeycombMaxWidth / (1 + 0.75 * (honeycombColumns - 1)));
+    : Math.min(honeycombCellCap, honeycombMaxWidth / (1 + 0.75 * (honeycombColumns - 1)));
   const honeycombCardHeight = Math.round(honeycombCellWidth * 0.866);
   const honeycombStepX = honeycombCellWidth * 0.75;
   const honeycombGridWidth = honeycombCellWidth + honeycombStepX * (honeycombColumns - 1);
@@ -2477,6 +2573,59 @@ export default function MembersScreen() {
               );
             })}
           </View>
+          {memberViewMode === 'directory' && (
+            <View style={{ alignItems: 'center', marginTop: 8 }}>
+              <Pressable
+                onPress={() => setSortMenuOpen(open => !open)}
+                accessibilityRole="button"
+                accessibilityLabel={`Sort members, currently by ${MEMBER_SORT_OPTIONS.find(option => option.key === memberSort)?.label ?? 'First name'}`}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5,
+                  backgroundColor: 'rgba(255,255,255,0.78)',
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.45)',
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                }}
+              >
+                <Ionicons name="swap-vertical" size={12} color="#8f7b55" />
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8f7b55' }}>
+                  Sort: {MEMBER_SORT_OPTIONS.find(option => option.key === memberSort)?.label ?? 'First name'}
+                </Text>
+                <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={11} color="#8f7b55" />
+              </Pressable>
+              {sortMenuOpen && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+                  {MEMBER_SORT_OPTIONS.map(option => {
+                    const active = memberSort === option.key;
+                    return (
+                      <Pressable
+                        key={option.key}
+                        onPress={() => selectMemberSort(option.key)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Sort members by ${option.label}`}
+                        style={{
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: active ? '#bd9348' : 'rgba(222,193,129,0.45)',
+                          backgroundColor: active ? '#bd9348' : 'rgba(255,255,255,0.78)',
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                        }}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: active ? '#fffdf7' : '#8f7b55' }}>
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
           {memberViewMode === 'swarm' && matchedMemberCount > 0 && (
             <Text
               style={{
@@ -2660,6 +2809,53 @@ export default function MembersScreen() {
                         }}
                       >
                         <HoneycombCardShell isMe={isMe} height={honeycombCardHeight} width={honeycombCellWidth}>
+                          {isPhoneHoneycomb ? (
+                            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                              <View style={{ position: 'relative' }}>
+                                <View style={{
+                                  borderRadius: (honeycombAvatarSize + 8) / 2,
+                                  borderWidth: isMe ? 2 : 1.25,
+                                  borderColor: isMe ? '#bd9348' : 'rgba(222,193,129,0.7)',
+                                  padding: 2,
+                                  backgroundColor: 'white',
+                                  shadowColor: '#bd9348',
+                                  shadowOpacity: 0.14,
+                                  shadowRadius: 8,
+                                  shadowOffset: { width: 0, height: 3 },
+                                }}>
+                                  <Avatar uri={member.avatar_url} name={member.name} size={honeycombAvatarSize} />
+                                </View>
+                                {hasDailyMatch && (
+                                  <View
+                                    accessible
+                                    accessibilityLabel={`${member.dailyMatchPercent}% daily question match with ${member.name}`}
+                                    style={{
+                                      position: 'absolute',
+                                      top: -6,
+                                      right: -20,
+                                      backgroundColor: 'rgba(255,247,221,0.95)',
+                                      borderWidth: 1,
+                                      borderColor: 'rgba(189,147,72,0.46)',
+                                      borderRadius: 999,
+                                      paddingHorizontal: 5,
+                                      paddingVertical: 2,
+                                    }}
+                                  >
+                                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 9, color: '#bd9348', lineHeight: 11 }}>
+                                      {member.dailyMatchPercent}%
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text
+                                style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: honeycombCellWidth < 170 ? 11.5 : 12.5, color: '#2d2d2d', marginTop: 5, textAlign: 'center', maxWidth: honeycombTextMaxWidth }}
+                                numberOfLines={1}
+                              >
+                                {isMe ? `${memberFirstName(member.name)} (you)` : memberFirstName(member.name)}
+                              </Text>
+                            </View>
+                          ) : (
+                          <>
                           {hasDailyMatch && (
                             <View
                               accessible
@@ -2744,6 +2940,8 @@ export default function MembersScreen() {
                                 </View>
                               ))}
                             </View>
+                          )}
+                          </>
                           )}
                         </HoneycombCardShell>
                       </Pressable>
