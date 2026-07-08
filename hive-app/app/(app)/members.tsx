@@ -1469,54 +1469,57 @@ function MemberDetailModal({
               {(member.profile_title || member.occupation) && (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', marginTop: 3 }}>{member.profile_title || member.occupation}</Text>
               )}
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-                {isCurrentUser && (
-                  <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)' }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>You</Text>
-                  </View>
-                )}
-                {isCurrentUser && (
-                  <Pressable
-                    onPress={() => setEditing(e => !e)}
-                    accessibilityRole="button"
-                    accessibilityLabel={editing ? 'Close profile editing' : 'Edit profile info'}
-                    style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)' }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>
-                      {editing ? 'Close edit' : 'Edit info'}
-                    </Text>
-                  </Pressable>
-                )}
-                {roleLabel && (
-                  <View style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{roleLabel}</Text>
-                  </View>
-                )}
-                {member.hometown && (
-                  <View style={{ backgroundColor: '#f5f3ee', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#6b7280' }}>📍 {member.hometown}</Text>
-                  </View>
-                )}
-                {member.questionAnswerCount > 0 && (
-                  <Pressable
-                    onPress={() => setShowDailyAnswersSheet(true)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`View ${member.name}'s daily question answers`}
-                    style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f3ee', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#6b7280' }}>
-                      ✨ {member.questionAnswerCount} daily answer{member.questionAnswerCount !== 1 ? 's' : ''}{' '}
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>· Read Q&A ›</Text>
-                  </Pressable>
-                )}
-                {member.queen_bee_month && (
-                  <View style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#bd9348' }}>👑 Queen Bee: {member.queen_bee_month}</Text>
-                  </View>
-                )}
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 14, width: '100%' }}>
+              {(isCurrentUser || roleLabel || member.queen_bee_month) && (
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {isCurrentUser && (
+                    <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)' }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>You</Text>
+                    </View>
+                  )}
+                  {isCurrentUser && (
+                    <Pressable
+                      onPress={() => setEditing(e => !e)}
+                      accessibilityRole="button"
+                      accessibilityLabel={editing ? 'Close profile editing' : 'Edit profile info'}
+                      style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)' }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>
+                        {editing ? 'Close edit' : 'Edit info'}
+                      </Text>
+                    </Pressable>
+                  )}
+                  {roleLabel && (
+                    <View style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{roleLabel}</Text>
+                    </View>
+                  )}
+                  {member.queen_bee_month && (
+                    <View style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#bd9348' }}>👑 Queen Bee: {member.queen_bee_month}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+              {/* Stacked identity column: what you do → where you're from → your answers → message */}
+              {member.hometown && (
+                <View style={{ marginTop: 8, backgroundColor: '#f5f3ee', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#6b7280' }}>📍 {member.hometown}</Text>
+                </View>
+              )}
+              {member.questionAnswerCount > 0 && (
+                <Pressable
+                  onPress={() => setShowDailyAnswersSheet(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${member.name}'s daily question answers`}
+                  style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, backgroundColor: '#f5f3ee', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#6b7280' }}>
+                    ✨ {member.questionAnswerCount} daily Q&A{' '}
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>›</Text>
+                </Pressable>
+              )}
+              <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 12, width: '100%' }}>
                 <Pressable
                   onPress={startDirectMessage}
                   disabled={startingMessage}
