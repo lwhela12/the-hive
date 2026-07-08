@@ -1701,8 +1701,9 @@ export default function HiveScreen() {
     setShowAddHomeGuide(true);
   }, [canPromptInstall, promptInstall]);
 
-  // Refresh pill: data refresh normally; when a new build is live, run the
-  // full app-update flow (SW update + skip waiting + reload) instead.
+  // Refresh pill: data refresh normally; when a new build is live it quietly
+  // runs the full app-update flow instead. The banner is the only visual
+  // messenger for updates — the pill label never changes (no doubling up).
   const handleRefreshPill = () => {
     if (Platform.OS === 'web' && updateAvailable) {
       void applyUpdate();
@@ -2528,7 +2529,7 @@ export default function HiveScreen() {
           {useMobileLayout && (
             <HeaderActionPill
               large
-              label={updateAvailable ? '🍯 Refresh' : '↻ Refresh'}
+              label="↻ Refresh"
               onPress={handleRefreshPill}
               disabled={refreshing || isLoading}
             />
