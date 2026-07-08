@@ -9,7 +9,7 @@ export interface ActivityItem {
   timestamp: string; // ISO string
   sourceId: string;  // the DB record ID (post id, event id, wish id, user id)
   categoryId?: string; // board activity only — to deep-link into the right topic
-  navigatesTo?: 'board' | 'members' | 'wish' | 'messages'; // screens that can be navigated to
+  navigatesTo?: 'board' | 'event' | 'members' | 'wish' | 'messages'; // screens that can be navigated to
 }
 
 function truncate(text: string, max: number): string {
@@ -223,6 +223,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       text: `New event: ${e.title} — ${dateStr}${timeStr}`,
       timestamp: e.created_at,
       sourceId: e.id,
+      navigatesTo: 'event',
     });
   }
 

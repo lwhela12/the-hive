@@ -625,6 +625,21 @@ export default function HiveScreen() {
   const [duesStatusChecked, setDuesStatusChecked] = useState(false);
   const [dismissedDuesPeriodKeys, setDismissedDuesPeriodKeys] = useState<Set<string>>(() => new Set());
 
+  const formatDateForInput = useCallback((isoDate: string) => {
+    const [year, month, day] = isoDate.split('-');
+    return `${month}-${day}-${year}`;
+  }, []);
+
+  const openEditEvent = useCallback((event: Event) => {
+    setEditingEvent(event);
+    setEventTitle(event.title);
+    setEventDate(formatDateForInput(event.event_date));
+    setEventTime(event.event_time || '');
+    setEventDescription(event.description || '');
+    setEventLocation(event.location || '');
+    setShowEventModal(true);
+  }, [formatDateForInput]);
+
   const fetchMyActionItems = useCallback(async () => {
     if (!profile?.id || !communityId) return;
     setHomeActionLoading(true);
@@ -1116,6 +1131,25 @@ export default function HiveScreen() {
     void openWishById(wishId, { alertOnUnavailable: true });
   }, [openWishById]);
 
+  const openEventFromActivity = useCallback(async (eventId: string) => {
+    if (!communityId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('id', eventId)
+        .eq('community_id', communityId)
+        .single();
+
+      if (error || !data) throw error ?? new Error('Event not found');
+      openEditEvent(data as Event);
+    } catch (error) {
+      console.warn('Could not open event', error);
+      Alert.alert('Event unavailable', 'That event may have been deleted or moved.');
+    }
+  }, [communityId, openEditEvent]);
+
   useEffect(() => {
     if (!activeWishStorageKey) {
       restoredWishStorageKeyRef.current = null;
@@ -1147,6 +1181,8 @@ export default function HiveScreen() {
       router.push('/members');
     } else if (destination === 'wish') {
       openWishFromActivity(item.sourceId);
+    } else if (destination === 'event') {
+      void openEventFromActivity(item.sourceId);
     } else if (destination === 'messages') {
       if (item.sourceId) {
         router.push({ pathname: '/messages', params: { roomId: item.sourceId } });
@@ -1154,7 +1190,7 @@ export default function HiveScreen() {
         router.push('/messages');
       }
     }
-  }, [getActivityDestination, openWishFromActivity, router]);
+  }, [getActivityDestination, openEventFromActivity, openWishFromActivity, router]);
 
   const handleActivityPress = useCallback((item: ActivityItem) => {
     const wasUnread = item.timestamp > sessionReadAt && !readItemIds.has(item.id);
@@ -1379,23 +1415,6 @@ export default function HiveScreen() {
   }, []);
 
   const homeIsUpdating = refreshing || isLoading || activityLoading || homeActionLoading || duesStatusLoading;
-
-  // Helper to format ISO date to MM-DD-YYYY for display in input
-  const formatDateForInput = (isoDate: string) => {
-    const [year, month, day] = isoDate.split('-');
-    return `${month}-${day}-${year}`;
-  };
-
-  // Open event modal for editing
-  const openEditEvent = (event: Event) => {
-    setEditingEvent(event);
-    setEventTitle(event.title);
-    setEventDate(formatDateForInput(event.event_date));
-    setEventTime(event.event_time || '');
-    setEventDescription(event.description || '');
-    setEventLocation(event.location || '');
-    setShowEventModal(true);
-  };
 
   // Open event modal for creating
   const openCreateEvent = () => {
