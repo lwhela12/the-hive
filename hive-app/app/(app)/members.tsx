@@ -1497,6 +1497,19 @@ function MemberDetailModal({
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#6b7280' }}>📍 {member.hometown}</Text>
                   </View>
                 )}
+                {member.questionAnswerCount > 0 && (
+                  <Pressable
+                    onPress={() => setShowDailyAnswersSheet(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${member.name}'s daily question answers`}
+                    style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f3ee', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#6b7280' }}>
+                      ✨ {member.questionAnswerCount} daily answer{member.questionAnswerCount !== 1 ? 's' : ''}{' '}
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>· Read Q&A ›</Text>
+                  </Pressable>
+                )}
                 {member.queen_bee_month && (
                   <View style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#bd9348' }}>👑 Queen Bee: {member.queen_bee_month}</Text>
@@ -1853,23 +1866,6 @@ function MemberDetailModal({
                   )}
                 </View>
               </View>
-            )}
-
-            {/* Question engagement */}
-            {member.questionAnswerCount > 0 && (
-              <Pressable
-                onPress={() => setShowDailyAnswersSheet(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`View ${member.name}'s daily question answers`}
-                style={{ marginBottom: 20, alignItems: 'center', backgroundColor: '#faf8f3', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(222,193,129,0.28)' }}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 22, color: '#bd9348' }}>{member.questionAnswerCount}</Text>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 2 }}>daily questions answered</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Read Q&A</Text>
-                  <Ionicons name="chevron-forward" size={12} color="#bd9348" />
-                </View>
-              </Pressable>
             )}
 
             {/* Wishes management — current user only */}

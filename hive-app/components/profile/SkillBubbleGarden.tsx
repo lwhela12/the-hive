@@ -576,6 +576,64 @@ function getMeadowHeight(skillCount: number, width: number, compactLandscape = f
   return clamp(base + extra, base, width < 420 ? 720 : 780);
 }
 
+type BouquetPlantLayout = { centerX: number; anchorY: number; scale: number };
+
+// Read-only "bouquet" layout for narrow/portrait canvases: stored display_x
+// positions were tuned for wide meadows and pile up when compressed, so we
+// arrange blooms on a tidy staggered grid over the ground instead. Editable
+// gardens keep their hand-placed layout everywhere.
+function buildBouquetLayout(skills: GardenSkill[], width: number) {
+  const ordered = [...skills].sort(
+    (left, right) =>
+      getLevel(right) - getLevel(left) ||
+      left.description.localeCompare(right.description)
+  );
+  const sidePadding = 16;
+  const columns = width < 380 ? 2 : 3;
+  const usableWidth = Math.max(1, width - sidePadding * 2);
+  const cellWidth = usableWidth / columns;
+  const fullBloom = STAGES[STAGES.length - 1];
+  const scale = clamp((cellWidth * 0.92) / fullBloom.labelWidth, 0.3, 0.6);
+  const maxPlantHeight = getStageCanvasHeight(fullBloom) * scale * 1.04 + 8;
+  const rowSpacing = maxPlantHeight + 10;
+
+  // Brick-style stagger: full rows alternate with rows one bloom short,
+  // each row centered, so offset rows sit in the gaps like a bouquet.
+  const rowSizes: number[] = [];
+  let remaining = ordered.length;
+  while (remaining > 0) {
+    const capacity = rowSizes.length % 2 === 0 ? columns : Math.max(1, columns - 1);
+    const take = Math.min(capacity, remaining);
+    rowSizes.push(take);
+    remaining -= take;
+  }
+
+  const bottomInset = 26;
+  const skyRoom = 96;
+  const minHeight = width < 420 ? 330 : 370;
+  const meadowHeight = Math.max(
+    minHeight,
+    bottomInset + Math.max(0, rowSizes.length - 1) * rowSpacing + maxPlantHeight + skyRoom
+  );
+
+  const positions = new Map<string, BouquetPlantLayout>();
+  let skillIndex = 0;
+  rowSizes.forEach((take, rowIndex) => {
+    // Row 0 (highest enthusiasm) sits in front at the bottom; later rows step up.
+    const anchorY = meadowHeight - bottomInset - rowIndex * rowSpacing;
+    for (let column = 0; column < take; column += 1) {
+      positions.set(ordered[skillIndex].id, {
+        centerX: width / 2 + (column - (take - 1) / 2) * cellWidth,
+        anchorY,
+        scale,
+      });
+      skillIndex += 1;
+    }
+  });
+
+  return { positions, meadowHeight };
+}
+
 function normalizeSkillName(skill: string) {
   return skill.trim().toLowerCase();
 }
@@ -1436,6 +1494,7 @@ function SkillPlant({
   onEntryComplete,
   compactLandscape,
   groundHeight,
+  layoutOverride,
   beeWishes,
   onBeePress,
 }: SkillBubbleGardenProps & {
@@ -1453,6 +1512,7 @@ function SkillPlant({
   onEntryComplete: (skill: GardenSkill) => void;
   compactLandscape: boolean;
   groundHeight: number;
+  layoutOverride?: BouquetPlantLayout;
   beeWishes?: MatchedWish[];
   onBeePress?: (skill: GardenSkill, slotIndex: number) => void;
 }) {
@@ -1460,14 +1520,14 @@ function SkillPlant({
   const bloomStep = getBloomStep(level);
   const stage = getStage(level);
   const category = getCategoryForSkill(skill.description);
-  const rowScale = getFrontRowScale(width, compactLandscape);
+  const rowScale = layoutOverride?.scale ?? getFrontRowScale(width, compactLandscape);
   const bloomHasEmbeddedLabel = bloomStep > 0;
   const showLabel = !bloomHasEmbeddedLabel && (selected || count <= 10 || featured);
   const plantWidth = stage.labelWidth * rowScale;
   const spriteHeight = getStageCanvasHeight(stage) * rowScale * (bloomStep >= 3 ? 1.04 : 1);
   const plantHeight = spriteHeight + (showLabel ? LABEL_HEIGHT : 8);
-  const centerX = getFrontRowCenterX(index, count, width);
-  const anchorY = getFrontRowAnchorY(height, width, index, compactLandscape, groundHeight);
+  const centerX = layoutOverride?.centerX ?? getFrontRowCenterX(index, count, width);
+  const anchorY = layoutOverride?.anchorY ?? getFrontRowAnchorY(height, width, index, compactLandscape, groundHeight);
   const left = clamp(centerX - plantWidth / 2, -plantWidth * 0.28, Math.max(-plantWidth * 0.28, width - plantWidth * 0.72));
   const top = clamp(anchorY - plantHeight, 6, Math.max(6, height - plantHeight - 4));
   const labelFont = clamp(12 * rowScale - Math.max(0, skill.description.length - 22) * 0.06, 8.4, 12);
@@ -3193,7 +3253,14 @@ export function SkillBubbleGarden({
   const compactLandscape = editable && viewport.width > viewport.height && viewport.height < 540;
   const narrowPortrait = editable && !compactLandscape && width > 0 && width < 560;
   const groundHeight = compactLandscape ? GROUND_HEIGHT * 0.75 : GROUND_HEIGHT;
-  const meadowHeight = getMeadowHeight(visibleSkills.length, width || 680, compactLandscape);
+  // Read-only gardens on narrow (portrait phone) canvases switch to the tidy
+  // bouquet grid; editable gardens always keep their hand-placed layout.
+  const bouquetLayout = useMemo(
+    () => (!editable && width > 0 && width < 500 ? buildBouquetLayout(visibleSkills, width) : null),
+    [editable, visibleSkills, width]
+  );
+  const meadowHeight = bouquetLayout?.meadowHeight
+    ?? getMeadowHeight(visibleSkills.length, width || 680, compactLandscape);
   const showLandscapeHint = editable && width > 0 && width < 560;
   const seedLaneWidth = compactLandscape ? 72 : 112;
   const seedGap = compactLandscape ? 4 : 7;
@@ -3431,6 +3498,7 @@ export function SkillBubbleGarden({
             onEntryComplete={handleEntryComplete}
             compactLandscape={compactLandscape}
             groundHeight={groundHeight}
+            layoutOverride={bouquetLayout?.positions.get(skill.id)}
             skills={skills}
             beeWishes={beeWishesBySkillId.get(skill.id)}
             onBeePress={onOpenWish ? handleBeePress : undefined}
