@@ -2514,7 +2514,7 @@ export default function HiveScreen() {
         )}
 
         {/* Refresh / Add to Home / Customize — one compact pill row */}
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           {customizeMode && (
             <Pressable
               onPress={() => { void persistHomeLayout(null, null); }}
@@ -2885,7 +2885,7 @@ export default function HiveScreen() {
                   admin: () => router.push('/admin' as any),
                 };
                 return (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: useMobileLayout ? 12 : 24, paddingHorizontal: 8 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: useMobileLayout ? 20 : 24, paddingHorizontal: 8 }}>
                     {homeShortcuts.map((shortcutKey) => (
                       <HexShortcut
                         key={shortcutKey}
@@ -2904,7 +2904,7 @@ export default function HiveScreen() {
               }
               case 'wishes':
                 return (
-                  <View style={{ marginBottom: useMobileLayout ? 12 : 24 }}>
+                  <View style={{ marginBottom: useMobileLayout ? 20 : 24 }}>
                     <HeaderTabs
                       activeTab={wishStatusTab}
                       onChange={setWishStatusTab}
@@ -3130,7 +3130,7 @@ export default function HiveScreen() {
             HOME_SECTION_META[group[0]].layout === 'panel' ? (
               <View
                 key={group.join('-')}
-                style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: useMobileLayout ? 12 : 16, marginBottom: useMobileLayout ? 12 : 24 }}
+                style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: useMobileLayout ? 20 : 16, marginBottom: useMobileLayout ? 20 : 24 }}
               >
                 {group.map((sectionKey) => (
                   <View key={sectionKey} style={dashboardSectionStyle}>
