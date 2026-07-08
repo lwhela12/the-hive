@@ -730,33 +730,54 @@ function MemberDetailModal({
       if (selectedWish?.id === wish.id) setSelectedWish(null);
     };
 
-    Alert.alert('Archive HD Wish', `Archive this HD wish from Wishes?\n\n"${wish.description}"`, [
+    const message = `Archive this HD wish from Wishes?\n\n"${wish.description}"`;
+
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) {
+        archiveWish();
+      }
+      return;
+    }
+
+    Alert.alert('Archive HD Wish', message, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Archive', onPress: archiveWish },
     ]);
   };
 
-  const handleDeleteWish = async (wish: MemberWish) => {
+  const handleDeleteWish = (wish: MemberWish) => {
     if (!communityId || !canDeleteWish(wish)) return;
 
-    Alert.alert('Delete wish', 'Remove this wish from this profile?', [
+    const deleteWish = async () => {
+      const { error } = await deleteWishById({
+        wishId: wish.id,
+        communityId,
+        ownerId: member.id,
+      });
+      if (error) {
+        Alert.alert('Error', 'Failed to delete wish. Please try again.');
+        return;
+      }
+      await invalidateWishQueries(communityId, member.id);
+      await refreshManagedWishes();
+      setManagingWish(null);
+      if (selectedWish?.id === wish.id) setSelectedWish(null);
+    };
+
+    const message = `Delete this wish?\n\n"${wish.description}"`;
+
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) {
+        deleteWish();
+      }
+      return;
+    }
+
+    Alert.alert('Delete Wish', message, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive',
-        onPress: async () => {
-          const { error } = await deleteWishById({
-            wishId: wish.id,
-            communityId,
-            ownerId: member.id,
-          });
-          if (error) {
-            Alert.alert('Error', 'Failed to delete wish. Please try again.');
-            return;
-          }
-          await invalidateWishQueries(communityId, member.id);
-          await refreshManagedWishes();
-          if (selectedWish?.id === wish.id) setSelectedWish(null);
-        },
+        onPress: deleteWish,
       },
     ]);
   };
