@@ -71,6 +71,7 @@ type HomeTodo = {
 
 const CALENDAR_DURATION_MS = 2.5 * 60 * 60 * 1000; // 30-min arrival + 2-hour meeting
 const CATCH_UP_BATCH_SIZE = 7;
+const PAST_EVENTS_PAGE_SIZE = 25;
 const CATCH_UP_MAX_DAYS = DAILY_QUESTIONS.length;
 
 const getRecentDailyQuestions = (days = CATCH_UP_BATCH_SIZE) => {
@@ -640,6 +641,66 @@ export default function HiveScreen() {
     setShowEventModal(true);
   }, [formatDateForInput]);
 
+  // Hide-birthdays preference for Upcoming Events (persisted per member/device)
+  const eventsHideBirthdaysKey = communityId && currentUserId ? `the-hive:events-hide-birthdays:${communityId}:${currentUserId}` : null;
+  const [hideBirthdayEvents, setHideBirthdayEvents] = useState<boolean>(() => (
+    eventsHideBirthdaysKey ? getStoredItem(eventsHideBirthdaysKey) === 'true' : false
+  ));
+
+  useEffect(() => {
+    setHideBirthdayEvents(eventsHideBirthdaysKey ? getStoredItem(eventsHideBirthdaysKey) === 'true' : false);
+  }, [eventsHideBirthdaysKey]);
+
+  const toggleHideBirthdayEvents = useCallback(() => {
+    setHideBirthdayEvents(prev => {
+      const next = !prev;
+      if (eventsHideBirthdaysKey) setStoredItem(eventsHideBirthdaysKey, next ? 'true' : 'false');
+      return next;
+    });
+  }, [eventsHideBirthdaysKey]);
+
+  // Past events browser — paginated, newest-first
+  const [showPastEventsModal, setShowPastEventsModal] = useState(false);
+  const [pastEvents, setPastEvents] = useState<Event[]>([]);
+  const [pastEventsLoading, setPastEventsLoading] = useState(false);
+  const [pastEventsLoadingMore, setPastEventsLoadingMore] = useState(false);
+  const [pastEventsHasMore, setPastEventsHasMore] = useState(false);
+
+  const fetchPastEvents = useCallback(async (offset: number) => {
+    if (!communityId) return;
+    if (offset === 0) setPastEventsLoading(true);
+    else setPastEventsLoadingMore(true);
+    try {
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('community_id', communityId)
+        .lt('event_date', today)
+        .order('event_date', { ascending: false })
+        .order('event_time', { ascending: false })
+        .range(offset, offset + PAST_EVENTS_PAGE_SIZE - 1);
+
+      if (error) throw error;
+      const rows = (data as Event[]) ?? [];
+      setPastEvents(prev => (offset === 0 ? rows : [...prev, ...rows]));
+      setPastEventsHasMore(rows.length === PAST_EVENTS_PAGE_SIZE);
+    } catch (error) {
+      console.warn('Could not load past events', error);
+      if (offset === 0) setPastEvents([]);
+      setPastEventsHasMore(false);
+    } finally {
+      setPastEventsLoading(false);
+      setPastEventsLoadingMore(false);
+    }
+  }, [communityId]);
+
+  const openPastEvents = useCallback(() => {
+    setShowPastEventsModal(true);
+    void fetchPastEvents(0);
+  }, [fetchPastEvents]);
+
   const fetchMyActionItems = useCallback(async () => {
     if (!profile?.id || !communityId) return;
     setHomeActionLoading(true);
@@ -902,6 +963,7 @@ export default function HiveScreen() {
     setShowEventModal(false);
     setEditingEvent(null);
     setEventError(null);
+    setShowPastEventsModal(false);
     setShowAddTaskModal(false);
     setSelectedActionItemId(null);
     setTaskError(null);
@@ -1008,6 +1070,7 @@ export default function HiveScreen() {
   // Read state — timestamp-based (for auto-clear) + per-item set (for tap-to-clear)
   const activityReadKey = communityId && currentUserId ? `the-hive:activity-viewed:${communityId}:${currentUserId}` : null;
   const activityReadIdsKey = communityId && currentUserId ? `the-hive:activity-read-ids:${communityId}:${currentUserId}` : null;
+  const activityMentionsOnlyKey = communityId && currentUserId ? `the-hive:activity-mentions-only:${communityId}:${currentUserId}` : null;
   const activityDefaultReadAt = currentMembershipStartedAt ?? (profile?.created_at as string | undefined) ?? new Date(0).toISOString();
 
   const [sessionReadAt, setSessionReadAt] = useState<string>(() => {
@@ -1048,6 +1111,37 @@ export default function HiveScreen() {
       setReadItemIds(new Set());
     }
   }, [activityDefaultReadAt, activityReadIdsKey, activityReadKey]);
+
+  // "Mentions me" filter — persisted per member/device
+  const [activityMentionsOnly, setActivityMentionsOnly] = useState<boolean>(() => (
+    activityMentionsOnlyKey ? getStoredItem(activityMentionsOnlyKey) === 'true' : false
+  ));
+
+  useEffect(() => {
+    setActivityMentionsOnly(activityMentionsOnlyKey ? getStoredItem(activityMentionsOnlyKey) === 'true' : false);
+  }, [activityMentionsOnlyKey]);
+
+  const toggleActivityMentionsOnly = useCallback(() => {
+    setActivityMentionsOnly(prev => {
+      const next = !prev;
+      if (activityMentionsOnlyKey) setStoredItem(activityMentionsOnlyKey, next ? 'true' : 'false');
+      return next;
+    });
+  }, [activityMentionsOnlyKey]);
+
+  const currentFirstName = (profile?.name ?? '').trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+
+  const activityInvolvesMe = useCallback((item: ActivityItem) => {
+    if (item.type === 'mention') return true;
+    if (currentUserId && item.involvesUserIds?.includes(currentUserId)) return true;
+    // Fallback for items without ids — the feed embeds member names in text.
+    if ((!item.involvesUserIds || item.involvesUserIds.length === 0) && currentFirstName) {
+      return item.text.toLowerCase().includes(currentFirstName);
+    }
+    return false;
+  }, [currentFirstName, currentUserId]);
+
+  const visibleActivityItems = activityMentionsOnly ? activityItems.filter(activityInvolvesMe) : activityItems;
 
   const markItemRead = useCallback((itemId: string) => {
     setReadItemIds(prev => {
@@ -1762,6 +1856,32 @@ export default function HiveScreen() {
   const todoPanelMaxHeight = useMobileLayout ? 420 : 280;
   const wishPanelHeight = useMobileLayout ? 460 : 360;
 
+  const visibleUpcomingEvents = hideBirthdayEvents
+    ? upcomingEvents.filter(event => event.event_type !== 'birthday')
+    : upcomingEvents;
+
+  const visiblePastEvents = hideBirthdayEvents
+    ? pastEvents.filter(event => event.event_type !== 'birthday')
+    : pastEvents;
+
+  // Group past events under month headers ("June 2026", "May 2026", ...).
+  // Events arrive sorted newest-first, so consecutive rows share a month.
+  const pastEventMonthGroups = visiblePastEvents.reduce<{ key: string; label: string; events: Event[] }[]>((groups, event) => {
+    const key = event.event_date.slice(0, 7); // YYYY-MM
+    const lastGroup = groups[groups.length - 1];
+    if (lastGroup && lastGroup.key === key) {
+      lastGroup.events.push(event);
+      return groups;
+    }
+    const [year, month] = key.split('-').map(Number);
+    groups.push({
+      key,
+      label: new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      events: [event],
+    });
+    return groups;
+  }, []);
+
   const renderTodoRow = (todo: HomeTodo, isLast: boolean) => {
     const isDone = !!todo.isDone;
     const circleStyle = (pressed = false) => ({
@@ -2217,9 +2337,9 @@ export default function HiveScreen() {
           {/* Activity Feed */}
           <View style={dashboardSectionStyle}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
-              <View style={{ backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-                  Activity
+              <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+                  Recent Activity
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4 }}>
@@ -2234,6 +2354,25 @@ export default function HiveScreen() {
                   </Text>
                 </Pressable>
                 )}
+                <Pressable
+                  onPress={toggleActivityMentionsOnly}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: activityMentionsOnly }}
+                  accessibilityLabel="Only show activity that mentions me"
+                  style={({ pressed }) => ({
+                    flexShrink: 0,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: activityMentionsOnly ? '#bd9348' : 'rgba(222,193,129,0.72)',
+                    backgroundColor: activityMentionsOnly ? '#fdf3dc' : pressed ? '#fbf0d7' : '#fffdf5',
+                  })}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: activityMentionsOnly ? '#8e6f35' : '#bd9348' }}>
+                    @ Mentions me
+                  </Text>
+                </Pressable>
               </View>
             </View>
             <View style={{
@@ -2258,10 +2397,12 @@ export default function HiveScreen() {
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                   <ActivityIndicator size="small" color="#bd9348" />
                 </View>
-              ) : activityItems.length === 0 ? (
+              ) : visibleActivityItems.length === 0 ? (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: '#fdf3dc' }}>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center' }}>
-                    No recent activity yet.{'\n'}Start by sharing a wish or posting on the board!
+                    {activityMentionsOnly
+                      ? `Nothing with your name on it yet 🐝${'\n'}Turn off "Mentions me" to see all activity.`
+                      : `No recent activity yet.${'\n'}Start by sharing a wish or posting on the board!`}
                   </Text>
                 </View>
               ) : (
@@ -2282,7 +2423,7 @@ export default function HiveScreen() {
                       </Text>
                     </View>
                   )}
-                  {activityItems.map((item, i) => {
+                  {visibleActivityItems.map((item, i) => {
                     const isUnread = item.timestamp > sessionReadAt && !readItemIds.has(item.id);
                     const canNavigate = !!getActivityDestination(item);
                     return (
@@ -2293,7 +2434,7 @@ export default function HiveScreen() {
                           flexDirection: 'row',
                           alignItems: 'center',
                           padding: 14,
-                          borderBottomWidth: i < activityItems.length - 1 ? 1 : 0,
+                          borderBottomWidth: i < visibleActivityItems.length - 1 ? 1 : 0,
                           borderBottomColor: 'rgba(222,193,129,0.28)',
                           backgroundColor: isUnread
                             ? pressed ? '#fbf0d7' : '#fff8e8'
@@ -2406,6 +2547,26 @@ export default function HiveScreen() {
                   Upcoming Events
                 </Text>
               </View>
+              <Pressable
+                onPress={toggleHideBirthdayEvents}
+                accessibilityRole="button"
+                accessibilityState={{ selected: hideBirthdayEvents }}
+                accessibilityLabel={hideBirthdayEvents ? 'Show birthday events' : 'Hide birthday events'}
+                style={({ pressed }) => ({
+                  flexShrink: 0,
+                  paddingHorizontal: 10,
+                  paddingVertical: 7,
+                  marginBottom: 4,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: hideBirthdayEvents ? '#bd9348' : 'rgba(222,193,129,0.72)',
+                  backgroundColor: hideBirthdayEvents ? '#fdf3dc' : pressed ? '#fbf0d7' : '#fffdf5',
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: hideBirthdayEvents ? '#8e6f35' : '#bd9348' }}>
+                  {hideBirthdayEvents ? '🎂 Hidden' : '🎂 Hide'}
+                </Text>
+              </Pressable>
               <HeaderActionPill label="+ Event" onPress={openCreateEvent} />
             </View>
             <View style={{
@@ -2426,15 +2587,33 @@ export default function HiveScreen() {
               <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.95)', marginHorizontal: 10, marginTop: 0 }} />
               {loading.events ? (
                 <View style={{ padding: 16 }}><EventsListSkeleton /></View>
-              ) : upcomingEvents.length > 0 ? (
-                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true}>
-                  <EventsList events={upcomingEvents} onEditEvent={openEditEvent} />
+              ) : visibleUpcomingEvents.length > 0 ? (
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true} style={{ flex: 1 }}>
+                  <EventsList events={visibleUpcomingEvents} onEditEvent={openEditEvent} />
                 </ScrollView>
               ) : (
                 <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-                  <Text style={{ fontFamily: 'Lato_400Regular', color: '#9ca3af' }}>No upcoming events</Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', color: '#9ca3af' }}>
+                    {hideBirthdayEvents && upcomingEvents.length > 0 ? 'No upcoming events (birthdays hidden)' : 'No upcoming events'}
+                  </Text>
                 </View>
               )}
+              <Pressable
+                onPress={openPastEvents}
+                accessibilityRole="button"
+                accessibilityLabel="View past events"
+                style={({ pressed }) => ({
+                  paddingVertical: 10,
+                  alignItems: 'center',
+                  borderTopWidth: 1,
+                  borderTopColor: 'rgba(222,193,129,0.4)',
+                  backgroundColor: pressed ? '#fbf0d7' : 'transparent',
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
+                  View past events ›
+                </Text>
+              </Pressable>
             </View>
           </View>
 
@@ -2708,6 +2887,111 @@ export default function HiveScreen() {
                 </>
               );
             })()}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Past Events Browser */}
+      <Modal visible={showPastEventsModal} animationType="slide" transparent onRequestClose={() => setShowPastEventsModal(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'flex-end' }} onPress={() => setShowPastEventsModal(false)}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              backgroundColor: '#fffdf5',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              maxHeight: useMobileLayout ? '78%' : '82%',
+              paddingBottom: useMobileLayout ? 34 : 24,
+            }}
+          >
+            <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+              <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2 }} />
+            </View>
+            <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d', marginBottom: 4 }}>Past Events</Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 12 }}>
+                Everything HIVE has been up to, newest first.{hideBirthdayEvents ? ' Birthdays are hidden.' : ''}
+              </Text>
+              {pastEventsLoading ? (
+                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+                  <ActivityIndicator size="small" color="#bd9348" />
+                </View>
+              ) : pastEventMonthGroups.length === 0 ? (
+                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center' }}>
+                    No past events yet.{'\n'}Once events wrap up, they will land here.
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={true}
+                  style={{ maxHeight: useMobileLayout ? 440 : 560 }}
+                  contentContainerStyle={{ paddingBottom: 4 }}
+                >
+                  {pastEventMonthGroups.map((group) => (
+                    <View key={group.key} style={{ marginBottom: 14 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348', marginBottom: 8 }}>
+                        {group.label}
+                      </Text>
+                      <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)', overflow: 'hidden' }}>
+                        {group.events.map((event, index) => (
+                          <View
+                            key={event.id}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'flex-start',
+                              padding: 12,
+                              borderBottomWidth: index < group.events.length - 1 ? 1 : 0,
+                              borderBottomColor: 'rgba(222,193,129,0.28)',
+                            }}
+                          >
+                            <Text style={{ fontSize: 18, marginRight: 10 }}>
+                              {event.event_type === 'birthday' ? '🎂' :
+                               event.event_type === 'meeting' ? '📅' :
+                               event.event_type === 'queen_bee' ? '👑' : '📌'}
+                            </Text>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>{event.title}</Text>
+                              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 2 }}>
+                                {formatDateShort(event.event_date)}
+                                {event.event_time ? ` at ${formatTime(event.event_time)}` : ''}
+                                {event.location ? ` · ${event.location}` : ''}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+                  {pastEventsHasMore && (
+                    <Pressable
+                      onPress={() => fetchPastEvents(pastEvents.length)}
+                      disabled={pastEventsLoadingMore}
+                      accessibilityRole="button"
+                      accessibilityLabel="Load more past events"
+                      style={({ pressed }) => ({
+                        backgroundColor: pressed ? '#fbf0d7' : '#f5f3ee',
+                        borderRadius: 14,
+                        paddingVertical: 14,
+                        marginBottom: 10,
+                        opacity: pastEventsLoadingMore ? 0.6 : 1,
+                      })}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', textAlign: 'center' }}>
+                        {pastEventsLoadingMore ? 'Loading...' : 'Load more'}
+                      </Text>
+                    </Pressable>
+                  )}
+                </ScrollView>
+              )}
+              <Pressable
+                onPress={() => setShowPastEventsModal(false)}
+                style={{ backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14, marginTop: 6 }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>

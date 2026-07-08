@@ -10,6 +10,7 @@ export interface ActivityItem {
   sourceId: string;  // the DB record ID (post id, event id, wish id, user id)
   categoryId?: string; // board activity only — to deep-link into the right topic
   navigatesTo?: 'board' | 'event' | 'members' | 'wish' | 'messages'; // screens that can be navigated to
+  involvesUserIds?: string[]; // member ids involved in this item — used by the "Mentions me" filter
 }
 
 function truncate(text: string, max: number): string {
@@ -53,7 +54,7 @@ async function fetchBoardReplyActivity(communityId: string, since: string) {
   const { data, error } = await supabase
     .from('board_replies')
     .select(
-      'id, post_id, parent_reply_id, content, created_at, author:profiles!board_replies_author_id_fkey(name), post:board_posts!board_replies_post_id_fkey(id, title, category_id, category:board_categories!board_posts_category_id_fkey(name))'
+      'id, post_id, parent_reply_id, content, created_at, author_id, author:profiles!board_replies_author_id_fkey(name), post:board_posts!board_replies_post_id_fkey(id, title, category_id, category:board_categories!board_posts_category_id_fkey(name))'
     )
     .eq('community_id', communityId)
     .gte('created_at', since)
@@ -72,7 +73,7 @@ async function fetchGeneralDiscussionActivity(communityId: string, since: string
   const { data, error } = await supabase
     .from('room_messages')
     .select(
-      'id, room_id, content, attachments, created_at, sender:profiles!room_messages_sender_id_fkey(name), room:chat_rooms!room_messages_room_id_fkey(id, name, room_type)'
+      'id, room_id, content, attachments, created_at, sender_id, sender:profiles!room_messages_sender_id_fkey(name), room:chat_rooms!room_messages_room_id_fkey(id, name, room_type)'
     )
     .eq('community_id', communityId)
     .is('deleted_at', null)
@@ -103,7 +104,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
     // New public wishes
     supabase
       .from('wishes')
-      .select('id, description, created_at, user:profiles!user_id(name)')
+      .select('id, description, created_at, user_id, user:profiles!user_id(name)')
       .eq('community_id', communityId)
       .eq('status', 'public')
       .gte('created_at', thirtyDaysAgo)
@@ -114,7 +115,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
     supabase
       .from('wishes')
       .select(
-        'id, description, fulfilled_at, user:profiles!user_id(name), granters:wish_granters(granter:profiles!granter_id(name))'
+        'id, description, fulfilled_at, user_id, user:profiles!user_id(name), granters:wish_granters(granter_id, granter:profiles!granter_id(name))'
       )
       .eq('community_id', communityId)
       .eq('status', 'fulfilled')
@@ -126,7 +127,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
     // New events added recently
     supabase
       .from('events')
-      .select('id, title, event_date, event_time, created_at')
+      .select('id, title, event_date, event_time, created_at, created_by')
       .eq('community_id', communityId)
       .gte('created_at', thirtyDaysAgo)
       .order('created_at', { ascending: false })
@@ -136,7 +137,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
     supabase
       .from('board_posts')
       .select(
-        'id, title, category_id, created_at, author:profiles!author_id(name), category:board_categories!category_id(name)'
+        'id, title, category_id, created_at, author_id, author:profiles!author_id(name), category:board_categories!category_id(name)'
       )
       .eq('community_id', communityId)
       .gte('created_at', thirtyDaysAgo)
@@ -190,16 +191,21 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       timestamp: w.created_at,
       sourceId: w.id,
       navigatesTo: 'wish',
+      involvesUserIds: (w as any).user_id ? [(w as any).user_id] : undefined,
     });
   }
 
   // Granted wishes
   for (const w of grantedRes.data ?? []) {
     const wisherName: string = (w as any).user?.name ?? 'Someone';
-    const granters: { granter: { name: string } }[] = (w as any).granters ?? [];
+    const granters: { granter_id?: string; granter: { name: string } }[] = (w as any).granters ?? [];
     const granterNames = granters.map((g) => g.granter?.name).filter(Boolean);
     const grantedBy =
       granterNames.length > 0 ? ` — granted by ${granterNames.join(' & ')}` : '';
+    const involvedIds = [
+      (w as any).user_id,
+      ...granters.map((g) => g.granter_id),
+    ].filter(Boolean) as string[];
     items.push({
       id: `granted_${w.id}`,
       type: 'wish_granted',
@@ -208,6 +214,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       timestamp: (w as any).fulfilled_at,
       sourceId: w.id,
       navigatesTo: 'wish',
+      involvesUserIds: involvedIds.length > 0 ? involvedIds : undefined,
     });
   }
 
@@ -224,6 +231,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       timestamp: e.created_at,
       sourceId: e.id,
       navigatesTo: 'event',
+      involvesUserIds: (e as any).created_by ? [(e as any).created_by] : undefined,
     });
   }
 
@@ -241,6 +249,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       sourceId: p.id,
       categoryId: (p as any).category_id,
       navigatesTo: 'board',
+      involvesUserIds: (p as any).author_id ? [(p as any).author_id] : undefined,
     });
   }
 
@@ -264,6 +273,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       sourceId: (r as any).post_id,
       categoryId: (post as any)?.category_id,
       navigatesTo: 'board',
+      involvesUserIds: (r as any).author_id ? [(r as any).author_id] : undefined,
     });
   }
 
@@ -287,6 +297,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       timestamp: (message as any).created_at,
       sourceId: (message as any).room_id,
       navigatesTo: 'messages',
+      involvesUserIds: (message as any).sender_id ? [(message as any).sender_id] : undefined,
     });
   }
 
@@ -301,6 +312,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       timestamp: m.created_at,
       sourceId: m.user_id,
       navigatesTo: 'members',
+      involvesUserIds: m.user_id ? [m.user_id] : undefined,
     });
   }
 
@@ -332,6 +344,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       timestamp: (notification as any).created_at,
       sourceId,
       navigatesTo,
+      involvesUserIds: userId ? [userId] : undefined,
     });
   }
 
