@@ -24,6 +24,7 @@ import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileShowcase } from '../../components/profile/ProfileShowcase';
 import { WishCombCard } from '../../components/profile/WishCombCard';
+import { LinkedLogins } from '../../components/profile/LinkedLogins';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
@@ -2230,6 +2231,9 @@ export default function ProfileScreen() {
             </View>
           </View>
         )}
+
+        {/* Linked Logins */}
+        {!immersiveSkillsGarden && <LinkedLogins />}
 
         {/* Sign Out Button */}
         {!immersiveSkillsGarden && (
