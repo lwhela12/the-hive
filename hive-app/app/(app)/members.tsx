@@ -2008,12 +2008,24 @@ function MemberDetailModal({
                   </Text>
                 </View>
                 {isCurrentUser && (
-                  <Pressable
-                    onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
-                    style={{ backgroundColor: '#fdf3dc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Edit</Text>
-                  </Pressable>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {/* This is the visitor's view — the full garden (sun quiz, seed
+                        tray, planting) lives on the Profile screen. */}
+                    <Pressable
+                      onPress={() => { onClose(); router.push('/profile'); }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Tend your garden — plant seeds and take the garden quiz"
+                      style={{ backgroundColor: '#eef6ee', borderWidth: 1, borderColor: '#cfe3d2', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2f7147' }}>🌱 Tend garden</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
+                      style={{ backgroundColor: '#fdf3dc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Edit</Text>
+                    </Pressable>
+                  </View>
                 )}
               </View>
 
