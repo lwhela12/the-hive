@@ -2007,11 +2007,13 @@ export default function HiveScreen() {
         detail: a.completed
           ? `Done${a.completed_at ? ` · ${formatDateShort(a.completed_at)}` : ''}`
           : a.due_date ? `Due ${formatDateShort(a.due_date)}` : undefined,
-        cta: deepLink ? 'Open →' : undefined,
-        ctaOnPress: deepLink?.onPress,
+        // Linked to-dos navigate on tap (like Recent Activity rows); the circle
+        // still toggles done and long-press still archives. Unlinked to-dos
+        // keep opening the detail sheet.
+        cta: deepLink && !a.completed ? '›' : undefined,
         isDone: a.completed,
         completedAt: a.completed_at,
-        onPress: () => setSelectedActionItemId(a.id),
+        onPress: deepLink && !a.completed ? deepLink.onPress : () => setSelectedActionItemId(a.id),
         onToggle: () => toggleActionItem(a),
         onLongPress: () => archiveActionItem(a),
         onArchive: a.completed ? () => archiveActionItem(a) : undefined,
