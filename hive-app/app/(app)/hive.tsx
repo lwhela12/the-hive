@@ -21,7 +21,7 @@ import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { WishCard } from '../../components/hive/WishCard';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
-import { HeaderTabs } from '../../components/ui/HeaderTabs';
+import { HeaderTabs, HeaderActionPill } from '../../components/ui/HeaderTabs';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { WishManageModal } from '../../components/wishes/WishManageModal';
 import {
@@ -387,28 +387,6 @@ function HexShortcut({ emoji, label, sublabel, onPress }: {
       {sublabel ? (
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginTop: 2, textAlign: 'center' }}>{sublabel}</Text>
       ) : null}
-    </Pressable>
-  );
-}
-
-function HeaderActionPill({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        flexShrink: 0,
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        marginBottom: 4,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: 'rgba(222,193,129,0.72)',
-        backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-      })}
-    >
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
-        {label}
-      </Text>
     </Pressable>
   );
 }
@@ -2534,55 +2512,8 @@ export default function HiveScreen() {
           </View>
         )}
 
-        {useMobileLayout && (
-          <View
-            style={{
-              flexDirection: 'row',
-              gap: 10,
-              marginBottom: 28,
-            }}
-          >
-            <Pressable
-              onPress={handleRefreshPill}
-              disabled={refreshing || isLoading}
-              style={({ pressed }) => ({
-                flex: 1,
-                backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-                borderWidth: 1,
-                borderColor: 'rgba(222,193,129,0.7)',
-                borderRadius: 999,
-                paddingVertical: 10,
-                alignItems: 'center',
-                opacity: refreshing || isLoading ? 0.6 : 1,
-              })}
-            >
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
-                {updateAvailable ? '🍯 Refresh' : '↻ Refresh'}
-              </Text>
-            </Pressable>
-            {!hideAddToHomePill && (
-              <Pressable
-                onPress={showPhoneInstallHelp}
-                style={({ pressed }) => ({
-                  flex: 1.4,
-                  backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-                  borderWidth: 1,
-                  borderColor: 'rgba(222,193,129,0.7)',
-                  borderRadius: 999,
-                  paddingVertical: 10,
-                  alignItems: 'center',
-                })}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
-                  □↑ Add to Home
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-
-        {/* Customize home layout */}
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+        {/* Refresh / Add to Home / Customize — one compact pill row */}
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           {customizeMode && (
             <Pressable
               onPress={() => { void persistHomeLayout(null, null); }}
@@ -2594,7 +2525,19 @@ export default function HiveScreen() {
               </Text>
             </Pressable>
           )}
+          {useMobileLayout && (
+            <HeaderActionPill
+              large
+              label={updateAvailable ? '🍯 Refresh' : '↻ Refresh'}
+              onPress={handleRefreshPill}
+              disabled={refreshing || isLoading}
+            />
+          )}
+          {useMobileLayout && !hideAddToHomePill && (
+            <HeaderActionPill large label="□↑ Add to Home" onPress={showPhoneInstallHelp} />
+          )}
           <HeaderActionPill
+            large
             label={customizeMode ? 'Done' : savingSectionOrder ? 'Saving…' : '⇅ Customize'}
             onPress={() => {
               if (savingSectionOrder) return;
@@ -2615,45 +2558,22 @@ export default function HiveScreen() {
               case 'activity':
                 return (
                   <>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
-                      <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
-                        <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-                          Recent Activity
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4 }}>
-                        {hasUnreadActivity && (
-                        <Pressable
-                          onPress={markAllActivityRead}
-                          className="active:opacity-60"
-                          style={{ paddingHorizontal: 4 }}
-                        >
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
-                            Mark all read
-                          </Text>
-                        </Pressable>
-                        )}
-                        <Pressable
-                          onPress={toggleActivityMentionsOnly}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: activityMentionsOnly }}
-                          accessibilityLabel="Only show activity that mentions me"
-                          style={({ pressed }) => ({
-                            flexShrink: 0,
-                            paddingHorizontal: 10,
-                            paddingVertical: 5,
-                            borderRadius: 999,
-                            borderWidth: 1,
-                            borderColor: activityMentionsOnly ? '#bd9348' : 'rgba(222,193,129,0.72)',
-                            backgroundColor: activityMentionsOnly ? '#fdf3dc' : pressed ? '#fbf0d7' : '#fffdf5',
-                          })}
-                        >
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: activityMentionsOnly ? '#8e6f35' : '#bd9348' }}>
-                            @ Mentions me
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
+                    <HeaderTabs
+                      tabs={[{ key: 'activity', label: 'Recent Activity' }]}
+                      actions={
+                        <>
+                          {hasUnreadActivity && (
+                            <HeaderActionPill label="✓ All read" onPress={markAllActivityRead} />
+                          )}
+                          <HeaderActionPill
+                            label="@ Mentions me"
+                            onPress={toggleActivityMentionsOnly}
+                            selected={activityMentionsOnly}
+                            accessibilityLabel="Only show activity that mentions me"
+                          />
+                        </>
+                      }
+                    />
                     <View style={{
                       backgroundColor: '#fffdf5',
                       borderRadius: 20,
@@ -2822,34 +2742,20 @@ export default function HiveScreen() {
               case 'events':
                 return (
                   <>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 0 }}>
-                      <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
-                        <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-                          Upcoming Events
-                        </Text>
-                      </View>
-                      <Pressable
-                        onPress={toggleHideBirthdayEvents}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: hideBirthdayEvents }}
-                        accessibilityLabel={hideBirthdayEvents ? 'Show birthday events' : 'Hide birthday events'}
-                        style={({ pressed }) => ({
-                          flexShrink: 0,
-                          paddingHorizontal: 10,
-                          paddingVertical: 7,
-                          marginBottom: 4,
-                          borderRadius: 999,
-                          borderWidth: 1,
-                          borderColor: hideBirthdayEvents ? '#bd9348' : 'rgba(222,193,129,0.72)',
-                          backgroundColor: hideBirthdayEvents ? '#fdf3dc' : pressed ? '#fbf0d7' : '#fffdf5',
-                        })}
-                      >
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: hideBirthdayEvents ? '#8e6f35' : '#bd9348' }}>
-                          {hideBirthdayEvents ? '🎂 Hidden' : '🎂 Hide'}
-                        </Text>
-                      </Pressable>
-                      <HeaderActionPill label="+ Event" onPress={openCreateEvent} />
-                    </View>
+                    <HeaderTabs
+                      tabs={[{ key: 'events', label: 'Upcoming Events' }]}
+                      actions={
+                        <>
+                          <HeaderActionPill
+                            label={hideBirthdayEvents ? '🎂 Hidden' : '🎂 Hide'}
+                            onPress={toggleHideBirthdayEvents}
+                            selected={hideBirthdayEvents}
+                            accessibilityLabel={hideBirthdayEvents ? 'Show birthday events' : 'Hide birthday events'}
+                          />
+                          <HeaderActionPill label="+ Event" onPress={openCreateEvent} />
+                        </>
+                      }
+                    />
                     <View style={{
                       backgroundColor: '#fdf3dc',
                       borderRadius: 20,
@@ -2978,7 +2884,7 @@ export default function HiveScreen() {
                   admin: () => router.push('/admin' as any),
                 };
                 return (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 24, paddingHorizontal: 8 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: useMobileLayout ? 12 : 24, paddingHorizontal: 8 }}>
                     {homeShortcuts.map((shortcutKey) => (
                       <HexShortcut
                         key={shortcutKey}
@@ -2997,7 +2903,7 @@ export default function HiveScreen() {
               }
               case 'wishes':
                 return (
-                  <View style={{ marginBottom: 24 }}>
+                  <View style={{ marginBottom: useMobileLayout ? 12 : 24 }}>
                     <HeaderTabs
                       activeTab={wishStatusTab}
                       onChange={setWishStatusTab}
@@ -3223,7 +3129,7 @@ export default function HiveScreen() {
             HOME_SECTION_META[group[0]].layout === 'panel' ? (
               <View
                 key={group.join('-')}
-                style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: useMobileLayout ? 22 : 16, marginBottom: 24 }}
+                style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: useMobileLayout ? 12 : 16, marginBottom: useMobileLayout ? 12 : 24 }}
               >
                 {group.map((sectionKey) => (
                   <View key={sectionKey} style={dashboardSectionStyle}>
