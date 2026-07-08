@@ -33,6 +33,7 @@ import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
 import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
 import { Avatar } from '../ui/Avatar';
+import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { MentionSuggestions } from '../ui/MentionSuggestions';
 import { SelectedFilePreview } from '../ui/SelectedFilePreview';
 import { VoiceMicButton } from '../ui/VoiceMicButton';
@@ -300,7 +301,11 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
     if (room.room_type === 'dm' && otherMembers.length === 1) {
       const otherMember = otherMembers[0];
       return (
-        <View
+        <MemberProfileLink
+          memberId={otherMember.id}
+          memberName={otherMember.name}
+          stopPropagation
+          hitSlop={8}
           style={{
             width: size,
             height: size,
@@ -311,7 +316,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
           }}
         >
           <Avatar name={otherMember.name} url={otherMember.avatar_url} size={size} />
-        </View>
+        </MemberProfileLink>
       );
     }
 

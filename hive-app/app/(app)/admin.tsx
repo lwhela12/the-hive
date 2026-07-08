@@ -37,6 +37,7 @@ import {
   type HoneyPotPaymentMethod,
 } from '../../lib/honeyPot';
 import { Avatar } from '../../components/ui/Avatar';
+import { MemberProfileLink } from '../../components/ui/MemberProfileLink';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
@@ -2249,7 +2250,13 @@ export default function AdminScreen() {
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Avatar name={member.profiles.name} url={member.profiles.avatar_url} size={40} />
+                        <MemberProfileLink
+                          memberId={member.profiles.id}
+                          memberName={member.profiles.name}
+                          hitSlop={8}
+                        >
+                          <Avatar name={member.profiles.name} url={member.profiles.avatar_url} size={40} />
+                        </MemberProfileLink>
                         <View style={{ flex: 1, minWidth: 0, marginLeft: 12, marginRight: 12 }}>
                           <Text className="font-medium text-gray-800" numberOfLines={2}>
                             {member.profiles.name}
@@ -2676,7 +2683,13 @@ export default function AdminScreen() {
                             }}
                           >
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                              <Avatar name={responseName} url={responseUser?.avatar_url} size={34} />
+                              <MemberProfileLink
+                                memberId={responseUser?.id}
+                                memberName={responseName}
+                                hitSlop={8}
+                              >
+                                <Avatar name={responseName} url={responseUser?.avatar_url} size={34} />
+                              </MemberProfileLink>
                               <View style={{ flex: 1 }}>
                                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>
                                   {responseName}

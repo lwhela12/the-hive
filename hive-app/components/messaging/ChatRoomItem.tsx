@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { View, Text, Pressable, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../ui/Avatar';
+import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { formatDateShort } from '../../lib/dateUtils';
 import {
   getChatRoomTheme,
@@ -90,22 +91,32 @@ export const ChatRoomItem = memo(function ChatRoomItem({
       return (
         <View className="w-12 h-12 mr-3 relative">
           {displayMembers.length >= 2 && (
-            <View className="absolute top-0 right-0">
+            <MemberProfileLink
+              memberId={displayMembers[1].id}
+              memberName={displayMembers[1].name}
+              stopPropagation
+              className="absolute top-0 right-0 active:opacity-70"
+            >
               <Avatar
                 name={displayMembers[1].name}
                 url={displayMembers[1].avatar_url}
                 size={32}
               />
-            </View>
+            </MemberProfileLink>
           )}
           {displayMembers.length >= 1 && (
-            <View className={displayMembers.length >= 2 ? 'absolute bottom-0 left-0' : ''}>
+            <MemberProfileLink
+              memberId={displayMembers[0].id}
+              memberName={displayMembers[0].name}
+              stopPropagation
+              className={displayMembers.length >= 2 ? 'absolute bottom-0 left-0 active:opacity-70' : 'active:opacity-70'}
+            >
               <Avatar
                 name={displayMembers[0].name}
                 url={displayMembers[0].avatar_url}
                 size={displayMembers.length >= 2 ? 32 : 48}
               />
-            </View>
+            </MemberProfileLink>
           )}
           {displayMembers.length === 0 && (
             <View className="w-12 h-12 rounded-full bg-gold/20 items-center justify-center">
@@ -128,13 +139,18 @@ export const ChatRoomItem = memo(function ChatRoomItem({
 
     // Regular DM
     return (
-      <View className="mr-3">
+      <MemberProfileLink
+        memberId={otherMember?.id}
+        memberName={otherMember?.name}
+        stopPropagation
+        className="mr-3 active:opacity-70"
+      >
         <Avatar
           name={otherMember?.name || 'DM'}
           url={otherMember?.avatar_url}
           size={48}
         />
-      </View>
+      </MemberProfileLink>
     );
   };
 

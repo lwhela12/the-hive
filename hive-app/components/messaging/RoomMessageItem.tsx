@@ -3,6 +3,7 @@ import { View, Text, Pressable, useWindowDimensions } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Avatar } from '../ui/Avatar';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
+import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import {
   getReactionGroups,
@@ -108,13 +109,18 @@ export const RoomMessageItem = memo(function RoomMessageItem({
       <View className={`flex-row items-end ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
         {/* Avatar */}
         {message.sender && (
-          <View className={isOwnMessage ? 'ml-2' : 'mr-2'}>
+          <MemberProfileLink
+            memberId={message.sender.id}
+            memberName={message.sender.name}
+            hitSlop={8}
+            className={`active:opacity-70 ${isOwnMessage ? 'ml-2' : 'mr-2'}`}
+          >
             <Avatar
               name={message.sender.name}
               url={message.sender.avatar_url}
               size={28}
             />
-          </View>
+          </MemberProfileLink>
         )}
 
         <Pressable

@@ -16,6 +16,7 @@ import {
   type HoneyPotLedgerEntry,
 } from '../../lib/honeyPot';
 import { Avatar } from '../ui/Avatar';
+import { MemberProfileLink } from '../ui/MemberProfileLink';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -142,11 +143,18 @@ function TransactionRow({ transaction }: { transaction: HoneyPotLedgerEntry }) {
       })}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-        <Avatar
-          name={transaction.recorded_by_profile?.name ?? 'HIVE'}
-          url={transaction.recorded_by_profile?.avatar_url}
-          size={36}
-        />
+        <MemberProfileLink
+          memberId={transaction.recorded_by_profile?.id}
+          memberName={transaction.recorded_by_profile?.name}
+          stopPropagation
+          hitSlop={8}
+        >
+          <Avatar
+            name={transaction.recorded_by_profile?.name ?? 'HIVE'}
+            url={transaction.recorded_by_profile?.avatar_url}
+            size={36}
+          />
+        </MemberProfileLink>
         <View style={{ flex: 1, minWidth: 0, marginLeft: 10 }}>
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', lineHeight: 19 }}>
             {describeHoneyPotTransaction(transaction)}

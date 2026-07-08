@@ -1,6 +1,7 @@
 import { View, Text, Pressable } from 'react-native';
 import { useState } from 'react';
 import { Avatar } from '../ui/Avatar';
+import { MemberProfileLink } from '../ui/MemberProfileLink';
 import type { QueenBee, Profile, MonthlyHighlight } from '../../types';
 
 interface QueenBeeCardProps {
@@ -17,10 +18,16 @@ export function QueenBeeCard({ queenBee, onAddUpdate }: QueenBeeCardProps) {
       className="bg-white rounded-xl p-4 shadow-sm border-2 border-gold-light"
     >
       <View className="flex-row items-center">
-        <View className="relative">
+        <MemberProfileLink
+          memberId={queenBee.user.id}
+          memberName={queenBee.user.name}
+          stopPropagation
+          hitSlop={8}
+          className="relative active:opacity-70"
+        >
           <Avatar name={queenBee.user.name} url={queenBee.user.avatar_url} size={56} />
           <Text className="absolute -top-1 -right-1 text-lg">👑</Text>
-        </View>
+        </MemberProfileLink>
         <View className="flex-1 ml-4">
           <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-lg text-charcoal">
             {queenBee.user.name}
