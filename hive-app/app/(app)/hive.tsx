@@ -1354,6 +1354,35 @@ export default function HiveScreen() {
     }
   }, [communityId, openEditEvent]);
 
+  const getActionItemDeepLink = useCallback((item: ActionItem): { label: string; onPress: () => void } | null => {
+    if (item.related_wish_id) {
+      const wishId = item.related_wish_id;
+      return { label: 'Go to wish', onPress: () => openWishFromActivity(wishId) };
+    }
+    if (item.related_board_category_id) {
+      const categoryId = item.related_board_category_id;
+      return {
+        label: 'Go to board',
+        onPress: () => router.push({
+          pathname: '/board',
+          params: { categoryId, from: 'home', open: String(Date.now()) },
+        }),
+      };
+    }
+    if (item.related_user_id) {
+      const memberId = item.related_user_id;
+      return {
+        label: 'Go to profile',
+        onPress: () => router.push(
+          memberId === profile?.id
+            ? '/profile'
+            : { pathname: '/(app)/members', params: { memberId } }
+        ),
+      };
+    }
+    return null;
+  }, [openWishFromActivity, profile?.id, router]);
+
   useEffect(() => {
     if (!activeWishStorageKey) {
       restoredWishStorageKeyRef.current = null;
@@ -1910,20 +1939,25 @@ export default function HiveScreen() {
         onPress: () => openSurvey(s),
       };
     }),
-    ...homeActionItems.map(a => ({
-      id: `action-${a.id}`,
-      emoji: '📝',
-      title: a.description,
-      detail: a.completed
-        ? `Done${a.completed_at ? ` · ${formatDateShort(a.completed_at)}` : ''}`
-        : a.due_date ? `Due ${formatDateShort(a.due_date)}` : undefined,
-      isDone: a.completed,
-      completedAt: a.completed_at,
-      onPress: () => setSelectedActionItemId(a.id),
-      onToggle: () => toggleActionItem(a),
-      onLongPress: () => archiveActionItem(a),
-      onArchive: a.completed ? () => archiveActionItem(a) : undefined,
-    })),
+    ...homeActionItems.map(a => {
+      const deepLink = getActionItemDeepLink(a);
+      return {
+        id: `action-${a.id}`,
+        emoji: '📝',
+        title: a.description,
+        detail: a.completed
+          ? `Done${a.completed_at ? ` · ${formatDateShort(a.completed_at)}` : ''}`
+          : a.due_date ? `Due ${formatDateShort(a.due_date)}` : undefined,
+        cta: deepLink ? 'Open →' : undefined,
+        ctaOnPress: deepLink?.onPress,
+        isDone: a.completed,
+        completedAt: a.completed_at,
+        onPress: () => setSelectedActionItemId(a.id),
+        onToggle: () => toggleActionItem(a),
+        onLongPress: () => archiveActionItem(a),
+        onArchive: a.completed ? () => archiveActionItem(a) : undefined,
+      };
+    }),
     ...(() => {
       const today = new Date();
       const { year, quarter } = getCurrentDuesPeriod(today);
@@ -3374,6 +3408,35 @@ export default function HiveScreen() {
                 </ScrollView>
 
                 <View style={{ gap: 10 }}>
+                  {(() => {
+                    const deepLink = getActionItemDeepLink(selectedActionItem);
+                    if (!deepLink) return null;
+                    return (
+                      <Pressable
+                        onPress={() => {
+                          setSelectedActionItemId(null);
+                          deepLink.onPress();
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={deepLink.label}
+                        style={({ pressed }) => ({
+                          backgroundColor: pressed ? '#f2e1bd' : '#fff8e8',
+                          borderColor: 'rgba(189,147,72,0.36)',
+                          borderWidth: 1,
+                          borderRadius: 14,
+                          paddingVertical: 13,
+                          paddingHorizontal: 14,
+                          alignItems: 'center',
+                          flexDirection: 'row',
+                          justifyContent: 'center',
+                          gap: 8,
+                        })}
+                      >
+                        <Ionicons name="open-outline" size={16} color="#8e6f35" />
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#8e6f35' }}>{deepLink.label}</Text>
+                      </Pressable>
+                    );
+                  })()}
                   <Pressable
                     onPress={() => toggleActionItem(selectedActionItem)}
                     accessibilityRole="button"

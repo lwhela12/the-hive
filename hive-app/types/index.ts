@@ -240,6 +240,9 @@ export interface ActionItem extends Record<string, unknown> {
   completed: boolean;
   completed_at?: string | null;
   archived_at?: string | null;
+  related_wish_id?: string | null;
+  related_board_category_id?: string | null;
+  related_user_id?: string | null;
   created_at: string;
   assigned_user?: Profile;
 }

@@ -44,6 +44,8 @@ interface MeetingAnalysis {
     description: string;
     assigned_to_name?: string | null;
     due_date?: string | null;
+    about_person_name?: string | null;
+    related_wish_hint?: string | null;
   }>;
   events?: Array<{
     title: string;
@@ -146,6 +148,12 @@ function normalizeMeetingAnalysis(value: Record<string, any>): MeetingAnalysis {
           ? item.assigned_to_name.trim()
           : null,
         due_date: isIsoDate(item.due_date) ? item.due_date : null,
+        about_person_name: typeof item.about_person_name === 'string' && item.about_person_name.trim()
+          ? item.about_person_name.trim()
+          : null,
+        related_wish_hint: typeof item.related_wish_hint === 'string' && item.related_wish_hint.trim()
+          ? item.related_wish_hint.trim()
+          : null,
       })),
     events: events
       .filter((event: Record<string, any>) => typeof event?.title === 'string' && event.title.trim().length > 0 && isIsoDate(event.event_date))
@@ -694,7 +702,7 @@ Return strict JSON only:
   "summary": "2-4 sentence useful summary",
   "decisions": ["decision"],
   "details": ["notable detail"],
-  "action_items": [{"description": "specific task", "assigned_to_name": "member name, The group, or null", "due_date": "YYYY-MM-DD or null"}],
+  "action_items": [{"description": "specific task", "assigned_to_name": "member name, The group, or null", "due_date": "YYYY-MM-DD or null", "about_person_name": "member the task is FOR or ABOUT, distinct from the assignee (e.g. 'give a recommendation to Nat' -> 'Nat'), or null", "related_wish_hint": "a few words naming the specific wish this task concerns, only when the notes make it obvious, or null"}],
   "events": [{"title": "event title", "event_date": "YYYY-MM-DD", "event_time": "HH:MM:SS or null", "event_type": "meeting or custom", "description": "optional", "location": "optional"}],
   "wishes_surfaced": [{"person_name": "member name", "description": "specific wish or need"}],
   "hd_boards": [{"person_name": "member name", "goal_title": "member HD board or short goal label", "description": "why this member needs an HD board"}],
@@ -746,6 +754,53 @@ ${meeting.transcript_attributed || meeting.transcript_raw || ''}`,
   return normalizeMeetingAnalysis(parseJsonText(textBlock?.text ?? '{}'));
 }
 
+async function resolveActionItemDeepLink(
+  supabaseAdmin: any,
+  communityId: string,
+  item: { about_person_name?: string | null; related_wish_hint?: string | null },
+  members: Member[]
+) {
+  const relatedUserId = matchMemberByName(item.about_person_name, members);
+  let relatedWishId: string | null = null;
+  let relatedBoardCategoryId: string | null = null;
+
+  if (item.related_wish_hint) {
+    const normalizedHint = normalizeText(item.related_wish_hint);
+    if (!relatedUserId || !normalizedHint) {
+      console.log(`Skipped wish hint "${item.related_wish_hint}": no member match for "${item.about_person_name ?? ''}"`);
+    } else {
+      const { data: wishes, error } = await supabaseAdmin
+        .from('wishes')
+        .select('id, title, description, board_category_id')
+        .eq('community_id', communityId)
+        .eq('user_id', relatedUserId)
+        .eq('status', 'public')
+        .eq('is_active', true);
+
+      if (error) {
+        console.error('Failed to load wishes for action item deep link:', error);
+      } else {
+        const matches = (wishes ?? []).filter((wish: any) =>
+          normalizeText(wish.title).includes(normalizedHint)
+          || normalizeText(wish.description).includes(normalizedHint)
+        );
+        if (matches.length === 1) {
+          relatedWishId = matches[0].id;
+          relatedBoardCategoryId = matches[0].board_category_id ?? null;
+        } else {
+          console.log(`Skipped wish hint "${item.related_wish_hint}": ${matches.length} matching wishes`);
+        }
+      }
+    }
+  }
+
+  return {
+    related_user_id: relatedUserId,
+    related_wish_id: relatedWishId,
+    related_board_category_id: relatedBoardCategoryId,
+  };
+}
+
 async function writeApprovedMeetingNotes(
   supabaseAdmin: any,
   params: {
@@ -763,15 +818,19 @@ async function writeApprovedMeetingNotes(
     .delete()
     .eq('meeting_id', meetingId);
 
-  const actionItems = (analysis.action_items ?? [])
-    .filter((item) => item.description?.trim())
-    .map((item) => ({
+  const actionItems = [];
+  for (const item of analysis.action_items ?? []) {
+    if (!item.description?.trim()) continue;
+    const deepLink = await resolveActionItemDeepLink(supabaseAdmin, communityId, item, members);
+    actionItems.push({
       meeting_id: meetingId,
       community_id: communityId,
       description: item.description.trim(),
       assigned_to: matchMemberByName(item.assigned_to_name, members),
       due_date: isIsoDate(item.due_date) ? item.due_date : null,
-    }));
+      ...deepLink,
+    });
+  }
 
   if (actionItems.length > 0) {
     const { error } = await supabaseAdmin.from('action_items').insert(actionItems);
