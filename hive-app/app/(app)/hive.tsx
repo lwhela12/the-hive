@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { invalidateWishQueries } from '../../lib/queryClient';
+import { deleteWishById } from '../../lib/wishMutations';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
 import { useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
 import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
@@ -1628,17 +1629,11 @@ export default function HiveScreen() {
     if (!canDeleteWish(wish)) return;
 
     const deleteWish = async () => {
-      let query = supabase
-        .from('wishes')
-        .delete()
-        .eq('id', wish.id)
-        .eq('community_id', communityId);
-
-      if (!isAdmin) {
-        query = query.eq('user_id', profile.id);
-      }
-
-      const { error } = await query;
+      const { error } = await deleteWishById({
+        wishId: wish.id,
+        communityId,
+        ownerId: isAdmin ? null : profile.id,
+      });
 
       if (error) {
         Alert.alert('Error', 'Failed to delete wish. Please try again.');

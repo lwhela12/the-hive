@@ -23,6 +23,7 @@ import { setBoardThreadArchiveState } from '../../lib/boardThreadArchive';
 import { BOARD_HOME_EVENT } from '../../lib/boardNavigation';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { linkThreadToCommunityWish, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
+import { deleteWishById } from '../../lib/wishMutations';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 
@@ -1217,11 +1218,10 @@ export default function BoardScreen() {
 
     const deleteWish = async () => {
       try {
-        const { error } = await (supabase as any)
-          .from('wishes')
-          .delete()
-          .eq('id', wish.id)
-          .eq('community_id', communityId);
+        const { error } = await deleteWishById({
+          wishId: wish.id,
+          communityId,
+        });
 
         if (error) throw error;
 

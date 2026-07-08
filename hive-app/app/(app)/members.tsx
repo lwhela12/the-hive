@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Profile, Skill, UserRole, Wish, WishGranter } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { invalidateWishQueries } from '../../lib/queryClient';
+import { deleteWishById } from '../../lib/wishMutations';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
@@ -743,12 +744,11 @@ function MemberDetailModal({
       {
         text: 'Delete', style: 'destructive',
         onPress: async () => {
-          const { error } = await (supabase as any)
-            .from('wishes')
-            .delete()
-            .eq('id', wish.id)
-            .eq('user_id', member.id)
-            .eq('community_id', communityId);
+          const { error } = await deleteWishById({
+            wishId: wish.id,
+            communityId,
+            ownerId: member.id,
+          });
           if (error) {
             Alert.alert('Error', 'Failed to delete wish. Please try again.');
             return;

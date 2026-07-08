@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { requestMediaLibraryPermission } from '../../lib/imagePicker';
 import { supabase } from '../../lib/supabase';
 import { invalidateWishQueries } from '../../lib/queryClient';
+import { deleteWishById } from '../../lib/wishMutations';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useWishes } from '../../lib/hooks/useWishes';
@@ -1033,17 +1034,11 @@ export default function ProfileScreen() {
     if (!profile || !communityId || !canDeleteWish(wish)) return;
 
     const deleteWish = async () => {
-      let query = supabase
-        .from('wishes')
-        .delete()
-        .eq('id', wish.id)
-        .eq('community_id', communityId);
-
-      if (!isAdmin) {
-        query = query.eq('user_id', profile.id);
-      }
-
-      const { error } = await query;
+      const { error } = await deleteWishById({
+        wishId: wish.id,
+        communityId,
+        ownerId: isAdmin ? null : profile.id,
+      });
 
       if (error) {
         Alert.alert('Error', 'Failed to delete wish. Please try again.');

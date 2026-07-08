@@ -95,8 +95,11 @@ export function WishManageModal<TWish extends ManagedWish>({
 }: WishManageModalProps<TWish>) {
   const runAction = (handler?: (wish: TWish) => void) => {
     if (!wish || !handler) return;
-    onClose();
-    handler(wish);
+    try {
+      handler(wish);
+    } finally {
+      onClose();
+    }
   };
 
   return (
