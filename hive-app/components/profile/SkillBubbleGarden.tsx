@@ -1480,15 +1480,22 @@ function SkillPlant({
   const [isHovered, setIsHovered] = useState(false);
   const hoverOutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canDrag = false;
+  const waterSplash = useRef(new Animated.Value(0)).current;
+  const capWiggle = useRef(new Animated.Value(0)).current;
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const [isSplashing, setIsSplashing] = useState(false);
+  const [showBloomToast, setShowBloomToast] = useState(false);
 
   useEffect(() => {
     grow.stopAnimation();
     depart.setValue(0);
     grow.setValue(justPlanted ? 0 : 0.34);
+    // Genie-out on plant (seed → flower), and the same growth spring replays
+    // whenever the enthusiasm level changes (e.g. watering).
     Animated.timing(grow, {
       toValue: 1,
       useNativeDriver: true,
-      duration: justPlanted ? 2860 : 980,
+      duration: justPlanted ? 660 : 520,
       easing: justPlanted ? Easing.bezier(0.18, 0.84, 0.08, 1) : Easing.out(Easing.cubic),
     }).start(({ finished }) => {
       if (finished && justPlanted) {
@@ -1567,11 +1574,13 @@ function SkillPlant({
     setIsHovered(false);
     onSelect(skill.id);
     depart.setValue(0);
+    // Genie-in (flower → seed): petals fold, the plant streams down toward
+    // the seed slot it returns to, and lands with a tiny puff.
     Animated.timing(depart, {
       toValue: 1,
       useNativeDriver: true,
-      duration: 2780,
-      easing: Easing.bezier(0.48, 0, 0.08, 1),
+      duration: 700,
+      easing: Easing.bezier(0.48, 0, 0.12, 1),
     }).start(({ finished }) => {
       if (finished) {
         onReturnToSeed(skill, returnSlotIndex);
@@ -1601,7 +1610,50 @@ function SkillPlant({
     });
   };
 
+  const playWaterSplash = () => {
+    setIsSplashing(true);
+    waterSplash.setValue(0);
+    Animated.timing(waterSplash, {
+      toValue: 1,
+      useNativeDriver: true,
+      duration: 620,
+      easing: Easing.out(Easing.quad),
+    }).start(() => setIsSplashing(false));
+  };
+
+  const waterPlant = () => {
+    if (!editable || !onUpdateSkill || isReseeding) return;
+    onSelect(skill.id);
+
+    if (level >= 5) {
+      // Already fully bloomed: a gentle happy wiggle + micro-toast, no growth.
+      capWiggle.setValue(0);
+      Animated.timing(capWiggle, {
+        toValue: 1,
+        useNativeDriver: true,
+        duration: 480,
+        easing: Easing.inOut(Easing.quad),
+      }).start();
+      setShowBloomToast(true);
+      toastAnim.setValue(0);
+      Animated.sequence([
+        Animated.timing(toastAnim, { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.delay(1150),
+        Animated.timing(toastAnim, { toValue: 0, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+      ]).start(() => setShowBloomToast(false));
+      return;
+    }
+
+    playWaterSplash();
+    // Optimistic: the parent updates local state immediately, which bumps
+    // `level` and replays the growth spring in the entry effect above.
+    onUpdateSkill(skill, {
+      enthusiasm_level: clamp(level + 1, 1, 5),
+    });
+  };
+
   const showReseedButton = editable && !isReseeding && (isHovered || selected);
+  const showWaterButton = editable && Boolean(onUpdateSkill) && bloomStep > 0 && !isReseeding;
   const entryLift = justPlanted ? Math.max(compactLandscape ? 124 : 230, groundHeight * 2.28) : 32;
   const soilDrop = Math.max(compactLandscape ? 108 : 168, height - top - groundHeight * 0.02 - plantHeight * 0.44);
   const entryOriginOffset = justPlanted && entryOriginX !== undefined
@@ -1642,6 +1694,27 @@ function SkillPlant({
     outputRange: [1, 0.74, 0.44, 0.22, 0.09, 0.025],
   });
   const departOpacity = depart.interpolate({ inputRange: [0, 0.82, 0.94, 1], outputRange: [1, 0.96, 0.72, 0] });
+  // Drift horizontally toward the seed slot this flower returns to, so the
+  // eye can follow it from bloom back into the tray.
+  const returnSlotDriftX = width > 0
+    ? getFrontRowCenterX(getSeedSlotIndexForCenterX(centerX, width), GARDEN_CAPACITY, width) - centerX
+    : 0;
+  const departTranslateX = depart.interpolate({
+    inputRange: [0, 0.35, 1],
+    outputRange: [0, returnSlotDriftX * 0.22, returnSlotDriftX],
+  });
+  const puffOpacity = depart.interpolate({ inputRange: [0, 0.76, 0.9, 1], outputRange: [0, 0, 0.9, 0] });
+  const puffScale = depart.interpolate({ inputRange: [0, 0.76, 1], outputRange: [0.3, 0.4, 1.5] });
+  const wiggleRotate = capWiggle.interpolate({
+    inputRange: [0, 0.2, 0.45, 0.7, 1],
+    outputRange: ['0deg', '-3deg', '2.4deg', '-1.4deg', '0deg'],
+  });
+  const dropletTranslateY = waterSplash.interpolate({ inputRange: [0, 0.55, 1], outputRange: [-16, 4, 0] });
+  const dropletOpacity = waterSplash.interpolate({ inputRange: [0, 0.08, 0.42, 0.58, 1], outputRange: [0, 1, 1, 0, 0] });
+  const sparkleOpacity = waterSplash.interpolate({ inputRange: [0, 0.5, 0.68, 0.86, 1], outputRange: [0, 0, 1, 0.9, 0] });
+  const sparkleScale = waterSplash.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.4, 0.5, 1.35] });
+  const toastOpacity = toastAnim;
+  const toastTranslateY = toastAnim.interpolate({ inputRange: [0, 1], outputRange: [6, -4] });
 
   const label = showLabel ? (
     <View
@@ -1690,6 +1763,7 @@ function SkillPlant({
   ) : null;
 
   return (
+    <>
     <Animated.View
       {...responder.panHandlers}
       style={{
@@ -1698,7 +1772,7 @@ function SkillPlant({
         top,
         zIndex: selected ? 90 : 20 + index,
         transform: [
-          { translateX: Animated.add(pan.x, entryTranslateX) },
+          { translateX: Animated.add(Animated.add(pan.x, entryTranslateX), departTranslateX) },
           { translateY: Animated.add(Animated.add(pan.y, entryTranslateY), departTranslateY) },
           { scaleX: entryScaleX },
           { scaleY: entryScaleY },
@@ -1748,7 +1822,15 @@ function SkillPlant({
             : {}),
         }}
       >
-        <View style={{ width: plantWidth, height: spriteHeight, alignItems: 'center', justifyContent: 'flex-end' }}>
+        <Animated.View
+          style={{
+            width: plantWidth,
+            height: spriteHeight,
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            transform: [{ rotate: wiggleRotate }],
+          }}
+        >
           <WildflowerSprite
             level={level}
             category={category}
@@ -1756,10 +1838,75 @@ function SkillPlant({
             label={skill.description}
             sizeScale={rowScale}
           />
-        </View>
+        </Animated.View>
 
         {label}
       </Pressable>
+      {isSplashing && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: plantWidth / 2 - 9,
+            top: Math.max(0, plantHeight * 0.16),
+            zIndex: 40,
+            transform: [{ translateY: dropletTranslateY }],
+          }}
+        >
+          <Animated.Text selectable={false} style={{ fontSize: 16, lineHeight: 19, opacity: dropletOpacity }}>
+            💧
+          </Animated.Text>
+          <Animated.Text
+            selectable={false}
+            style={{
+              position: 'absolute',
+              fontSize: 16,
+              lineHeight: 19,
+              opacity: sparkleOpacity,
+              transform: [{ scale: sparkleScale }],
+            }}
+          >
+            ✨
+          </Animated.Text>
+        </Animated.View>
+      )}
+      {showBloomToast && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            alignItems: 'center',
+            zIndex: 50,
+            opacity: toastOpacity,
+            transform: [{ translateY: toastTranslateY }],
+          }}
+        >
+          <View
+            style={{
+              borderRadius: 999,
+              backgroundColor: 'rgba(255,253,247,0.94)',
+              borderWidth: 1,
+              borderColor: 'rgba(154,129,81,0.24)',
+              paddingHorizontal: 9,
+              paddingVertical: 4,
+              shadowColor: '#4d3a22',
+              shadowOpacity: 0.14,
+              shadowRadius: 6,
+              shadowOffset: { width: 0, height: 2 },
+            }}
+          >
+            <Text
+              selectable={false}
+              style={{ fontFamily: 'Lato_700Bold', color: category.text, fontSize: 10.5, lineHeight: 13 }}
+            >
+              Fully bloomed! 🌸
+            </Text>
+          </View>
+        </Animated.View>
+      )}
       {beeWishes && beeWishes.length > 0 && bloomStep > 0 && !isReseeding && onBeePress && (
         <View
           style={{
@@ -1826,7 +1973,69 @@ function SkillPlant({
           </Text>
         </Pressable>
       )}
+      {showWaterButton && (
+        <Pressable
+          onPress={(event) => {
+            event.stopPropagation?.();
+            waterPlant();
+          }}
+          onHoverIn={showHoverControls}
+          onHoverOut={hideHoverControls}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={level >= 5 ? `${skill.description} is fully bloomed` : `Water ${skill.description}`}
+          style={{
+            position: 'absolute',
+            right: Math.max(6, plantWidth * 0.16),
+            bottom: showLabel ? LABEL_HEIGHT + 4 : 8,
+            width: 28,
+            height: 28,
+            borderRadius: 999,
+            backgroundColor: 'rgba(255,253,247,0.92)',
+            borderWidth: 1,
+            borderColor: 'rgba(74,143,160,0.26)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: isHovered || selected ? 1 : 0.82,
+            shadowColor: '#2f5d6b',
+            shadowOpacity: 0.16,
+            shadowRadius: 7,
+            shadowOffset: { width: 0, height: 3 },
+            ...(Platform.OS === 'web'
+              ? ({
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  outlineStyle: 'none',
+                  transition: 'opacity 180ms ease, transform 180ms ease',
+                } as any)
+              : {}),
+          }}
+        >
+          <Text selectable={false} style={{ fontSize: 13, lineHeight: 16 }}>
+            💧
+          </Text>
+        </Pressable>
+      )}
     </Animated.View>
+    {isReseeding && (
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: centerX + returnSlotDriftX - 12,
+          top: Math.max(0, height - groundHeight * 0.42 - 12),
+          zIndex: 95,
+          opacity: puffOpacity,
+          transform: [{ scale: puffScale }],
+        }}
+      >
+        <Text selectable={false} style={{ fontSize: 18, lineHeight: 22 }}>
+          ✨
+        </Text>
+      </Animated.View>
+    )}
+    </>
   );
 }
 
