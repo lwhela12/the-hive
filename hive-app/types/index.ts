@@ -118,6 +118,7 @@ export interface Profile extends Record<string, unknown> {
   miq_contribution?: string | null;
   fun_facts?: string[] | null;
   love_languages?: string[] | null;
+  home_section_order?: string[] | null;
   created_at: string;
   updated_at: string;
 }

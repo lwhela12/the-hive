@@ -411,8 +411,65 @@ function HeaderActionPill({ label, onPress }: { label: string; onPress: () => vo
   );
 }
 
+// Reorderable home screen sections (persisted per member in profiles.home_section_order).
+// 'panel' sections sit side by side in a row on wide screens; 'full' sections span the width.
+type HomeSectionKey = 'activity' | 'todos' | 'events' | 'shortcuts' | 'wishes';
+
+const DEFAULT_HOME_SECTION_ORDER: HomeSectionKey[] = ['activity', 'todos', 'events', 'shortcuts', 'wishes'];
+
+const HOME_SECTION_META: Record<HomeSectionKey, { title: string; emoji: string; layout: 'panel' | 'full' }> = {
+  activity: { title: 'Recent Activity', emoji: '🐝', layout: 'panel' },
+  todos: { title: 'My To Do List', emoji: '📝', layout: 'panel' },
+  events: { title: 'Upcoming Events', emoji: '📅', layout: 'panel' },
+  shortcuts: { title: 'Shortcuts', emoji: '🍯', layout: 'full' },
+  wishes: { title: 'Wishes', emoji: '⭐', layout: 'full' },
+};
+
+// Resolve a saved order against the current section set: unknown saved keys are
+// dropped, and any new/missing sections slot back in at their default position,
+// so adding sections later never breaks a member's saved layout.
+const resolveHomeSectionOrder = (saved?: readonly string[] | null): HomeSectionKey[] => {
+  const isKnownSection = (key: string): key is HomeSectionKey => key in HOME_SECTION_META;
+  const order = [...new Set((saved ?? []).filter(isKnownSection))];
+  if (order.length === 0) return [...DEFAULT_HOME_SECTION_ORDER];
+
+  DEFAULT_HOME_SECTION_ORDER.forEach((key, defaultIndex) => {
+    if (!order.includes(key)) order.splice(Math.min(defaultIndex, order.length), 0, key);
+  });
+  return order;
+};
+
+function SectionMoveButton({ direction, disabled, onPress }: {
+  direction: 'up' | 'down';
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={direction === 'up' ? 'Move section up' : 'Move section down'}
+      hitSlop={6}
+      style={({ pressed }) => ({
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: disabled ? 'rgba(222,193,129,0.35)' : 'rgba(189,147,72,0.5)',
+        backgroundColor: disabled ? 'transparent' : pressed ? '#fbf0d7' : '#fff8e8',
+        opacity: disabled ? 0.35 : 1,
+      })}
+    >
+      <Ionicons name={direction === 'up' ? 'chevron-up' : 'chevron-down'} size={18} color="#8e6f35" />
+    </Pressable>
+  );
+}
+
 export default function HiveScreen() {
-  const { profile, communityId, communityRole, session } = useAuth();
+  const { profile, communityId, communityRole, session, refreshProfile } = useAuth();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
@@ -428,6 +485,59 @@ export default function HiveScreen() {
     : null;
   const restoredSurveyStorageKeyRef = useRef<string | null>(null);
   const restoredWishStorageKeyRef = useRef<string | null>(null);
+
+  // Per-member home section order — read from the already-fetched profile row,
+  // reordered locally in customize mode, persisted to profiles.home_section_order.
+  const savedHomeSectionOrderKey = (profile?.home_section_order ?? []).join('|');
+  const [customizeMode, setCustomizeMode] = useState(false);
+  const customizeModeRef = useRef(false);
+  customizeModeRef.current = customizeMode;
+  const [savingSectionOrder, setSavingSectionOrder] = useState(false);
+  const [sectionOrder, setSectionOrder] = useState<HomeSectionKey[]>(
+    () => resolveHomeSectionOrder(profile?.home_section_order)
+  );
+
+  // Keep the local order in sync with the profile (e.g. changed on another device),
+  // but never clobber an in-progress customize session.
+  useEffect(() => {
+    if (customizeModeRef.current) return;
+    setSectionOrder(resolveHomeSectionOrder(savedHomeSectionOrderKey ? savedHomeSectionOrderKey.split('|') : null));
+  }, [savedHomeSectionOrderKey]);
+
+  const moveHomeSection = useCallback((key: HomeSectionKey, direction: -1 | 1) => {
+    setSectionOrder(prev => {
+      const index = prev.indexOf(key);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }, []);
+
+  const persistHomeSectionOrder = useCallback(async (order: HomeSectionKey[] | null) => {
+    setCustomizeMode(false);
+    customizeModeRef.current = false;
+    const nextOrder = resolveHomeSectionOrder(order);
+    setSectionOrder(nextOrder);
+    if (!profile?.id) return;
+
+    const isDefault = !order || nextOrder.join('|') === DEFAULT_HOME_SECTION_ORDER.join('|');
+    setSavingSectionOrder(true);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ home_section_order: isDefault ? null : nextOrder } as any)
+      .eq('id', profile.id);
+
+    if (error) {
+      console.warn('Could not save home section order', error);
+      Alert.alert('Could not save layout', 'Your new order is showing for now, but it may not stick. Please try again.');
+    } else {
+      // Refresh the cached auth profile so the saved order follows the member everywhere.
+      await refreshProfile();
+    }
+    setSavingSectionOrder(false);
+  }, [profile?.id, refreshProfile]);
 
   const [refreshing, setRefreshing] = useState(false);
   const [showAnswerModal, setShowAnswerModal] = useState(false);
@@ -1856,6 +1966,18 @@ export default function HiveScreen() {
   const todoPanelMaxHeight = useMobileLayout ? 420 : 280;
   const wishPanelHeight = useMobileLayout ? 460 : 360;
 
+  // Group consecutive 'panel' sections so they share a row on wide screens
+  // (and stack in order on mobile); 'full' sections always span the width.
+  const homeSectionGroups = sectionOrder.reduce<HomeSectionKey[][]>((groups, key) => {
+    const lastGroup = groups[groups.length - 1];
+    if (HOME_SECTION_META[key].layout === 'panel' && lastGroup && HOME_SECTION_META[lastGroup[0]].layout === 'panel') {
+      lastGroup.push(key);
+    } else {
+      groups.push([key]);
+    }
+    return groups;
+  }, []);
+
   const visibleUpcomingEvents = hideBirthdayEvents
     ? upcomingEvents.filter(event => event.event_type !== 'birthday')
     : upcomingEvents;
@@ -2331,404 +2453,496 @@ export default function HiveScreen() {
           </View>
         )}
 
-        {/* Activity · My To Do List · Upcoming Events */}
-        <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: useMobileLayout ? 22 : 16, marginBottom: 24 }}>
+        {/* Customize home layout */}
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+          {customizeMode && (
+            <Pressable
+              onPress={() => { void persistHomeSectionOrder(null); }}
+              className="active:opacity-60"
+              style={{ paddingHorizontal: 4 }}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+                Reset to default
+              </Text>
+            </Pressable>
+          )}
+          <HeaderActionPill
+            label={customizeMode ? 'Done' : savingSectionOrder ? 'Saving…' : '⇅ Customize'}
+            onPress={() => {
+              if (savingSectionOrder) return;
+              if (customizeMode) {
+                void persistHomeSectionOrder(sectionOrder);
+              } else {
+                setCustomizeMode(true);
+              }
+            }}
+          />
+        </View>
 
-          {/* Activity Feed */}
-          <View style={dashboardSectionStyle}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
-              <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
-                <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-                  Recent Activity
-                </Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4 }}>
-                {hasUnreadActivity && (
-                <Pressable
-                  onPress={markAllActivityRead}
-                  className="active:opacity-60"
-                  style={{ paddingHorizontal: 4 }}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
-                    Mark all read
-                  </Text>
-                </Pressable>
-                )}
-                <Pressable
-                  onPress={toggleActivityMentionsOnly}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: activityMentionsOnly }}
-                  accessibilityLabel="Only show activity that mentions me"
-                  style={({ pressed }) => ({
-                    flexShrink: 0,
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: activityMentionsOnly ? '#bd9348' : 'rgba(222,193,129,0.72)',
-                    backgroundColor: activityMentionsOnly ? '#fdf3dc' : pressed ? '#fbf0d7' : '#fffdf5',
-                  })}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: activityMentionsOnly ? '#8e6f35' : '#bd9348' }}>
-                    @ Mentions me
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-            <View style={{
-              backgroundColor: '#fffdf5',
-              borderRadius: 20,
-              borderTopLeftRadius: 0,
-              borderWidth: 1,
-              borderColor: 'rgba(222,193,129,0.7)',
-              shadowColor: '#bd9348',
-              shadowOpacity: 0.16,
-              shadowRadius: 18,
-              shadowOffset: { width: 0, height: 5 },
-              elevation: 3,
-              overflow: 'hidden',
-              height: dashboardPanelHeight,
-              position: 'relative',
-            }}>
-              <ConfettiBurst visible={showActivityConfetti} onDone={() => setShowActivityConfetti(false)} />
-              {/* Inner top highlight — liquid glass gloss */}
-              <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10, marginTop: 0 }} />
-              {activityLoading && activityItems.length === 0 ? (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                  <ActivityIndicator size="small" color="#bd9348" />
-                </View>
-              ) : visibleActivityItems.length === 0 ? (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: '#fdf3dc' }}>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center' }}>
-                    {activityMentionsOnly
-                      ? `Nothing with your name on it yet 🐝${'\n'}Turn off "Mentions me" to see all activity.`
-                      : `No recent activity yet.${'\n'}Start by sharing a wish or posting on the board!`}
-                  </Text>
-                </View>
-              ) : (
-                <ScrollView
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator={true}
-                  onScroll={handleActivityScroll}
-                  scrollEventThrottle={16}
-                  refreshControl={<RefreshControl refreshing={isActivityChecking} onRefresh={handleActivityRefresh} tintColor="#bd9348" />}
-                >
-                  {(isActivityChecking || showActivityPullSpace) && (
-                    <View style={{ height: 54, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff8e8', borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.24)' }}>
-                      <Animated.View style={{ transform: [{ rotate: activityRefreshRotation }] }}>
-                        <Text style={{ fontSize: 18, color: '#bd9348', lineHeight: 22 }}>◌</Text>
-                      </Animated.View>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginTop: 2 }}>
-                        {isActivityChecking ? 'Checking activity...' : 'Pull to check activity'}
-                      </Text>
+        {/* Home sections — order comes from sectionOrder (profiles.home_section_order) */}
+        {(() => {
+          const renderHomeSection = (key: HomeSectionKey) => {
+            switch (key) {
+              case 'activity':
+                return (
+                  <>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
+                      <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
+                        <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+                          Recent Activity
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4 }}>
+                        {hasUnreadActivity && (
+                        <Pressable
+                          onPress={markAllActivityRead}
+                          className="active:opacity-60"
+                          style={{ paddingHorizontal: 4 }}
+                        >
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+                            Mark all read
+                          </Text>
+                        </Pressable>
+                        )}
+                        <Pressable
+                          onPress={toggleActivityMentionsOnly}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: activityMentionsOnly }}
+                          accessibilityLabel="Only show activity that mentions me"
+                          style={({ pressed }) => ({
+                            flexShrink: 0,
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            borderColor: activityMentionsOnly ? '#bd9348' : 'rgba(222,193,129,0.72)',
+                            backgroundColor: activityMentionsOnly ? '#fdf3dc' : pressed ? '#fbf0d7' : '#fffdf5',
+                          })}
+                        >
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: activityMentionsOnly ? '#8e6f35' : '#bd9348' }}>
+                            @ Mentions me
+                          </Text>
+                        </Pressable>
+                      </View>
                     </View>
-                  )}
-                  {visibleActivityItems.map((item, i) => {
-                    const isUnread = item.timestamp > sessionReadAt && !readItemIds.has(item.id);
-                    const canNavigate = !!getActivityDestination(item);
-                    return (
+                    <View style={{
+                      backgroundColor: '#fffdf5',
+                      borderRadius: 20,
+                      borderTopLeftRadius: 0,
+                      borderWidth: 1,
+                      borderColor: 'rgba(222,193,129,0.7)',
+                      shadowColor: '#bd9348',
+                      shadowOpacity: 0.16,
+                      shadowRadius: 18,
+                      shadowOffset: { width: 0, height: 5 },
+                      elevation: 3,
+                      overflow: 'hidden',
+                      height: dashboardPanelHeight,
+                      position: 'relative',
+                    }}>
+                      <ConfettiBurst visible={showActivityConfetti} onDone={() => setShowActivityConfetti(false)} />
+                      {/* Inner top highlight — liquid glass gloss */}
+                      <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10, marginTop: 0 }} />
+                      {activityLoading && activityItems.length === 0 ? (
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                          <ActivityIndicator size="small" color="#bd9348" />
+                        </View>
+                      ) : visibleActivityItems.length === 0 ? (
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: '#fdf3dc' }}>
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center' }}>
+                            {activityMentionsOnly
+                              ? `Nothing with your name on it yet 🐝${'\n'}Turn off "Mentions me" to see all activity.`
+                              : `No recent activity yet.${'\n'}Start by sharing a wish or posting on the board!`}
+                          </Text>
+                        </View>
+                      ) : (
+                        <ScrollView
+                          nestedScrollEnabled
+                          showsVerticalScrollIndicator={true}
+                          onScroll={handleActivityScroll}
+                          scrollEventThrottle={16}
+                          refreshControl={<RefreshControl refreshing={isActivityChecking} onRefresh={handleActivityRefresh} tintColor="#bd9348" />}
+                        >
+                          {(isActivityChecking || showActivityPullSpace) && (
+                            <View style={{ height: 54, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff8e8', borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.24)' }}>
+                              <Animated.View style={{ transform: [{ rotate: activityRefreshRotation }] }}>
+                                <Text style={{ fontSize: 18, color: '#bd9348', lineHeight: 22 }}>◌</Text>
+                              </Animated.View>
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', marginTop: 2 }}>
+                                {isActivityChecking ? 'Checking activity...' : 'Pull to check activity'}
+                              </Text>
+                            </View>
+                          )}
+                          {visibleActivityItems.map((item, i) => {
+                            const isUnread = item.timestamp > sessionReadAt && !readItemIds.has(item.id);
+                            const canNavigate = !!getActivityDestination(item);
+                            return (
+                              <Pressable
+                                key={item.id}
+                                onPress={() => handleActivityPress(item)}
+                                style={({ pressed }) => ({
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  padding: 14,
+                                  borderBottomWidth: i < visibleActivityItems.length - 1 ? 1 : 0,
+                                  borderBottomColor: 'rgba(222,193,129,0.28)',
+                                  backgroundColor: isUnread
+                                    ? pressed ? '#fbf0d7' : '#fff8e8'
+                                    : pressed ? '#fbf4e3' : '#fffdf5',
+                                })}
+                              >
+                                <View style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 18,
+                                  backgroundColor: isUnread ? 'rgba(222,193,129,0.26)' : 'rgba(222,193,129,0.14)',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  marginRight: 12,
+                                  flexShrink: 0,
+                                }}>
+                                  <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
+                                </View>
+                                {isUnread && (
+                                  <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#bd9348', marginRight: 10, shadowColor: '#bd9348', shadowOpacity: 0.18, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } }} />
+                                )}
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ fontFamily: isUnread ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: isUnread ? '#2d2d2d' : '#756b5f', lineHeight: 18 }}>
+                                    {item.text}
+                                  </Text>
+                                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: isUnread ? '#7b653e' : '#9a8d7c', marginTop: 3 }}>
+                                    {getRelativeTime(item.timestamp)}
+                                  </Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6, flexShrink: 0 }}>
+                                  {canNavigate && (
+                                    <Text style={{ fontSize: 16, color: isUnread ? 'rgba(143,109,49,0.72)' : 'rgba(189,147,72,0.35)', lineHeight: 20 }}>›</Text>
+                                  )}
+                                </View>
+                              </Pressable>
+                            );
+                          })}
+                        </ScrollView>
+                      )}
+                    </View>
+                  </>
+                );
+              case 'todos':
+                return (
+                  <>
+                    <HeaderTabs
+                      activeTab={todoStatusTab}
+                      onChange={setTodoStatusTab}
+                      actionLabel="+ Task"
+                      onAction={() => { setNewTaskText(''); setTaskError(null); setShowAddTaskModal(true); }}
+                      compact
+                      compactAction={false}
+                      stretchTabs={false}
+                      tabs={[
+                        {
+                          key: 'open',
+                          label: 'Open To Do',
+                          count: openTodos.length,
+                        },
+                        {
+                          key: 'done',
+                          label: 'Done',
+                          count: doneTodos.length,
+                        },
+                      ]}
+                    />
+                    <View style={{
+                      backgroundColor: '#fffdf5',
+                      borderRadius: 20,
+                      borderTopLeftRadius: 0,
+                      borderWidth: 1,
+                      borderColor: 'rgba(222,193,129,0.7)',
+                      shadowColor: '#bd9348',
+                      shadowOpacity: 0.16,
+                      shadowRadius: 18,
+                      shadowOffset: { width: 0, height: 5 },
+                      elevation: 3,
+                      overflow: 'hidden',
+                      maxHeight: todoPanelMaxHeight,
+                      position: 'relative',
+                    }}>
+                      <ConfettiBurst visible={showConfetti} onDone={() => setShowConfetti(false)} />
+                      <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10 }} />
+                      {homeActionLoading ? (
+                        <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 32 }}>
+                          <ActivityIndicator size="small" color="#bd9348" />
+                        </View>
+                      ) : visibleTodos.length === 0 ? (
+                        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 20, paddingVertical: 28 }}>
+                          <Text style={{ fontSize: 32, marginBottom: 8 }}>✅</Text>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', marginBottom: 4, textAlign: 'center' }}>All clear!</Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center', lineHeight: 18 }}>
+                            {todoStatusTab === 'done'
+                              ? 'No completed to-dos yet.'
+                              : 'No pending to-dos.'}{'\n'}Meeting action items and{'\n'}monthly check-ins will show up here.
+                          </Text>
+                        </View>
+                      ) : (
+                        <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true} style={{ maxHeight: todoPanelMaxHeight }}>
+                          {renderTodoList()}
+                        </ScrollView>
+                      )}
+                    </View>
+                  </>
+                );
+              case 'events':
+                return (
+                  <>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 0 }}>
+                      <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
+                        <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+                          Upcoming Events
+                        </Text>
+                      </View>
                       <Pressable
-                        key={item.id}
-                        onPress={() => handleActivityPress(item)}
+                        onPress={toggleHideBirthdayEvents}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: hideBirthdayEvents }}
+                        accessibilityLabel={hideBirthdayEvents ? 'Show birthday events' : 'Hide birthday events'}
                         style={({ pressed }) => ({
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          padding: 14,
-                          borderBottomWidth: i < visibleActivityItems.length - 1 ? 1 : 0,
-                          borderBottomColor: 'rgba(222,193,129,0.28)',
-                          backgroundColor: isUnread
-                            ? pressed ? '#fbf0d7' : '#fff8e8'
-                            : pressed ? '#fbf4e3' : '#fffdf5',
+                          flexShrink: 0,
+                          paddingHorizontal: 10,
+                          paddingVertical: 7,
+                          marginBottom: 4,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: hideBirthdayEvents ? '#bd9348' : 'rgba(222,193,129,0.72)',
+                          backgroundColor: hideBirthdayEvents ? '#fdf3dc' : pressed ? '#fbf0d7' : '#fffdf5',
                         })}
                       >
-                        <View style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 18,
-                          backgroundColor: isUnread ? 'rgba(222,193,129,0.26)' : 'rgba(222,193,129,0.14)',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginRight: 12,
-                          flexShrink: 0,
-                        }}>
-                          <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
-                        </View>
-                        {isUnread && (
-                          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#bd9348', marginRight: 10, shadowColor: '#bd9348', shadowOpacity: 0.18, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } }} />
-                        )}
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontFamily: isUnread ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: isUnread ? '#2d2d2d' : '#756b5f', lineHeight: 18 }}>
-                            {item.text}
-                          </Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: isUnread ? '#7b653e' : '#9a8d7c', marginTop: 3 }}>
-                            {getRelativeTime(item.timestamp)}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6, flexShrink: 0 }}>
-                          {canNavigate && (
-                            <Text style={{ fontSize: 16, color: isUnread ? 'rgba(143,109,49,0.72)' : 'rgba(189,147,72,0.35)', lineHeight: 20 }}>›</Text>
-                          )}
-                        </View>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: hideBirthdayEvents ? '#8e6f35' : '#bd9348' }}>
+                          {hideBirthdayEvents ? '🎂 Hidden' : '🎂 Hide'}
+                        </Text>
                       </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              )}
-            </View>
-          </View>
-
-          {/* My To Do List */}
-          <View style={dashboardSectionStyle}>
-            <HeaderTabs
-              activeTab={todoStatusTab}
-              onChange={setTodoStatusTab}
-              actionLabel="+ Task"
-              onAction={() => { setNewTaskText(''); setTaskError(null); setShowAddTaskModal(true); }}
-              compact
-              compactAction={false}
-              stretchTabs={false}
-              tabs={[
-                {
-                  key: 'open',
-                  label: 'Open To Do',
-                  count: openTodos.length,
-                },
-                {
-                  key: 'done',
-                  label: 'Done',
-                  count: doneTodos.length,
-                },
-              ]}
-            />
-            <View style={{
-              backgroundColor: '#fffdf5',
-              borderRadius: 20,
-              borderTopLeftRadius: 0,
-              borderWidth: 1,
-              borderColor: 'rgba(222,193,129,0.7)',
-              shadowColor: '#bd9348',
-              shadowOpacity: 0.16,
-              shadowRadius: 18,
-              shadowOffset: { width: 0, height: 5 },
-              elevation: 3,
-              overflow: 'hidden',
-              maxHeight: todoPanelMaxHeight,
-              position: 'relative',
-            }}>
-              <ConfettiBurst visible={showConfetti} onDone={() => setShowConfetti(false)} />
-              <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10 }} />
-              {homeActionLoading ? (
-                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 32 }}>
-                  <ActivityIndicator size="small" color="#bd9348" />
-                </View>
-              ) : visibleTodos.length === 0 ? (
-                <View style={{ alignItems: 'center', justifyContent: 'center', padding: 20, paddingVertical: 28 }}>
-                  <Text style={{ fontSize: 32, marginBottom: 8 }}>✅</Text>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', marginBottom: 4, textAlign: 'center' }}>All clear!</Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center', lineHeight: 18 }}>
-                    {todoStatusTab === 'done'
-                      ? 'No completed to-dos yet.'
-                      : 'No pending to-dos.'}{'\n'}Meeting action items and{'\n'}monthly check-ins will show up here.
-                  </Text>
-                </View>
-              ) : (
-                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true} style={{ maxHeight: todoPanelMaxHeight }}>
-                  {renderTodoList()}
-                </ScrollView>
-              )}
-            </View>
-          </View>
-
-          {/* Upcoming Events */}
-          <View style={dashboardSectionStyle}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 0 }}>
-              <View style={{ flexShrink: 1, backgroundColor: '#fdf3dc', borderColor: 'rgba(222,193,129,0.7)', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 14, paddingVertical: 7 }}>
-                <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-                  Upcoming Events
-                </Text>
-              </View>
-              <Pressable
-                onPress={toggleHideBirthdayEvents}
-                accessibilityRole="button"
-                accessibilityState={{ selected: hideBirthdayEvents }}
-                accessibilityLabel={hideBirthdayEvents ? 'Show birthday events' : 'Hide birthday events'}
-                style={({ pressed }) => ({
-                  flexShrink: 0,
-                  paddingHorizontal: 10,
-                  paddingVertical: 7,
-                  marginBottom: 4,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: hideBirthdayEvents ? '#bd9348' : 'rgba(222,193,129,0.72)',
-                  backgroundColor: hideBirthdayEvents ? '#fdf3dc' : pressed ? '#fbf0d7' : '#fffdf5',
-                })}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: hideBirthdayEvents ? '#8e6f35' : '#bd9348' }}>
-                  {hideBirthdayEvents ? '🎂 Hidden' : '🎂 Hide'}
-                </Text>
-              </Pressable>
-              <HeaderActionPill label="+ Event" onPress={openCreateEvent} />
-            </View>
-            <View style={{
-              backgroundColor: '#fdf3dc',
-              borderRadius: 20,
-              borderTopLeftRadius: 0,
-              borderWidth: 1,
-              borderColor: 'rgba(222,193,129,0.7)',
-              shadowColor: '#bd9348',
-              shadowOpacity: 0.12,
-              shadowRadius: 18,
-              shadowOffset: { width: 0, height: 5 },
-              elevation: 3,
-              overflow: 'hidden',
-              height: dashboardPanelHeight,
-            }}>
-              {/* Inner top highlight — liquid glass gloss */}
-              <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.95)', marginHorizontal: 10, marginTop: 0 }} />
-              {loading.events ? (
-                <View style={{ padding: 16 }}><EventsListSkeleton /></View>
-              ) : visibleUpcomingEvents.length > 0 ? (
-                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true} style={{ flex: 1 }}>
-                  <EventsList events={visibleUpcomingEvents} onEditEvent={openEditEvent} />
-                </ScrollView>
-              ) : (
-                <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-                  <Text style={{ fontFamily: 'Lato_400Regular', color: '#9ca3af' }}>
-                    {hideBirthdayEvents && upcomingEvents.length > 0 ? 'No upcoming events (birthdays hidden)' : 'No upcoming events'}
-                  </Text>
-                </View>
-              )}
-              <Pressable
-                onPress={openPastEvents}
-                accessibilityRole="button"
-                accessibilityLabel="View past events"
-                style={({ pressed }) => ({
-                  paddingVertical: 10,
-                  alignItems: 'center',
-                  borderTopWidth: 1,
-                  borderTopColor: 'rgba(222,193,129,0.4)',
-                  backgroundColor: pressed ? '#fbf0d7' : 'transparent',
-                })}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
-                  View past events ›
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-
-        </View>
-
-        {/* Hex Shortcuts */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 24, paddingHorizontal: 8 }}>
-          <HexShortcut
-            emoji="🍯"
-            label="Honey Pot"
-            sublabel={loading.honeyPot ? '...' : `$${honeyPotBalance?.toFixed(0) ?? '0'}`}
-            onPress={() => router.push('/honey-pot' as any)}
-          />
-          <HexShortcut
-            emoji="📋"
-            label="Boards"
-            onPress={openBoardsHome}
-          />
-          <HexShortcut
-            emoji="💬"
-            label="Messages"
-            onPress={() => router.push('/messages')}
-          />
-        </View>
-
-        {/* Wishes */}
-        <View style={{ marginBottom: 24 }}>
-          <HeaderTabs
-            activeTab={wishStatusTab}
-            onChange={setWishStatusTab}
-            actionLabel="+ Wish"
-            onAction={() => setShowAddWishModal(true)}
-            compact={useMobileLayout}
-            compactAction={false}
-            stretchTabs={false}
-            tabs={[
-              {
-                key: 'public',
-                label: getHdWishTabLabel('public'),
-                count: publicHdWishes.length,
-              },
-              {
-                key: 'granted',
-                label: getHdWishTabLabel('granted'),
-                count: grantedHdWishes.length,
-              },
-            ]}
-          />
-
-          {loading.publicWishes && loading.grantedWishes ? (
-            <View style={{
-              backgroundColor: '#fdf3dc',
-              borderRadius: 20,
-              borderTopLeftRadius: 0,
-              borderWidth: 1,
-              borderColor: 'rgba(222,193,129,0.7)',
-              shadowColor: '#bd9348',
-              shadowOpacity: 0.12,
-              shadowRadius: 18,
-              shadowOffset: { width: 0, height: 5 },
-              elevation: 3,
-              height: wishPanelHeight,
-              overflow: 'hidden',
-              padding: 12,
-            }}>
-              <WishSectionSkeleton />
-            </View>
-          ) : (
-            <View style={{
-              backgroundColor: '#fdf3dc',
-              borderRadius: 20,
-              borderTopLeftRadius: 0,
-              borderWidth: 1,
-              borderColor: 'rgba(222,193,129,0.7)',
-              shadowColor: '#bd9348',
-              shadowOpacity: 0.12,
-              shadowRadius: 18,
-              shadowOffset: { width: 0, height: 5 },
-              elevation: 3,
-              height: wishPanelHeight,
-              overflow: 'hidden',
-            }}>
-              <ScrollView
-                nestedScrollEnabled
-                showsVerticalScrollIndicator={true}
-                style={{ flex: 1 }}
-                contentContainerStyle={{
-                  padding: 12,
-                  paddingBottom: 12,
-                  flexGrow: visibleHdWishes.length === 0 ? 1 : undefined,
-                }}
-              >
-                {visibleHdWishes.length === 0 ? (
-                  <View className="bg-white rounded-xl p-6 shadow-sm items-center">
-                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
-                      {hdWishesEmptyText}
-                    </Text>
-                  </View>
-                ) : (
-                  visibleHdWishes.map((wish) => (
-                    <WishCard
-                      key={wish.id}
-                      wish={wish}
-                      onPress={() => openWishDetail(wish)}
-                      canEdit={canOpenWishActions(wish)}
-                      canDelete={canDeleteWish(wish)}
-                      onManage={() => setManagingWish(wish)}
-                      showBodyPreview={!useMobileLayout}
+                      <HeaderActionPill label="+ Event" onPress={openCreateEvent} />
+                    </View>
+                    <View style={{
+                      backgroundColor: '#fdf3dc',
+                      borderRadius: 20,
+                      borderTopLeftRadius: 0,
+                      borderWidth: 1,
+                      borderColor: 'rgba(222,193,129,0.7)',
+                      shadowColor: '#bd9348',
+                      shadowOpacity: 0.12,
+                      shadowRadius: 18,
+                      shadowOffset: { width: 0, height: 5 },
+                      elevation: 3,
+                      overflow: 'hidden',
+                      height: dashboardPanelHeight,
+                    }}>
+                      {/* Inner top highlight — liquid glass gloss */}
+                      <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.95)', marginHorizontal: 10, marginTop: 0 }} />
+                      {loading.events ? (
+                        <View style={{ padding: 16 }}><EventsListSkeleton /></View>
+                      ) : visibleUpcomingEvents.length > 0 ? (
+                        <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true} style={{ flex: 1 }}>
+                          <EventsList events={visibleUpcomingEvents} onEditEvent={openEditEvent} />
+                        </ScrollView>
+                      ) : (
+                        <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+                          <Text style={{ fontFamily: 'Lato_400Regular', color: '#9ca3af' }}>
+                            {hideBirthdayEvents && upcomingEvents.length > 0 ? 'No upcoming events (birthdays hidden)' : 'No upcoming events'}
+                          </Text>
+                        </View>
+                      )}
+                      <Pressable
+                        onPress={openPastEvents}
+                        accessibilityRole="button"
+                        accessibilityLabel="View past events"
+                        style={({ pressed }) => ({
+                          paddingVertical: 10,
+                          alignItems: 'center',
+                          borderTopWidth: 1,
+                          borderTopColor: 'rgba(222,193,129,0.4)',
+                          backgroundColor: pressed ? '#fbf0d7' : 'transparent',
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
+                          View past events ›
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </>
+                );
+              case 'shortcuts':
+                return (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 24, paddingHorizontal: 8 }}>
+                    <HexShortcut
+                      emoji="🍯"
+                      label="Honey Pot"
+                      sublabel={loading.honeyPot ? '...' : `$${honeyPotBalance?.toFixed(0) ?? '0'}`}
+                      onPress={() => router.push('/honey-pot' as any)}
                     />
-                  ))
-                )}
-              </ScrollView>
-            </View>
-          )}
-        </View>
+                    <HexShortcut
+                      emoji="📋"
+                      label="Boards"
+                      onPress={openBoardsHome}
+                    />
+                    <HexShortcut
+                      emoji="💬"
+                      label="Messages"
+                      onPress={() => router.push('/messages')}
+                    />
+                  </View>
+                );
+              case 'wishes':
+                return (
+                  <View style={{ marginBottom: 24 }}>
+                    <HeaderTabs
+                      activeTab={wishStatusTab}
+                      onChange={setWishStatusTab}
+                      actionLabel="+ Wish"
+                      onAction={() => setShowAddWishModal(true)}
+                      compact={useMobileLayout}
+                      compactAction={false}
+                      stretchTabs={false}
+                      tabs={[
+                        {
+                          key: 'public',
+                          label: getHdWishTabLabel('public'),
+                          count: publicHdWishes.length,
+                        },
+                        {
+                          key: 'granted',
+                          label: getHdWishTabLabel('granted'),
+                          count: grantedHdWishes.length,
+                        },
+                      ]}
+                    />
+
+                    {loading.publicWishes && loading.grantedWishes ? (
+                      <View style={{
+                        backgroundColor: '#fdf3dc',
+                        borderRadius: 20,
+                        borderTopLeftRadius: 0,
+                        borderWidth: 1,
+                        borderColor: 'rgba(222,193,129,0.7)',
+                        shadowColor: '#bd9348',
+                        shadowOpacity: 0.12,
+                        shadowRadius: 18,
+                        shadowOffset: { width: 0, height: 5 },
+                        elevation: 3,
+                        height: wishPanelHeight,
+                        overflow: 'hidden',
+                        padding: 12,
+                      }}>
+                        <WishSectionSkeleton />
+                      </View>
+                    ) : (
+                      <View style={{
+                        backgroundColor: '#fdf3dc',
+                        borderRadius: 20,
+                        borderTopLeftRadius: 0,
+                        borderWidth: 1,
+                        borderColor: 'rgba(222,193,129,0.7)',
+                        shadowColor: '#bd9348',
+                        shadowOpacity: 0.12,
+                        shadowRadius: 18,
+                        shadowOffset: { width: 0, height: 5 },
+                        elevation: 3,
+                        height: wishPanelHeight,
+                        overflow: 'hidden',
+                      }}>
+                        <ScrollView
+                          nestedScrollEnabled
+                          showsVerticalScrollIndicator={true}
+                          style={{ flex: 1 }}
+                          contentContainerStyle={{
+                            padding: 12,
+                            paddingBottom: 12,
+                            flexGrow: visibleHdWishes.length === 0 ? 1 : undefined,
+                          }}
+                        >
+                          {visibleHdWishes.length === 0 ? (
+                            <View className="bg-white rounded-xl p-6 shadow-sm items-center">
+                              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
+                                {hdWishesEmptyText}
+                              </Text>
+                            </View>
+                          ) : (
+                            visibleHdWishes.map((wish) => (
+                              <WishCard
+                                key={wish.id}
+                                wish={wish}
+                                onPress={() => openWishDetail(wish)}
+                                canEdit={canOpenWishActions(wish)}
+                                canDelete={canDeleteWish(wish)}
+                                onManage={() => setManagingWish(wish)}
+                                showBodyPreview={!useMobileLayout}
+                              />
+                            ))
+                          )}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+                );
+              default:
+                return null;
+            }
+          };
+
+          if (customizeMode) {
+            return (
+              <View style={{ marginBottom: 24 }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginBottom: 10 }}>
+                  Use the arrows to reorder your home screen, then tap Done to save.
+                </Text>
+                {sectionOrder.map((key, index) => (
+                  <View
+                    key={key}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                      backgroundColor: '#fffdf5',
+                      borderWidth: 1,
+                      borderColor: 'rgba(222,193,129,0.7)',
+                      borderRadius: 16,
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      marginBottom: 10,
+                      shadowColor: '#bd9348',
+                      shadowOpacity: 0.08,
+                      shadowRadius: 8,
+                      shadowOffset: { width: 0, height: 3 },
+                      elevation: 2,
+                    }}
+                  >
+                    <Text style={{ fontSize: 16 }}>{HOME_SECTION_META[key].emoji}</Text>
+                    <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }} numberOfLines={1}>
+                      {HOME_SECTION_META[key].title}
+                    </Text>
+                    <SectionMoveButton direction="up" disabled={index === 0} onPress={() => moveHomeSection(key, -1)} />
+                    <SectionMoveButton direction="down" disabled={index === sectionOrder.length - 1} onPress={() => moveHomeSection(key, 1)} />
+                  </View>
+                ))}
+              </View>
+            );
+          }
+
+          return homeSectionGroups.map((group) => (
+            HOME_SECTION_META[group[0]].layout === 'panel' ? (
+              <View
+                key={group.join('-')}
+                style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: useMobileLayout ? 22 : 16, marginBottom: 24 }}
+              >
+                {group.map((sectionKey) => (
+                  <View key={sectionKey} style={dashboardSectionStyle}>
+                    {renderHomeSection(sectionKey)}
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View key={group[0]}>{renderHomeSection(group[0])}</View>
+            )
+          ));
+        })()}
 
         </View>
       </ScrollView>
