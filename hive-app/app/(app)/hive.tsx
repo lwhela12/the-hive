@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, ActivityIndicator, Animated, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
@@ -14,6 +14,9 @@ import { deleteWishById } from '../../lib/wishMutations';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
 import { useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
 import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
+import { useAppUpdate } from '../../lib/hooks/useAppUpdate';
+import { useInstallPrompt } from '../../lib/hooks/useInstallPrompt';
+import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { WishCard } from '../../components/hive/WishCard';
 import { WishDetail } from '../../components/hive/WishDetail';
@@ -1702,9 +1705,33 @@ export default function HiveScreen() {
     }
   };
 
+  // "Fresh honey" update flow + one-tap install (both web only, native no-ops)
+  const { updateAvailable, applyUpdate } = useAppUpdate();
+  const { canPromptInstall, promptInstall } = useInstallPrompt();
+  const { isStandalone: isInstalledWebApp } = useWebAppDisplayMode();
+  // Hide "Add to Home" when already running as an installed web app.
+  const hideAddToHomePill = Platform.OS === 'web' && isInstalledWebApp;
+
   const showPhoneInstallHelp = useCallback(() => {
+    if (Platform.OS === 'web' && canPromptInstall) {
+      // Android Chrome (and other Chromium): trigger the real install prompt.
+      // Falls back to the instructions modal if the prompt fails to show.
+      void promptInstall().catch(() => setShowAddHomeGuide(true));
+      return;
+    }
+    // iOS Safari / unsupported browsers: manual instructions, unchanged.
     setShowAddHomeGuide(true);
-  }, []);
+  }, [canPromptInstall, promptInstall]);
+
+  // Refresh pill: data refresh normally; when a new build is live, run the
+  // full app-update flow (SW update + skip waiting + reload) instead.
+  const handleRefreshPill = () => {
+    if (Platform.OS === 'web' && updateAvailable) {
+      void applyUpdate();
+      return;
+    }
+    void onRefresh();
+  };
 
   const homeIsUpdating = refreshing || isLoading || activityLoading || homeActionLoading || duesStatusLoading;
 
@@ -2516,7 +2543,7 @@ export default function HiveScreen() {
             }}
           >
             <Pressable
-              onPress={onRefresh}
+              onPress={handleRefreshPill}
               disabled={refreshing || isLoading}
               style={({ pressed }) => ({
                 flex: 1,
@@ -2530,25 +2557,27 @@ export default function HiveScreen() {
               })}
             >
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
-                ↻ Refresh
+                {updateAvailable ? '🍯 Refresh' : '↻ Refresh'}
               </Text>
             </Pressable>
-            <Pressable
-              onPress={showPhoneInstallHelp}
-              style={({ pressed }) => ({
-                flex: 1.4,
-                backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-                borderWidth: 1,
-                borderColor: 'rgba(222,193,129,0.7)',
-                borderRadius: 999,
-                paddingVertical: 10,
-                alignItems: 'center',
-              })}
-            >
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
-                □↑ Add to Home
-              </Text>
-            </Pressable>
+            {!hideAddToHomePill && (
+              <Pressable
+                onPress={showPhoneInstallHelp}
+                style={({ pressed }) => ({
+                  flex: 1.4,
+                  backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.7)',
+                  borderRadius: 999,
+                  paddingVertical: 10,
+                  alignItems: 'center',
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+                  □↑ Add to Home
+                </Text>
+              </Pressable>
+            )}
           </View>
         )}
 

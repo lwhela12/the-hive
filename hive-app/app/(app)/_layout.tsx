@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
+import { AppUpdateBanner } from '../../components/ui/AppUpdateBanner';
 import { getLastAppPathAsync, getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
@@ -177,6 +178,8 @@ export default function AppLayout() {
 
   return (
     <View style={{ flex: 1 }}>
+      {/* "Fresh honey" bar — web only, shows on every tab when a new build ships */}
+      <AppUpdateBanner />
       <Tabs
         initialRouteName={getLastAppTabName()}
         screenOptions={{
