@@ -2782,6 +2782,23 @@ export default function HiveScreen() {
                     }}>
                       {/* Inner top highlight — liquid glass gloss */}
                       <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.95)', marginHorizontal: 10, marginTop: 0 }} />
+                      {/* Past events sits above upcoming — chronological top-to-bottom */}
+                      <Pressable
+                        onPress={openPastEvents}
+                        accessibilityRole="button"
+                        accessibilityLabel="View past events"
+                        style={({ pressed }) => ({
+                          paddingVertical: 10,
+                          alignItems: 'center',
+                          borderBottomWidth: 1,
+                          borderBottomColor: 'rgba(222,193,129,0.4)',
+                          backgroundColor: pressed ? '#fbf0d7' : 'transparent',
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
+                          ‹ View past events
+                        </Text>
+                      </Pressable>
                       {loading.events ? (
                         <View style={{ padding: 16 }}><EventsListSkeleton /></View>
                       ) : visibleUpcomingEvents.length > 0 ? (
@@ -2795,22 +2812,6 @@ export default function HiveScreen() {
                           </Text>
                         </View>
                       )}
-                      <Pressable
-                        onPress={openPastEvents}
-                        accessibilityRole="button"
-                        accessibilityLabel="View past events"
-                        style={({ pressed }) => ({
-                          paddingVertical: 10,
-                          alignItems: 'center',
-                          borderTopWidth: 1,
-                          borderTopColor: 'rgba(222,193,129,0.4)',
-                          backgroundColor: pressed ? '#fbf0d7' : 'transparent',
-                        })}
-                      >
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
-                          View past events ›
-                        </Text>
-                      </Pressable>
                     </View>
                   </>
                 );
