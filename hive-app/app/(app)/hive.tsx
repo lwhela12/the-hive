@@ -43,6 +43,7 @@ import {
   getDuesPeriodStartDate,
   isDuesPeriodStartDay,
 } from '../../lib/dues';
+import { HONEY_POT_CASH_APP_HANDLE } from '../../lib/honeyPotPayment';
 import type { Profile, Wish, WishGranter, Event, ActionItem } from '../../types';
 
 type WishWithGranters = Wish & {
@@ -1721,10 +1722,10 @@ export default function HiveScreen() {
         title: isDueToday ? 'Quarterly dues are due today!' : 'Quarterly dues are still due',
         detail: duesStatusLoading
           ? 'Checking payment status...'
-          : `Due ${dueDateLabel} · $${QUARTERLY_DUES_AMOUNT} for Q${quarter} ${year}`,
-        cta: canManageDues ? 'Record →' : undefined,
-        ctaOnPress: canManageDues ? () => router.push('/admin') : undefined,
-        onPress: markQuarterlyDuesReminderDone,
+          : `Due ${dueDateLabel} · $${QUARTERLY_DUES_AMOUNT} for Q${quarter} ${year} · ${HONEY_POT_CASH_APP_HANDLE}`,
+        cta: canManageDues ? 'Record →' : 'Pay →',
+        ctaOnPress: canManageDues ? () => router.push('/admin') : () => router.push('/honey-pot' as any),
+        onPress: canManageDues ? markQuarterlyDuesReminderDone : () => router.push('/honey-pot' as any),
         onToggle: markQuarterlyDuesReminderDone,
       }];
     })(),

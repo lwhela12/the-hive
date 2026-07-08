@@ -3,6 +3,7 @@ import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppHeader } from '../../components/navigation';
+import { HoneyPotPaymentCard } from '../../components/hive/HoneyPotPaymentCard';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { fetchHoneyPotLedger, type HoneyPotLedgerEntry } from '../../lib/honeyPot';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -61,6 +62,7 @@ export default function HoneyPotScreen() {
               Community fund activity
             </Text>
           </View>
+          <HoneyPotPaymentCard />
           <HoneyPotLedger
             balance={balance}
             transactions={transactions}
