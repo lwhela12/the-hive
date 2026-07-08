@@ -71,7 +71,6 @@ type HomeTodo = {
 
 const CALENDAR_DURATION_MS = 2.5 * 60 * 60 * 1000; // 30-min arrival + 2-hour meeting
 const CATCH_UP_BATCH_SIZE = 7;
-const PAST_EVENTS_PAGE_SIZE = 25;
 const CATCH_UP_MAX_DAYS = DAILY_QUESTIONS.length;
 
 const getRecentDailyQuestions = (days = CATCH_UP_BATCH_SIZE) => {
@@ -770,46 +769,44 @@ export default function HiveScreen() {
   }, [eventsHideBirthdaysKey]);
 
   // Past events browser — paginated, newest-first
-  const [showPastEventsModal, setShowPastEventsModal] = useState(false);
   const [pastEvents, setPastEvents] = useState<Event[]>([]);
+  const [pastMonthsShown, setPastMonthsShown] = useState(0);
   const [pastEventsLoading, setPastEventsLoading] = useState(false);
-  const [pastEventsLoadingMore, setPastEventsLoadingMore] = useState(false);
-  const [pastEventsHasMore, setPastEventsHasMore] = useState(false);
 
-  const fetchPastEvents = useCallback(async (offset: number) => {
-    if (!communityId) return;
-    if (offset === 0) setPastEventsLoading(true);
-    else setPastEventsLoadingMore(true);
+  // Inline timeline: each tap pulls one more calendar month of history into the
+  // Upcoming Events panel (scroll up = past, scroll down = future).
+  const showMorePastEvents = useCallback(async () => {
+    if (!communityId || pastEventsLoading) return;
+    const nextMonths = pastMonthsShown + 1;
+    setPastEventsLoading(true);
     try {
       const now = new Date();
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const windowStart = new Date(now.getFullYear(), now.getMonth() - (nextMonths - 1), 1);
+      const startIso = `${windowStart.getFullYear()}-${String(windowStart.getMonth() + 1).padStart(2, '0')}-01`;
       const { data, error } = await supabase
         .from('events')
         .select('*')
         .eq('community_id', communityId)
+        .gte('event_date', startIso)
         .lt('event_date', today)
-        .order('event_date', { ascending: false })
-        .order('event_time', { ascending: false })
-        .range(offset, offset + PAST_EVENTS_PAGE_SIZE - 1);
+        .order('event_date', { ascending: true })
+        .order('event_time', { ascending: true });
 
       if (error) throw error;
-      const rows = (data as Event[]) ?? [];
-      setPastEvents(prev => (offset === 0 ? rows : [...prev, ...rows]));
-      setPastEventsHasMore(rows.length === PAST_EVENTS_PAGE_SIZE);
+      setPastEvents((data as Event[]) ?? []);
+      setPastMonthsShown(nextMonths);
     } catch (error) {
       console.warn('Could not load past events', error);
-      if (offset === 0) setPastEvents([]);
-      setPastEventsHasMore(false);
     } finally {
       setPastEventsLoading(false);
-      setPastEventsLoadingMore(false);
     }
-  }, [communityId]);
+  }, [communityId, pastEventsLoading, pastMonthsShown]);
 
-  const openPastEvents = useCallback(() => {
-    setShowPastEventsModal(true);
-    void fetchPastEvents(0);
-  }, [fetchPastEvents]);
+  const collapsePastEvents = useCallback(() => {
+    setPastEvents([]);
+    setPastMonthsShown(0);
+  }, []);
 
   const fetchMyActionItems = useCallback(async () => {
     if (!profile?.id || !communityId) return;
@@ -1073,7 +1070,6 @@ export default function HiveScreen() {
     setShowEventModal(false);
     setEditingEvent(null);
     setEventError(null);
-    setShowPastEventsModal(false);
     setShowAddTaskModal(false);
     setSelectedActionItemId(null);
     setTaskError(null);
@@ -2031,8 +2027,12 @@ export default function HiveScreen() {
     ? pastEvents.filter(event => event.event_type !== 'birthday')
     : pastEvents;
 
-  // Group past events under month headers ("June 2026", "May 2026", ...).
-  // Events arrive sorted newest-first, so consecutive rows share a month.
+  // Group past events under month headers, oldest month first so the panel
+  // reads as one timeline: past at the top, today, then upcoming below.
+  const pastWindowLabel = pastMonthsShown > 0
+    ? new Date(new Date().getFullYear(), new Date().getMonth() - (pastMonthsShown - 1), 1)
+        .toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : null;
   const pastEventMonthGroups = visiblePastEvents.reduce<{ key: string; label: string; events: Event[] }[]>((groups, event) => {
     const key = event.event_date.slice(0, 7); // YYYY-MM
     const lastGroup = groups[groups.length - 1];
@@ -2782,35 +2782,102 @@ export default function HiveScreen() {
                     }}>
                       {/* Inner top highlight — liquid glass gloss */}
                       <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.95)', marginHorizontal: 10, marginTop: 0 }} />
-                      {/* Past events sits above upcoming — chronological top-to-bottom */}
-                      <Pressable
-                        onPress={openPastEvents}
-                        accessibilityRole="button"
-                        accessibilityLabel="View past events"
-                        style={({ pressed }) => ({
-                          paddingVertical: 10,
-                          alignItems: 'center',
-                          borderBottomWidth: 1,
-                          borderBottomColor: 'rgba(222,193,129,0.4)',
-                          backgroundColor: pressed ? '#fbf0d7' : 'transparent',
-                        })}
-                      >
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
-                          ‹ View past events
-                        </Text>
-                      </Pressable>
+                      {/* Past events load inline above upcoming — one timeline, one month per tap */}
+                      <View style={{ flexDirection: 'row', alignItems: 'stretch', borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.4)' }}>
+                        <Pressable
+                          onPress={showMorePastEvents}
+                          disabled={pastEventsLoading}
+                          accessibilityRole="button"
+                          accessibilityLabel="View past events, one month further back per tap"
+                          style={({ pressed }) => ({
+                            flex: 1,
+                            paddingVertical: 10,
+                            alignItems: 'center',
+                            backgroundColor: pressed ? '#fbf0d7' : 'transparent',
+                            opacity: pastEventsLoading ? 0.6 : 1,
+                          })}
+                        >
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
+                            {pastEventsLoading ? 'Loading…' : pastMonthsShown === 0 ? '‹ View past events' : '‹ View earlier events'}
+                          </Text>
+                        </Pressable>
+                        {pastMonthsShown > 0 && (
+                          <Pressable
+                            onPress={collapsePastEvents}
+                            accessibilityRole="button"
+                            accessibilityLabel="Collapse past events"
+                            style={({ pressed }) => ({
+                              paddingVertical: 10,
+                              paddingHorizontal: 14,
+                              justifyContent: 'center',
+                              borderLeftWidth: 1,
+                              borderLeftColor: 'rgba(222,193,129,0.4)',
+                              backgroundColor: pressed ? '#fbf0d7' : 'transparent',
+                            })}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#9a8060' }}>Collapse ✕</Text>
+                          </Pressable>
+                        )}
+                      </View>
                       {loading.events ? (
                         <View style={{ padding: 16 }}><EventsListSkeleton /></View>
-                      ) : visibleUpcomingEvents.length > 0 ? (
-                        <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true} style={{ flex: 1 }}>
-                          <EventsList events={visibleUpcomingEvents} onEditEvent={openEditEvent} />
-                        </ScrollView>
                       ) : (
-                        <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-                          <Text style={{ fontFamily: 'Lato_400Regular', color: '#9ca3af' }}>
-                            {hideBirthdayEvents && upcomingEvents.length > 0 ? 'No upcoming events (birthdays hidden)' : 'No upcoming events'}
-                          </Text>
-                        </View>
+                        <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true} style={{ flex: 1 }}>
+                          {pastMonthsShown > 0 && (
+                            <>
+                              <View style={{ opacity: 0.82 }}>
+                                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', textAlign: 'center', paddingTop: 8 }}>
+                                  Showing events since {pastWindowLabel}
+                                </Text>
+                                {pastEventMonthGroups.length === 0 ? (
+                                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', textAlign: 'center', paddingVertical: 10 }}>
+                                    No events in this stretch — tap again to go back further.
+                                  </Text>
+                                ) : pastEventMonthGroups.map((group) => (
+                                  <View key={group.key} style={{ paddingHorizontal: 14, paddingTop: 8 }}>
+                                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', marginBottom: 4 }}>
+                                      {group.label}
+                                    </Text>
+                                    {group.events.map((event) => (
+                                      <View
+                                        key={event.id}
+                                        style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.22)' }}
+                                      >
+                                        <Text style={{ fontSize: 15, marginRight: 8 }}>
+                                          {event.event_type === 'birthday' ? '🎂' :
+                                           event.event_type === 'meeting' ? '📅' :
+                                           event.event_type === 'queen_bee' ? '👑' : '📌'}
+                                        </Text>
+                                        <View style={{ flex: 1 }}>
+                                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#5b5b5b' }}>{event.title}</Text>
+                                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 1 }}>
+                                            {formatDateShort(event.event_date)}
+                                            {event.event_time ? ` at ${formatTime(event.event_time)}` : ''}
+                                            {event.location ? ` · ${event.location}` : ''}
+                                          </Text>
+                                        </View>
+                                      </View>
+                                    ))}
+                                  </View>
+                                ))}
+                              </View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8 }}>
+                                <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(189,147,72,0.35)' }} />
+                                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', letterSpacing: 1 }}>TODAY</Text>
+                                <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(189,147,72,0.35)' }} />
+                              </View>
+                            </>
+                          )}
+                          {visibleUpcomingEvents.length > 0 ? (
+                            <EventsList events={visibleUpcomingEvents} onEditEvent={openEditEvent} />
+                          ) : (
+                            <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ fontFamily: 'Lato_400Regular', color: '#9ca3af' }}>
+                                {hideBirthdayEvents && upcomingEvents.length > 0 ? 'No upcoming events (birthdays hidden)' : 'No upcoming events'}
+                              </Text>
+                            </View>
+                          )}
+                        </ScrollView>
                       )}
                     </View>
                   </>
@@ -3151,110 +3218,6 @@ export default function HiveScreen() {
         </Pressable>
       </Modal>
 
-      {/* Past Events Browser */}
-      <Modal visible={showPastEventsModal} animationType="slide" transparent onRequestClose={() => setShowPastEventsModal(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'flex-end' }} onPress={() => setShowPastEventsModal(false)}>
-          <Pressable
-            onPress={(event) => event.stopPropagation()}
-            style={{
-              backgroundColor: '#fffdf5',
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              maxHeight: useMobileLayout ? '78%' : '82%',
-              paddingBottom: useMobileLayout ? 34 : 24,
-            }}
-          >
-            <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
-              <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2 }} />
-            </View>
-            <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d', marginBottom: 4 }}>Past Events</Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 12 }}>
-                Everything HIVE has been up to, newest first.{hideBirthdayEvents ? ' Birthdays are hidden.' : ''}
-              </Text>
-              {pastEventsLoading ? (
-                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
-                  <ActivityIndicator size="small" color="#bd9348" />
-                </View>
-              ) : pastEventMonthGroups.length === 0 ? (
-                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center' }}>
-                    No past events yet.{'\n'}Once events wrap up, they will land here.
-                  </Text>
-                </View>
-              ) : (
-                <ScrollView
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator={true}
-                  style={{ maxHeight: useMobileLayout ? 440 : 560 }}
-                  contentContainerStyle={{ paddingBottom: 4 }}
-                >
-                  {pastEventMonthGroups.map((group) => (
-                    <View key={group.key} style={{ marginBottom: 14 }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348', marginBottom: 8 }}>
-                        {group.label}
-                      </Text>
-                      <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)', overflow: 'hidden' }}>
-                        {group.events.map((event, index) => (
-                          <View
-                            key={event.id}
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'flex-start',
-                              padding: 12,
-                              borderBottomWidth: index < group.events.length - 1 ? 1 : 0,
-                              borderBottomColor: 'rgba(222,193,129,0.28)',
-                            }}
-                          >
-                            <Text style={{ fontSize: 18, marginRight: 10 }}>
-                              {event.event_type === 'birthday' ? '🎂' :
-                               event.event_type === 'meeting' ? '📅' :
-                               event.event_type === 'queen_bee' ? '👑' : '📌'}
-                            </Text>
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>{event.title}</Text>
-                              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 2 }}>
-                                {formatDateShort(event.event_date)}
-                                {event.event_time ? ` at ${formatTime(event.event_time)}` : ''}
-                                {event.location ? ` · ${event.location}` : ''}
-                              </Text>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  ))}
-                  {pastEventsHasMore && (
-                    <Pressable
-                      onPress={() => fetchPastEvents(pastEvents.length)}
-                      disabled={pastEventsLoadingMore}
-                      accessibilityRole="button"
-                      accessibilityLabel="Load more past events"
-                      style={({ pressed }) => ({
-                        backgroundColor: pressed ? '#fbf0d7' : '#f5f3ee',
-                        borderRadius: 14,
-                        paddingVertical: 14,
-                        marginBottom: 10,
-                        opacity: pastEventsLoadingMore ? 0.6 : 1,
-                      })}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', textAlign: 'center' }}>
-                        {pastEventsLoadingMore ? 'Loading...' : 'Load more'}
-                      </Text>
-                    </Pressable>
-                  )}
-                </ScrollView>
-              )}
-              <Pressable
-                onPress={() => setShowPastEventsModal(false)}
-                style={{ backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14, marginTop: 6 }}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       <WishManageModal
         visible={!!managingWish}
