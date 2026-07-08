@@ -112,6 +112,8 @@ export default function ProfileScreen() {
   const [selectedWish, setSelectedWish] = useState<(Wish & { user: Profile }) | null>(null);
   const [wishToGrant, setWishToGrant] = useState<(Wish & { user: Profile }) | null>(null);
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
+  const [replantingGarden, setReplantingGarden] = useState(false);
+  const [replantNotice, setReplantNotice] = useState<string | null>(null);
   const [addWishModalVisible, setAddWishModalVisible] = useState(false);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
   const [managingWish, setManagingWish] = useState<Wish | null>(null);
@@ -900,8 +902,8 @@ export default function ProfileScreen() {
   const handlePlantSkills = async (
     seeds: Array<{ description: string; enthusiasmLevel?: number; slotIndex?: number }>,
     options?: { mode?: 'fill' | 'replace' }
-  ) => {
-    if (!profile || !communityId || seeds.length === 0) return;
+  ): Promise<number | null> => {
+    if (!profile || !communityId || seeds.length === 0) return 0;
 
     const mode = options?.mode ?? 'fill';
     const activeNames = new Set(
@@ -911,7 +913,7 @@ export default function ProfileScreen() {
     );
     const bloomingCount = mode === 'replace' ? 0 : skills.filter(hasBloomingSkill).length;
     const openSlots = Math.max(0, SKILLS_GARDEN_CAPACITY - bloomingCount);
-    if (openSlots === 0) return;
+    if (openSlots === 0) return 0;
 
     const uniqueSeeds = seeds.filter((seed, index, all) => {
       const normalized = seed.description.trim().toLowerCase();
@@ -919,7 +921,7 @@ export default function ProfileScreen() {
         all.findIndex(item => item.description.trim().toLowerCase() === normalized) === index;
     }).slice(0, openSlots);
 
-    if (uniqueSeeds.length === 0) return;
+    if (uniqueSeeds.length === 0) return 0;
 
     if (mode === 'replace') {
       const { error: resetError } = await supabase
@@ -934,7 +936,7 @@ export default function ProfileScreen() {
 
       if (resetError) {
         Alert.alert('Error', 'Failed to clear your current garden. Please try again.');
-        return;
+        return null;
       }
 
       setSkills((current) =>
@@ -990,7 +992,7 @@ export default function ProfileScreen() {
         if (error) {
           Alert.alert('Error', 'Failed to plant that garden. Please try again.');
           await fetchData();
-          return;
+          return null;
         }
 
         if (data) updatedRows.push(data as Skill);
@@ -1016,7 +1018,7 @@ export default function ProfileScreen() {
       if (error) {
         Alert.alert('Error', 'Failed to plant that garden. Please try again.');
         await fetchData();
-        return;
+        return null;
       }
 
       insertedRows = (data as Skill[] | null) ?? [];
@@ -1029,6 +1031,37 @@ export default function ProfileScreen() {
         plantedRows.forEach(skill => byId.set(skill.id, skill));
         return Array.from(byId.values());
       });
+    }
+
+    return plantedRows.length;
+  };
+
+  const handleReplantGarden = async () => {
+    if (replantingGarden) return;
+
+    const unplantedSkills = skills.filter((skill) => !hasBloomingSkill(skill));
+    if (unplantedSkills.length === 0) return;
+
+    const openSlots = Math.max(0, SKILLS_GARDEN_CAPACITY - skills.filter(hasBloomingSkill).length);
+    if (openSlots === 0) return;
+
+    setReplantNotice(null);
+    setReplantingGarden(true);
+    try {
+      const planted = await handlePlantSkills(
+        unplantedSkills.map((skill) => ({ description: skill.description, enthusiasmLevel: 1 })),
+        { mode: 'fill' }
+      );
+
+      if (planted === null) {
+        setReplantNotice('Something went wrong while replanting — please try again.');
+      } else if (unplantedSkills.length > openSlots) {
+        setReplantNotice(
+          `Planted ${planted} — the garden is full; ${unplantedSkills.length - planted} still saved.`
+        );
+      }
+    } finally {
+      setReplantingGarden(false);
     }
   };
 
@@ -1165,6 +1198,8 @@ export default function ProfileScreen() {
   const isProfilePhone = screenWidth < 640;
   const profileWishPanelHeight = isProfilePhone ? 500 : 520;
   const bloomingSkillCount = skills.filter(hasBloomingSkill).length;
+  const unplantedSkillCount = skills.length - bloomingSkillCount;
+  const gardenOpenSlots = Math.max(0, SKILLS_GARDEN_CAPACITY - bloomingSkillCount);
   const deepQuizCanGoBack = deepQuizStep > 0;
   const deepQuizIsLastStep = deepQuizStep === DEEP_PROFILE_STEPS.length - 1;
   const deepQuizProgress = `${deepQuizStep + 1}/${DEEP_PROFILE_STEPS.length}`;
@@ -2189,6 +2224,60 @@ export default function ProfileScreen() {
                         : 'Seed your Skills Garden'}
                     </Text>
                   </View>
+                </View>
+              )}
+              {/* Replant helper — only rendered here on the user's own garden
+                  (read-only gardens in members.tsx never show it) */}
+              {(unplantedSkillCount > 0 || replantNotice) && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    backgroundColor: '#eef6ee',
+                    borderWidth: 1,
+                    borderColor: '#cfe3d2',
+                    borderRadius: 14,
+                    paddingVertical: 9,
+                    paddingHorizontal: 14,
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Lato_400Regular',
+                      color: '#2f7147',
+                      fontSize: 12.5,
+                      lineHeight: 17,
+                      flex: 1,
+                      minWidth: 160,
+                    }}
+                  >
+                    {replantNotice
+                      ?? (gardenOpenSlots > 0
+                        ? `🌱 ${unplantedSkillCount} skill${unplantedSkillCount === 1 ? '' : 's'} waiting to be replanted`
+                        : `🌱 ${unplantedSkillCount} skill${unplantedSkillCount === 1 ? '' : 's'} still saved — the garden is full`)}
+                  </Text>
+                  {unplantedSkillCount > 0 && gardenOpenSlots > 0 && (
+                    <Pressable
+                      onPress={handleReplantGarden}
+                      disabled={replantingGarden}
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: replantingGarden }}
+                      style={{
+                        backgroundColor: '#315d4e',
+                        borderRadius: 999,
+                        paddingVertical: 6,
+                        paddingHorizontal: 14,
+                        opacity: replantingGarden ? 0.6 : 1,
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 12 }}>
+                        {replantingGarden ? 'Replanting…' : 'Replant all'}
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
               )}
               <SkillBubbleGarden
