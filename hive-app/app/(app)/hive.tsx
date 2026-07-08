@@ -438,6 +438,37 @@ const resolveHomeSectionOrder = (saved?: readonly string[] | null): HomeSectionK
   return order;
 };
 
+// Customizable home shortcut hexes (persisted per member in profiles.home_shortcuts).
+type HomeShortcutKey = 'honey_pot' | 'boards' | 'messages' | 'members' | 'meetings' | 'profile' | 'clive' | 'admin';
+
+const DEFAULT_HOME_SHORTCUTS: HomeShortcutKey[] = ['honey_pot', 'boards', 'messages'];
+
+const HOME_SHORTCUT_META: Record<HomeShortcutKey, { label: string; emoji: string; adminOnly?: boolean }> = {
+  honey_pot: { label: 'Honey Pot', emoji: '🍯' },
+  boards: { label: 'Boards', emoji: '📋' },
+  messages: { label: 'Messages', emoji: '💬' },
+  members: { label: 'Members', emoji: '🐝' },
+  meetings: { label: 'Meetings', emoji: '📅' },
+  profile: { label: 'My Profile', emoji: '👤' },
+  clive: { label: 'Clive', emoji: '✨' },
+  admin: { label: 'Admin', emoji: '⚙️', adminOnly: true },
+};
+
+// Resolve saved shortcuts against the catalog: unknown keys and duplicates are
+// dropped, admin-only shortcuts are dropped for members who can't use them, and
+// any remaining empty slots fall back to the defaults — always exactly 3 slots.
+const resolveHomeShortcuts = (saved: readonly string[] | null | undefined, allowAdmin: boolean): HomeShortcutKey[] => {
+  const isKnownShortcut = (key: string): key is HomeShortcutKey => key in HOME_SHORTCUT_META;
+  const picked = [...new Set((saved ?? []).filter(isKnownShortcut))]
+    .filter((key) => allowAdmin || !HOME_SHORTCUT_META[key].adminOnly)
+    .slice(0, DEFAULT_HOME_SHORTCUTS.length);
+  for (const fallback of DEFAULT_HOME_SHORTCUTS) {
+    if (picked.length >= DEFAULT_HOME_SHORTCUTS.length) break;
+    if (!picked.includes(fallback)) picked.push(fallback);
+  }
+  return picked;
+};
+
 function SectionMoveButton({ direction, disabled, onPress }: {
   direction: 'up' | 'down';
   disabled: boolean;
@@ -488,6 +519,7 @@ export default function HiveScreen() {
   // Per-member home section order — read from the already-fetched profile row,
   // reordered locally in customize mode, persisted to profiles.home_section_order.
   const savedHomeSectionOrderKey = (profile?.home_section_order ?? []).join('|');
+  const savedHomeShortcutsKey = (profile?.home_shortcuts ?? []).join('|');
   const [customizeMode, setCustomizeMode] = useState(false);
   const customizeModeRef = useRef(false);
   customizeModeRef.current = customizeMode;
@@ -495,6 +527,11 @@ export default function HiveScreen() {
   const [sectionOrder, setSectionOrder] = useState<HomeSectionKey[]>(
     () => resolveHomeSectionOrder(profile?.home_section_order)
   );
+  const [homeShortcuts, setHomeShortcuts] = useState<HomeShortcutKey[]>(
+    () => resolveHomeShortcuts(profile?.home_shortcuts, canManageDues)
+  );
+  // Which of the 3 shortcut slots is showing its picker in customize mode.
+  const [editingShortcutSlot, setEditingShortcutSlot] = useState<number | null>(null);
 
   // Keep the local order in sync with the profile (e.g. changed on another device),
   // but never clobber an in-progress customize session.
@@ -502,6 +539,11 @@ export default function HiveScreen() {
     if (customizeModeRef.current) return;
     setSectionOrder(resolveHomeSectionOrder(savedHomeSectionOrderKey ? savedHomeSectionOrderKey.split('|') : null));
   }, [savedHomeSectionOrderKey]);
+
+  useEffect(() => {
+    if (customizeModeRef.current) return;
+    setHomeShortcuts(resolveHomeShortcuts(savedHomeShortcutsKey ? savedHomeShortcutsKey.split('|') : null, canManageDues));
+  }, [savedHomeShortcutsKey, canManageDues]);
 
   const moveHomeSection = useCallback((key: HomeSectionKey, direction: -1 | 1) => {
     setSectionOrder(prev => {
@@ -514,18 +556,28 @@ export default function HiveScreen() {
     });
   }, []);
 
-  const persistHomeSectionOrder = useCallback(async (order: HomeSectionKey[] | null) => {
+  const persistHomeLayout = useCallback(async (
+    order: HomeSectionKey[] | null,
+    shortcuts: HomeShortcutKey[] | null,
+  ) => {
     setCustomizeMode(false);
     customizeModeRef.current = false;
+    setEditingShortcutSlot(null);
     const nextOrder = resolveHomeSectionOrder(order);
+    const nextShortcuts = resolveHomeShortcuts(shortcuts, canManageDues);
     setSectionOrder(nextOrder);
+    setHomeShortcuts(nextShortcuts);
     if (!profile?.id) return;
 
     const isDefault = !order || nextOrder.join('|') === DEFAULT_HOME_SECTION_ORDER.join('|');
+    const shortcutsAreDefault = !shortcuts || nextShortcuts.join('|') === DEFAULT_HOME_SHORTCUTS.join('|');
     setSavingSectionOrder(true);
     const { error } = await supabase
       .from('profiles')
-      .update({ home_section_order: isDefault ? null : nextOrder } as any)
+      .update({
+        home_section_order: isDefault ? null : nextOrder,
+        home_shortcuts: shortcutsAreDefault ? null : nextShortcuts,
+      } as any)
       .eq('id', profile.id);
 
     if (error) {
@@ -536,7 +588,7 @@ export default function HiveScreen() {
       await refreshProfile();
     }
     setSavingSectionOrder(false);
-  }, [profile?.id, refreshProfile]);
+  }, [profile?.id, refreshProfile, canManageDues]);
 
   const [refreshing, setRefreshing] = useState(false);
   const [showAnswerModal, setShowAnswerModal] = useState(false);
@@ -2502,7 +2554,7 @@ export default function HiveScreen() {
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginBottom: 8 }}>
           {customizeMode && (
             <Pressable
-              onPress={() => { void persistHomeSectionOrder(null); }}
+              onPress={() => { void persistHomeLayout(null, null); }}
               className="active:opacity-60"
               style={{ paddingHorizontal: 4 }}
             >
@@ -2516,8 +2568,9 @@ export default function HiveScreen() {
             onPress={() => {
               if (savingSectionOrder) return;
               if (customizeMode) {
-                void persistHomeSectionOrder(sectionOrder);
+                void persistHomeLayout(sectionOrder, homeShortcuts);
               } else {
+                setEditingShortcutSlot(null);
                 setCustomizeMode(true);
               }
             }}
@@ -2882,27 +2935,35 @@ export default function HiveScreen() {
                     </View>
                   </>
                 );
-              case 'shortcuts':
+              case 'shortcuts': {
+                const shortcutOnPress: Record<HomeShortcutKey, () => void> = {
+                  honey_pot: () => router.push('/honey-pot' as any),
+                  boards: openBoardsHome,
+                  messages: () => router.push('/messages'),
+                  members: () => router.push('/members' as any),
+                  meetings: () => router.push('/meetings' as any),
+                  profile: () => router.push('/profile' as any),
+                  clive: () => router.push('/' as any),
+                  admin: () => router.push('/admin' as any),
+                };
                 return (
                   <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 24, paddingHorizontal: 8 }}>
-                    <HexShortcut
-                      emoji="🍯"
-                      label="Honey Pot"
-                      sublabel={loading.honeyPot ? '...' : `$${honeyPotBalance?.toFixed(0) ?? '0'}`}
-                      onPress={() => router.push('/honey-pot' as any)}
-                    />
-                    <HexShortcut
-                      emoji="📋"
-                      label="Boards"
-                      onPress={openBoardsHome}
-                    />
-                    <HexShortcut
-                      emoji="💬"
-                      label="Messages"
-                      onPress={() => router.push('/messages')}
-                    />
+                    {homeShortcuts.map((shortcutKey) => (
+                      <HexShortcut
+                        key={shortcutKey}
+                        emoji={HOME_SHORTCUT_META[shortcutKey].emoji}
+                        label={HOME_SHORTCUT_META[shortcutKey].label}
+                        sublabel={
+                          shortcutKey === 'honey_pot'
+                            ? (loading.honeyPot ? '...' : `$${honeyPotBalance?.toFixed(0) ?? '0'}`)
+                            : undefined
+                        }
+                        onPress={shortcutOnPress[shortcutKey]}
+                      />
+                    ))}
                   </View>
                 );
+              }
               case 'wishes':
                 return (
                   <View style={{ marginBottom: 24 }}>
@@ -3004,15 +3065,12 @@ export default function HiveScreen() {
             return (
               <View style={{ marginBottom: 24 }}>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginBottom: 10 }}>
-                  Use the arrows to reorder your home screen, then tap Done to save.
+                  Use the arrows to reorder your home screen. Tap a shortcut slot to change what it opens. Tap Done to save.
                 </Text>
                 {sectionOrder.map((key, index) => (
                   <View
                     key={key}
                     style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 10,
                       backgroundColor: '#fffdf5',
                       borderWidth: 1,
                       borderColor: 'rgba(222,193,129,0.7)',
@@ -3027,12 +3085,103 @@ export default function HiveScreen() {
                       elevation: 2,
                     }}
                   >
-                    <Text style={{ fontSize: 16 }}>{HOME_SECTION_META[key].emoji}</Text>
-                    <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }} numberOfLines={1}>
-                      {HOME_SECTION_META[key].title}
-                    </Text>
-                    <SectionMoveButton direction="up" disabled={index === 0} onPress={() => moveHomeSection(key, -1)} />
-                    <SectionMoveButton direction="down" disabled={index === sectionOrder.length - 1} onPress={() => moveHomeSection(key, 1)} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Text style={{ fontSize: 16 }}>{HOME_SECTION_META[key].emoji}</Text>
+                      <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }} numberOfLines={1}>
+                        {HOME_SECTION_META[key].title}
+                      </Text>
+                      <SectionMoveButton direction="up" disabled={index === 0} onPress={() => moveHomeSection(key, -1)} />
+                      <SectionMoveButton direction="down" disabled={index === sectionOrder.length - 1} onPress={() => moveHomeSection(key, 1)} />
+                    </View>
+                    {key === 'shortcuts' && (
+                      <View style={{ marginTop: 10 }}>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          {homeShortcuts.map((shortcutKey, slot) => {
+                            const isEditing = editingShortcutSlot === slot;
+                            return (
+                              <Pressable
+                                key={slot}
+                                onPress={() => setEditingShortcutSlot(prev => (prev === slot ? null : slot))}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Change shortcut slot ${slot + 1}, currently ${HOME_SHORTCUT_META[shortcutKey].label}`}
+                                style={({ pressed }) => ({
+                                  flex: 1,
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: 6,
+                                  paddingVertical: 8,
+                                  paddingHorizontal: 8,
+                                  borderRadius: 12,
+                                  borderWidth: 1,
+                                  borderColor: isEditing ? '#bd9348' : 'rgba(222,193,129,0.7)',
+                                  backgroundColor: isEditing ? '#fbf0d7' : pressed ? '#fdf3dc' : '#fff8e8',
+                                })}
+                              >
+                                <Text style={{ fontSize: 14 }}>{HOME_SHORTCUT_META[shortcutKey].emoji}</Text>
+                                <Text
+                                  style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#2d2d2d', flexShrink: 1 }}
+                                  numberOfLines={1}
+                                >
+                                  {HOME_SHORTCUT_META[shortcutKey].label}
+                                </Text>
+                                <Ionicons name={isEditing ? 'chevron-up' : 'chevron-down'} size={12} color="#8e6f35" />
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                        {editingShortcutSlot !== null && (
+                          <View
+                            style={{
+                              marginTop: 8,
+                              borderWidth: 1,
+                              borderColor: 'rgba(222,193,129,0.7)',
+                              borderRadius: 12,
+                              backgroundColor: '#fff8e8',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {(Object.keys(HOME_SHORTCUT_META) as HomeShortcutKey[])
+                              .filter((optionKey) => canManageDues || !HOME_SHORTCUT_META[optionKey].adminOnly)
+                              .map((optionKey, optionIndex) => {
+                                const slot = editingShortcutSlot;
+                                const isCurrent = homeShortcuts[slot] === optionKey;
+                                const usedElsewhere = !isCurrent && homeShortcuts.includes(optionKey);
+                                return (
+                                  <Pressable
+                                    key={optionKey}
+                                    disabled={usedElsewhere}
+                                    onPress={() => {
+                                      setHomeShortcuts(prev => prev.map((k, i) => (i === slot ? optionKey : k)));
+                                      setEditingShortcutSlot(null);
+                                    }}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected: isCurrent, disabled: usedElsewhere }}
+                                    style={({ pressed }) => ({
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                      paddingVertical: 10,
+                                      paddingHorizontal: 12,
+                                      borderTopWidth: optionIndex === 0 ? 0 : 1,
+                                      borderTopColor: 'rgba(222,193,129,0.45)',
+                                      backgroundColor: pressed && !usedElsewhere ? '#fbf0d7' : 'transparent',
+                                      opacity: usedElsewhere ? 0.4 : 1,
+                                    })}
+                                  >
+                                    <Text style={{ fontSize: 15 }}>{HOME_SHORTCUT_META[optionKey].emoji}</Text>
+                                    <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: 13, color: '#2d2d2d' }}>
+                                      {HOME_SHORTCUT_META[optionKey].label}
+                                      {usedElsewhere ? ' · in another slot' : ''}
+                                    </Text>
+                                    {isCurrent && <Ionicons name="checkmark" size={16} color="#bd9348" />}
+                                  </Pressable>
+                                );
+                              })}
+                          </View>
+                        )}
+                      </View>
+                    )}
                   </View>
                 ))}
               </View>

@@ -42,6 +42,7 @@ export const NavigationDrawer = memo(function NavigationDrawer({
     { icon: null, customIcon: 'boards', label: 'Boards', route: '/board' },
     { icon: null, customIcon: 'messages', label: 'Messages', route: '/messages', badge: unreadDMCount },
     { icon: null, customIcon: 'meetings', label: 'Meetings', route: '/meetings' },
+    { icon: '🍯', customIcon: 'honeypot', label: 'Honey Pot', route: '/honey-pot' },
     { icon: null, customIcon: 'profile', label: 'Profile', route: '/profile' },
     ...(isAdmin ? [{ icon: null, customIcon: 'admin', label: 'Admin', route: '/admin' }] : []),
   ];
