@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, ActivityIndicator, Animated } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
 import Svg, { Polygon } from 'react-native-svg';
@@ -1334,6 +1334,17 @@ export default function HiveScreen() {
   const openWishFromActivity = useCallback((wishId: string) => {
     void openWishById(wishId, { alertOnUnavailable: true });
   }, [openWishById]);
+
+  // Deep link: /hive?openWishId=... opens that wish's detail sheet (used by the
+  // profile App Feedback shortcut; works for any screen that wants to point at a wish).
+  const { openWishId } = useLocalSearchParams<{ openWishId?: string }>();
+  const handledOpenWishIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openWishId || !communityId) return;
+    if (handledOpenWishIdRef.current === openWishId) return;
+    handledOpenWishIdRef.current = openWishId;
+    void openWishById(openWishId, { alertOnUnavailable: true });
+  }, [openWishId, communityId, openWishById]);
 
   const openEventFromActivity = useCallback(async (eventId: string) => {
     if (!communityId) return;

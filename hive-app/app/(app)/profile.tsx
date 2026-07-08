@@ -655,6 +655,29 @@ export default function ProfileScreen() {
     router.replace('/hive');
   };
 
+  // App Feedback shortcut: jump to the community's bug-reports wish on Home.
+  const openAppFeedback = async () => {
+    if (communityId) {
+      try {
+        const { data } = await (supabase as any)
+          .from('wishes')
+          .select('id')
+          .eq('community_id', communityId)
+          .eq('status', 'public')
+          .ilike('title', '%bug report%')
+          .limit(1)
+          .maybeSingle();
+        if (data?.id) {
+          router.push({ pathname: '/hive', params: { openWishId: data.id } });
+          return;
+        }
+      } catch (error) {
+        console.warn('Could not find the bug reports wish', error);
+      }
+    }
+    router.push('/hive');
+  };
+
   const performSignOut = async () => {
     clearLastAppPath();
     const { error } = await supabase.auth.signOut({ scope: 'local' });
@@ -2229,6 +2252,33 @@ export default function ProfileScreen() {
                 )}
               </View>
             </View>
+          </View>
+        )}
+
+        {/* App Feedback */}
+        {!immersiveSkillsGarden && (
+          <View className="mb-6">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
+              App Feedback
+            </Text>
+            <Pressable
+              onPress={openAppFeedback}
+              accessibilityRole="button"
+              accessibilityLabel="Open the HIVE app feedback wish"
+              className="bg-white rounded-xl shadow-sm p-4 active:opacity-80"
+            >
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-3">
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                    💬 Found a bug or have an idea?
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
+                    Drop it on the HIVE App Bug Reports wish — screenshots welcome!
+                  </Text>
+                </View>
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-base">→</Text>
+              </View>
+            </Pressable>
           </View>
         )}
 
