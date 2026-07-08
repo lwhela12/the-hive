@@ -190,6 +190,59 @@ export async function linkWishToHdBoard({
   return category;
 }
 
+export async function syncWishEditToLinkedBoard({
+  wishId,
+  communityId,
+  title,
+  description,
+}: {
+  wishId: string;
+  communityId: string;
+  title?: string | null;
+  description: string;
+}) {
+  const { data: wishLink, error: linkError } = await (supabase as any)
+    .from('wishes')
+    .select('source_board_post_id')
+    .eq('id', wishId)
+    .eq('community_id', communityId)
+    .maybeSingle();
+
+  if (linkError) {
+    console.warn('Linked thread edit sync skipped:', linkError);
+    return;
+  }
+
+  const threadTitle = title?.trim() || getWishGoalTitle(description, 70);
+
+  // If this wish mirrors an HD-board thread, keep the thread's title/content in sync.
+  if (wishLink?.source_board_post_id) {
+    const { error: postError } = await (supabase as any)
+      .from('board_posts')
+      .update({
+        title: threadTitle,
+        content: description,
+      })
+      .eq('id', wishLink.source_board_post_id)
+      .eq('community_id', communityId);
+
+    if (postError) {
+      console.warn('Linked thread edit sync skipped:', postError);
+    }
+  }
+
+  // If this wish was turned into a board, keep the board's goal label in sync too.
+  const { error: categoryError } = await (supabase as any)
+    .from('board_categories')
+    .update({ goal_title: threadTitle })
+    .eq('source_wish_id', wishId)
+    .eq('community_id', communityId);
+
+  if (categoryError) {
+    console.warn('Linked board edit sync skipped:', categoryError);
+  }
+}
+
 export async function unlinkWishFromBoard({
   wishId,
   communityId,

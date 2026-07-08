@@ -18,6 +18,7 @@ import { invalidateWishQueries } from '../../lib/queryClient';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { notifyWishMentions } from '../../lib/wishMentions';
+import { syncWishEditToLinkedBoard } from '../../lib/wishBoardLinking';
 import { MentionSuggestions } from '../ui/MentionSuggestions';
 import type { BoardCategory, Wish } from '../../types';
 
@@ -137,6 +138,14 @@ export function AddWishModal({
         }
 
         if (updateError) throw updateError;
+
+        // Mirror the edit onto the linked HD-board thread so board and wish never diverge.
+        await syncWishEditToLinkedBoard({
+          wishId: existingWish.id,
+          communityId,
+          title: updatePayload.title,
+          description: updatePayload.description,
+        });
       } else {
         const insertPayload: Record<string, unknown> = {
           user_id: ownerUserId,
