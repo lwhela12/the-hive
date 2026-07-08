@@ -18,6 +18,7 @@ import { AppHeader } from '../../components/navigation';
 import { clearLastAppPath } from '../../lib/navigationState';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
+import { fetchSkillWishMatches, type SkillWishMatch } from '../../lib/skillWishMatching';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
@@ -108,6 +109,7 @@ export default function ProfileScreen() {
     permissionStatus === 'granted' || permissionStatus === 'provisional';
   const [refreshing, setRefreshing] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
+  const [skillWishMatches, setSkillWishMatches] = useState<SkillWishMatch[]>([]);
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [selectedWish, setSelectedWish] = useState<(Wish & { user: Profile }) | null>(null);
   const [wishToGrant, setWishToGrant] = useState<(Wish & { user: Profile }) | null>(null);
@@ -246,6 +248,17 @@ export default function ProfileScreen() {
     if (wishesError) console.error('Error fetching profile wishes:', wishesError);
     setUserInsights(insightsResult.data);
     setInitialLoading(false);
+
+    // Garden bees: match my planted skills against other members' public
+    // wishes. Fails silent (no bees) so the garden never blocks on this.
+    if (skillsResult.data) {
+      const matches = await fetchSkillWishMatches({
+        skills: skillsResult.data,
+        currentUserId: profile.id,
+        communityId,
+      });
+      setSkillWishMatches(matches);
+    }
   }, [profile?.id, communityId]);
 
   useFocusEffect(
@@ -2290,6 +2303,8 @@ export default function ProfileScreen() {
                 onPlantSkills={handlePlantSkills}
                 onAddCustomSkill={() => setSkillsModalVisible(true)}
                 draftKey={profile?.id ? `the-hive:skills-garden:${profile.id}` : null}
+                wishMatches={skillWishMatches}
+                onOpenWish={(wishId) => router.push({ pathname: '/hive', params: { openWishId: wishId } })}
               />
             </View>
           </FadeIn>

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line, Path, Text as SvgText, TSpan } from 'react-native-svg';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+import type { MatchedWish, SkillWishMatch } from '../../lib/skillWishMatching';
 import type { Skill } from '../../types';
 
 type GardenSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
@@ -35,6 +36,8 @@ type SkillBubbleGardenProps = {
   onPlantSkills?: (skills: PlantSkillSelection[], options?: PlantSkillsOptions) => void;
   onAddCustomSkill?: () => void;
   draftKey?: string | null;
+  wishMatches?: SkillWishMatch[];
+  onOpenWish?: (wishId: string) => void;
 };
 
 type SkillCategoryDef = {
@@ -135,6 +138,7 @@ const SEED_STRIP_LIMIT = GARDEN_CAPACITY * 3;
 const VISIBLE_BLOOM_LIMIT = GARDEN_CAPACITY;
 const BLOOM_CANVAS_EXTRA = 38;
 const PHONE_LANDSCAPE_SCALE = 0.64;
+const MAX_GARDEN_BEES = 6;
 
 type SurveyChoice = {
   icon: string;
@@ -1350,6 +1354,70 @@ function GroundStrip({ width, height = GROUND_HEIGHT }: { width: number; height?
   );
 }
 
+function GardenBee({
+  matchCount,
+  skillDescription,
+  onPress,
+  compact = false,
+}: {
+  matchCount: number;
+  skillDescription: string;
+  onPress: () => void;
+  compact?: boolean;
+}) {
+  const hover = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(hover, {
+          toValue: 1,
+          duration: 1350 + (hashString(skillDescription) % 500),
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(hover, {
+          toValue: 0,
+          duration: 1350 + (hashString(skillDescription) % 500),
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [hover, skillDescription]);
+
+  const translateY = hover.interpolate({ inputRange: [0, 1], outputRange: [0, -5] });
+
+  return (
+    <Animated.View style={{ transform: [{ translateY }] }}>
+      <Pressable
+        onPress={onPress}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`${skillDescription} matches ${matchCount} community ${matchCount === 1 ? 'wish' : 'wishes'}`}
+        style={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          ...(Platform.OS === 'web'
+            ? ({
+                cursor: 'pointer',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                outlineStyle: 'none',
+              } as any)
+            : {}),
+        }}
+      >
+        <Text selectable={false} style={{ fontSize: compact ? 13 : 17, lineHeight: compact ? 15 : 20 }}>
+          🐝
+        </Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 function SkillPlant({
   skill,
   index,
@@ -1368,6 +1436,8 @@ function SkillPlant({
   onEntryComplete,
   compactLandscape,
   groundHeight,
+  beeWishes,
+  onBeePress,
 }: SkillBubbleGardenProps & {
   skill: GardenSkill;
   index: number;
@@ -1383,6 +1453,8 @@ function SkillPlant({
   onEntryComplete: (skill: GardenSkill) => void;
   compactLandscape: boolean;
   groundHeight: number;
+  beeWishes?: MatchedWish[];
+  onBeePress?: (skill: GardenSkill, slotIndex: number) => void;
 }) {
   const level = getLevel(skill);
   const bloomStep = getBloomStep(level);
@@ -1688,6 +1760,22 @@ function SkillPlant({
 
         {label}
       </Pressable>
+      {beeWishes && beeWishes.length > 0 && bloomStep > 0 && !isReseeding && onBeePress && (
+        <View
+          style={{
+            position: 'absolute',
+            left: Math.max(2, plantWidth * 0.1),
+            top: Math.max(0, plantHeight * 0.03),
+          }}
+        >
+          <GardenBee
+            matchCount={beeWishes.length}
+            skillDescription={skill.description}
+            compact={compactLandscape}
+            onPress={() => onBeePress(skill, index)}
+          />
+        </View>
+      )}
       {showReseedButton && (
         <Pressable
           onPress={(event) => {
@@ -2764,6 +2852,8 @@ export function SkillBubbleGarden({
   onPlantSkills,
   onAddCustomSkill,
   draftKey,
+  wishMatches,
+  onOpenWish,
 }: SkillBubbleGardenProps) {
   useWildflowerStyles();
 
@@ -2795,6 +2885,34 @@ export function SkillBubbleGarden({
     () => buildFlowerSlots(visibleSkills, flowerSlotPins),
     [flowerSlotPins, visibleSkills]
   );
+  const [beePopover, setBeePopover] = useState<{
+    skill: GardenSkill;
+    slotIndex: number;
+    wishes: MatchedWish[];
+  } | null>(null);
+  // Bees visit blooms whose skill matches another member's public wish.
+  // Cap the animated swarm, prioritizing blooms with the most matches.
+  const beeWishesBySkillId = useMemo(() => {
+    const bees = new Map<string, MatchedWish[]>();
+    if (!wishMatches || wishMatches.length === 0) return bees;
+
+    const matchesBySkillId = new Map(wishMatches.map(match => [match.skillId, match.wishes]));
+    flowerSlots
+      .map(({ skill }) => ({ skillId: skill.id, wishes: matchesBySkillId.get(skill.id) ?? [] }))
+      .filter(entry => entry.wishes.length > 0)
+      .sort((left, right) => right.wishes.length - left.wishes.length)
+      .slice(0, MAX_GARDEN_BEES)
+      .forEach(entry => bees.set(entry.skillId, entry.wishes));
+
+    return bees;
+  }, [flowerSlots, wishMatches]);
+  const handleBeePress = useCallback((skill: GardenSkill, slotIndex: number) => {
+    setBeePopover((current) => {
+      if (current?.skill.id === skill.id) return null;
+      const wishes = beeWishesBySkillId.get(skill.id);
+      return wishes && wishes.length > 0 ? { skill, slotIndex, wishes } : null;
+    });
+  }, [beeWishesBySkillId]);
   const plantedNames = useMemo(
     () => new Set(displaySkills.map((skill) => normalizeSkillName(skill.description))),
     [displaySkills]
@@ -2895,6 +3013,7 @@ export function SkillBubbleGarden({
   const handleReturnToSeed = (skill: GardenSkill, slotIndex: number) => {
     const normalizedSkill = normalizeSkillName(skill.description);
     setSelectedSkillId(null);
+    setBeePopover((current) => (current?.skill.id === skill.id ? null : current));
     setFlowerSlotPins((current) => {
       const { [normalizedSkill]: _removed, ...next } = current;
       return next;
@@ -3104,8 +3223,119 @@ export function SkillBubbleGarden({
             compactLandscape={compactLandscape}
             groundHeight={groundHeight}
             skills={skills}
+            beeWishes={beeWishesBySkillId.get(skill.id)}
+            onBeePress={onOpenWish ? handleBeePress : undefined}
           />
         ))}
+
+        {beePopover && width > 0 && (() => {
+          const cardWidth = Math.min(272, Math.max(200, width - 24));
+          const centerX = getFrontRowCenterX(beePopover.slotIndex, GARDEN_CAPACITY, width);
+          const anchorY = getFrontRowAnchorY(meadowHeight, width, beePopover.slotIndex, compactLandscape, groundHeight);
+          const rowScale = getFrontRowScale(width, compactLandscape);
+          const spriteHeight = getStageCanvasHeight(getStage(getLevel(beePopover.skill))) * rowScale;
+          const cardLeft = clamp(centerX - cardWidth / 2, 10, Math.max(10, width - cardWidth - 10));
+          const cardBottom = clamp(
+            meadowHeight - anchorY + spriteHeight + 6,
+            groundHeight * 0.6,
+            Math.max(groundHeight * 0.6, meadowHeight - 190)
+          );
+
+          return (
+            <>
+              <Pressable
+                onPress={() => setBeePopover(null)}
+                accessibilityLabel="Close wish matches"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  zIndex: 590,
+                  ...(Platform.OS === 'web' ? ({ cursor: 'default' } as any) : {}),
+                }}
+              />
+              <View
+                style={{
+                  position: 'absolute',
+                  left: cardLeft,
+                  bottom: cardBottom,
+                  width: cardWidth,
+                  zIndex: 600,
+                  borderRadius: 18,
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.55)',
+                  backgroundColor: 'rgba(255,253,247,0.98)',
+                  paddingHorizontal: 12,
+                  paddingVertical: 11,
+                  gap: 7,
+                  shadowColor: '#4d3a22',
+                  shadowOpacity: 0.22,
+                  shadowRadius: 16,
+                  shadowOffset: { width: 0, height: 6 },
+                  elevation: 6,
+                }}
+              >
+                <Text
+                  selectable={false}
+                  style={{ fontFamily: 'Lato_700Bold', color: '#2f7147', fontSize: 12.5, lineHeight: 16 }}
+                >
+                  This skill could grant a wish! 🌟
+                </Text>
+                <Text
+                  selectable={false}
+                  numberOfLines={1}
+                  style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 10.5, lineHeight: 13 }}
+                >
+                  🐝 A bee caught the scent of {beePopover.skill.description}
+                </Text>
+                {beePopover.wishes.slice(0, 4).map(wish => (
+                  <Pressable
+                    key={wish.id}
+                    onPress={() => {
+                      setBeePopover(null);
+                      onOpenWish?.(wish.id);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${wish.ownerName}'s wish: ${wish.title}`}
+                    style={{
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: 'rgba(63,153,88,0.18)',
+                      backgroundColor: 'rgba(63,153,88,0.08)',
+                      paddingHorizontal: 9,
+                      paddingVertical: 7,
+                      gap: 2,
+                      ...(Platform.OS === 'web'
+                        ? ({
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            WebkitUserSelect: 'none',
+                          } as any)
+                        : {}),
+                    }}
+                  >
+                    <Text
+                      selectable={false}
+                      numberOfLines={2}
+                      style={{ fontFamily: 'Lato_700Bold', color: '#315d4e', fontSize: 11.5, lineHeight: 14 }}
+                    >
+                      {wish.title}
+                    </Text>
+                    <Text
+                      selectable={false}
+                      numberOfLines={1}
+                      style={{ fontFamily: 'Lato_400Regular', color: '#5d8b67', fontSize: 10, lineHeight: 12.5 }}
+                    >
+                      {wish.ownerName}'s wish · tap to visit
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          );
+        })()}
 
         {displaySkills.length === 0 && !editable && (
           <View
