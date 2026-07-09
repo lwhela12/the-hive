@@ -17,7 +17,6 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { useQueenBee } from '../../lib/hooks/useQueenBee';
 import { fetchHoneyPotLedger } from '../../lib/honeyPot';
 import { getWishQuickTitle } from '../../lib/wishDisplay';
 import { Avatar } from '../../components/ui/Avatar';
@@ -30,6 +29,7 @@ import {
   getNumberAnswer,
   getTextAnswer,
   useArrivalBoard,
+  type ArrivalBoardMember,
 } from '../../lib/hooks/useArrivalBoard';
 
 const hiveBee = require('../../assets/HIVE Bee.png');
@@ -46,21 +46,24 @@ const CARD = '#fffdf5';
 const TAGLINE = 'HUMAN · INSIGHT · VISION · EXECUTION';
 
 const AGENDA = [
-  'Welcome',
   'News from Nat',
-  'Cabinet Reports',
-  'Meet Ups',
+  'Treasurer',
+  'Plan the Meet Ups',
+  'Upcoming Dates',
   'Check-in Highlights',
-  'HummDinger',
+  'HummDinger Sesh',
   'Wrap-Up',
 ];
 
-const HUMMDINGER_FORMULA = [
-  'Where I am',
-  'Where I want to be',
-  "What I've tried",
-  "Where I'm blocked",
-];
+// Nat's POP formula — the backbone of the HummDinger sesh.
+const POP_SECTIONS = [
+  { key: 'q_pop_progress', label: 'Progress', prompt: 'credit where credit is due' },
+  { key: 'q_pop_obstacles', label: 'Obstacles', prompt: 'where are you stuck?' },
+  { key: 'q_pop_priorities', label: 'Priorities', prompt: "what's your focus this month?" },
+] as const;
+
+const POP_ALT_PHRASING =
+  'Where are you · Where do you want to be · What have you tried · Where are you stuck';
 
 type MeetingHelperNotes = {
   news?: string;
@@ -91,6 +94,13 @@ type HangIdea = {
   title: string | null;
 };
 
+type GrantedWish = {
+  id: string;
+  title: string | null;
+  description: string;
+  granterNames: string[];
+};
+
 type NamedLine = { memberName: string; text: string };
 
 const EDIT_SLIDE_META: Record<EditableNoteKey, { title: string; placeholder: string }> = {
@@ -99,7 +109,7 @@ const EDIT_SLIDE_META: Record<EditableNoteKey, { title: string; placeholder: str
     placeholder: "What's the news this month? Announcements, celebrations, house business…",
   },
   meetups: {
-    title: 'Meet Ups',
+    title: 'Plan the Meet Ups',
     placeholder: "This month's plans — who's hosting the hang, help requests, meeting notes…",
   },
   wrapup: {
@@ -144,14 +154,14 @@ export default function MeetingHelperScreen() {
     refresh: refreshArrivals,
   } = useArrivalBoard({ pollingEnabled: slideIndex <= 1 });
 
-  const { currentQueenBee, refresh: refreshQueenBee } = useQueenBee();
-
   // Deck data — loaded once on mount, refreshed via the subtle refresh button.
   const [notes, setNotes] = useState<MeetingHelperNotes>({});
   const [events, setEvents] = useState<DeckEvent[]>([]);
   const [honeyPotBalance, setHoneyPotBalance] = useState<number | null>(null);
   const [hangIdeas, setHangIdeas] = useState<HangIdea[]>([]);
   const [wishes, setWishes] = useState<DeckWish[]>([]);
+  const [grantedWishes, setGrantedWishes] = useState<GrantedWish[]>([]);
+  const [helperPosts, setHelperPosts] = useState<HangIdea[]>([]);
   const [deckRefreshing, setDeckRefreshing] = useState(false);
 
   const loadDeckData = useCallback(async () => {
@@ -160,6 +170,9 @@ export default function MeetingHelperScreen() {
     const today = getLocalIsoDate(new Date());
     const horizon = new Date();
     horizon.setDate(horizon.getDate() + 35);
+    const sinceLastMeeting = new Date();
+    sinceLastMeeting.setDate(sinceLastMeeting.getDate() - 35);
+    const sinceIso = sinceLastMeeting.toISOString();
 
     await Promise.all([
       // Admin-editable slide notes
@@ -172,7 +185,7 @@ export default function MeetingHelperScreen() {
         setNotes(data?.meeting_helper_notes ?? {});
       })().catch((error) => console.warn('Could not load meeting notes', error)),
 
-      // Historian: birthdays + events for the next ~35 days
+      // Upcoming Dates: birthdays + events for the next ~35 days
       (async () => {
         const { data } = await supabase
           .from('events')
@@ -233,6 +246,51 @@ export default function MeetingHelperScreen() {
           .sort((a, b) => a.memberName.localeCompare(b.memberName));
         setWishes(rows);
       })().catch((error) => console.warn('Could not load wishes', error)),
+
+      // Kudos: wishes granted since the last meeting (~35 days), with granters
+      (async () => {
+        const { data } = await (supabase as any)
+          .from('wishes')
+          .select('id, title, description, fulfilled_at, granters:wish_granters(granter_id, granter:profiles!granter_id(name))')
+          .eq('community_id', communityId)
+          .eq('status', 'fulfilled')
+          .not('fulfilled_at', 'is', null)
+          .gte('fulfilled_at', sinceIso)
+          .order('fulfilled_at', { ascending: false })
+          .limit(10);
+        const rows = ((data ?? []) as any[]).map((wish) => ({
+          id: wish.id as string,
+          title: (wish.title ?? null) as string | null,
+          description: (wish.description ?? '') as string,
+          granterNames: ((wish.granters ?? []) as any[])
+            .map((granter) => (granter.granter?.name ? getFirstName(granter.granter.name) : null))
+            .filter((name: string | null): name is string => !!name),
+        }));
+        setGrantedWishes(rows);
+      })().catch((error) => console.warn('Could not load granted wishes', error)),
+
+      // Kudos: recent 15-min helper posts from the helper log board
+      (async () => {
+        const { data: categories } = await supabase
+          .from('board_categories')
+          .select('id, name, status')
+          .eq('community_id', communityId)
+          .or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%');
+        const helperBoard = ((categories ?? []) as { id: string; status?: string | null }[])
+          .find((row) => !row.status || row.status === 'active');
+        if (!helperBoard) {
+          setHelperPosts([]);
+          return;
+        }
+        const { data: posts } = await supabase
+          .from('board_posts')
+          .select('id, title')
+          .eq('category_id', helperBoard.id)
+          .gte('created_at', sinceIso)
+          .order('created_at', { ascending: false })
+          .limit(6);
+        setHelperPosts((posts ?? []) as HangIdea[]);
+      })().catch((error) => console.warn('Could not load helper posts', error)),
     ]);
   }, [communityId]);
 
@@ -244,21 +302,18 @@ export default function MeetingHelperScreen() {
     if (deckRefreshing) return;
     setDeckRefreshing(true);
     try {
-      await Promise.all([loadDeckData(), refreshArrivals(), refreshQueenBee()]);
+      await Promise.all([loadDeckData(), refreshArrivals()]);
     } finally {
       setDeckRefreshing(false);
     }
-  }, [deckRefreshing, loadDeckData, refreshArrivals, refreshQueenBee]);
+  }, [deckRefreshing, loadDeckData, refreshArrivals]);
 
-  // Check-in aggregation for Highlights + POP slides (from the same live
+  // Check-in aggregation for the Highlights slide (from the same live
   // responses the arrival cards use).
   const checkIn = useMemo(() => {
     const energyValues: number[] = [];
     const modeCounts = new Map<string, number>();
     const topics: NamedLine[] = [];
-    const progress: NamedLine[] = [];
-    const obstacles: NamedLine[] = [];
-    const priorities: NamedLine[] = [];
 
     members.forEach((member) => {
       const response = responsesByUser.get(member.id);
@@ -272,14 +327,8 @@ export default function MeetingHelperScreen() {
       const mode = getTextAnswer(answers, 'q_energy_mode');
       if (mode) modeCounts.set(mode, (modeCounts.get(mode) ?? 0) + 1);
 
-      const pushIf = (list: NamedLine[], key: string) => {
-        const text = getTextAnswer(answers, key);
-        if (text) list.push({ memberName, text });
-      };
-      pushIf(topics, 'q_meeting_topic');
-      pushIf(progress, 'q_pop_progress');
-      pushIf(obstacles, 'q_pop_obstacles');
-      pushIf(priorities, 'q_pop_priorities');
+      const topic = getTextAnswer(answers, 'q_meeting_topic');
+      if (topic) topics.push({ memberName, text: topic });
     });
 
     const energyAverage = energyValues.length
@@ -289,8 +338,25 @@ export default function MeetingHelperScreen() {
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
-    return { energyAverage, energyCount: energyValues.length, modes, topics, progress, obstacles, priorities };
+    return { energyAverage, energyCount: energyValues.length, modes, topics };
   }, [members, responsesByUser]);
+
+  // Go-around order: checked-in members first, then the rest (both alphabetical).
+  const memberOrder = useMemo(() => {
+    const checkedIn = members.filter((member) => responsesByUser.has(member.id));
+    const notYet = members.filter((member) => !responsesByUser.has(member.id));
+    return [...checkedIn, ...notYet];
+  }, [members, responsesByUser]);
+
+  const wishesByUserId = useMemo(() => {
+    const grouped = new Map<string, DeckWish[]>();
+    wishes.forEach((wish) => {
+      const list = grouped.get(wish.user_id) ?? [];
+      list.push(wish);
+      grouped.set(wish.user_id, list);
+    });
+    return grouped;
+  }, [wishes]);
 
   const wishesByMember = useMemo(() => {
     const grouped = new Map<string, DeckWish[]>();
@@ -544,7 +610,7 @@ export default function MeetingHelperScreen() {
     <View style={{ flex: 1 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: sz(36, 20) }}>
         <View>
-          <Kicker>From our founder</Kicker>
+          <Kicker>Progress · credit where credit is due</Kicker>
           <SlideTitle>News from Nat</SlideTitle>
         </View>
         <EditPill noteKey="news" />
@@ -553,10 +619,58 @@ export default function MeetingHelperScreen() {
         noteKey="news"
         emptyText="Nat hasn't dropped the news yet — drumroll, please."
       />
+      <View style={{ marginTop: sz(40, 22) }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), letterSpacing: 2, textTransform: 'uppercase', color: GOLD, marginBottom: sz(14, 9) }}>
+          🌟 Wishes granted since last meeting
+        </Text>
+        {grantedWishes.length === 0 ? (
+          <EmptyNote>No wishes granted since we last met — plenty of wands still charged.</EmptyNote>
+        ) : (
+          <View style={{ gap: sz(14, 9) }}>
+            {grantedWishes.map((wish) => (
+              <Text
+                key={wish.id}
+                style={{ fontFamily: 'Lato_400Regular', fontSize: sz(24, 15), lineHeight: sz(36, 23), color: CHARCOAL }}
+              >
+                {getWishQuickTitle(wish, 72)}
+                {wish.granterNames.length > 0 ? (
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>
+                    {'  —  granted by '}{wish.granterNames.join(' & ')}
+                  </Text>
+                ) : null}
+              </Text>
+            ))}
+          </View>
+        )}
+      </View>
+      {helperPosts.length > 0 ? (
+        <View style={{ marginTop: sz(30, 18) }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: MUTED, marginBottom: sz(12, 8) }}>
+            🤝 15-minute helpers this month
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(14, 8) }}>
+            {helperPosts.map((post) => (
+              <View
+                key={post.id}
+                style={{
+                  backgroundColor: 'rgba(222,193,129,0.18)',
+                  borderRadius: 999,
+                  paddingHorizontal: sz(22, 14),
+                  paddingVertical: sz(10, 7),
+                }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 12), color: GOLD_DEEP }}>
+                  {(post.title ?? 'A quiet favor').trim() || 'A quiet favor'}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 
-  const renderHistorian = () => {
+  const renderUpcomingDates = () => {
     const birthdays = events.filter((event) => event.event_type === 'birthday');
     const otherEvents = events.filter((event) => event.event_type !== 'birthday');
     const EventRows = ({ rows, emptyText }: { rows: DeckEvent[]; emptyText: string }) =>
@@ -579,8 +693,8 @@ export default function MeetingHelperScreen() {
 
     return (
       <View style={{ flex: 1 }}>
-        <Kicker>Cabinet Reports</Kicker>
-        <SlideTitle>Historian Report — Charlee</SlideTitle>
+        <Kicker>On the calendar</Kicker>
+        <SlideTitle>Upcoming Dates</SlideTitle>
         <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(70, 28), marginTop: sz(40, 22) }}>
           <View style={{ flex: 1, gap: sz(20, 12) }}>
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), letterSpacing: 2, textTransform: 'uppercase', color: MUTED }}>
@@ -592,7 +706,7 @@ export default function MeetingHelperScreen() {
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), letterSpacing: 2, textTransform: 'uppercase', color: MUTED }}>
               Coming up
             </Text>
-            <EventRows rows={otherEvents} emptyText="Nothing on the calendar yet — a blank page for the historian." />
+            <EventRows rows={otherEvents} emptyText="Nothing on the calendar yet — a blank page waiting for plans." />
           </View>
         </View>
       </View>
@@ -655,7 +769,7 @@ export default function MeetingHelperScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: sz(30, 18) }}>
         <View>
           <Kicker>Ways we gather</Kicker>
-          <SlideTitle>Meet Ups</SlideTitle>
+          <SlideTitle>Plan the Meet Ups</SlideTitle>
         </View>
         <EditPill noteKey="meetups" />
       </View>
@@ -773,105 +887,156 @@ export default function MeetingHelperScreen() {
     </View>
   );
 
-  const renderPop = (label: string, sub: string, lines: NamedLine[], emptyText: string) => () => (
+  // The formula slide — the jumping-off point people see as the go-around starts.
+  const renderHummdinger = () => (
     <View style={{ flex: 1 }}>
-      <Kicker>{`P.O.P. — ${sub}`}</Kicker>
-      <SlideTitle>{label}</SlideTitle>
-      <View style={{ marginTop: sz(36, 20) }}>
-        {lines.length === 0 ? (
-          <EmptyNote>{emptyText}</EmptyNote>
-        ) : (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: sz(-24, 0) }}>
-            {lines.map((line, index) => (
-              <View
-                key={`${line.memberName}-${index}`}
+      <Kicker>Obstacles · the HD sesh</Kicker>
+      <SlideTitle>HummDinger Sesh</SlideTitle>
+      <Text
+        style={{
+          fontFamily: 'Lato_400Regular',
+          fontStyle: 'italic',
+          fontSize: sz(24, 14),
+          lineHeight: sz(34, 21),
+          color: MUTED,
+          marginTop: sz(16, 10),
+        }}
+      >
+        {POP_ALT_PHRASING}
+      </Text>
+      <View style={{ flex: 1, justifyContent: 'center' }}>
+        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(28, 14) }}>
+          {POP_SECTIONS.map((section, index) => (
+            <View
+              key={section.key}
+              style={{
+                flex: 1,
+                backgroundColor: CARD,
+                borderWidth: 1,
+                borderColor: GOLD_SOFT,
+                borderRadius: sz(28, 18),
+                padding: sz(40, 20),
+                alignItems: isTV ? 'flex-start' : 'center',
+              }}
+            >
+              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(30, 16), color: GOLD }}>
+                {index + 1}
+              </Text>
+              <Text
                 style={{
-                  width: isTV && lines.length > 4 ? '50%' : '100%',
-                  paddingHorizontal: sz(24, 0),
-                  paddingBottom: sz(22, 12),
+                  fontFamily: 'LibreBaskerville_700Bold',
+                  fontSize: sz(44, 24),
+                  color: CHARCOAL,
+                  marginTop: sz(12, 6),
+                  textAlign: isTV ? 'left' : 'center',
                 }}
               >
-                <NameLine line={line} />
-              </View>
-            ))}
-          </View>
-        )}
+                {section.label}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: 'Lato_700Bold',
+                  fontSize: sz(24, 14),
+                  lineHeight: sz(34, 21),
+                  color: GOLD_DEEP,
+                  marginTop: sz(12, 6),
+                  textAlign: isTV ? 'left' : 'center',
+                }}
+              >
+                {section.prompt}
+              </Text>
+            </View>
+          ))}
+        </View>
       </View>
     </View>
   );
 
-  const renderHummdinger = () => (
-    <View style={{ flex: 1 }}>
-      <Kicker>Spotlight</Kicker>
-      <SlideTitle>HummDinger</SlideTitle>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(14, 8), marginTop: sz(30, 16) }}>
-        {HUMMDINGER_FORMULA.map((step, index) => (
-          <View
-            key={step}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: sz(10, 6),
-              backgroundColor: 'rgba(222,193,129,0.18)',
-              borderRadius: 999,
-              paddingHorizontal: sz(22, 13),
-              paddingVertical: sz(11, 7),
-            }}
-          >
-            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(20, 12), color: GOLD }}>
-              {index + 1}
-            </Text>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(21, 13), color: GOLD_DEEP }}>
-              {step}
+  // One slide per member — deliberately lighter than the headline slides so
+  // ten of them in a row feel like a rhythm, not a slog.
+  const renderMemberSlide = (member: ArrivalBoardMember, position: number, total: number) => () => {
+    const response = responsesByUser.get(member.id);
+    const answers = response?.answers ?? {};
+    const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
+    const memberWishes = wishesByUserId.get(member.id) ?? [];
+
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(24, 14), marginBottom: sz(30, 18) }}>
+          <Avatar name={member.name} url={member.avatar_url} size={sz(96, 56)} />
+          <View style={{ flex: 1 }}>
+            <Kicker>{`The go-around · ${position} of ${total}`}</Kicker>
+            <Text
+              style={{
+                fontFamily: 'LibreBaskerville_700Bold',
+                fontSize: sz(44, 24),
+                lineHeight: sz(56, 32),
+                color: CHARCOAL,
+              }}
+            >
+              {nameToday}
             </Text>
           </View>
-        ))}
-      </View>
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        {currentQueenBee ? (
-          <View
-            style={{
-              flexDirection: isTV ? 'row' : 'column',
-              alignItems: 'center',
-              gap: sz(40, 18),
-              backgroundColor: CARD,
-              borderWidth: 1,
-              borderColor: GOLD_SOFT,
-              borderRadius: sz(28, 18),
-              padding: sz(44, 22),
-            }}
-          >
-            <Avatar
-              name={currentQueenBee.user?.name ?? 'Queen Bee'}
-              url={currentQueenBee.user?.avatar_url ?? null}
-              size={sz(150, 84)}
-            />
-            <View style={{ flex: isTV ? 1 : undefined, alignItems: isTV ? 'flex-start' : 'center' }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 12), letterSpacing: 3, textTransform: 'uppercase', color: GOLD }}>
-                {monthName}'s Queen Bee
-              </Text>
-              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(48, 24), color: CHARCOAL, marginTop: sz(8, 4), textAlign: isTV ? 'left' : 'center' }}>
-                {currentQueenBee.user?.name ?? 'Our Queen Bee'}
-              </Text>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(28, 16), color: GOLD_DEEP, marginTop: sz(12, 8), textAlign: isTV ? 'left' : 'center' }}>
-                {currentQueenBee.project_title}
-              </Text>
-              {currentQueenBee.project_description ? (
-                <Text
-                  numberOfLines={4}
-                  style={{ fontFamily: 'Lato_400Regular', fontSize: sz(22, 14), lineHeight: sz(33, 21), color: MUTED, marginTop: sz(10, 6), textAlign: isTV ? 'left' : 'center' }}
-                >
-                  {currentQueenBee.project_description}
+        </View>
+        <View style={{ flex: 1, gap: sz(22, 12) }}>
+          {POP_SECTIONS.map((section) => {
+            const text = response ? getTextAnswer(answers, section.key) : '';
+            return (
+              <View
+                key={section.key}
+                style={{
+                  backgroundColor: CARD,
+                  borderWidth: 1,
+                  borderColor: GOLD_SOFT,
+                  borderRadius: sz(20, 14),
+                  paddingHorizontal: sz(28, 16),
+                  paddingVertical: sz(22, 13),
+                }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD }}>
+                  {section.label} — {section.prompt}
                 </Text>
-              ) : null}
-            </View>
-          </View>
-        ) : (
-          <EmptyNote>No Queen Bee crowned for {monthName} yet — the throne is warm and waiting.</EmptyNote>
-        )}
+                {text ? (
+                  <Text
+                    style={{
+                      fontFamily: 'Lato_400Regular',
+                      fontSize: sz(24, 15),
+                      lineHeight: sz(36, 23),
+                      color: CHARCOAL,
+                      marginTop: sz(10, 6),
+                    }}
+                  >
+                    {text}
+                  </Text>
+                ) : (
+                  <Text
+                    style={{
+                      fontFamily: 'Lato_400Regular',
+                      fontStyle: 'italic',
+                      fontSize: sz(22, 14),
+                      lineHeight: sz(32, 21),
+                      color: MUTED,
+                      marginTop: sz(10, 6),
+                    }}
+                  >
+                    share it live! 🐝-style, no pressure
+                  </Text>
+                )}
+              </View>
+            );
+          })}
+        </View>
+        <View style={{ marginTop: sz(24, 14) }}>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(21, 13), lineHeight: sz(32, 20), color: MUTED }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>Their HDs: </Text>
+            {memberWishes.length > 0
+              ? memberWishes.map((wish) => getWishQuickTitle(wish, 60)).join('  ·  ')
+              : 'no public wish on the board right now'}
+          </Text>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderWishes = () => (
     <View style={{ flex: 1 }}>
@@ -914,14 +1079,13 @@ export default function MeetingHelperScreen() {
     'Next meeting — second Wednesday of the month',
     'Newsletter lands on the 1st',
     'Dues: $25 / quarter · CashApp $HiveLV',
-    'Crown the next Queen Bee before we leave',
   ];
 
   const renderWrapup = () => (
     <View style={{ flex: 1 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: sz(30, 18) }}>
         <View>
-          <Kicker>Before we go</Kicker>
+          <Kicker>Priorities · take it home</Kicker>
           <SlideTitle>Wrap-Up</SlideTitle>
         </View>
         <EditPill noteKey="wrapup" />
@@ -984,23 +1148,15 @@ export default function MeetingHelperScreen() {
     { key: 'room', render: renderRoom },
     { key: 'outline', render: renderOutline },
     { key: 'news', render: renderNews },
-    { key: 'historian', render: renderHistorian },
     { key: 'treasurer', render: renderTreasurer },
     { key: 'meetups', render: renderMeetups },
+    { key: 'dates', render: renderUpcomingDates },
     { key: 'highlights', render: renderHighlights },
-    {
-      key: 'pop-progress',
-      render: renderPop('Progress', 'wins since last month', checkIn.progress, 'Nothing logged yet — perfect attendance at the snack table.'),
-    },
-    {
-      key: 'pop-obstacles',
-      render: renderPop('Obstacles', "what's in the way", checkIn.obstacles, 'No obstacles reported — suspiciously smooth sailing.'),
-    },
-    {
-      key: 'pop-priorities',
-      render: renderPop('Priorities', 'what matters next', checkIn.priorities, 'No priorities submitted yet — the month is a blank canvas.'),
-    },
     { key: 'hummdinger', render: renderHummdinger },
+    ...memberOrder.map((member, index) => ({
+      key: `member-${member.id}`,
+      render: renderMemberSlide(member, index + 1, memberOrder.length),
+    })),
     { key: 'wishes', render: renderWishes },
     { key: 'wrapup', render: renderWrapup },
     { key: 'thanks', render: renderThanks },

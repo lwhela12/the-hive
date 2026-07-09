@@ -255,8 +255,12 @@ export default function MonthlyTuneupScreen() {
       return null;
     }
 
-    const active = ((data ?? []) as { id: string; name: string; status?: string | null }[])
-      .find((row) => !row.status || row.status === 'active');
+    const rows = ((data ?? []) as { id: string; name: string; status?: string | null }[])
+      .filter((row) => !row.status || row.status === 'active');
+    // Prefer a month-specific board when one exists (e.g. "HIVE Helpers July"),
+    // so monthly helper boards route automatically as they're created.
+    const monthName = new Date().toLocaleDateString('en-US', { month: 'long' }).toLowerCase();
+    const active = rows.find((row) => row.name.toLowerCase().includes(monthName)) ?? rows[0];
     return active ? { id: active.id, name: active.name } : null;
   }, [communityId]);
 
@@ -739,7 +743,7 @@ export default function MonthlyTuneupScreen() {
     <View>
       <StepHeader
         title="15-min helpers 🐝"
-        subtitle={`Done a 15-minute helper this month? Log it! It lands in ${helperBoardName ?? 'the 15min HIVE Helpers board'} for recaps and celebration.`}
+        subtitle={`Done a HIVE help this month? Log it! It posts to ${helperBoardName ?? 'the 15min HIVE Helpers board'} AND shows up on the Progress slide at the meeting — credit where credit is due 🌟 (totally optional, always)`}
       />
       <View style={[cardStyle, { gap: 10 }]}>
         <TextInput
