@@ -204,6 +204,36 @@ const DEFAULT_RESPONSE_PERIOD = 'default';
 const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
 
 const MONTHLY_CHECK_IN_TEMPLATE: SurveyQuestion[] = [
+  // Arrival questions power the meeting-day Arrival Board. Keep the ids and
+  // text in sync with the live monthly check-in survey (q_name_today,
+  // q_feeling_today, q_feeling_note) so re-applying the template never drops them.
+  {
+    id: 'q_name_today',
+    text: 'Arrival: what do you want to be called today?',
+    type: 'short',
+    required: false,
+  },
+  {
+    id: 'q_feeling_today',
+    text: 'Arrival: how are you feeling right now?',
+    type: 'choice',
+    options: [
+      '😊 Great — bring it on!',
+      '😌 Good & steady',
+      '🫠 Tired, but here',
+      '🤒 Under the weather — love me from a distance',
+      '💛 Sad — extra hugs please',
+      "🖤 Sad — please don't ask about it",
+      '🌀 All over the place',
+    ],
+    required: false,
+  },
+  {
+    id: 'q_feeling_note',
+    text: 'Arrival: anything we should know on sight? (optional)',
+    type: 'short',
+    required: false,
+  },
   {
     id: 'q_energy_level',
     text: 'Energy: what is your energy level right now?',
@@ -1285,6 +1315,37 @@ export default function AdminScreen() {
     })
   );
 
+  const syncSurveyDueToNextMeeting = async () => {
+    let meeting: Pick<Event, 'event_date' | 'event_time' | 'title'> | null = nextSurveyMeeting;
+
+    // Fallback: some meetings are saved without event_type='meeting', so also
+    // look for the next upcoming event whose title mentions "meeting".
+    if (!meeting && communityId) {
+      const today = getLocalIsoDate(new Date());
+      const { data } = await supabase
+        .from('events')
+        .select('event_date, event_time, title')
+        .eq('community_id', communityId)
+        .gte('event_date', today)
+        .or('status.is.null,status.eq.scheduled')
+        .ilike('title', '%meeting%')
+        .order('event_date', { ascending: true })
+        .limit(1);
+      meeting = (data?.[0] as Pick<Event, 'event_date' | 'event_time' | 'title'> | undefined) ?? null;
+    }
+
+    if (!meeting?.event_date) {
+      setSurveyEditorError('No upcoming HIVE meeting found on the calendar yet.');
+      return;
+    }
+
+    // 30 minutes before the meeting start (5:30 PM default → 5:00 PM due).
+    const dueAt = getSurveyDefaultDueAt(meeting);
+    setSurveyEditorDueDate(toAmericanDate(dueAt));
+    setSurveyEditorDueTime(getTimeInputValue(dueAt));
+    setSurveyEditorError(null);
+  };
+
   const applyMonthlyCheckInTemplate = () => {
     questionLayoutsRef.current = {};
     setSurveyEditorTitle(prev => prev.trim() || 'Monthly Check-in: POP + Energy');
@@ -2344,6 +2405,23 @@ export default function AdminScreen() {
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={true}
                 >
+                  <Pressable
+                    onPress={() => router.push('/arrival-board')}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      borderBottomWidth: 1,
+                      borderBottomColor: 'rgba(222,193,129,0.3)',
+                      backgroundColor: pressed ? '#fbf4e3' : 'transparent',
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', flex: 1 }}>
+                      📺 Arrival Board — live check-in view for meeting day
+                    </Text>
+                    <Ionicons name="chevron-forward" size={15} color="#bd9348" />
+                  </Pressable>
                   {allSurveys.length === 0 ? (
                     <View style={{ padding: 20, alignItems: 'center' }}>
                       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af' }}>
@@ -2487,7 +2565,7 @@ export default function AdminScreen() {
                 style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3', minHeight: 72, textAlignVertical: 'top' }}
                 placeholderTextColor="#b5ad9f"
               />
-              <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 12 }}>
+              <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 8 }}>
                 <View style={{ flex: 2, minWidth: 180 }}>
                   <EventDatePicker
                     value={surveyEditorDueDate}
@@ -2499,6 +2577,23 @@ export default function AdminScreen() {
                   onChange={setSurveyEditorDueTime}
                 />
               </View>
+              <Pressable
+                onPress={() => { void syncSurveyDueToNextMeeting(); }}
+                style={({ pressed }) => ({
+                  alignSelf: 'flex-start',
+                  backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+                  borderColor: 'rgba(222,193,129,0.55)',
+                  borderWidth: 1,
+                  borderRadius: 999,
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  marginBottom: 12,
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>
+                  📅 Sync to next HIVE meeting
+                </Text>
+              </Pressable>
 
               <View
                 style={{

@@ -104,7 +104,7 @@ function startOfLocalMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
-function getSurveyAvailableAt(survey: Survey) {
+export function getSurveyAvailableAt(survey: Survey) {
   const dueDate = getLocalDateFromSurveyDueDate(survey.due_date);
   if (!dueDate) return null;
 

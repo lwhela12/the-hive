@@ -1,9 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
+import {
+  getSurveyAvailableAt,
+  getSurveyResponsePeriod,
+  isMonthlyCheckInSurvey,
+  type Survey,
+} from './useSurveys';
 
 export interface ActivityItem {
   id: string;
-  type: 'wish_posted' | 'wish_granted' | 'event_added' | 'board_post' | 'board_reply' | 'chat_message' | 'member_joined' | 'app_update' | 'mention';
+  type: 'wish_posted' | 'wish_granted' | 'event_added' | 'board_post' | 'board_reply' | 'chat_message' | 'member_joined' | 'app_update' | 'survey_open' | 'mention';
   emoji: string;
   text: string;
   timestamp: string; // ISO string
@@ -100,7 +106,7 @@ function firstRelation<T = any>(value: T | T[] | null | undefined): T | null {
 async function fetchActivityItems(communityId: string, userId?: string): Promise<ActivityItem[]> {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [wishesRes, grantedRes, eventsRes, postsRes, boardReplies, generalMessages, membersRes, mentionNotifications] = await Promise.all([
+  const [wishesRes, grantedRes, eventsRes, postsRes, boardReplies, generalMessages, membersRes, mentionNotifications, surveysRes] = await Promise.all([
     // New public wishes
     supabase
       .from('wishes')
@@ -158,9 +164,42 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       .limit(10),
 
     fetchMentionNotifications(communityId, userId, thirtyDaysAgo),
+
+    // Active surveys — used to whisper when the monthly check-in window opens
+    supabase
+      .from('surveys')
+      .select('*')
+      .eq('community_id', communityId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false }),
   ]);
 
   const items: ActivityItem[] = [];
+
+  // Monthly check-in window: surface a ping while it is open (due_date − 3 days
+  // through due_date), timestamped at the moment the window opened.
+  const monthlyCheckIn = ((surveysRes.data ?? []) as Survey[])
+    .find((survey) => isMonthlyCheckInSurvey(survey) && !!survey.due_date);
+  if (monthlyCheckIn) {
+    const windowOpensAt = getSurveyAvailableAt(monthlyCheckIn);
+    const dueAt = new Date(monthlyCheckIn.due_date!);
+    const now = new Date();
+    if (windowOpensAt && !Number.isNaN(dueAt.getTime()) && now >= windowOpensAt && now < dueAt) {
+      const period = getSurveyResponsePeriod(monthlyCheckIn);
+      const periodMatch = period.match(/^(\d{4})-(\d{2})$/);
+      const monthName = periodMatch
+        ? new Date(Number(periodMatch[1]), Number(periodMatch[2]) - 1, 1).toLocaleString('en-US', { month: 'long' })
+        : 'next';
+      items.push({
+        id: `survey_open_${monthlyCheckIn.id}_${period}`,
+        type: 'survey_open',
+        emoji: '📝',
+        text: `Monthly check-in is open — answer before the ${monthName} meeting! 🐝`,
+        timestamp: windowOpensAt.toISOString(),
+        sourceId: monthlyCheckIn.id,
+      });
+    }
+  }
 
   items.push({
     id: 'app_update_2026_05_11',

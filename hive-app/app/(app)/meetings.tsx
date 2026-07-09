@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, RefreshControl, Pressable, Alert, Linking, useWindowDimensions, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../../lib/supabase';
@@ -120,6 +121,7 @@ const parseMeetingSummaryPreview = (summary?: string): MeetingSummaryPreview => 
 };
 
 export default function MeetingsScreen() {
+  const router = useRouter();
   const { profile, communityId, session, communityRole, community, refreshProfile } = useAuth();
   const { width } = useWindowDimensions();
   const useCompactActions = width < 640;
@@ -1005,6 +1007,29 @@ export default function MeetingsScreen() {
               </Text>
             </Pressable>
           </View>
+
+          {/* Arrival Board — live check-in view for everyone on meeting day */}
+          <Pressable
+            onPress={() => router.push('/arrival-board')}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              alignSelf: 'flex-start',
+              backgroundColor: 'rgba(255,255,255,0.08)',
+              borderRadius: 999,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              marginTop: 12,
+              opacity: pressed ? 0.75 : 1,
+            })}
+          >
+            <Text style={{ fontSize: 14 }}>📺</Text>
+            <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
+              Arrival Board — who's in the room
+            </Text>
+          </Pressable>
         </View>
 
         {/* Upcoming Meetings */}
@@ -1448,6 +1473,17 @@ export default function MeetingsScreen() {
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>View Deck</Text>
               </Pressable>
+              {isAdmin && (
+                <Pressable
+                  onPress={() => {
+                    setShowDeckActions(false);
+                    router.push('/arrival-board');
+                  }}
+                  style={{ backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#6b7280' }}>📺 Arrival Board</Text>
+                </Pressable>
+              )}
               {isAdmin && (
                 <Pressable
                   onPress={() => {

@@ -371,6 +371,13 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
+          name="arrival-board"
+          options={{
+            title: 'Arrival Board',
+            href: null,
+          }}
+        />
+        <Tabs.Screen
           name="admin"
           options={{
             title: 'Admin',
