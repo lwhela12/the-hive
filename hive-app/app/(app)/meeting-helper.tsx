@@ -29,7 +29,6 @@ import {
   getNumberAnswer,
   getTextAnswer,
   useArrivalBoard,
-  type ArrivalBoardMember,
 } from '../../lib/hooks/useArrivalBoard';
 
 const hiveBee = require('../../assets/HIVE Bee.png');
@@ -365,16 +364,6 @@ export default function MeetingHelperScreen() {
       grouped.set(wish.user_id, list);
     });
     return grouped;
-  }, [wishes]);
-
-  const wishesByMember = useMemo(() => {
-    const grouped = new Map<string, DeckWish[]>();
-    wishes.forEach((wish) => {
-      const list = grouped.get(wish.memberName) ?? [];
-      list.push(wish);
-      grouped.set(wish.memberName, list);
-    });
-    return Array.from(grouped.entries());
   }, [wishes]);
 
   // ---- Editable notes (admin-only writes) ----
@@ -896,7 +885,16 @@ export default function MeetingHelperScreen() {
     </View>
   );
 
-  // The formula slide — the jumping-off point people see as the go-around starts.
+  // The HummDinger sesh, consolidated onto one page: a compact POP-formula
+  // header (the talking points people follow during the go-around) above a grid
+  // of member bubbles (name-for-today + their top HD goal).
+  //
+  // NOTE: Earlier this was a full formula slide + one slide PER MEMBER + a
+  // grouped "Member HDs" overview. Per-member slides were intentionally folded
+  // into these bubbles — early on most people haven't filled out the check-in,
+  // and an empty personal slide makes them feel singled out. As the check-in
+  // data richens, per-member slides can be reintroduced from git history.
+  const bubbleColumns = isTV ? 5 : width >= 1024 ? 4 : width >= 760 ? 3 : width >= 480 ? 2 : 1;
   const renderHummdinger = () => (
     <View style={{ flex: 1 }}>
       <Kicker>Obstacles · the HD sesh</Kicker>
@@ -905,181 +903,110 @@ export default function MeetingHelperScreen() {
         style={{
           fontFamily: 'Lato_400Regular',
           fontStyle: 'italic',
-          fontSize: sz(24, 14),
-          lineHeight: sz(34, 21),
+          fontSize: sz(20, 12),
+          lineHeight: sz(30, 18),
           color: MUTED,
-          marginTop: sz(16, 10),
+          marginTop: sz(12, 8),
         }}
       >
         {POP_ALT_PHRASING}
       </Text>
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(28, 14) }}>
-          {POP_SECTIONS.map((section, index) => (
-            <View
-              key={section.key}
-              style={{
-                flex: 1,
-                backgroundColor: CARD,
-                borderWidth: 1,
-                borderColor: GOLD_SOFT,
-                borderRadius: sz(28, 18),
-                padding: sz(40, 20),
-                alignItems: isTV ? 'flex-start' : 'center',
-              }}
-            >
-              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(30, 16), color: GOLD }}>
-                {index + 1}
-              </Text>
-              <Text
-                style={{
-                  fontFamily: 'LibreBaskerville_700Bold',
-                  fontSize: sz(44, 24),
-                  color: CHARCOAL,
-                  marginTop: sz(12, 6),
-                  textAlign: isTV ? 'left' : 'center',
-                }}
-              >
-                {section.label}
-              </Text>
-              <Text
-                style={{
-                  fontFamily: 'Lato_700Bold',
-                  fontSize: sz(24, 14),
-                  lineHeight: sz(34, 21),
-                  color: GOLD_DEEP,
-                  marginTop: sz(12, 6),
-                  textAlign: isTV ? 'left' : 'center',
-                }}
-              >
-                {section.prompt}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
 
-  // One slide per member — deliberately lighter than the headline slides so
-  // ten of them in a row feel like a rhythm, not a slog.
-  const renderMemberSlide = (member: ArrivalBoardMember, position: number, total: number) => () => {
-    const response = responsesByUser.get(member.id);
-    const answers = response?.answers ?? {};
-    const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
-    const memberWishes = wishesByUserId.get(member.id) ?? [];
-
-    return (
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(24, 14), marginBottom: sz(30, 18) }}>
-          <Avatar name={member.name} url={member.avatar_url} size={sz(96, 56)} />
-          <View style={{ flex: 1 }}>
-            <Kicker>{`The go-around · ${position} of ${total}`}</Kicker>
-            <Text
-              style={{
-                fontFamily: 'LibreBaskerville_700Bold',
-                fontSize: sz(44, 24),
-                lineHeight: sz(56, 32),
-                color: CHARCOAL,
-              }}
-            >
-              {nameToday}
+      {/* Compact POP-formula header — the talking points for the go-around */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(16, 8), marginTop: sz(20, 12) }}>
+        {POP_SECTIONS.map((section) => (
+          <View
+            key={section.key}
+            style={{
+              flex: 1,
+              minWidth: sz(240, 150),
+              backgroundColor: CARD,
+              borderWidth: 1,
+              borderColor: GOLD_SOFT,
+              borderRadius: sz(16, 12),
+              paddingHorizontal: sz(22, 13),
+              paddingVertical: sz(14, 9),
+            }}
+          >
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(24, 15), color: CHARCOAL }}>
+              {section.label}
+            </Text>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 11), lineHeight: sz(24, 15), color: GOLD_DEEP, marginTop: sz(4, 2) }}>
+              {section.prompt}
             </Text>
           </View>
-        </View>
-        <View style={{ flex: 1, gap: sz(22, 12) }}>
-          {POP_SECTIONS.map((section) => {
-            const text = response ? getTextAnswer(answers, section.key) : '';
-            return (
+        ))}
+      </View>
+
+      {/* Member bubbles — one per member, uniform size so no one looks emptier */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: sz(-8, -5), marginTop: sz(28, 16) }}>
+        {memberOrder.map((member) => {
+          const response = responsesByUser.get(member.id);
+          const answers = response?.answers ?? {};
+          const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
+          const memberWishes = wishesByUserId.get(member.id) ?? [];
+          const hdGoal = memberWishes.length > 0 ? getWishQuickTitle(memberWishes[0], 40) : null;
+          const priorities = getTextAnswer(answers, 'q_pop_priorities');
+          return (
+            <View key={member.id} style={{ width: `${100 / bubbleColumns}%`, padding: sz(8, 5) }}>
               <View
-                key={section.key}
                 style={{
+                  flex: 1,
+                  alignItems: 'center',
                   backgroundColor: CARD,
                   borderWidth: 1,
                   borderColor: GOLD_SOFT,
                   borderRadius: sz(20, 14),
-                  paddingHorizontal: sz(28, 16),
-                  paddingVertical: sz(22, 13),
+                  paddingHorizontal: sz(16, 10),
+                  paddingVertical: sz(20, 13),
                 }}
               >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD }}>
-                  {section.label} — {section.prompt}
+                <Avatar name={member.name} url={member.avatar_url} size={sz(72, 48)} />
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontFamily: 'LibreBaskerville_700Bold',
+                    fontSize: sz(24, 15),
+                    color: CHARCOAL,
+                    marginTop: sz(12, 8),
+                    textAlign: 'center',
+                  }}
+                >
+                  {nameToday}
                 </Text>
-                {text ? (
+                <Text
+                  numberOfLines={2}
+                  style={{
+                    fontFamily: 'Lato_400Regular',
+                    fontSize: sz(17, 11),
+                    lineHeight: sz(24, 16),
+                    color: hdGoal ? GOLD_DEEP : MUTED,
+                    fontStyle: hdGoal ? 'normal' : 'italic',
+                    textAlign: 'center',
+                    marginTop: sz(6, 4),
+                  }}
+                >
+                  {hdGoal ?? 'open to ideas'}
+                </Text>
+                {priorities ? (
                   <Text
+                    numberOfLines={2}
                     style={{
                       fontFamily: 'Lato_400Regular',
-                      fontSize: sz(24, 15),
-                      lineHeight: sz(36, 23),
-                      color: CHARCOAL,
-                      marginTop: sz(10, 6),
-                    }}
-                  >
-                    {text}
-                  </Text>
-                ) : (
-                  <Text
-                    style={{
-                      fontFamily: 'Lato_400Regular',
-                      fontStyle: 'italic',
-                      fontSize: sz(22, 14),
-                      lineHeight: sz(32, 21),
+                      fontSize: sz(15, 10),
+                      lineHeight: sz(21, 14),
                       color: MUTED,
-                      marginTop: sz(10, 6),
+                      textAlign: 'center',
+                      marginTop: sz(6, 4),
                     }}
                   >
-                    share it live! 🐝-style, no pressure
+                    {priorities}
                   </Text>
-                )}
+                ) : null}
               </View>
-            );
-          })}
-        </View>
-        <View style={{ marginTop: sz(24, 14) }}>
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(21, 13), lineHeight: sz(32, 20), color: MUTED }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>Their HDs: </Text>
-            {memberWishes.length > 0
-              ? memberWishes.map((wish) => getWishQuickTitle(wish, 60)).join('  ·  ')
-              : 'no public wish on the board right now'}
-          </Text>
-        </View>
-      </View>
-    );
-  };
-
-  const renderWishes = () => (
-    <View style={{ flex: 1 }}>
-      <Kicker>High-definition wishing</Kicker>
-      <SlideTitle>Member HDs</SlideTitle>
-      <View style={{ marginTop: sz(36, 20) }}>
-        {wishesByMember.length === 0 ? (
-          <EmptyNote>No public wishes on the board right now — time to dream in high definition.</EmptyNote>
-        ) : (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: sz(-28, 0) }}>
-            {wishesByMember.map(([memberName, memberWishes]) => (
-              <View
-                key={memberName}
-                style={{
-                  width: isTV ? '50%' : '100%',
-                  paddingHorizontal: sz(28, 0),
-                  paddingBottom: sz(28, 16),
-                }}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(25, 15), color: GOLD_DEEP, marginBottom: sz(8, 5) }}>
-                  {getFirstName(memberName)}
-                </Text>
-                {memberWishes.map((wish) => (
-                  <Text
-                    key={wish.id}
-                    style={{ fontFamily: 'Lato_400Regular', fontSize: sz(23, 14), lineHeight: sz(35, 22), color: CHARCOAL }}
-                  >
-                    — {getWishQuickTitle(wish, 72)}
-                  </Text>
-                ))}
-              </View>
-            ))}
-          </View>
-        )}
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -1162,11 +1089,6 @@ export default function MeetingHelperScreen() {
     { key: 'dates', render: renderUpcomingDates },
     { key: 'highlights', render: renderHighlights },
     { key: 'hummdinger', render: renderHummdinger },
-    ...memberOrder.map((member, index) => ({
-      key: `member-${member.id}`,
-      render: renderMemberSlide(member, index + 1, memberOrder.length),
-    })),
-    { key: 'wishes', render: renderWishes },
     { key: 'wrapup', render: renderWrapup },
     { key: 'thanks', render: renderThanks },
   ];
