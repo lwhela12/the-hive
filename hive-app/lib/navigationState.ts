@@ -16,6 +16,13 @@ const APP_PATHS = new Set([
   '/meetings',
   '/profile',
   '/admin',
+  // Meeting tools — restoring these after a resume matters most of all:
+  // losing a half-finished tune-up mid-check-in is how "my survey
+  // disappeared" reports happen.
+  '/monthly-tuneup',
+  '/arrival-board',
+  '/meeting-helper',
+  '/honey-pot',
 ]);
 
 export function isAppPath(pathname: string | null | undefined): pathname is string {

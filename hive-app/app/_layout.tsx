@@ -111,6 +111,13 @@ export default function RootLayout() {
   const initializingRef = useRef(false);
   const initializingUserIdRef = useRef<string | null>(null);
 
+  // Which user's data is currently loaded — lets the auth listener tell a
+  // routine token refresh apart from a real sign-in (see onAuthStateChange).
+  const loadedUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    loadedUserIdRef.current = profile?.id ?? null;
+  }, [profile?.id]);
+
   // Optimized: Fetch profile and memberships in parallel to reduce startup latency
   const initializeUserData = useCallback(async (userId: string, authUser: User) => {
     if (initializingRef.current && initializingUserIdRef.current === userId) return;
@@ -255,6 +262,21 @@ export default function RootLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (session?.user) {
+        // Token refreshes fire every time the app regains focus. If this same
+        // user's data is already loaded, keep the app mounted and move on —
+        // tearing down to a loading screen here is what made in-progress
+        // surveys/wizards "disappear" when people switched tabs and came back.
+        const alreadyLoaded = loadedUserIdRef.current === session.user.id;
+        if (alreadyLoaded && event !== 'USER_UPDATED') {
+          return;
+        }
+        if (alreadyLoaded && event === 'USER_UPDATED') {
+          // e.g. a newly linked login — refresh data quietly, no unmount.
+          initializingRef.current = false;
+          initializingUserIdRef.current = null;
+          initializeUserData(session.user.id, session.user);
+          return;
+        }
         setLoading(true); // Re-enter loading state while we fetch user data
         setProfile(prev => prev?.id === session.user.id ? prev : null);
         setCommunity(null);

@@ -124,29 +124,14 @@ export default function AppLayout() {
     getLastAppPathAsync().then((lastPath) => {
       if (cancelled || pathname !== '/hive' || lastPath === pathname) return;
 
-      switch (lastPath) {
-        case '/':
-        case '/index':
-          router.replace('/');
-          break;
-        case '/board':
-          router.replace('/board');
-          break;
-        case '/messages':
-          router.replace('/messages');
-          break;
-        case '/meetings':
-          router.replace('/meetings');
-          break;
-        case '/profile':
-          router.replace('/profile');
-          break;
-        case '/admin':
-          router.replace('/admin');
-          break;
-        case '/hive':
-        default:
-          break;
+      // lastPath is validated against the APP_PATHS whitelist in
+      // navigationState.ts, so any non-home value can be restored directly —
+      // including meeting tools like /monthly-tuneup (a half-finished
+      // check-in must survive an app resume).
+      if (lastPath === '/index') {
+        router.replace('/');
+      } else if (lastPath !== '/hive') {
+        router.replace(lastPath as never);
       }
     });
 
