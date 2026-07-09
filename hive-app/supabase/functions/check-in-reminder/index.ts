@@ -105,10 +105,60 @@ function formatMeetingDate(dueDateOnly: string): { month: string; day: number } 
   return { month: MONTH_NAMES[m - 1] ?? '', day: d };
 }
 
+// Warm honey/gold check-in email — shared by the real send and the test preview.
+function checkInEmailHtml(name: string, month: string, day: number): string {
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
+      <div style="text-align: center; padding: 8px 0 4px;">
+        <span style="font-size: 40px;">🐝</span>
+      </div>
+      <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Your check-in is open</h1>
+      <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">Before the ${month} ${day} meeting</p>
+      <p style="font-size: 15px;">Hi ${name},</p>
+      <p style="font-size: 15px;">The monthly check-in for the <strong>${month} meeting</strong> is now open. It takes about <strong>5 minutes</strong> and covers three quick things:</p>
+      <ul style="font-size: 15px; padding-left: 20px;">
+        <li>Your name-for-today</li>
+        <li>How you're feeling coming in</li>
+        <li>Your POP (Progress · Obstacles · Priorities)</li>
+      </ul>
+      <p style="font-size: 15px;">Checking in ahead of time shows up on the Arrival Board and helps set the room before we gather.</p>
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${APP_URL}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open H.I.V.E. and check in</a>
+      </div>
+      <p style="font-size: 13px; color: #9a9a9a; text-align: center;">See you at the ${month} meeting. 🍯</p>
+    </div>
+  `;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
+
+  // Preview mode: POST { "test_email": "you@example.com" } sends ONE sample email
+  // to that address (ignores the date gate + dedup, writes no notifications) so an
+  // admin can see the real email before it goes to everyone. No secrets exposed.
+  let body: Record<string, unknown> = {};
+  try { body = await req.json(); } catch { /* empty body is fine */ }
+  const testEmail = typeof body.test_email === 'string' ? body.test_email.trim() : '';
+  if (testEmail) {
+    if (!RESEND_API_KEY) return errorResponse('RESEND_API_KEY not configured', 500);
+    const now = new Date();
+    const month = MONTH_NAMES[now.getMonth()];
+    const day = now.getDate();
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: FROM_EMAIL,
+        to: testEmail,
+        subject: `[Preview] 🐝 Your HIVE check-in is open — meeting ${month} ${day}`,
+        html: checkInEmailHtml(typeof body.test_name === 'string' ? body.test_name : 'there', month, day),
+      }),
+    });
+    if (!res.ok) return errorResponse(`Preview email failed: ${await res.text()}`, 502);
+    return jsonResponse({ preview_sent_to: testEmail });
+  }
 
   // This function uses service_role - no user auth needed (cron/HTTP triggered)
   const supabaseAdmin = createClient(
@@ -225,27 +275,7 @@ serve(async (req) => {
 
             // Send email first so we can set email_sent accurately on the row.
             if (hasEmail) {
-              const emailBody = `
-                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-                  <div style="text-align: center; padding: 8px 0 4px;">
-                    <span style="font-size: 40px;">🐝</span>
-                  </div>
-                  <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Your check-in is open</h1>
-                  <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">Before the ${month} ${day} meeting</p>
-                  <p style="font-size: 15px;">Hi ${member.name ?? 'there'},</p>
-                  <p style="font-size: 15px;">The monthly check-in for the <strong>${month} meeting</strong> is now open. It takes about <strong>5 minutes</strong> and covers three quick things:</p>
-                  <ul style="font-size: 15px; padding-left: 20px;">
-                    <li>Your name-for-today</li>
-                    <li>How you're feeling coming in</li>
-                    <li>Your POP (point of presence)</li>
-                  </ul>
-                  <p style="font-size: 15px;">Checking in ahead of time shows up on the Arrival Board and helps set the room before we gather.</p>
-                  <div style="text-align: center; margin: 28px 0;">
-                    <a href="${APP_URL}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open H.I.V.E. and check in</a>
-                  </div>
-                  <p style="font-size: 13px; color: #9a9a9a; text-align: center;">See you at the ${month} meeting. 🍯</p>
-                </div>
-              `;
+              const emailBody = checkInEmailHtml(member.name ?? 'there', month, day);
 
               try {
                 const res = await fetch('https://api.resend.com/emails', {
