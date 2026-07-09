@@ -2564,28 +2564,51 @@ export default function AdminScreen() {
                         <Ionicons name="chevron-forward" size={15} color="#bd9348" />
                       </Pressable>
                     ))}
+                    {/* The monthly check-in lives here as the "engine" behind the
+                        Tune-up, not as a loose survey — opens the same editor/responses. */}
+                    {(() => {
+                      const checkIn = allSurveys.find((s) => /monthly\s+check-?in/i.test(s.title));
+                      if (!checkIn) return null;
+                      return (
+                        <Pressable
+                          key="monthly-check-in"
+                          onPress={() => openSurveyEditor(checkIn)}
+                          style={({ pressed }) => ({
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingHorizontal: 14,
+                            paddingVertical: 8,
+                            backgroundColor: pressed ? '#fbf4e3' : 'transparent',
+                          })}
+                        >
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', flex: 1 }}>
+                            📊 Check-in questions & responses
+                          </Text>
+                          <Ionicons name="chevron-forward" size={15} color="#bd9348" />
+                        </Pressable>
+                      );
+                    })()}
                   </View>
-                  {allSurveys.length === 0 ? (
-                    <View style={{ padding: 20, alignItems: 'center' }}>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af' }}>
-                        No surveys yet.
-                      </Text>
-                    </View>
-                  ) : (
-                    allSurveys.map((survey, i) => (
+                  {(() => {
+                    const otherSurveys = allSurveys.filter((s) => !/monthly\s+check-?in/i.test(s.title));
+                    if (otherSurveys.length === 0) {
+                      return (
+                        <View style={{ padding: 20, alignItems: 'center' }}>
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af' }}>
+                            No other surveys yet.
+                          </Text>
+                        </View>
+                      );
+                    }
+                    return otherSurveys.map((survey, i) => (
                       <Pressable key={survey.id} onPress={() => openSurveyEditor(survey)} style={({ pressed }) => ({
                         flexDirection: 'row', alignItems: 'center', padding: 14,
-                        borderBottomWidth: i < allSurveys.length - 1 ? 1 : 0,
+                        borderBottomWidth: i < otherSurveys.length - 1 ? 1 : 0,
                         borderBottomColor: 'rgba(222,193,129,0.3)',
                         backgroundColor: pressed ? '#fbf4e3' : 'transparent',
                       })}>
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>{survey.title}</Text>
-                          {/monthly\s+check-?in/i.test(survey.title) && (
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#bd9348', marginTop: 2 }}>
-                              This is the survey behind the Monthly Tune-up — answers show here.
-                            </Text>
-                          )}
                           {survey.due_date && (
                             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
                               Due {formatSurveyDueAt(survey.due_date)}
@@ -2610,8 +2633,8 @@ export default function AdminScreen() {
                           </Text>
                         </Pressable>
                       </Pressable>
-                    ))
-                  )}
+                    ));
+                  })()}
                 </ScrollView>
               </AdminPanel>
             </View>
