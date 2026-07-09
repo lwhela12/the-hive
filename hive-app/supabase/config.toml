@@ -114,6 +114,11 @@ verify_jwt = false
 [functions.meeting-reminder]
 verify_jwt = false
 
+# Cron-triggered: emails + notifies members 3 days before the meeting when the
+# monthly check-in opens. Service-role, no user auth.
+[functions.check-in-reminder]
+verify_jwt = false
+
 # Import Gemini/Google Meet notes into Meeting Hub.
 # Auth and membership checks are handled in function code.
 [functions.import-meeting-notes]

@@ -1,0 +1,50 @@
+-- =============================================================================
+-- 107_check_in_reminder_schedule.sql
+--
+-- DOCUMENTATION ONLY — no live schema or cron changes in this migration.
+--
+-- The `check-in-reminder` Edge Function emails + notifies community members
+-- exactly 3 days before the monthly meeting, when the monthly check-in opens.
+-- The function is service-role (verify_jwt = false) and is meant to be invoked
+-- once per day by pg_cron via pg_net (net.http_post).
+--
+-- The schedule below is applied MANUALLY (not through migrations) because it
+-- embeds the project ref + service-role key, which must not live in version
+-- control. Run the snippet against the database with the real values filled in,
+-- using a Supabase Vault secret or a session-local setting for the JWT.
+--
+-- Timing rationale:
+--   - Runs daily at 16:00 UTC, which is ~9:00am America/Los_Angeles (Pacific).
+--   - The function itself computes "today" and the meeting day in Pacific time
+--     (due_date is stored as midnight UTC = 5pm Pacific the prior day, i.e. the
+--     real meeting day). Evaluating at 9am Pacific lands on the correct calendar
+--     day. The function is idempotent (dedups per survey + 'YYYY-MM' period via
+--     the notifications.metadata marker), so a repeated run the same day is safe.
+--
+-- Prerequisites (enable once, in the Supabase dashboard or via SQL):
+--   create extension if not exists pg_cron;
+--   create extension if not exists pg_net;
+--
+-- Example schedule to apply manually (replace <PROJECT_REF> and the auth token):
+--
+--   select cron.schedule(
+--     'check-in-reminder-daily',
+--     '0 16 * * *',  -- every day at 16:00 UTC (~9am Pacific)
+--     $$
+--     select net.http_post(
+--       url := 'https://<PROJECT_REF>.supabase.co/functions/v1/check-in-reminder',
+--       headers := jsonb_build_object(
+--         'Content-Type', 'application/json',
+--         -- Use the service-role key (or an anon key; the function is verify_jwt=false).
+--         'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
+--       ),
+--       body := '{}'::jsonb
+--     );
+--     $$
+--   );
+--
+-- To update the schedule later, unschedule then reschedule:
+--
+--   select cron.unschedule('check-in-reminder-daily');
+--
+-- =============================================================================
