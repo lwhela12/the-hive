@@ -1010,7 +1010,7 @@ export default function MeetingsScreen() {
 
           {/* Arrival Board — live check-in view for everyone on meeting day */}
           <Pressable
-            onPress={() => router.push('/arrival-board')}
+            onPress={() => router.push({ pathname: '/arrival-board', params: { from: 'meetings' } })}
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
@@ -1477,7 +1477,7 @@ export default function MeetingsScreen() {
                 <Pressable
                   onPress={() => {
                     setShowDeckActions(false);
-                    router.push('/arrival-board');
+                    router.push({ pathname: '/arrival-board', params: { from: 'meetings' } });
                   }}
                   style={{ backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
                 >

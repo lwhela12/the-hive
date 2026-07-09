@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -22,6 +22,13 @@ const hiveBee = require('../../assets/HIVE Bee.png');
 
 export default function ArrivalBoardScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const closeBoard = () => {
+    if (from === 'admin') router.replace('/admin');
+    else if (from === 'meetings') router.replace('/meetings');
+    else if (router.canGoBack()) router.back();
+    else router.replace('/meetings');
+  };
   const { width } = useWindowDimensions();
 
   const {
@@ -70,7 +77,7 @@ export default function ArrivalBoardScreen() {
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: isTV ? 22 : 14 }}>
           <Pressable
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/meetings'))}
+            onPress={closeBoard}
             accessibilityRole="button"
             accessibilityLabel="Go back"
             hitSlop={10}

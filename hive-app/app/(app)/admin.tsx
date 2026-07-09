@@ -2545,12 +2545,11 @@ export default function AdminScreen() {
                     </Text>
                     {([
                       { label: '🎞️ Meeting Helper — run the meeting from the TV', route: '/meeting-helper' },
-                      { label: '📺 Arrival Board — live check-in view for meeting day', route: '/arrival-board' },
-                      { label: '🧰 Monthly Tune-up — pre-meeting prep walkthrough', route: '/monthly-tuneup' },
+                      { label: '🧰 Monthly Tune-up — the check-in members fill out', route: '/monthly-tuneup' },
                     ] as const).map((tool) => (
                       <Pressable
                         key={tool.route}
-                        onPress={() => router.push(tool.route)}
+                        onPress={() => router.push({ pathname: tool.route, params: { from: 'admin' } })}
                         style={({ pressed }) => ({
                           flexDirection: 'row',
                           alignItems: 'center',
@@ -2582,6 +2581,11 @@ export default function AdminScreen() {
                       })}>
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>{survey.title}</Text>
+                          {/monthly\s+check-?in/i.test(survey.title) && (
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#bd9348', marginTop: 2 }}>
+                              This is the survey behind the Monthly Tune-up — answers show here.
+                            </Text>
+                          )}
                           {survey.due_date && (
                             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
                               Due {formatSurveyDueAt(survey.due_date)}

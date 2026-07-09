@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
@@ -134,6 +134,15 @@ function formatBalance(balance: number) {
 
 export default function MeetingHelperScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  // These live as sibling tab screens, so router.back() can't be trusted to
+  // return to the launching tab — honor an explicit `from` param instead.
+  const closeDeck = () => {
+    if (from === 'admin') router.replace('/admin');
+    else if (from === 'meetings') router.replace('/meetings');
+    else if (router.canGoBack()) router.back();
+    else router.replace('/meetings');
+  };
   const { communityId, communityRole, profile } = useAuth();
   const { width, height } = useWindowDimensions();
   const isTV = width >= 1400;
@@ -1269,7 +1278,7 @@ export default function MeetingHelperScreen() {
 
         {/* Quiet top controls: exit + refresh */}
         <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/meetings'))}
+          onPress={closeDeck}
           accessibilityRole="button"
           accessibilityLabel="Leave the deck"
           hitSlop={10}

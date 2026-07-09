@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
@@ -155,6 +155,7 @@ function PostedConfirmation({ lines, boardName }: { lines: string[]; boardName?:
 
 export default function MonthlyTuneupScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const { profile, communityId } = useAuth();
   const { wishes, loading: wishesLoading, refresh: refreshWishes, grantWish } = useWishes();
   const {
@@ -523,11 +524,10 @@ export default function MonthlyTuneupScreen() {
 
   const goBack = () => {
     if (stepIndex === 0) {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/hive');
-      }
+      if (from === 'admin') router.replace('/admin');
+      else if (from === 'meetings') router.replace('/meetings');
+      else if (router.canGoBack()) router.back();
+      else router.replace('/hive');
       return;
     }
     setStepIndex((index) => Math.max(0, index - 1));
