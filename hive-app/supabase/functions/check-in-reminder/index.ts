@@ -123,7 +123,7 @@ function checkInEmailHtml(name: string, month: string, day: number): string {
       </ul>
       <p style="font-size: 15px;">Checking in ahead of time shows up on the Arrival Board and helps set the room before we gather.</p>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${APP_URL}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open H.I.V.E. and check in</a>
+        <a href="${APP_URL}/monthly-tuneup" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open H.I.V.E. and check in</a>
       </div>
       <p style="font-size: 13px; color: #9a9a9a; text-align: center;">See you at the ${month} meeting. 🍯</p>
     </div>
@@ -135,17 +135,35 @@ serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
+  // This function uses service_role - no user auth needed (cron/HTTP triggered)
+  const supabaseAdmin = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
   // Preview mode: POST { "test_email": "you@example.com" } sends ONE sample email
   // to that address (ignores the date gate + dedup, writes no notifications) so an
-  // admin can see the real email before it goes to everyone. No secrets exposed.
+  // admin can see the real email before it goes to everyone. Uses the REAL active
+  // monthly check-in's meeting date so the preview reads like the real send.
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { /* empty body is fine */ }
   const testEmail = typeof body.test_email === 'string' ? body.test_email.trim() : '';
   if (testEmail) {
     if (!RESEND_API_KEY) return errorResponse('RESEND_API_KEY not configured', 500);
-    const now = new Date();
-    const month = MONTH_NAMES[now.getMonth()];
-    const day = now.getDate();
+    let month = MONTH_NAMES[new Date().getMonth()];
+    let day = new Date().getDate();
+    const { data: previewSurveys } = await supabaseAdmin
+      .from('surveys')
+      .select('title, due_date')
+      .eq('is_active', true);
+    const previewCheckIn = (previewSurveys ?? []).find(
+      (s: { title?: string; due_date?: string }) =>
+        MONTHLY_CHECK_IN_PATTERN.test(s.title || '') && s.due_date
+    );
+    if (previewCheckIn?.due_date) {
+      const previewDate = toPacificDateOnly(new Date(previewCheckIn.due_date));
+      if (previewDate) ({ month, day } = formatMeetingDate(previewDate));
+    }
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -157,14 +175,8 @@ serve(async (req) => {
       }),
     });
     if (!res.ok) return errorResponse(`Preview email failed: ${await res.text()}`, 502);
-    return jsonResponse({ preview_sent_to: testEmail });
+    return jsonResponse({ preview_sent_to: testEmail, meeting: `${month} ${day}` });
   }
-
-  // This function uses service_role - no user auth needed (cron/HTTP triggered)
-  const supabaseAdmin = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  );
 
   try {
     // Today's date as an America/Los_Angeles calendar date, 'YYYY-MM-DD'.
