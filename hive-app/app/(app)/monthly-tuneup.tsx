@@ -742,8 +742,8 @@ export default function MonthlyTuneupScreen() {
   const renderHelpersStep = () => (
     <View>
       <StepHeader
-        title="15-min helpers 🐝"
-        subtitle={`Done a HIVE help this month? Log it! It posts to ${helperBoardName ?? 'the 15min HIVE Helpers board'} AND shows up on the Progress slide at the meeting — credit where credit is due 🌟 (totally optional, always)`}
+        title="HIVE helps you've done 🐝"
+        subtitle={`Looking back: did you help a HIVE member since the last meeting — 15 minutes or more? Log it here and it posts to ${helperBoardName ?? 'the 15min HIVE Helpers board'} and gets its moment on the Progress slide 🌟 (totally optional, always). Ideas for next month's group Help focus? We pick that together at the meeting!`}
       />
       <View style={[cardStyle, { gap: 10 }]}>
         <TextInput
@@ -756,7 +756,7 @@ export default function MonthlyTuneupScreen() {
         <TextInput
           value={helperContent}
           onChangeText={setHelperContent}
-          placeholder="Who did you help, and how?"
+          placeholder="Who did you help, and how? (e.g. 'Practiced front-door manners with Charlee's pups')"
           placeholderTextColor="#b5ad9f"
           multiline
           blurOnSubmit={false}
