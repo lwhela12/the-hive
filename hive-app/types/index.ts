@@ -52,6 +52,12 @@ export interface Community extends Record<string, unknown> {
   name: string;
   slug: string;
   slide_deck_url?: string;
+  /** Admin-editable Meeting Helper slide notes (migration 106). */
+  meeting_helper_notes?: {
+    news?: string;
+    meetups?: string;
+    wrapup?: string;
+  } | null;
   created_by?: string;
   created_at: string;
 }

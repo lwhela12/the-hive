@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { invalidateWishQueries } from '../../lib/queryClient';
@@ -33,6 +34,8 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { parseAmericanDate } from '../../lib/dateUtils';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import type { Profile, Wish } from '../../types';
+
+const hiveBee = require('../../assets/HIVE Bee.png');
 
 const STEPS = [
   { key: 'wishes', label: 'HD wishes' },
@@ -857,7 +860,11 @@ export default function MonthlyTuneupScreen() {
     return (
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-          <Text style={{ fontSize: 52, marginBottom: 16 }}>🎶🐝</Text>
+          <Image
+            source={hiveBee}
+            style={{ width: 84, height: 84, marginBottom: 16 }}
+            contentFit="contain"
+          />
           <Text
             style={{
               fontFamily: 'LibreBaskerville_700Bold',
@@ -912,9 +919,16 @@ export default function MonthlyTuneupScreen() {
           <Ionicons name="chevron-back" size={20} color="#8a6b30" />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 20, color: '#2d2d2d' }}>
-            🧰 {monthName} Tune-up
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Image
+              source={hiveBee}
+              style={{ width: 26, height: 26 }}
+              contentFit="contain"
+            />
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 20, color: '#2d2d2d' }}>
+              {monthName} Tune-up
+            </Text>
+          </View>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 2 }}>
             Step {stepIndex + 1} of {STEPS.length} · {STEPS[stepIndex].label}
           </Text>

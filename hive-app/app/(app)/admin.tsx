@@ -2521,23 +2521,51 @@ export default function AdminScreen() {
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={true}
                 >
-                  <Pressable
-                    onPress={() => router.push('/arrival-board')}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingHorizontal: 14,
-                      paddingVertical: 10,
+                  {/* Meeting tools — quick links to the meeting-day surfaces */}
+                  <View
+                    style={{
                       borderBottomWidth: 1,
                       borderBottomColor: 'rgba(222,193,129,0.3)',
-                      backgroundColor: pressed ? '#fbf4e3' : 'transparent',
-                    })}
+                      paddingBottom: 4,
+                    }}
                   >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', flex: 1 }}>
-                      📺 Arrival Board — live check-in view for meeting day
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_700Bold',
+                        fontSize: 11,
+                        letterSpacing: 1,
+                        textTransform: 'uppercase',
+                        color: '#9a8060',
+                        paddingHorizontal: 14,
+                        paddingTop: 12,
+                        paddingBottom: 4,
+                      }}
+                    >
+                      Meeting tools
                     </Text>
-                    <Ionicons name="chevron-forward" size={15} color="#bd9348" />
-                  </Pressable>
+                    {([
+                      { label: '🎞️ Meeting Helper — run the meeting from the TV', route: '/meeting-helper' },
+                      { label: '📺 Arrival Board — live check-in view for meeting day', route: '/arrival-board' },
+                      { label: '🧰 Monthly Tune-up — pre-meeting prep walkthrough', route: '/monthly-tuneup' },
+                    ] as const).map((tool) => (
+                      <Pressable
+                        key={tool.route}
+                        onPress={() => router.push(tool.route)}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          backgroundColor: pressed ? '#fbf4e3' : 'transparent',
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', flex: 1 }}>
+                          {tool.label}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={15} color="#bd9348" />
+                      </Pressable>
+                    ))}
+                  </View>
                   {allSurveys.length === 0 ? (
                     <View style={{ padding: 20, alignItems: 'center' }}>
                       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af' }}>

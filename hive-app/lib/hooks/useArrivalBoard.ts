@@ -1,0 +1,200 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
+import { supabase } from '../supabase';
+import { useAuth } from './useAuth';
+import {
+  getSurveyAvailableAt,
+  getSurveyResponsePeriod,
+  isMonthlyCheckInSurvey,
+  type Survey,
+  type SurveyAnswers,
+  type SurveyResponse,
+} from './useSurveys';
+
+const POLL_INTERVAL_MS = 20 * 1000;
+
+export type ArrivalBoardMember = {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+};
+
+export type ArrivalBoardMeeting = {
+  event_date: string;
+  event_time: string | null;
+  title: string;
+};
+
+export function getTextAnswer(answers: SurveyAnswers, key: string) {
+  const value = answers[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+export function getNumberAnswer(answers: SurveyAnswers, key: string) {
+  const value = answers[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+export function getFirstName(name: string) {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
+export function getMonthNameFromPeriod(period?: string | null) {
+  const match = (period ?? '').match(/^(\d{4})-(\d{2})$/);
+  const date = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, 1)
+    : new Date();
+  return date.toLocaleString('en-US', { month: 'long' });
+}
+
+export function formatMeetingDate(meeting: ArrivalBoardMeeting | null) {
+  if (!meeting?.event_date) return '';
+  const [year, month, day] = meeting.event_date.split('-').map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return '';
+  const date = new Date(year, month - 1, day);
+  const dateLabel = date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+  return meeting.event_time ? `${dateLabel} · ${meeting.event_time}` : dateLabel;
+}
+
+// Energy is answered on a 1–10 scale; the board shows it as ⚡ dots out of 5.
+export function getEnergyDots(level: number) {
+  return Math.min(5, Math.max(1, Math.round(level / 2)));
+}
+
+export function getLocalIsoDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Live data behind the Arrival Board: community members, the active monthly
+ * check-in survey, everyone's response for the current period, and the next
+ * scheduled meeting. Shared by the Arrival Board screen and the Meeting
+ * Helper deck. Polls every ~20s while `pollingEnabled` (default true) and
+ * refreshes when the browser tab regains focus (the TV use case).
+ */
+export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
+  const { pollingEnabled = true } = options;
+  const { communityId } = useAuth();
+
+  const [loading, setLoading] = useState(true);
+  const [survey, setSurvey] = useState<Survey | null>(null);
+  const [responsePeriod, setResponsePeriod] = useState<string | null>(null);
+  const [members, setMembers] = useState<ArrivalBoardMember[]>([]);
+  const [responsesByUser, setResponsesByUser] = useState<Map<string, SurveyResponse>>(new Map());
+  const [nextMeeting, setNextMeeting] = useState<ArrivalBoardMeeting | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const loadingRef = useRef(false);
+
+  const refresh = useCallback(async () => {
+    if (!communityId || loadingRef.current) return;
+    loadingRef.current = true;
+
+    try {
+      const today = getLocalIsoDate(new Date());
+      const [surveysRes, membersRes, meetingRes] = await Promise.all([
+        supabase
+          .from('surveys')
+          .select('*')
+          .eq('community_id', communityId)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('community_memberships')
+          .select('profiles!user_id(id, name, avatar_url)')
+          .eq('community_id', communityId),
+        supabase
+          .from('events')
+          .select('event_date, event_time, title')
+          .eq('community_id', communityId)
+          .eq('event_type', 'meeting')
+          .gte('event_date', today)
+          .or('status.is.null,status.eq.scheduled')
+          .order('event_date', { ascending: true })
+          .limit(1),
+      ]);
+
+      const activeCheckIn =
+        ((surveysRes.data ?? []) as Survey[]).find(isMonthlyCheckInSurvey) ?? null;
+      const period = activeCheckIn ? getSurveyResponsePeriod(activeCheckIn) : null;
+
+      const memberRows = ((membersRes.data ?? []) as unknown as { profiles: ArrivalBoardMember | ArrivalBoardMember[] | null }[])
+        .map((row) => (Array.isArray(row.profiles) ? row.profiles[0] : row.profiles))
+        .filter((member): member is ArrivalBoardMember => !!member?.id && !!member.name)
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      const byUser = new Map<string, SurveyResponse>();
+      if (activeCheckIn && period) {
+        const { data: responseRows } = await supabase
+          .from('survey_responses')
+          .select('*')
+          .eq('survey_id', activeCheckIn.id)
+          .eq('community_id', communityId);
+
+        // Legacy responses may not carry a response_period; count them for this
+        // period only if they were submitted after the check-in window opened.
+        const windowOpenedAt = getSurveyAvailableAt(activeCheckIn);
+        ((responseRows ?? []) as SurveyResponse[]).forEach((response) => {
+          const matchesPeriod = response.response_period
+            ? response.response_period === period
+            : !windowOpenedAt || new Date(response.submitted_at) >= windowOpenedAt;
+          if (!matchesPeriod) return;
+
+          const existing = byUser.get(response.user_id);
+          if (!existing || response.submitted_at > existing.submitted_at) {
+            byUser.set(response.user_id, response);
+          }
+        });
+      }
+
+      setSurvey(activeCheckIn);
+      setResponsePeriod(period);
+      setMembers(memberRows);
+      setResponsesByUser(byUser);
+      setNextMeeting((meetingRes.data?.[0] as ArrivalBoardMeeting | undefined) ?? null);
+      setLastUpdatedAt(new Date());
+    } catch (error) {
+      console.warn('Could not load the Arrival Board', error);
+    } finally {
+      loadingRef.current = false;
+      setLoading(false);
+    }
+  }, [communityId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  // Simple + reliable live updates: poll every ~20 seconds while enabled.
+  useEffect(() => {
+    if (!pollingEnabled) return;
+    const interval = setInterval(() => {
+      void refresh();
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [pollingEnabled, refresh]);
+
+  // Refresh whenever the browser tab regains focus (the TV use case).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onFocus = () => {
+      void refresh();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refresh]);
+
+  return {
+    loading,
+    survey,
+    responsePeriod,
+    members,
+    responsesByUser,
+    nextMeeting,
+    lastUpdatedAt,
+    refresh,
+  };
+}
