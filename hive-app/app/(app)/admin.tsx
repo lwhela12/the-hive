@@ -15,6 +15,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,7 +51,8 @@ import {
 } from '../../lib/carryForward';
 import type { Survey, SurveyAnswers, SurveyQuestion, SurveyResponse } from '../../lib/hooks/useSurveys';
 import { parseAmericanDate } from '../../lib/dateUtils';
-import type { Profile, QueenBee, UserRole, CommunityInvite, Event } from '../../types';
+import { getWishQuickTitle } from '../../lib/wishDisplay';
+import type { Profile, QueenBee, UserRole, CommunityInvite, Event, Wish } from '../../types';
 
 type MemberRow = {
   id: string;
@@ -578,6 +580,46 @@ function buildSurveyPopPreview(
       || carryForward.length > 0
     ),
   };
+}
+
+// Plain-text version of the POP preview for pasting into a Google Slides text box.
+// Mirrors buildSurveyPopPreview sections; arrival-board answers (q_name_today,
+// q_feeling_today, q_feeling_note) are never part of the preview, so they stay out.
+function buildPopPreviewClipboardText(preview: SurveyPopPreview): string {
+  const sections: string[] = [];
+
+  const energyLines: string[] = [];
+  if (preview.energyAverage !== null) {
+    energyLines.push(
+      `Average ${preview.energyAverage.toFixed(1)} from ${preview.energyCount} response${preview.energyCount === 1 ? '' : 's'}.`
+    );
+  }
+  if (preview.modes.length > 0) {
+    energyLines.push(preview.modes.map(mode => `${mode.label}: ${mode.count}`).join(' - '));
+  }
+  if (energyLines.length > 0) {
+    sections.push(['ENERGY', ...energyLines].join('\n'));
+  }
+
+  const pushTextSection = (title: string, items: PopPreviewTextItem[]) => {
+    if (items.length === 0) return;
+    sections.push([title, ...items.map(item => `${item.memberName}: ${item.text}`)].join('\n'));
+  };
+
+  pushTextSection('PROGRESS', preview.progress);
+  pushTextSection('OBSTACLES', preview.obstacles);
+  pushTextSection('PRIORITIES', preview.priorities);
+  pushTextSection('MEETING TOPICS', preview.meetingTopics);
+
+  if (preview.carryForward.length > 0) {
+    const carryForwardLines = preview.carryForward.flatMap(({ memberName, item }) => {
+      const line = `${memberName}: ${getCarryForwardStatusLabel(item.status)} - ${item.sourceLabel}: ${item.label}`;
+      return item.note ? [line, `  ${item.note}`] : [line];
+    });
+    sections.push(['CARRY-FORWARD', ...carryForwardLines].join('\n'));
+  }
+
+  return sections.join('\n\n');
 }
 
 function PopPreviewList({ title, items }: { title: string; items: PopPreviewTextItem[] }) {
@@ -1116,6 +1158,80 @@ export default function AdminScreen() {
   const activeSurveyPopPreview = useMemo(() => (
     buildSurveyPopPreview(activeSurveyResponses, memberProfilesById)
   ), [activeSurveyResponses, memberProfilesById]);
+
+  const [deckCopyFeedback, setDeckCopyFeedback] = useState<'pop' | 'wishes' | null>(null);
+  const [hdWishesCopying, setHdWishesCopying] = useState(false);
+  const deckCopyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (deckCopyFeedbackTimeoutRef.current) clearTimeout(deckCopyFeedbackTimeoutRef.current);
+  }, []);
+
+  const flashDeckCopyFeedback = useCallback((section: 'pop' | 'wishes') => {
+    if (deckCopyFeedbackTimeoutRef.current) clearTimeout(deckCopyFeedbackTimeoutRef.current);
+    setDeckCopyFeedback(section);
+    deckCopyFeedbackTimeoutRef.current = setTimeout(() => setDeckCopyFeedback(null), 2000);
+  }, []);
+
+  const handleCopyPopPreview = useCallback(async () => {
+    const text = buildPopPreviewClipboardText(activeSurveyPopPreview);
+    if (!text) return;
+
+    try {
+      await Clipboard.setStringAsync(text);
+      flashDeckCopyFeedback('pop');
+    } catch {
+      Alert.alert('Copy failed', 'Could not copy the POP preview to the clipboard.');
+    }
+  }, [activeSurveyPopPreview, flashDeckCopyFeedback]);
+
+  const handleCopyHdWishes = useCallback(async () => {
+    if (!communityId || hdWishesCopying) return;
+
+    setHdWishesCopying(true);
+    try {
+      const { data, error } = await supabase
+        .from('wishes')
+        .select('*, user:profiles(*)')
+        .eq('status', 'public')
+        .or('is_active.is.true,is_active.is.null')
+        .eq('community_id', communityId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const activeWishes = (data ?? []) as (Wish & { user: Profile | null })[];
+      if (activeWishes.length === 0) {
+        Alert.alert('No HD wishes', 'There are no active public wishes to copy yet.');
+        return;
+      }
+
+      const linesByMember = new Map<string, string[]>();
+      activeWishes.forEach((wish) => {
+        const memberName = wish.user?.name
+          ?? memberProfilesById.get(wish.user_id)?.name
+          ?? 'Unknown member';
+        const line = `${memberName} — ${getWishQuickTitle(wish, 120)}`;
+        const memberLines = linesByMember.get(memberName);
+        if (memberLines) memberLines.push(line);
+        else linesByMember.set(memberName, [line]);
+      });
+
+      const sortedMemberNames = Array.from(linesByMember.keys())
+        .sort((a, b) => a.localeCompare(b));
+      const text = [
+        'MEMBER HDs',
+        ...sortedMemberNames.flatMap(name => linesByMember.get(name) ?? []),
+      ].join('\n');
+
+      await Clipboard.setStringAsync(text);
+      flashDeckCopyFeedback('wishes');
+    } catch {
+      Alert.alert('Copy failed', 'Could not load HD wishes. Try again in a moment.');
+    } finally {
+      setHdWishesCopying(false);
+    }
+  }, [communityId, hdWishesCopying, memberProfilesById, flashDeckCopyFeedback]);
 
   const activeSurveySubmittedMemberIds = useMemo(() => new Set(
     activeSurveyResponses.map((response) => response.user_id)
@@ -2717,6 +2833,40 @@ export default function AdminScreen() {
                           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7f715f', lineHeight: 17, marginTop: 2 }}>
                             Deck-ready readout from this month's responses.
                           </Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                            <Pressable
+                              onPress={() => { void handleCopyPopPreview(); }}
+                              style={({ pressed }) => ({
+                                backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+                                borderColor: 'rgba(222,193,129,0.55)',
+                                borderWidth: 1,
+                                borderRadius: 999,
+                                paddingHorizontal: 12,
+                                paddingVertical: 7,
+                              })}
+                            >
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: deckCopyFeedback === 'pop' ? '#3f7f4c' : '#8a6b30' }}>
+                                {deckCopyFeedback === 'pop' ? '✓ Copied' : '📋 Copy for deck'}
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => { void handleCopyHdWishes(); }}
+                              disabled={hdWishesCopying}
+                              style={({ pressed }) => ({
+                                backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+                                borderColor: 'rgba(222,193,129,0.55)',
+                                borderWidth: 1,
+                                borderRadius: 999,
+                                paddingHorizontal: 12,
+                                paddingVertical: 7,
+                                opacity: hdWishesCopying ? 0.6 : 1,
+                              })}
+                            >
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: deckCopyFeedback === 'wishes' ? '#3f7f4c' : '#8a6b30' }}>
+                                {deckCopyFeedback === 'wishes' ? '✓ Copied' : hdWishesCopying ? 'Copying…' : '📋 Copy HD wishes'}
+                              </Text>
+                            </Pressable>
+                          </View>
                         </View>
 
                         {(activeSurveyPopPreview.energyAverage !== null || activeSurveyPopPreview.modes.length > 0) ? (
