@@ -15,7 +15,7 @@ export interface ActivityItem {
   timestamp: string; // ISO string
   sourceId: string;  // the DB record ID (post id, event id, wish id, user id)
   categoryId?: string; // board activity only — to deep-link into the right topic
-  navigatesTo?: 'board' | 'event' | 'members' | 'wish' | 'messages'; // screens that can be navigated to
+  navigatesTo?: 'board' | 'event' | 'members' | 'wish' | 'messages' | 'tuneup'; // screens that can be navigated to
   involvesUserIds?: string[]; // member ids involved in this item — used by the "Mentions me" filter
 }
 
@@ -197,6 +197,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
         text: `Monthly check-in is open — answer before the ${monthName} meeting! 🐝`,
         timestamp: windowOpensAt.toISOString(),
         sourceId: monthlyCheckIn.id,
+        navigatesTo: 'tuneup',
       });
     }
   }

@@ -378,6 +378,13 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
+          name="monthly-tuneup"
+          options={{
+            title: 'Monthly Tune-up',
+            href: null,
+          }}
+        />
+        <Tabs.Screen
           name="admin"
           options={{
             title: 'Admin',

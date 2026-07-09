@@ -12,7 +12,7 @@ import { useWishes } from '../../lib/hooks/useWishes';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
-import { useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
+import { getSurveyResponsePeriod, isMonthlyCheckInSurvey, useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
 import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
 import { useAppUpdate } from '../../lib/hooks/useAppUpdate';
 import { useInstallPrompt } from '../../lib/hooks/useInstallPrompt';
@@ -1462,6 +1462,8 @@ export default function HiveScreen() {
       } else {
         router.push('/messages');
       }
+    } else if (destination === 'tuneup') {
+      router.push('/monthly-tuneup');
     }
   }, [getActivityDestination, openEventFromActivity, openWishFromActivity, router]);
 
@@ -1988,11 +1990,21 @@ export default function HiveScreen() {
       const response = myResponses.get(s.id);
       const submittedAt = response?.submitted_at ?? null;
       const isDone = !!submittedAt && !pendingSurveyIds.has(s.id);
+      // Monthly check-ins route through the guided Monthly Tune-up (wishes →
+      // hang ideas → calendar → helpers → check-in) instead of the bare survey.
+      const isMonthlyTuneUp = isMonthlyCheckInSurvey(s);
+      const tuneUpPeriodMatch = isMonthlyTuneUp
+        ? getSurveyResponsePeriod(s).match(/^(\d{4})-(\d{2})$/)
+        : null;
+      const tuneUpMonthName = tuneUpPeriodMatch
+        ? new Date(Number(tuneUpPeriodMatch[1]), Number(tuneUpPeriodMatch[2]) - 1, 1)
+            .toLocaleString('en-US', { month: 'long' })
+        : 'Monthly';
 
       return {
         id: `survey-${s.id}`,
-        emoji: '📋',
-        title: s.title,
+        emoji: isMonthlyTuneUp ? '🧰' : '📋',
+        title: isMonthlyTuneUp ? `${tuneUpMonthName} tune-up + check-in` : s.title,
         detail: isDone
           ? `Submitted ${formatDateShort(submittedAt)} · Tap to edit`
           : s.due_date
@@ -2001,7 +2013,7 @@ export default function HiveScreen() {
         cta: isDone ? undefined : 'Fill out →',
         isDone,
         completedAt: isDone ? submittedAt : null,
-        onPress: () => openSurvey(s),
+        onPress: isMonthlyTuneUp ? () => router.push('/monthly-tuneup') : () => openSurvey(s),
       };
     }),
     ...homeActionItems.map(a => {
