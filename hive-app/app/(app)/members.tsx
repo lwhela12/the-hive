@@ -1511,12 +1511,12 @@ function MemberDetailModal({
                   onPress={() => setShowDailyAnswersSheet(true)}
                   accessibilityRole="button"
                   accessibilityLabel={`View ${member.name}'s daily question answers`}
-                  style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, backgroundColor: '#f5f3ee', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}
+                  style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, backgroundColor: '#f5f3ee', paddingHorizontal: 15, paddingVertical: 4, borderRadius: 20 }}
                 >
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#6b7280' }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#6b7280' }}>
                     ✨ {member.questionAnswerCount} daily Q&A{' '}
                   </Text>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>›</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>›</Text>
                 </Pressable>
               )}
               <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 12, width: '100%' }}>
