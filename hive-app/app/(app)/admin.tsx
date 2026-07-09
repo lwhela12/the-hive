@@ -2366,7 +2366,7 @@ export default function AdminScreen() {
                             </Text>
                           )}
                           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 2 }}>
-                            {(survey.questions ?? []).length} question{(survey.questions ?? []).length === 1 ? '' : 's'} - Tap to edit
+                            {(survey.questions ?? []).length} question{(survey.questions ?? []).length === 1 ? '' : 's'} · Tap to edit & 📊 see responses
                           </Text>
                         </View>
                         <Pressable

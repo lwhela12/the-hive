@@ -55,7 +55,6 @@ type MeetingFormDraft<T> = {
 };
 
 const DEFAULT_HIVE_DECK_VIEW_URL = 'https://www.canva.com/d/CQkVqOMhwuO06qe';
-const DEFAULT_HIVE_DECK_EDIT_URL = 'https://www.canva.com/d/QPpy59P1sGtp6Al';
 const MEETING_FORM_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const getIsMobileWeb = () => {
@@ -1449,17 +1448,6 @@ export default function MeetingsScreen() {
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>View Deck</Text>
               </Pressable>
-              {isAdmin && (
-                <Pressable
-                  onPress={() => {
-                    setShowDeckActions(false);
-                    handleOpenSlideDeck(DEFAULT_HIVE_DECK_EDIT_URL);
-                  }}
-                  style={{ backgroundColor: '#2d2d2d', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>Edit in Canva</Text>
-                </Pressable>
-              )}
               {isAdmin && (
                 <Pressable
                   onPress={() => {
