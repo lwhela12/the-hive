@@ -13,7 +13,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
-import { invalidateWishQueries } from '../../lib/queryClient';
+import { invalidateWishQueries, queryClient, queryKeys } from '../../lib/queryClient';
+import {
+  getStoredItemAsync,
+  removeStoredItemAsync,
+  setStoredItemAsync,
+} from '../../lib/webStorage';
 import { deleteWishById } from '../../lib/wishMutations';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
@@ -46,6 +51,30 @@ const STEPS = [
 ] as const;
 
 type BoardTarget = { id: string; name: string };
+
+// The HIVE Helpers board holds one thread per month (e.g. "June Pay It Forward
+// Success"); members log helps as replies on the current thread.
+type HelperThread = {
+  boardId: string;
+  boardName: string;
+  postId: string | null;
+  postTitle: string | null;
+};
+
+// Wizard draft persisted across relaunches (per community + member).
+type TuneupDraft = {
+  stepIndex?: number;
+  helperContent?: string;
+  hangTitle?: string;
+  hangContent?: string;
+  eventTitle?: string;
+  eventDate?: string;
+  eventTime?: string;
+  eventLocation?: string;
+};
+
+const getTuneupDraftKey = (communityId: string, userId: string) =>
+  `the-hive:tuneup-draft:${communityId}:${userId}`;
 
 function getFirstName(name?: string | null) {
   const trimmed = (name ?? '').trim();
@@ -183,12 +212,11 @@ export default function MonthlyTuneupScreen() {
   const [hangPosted, setHangPosted] = useState<string[]>([]);
   const [hangBoardName, setHangBoardName] = useState<string | null>(null);
 
-  const [helperTitle, setHelperTitle] = useState('');
   const [helperContent, setHelperContent] = useState('');
   const [helperPosting, setHelperPosting] = useState(false);
   const [helperError, setHelperError] = useState<string | null>(null);
   const [helperPosted, setHelperPosted] = useState<string[]>([]);
-  const [helperBoardName, setHelperBoardName] = useState<string | null>(null);
+  const [helperThread, setHelperThread] = useState<HelperThread | null>(null);
 
   // Step 3 — calendar
   const [eventTitle, setEventTitle] = useState('');
@@ -265,17 +293,15 @@ export default function MonthlyTuneupScreen() {
     return active ? { id: active.id, name: active.name } : null;
   }, [communityId]);
 
-  const postToBoard = useCallback(async (kind: 'hangs' | 'helpers', title: string, content: string) => {
+  const postToBoard = useCallback(async (title: string, content: string) => {
     if (!profile || !communityId) {
       return { error: 'Your profile is still loading. Please try again in a moment.' };
     }
 
-    const board = await findBoardTarget(kind);
+    const board = await findBoardTarget('hangs');
     if (!board) {
       return {
-        error: kind === 'hangs'
-          ? 'Could not find the HIVE Hangs board. You can post your idea from the Boards tab instead.'
-          : 'Could not find the 15min HIVE Helpers board. You can log it from the Boards tab instead.',
+        error: 'Could not find the HIVE Hangs board. You can post your idea from the Boards tab instead.',
       };
     }
 
@@ -294,32 +320,136 @@ export default function MonthlyTuneupScreen() {
     return { error: null, boardName: board.name };
   }, [communityId, findBoardTarget, profile]);
 
-  // Preload the destination board names so steps 2 and 4 can say where posts land.
+  // Helpers step posts as a REPLY on the current monthly thread of the HIVE
+  // Helpers board (one thread per month, e.g. "June Pay It Forward Success").
+  const findHelperThread = useCallback(async (): Promise<HelperThread | null> => {
+    if (!communityId) return null;
+
+    const board = await findBoardTarget('helpers');
+    if (!board) return null;
+
+    const { data, error } = await supabase
+      .from('board_posts')
+      .select('id, title, status, created_at')
+      .eq('community_id', communityId)
+      .eq('category_id', board.id)
+      .or('status.is.null,status.eq.active')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.warn('Could not load the current HIVE Helpers thread', error);
+      return { boardId: board.id, boardName: board.name, postId: null, postTitle: null };
+    }
+
+    const thread = ((data ?? []) as { id: string; title: string }[])[0];
+    return {
+      boardId: board.id,
+      boardName: board.name,
+      postId: thread?.id ?? null,
+      postTitle: thread?.title ?? null,
+    };
+  }, [communityId, findBoardTarget]);
+
+  // Preload the destination board/thread so steps 2 and 4 can say where posts land.
   useEffect(() => {
     if (!communityId) return;
     let cancelled = false;
 
-    const loadBoardNames = async () => {
-      const [hangBoard, helperBoard] = await Promise.all([
+    const loadBoardTargets = async () => {
+      const [hangBoard, helperThreadInfo] = await Promise.all([
         findBoardTarget('hangs'),
-        findBoardTarget('helpers'),
+        findHelperThread(),
       ]);
       if (cancelled) return;
       setHangBoardName(hangBoard?.name ?? null);
-      setHelperBoardName(helperBoard?.name ?? null);
+      setHelperThread(helperThreadInfo);
     };
 
-    void loadBoardNames();
+    void loadBoardTargets();
     return () => {
       cancelled = true;
     };
-  }, [communityId, findBoardTarget]);
+  }, [communityId, findBoardTarget, findHelperThread]);
+
+  // Wizard progress survives a full relaunch: restore any saved draft once the
+  // profile/community are known, save (debounced) on change, clear on finish.
+  const draftKey = communityId && profile ? getTuneupDraftKey(communityId, profile.id) : null;
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  useEffect(() => {
+    if (!draftKey || draftRestored) return;
+    let cancelled = false;
+
+    const restoreDraft = async () => {
+      try {
+        const raw = await getStoredItemAsync(draftKey);
+        if (!cancelled && raw) {
+          const draft = JSON.parse(raw) as TuneupDraft;
+          if (draft && typeof draft === 'object') {
+            if (typeof draft.stepIndex === 'number' && Number.isFinite(draft.stepIndex)) {
+              setStepIndex(Math.min(Math.max(Math.trunc(draft.stepIndex), 0), STEPS.length - 1));
+            }
+            if (typeof draft.helperContent === 'string') setHelperContent(draft.helperContent);
+            if (typeof draft.hangTitle === 'string') setHangTitle(draft.hangTitle);
+            if (typeof draft.hangContent === 'string') setHangContent(draft.hangContent);
+            if (typeof draft.eventTitle === 'string') setEventTitle(draft.eventTitle);
+            if (typeof draft.eventDate === 'string') setEventDate(draft.eventDate);
+            if (typeof draft.eventTime === 'string') setEventTime(draft.eventTime);
+            if (typeof draft.eventLocation === 'string') setEventLocation(draft.eventLocation);
+          }
+        }
+      } catch {
+        // Bad or unreadable draft — start fresh.
+      }
+      if (!cancelled) setDraftRestored(true);
+    };
+
+    void restoreDraft();
+    return () => {
+      cancelled = true;
+    };
+  }, [draftKey, draftRestored]);
+
+  useEffect(() => {
+    if (!draftKey || !draftRestored || finished) return;
+    const timeout = setTimeout(() => {
+      const draft: TuneupDraft = {
+        stepIndex,
+        helperContent,
+        hangTitle,
+        hangContent,
+        eventTitle,
+        eventDate,
+        eventTime,
+        eventLocation,
+      };
+      void setStoredItemAsync(draftKey, JSON.stringify(draft));
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [
+    draftKey,
+    draftRestored,
+    finished,
+    stepIndex,
+    helperContent,
+    hangTitle,
+    hangContent,
+    eventTitle,
+    eventDate,
+    eventTime,
+    eventLocation,
+  ]);
+
+  useEffect(() => {
+    if (finished && draftKey) void removeStoredItemAsync(draftKey);
+  }, [finished, draftKey]);
 
   const handlePostHangIdea = async () => {
     if (!hangContent.trim() || hangPosting) return;
     setHangPosting(true);
     setHangError(null);
-    const result = await postToBoard('hangs', hangTitle, hangContent);
+    const result = await postToBoard(hangTitle, hangContent);
     setHangPosting(false);
     if (result.error) {
       setHangError(result.error);
@@ -332,19 +462,82 @@ export default function MonthlyTuneupScreen() {
   };
 
   const handlePostHelperLog = async () => {
-    if (!helperContent.trim() || helperPosting) return;
-    setHelperPosting(true);
-    setHelperError(null);
-    const result = await postToBoard('helpers', helperTitle, helperContent);
-    setHelperPosting(false);
-    if (result.error) {
-      setHelperError(result.error);
+    const content = helperContent.trim();
+    if (!content || helperPosting) return;
+    if (!profile || !communityId) {
+      setHelperError('Your profile is still loading. Please try again in a moment.');
       return;
     }
-    if (result.boardName) setHelperBoardName(result.boardName);
-    setHelperPosted((prev) => [...prev, deriveBoardPostTitle(helperTitle, helperContent)]);
-    setHelperTitle('');
+
+    setHelperPosting(true);
+    setHelperError(null);
+
+    let thread = helperThread ?? await findHelperThread();
+    if (!thread) {
+      setHelperPosting(false);
+      setHelperError('Could not find the HIVE Helpers board. You can log it from the Boards tab instead.');
+      return;
+    }
+
+    if (thread.postId) {
+      // Same reply shape the Boards tab uses; reply_count / last_reply_at on the
+      // thread are kept in sync by the update_reply_count DB trigger.
+      const { error } = await (supabase as any).from('board_replies').insert({
+        community_id: communityId,
+        post_id: thread.postId,
+        author_id: profile.id,
+        content,
+      });
+
+      if (error) {
+        setHelperPosting(false);
+        setHelperError(`Failed to post: ${error.message}`);
+        return;
+      }
+
+      // Non-blocking side-effects, mirroring the Boards reply composer.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.boardSearchIndex(communityId),
+      });
+      supabase.functions.invoke('notify-board-reply', {
+        body: {
+          post_id: thread.postId,
+          reply_author_id: profile.id,
+          reply_preview: content,
+          community_id: communityId,
+        },
+      }).catch((err) => console.log('Board reply notification error (non-blocking):', err));
+    } else {
+      // No monthly thread yet — start one so this and later logs have a home.
+      const { data, error } = await (supabase as any)
+        .from('board_posts')
+        .insert({
+          community_id: communityId,
+          category_id: thread.boardId,
+          author_id: profile.id,
+          title: `${monthName} HIVE Helpers`,
+          content,
+        })
+        .select('id, title')
+        .single();
+
+      if (error) {
+        setHelperPosting(false);
+        setHelperError(`Failed to post: ${error.message}`);
+        return;
+      }
+
+      thread = {
+        ...thread,
+        postId: data?.id ?? null,
+        postTitle: data?.title ?? `${monthName} HIVE Helpers`,
+      };
+    }
+
+    setHelperThread(thread);
+    setHelperPosted((prev) => [...prev, deriveBoardPostTitle('', content)]);
     setHelperContent('');
+    setHelperPosting(false);
   };
 
   // Same create path as hive.tsx's event modal: the create-event edge function.
@@ -559,7 +752,7 @@ export default function MonthlyTuneupScreen() {
     <View style={{ gap: 12 }}>
       <StepHeader
         title="Your HD wishes 🌟"
-        subtitle="Let's check in on your HDs — still true? Anything granted? Anything new?"
+        subtitle="Let's check in on your HDs — still true? Anything new? What's changed since last meeting? Did anyone help you? Mark it granted and give them credit 🌟"
       />
       {wishesLoading ? (
         <View style={{ paddingVertical: 32, alignItems: 'center' }}>
@@ -742,21 +935,19 @@ export default function MonthlyTuneupScreen() {
   const renderHelpersStep = () => (
     <View>
       <StepHeader
-        title="HIVE helps you've done 🐝"
-        subtitle={`Looking back: did you help a HIVE member since the last meeting — 15 minutes or more? Log it here and it posts to ${helperBoardName ?? 'the 15min HIVE Helpers board'} and gets its moment on the Progress slide 🌟 (totally optional, always). Ideas for next month's group Help focus? We pick that together at the meeting!`}
+        title="HIVE helps 🐝"
+        subtitle="Little kindnesses out in the world since last meeting — no act too tiny! Picked up a candy wrapper on a walk? Gave your change to someone? Complimented a stranger? Donated a blanket to the dog shelter? Log it — it lands in this month's HIVE Helpers thread and gets its moment on the Progress slide 🌟 (totally optional, always). (Helped a HIVE member? That belongs on their wish — mark it granted!)"
       />
+      {helperThread?.postTitle ? (
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348', marginTop: -6, marginBottom: 12 }}>
+          This month's thread: "{helperThread.postTitle}"
+        </Text>
+      ) : null}
       <View style={[cardStyle, { gap: 10 }]}>
-        <TextInput
-          value={helperTitle}
-          onChangeText={setHelperTitle}
-          placeholder="Title (optional)"
-          placeholderTextColor="#b5ad9f"
-          style={inputStyle}
-        />
         <TextInput
           value={helperContent}
           onChangeText={setHelperContent}
-          placeholder="Who did you help, and how? (e.g. 'Practiced front-door manners with Charlee's pups')"
+          placeholder="What tiny (or huge) kindness did you do?"
           placeholderTextColor="#b5ad9f"
           multiline
           blurOnSubmit={false}
@@ -778,11 +969,11 @@ export default function MonthlyTuneupScreen() {
           })}
         >
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: helperContent.trim() ? 'white' : '#9ca3af' }}>
-            {helperPosting ? 'Logging...' : 'Log helper act'}
+            {helperPosting ? 'Logging...' : 'Log kindness'}
           </Text>
         </Pressable>
       </View>
-      <PostedConfirmation lines={helperPosted} boardName={helperBoardName} />
+      <PostedConfirmation lines={helperPosted} boardName={helperThread?.postTitle ?? helperThread?.boardName ?? null} />
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
         Nothing to log? No worries — tap Next.
       </Text>
