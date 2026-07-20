@@ -1676,7 +1676,7 @@ export default function ProfileScreen() {
 
               {monthlyCheckInSurvey ? (
                 <Pressable
-                  onPress={() => setActiveSurvey(monthlyCheckInSurvey)}
+                  onPress={() => router.push('/monthly-tuneup' as any)}
                   className="active:opacity-75"
                   style={{
                     marginTop: 12,
@@ -1713,7 +1713,7 @@ export default function ProfileScreen() {
                         numberOfLines={1}
                         style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8e7a5e', marginTop: 2 }}
                       >
-                        Submitted {formatDateShort(monthlyCheckInResponse.submitted_at)}
+                        Submitted {formatDateShort(monthlyCheckInResponse.submitted_at)} · tap to review or update
                       </Text>
                     ) : null}
                   </View>
@@ -2354,35 +2354,6 @@ export default function ProfileScreen() {
                 )}
               </View>
             </View>
-          </View>
-        )}
-
-        {/* Monthly Check-in — always-available front door to the tune-up flow */}
-        {!immersiveSkillsGarden && (
-          <View className="mb-6">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
-              Monthly Check-in
-            </Text>
-            <Pressable
-              onPress={() => router.push('/monthly-tuneup' as any)}
-              accessibilityRole="button"
-              accessibilityLabel="Open the monthly check-in"
-              className="bg-white rounded-xl shadow-sm p-4 active:opacity-80"
-            >
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1 pr-3">
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
-                    ✅ {pendingSurveys.length === 0 ? 'All tuned up for this month!' : 'Walk through your monthly tune-up'}
-                  </Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
-                    {pendingSurveys.length === 0
-                      ? 'Tap any time to review or update your answers, wishes, and calendar.'
-                      : 'Wishes, hang ideas, calendar, kindnesses, and a few quick questions — skippable, savable, always open.'}
-                  </Text>
-                </View>
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-base">→</Text>
-              </View>
-            </Pressable>
           </View>
         )}
 

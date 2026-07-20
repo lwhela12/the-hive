@@ -594,8 +594,6 @@ function buildBouquetLayout(skills: GardenSkill[], width: number) {
   const cellWidth = usableWidth / columns;
   const fullBloom = STAGES[STAGES.length - 1];
   const scale = clamp((cellWidth * 0.92) / fullBloom.labelWidth, 0.3, 0.6);
-  const maxPlantHeight = getStageCanvasHeight(fullBloom) * scale * 1.04 + 8;
-  const rowSpacing = maxPlantHeight + 10;
 
   // Brick-style stagger: full rows alternate with rows one bloom short,
   // each row centered, so offset rows sit in the gaps like a bouquet.
@@ -608,19 +606,34 @@ function buildBouquetLayout(skills: GardenSkill[], width: number) {
     remaining -= take;
   }
 
+  // Space each row by the tallest bloom actually IN it — sizing every row for
+  // a hypothetical full bloom left huge sky-gaps between small flowers and
+  // ballooned the canvas to fill a whole phone screen.
+  const rowGap = 12;
+  let skillCursor = 0;
+  const rowHeights = rowSizes.map((take) => {
+    const rowSkills = ordered.slice(skillCursor, skillCursor + take);
+    skillCursor += take;
+    return Math.max(
+      ...rowSkills.map((skill) => getStageCanvasHeight(getStage(getLevel(skill))) * scale * 1.04 + 8)
+    );
+  });
+
   const bottomInset = 26;
-  const skyRoom = 96;
-  const minHeight = width < 420 ? 330 : 370;
-  const meadowHeight = Math.max(
-    minHeight,
-    bottomInset + Math.max(0, rowSizes.length - 1) * rowSpacing + maxPlantHeight + skyRoom
-  );
+  const skyRoom = 64;
+  const minHeight = width < 420 ? 300 : 340;
+  const stackedHeight = rowHeights.reduce((sum, rowHeight) => sum + rowHeight, 0)
+    + Math.max(0, rowHeights.length - 1) * rowGap;
+  const meadowHeight = Math.max(minHeight, bottomInset + stackedHeight + skyRoom);
 
   const positions = new Map<string, BouquetPlantLayout>();
   let skillIndex = 0;
+  let rowOffset = 0;
   rowSizes.forEach((take, rowIndex) => {
-    // Row 0 (highest enthusiasm) sits in front at the bottom; later rows step up.
-    const anchorY = meadowHeight - bottomInset - rowIndex * rowSpacing;
+    // Row 0 (highest enthusiasm) sits in front at the bottom; later rows step up
+    // by the height of the rows beneath them.
+    const anchorY = meadowHeight - bottomInset - rowOffset;
+    rowOffset += rowHeights[rowIndex] + rowGap;
     for (let column = 0; column < take; column += 1) {
       positions.set(ordered[skillIndex].id, {
         centerX: width / 2 + (column - (take - 1) / 2) * cellWidth,
