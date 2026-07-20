@@ -26,11 +26,10 @@ import {
   getSurveyResponsePeriod,
   isMonthlyCheckInSurvey,
   useSurveys,
-  type Survey,
   type SurveyAnswers,
 } from '../../lib/hooks/useSurveys';
-import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
-import { SurveyModal } from '../../components/surveys/SurveyModal';
+import { SurveyQuestionField } from '../../components/surveys/SurveyQuestionField';
+import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
 import { WishCombCard } from '../../components/profile/WishCombCard';
 import { WishManageModal } from '../../components/wishes/WishManageModal';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
@@ -73,6 +72,7 @@ type TuneupDraft = {
   eventAllDay?: boolean;
   eventTime?: string;
   eventLocation?: string;
+  checkInAnswers?: Record<string, unknown>;
 };
 
 const getTuneupDraftKey = (communityId: string, userId: string) =>
@@ -231,9 +231,13 @@ export default function MonthlyTuneupScreen() {
   const [eventError, setEventError] = useState<string | null>(null);
   const [eventsAdded, setEventsAdded] = useState<string[]>([]);
 
-  // Step 5 — check-in survey
-  const [surveyVisible, setSurveyVisible] = useState(false);
+  // Step 5 — check-in questions, inline (one flow, no separate survey modal)
+  const [checkInAnswers, setCheckInAnswers] = useState<SurveyAnswers>({});
+  const [checkInDirty, setCheckInDirty] = useState(false);
+  const [checkInPrefilled, setCheckInPrefilled] = useState(false);
   const [checkInSubmitted, setCheckInSubmitted] = useState(false);
+  const [checkInSaving, setCheckInSaving] = useState(false);
+  const [checkInError, setCheckInError] = useState<string | null>(null);
 
   const monthlyCheckInSurvey = availableSurveys.find(isMonthlyCheckInSurvey) ?? null;
   const pendingSurveyIds = new Set(pendingSurveys.map((survey) => survey.id));
@@ -242,16 +246,20 @@ export default function MonthlyTuneupScreen() {
     && !!checkInResponse
     && !pendingSurveyIds.has(monthlyCheckInSurvey.id);
   const checkInAlreadyDone = checkInIsEditing || checkInSubmitted;
-  const activeSurvey: Survey | null = surveyVisible ? monthlyCheckInSurvey : null;
-  const {
-    items: carryForwardItems,
-    loading: carryForwardLoading,
-    error: carryForwardError,
-  } = useCarryForwardContext({
-    communityId,
-    userId: profile?.id,
-    survey: activeSurvey,
-  });
+
+  // Prefill this month's answers once, without clobbering draft-restored edits.
+  useEffect(() => {
+    if (checkInPrefilled || checkInDirty) return;
+    if (checkInIsEditing && checkInResponse?.answers) {
+      setCheckInAnswers(checkInResponse.answers);
+      setCheckInPrefilled(true);
+    }
+  }, [checkInPrefilled, checkInDirty, checkInIsEditing, checkInResponse]);
+
+  const setCheckInAnswer = useCallback((questionId: string, value: any) => {
+    setCheckInDirty(true);
+    setCheckInAnswers((prev) => ({ ...prev, [questionId]: value }));
+  }, []);
 
   const monthName = monthlyCheckInSurvey
     ? getMonthNameFromPeriod(getSurveyResponsePeriod(monthlyCheckInSurvey))
@@ -403,6 +411,10 @@ export default function MonthlyTuneupScreen() {
             if (typeof draft.eventAllDay === 'boolean') setEventAllDay(draft.eventAllDay);
             if (typeof draft.eventTime === 'string') setEventTime(draft.eventTime);
             if (typeof draft.eventLocation === 'string') setEventLocation(draft.eventLocation);
+            if (draft.checkInAnswers && typeof draft.checkInAnswers === 'object') {
+              setCheckInAnswers(draft.checkInAnswers as SurveyAnswers);
+              setCheckInDirty(true);
+            }
           }
         }
       } catch {
@@ -431,6 +443,7 @@ export default function MonthlyTuneupScreen() {
         eventAllDay,
         eventTime,
         eventLocation,
+        ...(checkInDirty ? { checkInAnswers } : {}),
       };
       void setStoredItemAsync(draftKey, JSON.stringify(draft));
     }, 400);
@@ -449,6 +462,8 @@ export default function MonthlyTuneupScreen() {
     eventAllDay,
     eventTime,
     eventLocation,
+    checkInAnswers,
+    checkInDirty,
   ]);
 
   useEffect(() => {
@@ -728,22 +743,6 @@ export default function MonthlyTuneupScreen() {
     setAddWishModalVisible(false);
   };
 
-  const handleSurveySubmit = async (answers: SurveyAnswers) => {
-    if (!monthlyCheckInSurvey) return { error: 'No active check-in survey' };
-    const result = await submitResponse(monthlyCheckInSurvey.id, answers);
-    if (!result.error) {
-      setCheckInSubmitted(true);
-    }
-    return result;
-  };
-
-  const closeSurvey = () => {
-    setSurveyVisible(false);
-    if (checkInSubmitted) {
-      setFinished(true);
-    }
-  };
-
   const goBack = () => {
     if (stepIndex === 0) {
       if (from === 'admin') router.replace('/admin');
@@ -755,8 +754,21 @@ export default function MonthlyTuneupScreen() {
     setStepIndex((index) => Math.max(0, index - 1));
   };
 
-  const goNext = () => {
+  const goNext = async () => {
     if (stepIndex >= STEPS.length - 1) {
+      // Finishing: save any check-in answers the member touched this session.
+      if (monthlyCheckInSurvey && checkInDirty && !checkInSaving) {
+        setCheckInSaving(true);
+        setCheckInError(null);
+        const result = await submitResponse(monthlyCheckInSurvey.id, checkInAnswers);
+        setCheckInSaving(false);
+        if (result.error) {
+          setCheckInError('Could not save your check-in answers. Please try again.');
+          return;
+        }
+        setCheckInSubmitted(true);
+        setCheckInDirty(false);
+      }
       setFinished(true);
       return;
     }
@@ -834,16 +846,27 @@ export default function MonthlyTuneupScreen() {
           placeholderTextColor="#b5ad9f"
           style={inputStyle}
         />
-        <TextInput
-          value={hangContent}
-          onChangeText={setHangContent}
-          placeholder="Bowling night? Beach day? Potluck?..."
-          placeholderTextColor="#b5ad9f"
-          multiline
-          blurOnSubmit={false}
-          onKeyPress={submitOnEnter(handlePostHangIdea)}
-          style={[inputStyle, { minHeight: 90, textAlignVertical: 'top' }]}
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+          <TextInput
+            value={hangContent}
+            onChangeText={setHangContent}
+            placeholder="Bowling night? Beach day? Potluck?..."
+            placeholderTextColor="#b5ad9f"
+            multiline
+            blurOnSubmit={false}
+            onKeyPress={submitOnEnter(handlePostHangIdea)}
+            style={[inputStyle, { flex: 1, minHeight: 90, textAlignVertical: 'top' }]}
+          />
+          <VoiceMicButton
+            size={20}
+            style={{ marginBottom: 10 }}
+            onTranscript={(text) => {
+              const trimmed = text.trim();
+              if (!trimmed) return;
+              setHangContent((prev) => (prev ? `${prev.replace(/\s+$/, '')} ${trimmed}` : trimmed));
+            }}
+          />
+        </View>
         {hangError ? (
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626' }}>{hangError}</Text>
         ) : null}
@@ -1002,16 +1025,27 @@ export default function MonthlyTuneupScreen() {
         </Text>
       ) : null}
       <View style={[cardStyle, { gap: 10 }]}>
-        <TextInput
-          value={helperContent}
-          onChangeText={setHelperContent}
-          placeholder="What tiny (or huge) kindness did you do?"
-          placeholderTextColor="#b5ad9f"
-          multiline
-          blurOnSubmit={false}
-          onKeyPress={submitOnEnter(handlePostHelperLog)}
-          style={[inputStyle, { minHeight: 90, textAlignVertical: 'top' }]}
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+          <TextInput
+            value={helperContent}
+            onChangeText={setHelperContent}
+            placeholder="What tiny (or huge) kindness did you do?"
+            placeholderTextColor="#b5ad9f"
+            multiline
+            blurOnSubmit={false}
+            onKeyPress={submitOnEnter(handlePostHelperLog)}
+            style={[inputStyle, { flex: 1, minHeight: 90, textAlignVertical: 'top' }]}
+          />
+          <VoiceMicButton
+            size={20}
+            style={{ marginBottom: 10 }}
+            onTranscript={(text) => {
+              const trimmed = text.trim();
+              if (!trimmed) return;
+              setHelperContent((prev) => (prev ? `${prev.replace(/\s+$/, '')} ${trimmed}` : trimmed));
+            }}
+          />
+        </View>
         {helperError ? (
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626' }}>{helperError}</Text>
         ) : null}
@@ -1038,11 +1072,16 @@ export default function MonthlyTuneupScreen() {
     </View>
   );
 
+  // The check-in questions live right here in the flow — no separate survey
+  // modal at the end. Answers save when the member taps Finish.
+  const checkInQuestions = (monthlyCheckInSurvey?.questions ?? [])
+    .filter((question) => question.id !== 'q_carry_forward');
+
   const renderCheckInStep = () => (
     <View>
       <StepHeader
         title="Check-in 📝"
-        subtitle="Last stop: the monthly check-in itself, so HIVE and Clive arrive prepared."
+        subtitle="Last stop — a few quick questions so HIVE and Clive arrive prepared. Your answers save when you tap Finish, and you can come back and change them any time this month."
       />
       {surveysLoading ? (
         <View style={{ paddingVertical: 32, alignItems: 'center' }}>
@@ -1056,37 +1095,27 @@ export default function MonthlyTuneupScreen() {
           </Text>
         </View>
       ) : (
-        <View style={[cardStyle, { gap: 12 }]}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#2d2d2d' }}>
-            {monthlyCheckInSurvey.title}
-          </Text>
-          {monthlyCheckInSurvey.description ? (
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#7d715f' }}>
-              {monthlyCheckInSurvey.description}
-            </Text>
-          ) : null}
+        <View style={[cardStyle, { gap: 4 }]}>
           {checkInAlreadyDone ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
               <Ionicons name="checkmark-circle" size={16} color="#166534" />
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#166534' }}>
-                Submitted for {monthName} — you can still edit your answers.
+                Submitted for {monthName} — edits here overwrite your earlier answers.
               </Text>
             </View>
           ) : null}
-          <Pressable
-            onPress={() => setSurveyVisible(true)}
-            style={({ pressed }) => ({
-              backgroundColor: '#bd9348',
-              borderRadius: 12,
-              paddingVertical: 13,
-              alignItems: 'center',
-              opacity: pressed ? 0.8 : 1,
-            })}
-          >
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'white' }}>
-              {checkInAlreadyDone ? 'Edit your check-in' : 'Start the check-in'}
-            </Text>
-          </Pressable>
+          {checkInQuestions.map((question, index) => (
+            <SurveyQuestionField
+              key={question.id}
+              question={question}
+              index={index}
+              value={checkInAnswers[question.id]}
+              onChange={(value) => setCheckInAnswer(question.id, value)}
+            />
+          ))}
+          {checkInError ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626' }}>{checkInError}</Text>
+          ) : null}
         </View>
       )}
     </View>
@@ -1251,7 +1280,9 @@ export default function MonthlyTuneupScreen() {
           })}
         >
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'white' }}>
-            {stepIndex === STEPS.length - 1 ? 'Finish' : 'Next'}
+            {stepIndex === STEPS.length - 1
+              ? checkInSaving ? 'Saving...' : checkInDirty ? 'Save & finish ✓' : 'Finish ✓'
+              : 'Looks good →'}
           </Text>
         </Pressable>
       </View>
@@ -1302,18 +1333,6 @@ export default function MonthlyTuneupScreen() {
         wishOwnerName={editingWish?.user?.name}
       />
 
-      {activeSurvey && (
-        <SurveyModal
-          survey={activeSurvey}
-          initialAnswers={checkInIsEditing ? checkInResponse?.answers : undefined}
-          isEditingResponse={checkInIsEditing}
-          carryForwardItems={carryForwardItems}
-          carryForwardLoading={carryForwardLoading}
-          carryForwardError={carryForwardError}
-          onSubmit={handleSurveySubmit}
-          onClose={closeSurvey}
-        />
-      )}
     </SafeAreaView>
   );
 }
