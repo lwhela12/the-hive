@@ -42,6 +42,24 @@ export function formatDateShort(date: string | Date): string {
 }
 
 /**
+ * Format an inclusive date range for short display (e.g., "Jul 21 – 25" or
+ * "Jul 30 – Aug 2"). Falls back to the single-date format when there is no
+ * end date or the range is degenerate.
+ */
+export function formatDateRangeShort(start: string | Date, end?: string | Date | null): string {
+  if (!end) return formatDateShort(start);
+  const startDate = parseDateString(start);
+  const endDate = parseDateString(end);
+  if (endDate.getTime() <= startDate.getTime()) return formatDateShort(start);
+
+  const sameMonth = startDate.getMonth() === endDate.getMonth()
+    && startDate.getFullYear() === endDate.getFullYear();
+  return sameMonth
+    ? `${formatDateShort(startDate)} – ${endDate.getDate()}`
+    : `${formatDateShort(startDate)} – ${formatDateShort(endDate)}`;
+}
+
+/**
  * Format a date for medium display (e.g., "Jan 15, 2025")
  */
 export function formatDateMedium(date: string | Date): string {

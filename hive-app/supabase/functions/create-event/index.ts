@@ -7,6 +7,7 @@ interface CreateEventPayload {
   community_id: string;
   title: string;
   event_date: string;
+  end_date?: string | null;
   event_time?: string | null;
   description?: string | null;
   location?: string | null;
@@ -72,6 +73,8 @@ serve(async (req) => {
   };
 
   if (payload.event_time) newEvent.event_time = payload.event_time;
+  // Multi-day range: only keep an end date that lands after the start date.
+  if (payload.end_date && payload.end_date > eventDate) newEvent.end_date = payload.end_date;
   if (payload.description?.trim()) newEvent.description = payload.description.trim();
   if (payload.location?.trim()) newEvent.location = payload.location.trim();
 

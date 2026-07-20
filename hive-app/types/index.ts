@@ -286,6 +286,7 @@ export interface Event extends Record<string, unknown> {
   title: string;
   description?: string;
   event_date: string;
+  end_date?: string | null;
   event_time?: string;
   event_type: EventType;
   google_event_id?: string;

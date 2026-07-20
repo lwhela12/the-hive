@@ -69,6 +69,8 @@ type TuneupDraft = {
   hangContent?: string;
   eventTitle?: string;
   eventDate?: string;
+  eventEndDate?: string;
+  eventAllDay?: boolean;
   eventTime?: string;
   eventLocation?: string;
 };
@@ -221,6 +223,8 @@ export default function MonthlyTuneupScreen() {
   // Step 3 — calendar
   const [eventTitle, setEventTitle] = useState('');
   const [eventDate, setEventDate] = useState('');
+  const [eventEndDate, setEventEndDate] = useState('');
+  const [eventAllDay, setEventAllDay] = useState(false);
   const [eventTime, setEventTime] = useState('');
   const [eventLocation, setEventLocation] = useState('');
   const [savingEvent, setSavingEvent] = useState(false);
@@ -395,6 +399,8 @@ export default function MonthlyTuneupScreen() {
             if (typeof draft.hangContent === 'string') setHangContent(draft.hangContent);
             if (typeof draft.eventTitle === 'string') setEventTitle(draft.eventTitle);
             if (typeof draft.eventDate === 'string') setEventDate(draft.eventDate);
+            if (typeof draft.eventEndDate === 'string') setEventEndDate(draft.eventEndDate);
+            if (typeof draft.eventAllDay === 'boolean') setEventAllDay(draft.eventAllDay);
             if (typeof draft.eventTime === 'string') setEventTime(draft.eventTime);
             if (typeof draft.eventLocation === 'string') setEventLocation(draft.eventLocation);
           }
@@ -421,6 +427,8 @@ export default function MonthlyTuneupScreen() {
         hangContent,
         eventTitle,
         eventDate,
+        eventEndDate,
+        eventAllDay,
         eventTime,
         eventLocation,
       };
@@ -437,6 +445,8 @@ export default function MonthlyTuneupScreen() {
     hangContent,
     eventTitle,
     eventDate,
+    eventEndDate,
+    eventAllDay,
     eventTime,
     eventLocation,
   ]);
@@ -562,8 +572,22 @@ export default function MonthlyTuneupScreen() {
       return;
     }
 
-    const normalizedTime = normalizeEventTimeInput(eventTime);
-    if (eventTime.trim() && !normalizedTime.time) {
+    let eventEndDateIso: string | null = null;
+    if (eventEndDate.trim()) {
+      eventEndDateIso = parseAmericanDate(eventEndDate);
+      if (!eventEndDateIso) {
+        setEventError('Invalid end date. Please pick it using the calendar.');
+        return;
+      }
+      if (eventEndDateIso < eventDateIso) {
+        setEventError('The end date should be after the start date.');
+        return;
+      }
+      if (eventEndDateIso === eventDateIso) eventEndDateIso = null;
+    }
+
+    const normalizedTime = eventAllDay ? { time: null, note: '' } : normalizeEventTimeInput(eventTime);
+    if (!eventAllDay && eventTime.trim() && !normalizedTime.time) {
       setEventError('For time, use something like 7:30 PM.');
       return;
     }
@@ -575,6 +599,7 @@ export default function MonthlyTuneupScreen() {
         event_date: eventDateIso,
         community_id: communityId,
       };
+      if (eventEndDateIso) newEvent.end_date = eventEndDateIso;
       if (normalizedTime.time) newEvent.event_time = normalizedTime.time;
       if (normalizedTime.note) newEvent.description = `Time note: ${normalizedTime.note}`;
       if (eventLocation.trim()) newEvent.location = eventLocation.trim();
@@ -584,9 +609,11 @@ export default function MonthlyTuneupScreen() {
       });
       if (error) throw error;
 
-      setEventsAdded((prev) => [...prev, `${eventTitle.trim()} — ${eventDate}`]);
+      setEventsAdded((prev) => [...prev, `${eventTitle.trim()} — ${eventDate}${eventEndDateIso ? ` → ${eventEndDate}` : ''}`]);
       setEventTitle('');
       setEventDate('');
+      setEventEndDate('');
+      setEventAllDay(false);
       setEventTime('');
       setEventLocation('');
     } catch (error: any) {
@@ -598,6 +625,8 @@ export default function MonthlyTuneupScreen() {
 
   const handleOutOfTownPreset = () => {
     setEventTitle(`${getFirstName(profile?.name)} out of town`);
+    // Trips are all-day stretches — surface the range fields, skip the time.
+    setEventAllDay(true);
   };
 
   // Wish management — copied from profile.tsx's wiring.
@@ -874,13 +903,42 @@ export default function MonthlyTuneupScreen() {
           style={inputStyle}
         />
         <EventDatePicker value={eventDate} onChange={setEventDate} />
-        <TextInput
-          value={eventTime}
-          onChangeText={setEventTime}
-          placeholder="Time (optional) — 7:30 PM"
-          placeholderTextColor="#b5ad9f"
-          style={inputStyle}
+        <EventDatePicker
+          value={eventEndDate}
+          onChange={setEventEndDate}
+          label="End date (optional — for multi-day stretches)"
+          placeholder="Same day"
+          clearable
         />
+        <Pressable
+          onPress={() => setEventAllDay((prev) => !prev)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+        >
+          <View
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: 4,
+              borderWidth: 2,
+              borderColor: eventAllDay ? '#bd9348' : '#d1d5db',
+              backgroundColor: eventAllDay ? '#bd9348' : 'white',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {eventAllDay ? <Text style={{ color: 'white', fontSize: 12 }}>✓</Text> : null}
+          </View>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#4a4a4a' }}>All day (no set time)</Text>
+        </Pressable>
+        {!eventAllDay && (
+          <TextInput
+            value={eventTime}
+            onChangeText={setEventTime}
+            placeholder="Time (optional) — 7:30 PM"
+            placeholderTextColor="#b5ad9f"
+            style={inputStyle}
+          />
+        )}
         <TextInput
           value={eventLocation}
           onChangeText={setEventLocation}

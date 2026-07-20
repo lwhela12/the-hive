@@ -250,10 +250,20 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 interface CalendarDatePickerProps {
   value?: string; // MM-DD-YYYY or YYYY-MM-DD
   onChange: (value: string) => void; // Returns MM-DD-YYYY
+  label?: string;
+  placeholder?: string;
+  /** Show a ✕ to clear the selection (for optional dates like an end date) */
+  clearable?: boolean;
 }
 
 // Visual calendar grid date picker for events
-export function EventDatePicker({ value, onChange }: CalendarDatePickerProps) {
+export function EventDatePicker({
+  value,
+  onChange,
+  label = 'Date',
+  placeholder = 'Select a date',
+  clearable = false,
+}: CalendarDatePickerProps) {
   const today = new Date();
   const parsed = parseDate(value);
 
@@ -318,7 +328,7 @@ export function EventDatePicker({ value, onChange }: CalendarDatePickerProps) {
 
   return (
     <View>
-      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Date</Text>
+      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">{label}</Text>
       <Pressable
         onPress={() => setOpen(true)}
         className="flex-row items-center justify-between bg-cream border border-gray-200 rounded-lg px-4 py-3 active:opacity-80"
@@ -327,9 +337,23 @@ export function EventDatePicker({ value, onChange }: CalendarDatePickerProps) {
           style={{ fontFamily: 'Lato_400Regular' }}
           className={displayValue ? 'text-charcoal' : 'text-charcoal/40'}
         >
-          {displayValue || 'Select a date'}
+          {displayValue || placeholder}
         </Text>
-        <Ionicons name="calendar-outline" size={18} color="#b5860d" />
+        <View className="flex-row items-center gap-2">
+          {clearable && !!displayValue && (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                onChange('');
+              }}
+              hitSlop={8}
+              className="active:opacity-50"
+            >
+              <Ionicons name="close-circle" size={18} color="#9a8060" />
+            </Pressable>
+          )}
+          <Ionicons name="calendar-outline" size={18} color="#b5860d" />
+        </View>
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>

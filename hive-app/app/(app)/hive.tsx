@@ -31,7 +31,7 @@ import {
 import { AppHeader } from '../../components/navigation';
 import { DAILY_QUESTIONS, getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
 import { EventDatePicker } from '../../components/ui/DatePicker';
-import { formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
+import { formatDateRangeShort, formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
@@ -97,6 +97,22 @@ const formatGoogleCalendarDate = (date: Date) => {
 
 const formatIcsDate = (date: Date) => formatGoogleCalendarDate(date);
 
+// Time-less events export as all-day calendar entries spanning event_date
+// through end_date (calendar end dates are exclusive, hence the +1 day).
+const isAllDayEvent = (event: Event) => !event.event_time;
+
+const formatAllDayDate = (date: Date) =>
+  `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+
+const getAllDayRange = (event: Event) => {
+  const [startYear, startMonth, startDay] = event.event_date.split('-').map(Number);
+  const [endYear, endMonth, endDay] = (event.end_date || event.event_date).split('-').map(Number);
+  return {
+    start: new Date(startYear, startMonth - 1, startDay),
+    endExclusive: new Date(endYear, endMonth - 1, endDay + 1),
+  };
+};
+
 const formatSurveyDueDate = (dueDate: string) => {
   const parsed = new Date(dueDate);
   if (Number.isNaN(parsed.getTime())) return dueDate;
@@ -151,6 +167,8 @@ const getCalendarDescription = (event: Event) => {
 };
 
 const createCalendarLinks = (event: Event) => {
+  const allDay = isAllDayEvent(event);
+  const allDayRange = getAllDayRange(event);
   const start = getEventStartDate(event);
   const end = new Date(start.getTime() + CALENDAR_DURATION_MS);
   const description = getCalendarDescription(event);
@@ -158,7 +176,9 @@ const createCalendarLinks = (event: Event) => {
   const googleParams = new URLSearchParams({
     action: 'TEMPLATE',
     text: event.title,
-    dates: `${formatGoogleCalendarDate(start)}/${formatGoogleCalendarDate(end)}`,
+    dates: allDay
+      ? `${formatAllDayDate(allDayRange.start)}/${formatAllDayDate(allDayRange.endExclusive)}`
+      : `${formatGoogleCalendarDate(start)}/${formatGoogleCalendarDate(end)}`,
     details: description,
     location: event.location || '',
   });
@@ -167,8 +187,11 @@ const createCalendarLinks = (event: Event) => {
     path: '/calendar/action/compose',
     rru: 'addevent',
     subject: event.title,
-    startdt: start.toISOString(),
-    enddt: end.toISOString(),
+    startdt: allDay ? event.event_date : start.toISOString(),
+    enddt: allDay
+      ? `${allDayRange.endExclusive.getFullYear()}-${String(allDayRange.endExclusive.getMonth() + 1).padStart(2, '0')}-${String(allDayRange.endExclusive.getDate()).padStart(2, '0')}`
+      : end.toISOString(),
+    ...(allDay ? { allday: 'true' } : {}),
     body: description,
     location: event.location || '',
   });
@@ -180,6 +203,8 @@ const createCalendarLinks = (event: Event) => {
 };
 
 const createIcsContent = (event: Event) => {
+  const allDay = isAllDayEvent(event);
+  const allDayRange = getAllDayRange(event);
   const start = getEventStartDate(event);
   const end = new Date(start.getTime() + CALENDAR_DURATION_MS);
   const timestamp = formatIcsDate(new Date());
@@ -192,8 +217,12 @@ const createIcsContent = (event: Event) => {
     'BEGIN:VEVENT',
     `UID:${uid}`,
     `DTSTAMP:${timestamp}`,
-    `DTSTART:${formatIcsDate(start)}`,
-    `DTEND:${formatIcsDate(end)}`,
+    allDay
+      ? `DTSTART;VALUE=DATE:${formatAllDayDate(allDayRange.start)}`
+      : `DTSTART:${formatIcsDate(start)}`,
+    allDay
+      ? `DTEND;VALUE=DATE:${formatAllDayDate(allDayRange.endExclusive)}`
+      : `DTEND:${formatIcsDate(end)}`,
     `SUMMARY:${escapeIcsText(event.title)}`,
     `DESCRIPTION:${escapeIcsText(getCalendarDescription(event))}`,
     `LOCATION:${escapeIcsText(event.location || '')}`,
@@ -292,11 +321,16 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{event.title}</Text>
               <View className="flex-row flex-wrap items-center mt-1">
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60">
-                  {formatDateShort(event.event_date)}
+                  {formatDateRangeShort(event.event_date, event.end_date)}
                 </Text>
                 {event.event_time && (
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60">
                     {' '}at {formatTime(event.event_time)}
+                  </Text>
+                )}
+                {!event.event_time && !!event.end_date && (
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/60">
+                    {' '}· all day
                   </Text>
                 )}
               </View>
@@ -756,6 +790,8 @@ export default function HiveScreen() {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [eventTitle, setEventTitle] = useState('');
   const [eventDate, setEventDate] = useState('');
+  const [eventEndDate, setEventEndDate] = useState('');
+  const [eventAllDay, setEventAllDay] = useState(false);
   const [eventTime, setEventTime] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [eventLocation, setEventLocation] = useState('');
@@ -777,6 +813,8 @@ export default function HiveScreen() {
     setEditingEvent(event);
     setEventTitle(event.title);
     setEventDate(formatDateForInput(event.event_date));
+    setEventEndDate(event.end_date ? formatDateForInput(event.end_date) : '');
+    setEventAllDay(!event.event_time);
     setEventTime(event.event_time || '');
     setEventDescription(event.description || '');
     setEventLocation(event.location || '');
@@ -1721,6 +1759,8 @@ export default function HiveScreen() {
     setEditingEvent(null);
     setEventTitle('');
     setEventDate('');
+    setEventEndDate('');
+    setEventAllDay(false);
     setEventTime('');
     setEventDescription('');
     setEventLocation('');
@@ -1734,6 +1774,8 @@ export default function HiveScreen() {
     setEventError(null);
     setEventTitle('');
     setEventDate('');
+    setEventEndDate('');
+    setEventAllDay(false);
     setEventTime('');
     setEventDescription('');
     setEventLocation('');
@@ -1761,8 +1803,22 @@ export default function HiveScreen() {
       return;
     }
 
-    const normalizedTime = normalizeEventTimeInput(eventTime);
-    if (eventTime.trim() && !normalizedTime.time) {
+    let eventEndDateIso: string | null = null;
+    if (eventEndDate.trim()) {
+      eventEndDateIso = parseAmericanDate(eventEndDate);
+      if (!eventEndDateIso) {
+        setEventError('Invalid end date. Please pick it using the calendar.');
+        return;
+      }
+      if (eventEndDateIso < eventDateIso) {
+        setEventError('The end date should be after the start date.');
+        return;
+      }
+      if (eventEndDateIso === eventDateIso) eventEndDateIso = null;
+    }
+
+    const normalizedTime = eventAllDay ? { time: null, note: '' } : normalizeEventTimeInput(eventTime);
+    if (!eventAllDay && eventTime.trim() && !normalizedTime.time) {
       setEventError('For time, use something like 7:30 PM. Put extra details like doors/showtime in the description.');
       return;
     }
@@ -1780,6 +1836,7 @@ export default function HiveScreen() {
           .update({
             title: eventTitle,
             event_date: eventDateIso,
+            end_date: eventEndDateIso,
             event_time: normalizedTime.time,
             description: descriptionWithTimeNote || null,
             location: eventLocation || null,
@@ -1796,6 +1853,7 @@ export default function HiveScreen() {
         };
 
         if (descriptionWithTimeNote) newEvent.description = descriptionWithTimeNote;
+        if (eventEndDateIso) newEvent.end_date = eventEndDateIso;
         if (normalizedTime.time) newEvent.event_time = normalizedTime.time;
         if (eventLocation.trim()) newEvent.location = eventLocation.trim();
 
@@ -2854,7 +2912,7 @@ export default function HiveScreen() {
                                         <View style={{ flex: 1 }}>
                                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#5b5b5b' }}>{event.title}</Text>
                                           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 1 }}>
-                                            {formatDateShort(event.event_date)}
+                                            {formatDateRangeShort(event.event_date, event.end_date)}
                                             {event.event_time ? ` at ${formatTime(event.event_time)}` : ''}
                                             {event.location ? ` · ${event.location}` : ''}
                                           </Text>
@@ -3189,15 +3247,19 @@ export default function HiveScreen() {
                       </View>
                       <View className="flex-row mb-4">
                         <View className="flex-1 mr-4">
-                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Date</Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-base text-charcoal">{eventDate}</Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">
+                            {eventEndDate ? 'Dates' : 'Date'}
+                          </Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-base text-charcoal">
+                            {eventEndDate ? `${eventDate} – ${eventEndDate}` : eventDate}
+                          </Text>
                         </View>
-                        {eventTime && (
-                          <View>
-                            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Time</Text>
-                            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-base text-charcoal">{eventTime}</Text>
-                          </View>
-                        )}
+                        <View>
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Time</Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-base text-charcoal">
+                            {eventTime || 'All day'}
+                          </Text>
+                        </View>
                       </View>
                       {eventLocation && (
                         <View className="mb-4">
@@ -3250,19 +3312,39 @@ export default function HiveScreen() {
                         />
                       </View>
                       <View className="mb-3">
-                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Time (optional)</Text>
-                        <TextInput
-                          placeholder="7:30 PM"
-                          value={eventTime}
-                          onChangeText={setEventTime}
-                          returnKeyType="send"
-                          onSubmitEditing={saveEvent}
-                          className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-cream"
+                        <EventDatePicker
+                          value={eventEndDate}
+                          onChange={setEventEndDate}
+                          label="End date (optional — for multi-day stretches)"
+                          placeholder="Same day"
+                          clearable
                         />
-                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-1">
-                          Extra details like doors/showtime can go here too. We’ll save the first time and keep your note.
-                        </Text>
                       </View>
+                      <Pressable
+                        onPress={() => setEventAllDay((prev) => !prev)}
+                        className="flex-row items-center mb-3 active:opacity-70"
+                      >
+                        <View className={`w-5 h-5 rounded border-2 mr-2 items-center justify-center ${eventAllDay ? 'bg-gold border-gold' : 'border-gray-300 bg-white'}`}>
+                          {eventAllDay && <Text className="text-white text-xs">✓</Text>}
+                        </View>
+                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal">All day (no set time)</Text>
+                      </Pressable>
+                      {!eventAllDay && (
+                        <View className="mb-3">
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Time (optional)</Text>
+                          <TextInput
+                            placeholder="7:30 PM"
+                            value={eventTime}
+                            onChangeText={setEventTime}
+                            returnKeyType="send"
+                            onSubmitEditing={saveEvent}
+                            className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-cream"
+                          />
+                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-1">
+                            Extra details like doors/showtime can go here too. We’ll save the first time and keep your note.
+                          </Text>
+                        </View>
+                      )}
                       <TextInput
                         placeholder="Location (optional)"
                         value={eventLocation}

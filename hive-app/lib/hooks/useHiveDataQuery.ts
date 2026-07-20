@@ -234,7 +234,8 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
           const { data } = await supabase
             .from('events')
             .select('*')
-            .gte('event_date', today)
+            // Starts today or later, OR is a multi-day stretch still in progress.
+            .or(`event_date.gte.${today},end_date.gte.${today}`)
             .eq('community_id', communityId!)
             .or('status.is.null,status.eq.scheduled')
             .order('event_date', { ascending: true })
