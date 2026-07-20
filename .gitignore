@@ -1,3 +1,4 @@
 .vercel
 outputs/
 .DS_Store
+supabase/.temp/
