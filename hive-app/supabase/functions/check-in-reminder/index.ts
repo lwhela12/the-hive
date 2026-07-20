@@ -115,13 +115,14 @@ function checkInEmailHtml(name: string, month: string, day: number): string {
       <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Your check-in is open</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">Before the ${month} ${day} meeting</p>
       <p style="font-size: 15px;">Hi ${name},</p>
-      <p style="font-size: 15px;">The monthly check-in for the <strong>${month} meeting</strong> is now open. It takes about <strong>5 minutes</strong> and covers three quick things:</p>
+      <p style="font-size: 15px;">The monthly check-in for the <strong>${month} meeting</strong> is open — one walkthrough, about <strong>5 minutes</strong>:</p>
       <ul style="font-size: 15px; padding-left: 20px;">
-        <li>Your name-for-today</li>
-        <li>How you're feeling coming in</li>
-        <li>Your POP (Progress · Obstacles · Priorities)</li>
+        <li>Your HD wishes — anything change? Anyone help?</li>
+        <li>Hang ideas &amp; the calendar (out of town? add the stretch!)</li>
+        <li>A few quick questions: your name-for-today, energy, and POP</li>
       </ul>
-      <p style="font-size: 15px;">Checking in ahead of time shows up on the Arrival Board and helps set the room before we gather.</p>
+      <p style="font-size: 15px;">Each step has a <strong>Looks good →</strong> button, so if nothing's new you can breeze through in under a minute. Checking in shows up on the Arrival Board and helps set the room before we gather.</p>
+      <p style="font-size: 14px; color: #8a6b30; background: #fdf3dc; border-radius: 12px; padding: 10px 14px;">Already done your check-in this month? You're all set — feel free to skip this, or pop in any time to update your answers.</p>
       <div style="text-align: center; margin: 28px 0;">
         <a href="${APP_URL}/monthly-tuneup" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open H.I.V.E. and check in</a>
       </div>
@@ -178,6 +179,12 @@ serve(async (req) => {
     return jsonResponse({ preview_sent_to: testEmail, meeting: `${month} ${day}` });
   }
 
+  // Force mode: POST { "force_send": true } sends now, ignoring the 3-days-before
+  // date gate — for rescheduled meetings where the window already passed. Dedup
+  // still applies, but keyed to the survey's CURRENT due date, so a reschedule
+  // gets one fresh send and repeat invocations stay safe.
+  const forceSend = body.force_send === true;
+
   try {
     // Today's date as an America/Los_Angeles calendar date, 'YYYY-MM-DD'.
     // (See toPacificDateOnly: the meeting-day math must be Pacific, not UTC.)
@@ -218,13 +225,17 @@ serve(async (req) => {
         const dueDateOnly = toPacificDateOnly(new Date(survey.due_date));
         if (!dueDateOnly) continue;
 
-        // Fire only exactly 3 days before the meeting day (Pacific).
+        // Fire only exactly 3 days before the meeting day (Pacific) — unless
+        // force_send is set (rescheduled meeting, window already passed).
         const windowOpen = getWindowOpenDate(dueDateOnly);
-        if (todayStr !== windowOpen) {
+        if (!forceSend && todayStr !== windowOpen) {
           continue;
         }
 
-        const period = getSurveyResponsePeriod(dueDateOnly);
+        // Forced sends dedup per due date so a reschedule can send once more.
+        const period = forceSend
+          ? `${getSurveyResponsePeriod(dueDateOnly)}:${dueDateOnly}`
+          : getSurveyResponsePeriod(dueDateOnly);
 
         // Dedup: skip if we've already sent this survey's reminder for this period.
         const { data: existingReminders, error: dedupError } = await supabaseAdmin
