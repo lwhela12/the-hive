@@ -26,7 +26,6 @@ import {
   getFirstName,
   getLocalIsoDate,
   getMonthNameFromPeriod,
-  getNumberAnswer,
   getTextAnswer,
   useArrivalBoard,
 } from '../../lib/hooks/useArrivalBoard';
@@ -48,8 +47,6 @@ const AGENDA = [
   'News from Nat',
   'Treasurer',
   'Plan the Meet Ups',
-  'Upcoming Dates',
-  'Check-in Highlights',
   'HummDinger Sesh',
   'Wrap-Up',
 ];
@@ -76,6 +73,7 @@ type DeckEvent = {
   id: string;
   title: string;
   event_date: string;
+  end_date: string | null;
   event_time: string | null;
   event_type: string;
 };
@@ -99,8 +97,6 @@ type GrantedWish = {
   description: string;
   granterNames: string[];
 };
-
-type NamedLine = { memberName: string; text: string };
 
 const EDIT_SLIDE_META: Record<EditableNoteKey, { title: string; placeholder: string }> = {
   news: {
@@ -177,7 +173,7 @@ export default function MeetingHelperScreen() {
 
     const today = getLocalIsoDate(new Date());
     const horizon = new Date();
-    horizon.setDate(horizon.getDate() + 35);
+    horizon.setDate(horizon.getDate() + 45);
     const sinceLastMeeting = new Date();
     sinceLastMeeting.setDate(sinceLastMeeting.getDate() - 35);
     const sinceIso = sinceLastMeeting.toISOString();
@@ -193,13 +189,14 @@ export default function MeetingHelperScreen() {
         setNotes(data?.meeting_helper_notes ?? {});
       })().catch((error) => console.warn('Could not load meeting notes', error)),
 
-      // Upcoming Dates: birthdays + events for the next ~35 days
+      // Meet Ups calendar: birthdays + events (incl. ongoing multi-day
+      // stretches) between now and the next meeting (~45-day horizon).
       (async () => {
         const { data } = await supabase
           .from('events')
-          .select('id, title, event_date, event_time, event_type')
+          .select('id, title, event_date, end_date, event_time, event_type')
           .eq('community_id', communityId)
-          .gte('event_date', today)
+          .or(`event_date.gte.${today},end_date.gte.${today}`)
           .lte('event_date', getLocalIsoDate(horizon))
           .or('status.is.null,status.eq.scheduled')
           .order('event_date', { ascending: true })
@@ -316,39 +313,6 @@ export default function MeetingHelperScreen() {
     }
   }, [deckRefreshing, loadDeckData, refreshArrivals]);
 
-  // Check-in aggregation for the Highlights slide (from the same live
-  // responses the arrival cards use).
-  const checkIn = useMemo(() => {
-    const energyValues: number[] = [];
-    const modeCounts = new Map<string, number>();
-    const topics: NamedLine[] = [];
-
-    members.forEach((member) => {
-      const response = responsesByUser.get(member.id);
-      if (!response) return;
-      const answers = response.answers ?? {};
-      const memberName = getFirstName(member.name);
-
-      const energy = getNumberAnswer(answers, 'q_energy_level');
-      if (energy !== null) energyValues.push(energy);
-
-      const mode = getTextAnswer(answers, 'q_energy_mode');
-      if (mode) modeCounts.set(mode, (modeCounts.get(mode) ?? 0) + 1);
-
-      const topic = getTextAnswer(answers, 'q_meeting_topic');
-      if (topic) topics.push({ memberName, text: topic });
-    });
-
-    const energyAverage = energyValues.length
-      ? energyValues.reduce((sum, value) => sum + value, 0) / energyValues.length
-      : null;
-    const modes = Array.from(modeCounts.entries())
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-
-    return { energyAverage, energyCount: energyValues.length, modes, topics };
-  }, [members, responsesByUser]);
-
   // Go-around order: checked-in members first, then the rest (both alphabetical).
   const memberOrder = useMemo(() => {
     const checkedIn = members.filter((member) => responsesByUser.has(member.id));
@@ -446,20 +410,6 @@ export default function MeetingHelperScreen() {
       }}
     >
       {children}
-    </Text>
-  ), [sz]);
-
-  const NameLine = useCallback(({ line }: { line: NamedLine }) => (
-    <Text
-      style={{
-        fontFamily: 'Lato_400Regular',
-        fontSize: sz(24, 15),
-        lineHeight: sz(36, 23),
-        color: CHARCOAL,
-      }}
-    >
-      <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{line.memberName}: </Text>
-      {line.text}
     </Text>
   ), [sz]);
 
@@ -668,49 +618,6 @@ export default function MeetingHelperScreen() {
     </View>
   );
 
-  const renderUpcomingDates = () => {
-    const birthdays = events.filter((event) => event.event_type === 'birthday');
-    const otherEvents = events.filter((event) => event.event_type !== 'birthday');
-    const EventRows = ({ rows, emptyText }: { rows: DeckEvent[]; emptyText: string }) =>
-      rows.length === 0 ? (
-        <EmptyNote>{emptyText}</EmptyNote>
-      ) : (
-        <View style={{ gap: sz(16, 10) }}>
-          {rows.map((event) => (
-            <View key={event.id} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(18, 10) }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(21, 13), color: GOLD_DEEP, width: sz(160, 100) }}>
-                {formatShortDate(event.event_date)}
-              </Text>
-              <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: sz(24, 15), color: CHARCOAL }}>
-                {event.title}
-              </Text>
-            </View>
-          ))}
-        </View>
-      );
-
-    return (
-      <View style={{ flex: 1 }}>
-        <Kicker>On the calendar</Kicker>
-        <SlideTitle>Upcoming Dates</SlideTitle>
-        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(70, 28), marginTop: sz(40, 22) }}>
-          <View style={{ flex: 1, gap: sz(20, 12) }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), letterSpacing: 2, textTransform: 'uppercase', color: MUTED }}>
-              Birthdays ahead
-            </Text>
-            <EventRows rows={birthdays} emptyText="No birthdays in the next few weeks — the cake tin gets a rest." />
-          </View>
-          <View style={{ flex: 1, gap: sz(20, 12) }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), letterSpacing: 2, textTransform: 'uppercase', color: MUTED }}>
-              Coming up
-            </Text>
-            <EventRows rows={otherEvents} emptyText="Nothing on the calendar yet — a blank page waiting for plans." />
-          </View>
-        </View>
-      </View>
-    );
-  };
-
   const renderTreasurer = () => (
     <View style={{ flex: 1 }}>
       <Kicker>Cabinet Reports</Kicker>
@@ -762,128 +669,219 @@ export default function MeetingHelperScreen() {
     { title: 'HIVE Help', blurb: 'Fifteen-minute favors — small asks, quick wins.' },
   ];
 
-  const renderMeetups = () => (
-    <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: sz(30, 18) }}>
-        <View>
-          <Kicker>Ways we gather</Kicker>
-          <SlideTitle>Plan the Meet Ups</SlideTitle>
-        </View>
-        <EditPill noteKey="meetups" />
-      </View>
-      <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(24, 12) }}>
-        {MEETUP_COLUMNS.map((column) => (
-          <View
-            key={column.title}
-            style={{
-              flex: 1,
-              backgroundColor: CARD,
-              borderWidth: 1,
-              borderColor: GOLD_SOFT,
-              borderRadius: sz(22, 16),
-              padding: sz(28, 16),
-            }}
-          >
-            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(30, 18), color: GOLD_DEEP }}>
-              {column.title}
-            </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), lineHeight: sz(30, 20), color: MUTED, marginTop: sz(10, 6) }}>
-              {column.blurb}
-            </Text>
-          </View>
-        ))}
-      </View>
-      <View style={{ marginTop: sz(34, 18) }}>
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), letterSpacing: 2, textTransform: 'uppercase', color: MUTED, marginBottom: sz(12, 8) }}>
-          This month
-        </Text>
-        <NoteBody
-          noteKey="meetups"
-          emptyText="No meet-up plans written down yet — hatch some tonight."
-        />
-      </View>
-      <View style={{ marginTop: sz(30, 18) }}>
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), letterSpacing: 2, textTransform: 'uppercase', color: GOLD, marginBottom: sz(12, 8) }}>
-          Fresh hang ideas
-        </Text>
-        {hangIdeas.length === 0 ? (
-          <EmptyNote>No new ideas on the hang board yet — first one to post picks the venue.</EmptyNote>
-        ) : (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(14, 8) }}>
-            {hangIdeas.map((idea) => (
-              <View
-                key={idea.id}
-                style={{
-                  backgroundColor: 'rgba(222,193,129,0.18)',
-                  borderRadius: 999,
-                  paddingHorizontal: sz(22, 14),
-                  paddingVertical: sz(10, 7),
-                }}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), color: GOLD_DEEP }}>
-                  {(idea.title ?? 'Untitled idea').trim() || 'Untitled idea'}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-    </View>
-  );
+  // Plan the Meet Ups + Upcoming Dates, merged: a light calendar of the
+  // stretch between tonight and the next meeting, painted with what's already
+  // on the HIVE calendar (meetings, birthdays, out-of-town stretches), so the
+  // open days — the best hang candidates — are visible at a glance.
+  const renderMeetups = () => {
+    const todayIso = getLocalIsoDate(new Date());
+    const parseIsoDay = (iso: string) => {
+      const [year, month, day] = iso.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    };
 
-  const renderHighlights = () => (
-    <View style={{ flex: 1 }}>
-      <Kicker>Monthly check-in</Kicker>
-      <SlideTitle>Check-in Highlights</SlideTitle>
-      <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(70, 28), marginTop: sz(40, 22) }}>
-        <View style={{ width: isTV ? 420 : undefined, gap: sz(18, 10) }}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), letterSpacing: 2, textTransform: 'uppercase', color: MUTED }}>
-            Energy
-          </Text>
-          {checkIn.energyAverage === null ? (
-            <EmptyNote>No energy readings yet — everyone must be conserving it.</EmptyNote>
-          ) : (
-            <>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(12, 8) }}>
-                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(84, 42), color: GOLD }}>
-                  {checkIn.energyAverage.toFixed(1)}
-                </Text>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(24, 14), color: MUTED }}>
-                  / 10 average · {checkIn.energyCount} check-in{checkIn.energyCount === 1 ? '' : 's'}
-                </Text>
-              </View>
-              <View style={{ gap: sz(10, 6), marginTop: sz(8, 4) }}>
-                {checkIn.modes.map((mode) => (
-                  <View key={mode.label} style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
-                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(22, 14), color: GOLD_DEEP, width: sz(46, 30) }}>
-                      ×{mode.count}
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(24, 15), color: CHARCOAL }}>
-                      {mode.label}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </>
-          )}
+    const nextMeetingAfterToday = events.find(
+      (event) => event.event_type === 'meeting' && event.event_date > todayIso
+    );
+    const rangeStart = parseIsoDay(todayIso);
+    const rangeEnd = nextMeetingAfterToday
+      ? parseIsoDay(nextMeetingAfterToday.event_date)
+      : new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate() + 35);
+
+    // Whole weeks, Sunday through Saturday.
+    const gridStart = new Date(rangeStart);
+    gridStart.setDate(gridStart.getDate() - gridStart.getDay());
+    const gridEnd = new Date(rangeEnd);
+    gridEnd.setDate(gridEnd.getDate() + (6 - gridEnd.getDay()));
+
+    const days: Date[] = [];
+    for (const cursor = new Date(gridStart); cursor <= gridEnd; cursor.setDate(cursor.getDate() + 1)) {
+      days.push(new Date(cursor));
+    }
+    const weeks: Date[][] = [];
+    for (let index = 0; index < days.length; index += 7) {
+      weeks.push(days.slice(index, index + 7));
+    }
+
+    const eventsOnDay = (dayIso: string) =>
+      events.filter((event) => event.event_date <= dayIso && dayIso <= (event.end_date || event.event_date));
+
+    const eventEmoji = (event: DeckEvent) => {
+      if (event.event_type === 'meeting') return '🐝';
+      if (event.event_type === 'birthday') return '🎂';
+      if (event.end_date || /\b(out of town|away|trip|travel|galavant)/i.test(event.title)) return '✈️';
+      return '📌';
+    };
+
+    const monthLabel = (date: Date) => date.toLocaleDateString('en-US', { month: 'short' });
+    const calendarTitle = nextMeetingAfterToday
+      ? `Between tonight & ${formatShortDate(nextMeetingAfterToday.event_date)}`
+      : 'The next few weeks';
+
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: sz(26, 16) }}>
+          <View>
+            <Kicker>Ways we gather · on the calendar</Kicker>
+            <SlideTitle>Plan the Meet Ups</SlideTitle>
+          </View>
+          <EditPill noteKey="meetups" />
         </View>
-        <View style={{ flex: 1, gap: sz(18, 10) }}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), letterSpacing: 2, textTransform: 'uppercase', color: MUTED }}>
-            Bring to the meeting
-          </Text>
-          {checkIn.topics.length === 0 ? (
-            <EmptyNote>No meeting topics submitted — the floor is wide open.</EmptyNote>
-          ) : (
-            <View style={{ gap: sz(16, 10) }}>
-              {checkIn.topics.map((line, index) => (
-                <NameLine key={`${line.memberName}-${index}`} line={line} />
+
+        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(44, 20), flex: 1 }}>
+          {/* Left: how we gather + this month's plans + fresh ideas */}
+          <View style={{ flex: isTV ? 4 : undefined, gap: sz(20, 12) }}>
+            <View style={{ gap: sz(12, 8) }}>
+              {MEETUP_COLUMNS.map((column) => (
+                <View
+                  key={column.title}
+                  style={{
+                    backgroundColor: CARD,
+                    borderWidth: 1,
+                    borderColor: GOLD_SOFT,
+                    borderRadius: sz(18, 14),
+                    paddingHorizontal: sz(22, 14),
+                    paddingVertical: sz(14, 10),
+                  }}
+                >
+                  <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(24, 16), color: GOLD_DEEP }}>
+                    {column.title}
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 18), color: MUTED, marginTop: sz(4, 3) }}>
+                    {column.blurb}
+                  </Text>
+                </View>
               ))}
             </View>
-          )}
+            <View>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: MUTED, marginBottom: sz(10, 7) }}>
+                This month
+              </Text>
+              <NoteBody
+                noteKey="meetups"
+                emptyText="No meet-up plans written down yet — hatch some tonight."
+              />
+            </View>
+            <View>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD, marginBottom: sz(10, 7) }}>
+                Fresh hang ideas
+              </Text>
+              {hangIdeas.length === 0 ? (
+                <EmptyNote>No new ideas on the hang board yet — first one to post picks the venue.</EmptyNote>
+              ) : (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(12, 8) }}>
+                  {hangIdeas.map((idea) => (
+                    <View
+                      key={idea.id}
+                      style={{
+                        backgroundColor: 'rgba(222,193,129,0.18)',
+                        borderRadius: 999,
+                        paddingHorizontal: sz(20, 14),
+                        paddingVertical: sz(9, 7),
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 13), color: GOLD_DEEP }}>
+                        {(idea.title ?? 'Untitled idea').trim() || 'Untitled idea'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Right: the availability calendar */}
+          <View style={{ flex: isTV ? 6 : undefined }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: MUTED, marginBottom: sz(12, 8) }}>
+              {calendarTitle}
+            </Text>
+            <View
+              style={{
+                backgroundColor: CARD,
+                borderWidth: 1,
+                borderColor: GOLD_SOFT,
+                borderRadius: sz(20, 14),
+                padding: sz(16, 8),
+              }}
+            >
+              <View style={{ flexDirection: 'row', marginBottom: sz(8, 5) }}>
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((dayLabel) => (
+                  <Text
+                    key={dayLabel}
+                    style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      fontFamily: 'Lato_700Bold',
+                      fontSize: sz(15, 10),
+                      letterSpacing: 1,
+                      textTransform: 'uppercase',
+                      color: MUTED,
+                    }}
+                  >
+                    {dayLabel}
+                  </Text>
+                ))}
+              </View>
+              {weeks.map((week) => (
+                <View key={week[0].toISOString()} style={{ flexDirection: 'row' }}>
+                  {week.map((day) => {
+                    const dayIso = getLocalIsoDate(day);
+                    const inWindow = day >= rangeStart && day <= rangeEnd;
+                    const dayEvents = inWindow ? eventsOnDay(dayIso) : [];
+                    const isMeetingDay = dayEvents.some((event) => event.event_type === 'meeting');
+                    const isBusy = dayEvents.length > 0;
+                    const isToday = dayIso === todayIso;
+                    const firstOfMonth = day.getDate() === 1 || dayIso === getLocalIsoDate(gridStart);
+                    const primaryEvent = dayEvents[0];
+                    return (
+                      <View
+                        key={dayIso}
+                        style={{
+                          flex: 1,
+                          minHeight: sz(86, 52),
+                          margin: sz(3, 2),
+                          borderRadius: sz(12, 8),
+                          borderWidth: isMeetingDay || isToday ? 2 : 1,
+                          borderColor: isMeetingDay || isToday ? GOLD : isBusy ? GOLD_SOFT : 'rgba(222,193,129,0.24)',
+                          backgroundColor: !inWindow
+                            ? 'transparent'
+                            : isBusy
+                              ? 'rgba(222,193,129,0.16)'
+                              : PAPER,
+                          paddingHorizontal: sz(8, 4),
+                          paddingVertical: sz(6, 3),
+                          opacity: inWindow ? 1 : 0.35,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: isToday || isMeetingDay ? 'Lato_700Bold' : 'Lato_400Regular',
+                            fontSize: sz(17, 11),
+                            color: isToday || isMeetingDay ? GOLD_DEEP : CHARCOAL,
+                          }}
+                        >
+                          {firstOfMonth ? `${monthLabel(day)} ` : ''}{day.getDate()}
+                        </Text>
+                        {dayEvents.length > 0 ? (
+                          <Text numberOfLines={isTV ? 2 : 1} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 9), lineHeight: sz(19, 12), color: GOLD_DEEP, marginTop: sz(3, 2) }}>
+                            {eventEmoji(primaryEvent)}{isTV ? ` ${primaryEvent.title}` : ''}
+                            {dayEvents.length > 1 ? `  +${dayEvents.length - 1}` : ''}
+                          </Text>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: MUTED, marginTop: sz(10, 7) }}>
+              🐝 meeting · 🎂 birthday · ✈️ away · 📌 event — blank days are your best shot at a hang.
+            </Text>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   // The HummDinger sesh, consolidated onto one page: a compact POP-formula
   // header (the talking points people follow during the go-around) above a grid
@@ -1086,8 +1084,6 @@ export default function MeetingHelperScreen() {
     { key: 'news', render: renderNews },
     { key: 'treasurer', render: renderTreasurer },
     { key: 'meetups', render: renderMeetups },
-    { key: 'dates', render: renderUpcomingDates },
-    { key: 'highlights', render: renderHighlights },
     { key: 'hummdinger', render: renderHummdinger },
     { key: 'wrapup', render: renderWrapup },
     { key: 'thanks', render: renderThanks },
