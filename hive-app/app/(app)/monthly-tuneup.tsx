@@ -62,6 +62,7 @@ type HelperThread = {
 
 // Wizard draft persisted across relaunches (per community + member).
 type TuneupDraft = {
+  savedAt?: number;
   stepIndex?: number;
   helperContent?: string;
   hangTitle?: string;
@@ -399,7 +400,13 @@ export default function MonthlyTuneupScreen() {
         if (!cancelled && raw) {
           const draft = JSON.parse(raw) as TuneupDraft;
           if (draft && typeof draft === 'object') {
-            if (typeof draft.stepIndex === 'number' && Number.isFinite(draft.stepIndex)) {
+            // Resume the saved STEP only for a fresh interruption (refresh,
+            // crash, token-refresh remount). Coming back hours or days later —
+            // e.g. from the reminder email — should start at step 1, with any
+            // drafted content still restored below.
+            const draftIsFresh = typeof draft.savedAt === 'number'
+              && Date.now() - draft.savedAt < 60 * 60 * 1000;
+            if (draftIsFresh && typeof draft.stepIndex === 'number' && Number.isFinite(draft.stepIndex)) {
               setStepIndex(Math.min(Math.max(Math.trunc(draft.stepIndex), 0), STEPS.length - 1));
             }
             if (typeof draft.helperContent === 'string') setHelperContent(draft.helperContent);
@@ -433,6 +440,7 @@ export default function MonthlyTuneupScreen() {
     if (!draftKey || !draftRestored || finished) return;
     const timeout = setTimeout(() => {
       const draft: TuneupDraft = {
+        savedAt: Date.now(),
         stepIndex,
         helperContent,
         hangTitle,
