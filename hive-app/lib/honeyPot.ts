@@ -375,6 +375,10 @@ export const getHoneyPotDuesLabel = (transaction: Pick<
   if (!transaction.dues_year || !transaction.dues_covered_quarters) return null;
   if (transaction.dues_covered_quarters >= 4) return `Full year ${transaction.dues_year}`;
   if (!transaction.dues_quarter) return `${transaction.dues_year} dues`;
+  if (transaction.dues_covered_quarters > 1) {
+    const endQuarter = Math.min(transaction.dues_quarter + transaction.dues_covered_quarters - 1, 4);
+    return `Q${transaction.dues_quarter}–Q${endQuarter} ${transaction.dues_year}`;
+  }
   return `Q${transaction.dues_quarter} ${transaction.dues_year}`;
 };
 

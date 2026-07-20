@@ -94,6 +94,9 @@ const containsPhrase = (text: string, phrase: string) => {
 const hasDuesLanguage = (text: string) =>
   /\b(dues?|membership)\b/.test(text);
 
+const hasPaymentLanguage = (text: string) =>
+  /\b(paid|payment|pays?)\b/.test(text);
+
 const hasGroupPaymentLanguage = (text: string) => [
   'everyone',
   'everybody',
@@ -173,7 +176,12 @@ const mentionedMonthQuarter = (text: string) => {
   return null;
 };
 
-const textCoversDuesPeriod = (row: DuesTransactionRecognitionRow, period: DuesPeriod, text: string) => {
+const textCoversDuesPeriod = (
+  row: DuesTransactionRecognitionRow,
+  period: DuesPeriod,
+  text: string,
+  { requireExplicitPeriod = false } = {}
+) => {
   const mentionsYear = containsPhrase(text, String(period.year));
   const annualLanguage = /\b(annual|yearly|full year|whole year|all year)\b/.test(text)
     || /\bq1\s+(?:to|through|thru)?\s*q4\b/.test(text);
@@ -186,7 +194,7 @@ const textCoversDuesPeriod = (row: DuesTransactionRecognitionRow, period: DuesPe
   if (monthQuarter) return monthQuarter === period.quarter && (mentionsYear || createdDuringYear(row, period));
 
   if (mentionsYear) return true;
-  return createdDuringPeriod(row, period);
+  return !requireExplicitPeriod && createdDuringPeriod(row, period);
 };
 
 const unstructuredDuesTransactionCoversMember = (
@@ -202,8 +210,13 @@ const unstructuredDuesTransactionCoversMember = (
     row.external_counterparty_name,
   ].filter(Boolean).join(' '));
 
-  if (!hasDuesLanguage(text)) return false;
-  if (!textCoversDuesPeriod(row, period, text)) return false;
+  // Notes like "Lucas. Paid for 2026" never say "dues" — accept payment
+  // language too, but only with an explicit period mention (a quarter, month,
+  // or year in the text) so unrelated deposits can't cover the current quarter.
+  const duesLanguage = hasDuesLanguage(text);
+  const paymentLanguage = hasPaymentLanguage(text) && amount % QUARTERLY_DUES_AMOUNT === 0;
+  if (!duesLanguage && !paymentLanguage) return false;
+  if (!textCoversDuesPeriod(row, period, text, { requireExplicitPeriod: !duesLanguage })) return false;
   return textMentionsMember(text, member) || hasGroupPaymentLanguage(text);
 };
 
