@@ -981,8 +981,8 @@ export default function MeetingHelperScreen() {
 
   const MEETUP_COLUMNS = [
     { key: 'meeting' as const, title: 'HIVE Meeting', blurb: 'Second Wednesday — dinner, business, and the HummDinger.' },
-    { key: 'hang' as const, title: 'HIVE Hang', blurb: 'Casual get-togethers between meetings. Anyone can host.' },
     { key: 'help' as const, title: 'HIVE Help', blurb: 'Fifteen-minute favors — small asks, quick wins.' },
+    { key: 'hang' as const, title: 'HIVE Hang', blurb: 'Casual get-togethers between meetings. Anyone can host.' },
   ];
 
   // Plan the Meet Ups: how we gather across the top, then a classic two-month
@@ -1014,15 +1014,28 @@ export default function MeetingHelperScreen() {
     const helpVoices = voicesFor('q_hive_help_recap');
     const hangVoices = voicesFor('q_hangs_recap', recapNote);
 
-    // Survey says! Turnout per hang, counted from the check-ins' "I went 🙌"
-    // taps (the answer's first line is "Went to: A · B").
+    // Survey says! Turnout + average enjoyment per hang, from the check-ins'
+    // "I went 🙌" taps and 🍯 ratings ("Went to: Taste (4/5) · Drag Brunch").
     const hangPoll = pastHangs.map((hang) => {
-      const went = members.filter((member) => {
+      let went = 0;
+      const ratings: number[] = [];
+      members.forEach((member) => {
         const raw = getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, 'q_hangs_recap');
         const firstLine = raw.split('\n')[0] ?? '';
-        return firstLine.startsWith('Went to: ') && firstLine.includes(hang.title);
-      }).length;
-      return { ...hang, went };
+        if (!firstLine.startsWith('Went to: ')) return;
+        const entry = firstLine
+          .slice('Went to: '.length)
+          .split(' · ')
+          .find((candidate) => candidate.trim().startsWith(hang.title));
+        if (!entry) return;
+        went += 1;
+        const rating = entry.match(/\((\d)\/5\)\s*$/)?.[1];
+        if (rating) ratings.push(Number(rating));
+      });
+      const avgRating = ratings.length > 0
+        ? Math.round((ratings.reduce((sum, value) => sum + value, 0) / ratings.length) * 10) / 10
+        : null;
+      return { ...hang, went, avgRating };
     });
 
     const nextMeetingEvent = events.find(
@@ -1226,8 +1239,12 @@ export default function MeetingHelperScreen() {
             check-in voices. */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(16, 8) }}>
           {MEETUP_COLUMNS.map((column) => {
-            const isScheduleCard = column.key !== 'help';
-            const isSelected = isScheduleCard ? planMode === column.key : expandedPlanCard === 'help';
+            // Exactly ONE card carries the highlight: the open panel wins;
+            // with nothing expanded, the active schedule mode does. The ●/○
+            // line still shows which mode calendar taps use.
+            const isSelected = expandedPlanCard
+              ? expandedPlanCard === column.key
+              : planMode === column.key;
             return (
               <Pressable
                 key={column.title}
@@ -1306,7 +1323,9 @@ export default function MeetingHelperScreen() {
                         {hang.title}
                       </Text>
                       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP }}>
-                        {hang.went > 0 ? `🙌 ${hang.went} went` : 'survey pending…'}
+                        {hang.went > 0
+                          ? `🙌 ${hang.went} went${hang.avgRating ? ` · 🍯 ${hang.avgRating}/5${hang.avgRating >= 4.5 ? ' — we LOVED it' : hang.avgRating >= 3.5 ? ' — a hit' : ''}` : ''}`
+                          : 'survey pending…'}
                       </Text>
                     </View>
                     <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: 'rgba(222,193,129,0.18)', overflow: 'hidden' }}>
@@ -1323,17 +1342,9 @@ export default function MeetingHelperScreen() {
                 ))
               )}
               {hangVoices.length > 0 ? (
-                <View style={{ gap: sz(4, 3), marginTop: sz(6, 4) }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
-                    🗣️ What we thought
-                  </Text>
-                  {hangVoices.map((voice) => (
-                    <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
-                      {voice.text}
-                    </Text>
-                  ))}
-                </View>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED, marginTop: sz(4, 3) }}>
+                  🗣️ {hangVoices.length} written thought{hangVoices.length === 1 ? '' : 's'} in the check-ins — worth a skim out loud.
+                </Text>
               ) : null}
             </View>
 
