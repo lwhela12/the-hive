@@ -222,10 +222,27 @@ export default function MeetingHelperScreen() {
   const [liveNoteCursor, setLiveNoteCursor] = useState(0);
   const [liveNoteSaving, setLiveNoteSaving] = useState(false);
   const [liveNoteConfirmation, setLiveNoteConfirmation] = useState<string | null>(null);
-  // Everything jotted this session stays visible on the card it was taken on.
+  // Everything jotted this session stays visible on the card it was taken on,
+  // with an ✕ that pulls it back off every list it landed on (oops insurance).
   const [liveNotesTaken, setLiveNotesTaken] = useState<
-    { id: string; aboutId: string; text: string; assignees: string }[]
+    { id: string; aboutId: string; text: string; assignees: string; actionItemIds: string[] }[]
   >([]);
+
+  const handleUndoLiveNote = async (noteId: string) => {
+    const note = liveNotesTaken.find((candidate) => candidate.id === noteId);
+    if (!note) return;
+    setLiveNotesTaken((notes) => notes.filter((candidate) => candidate.id !== noteId));
+    if (note.actionItemIds.length > 0) {
+      const { error } = await (supabase as any)
+        .from('action_items')
+        .delete()
+        .in('id', note.actionItemIds);
+      if (error) {
+        console.error('Live note undo failed:', error);
+        Alert.alert('Hmm', "Couldn't remove that one — it may need archiving from the to-do list.");
+      }
+    }
+  };
 
   // Gentle timekeeper: a clock pill with time-'til-hard-out (default 8pm,
   // tap to change) and a soft per-remaining-slide pace hint — enough to say
@@ -604,17 +621,20 @@ export default function MeetingHelperScreen() {
 
     setLiveNoteSaving(true);
     try {
-      const { error } = await (supabase as any).from('action_items').insert(
-        assignees.map((member) => ({
-          description:
-            member.id === aboutMember.id
-              ? text
-              : `${text} (re: ${getFirstName(aboutMember.name)}'s HummDinger)`,
-          assigned_to: member.id,
-          community_id: communityId,
-          related_user_id: aboutMember.id,
-        }))
-      );
+      const { data: inserted, error } = await (supabase as any)
+        .from('action_items')
+        .insert(
+          assignees.map((member) => ({
+            description:
+              member.id === aboutMember.id
+                ? text
+                : `${text} (re: ${getFirstName(aboutMember.name)}'s HummDinger)`,
+            assigned_to: member.id,
+            community_id: communityId,
+            related_user_id: aboutMember.id,
+          }))
+        )
+        .select('id');
       if (error) throw error;
       const assigneesLabel = assignees.length > 3
         ? `everyone (${assignees.length})`
@@ -622,7 +642,13 @@ export default function MeetingHelperScreen() {
       setLiveNoteConfirmation(`On ${assigneesLabel}'s list ✓`);
       setLiveNotesTaken((notes) => [
         ...notes,
-        { id: `${Date.now()}-${notes.length}`, aboutId: aboutMember.id, text, assignees: assigneesLabel },
+        {
+          id: `${Date.now()}-${notes.length}`,
+          aboutId: aboutMember.id,
+          text,
+          assignees: assigneesLabel,
+          actionItemIds: ((inserted ?? []) as { id: string }[]).map((row) => row.id),
+        },
       ]);
       setLiveNoteDraft('');
     } catch (error) {
@@ -770,7 +796,7 @@ export default function MeetingHelperScreen() {
       <View style={{ alignItems: 'center', marginBottom: sz(24, 14) }}>
         <Image
           source={hiveBee}
-          style={{ width: sz(96, 56), height: sz(96, 56) }}
+          style={{ width: sz(170, 92), height: sz(170, 92) }}
           contentFit="contain"
         />
         <Text
@@ -786,11 +812,11 @@ export default function MeetingHelperScreen() {
           {monthName} {meetingYear} Meeting
         </Text>
         {meetingLine ? (
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(24, 14), color: GOLD_DEEP, marginTop: sz(8, 5), textAlign: 'center' }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(30, 16), color: GOLD_DEEP, marginTop: sz(10, 6), textAlign: 'center' }}>
             {meetingLine}
           </Text>
         ) : null}
-        <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(19, 12), color: MUTED, marginTop: sz(6, 4), textAlign: 'center' }}>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(23, 13), color: MUTED, marginTop: sz(8, 5), textAlign: 'center' }}>
           grab a plate and check in 🍯
         </Text>
         {survey ? (
@@ -1857,6 +1883,9 @@ export default function MeetingHelperScreen() {
                       {note.text}
                       <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>  → {note.assignees}</Text>
                     </Text>
+                    <Pressable onPress={() => handleUndoLiveNote(note.id)} hitSlop={8}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), color: MUTED }}>✕</Text>
+                    </Pressable>
                   </View>
                 ))}
               </View>
