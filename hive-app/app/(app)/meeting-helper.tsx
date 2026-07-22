@@ -222,6 +222,10 @@ export default function MeetingHelperScreen() {
   const [liveNoteCursor, setLiveNoteCursor] = useState(0);
   const [liveNoteSaving, setLiveNoteSaving] = useState(false);
   const [liveNoteConfirmation, setLiveNoteConfirmation] = useState<string | null>(null);
+  // Everything jotted this session stays visible on the card it was taken on.
+  const [liveNotesTaken, setLiveNotesTaken] = useState<
+    { id: string; aboutId: string; text: string; assignees: string }[]
+  >([]);
 
   // Gentle timekeeper: a clock pill with time-'til-hard-out (default 8pm,
   // tap to change) and a soft per-remaining-slide pace hint — enough to say
@@ -237,11 +241,11 @@ export default function MeetingHelperScreen() {
     return () => clearInterval(tick);
   }, []);
 
-  // "BAM, schedule": next cycle's HIVE Help focus, posted straight to the
-  // helper board from the deck — no tab-toggling to Boards mid-meeting.
-  const [helpFocusDraft, setHelpFocusDraft] = useState('');
-  const [helpFocusSaving, setHelpFocusSaving] = useState(false);
-  const [helpFocusPosted, setHelpFocusPosted] = useState<string | null>(null);
+  // Each month's HIVE Help focus lives in that month's calendar header —
+  // type it there and the "{Month} HIVE Helpers — {focus}" board thread is
+  // created automatically.
+  const [monthFocusDrafts, setMonthFocusDrafts] = useState<Record<string, string>>({});
+  const [monthFocusSaving, setMonthFocusSaving] = useState<string | null>(null);
 
   // Plan mode: the top cards pick what a calendar tap schedules — a hang
   // (quick pencil-in) or a full meeting (the same scheduler as the Meetings
@@ -549,10 +553,10 @@ export default function MeetingHelperScreen() {
     await loadDeckData();
   };
 
-  const handlePostHelpFocus = async () => {
-    const focus = helpFocusDraft.trim();
-    if (!focus || !communityId || !profile || helpFocusSaving) return;
-    setHelpFocusSaving(true);
+  const handlePostHelpFocus = async (monthLabel: string) => {
+    const focus = (monthFocusDrafts[monthLabel] ?? '').trim();
+    if (!focus || !communityId || !profile || monthFocusSaving) return;
+    setMonthFocusSaving(monthLabel);
     try {
       const { data: categories } = await supabase
         .from('board_categories')
@@ -563,33 +567,21 @@ export default function MeetingHelperScreen() {
         .find((row) => !row.status || row.status === 'active');
       if (!helperBoard) throw new Error('No HIVE Help board found');
 
-      // The focus decided tonight belongs to the coming cycle — name the
-      // thread for the next meeting's month.
-      const todayIso = getLocalIsoDate(new Date());
-      const nextMeetingEvent = events.find(
-        (event) => event.event_type === 'meeting' && event.event_date > todayIso
-      );
-      const focusMonth = nextMeetingEvent
-        ? new Date(`${nextMeetingEvent.event_date}T12:00:00`)
-        : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
-      const title = `${focusMonth.toLocaleDateString('en-US', { month: 'long' })} HIVE Helpers — ${focus}`;
-
       const { error } = await (supabase as any).from('board_posts').insert({
         community_id: communityId,
         category_id: helperBoard.id,
         author_id: profile.id,
-        title,
-        content: `This cycle's HIVE Help focus: ${focus}\n\n(Decided together at the meeting — log your helps in this thread!)`,
+        title: `${monthLabel} HIVE Helpers — ${focus}`,
+        content: `${monthLabel}'s HIVE Help focus: ${focus}\n\n(Decided together at the meeting — log your helps in this thread!)`,
       });
       if (error) throw error;
-      setHelpFocusPosted(title);
-      setHelpFocusDraft('');
+      setMonthFocusDrafts((drafts) => ({ ...drafts, [monthLabel]: '' }));
       await loadDeckData();
     } catch (error) {
       console.error('Could not post HIVE Help focus:', error);
       Alert.alert('Hmm', 'Could not post the new focus — try again, or use the Boards tab.');
     } finally {
-      setHelpFocusSaving(false);
+      setMonthFocusSaving(null);
     }
   };
 
@@ -624,11 +616,14 @@ export default function MeetingHelperScreen() {
         }))
       );
       if (error) throw error;
-      setLiveNoteConfirmation(
-        assignees.length > 3
-          ? `On everyone's list (${assignees.length} people) ✓`
-          : `On ${assignees.map((member) => getFirstName(member.name)).join(' & ')}'s list ✓`
-      );
+      const assigneesLabel = assignees.length > 3
+        ? `everyone (${assignees.length})`
+        : assignees.map((member) => getFirstName(member.name)).join(' & ');
+      setLiveNoteConfirmation(`On ${assigneesLabel}'s list ✓`);
+      setLiveNotesTaken((notes) => [
+        ...notes,
+        { id: `${Date.now()}-${notes.length}`, aboutId: aboutMember.id, text, assignees: assigneesLabel },
+      ]);
       setLiveNoteDraft('');
     } catch (error) {
       console.error('Live note save failed:', error);
@@ -1051,14 +1046,6 @@ export default function MeetingHelperScreen() {
       return { ...hang, went, avgRating };
     });
 
-    const nextMeetingEvent = events.find(
-      (event) => event.event_type === 'meeting' && event.event_date > todayIso
-    );
-    const nextFocusMonthLabel = (
-      nextMeetingEvent
-        ? new Date(`${nextMeetingEvent.event_date}T12:00:00`)
-        : new Date(today.getFullYear(), today.getMonth() + 1, 1)
-    ).toLocaleDateString('en-US', { month: 'long' });
 
     const eventsOnDay = (dayIso: string) =>
       events.filter((event) => event.event_date <= dayIso && dayIso <= (event.end_date || event.event_date));
@@ -1098,11 +1085,53 @@ export default function MeetingHelperScreen() {
         weeks.push(days.slice(index, index + 7));
       }
 
+      const monthLabel = monthStart.toLocaleDateString('en-US', { month: 'long' });
+      // This month's HIVE Help focus lives right in the calendar header —
+      // read from the "{Month} HIVE Helpers — {focus}" board thread, or type
+      // it here and the thread is created automatically.
+      const focusPattern = new RegExp(`^${monthLabel}\\s+HIVE Helpers\\s*[—–-]+\\s*(.+)$`, 'i');
+      const existingFocus = helperPosts
+        .map((post) => (post.title ?? '').trim().match(focusPattern)?.[1])
+        .find((match) => !!match);
+
       return (
         <View key={monthStart.toISOString()} style={{ flex: 1 }}>
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(26, 16), color: CHARCOAL, marginBottom: sz(8, 5) }}>
-            {monthStart.toLocaleDateString('en-US', { month: 'long' })}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(16, 8), marginBottom: sz(8, 5) }}>
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(26, 16), color: CHARCOAL }}>
+              {monthLabel}
+            </Text>
+            {existingFocus ? (
+              <Text
+                numberOfLines={1}
+                style={{ flex: 1, fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(18, 12), color: GOLD_DEEP, textAlign: 'center' }}
+              >
+                Help Focus: {existingFocus.replace(/!+$/, '')} 🤝
+              </Text>
+            ) : (
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: sz(6, 4), justifyContent: 'center' }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(17, 11), color: GOLD_DEEP }}>
+                  Help Focus:
+                </Text>
+                <TextInput
+                  value={monthFocusDrafts[monthLabel] ?? ''}
+                  onChangeText={(value) => setMonthFocusDrafts((drafts) => ({ ...drafts, [monthLabel]: value }))}
+                  onSubmitEditing={() => handlePostHelpFocus(monthLabel)}
+                  placeholder={monthFocusSaving === monthLabel ? 'posting…' : 'type it, press enter'}
+                  placeholderTextColor="rgba(154,128,96,0.5)"
+                  style={{
+                    minWidth: sz(160, 110),
+                    borderBottomWidth: 1,
+                    borderColor: GOLD_SOFT,
+                    paddingVertical: sz(3, 2),
+                    fontFamily: 'Lato_400Regular',
+                    fontStyle: 'italic',
+                    fontSize: sz(17, 11),
+                    color: GOLD_DEEP,
+                  }}
+                />
+              </View>
+            )}
+          </View>
           <View
             style={{
               backgroundColor: CARD,
@@ -1282,6 +1311,7 @@ export default function MeetingHelperScreen() {
                   paddingHorizontal: sz(22, 14),
                   paddingVertical: sz(14, 10),
                   opacity: pressed ? 0.8 : 1,
+                  outlineWidth: 0,
                 })}
               >
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(24, 16), color: GOLD_DEEP }}>
@@ -1295,7 +1325,7 @@ export default function MeetingHelperScreen() {
                     ? isSelected ? '● tap a day below to schedule the meeting' : '○ select, then tap a day to schedule'
                     : column.key === 'hang'
                       ? planMode === 'hang' ? '● tap a day below to pencil one in · tap for ideas' : '○ select, then tap a day to pencil in'
-                      : expandedPlanCard === 'help' ? '▾ focus & voices from the check-ins' : '▸ tap for focus & voices from the check-ins'}
+                      : expandedPlanCard === 'help' ? '▾ voices from the check-ins' : '▸ tap for voices from the check-ins'}
                 </Text>
               </Pressable>
             );
@@ -1407,8 +1437,9 @@ export default function MeetingHelperScreen() {
           </View>
         ) : null}
 
-        {/* HIVE Help expansion: month-by-month focus + what everyone said in
-            their check-ins — absent voices still get heard in the room. */}
+        {/* HIVE Help expansion: what everyone said in their check-ins —
+            absent voices still get heard. The monthly focus lives up in the
+            calendar headers now ("Help Focus: …"). */}
         {expandedPlanCard === 'help' ? (
           <View
             style={{
@@ -1422,71 +1453,6 @@ export default function MeetingHelperScreen() {
               gap: sz(12, 8),
             }}
           >
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: sz(10, 7) }}>
-              {helperPosts.length === 0 ? (
-                <EmptyNote>No HIVE Help thread this cycle yet.</EmptyNote>
-              ) : (
-                helperPosts.map((post) => (
-                  <View
-                    key={post.id}
-                    style={{
-                      backgroundColor: 'rgba(222,193,129,0.18)',
-                      borderRadius: 999,
-                      paddingHorizontal: sz(18, 12),
-                      paddingVertical: sz(8, 6),
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 12), color: GOLD_DEEP }}>
-                      {(post.title ?? 'A quiet favor').trim() || 'A quiet favor'}
-                    </Text>
-                  </View>
-                ))
-              )}
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(8, 6) }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 12), color: CHARCOAL }}>
-                {nextFocusMonthLabel}:
-              </Text>
-              <TextInput
-                value={helpFocusDraft}
-                onChangeText={setHelpFocusDraft}
-                placeholder="next focus (e.g. Shelter donation)"
-                placeholderTextColor={MUTED}
-                onSubmitEditing={handlePostHelpFocus}
-                style={{
-                  flex: 1,
-                  borderWidth: 1,
-                  borderColor: GOLD_SOFT,
-                  borderRadius: sz(12, 9),
-                  backgroundColor: PAPER,
-                  paddingHorizontal: sz(14, 10),
-                  paddingVertical: sz(9, 7),
-                  fontFamily: 'Lato_400Regular',
-                  fontSize: sz(16, 11),
-                  color: CHARCOAL,
-                }}
-              />
-              <Pressable
-                onPress={handlePostHelpFocus}
-                disabled={helpFocusSaving || !helpFocusDraft.trim()}
-                style={({ pressed }) => ({
-                  paddingHorizontal: sz(20, 14),
-                  paddingVertical: sz(9, 7),
-                  borderRadius: 999,
-                  backgroundColor: GOLD,
-                  opacity: pressed || helpFocusSaving || !helpFocusDraft.trim() ? 0.6 : 1,
-                })}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: 'white' }}>
-                  {helpFocusSaving ? 'Posting…' : 'BAM 🐝'}
-                </Text>
-              </Pressable>
-            </View>
-            {helpFocusPosted ? (
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP }}>
-                Posted to the boards: "{helpFocusPosted}" ✓
-              </Text>
-            ) : null}
             {helpVoices.length > 0 ? (
               <View style={{ gap: sz(4, 3) }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginTop: sz(4, 3) }}>
@@ -1884,6 +1850,15 @@ export default function MeetingHelperScreen() {
                     </Text>
                   ) : null}
                 </View>
+                {liveNotesTaken.filter((note) => note.aboutId === member.id).map((note) => (
+                  <View key={note.id} style={{ flexDirection: 'row', gap: sz(8, 6), alignItems: 'flex-start' }}>
+                    <Text style={{ fontSize: sz(14, 11) }}>📝</Text>
+                    <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: sz(15, 11), lineHeight: sz(22, 16), color: CHARCOAL }}>
+                      {note.text}
+                      <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>  → {note.assignees}</Text>
+                    </Text>
+                  </View>
+                ))}
               </View>
             </ScrollView>
           </Pressable>
