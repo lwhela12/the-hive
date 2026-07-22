@@ -22,6 +22,14 @@ import { getWishQuickTitle } from '../../lib/wishDisplay';
 import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
+import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
+import {
+  getActiveMentionQuery,
+  getMentionedMembers,
+  getMentionSuggestions,
+  hasBroadcastMention,
+  insertMention,
+} from '../../lib/mentions';
 import {
   formatMeetingDate,
   getAttendance,
@@ -211,6 +219,7 @@ export default function MeetingHelperScreen() {
   // Live meeting notes typed into an expanded HummDinger card. "@name" routes
   // the note onto that member's to-do list; no @ = the expanded member's list.
   const [liveNoteDraft, setLiveNoteDraft] = useState('');
+  const [liveNoteCursor, setLiveNoteCursor] = useState(0);
   const [liveNoteSaving, setLiveNoteSaving] = useState(false);
   const [liveNoteConfirmation, setLiveNoteConfirmation] = useState<string | null>(null);
 
@@ -582,16 +591,21 @@ export default function MeetingHelperScreen() {
     }
   };
 
-  // Live meeting notes from an expanded HummDinger card. "@name" puts the
-  // note on that member's to-do list (several @s fan out); no @ = the list of
-  // whoever's card is open.
+  // Live meeting notes from the HummDinger spotlight. Mentions use the same
+  // rules as the boards — "@charlee" targets her list, "@all"/"@hive" fans
+  // out to everyone, no @ lands on whoever's card is open.
   const handleSaveLiveNote = async (aboutMember: { id: string; name: string }) => {
     const text = liveNoteDraft.trim();
     if (!text || !communityId || liveNoteSaving) return;
 
-    const mentioned = [...text.matchAll(/@([a-zA-Z]+)/g)].map((match) => match[1].toLowerCase());
-    const targets = members.filter((member) => mentioned.includes(getFirstName(member.name).toLowerCase()));
-    const assignees = targets.length > 0 ? targets : members.filter((member) => member.id === aboutMember.id);
+    // "@all" from someone's card = the note is about helping THEM, so it
+    // lands on everyone else's list — not the subject's own.
+    const targets = hasBroadcastMention(text)
+      ? members.filter((member) => member.id !== aboutMember.id)
+      : getMentionedMembers(text, members);
+    const assignees = targets.length > 0
+      ? members.filter((member) => targets.some((target) => target.id === member.id))
+      : members.filter((member) => member.id === aboutMember.id);
     if (assignees.length === 0) return;
 
     setLiveNoteSaving(true);
@@ -608,7 +622,11 @@ export default function MeetingHelperScreen() {
         }))
       );
       if (error) throw error;
-      setLiveNoteConfirmation(`On ${assignees.map((member) => getFirstName(member.name)).join(' & ')}'s list ✓`);
+      setLiveNoteConfirmation(
+        assignees.length > 3
+          ? `On everyone's list (${assignees.length} people) ✓`
+          : `On ${assignees.map((member) => getFirstName(member.name)).join(' & ')}'s list ✓`
+      );
       setLiveNoteDraft('');
     } catch (error) {
       console.error('Live note save failed:', error);
@@ -1545,15 +1563,11 @@ export default function MeetingHelperScreen() {
             assistsForMember.length > 0 ||
             assistsByMember.length > 0 ||
             grantedThisCycle.length > 0;
-          const isExpanded = expandedHummdingerId === member.id;
           return (
-            <View
-              key={member.id}
-              style={{ width: isExpanded ? '100%' : `${100 / bubbleColumns}%`, padding: sz(8, 5) }}
-            >
+            <View key={member.id} style={{ width: `${100 / bubbleColumns}%`, padding: sz(8, 5) }}>
               <Pressable
                 onPress={() => {
-                  if (!hasDetails || isExpanded) return;
+                  if (!hasDetails) return;
                   setExpandedHummdingerId(member.id);
                   setHummdingerVisited((visited) => new Set(visited).add(member.id));
                   setLiveNoteDraft('');
@@ -1563,11 +1577,12 @@ export default function MeetingHelperScreen() {
                   flex: 1,
                   alignItems: 'center',
                   backgroundColor: CARD,
-                  borderWidth: isExpanded ? 2 : 1,
-                  borderColor: isExpanded ? GOLD : GOLD_SOFT,
+                  borderWidth: hummdingerVisited.has(member.id) ? 2 : 1,
+                  borderColor: hummdingerVisited.has(member.id) ? GOLD : GOLD_SOFT,
                   borderRadius: sz(20, 14),
                   paddingHorizontal: sz(16, 10),
                   paddingVertical: sz(20, 13),
+                  outlineWidth: 0,
                 }}
               >
                 <Avatar name={member.name} url={member.avatar_url} size={sz(72, 48)} />
@@ -1593,7 +1608,7 @@ export default function MeetingHelperScreen() {
                   </Text>
                 ) : null}
                 <Text
-                  numberOfLines={isExpanded ? undefined : 2}
+                  numberOfLines={2}
                   style={{
                     fontFamily: 'Lato_400Regular',
                     fontSize: sz(17, 11),
@@ -1606,7 +1621,7 @@ export default function MeetingHelperScreen() {
                 >
                   {hdGoal ?? 'open to ideas'}
                 </Text>
-                {!isExpanded && priorities ? (
+                {priorities ? (
                   <Text
                     numberOfLines={2}
                     style={{
@@ -1621,135 +1636,9 @@ export default function MeetingHelperScreen() {
                     {priorities}
                   </Text>
                 ) : null}
-                {isExpanded ? (
-                  <View style={{ alignSelf: 'stretch', marginTop: sz(16, 10), gap: sz(12, 8) }}>
-                    {topWish?.description ? (
-                      <View>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
-                          This month's HD
-                        </Text>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 17), color: CHARCOAL }}>
-                          {topWish.description}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {detailSections.map((section) => (
-                      <View key={section.key}>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
-                          {section.label}
-                        </Text>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 17), color: CHARCOAL }}>
-                          {section.text}
-                        </Text>
-                      </View>
-                    ))}
-                    {grantedThisCycle.length > 0 ? (
-                      <View>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
-                          Wishes granted this cycle 🌟
-                        </Text>
-                        {grantedThisCycle.map((wish) => (
-                          <Text key={wish.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 17), color: CHARCOAL }}>
-                            {getWishQuickTitle(wish, 72)}
-                            {wish.granterNames.length > 0 ? (
-                              <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>
-                                {'  —  granted by '}{wish.granterNames.join(' & ')}
-                              </Text>
-                            ) : null}
-                          </Text>
-                        ))}
-                      </View>
-                    ) : null}
-                    {assistsForMember.length > 0 ? (
-                      <View>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
-                          Done for {getFirstName(member.name)} this cycle 💛
-                        </Text>
-                        {assistsForMember.map((assist) => (
-                          <Text key={assist.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 17), color: CHARCOAL }}>
-                            {getFirstName(assist.assigneeName)}: {assist.description}
-                          </Text>
-                        ))}
-                      </View>
-                    ) : null}
-                    {assistsByMember.length > 0 ? (
-                      <View>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
-                          {getFirstName(member.name)} checked off ✓
-                        </Text>
-                        {assistsByMember.map((assist) => (
-                          <Text key={assist.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 17), color: CHARCOAL }}>
-                            {assist.description}
-                          </Text>
-                        ))}
-                      </View>
-                    ) : null}
-                    {/* Live note → to-do lists, typed as the room talks */}
-                    <View
-                      style={{
-                        borderTopWidth: 1,
-                        borderColor: GOLD_SOFT,
-                        paddingTop: sz(12, 8),
-                        gap: sz(8, 6),
-                      }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
-                        Live note → to-do list
-                      </Text>
-                      <TextInput
-                        value={liveNoteDraft}
-                        onChangeText={(value) => {
-                          setLiveNoteDraft(value);
-                          if (liveNoteConfirmation) setLiveNoteConfirmation(null);
-                        }}
-                        placeholder={`e.g. "@${getFirstName(member.name)} intro Brit to your PMU contact" — @name puts it on their list, no @ lands on ${getFirstName(member.name)}'s`}
-                        placeholderTextColor={MUTED}
-                        multiline
-                        style={{
-                          borderWidth: 1,
-                          borderColor: GOLD_SOFT,
-                          borderRadius: sz(12, 9),
-                          backgroundColor: PAPER,
-                          paddingHorizontal: sz(14, 10),
-                          paddingVertical: sz(10, 8),
-                          fontFamily: 'Lato_400Regular',
-                          fontSize: sz(17, 12),
-                          color: CHARCOAL,
-                          minHeight: sz(64, 48),
-                        }}
-                      />
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
-                        <Pressable
-                          onPress={() => handleSaveLiveNote(member)}
-                          disabled={liveNoteSaving || !liveNoteDraft.trim()}
-                          style={({ pressed }) => ({
-                            paddingHorizontal: sz(22, 16),
-                            paddingVertical: sz(9, 7),
-                            borderRadius: 999,
-                            backgroundColor: GOLD,
-                            opacity: pressed || liveNoteSaving || !liveNoteDraft.trim() ? 0.6 : 1,
-                          })}
-                        >
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), color: 'white' }}>
-                            {liveNoteSaving ? 'Saving…' : 'Add to list'}
-                          </Text>
-                        </Pressable>
-                        {liveNoteConfirmation ? (
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP, flexShrink: 1 }}>
-                            {liveNoteConfirmation}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </View>
-                    <Pressable onPress={() => setExpandedHummdingerId(null)} hitSlop={8}>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 10), color: MUTED, textAlign: 'center' }}>
-                        tap to tuck away ↑
-                      </Text>
-                    </Pressable>
-                  </View>
-                ) : hasDetails ? (
+                {hasDetails ? (
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 9), color: MUTED, marginTop: sz(8, 5) }}>
-                    tap for the full story ↓
+                    {hummdingerVisited.has(member.id) ? '✓ tap for the full story' : 'tap for the full story ↓'}
                   </Text>
                 ) : null}
               </Pressable>
@@ -1759,6 +1648,200 @@ export default function MeetingHelperScreen() {
       </View>
     </View>
   );
+
+  // The spotlight: one member's full story in an overlay, so the group grid
+  // never reflows. Big obvious way back — Lucas got lost in the inline
+  // version ("I wanted to get back to wide view").
+  const renderHummdingerSpotlight = () => {
+    const member = memberOrder.find((candidate) => candidate.id === expandedHummdingerId);
+    if (!member) return null;
+    const response = responsesByUser.get(member.id);
+    const answers = response?.answers ?? {};
+    const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
+    const topWish = (wishesByUserId.get(member.id) ?? [])[0];
+    const detailSections = HUMMDINGER_DETAIL_SECTIONS
+      .map((section) => ({ ...section, text: getTextAnswer(answers, section.key) }))
+      .filter((section) => !!section.text);
+    const assistsForMember = completedAssists.filter(
+      (assist) => assist.relatedUserId === member.id && assist.assignedTo !== member.id
+    );
+    const assistsByMember = completedAssists.filter((assist) => assist.assignedTo === member.id);
+    const grantedThisCycle = grantedWishes.filter((wish) => wish.user_id === member.id);
+    const attendance = getAttendance(response);
+    const sectionLabel = { fontFamily: 'Lato_700Bold' as const, fontSize: sz(15, 11), letterSpacing: 1.5, textTransform: 'uppercase' as const, color: GOLD, marginBottom: sz(4, 3) };
+    const sectionText = { fontFamily: 'Lato_400Regular' as const, fontSize: sz(18, 13), lineHeight: sz(27, 19), color: CHARCOAL };
+
+    return (
+      <Modal visible animationType="fade" transparent onRequestClose={() => setExpandedHummdingerId(null)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(49,49,48,0.5)', alignItems: 'center', justifyContent: 'center', padding: sz(40, 14) }}
+          onPress={() => setExpandedHummdingerId(null)}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: sz(880, 640),
+              maxHeight: '88%',
+              backgroundColor: PAPER,
+              borderRadius: sz(26, 18),
+              borderWidth: 1,
+              borderColor: GOLD_SOFT,
+              overflow: 'hidden',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(16, 10), paddingHorizontal: sz(28, 16), paddingTop: sz(24, 14), paddingBottom: sz(14, 9), borderBottomWidth: 1, borderColor: GOLD_SOFT }}>
+              <Avatar name={member.name} url={member.avatar_url} size={sz(64, 44)} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(30, 19), color: CHARCOAL }}>
+                  {nameToday}
+                </Text>
+                {attendance === 'missing' ? (
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), color: MUTED }}>
+                    😢 not here tonight — carry the torch
+                  </Text>
+                ) : attendance === 'remote' ? (
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), color: GOLD_DEEP }}>
+                    💻 zooming in
+                  </Text>
+                ) : null}
+              </View>
+              <Pressable
+                onPress={() => setExpandedHummdingerId(null)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: 'rgba(222,193,129,0.18)',
+                  borderRadius: 999,
+                  paddingHorizontal: sz(18, 12),
+                  paddingVertical: sz(9, 7),
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: GOLD_DEEP }}>
+                  ← back to the group
+                </Text>
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: sz(28, 16), paddingVertical: sz(20, 12), gap: sz(16, 10) }}>
+              {topWish?.description ? (
+                <View>
+                  <Text style={sectionLabel}>This month's HD</Text>
+                  <Text style={sectionText}>{topWish.description}</Text>
+                </View>
+              ) : null}
+              {grantedThisCycle.length > 0 ? (
+                <View>
+                  <Text style={sectionLabel}>Wishes granted this cycle 🌟</Text>
+                  {grantedThisCycle.map((wish) => (
+                    <Text key={wish.id} style={sectionText}>
+                      {getWishQuickTitle(wish, 72)}
+                      {wish.granterNames.length > 0 ? (
+                        <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>
+                          {'  —  granted by '}{wish.granterNames.join(' & ')}
+                        </Text>
+                      ) : null}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+              {detailSections.map((section) => (
+                <View key={section.key}>
+                  <Text style={sectionLabel}>{section.label}</Text>
+                  <Text style={sectionText}>{section.text}</Text>
+                </View>
+              ))}
+              {assistsForMember.length > 0 ? (
+                <View>
+                  <Text style={sectionLabel}>Done for {getFirstName(member.name)} this cycle 💛</Text>
+                  {assistsForMember.map((assist) => (
+                    <Text key={assist.id} style={sectionText}>
+                      {getFirstName(assist.assigneeName)}: {assist.description}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+              {assistsByMember.length > 0 ? (
+                <View>
+                  <Text style={sectionLabel}>{getFirstName(member.name)} checked off ✓</Text>
+                  {assistsByMember.map((assist) => (
+                    <Text key={assist.id} style={sectionText}>
+                      {assist.description}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+              <View style={{ borderTopWidth: 1, borderColor: GOLD_SOFT, paddingTop: sz(14, 9), gap: sz(8, 6) }}>
+                <Text style={sectionLabel}>Live note → to-do list</Text>
+                <TextInput
+                  value={liveNoteDraft}
+                  onChangeText={(value) => {
+                    setLiveNoteDraft(value);
+                    if (liveNoteConfirmation) setLiveNoteConfirmation(null);
+                  }}
+                  onSelectionChange={(event) => setLiveNoteCursor(event.nativeEvent.selection.end)}
+                  placeholder={`Jot a to-do — it lands on ${getFirstName(member.name)}'s list. Start a word with @ (like @Charlee, or @all) to send it to them instead.`}
+                  placeholderTextColor={MUTED}
+                  multiline
+                  style={{
+                    borderWidth: 1,
+                    borderColor: GOLD_SOFT,
+                    borderRadius: sz(12, 9),
+                    backgroundColor: CARD,
+                    paddingHorizontal: sz(14, 10),
+                    paddingVertical: sz(10, 8),
+                    fontFamily: 'Lato_400Regular',
+                    fontSize: sz(17, 12),
+                    color: CHARCOAL,
+                    minHeight: sz(64, 48),
+                  }}
+                />
+                {(() => {
+                  const mentionQuery = getActiveMentionQuery(liveNoteDraft, liveNoteCursor);
+                  if (mentionQuery === null) return null;
+                  return (
+                    <MentionSuggestions
+                      suggestions={getMentionSuggestions(mentionQuery, members)}
+                      query={mentionQuery}
+                      active
+                      onSelect={(target) => {
+                        const next = insertMention(liveNoteDraft, liveNoteCursor, target);
+                        setLiveNoteDraft(next.text);
+                        setLiveNoteCursor(next.cursorIndex);
+                      }}
+                    />
+                  );
+                })()}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
+                  <Pressable
+                    onPress={() => handleSaveLiveNote(member)}
+                    disabled={liveNoteSaving || !liveNoteDraft.trim()}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: sz(22, 16),
+                      paddingVertical: sz(9, 7),
+                      borderRadius: 999,
+                      backgroundColor: GOLD,
+                      opacity: pressed || liveNoteSaving || !liveNoteDraft.trim() ? 0.6 : 1,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), color: 'white' }}>
+                      {liveNoteSaving ? 'Saving…' : 'Add to list'}
+                    </Text>
+                  </Pressable>
+                  {liveNoteConfirmation ? (
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP, flexShrink: 1 }}>
+                      {liveNoteConfirmation}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    );
+  };
 
   const WRAPUP_REMINDERS = [
     'Next meeting — second Wednesday of the month',
@@ -2502,6 +2585,9 @@ export default function MeetingHelperScreen() {
             </Pressable>
           </Pressable>
         </Modal>
+
+        {/* HummDinger spotlight — one member's full story, grid stays put */}
+        {renderHummdingerSpotlight()}
 
         {/* Full meeting scheduler — same one as the Meetings page, seeded
             with the tapped calendar day */}
