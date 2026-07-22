@@ -238,7 +238,10 @@ export default function MeetingHelperScreen() {
           .from('wishes')
           .select('id, title, description, status, is_active, user_id, user:profiles!user_id(id, name)')
           .eq('community_id', communityId)
-          .eq('status', 'public');
+          .eq('status', 'public')
+          // Newest first so members with several active wishes lead with this
+          // month's HD on the HummDinger bubbles.
+          .order('created_at', { ascending: false });
         const rows = ((data ?? []) as any[])
           .filter((wish) => wish.is_active !== false)
           .map((wish) => ({
