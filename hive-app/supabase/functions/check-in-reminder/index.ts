@@ -385,7 +385,9 @@ serve(async (req) => {
 
         for (const member of members as MemberProfile[]) {
           try {
-            const hasEmail = !!(RESEND_API_KEY && member.email);
+            // Midpoint stays email-free — the monthly newsletter carries that
+            // nudge (Lucas's call: one email, not two). Push + in-app only.
+            const hasEmail = kind !== 'midpoint' && !!(RESEND_API_KEY && member.email);
             let emailDelivered = false;
 
             // Send email first so we can set email_sent accurately on the row.
