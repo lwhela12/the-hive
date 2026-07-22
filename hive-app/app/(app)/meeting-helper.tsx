@@ -21,6 +21,7 @@ import { fetchHoneyPotLedger } from '../../lib/honeyPot';
 import { getWishQuickTitle } from '../../lib/wishDisplay';
 import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
+import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
 import {
   formatMeetingDate,
   getAttendance,
@@ -167,7 +168,7 @@ export default function MeetingHelperScreen() {
     else if (router.canGoBack()) router.back();
     else router.replace('/meetings');
   };
-  const { communityId, communityRole, profile } = useAuth();
+  const { communityId, communityRole, profile, session } = useAuth();
   const { width, height } = useWindowDimensions();
   const isTV = width >= 1400;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
@@ -230,6 +231,13 @@ export default function MeetingHelperScreen() {
   const [helpFocusDraft, setHelpFocusDraft] = useState('');
   const [helpFocusSaving, setHelpFocusSaving] = useState(false);
   const [helpFocusPosted, setHelpFocusPosted] = useState<string | null>(null);
+
+  // Plan mode: the top cards pick what a calendar tap schedules — a hang
+  // (quick pencil-in) or a full meeting (the same scheduler as the Meetings
+  // page, Meet link and all). The Help card expands instead of scheduling.
+  const [planMode, setPlanMode] = useState<'hang' | 'meeting'>('hang');
+  const [expandedPlanCard, setExpandedPlanCard] = useState<'hang' | 'help' | null>(null);
+  const [meetingSchedulerDate, setMeetingSchedulerDate] = useState<string | null>(null);
 
   // Quick-add: tap a calendar day on Plan the Meet Ups to pencil in a hang.
   const [quickAddDate, setQuickAddDate] = useState<string | null>(null);
@@ -496,6 +504,40 @@ export default function MeetingHelperScreen() {
     }
   };
 
+  // Same wiring as the Meetings page's Schedule button.
+  const handleScheduleMeetingFromDeck = async (data: {
+    title: string;
+    description: string;
+    date: string;
+    time: string;
+    duration: number;
+    attendeeIds: string[];
+    timezone: string;
+    location?: string;
+  }) => {
+    if (!communityId || !session?.access_token) {
+      throw new Error('Not authenticated');
+    }
+    const response = await supabase.functions.invoke('schedule-meeting', {
+      body: { ...data, communityId },
+    });
+    if (response.error) {
+      let errorMsg = 'Failed to schedule meeting';
+      try {
+        const ctx = (response.error as any).context;
+        if (ctx instanceof Response) {
+          const body = await ctx.json();
+          errorMsg = body?.error || errorMsg;
+        }
+      } catch { /* fall through */ }
+      if (errorMsg === 'Failed to schedule meeting') {
+        errorMsg = response.error.message || errorMsg;
+      }
+      throw new Error(errorMsg);
+    }
+    await loadDeckData();
+  };
+
   const handlePostHelpFocus = async () => {
     const focus = helpFocusDraft.trim();
     if (!focus || !communityId || !profile || helpFocusSaving) return;
@@ -705,38 +747,27 @@ export default function MeetingHelperScreen() {
   }, [EmptyNote, notes, sz]);
 
   // ---- Slides ----
-  const renderWelcome = () => (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Image
-        source={hiveLogo}
-        style={{ width: sz(460, 240), height: sz(300, 160) }}
-        contentFit="contain"
-      />
-      <Text
-        style={{
-          fontFamily: 'LibreBaskerville_700Bold',
-          fontSize: sz(66, 32),
-          lineHeight: sz(82, 42),
-          color: CHARCOAL,
-          textAlign: 'center',
-          marginTop: sz(30, 18),
-        }}
-      >
-        {monthName} {meetingYear} Meeting
-      </Text>
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(26, 15), color: GOLD_DEEP, marginTop: sz(18, 10) }}>
-        {meetingLine}
-      </Text>
-      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), color: MUTED, marginTop: sz(14, 8) }}>
-        We'll begin shortly — grab a plate and check in.
-      </Text>
-    </View>
-  );
-
+  // Welcome + Room merged (Lucas: this is the slide up as people arrive, and
+  // the date/time header doubles as the "oops, wrong day!" check).
   const roomColumns = isTV ? 5 : width >= 1024 ? 4 : width >= 760 ? 3 : width >= 480 ? 2 : 1;
   const renderRoom = () => (
     <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap', gap: sz(18, 10), marginBottom: sz(24, 14) }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: sz(24, 12), marginBottom: sz(10, 6) }}>
+        <Image
+          source={hiveLogo}
+          style={{ width: sz(150, 84), height: sz(98, 56) }}
+          contentFit="contain"
+        />
+        <View style={{ flex: 1, minWidth: 240 }}>
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(40, 22), lineHeight: sz(50, 28), color: CHARCOAL }}>
+            {monthName} {meetingYear} Meeting
+          </Text>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 12), color: GOLD_DEEP, marginTop: sz(4, 2) }}>
+            {meetingLine} · grab a plate and check in 🍯
+          </Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap', gap: sz(18, 10), marginBottom: sz(20, 12) }}>
         <View style={{ flex: 1, minWidth: 240 }}>
           <Kicker>Arrivals</Kicker>
           <SlideTitle>Who's in the room</SlideTitle>
@@ -924,9 +955,9 @@ export default function MeetingHelperScreen() {
   );
 
   const MEETUP_COLUMNS = [
-    { title: 'HIVE Meeting', blurb: 'Second Wednesday — dinner, business, and the HummDinger.' },
-    { title: 'HIVE Hang', blurb: 'Casual get-togethers between meetings. Anyone can host.' },
-    { title: 'HIVE Help', blurb: 'Fifteen-minute favors — small asks, quick wins.' },
+    { key: 'meeting' as const, title: 'HIVE Meeting', blurb: 'Second Wednesday — dinner, business, and the HummDinger.' },
+    { key: 'hang' as const, title: 'HIVE Hang', blurb: 'Casual get-togethers between meetings. Anyone can host.' },
+    { key: 'help' as const, title: 'HIVE Help', blurb: 'Fifteen-minute favors — small asks, quick wins.' },
   ];
 
   // Plan the Meet Ups: how we gather across the top, then a classic two-month
@@ -940,6 +971,32 @@ export default function MeetingHelperScreen() {
       new Date(today.getFullYear(), today.getMonth(), 1),
       new Date(today.getFullYear(), today.getMonth() + 1, 1),
     ];
+
+    // Check-in voices for the expandable Hang/Help cards — the hangs answer
+    // stores "Went to: …" on line one, thoughts after.
+    const recapNote = (raw: string) => {
+      const lines = raw.split('\n');
+      return (lines[0]?.startsWith('Went to: ') ? lines.slice(1).join('\n') : raw).trim();
+    };
+    const voicesFor = (key: string, clean: (raw: string) => string = (raw) => raw.trim()) =>
+      memberOrder
+        .map((member) => ({
+          id: member.id,
+          name: getFirstName(member.name),
+          text: clean(getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, key)),
+        }))
+        .filter((voice) => !!voice.text);
+    const helpVoices = voicesFor('q_hive_help_recap');
+    const hangVoices = voicesFor('q_hangs_recap', recapNote);
+
+    const nextMeetingEvent = events.find(
+      (event) => event.event_type === 'meeting' && event.event_date > todayIso
+    );
+    const nextFocusMonthLabel = (
+      nextMeetingEvent
+        ? new Date(`${nextMeetingEvent.event_date}T12:00:00`)
+        : new Date(today.getFullYear(), today.getMonth() + 1, 1)
+    ).toLocaleDateString('en-US', { month: 'long' });
 
     const eventsOnDay = (dayIso: string) =>
       events.filter((event) => event.event_date <= dayIso && dayIso <= (event.end_date || event.event_date));
@@ -1039,6 +1096,10 @@ export default function MeetingHelperScreen() {
                       key={dayIso}
                       disabled={isPast}
                       onPress={() => {
+                        if (planMode === 'meeting') {
+                          setMeetingSchedulerDate(dayIso);
+                          return;
+                        }
                         setQuickAddDate(dayIso);
                         setQuickAddTitle('');
                         setQuickAddTime('');
@@ -1124,55 +1185,84 @@ export default function MeetingHelperScreen() {
           <EditPill noteKey="meetups" />
         </View>
 
-        {/* Top: the three ways we gather, side by side */}
+        {/* Top: the three ways we gather — now the controls. Meeting/Hang pick
+            what a calendar tap schedules; Help expands with the focus + the
+            check-in voices. */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(16, 8) }}>
-          {MEETUP_COLUMNS.map((column) => (
-            <View
-              key={column.title}
-              style={{
-                flex: 1,
-                minWidth: sz(260, 150),
-                backgroundColor: CARD,
-                borderWidth: 1,
-                borderColor: GOLD_SOFT,
-                borderRadius: sz(18, 14),
-                paddingHorizontal: sz(22, 14),
-                paddingVertical: sz(14, 10),
-              }}
-            >
-              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(24, 16), color: GOLD_DEEP }}>
-                {column.title}
-              </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 18), color: MUTED, marginTop: sz(4, 3) }}>
-                {column.blurb}
-              </Text>
-            </View>
-          ))}
+          {MEETUP_COLUMNS.map((column) => {
+            const isScheduleCard = column.key !== 'help';
+            const isSelected = isScheduleCard ? planMode === column.key : expandedPlanCard === 'help';
+            return (
+              <Pressable
+                key={column.title}
+                onPress={() => {
+                  if (column.key === 'meeting') {
+                    setPlanMode('meeting');
+                    setExpandedPlanCard(null);
+                  } else if (column.key === 'hang') {
+                    setPlanMode('hang');
+                    setExpandedPlanCard((card) => (card === 'hang' ? null : 'hang'));
+                  } else {
+                    setExpandedPlanCard((card) => (card === 'help' ? null : 'help'));
+                  }
+                }}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  minWidth: sz(260, 150),
+                  backgroundColor: isSelected ? 'rgba(222,193,129,0.18)' : CARD,
+                  borderWidth: isSelected ? 2 : 1,
+                  borderColor: isSelected ? GOLD : GOLD_SOFT,
+                  borderRadius: sz(18, 14),
+                  paddingHorizontal: sz(22, 14),
+                  paddingVertical: sz(14, 10),
+                  opacity: pressed ? 0.8 : 1,
+                })}
+              >
+                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(24, 16), color: GOLD_DEEP }}>
+                  {column.title}
+                </Text>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 18), color: MUTED, marginTop: sz(4, 3) }}>
+                  {column.blurb}
+                </Text>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: isSelected ? GOLD_DEEP : 'rgba(154,128,96,0.55)', marginTop: sz(6, 4) }}>
+                  {column.key === 'meeting'
+                    ? isSelected ? '● tap a day below to schedule the meeting' : '○ select, then tap a day to schedule'
+                    : column.key === 'hang'
+                      ? planMode === 'hang' ? '● tap a day below to pencil one in · tap for ideas' : '○ select, then tap a day to pencil in'
+                      : expandedPlanCard === 'help' ? '▾ focus & voices from the check-ins' : '▸ tap for focus & voices from the check-ins'}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
-        {/* Middle: this month and next, side by side on the TV */}
-        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(28, 14), marginTop: sz(22, 12) }}>
-          {monthStarts.map(renderMonth)}
-        </View>
-        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: MUTED, marginTop: sz(10, 7) }}>
-          🐝 meeting · 🎂 birthday · little faces → = who's away · 📌 event — tap any open day to pencil in a hang right here.
-        </Text>
-
-        {/* Bottom: recap → decide → schedule, for Hangs and for Help.
-            "Last month was this, this and this — what did we think? What
-            next? BAM, schedule." */}
-        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(36, 16), marginTop: sz(16, 10) }}>
-          <View style={{ flex: isTV ? 1 : undefined, gap: sz(8, 6) }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
-              🎉 HIVE Hang — last cycle
-            </Text>
-            {pastHangs.length === 0 ? (
-              <EmptyNote>No hangs this cycle — let's fix that tonight.</EmptyNote>
-            ) : (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(10, 7) }}>
-                {pastHangs.map((hang) => (
+        {/* HIVE Hang expansion: idea fuel — the hang board + what people said
+            in their check-ins. Writers days, dooms days — it all counts. */}
+        {expandedPlanCard === 'hang' ? (
+          <View
+            style={{
+              marginTop: sz(14, 8),
+              backgroundColor: CARD,
+              borderWidth: 1,
+              borderColor: GOLD_SOFT,
+              borderRadius: sz(18, 14),
+              paddingHorizontal: sz(22, 14),
+              paddingVertical: sz(16, 10),
+              gap: sz(10, 7),
+            }}
+          >
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: sz(10, 7) }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
+                💡 Ideas from the board
+              </Text>
+              {hangIdeas.length === 0 ? (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
+                  none yet — first to post picks the venue
+                </Text>
+              ) : (
+                hangIdeas.map((idea) => (
                   <View
-                    key={hang.id}
+                    key={idea.id}
                     style={{
                       backgroundColor: 'rgba(222,193,129,0.18)',
                       borderRadius: 999,
@@ -1180,54 +1270,52 @@ export default function MeetingHelperScreen() {
                       paddingVertical: sz(8, 6),
                     }}
                   >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 12), color: GOLD_DEEP }}>
-                      {hang.title}
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: GOLD_DEEP }}>
+                      {(idea.title ?? 'Untitled idea').trim() || 'Untitled idea'}
                     </Text>
                   </View>
-                ))}
-              </View>
-            )}
-            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(15, 10), color: MUTED }}>
-              What did we think? What's next? Tap a day above — bam, scheduled.
-            </Text>
-            <View style={{ marginTop: sz(6, 4) }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: MUTED, marginBottom: sz(6, 4) }}>
-                Fresh ideas from the board
-              </Text>
-              {hangIdeas.length === 0 ? (
-                <EmptyNote>No new ideas on the hang board yet — first one to post picks the venue.</EmptyNote>
-              ) : (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(10, 7) }}>
-                  {hangIdeas.map((idea) => (
-                    <View
-                      key={idea.id}
-                      style={{
-                        borderWidth: 1,
-                        borderColor: GOLD_SOFT,
-                        borderRadius: 999,
-                        paddingHorizontal: sz(18, 12),
-                        paddingVertical: sz(8, 6),
-                      }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: GOLD_DEEP }}>
-                        {(idea.title ?? 'Untitled idea').trim() || 'Untitled idea'}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+                ))
               )}
             </View>
-          </View>
-
-          <View style={{ flex: isTV ? 1 : undefined, gap: sz(8, 6) }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
-              🤝 HIVE Help — last cycle
+            {hangVoices.length > 0 ? (
+              <View style={{ gap: sz(4, 3) }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
+                  🗣️ From the check-ins
+                </Text>
+                {hangVoices.map((voice) => (
+                  <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
+                    {voice.text}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
+              Pick one, tap a day on the calendar — writers days and project days count too 🐝
             </Text>
-            {helperPosts.length === 0 ? (
-              <EmptyNote>No HIVE Help thread this cycle yet.</EmptyNote>
-            ) : (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(10, 7) }}>
-                {helperPosts.map((post) => (
+          </View>
+        ) : null}
+
+        {/* HIVE Help expansion: month-by-month focus + what everyone said in
+            their check-ins — absent voices still get heard in the room. */}
+        {expandedPlanCard === 'help' ? (
+          <View
+            style={{
+              marginTop: sz(14, 8),
+              backgroundColor: CARD,
+              borderWidth: 1,
+              borderColor: GOLD_SOFT,
+              borderRadius: sz(18, 14),
+              paddingHorizontal: sz(22, 14),
+              paddingVertical: sz(16, 10),
+              gap: sz(12, 8),
+            }}
+          >
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: sz(10, 7) }}>
+              {helperPosts.length === 0 ? (
+                <EmptyNote>No HIVE Help thread this cycle yet.</EmptyNote>
+              ) : (
+                helperPosts.map((post) => (
                   <View
                     key={post.id}
                     style={{
@@ -1241,17 +1329,17 @@ export default function MeetingHelperScreen() {
                       {(post.title ?? 'A quiet favor').trim() || 'A quiet favor'}
                     </Text>
                   </View>
-                ))}
-              </View>
-            )}
-            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(15, 10), color: MUTED }}>
-              How'd it go? What should we focus on next?
-            </Text>
+                ))
+              )}
+            </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(8, 6) }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 12), color: CHARCOAL }}>
+                {nextFocusMonthLabel}:
+              </Text>
               <TextInput
                 value={helpFocusDraft}
                 onChangeText={setHelpFocusDraft}
-                placeholder="Next HIVE Help focus (e.g. Shelter donation)"
+                placeholder="next focus (e.g. Shelter donation)"
                 placeholderTextColor={MUTED}
                 onSubmitEditing={handlePostHelpFocus}
                 style={{
@@ -1259,7 +1347,7 @@ export default function MeetingHelperScreen() {
                   borderWidth: 1,
                   borderColor: GOLD_SOFT,
                   borderRadius: sz(12, 9),
-                  backgroundColor: CARD,
+                  backgroundColor: PAPER,
                   paddingHorizontal: sz(14, 10),
                   paddingVertical: sz(9, 7),
                   fontFamily: 'Lato_400Regular',
@@ -1288,20 +1376,83 @@ export default function MeetingHelperScreen() {
                 Posted to the boards: "{helpFocusPosted}" ✓
               </Text>
             ) : null}
-            <View style={{ marginTop: sz(6, 4) }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 6), marginBottom: sz(6, 4) }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: MUTED }}>
-                  This month's plans
+            {helpVoices.length > 0 ? (
+              <View style={{ gap: sz(4, 3) }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginTop: sz(4, 3) }}>
+                  🗣️ Voices from the check-ins
                 </Text>
-                <EditPill noteKey="meetups" />
+                {helpVoices.map((voice) => (
+                  <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
+                    {voice.text}
+                  </Text>
+                ))}
               </View>
-              <NoteBody
-                noteKey="meetups"
-                emptyText="No meet-up plans written down yet — hatch some tonight."
-              />
+            ) : (
+              <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
+                No HIVE Help thoughts in the check-ins yet — they'll gather here as people fill theirs out.
+              </Text>
+            )}
+          </View>
+        ) : null}
+
+        {/* Middle: this month and next, side by side on the TV */}
+        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(28, 14), marginTop: sz(22, 12) }}>
+          {monthStarts.map(renderMonth)}
+        </View>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: MUTED, marginTop: sz(10, 7) }}>
+          🐝 meeting · 🎂 birthday · little faces → = who's away · 📌 event — tap any open day to pencil in a hang right here.
+        </Text>
+
+        {/* Bottom: last cycle's hangs (the "what did we think?" anchor) and
+            the running plans note. Everything else lives in the cards above. */}
+        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(36, 16), marginTop: sz(16, 10) }}>
+          <View style={{ flex: isTV ? 1 : undefined, gap: sz(8, 6) }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD }}>
+              🎉 Last cycle's hangs
+            </Text>
+            {pastHangs.length === 0 ? (
+              <EmptyNote>No hangs this cycle — let's fix that tonight.</EmptyNote>
+            ) : (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(10, 7) }}>
+                {pastHangs.map((hang) => (
+                  <View
+                    key={hang.id}
+                    style={{
+                      backgroundColor: 'rgba(222,193,129,0.18)',
+                      borderRadius: 999,
+                      paddingHorizontal: sz(18, 12),
+                      paddingVertical: sz(8, 6),
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 12), color: GOLD_DEEP }}>
+                      {hang.title}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(15, 10), color: MUTED }}>
+              What did we think? What's next? Tap a day above — bam, scheduled.
+            </Text>
+          </View>
+
+          <View style={{ flex: isTV ? 1 : undefined }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 6), marginBottom: sz(6, 4) }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: MUTED }}>
+                This month's plans
+              </Text>
+              <EditPill noteKey="meetups" />
             </View>
+            <NoteBody
+              noteKey="meetups"
+              emptyText="No meet-up plans written down yet — hatch some tonight."
+            />
           </View>
         </View>
+
+        {/* Breathing room so the last row scrolls clear of the footer. */}
+        <View style={{ height: sz(90, 64) }} />
       </View>
     );
   };
@@ -1678,7 +1829,6 @@ export default function MeetingHelperScreen() {
   );
 
   const slides = [
-    { key: 'welcome', render: renderWelcome },
     { key: 'room', render: renderRoom },
     { key: 'outline', render: renderOutline },
     { key: 'news', render: renderNews },
@@ -2352,6 +2502,19 @@ export default function MeetingHelperScreen() {
             </Pressable>
           </Pressable>
         </Modal>
+
+        {/* Full meeting scheduler — same one as the Meetings page, seeded
+            with the tapped calendar day */}
+        <ScheduleMeetingModal
+          visible={!!meetingSchedulerDate}
+          onClose={() => setMeetingSchedulerDate(null)}
+          communityId={communityId ?? null}
+          initialDate={meetingSchedulerDate}
+          onSchedule={async (data) => {
+            await handleScheduleMeetingFromDeck(data);
+            setMeetingSchedulerDate(null);
+          }}
+        />
 
         {/* Hard-out editor — "anyone got a hard out tonight?" */}
         <Modal

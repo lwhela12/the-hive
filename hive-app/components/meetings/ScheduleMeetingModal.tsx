@@ -27,6 +27,9 @@ interface ScheduleMeetingModalProps {
   visible: boolean;
   onClose: () => void;
   communityId: string | null;
+  // Seed the date picker (YYYY-MM-DD) — used when a calendar day is tapped
+  // in the Meeting Helper deck.
+  initialDate?: string | null;
   onSchedule: (data: {
     title: string;
     description: string;
@@ -43,6 +46,7 @@ export function ScheduleMeetingModal({
   visible,
   onClose,
   communityId,
+  initialDate,
   onSchedule,
 }: ScheduleMeetingModalProps) {
   const [title, setTitle] = useState('HIVE Meeting');
@@ -68,6 +72,13 @@ export function ScheduleMeetingModal({
       fetchMembers();
     }
   }, [visible, communityId]);
+
+  // Seed the picker with the tapped calendar day (5:30pm, the usual start).
+  useEffect(() => {
+    if (!visible || !initialDate) return;
+    const seeded = new Date(`${initialDate}T17:30:00`);
+    if (!Number.isNaN(seeded.getTime())) setDate(seeded);
+  }, [visible, initialDate]);
 
   const fetchMembers = async () => {
     if (!communityId) return;
