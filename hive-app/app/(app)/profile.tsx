@@ -2357,6 +2357,50 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Email reminders — the unsubscribe lever for app emails */}
+        {!immersiveSkillsGarden && (
+          <View className="mb-6">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
+              Email Reminders
+            </Text>
+            <View className="bg-white rounded-xl shadow-sm p-4 flex-row items-center justify-between">
+              <View className="flex-1 pr-3">
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                  Check-in & meeting emails
+                </Text>
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
+                  {profile?.email_reminders_enabled !== false
+                    ? 'On — a couple of gentle emails per month'
+                    : "Off — you'll still see in-app notes and pushes"}
+                </Text>
+              </View>
+              <Pressable
+                onPress={async () => {
+                  if (!profile) return;
+                  const next = profile.email_reminders_enabled === false;
+                  const { error } = await (supabase as any)
+                    .from('profiles')
+                    .update({ email_reminders_enabled: next })
+                    .eq('id', profile.id);
+                  if (error) {
+                    Alert.alert('Error', 'Could not update your email preference. Please try again.');
+                    return;
+                  }
+                  await refreshProfile();
+                }}
+                className={`px-4 py-2 rounded-full active:opacity-80 ${profile?.email_reminders_enabled !== false ? 'bg-gold' : 'bg-gray-200'}`}
+              >
+                <Text
+                  style={{ fontFamily: 'Lato_700Bold' }}
+                  className={profile?.email_reminders_enabled !== false ? 'text-white text-sm' : 'text-gray-600 text-sm'}
+                >
+                  {profile?.email_reminders_enabled !== false ? 'On' : 'Off'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         {/* App Feedback */}
         {!immersiveSkillsGarden && (
           <View className="mb-6">

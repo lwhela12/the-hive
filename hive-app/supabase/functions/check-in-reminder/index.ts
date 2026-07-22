@@ -28,6 +28,7 @@ interface MemberProfile {
   name: string | null;
   email: string | null;
   push_token: string | null;
+  email_reminders_enabled?: boolean | null;
 }
 
 // Copied from meeting-reminder/index.ts — sends an Expo push notification.
@@ -351,7 +352,7 @@ serve(async (req) => {
 
         const { data: members, error: profilesError } = await supabaseAdmin
           .from('profiles')
-          .select('id, name, email, push_token')
+          .select('id, name, email, push_token, email_reminders_enabled')
           .in('id', memberIds);
 
         if (profilesError || !members?.length) {
@@ -361,6 +362,54 @@ serve(async (req) => {
         }
 
         const { month, day } = formatMeetingDate(dueDateOnly);
+
+        // Midpoint doubles as newsletter season: open the "{Month} Newsletter"
+        // thread on Announcements so shout-outs and reminders ("come to my
+        // lemonade stand Tuesday!") land in one place Nat can write from.
+        let newsletterThread: string | null = null;
+        if (kind === 'midpoint') {
+          try {
+            const { data: boards } = await supabaseAdmin
+              .from('board_categories')
+              .select('id, name, status')
+              .eq('community_id', survey.community_id)
+              .ilike('name', '%announcement%')
+              .limit(1);
+            const boardId = boards?.[0]?.id;
+            if (boardId) {
+              const threadTitle = `${month} Newsletter — shout-outs & mentions 📣`;
+              const { data: existingThread } = await supabaseAdmin
+                .from('board_posts')
+                .select('id')
+                .eq('category_id', boardId)
+                .eq('title', threadTitle)
+                .limit(1);
+              if (!existingThread?.length) {
+                const { data: adminRows } = await supabaseAdmin
+                  .from('community_memberships')
+                  .select('user_id')
+                  .eq('community_id', survey.community_id)
+                  .eq('role', 'admin')
+                  .limit(1);
+                const authorId = adminRows?.[0]?.user_id;
+                if (authorId) {
+                  await supabaseAdmin.from('board_posts').insert({
+                    community_id: survey.community_id,
+                    category_id: boardId,
+                    author_id: authorId,
+                    title: threadTitle,
+                    content:
+                      "The newsletter's brewing! 🗞️ Want a shout-out, a plug, or a reminder in it — \"come to my lemonade stand Tuesday!\"-style? Drop it in this thread and it goes straight into the newsletter.",
+                  });
+                }
+              }
+              newsletterThread = threadTitle;
+            }
+          } catch (threadError) {
+            console.error('Newsletter thread creation failed (non-blocking):', threadError);
+          }
+        }
+
         const notificationTitle =
           kind === 'day_of'
             ? '🐝 Meeting tonight — last call to check in'
@@ -371,7 +420,7 @@ serve(async (req) => {
           kind === 'day_of'
             ? `Tonight's the ${month} ${day} meeting and your check-in isn't in yet — it takes ~2 minutes and lights you up on the Arrival Board.`
             : kind === 'midpoint'
-              ? `Halfway to the ${month} ${day} meeting — peek at your to-do list, check off what you've finished, and jot progress while it's fresh.`
+              ? `The newsletter's brewing 🗞️ — want a shout-out or reminder in it? Drop it in the "${newsletterThread ?? `${month} Newsletter`}" thread on the boards. And while you're in: peek at your to-do list and check off what's done.`
               : `Take 5 minutes before the ${month} meeting — update your HDs and check in. ` +
                 `It shows up on the Arrival Board and helps set the room.`;
         const emailSubject =
@@ -387,7 +436,12 @@ serve(async (req) => {
           try {
             // Midpoint stays email-free — the monthly newsletter carries that
             // nudge (Lucas's call: one email, not two). Push + in-app only.
-            const hasEmail = kind !== 'midpoint' && !!(RESEND_API_KEY && member.email);
+            // Members who flipped off Email Reminders in their profile never
+            // get app emails at all.
+            const hasEmail =
+              kind !== 'midpoint' &&
+              member.email_reminders_enabled !== false &&
+              !!(RESEND_API_KEY && member.email);
             let emailDelivered = false;
 
             // Send email first so we can set email_sent accurately on the row.

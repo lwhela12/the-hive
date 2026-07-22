@@ -110,6 +110,7 @@ export interface Profile extends Record<string, unknown> {
   google_refresh_token?: string;
   avatar_url?: string;
   push_token?: string;
+  email_reminders_enabled?: boolean | null;
   onboarded_at?: string;
   current_community_id?: string;
   bio?: string | null;
