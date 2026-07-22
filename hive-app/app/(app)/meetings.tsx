@@ -33,12 +33,28 @@ interface NotesImportFile {
   fileBase64: string;
 }
 
+// Voice memos go straight to the meeting-recordings bucket (way too big to
+// base64 into the edge function) — the form only carries their storage paths.
+interface NotesImportAudioFile {
+  fileName: string;
+  storagePath: string;
+}
+
 type NotesImportForm = {
   title: string;
   date: string;
   notes: string;
   linkedEventId: string | null;
   files: NotesImportFile[];
+  audioFiles: NotesImportAudioFile[];
+};
+
+const AUDIO_FILE_EXTENSIONS = ['m4a', 'mp3', 'wav', 'aac', 'ogg', 'flac', 'caf', 'aiff', 'amr'];
+
+const isAudioFileName = (fileName?: string | null, mimeType?: string | null) => {
+  if (mimeType?.startsWith('audio/')) return true;
+  const extension = (fileName ?? '').split('.').pop()?.toLowerCase() ?? '';
+  return AUDIO_FILE_EXTENSIONS.includes(extension);
 };
 
 type EventEditForm = {
@@ -207,7 +223,10 @@ export default function MeetingsScreen() {
     notes: '',
     linkedEventId: null as string | null,
     files: [] as NotesImportFile[],
+    audioFiles: [] as NotesImportAudioFile[],
   });
+  const [uploadingAudioCount, setUploadingAudioCount] = useState(0);
+  const [notesDropActive, setNotesDropActive] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [editForm, setEditForm] = useState<EventEditForm>({
@@ -251,6 +270,7 @@ export default function MeetingsScreen() {
       notes: '',
       linkedEventId: event?.id ?? null,
       files: [],
+      audioFiles: [],
     };
   };
 
@@ -317,7 +337,8 @@ export default function MeetingsScreen() {
     const savedDraft = readMeetingFormDraft<NotesImportForm>(notesImportDraftKey);
     if (!savedDraft) return;
 
-    setNotesImportForm(savedDraft.form);
+    // Older drafts predate audioFiles — normalize so .map/.length never crash.
+    setNotesImportForm({ ...savedDraft.form, audioFiles: savedDraft.form.audioFiles ?? [] });
     if (savedDraft.active) {
       setShowNotesImport(true);
     }
@@ -329,6 +350,7 @@ export default function MeetingsScreen() {
     const hasDraftContent =
       notesImportForm.notes.trim().length > 0 ||
       notesImportForm.files.length > 0 ||
+      notesImportForm.audioFiles.length > 0 ||
       notesImportForm.title.trim() !== 'HIVE Meeting';
 
     if (!showNotesImport && !hasDraftContent) {
@@ -670,41 +692,207 @@ export default function MeetingsScreen() {
     });
   };
 
-  const handlePickNotesFile = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'text/plain',
-          'text/markdown',
-        ],
-        copyToCacheDirectory: true,
-        multiple: false,
-        base64: Platform.OS === 'web',
-      });
+  // Voice memos upload straight to storage; the import request only carries
+  // their paths (an hour-long .m4a is far past the edge function's base64 cap).
+  const uploadAudioToStorage = async (input: {
+    fileName: string;
+    mimeType: string | null;
+    webFile?: File | null;
+    uri?: string | null;
+  }): Promise<NotesImportAudioFile> => {
+    if (!communityId) throw new Error('No active community selected.');
+    const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]+/g, '_') || 'voice-memo.m4a';
+    const storagePath = `${communityId}/imports/${Date.now()}-${safeName}`;
+    const contentType = input.mimeType || 'audio/mp4';
 
-      if (result.canceled || !result.assets?.[0]) return;
+    if (Platform.OS === 'web' && input.webFile) {
+      const { error } = await supabase.storage
+        .from('meeting-recordings')
+        .upload(storagePath, input.webFile, { contentType, upsert: false });
+      if (error) throw error;
+      return { fileName: input.fileName, storagePath };
+    }
 
-      const asset = result.assets[0];
-      const fileBase64 = await readAssetAsBase64(asset);
+    if (!input.uri) throw new Error('Missing audio file path.');
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+    const accessToken = session?.access_token;
+    if (!supabaseUrl || !anonKey || !accessToken) throw new Error('Not signed in.');
 
-      setNotesImportForm((form) => ({
-        ...form,
-        files: [
-          ...form.files,
-          {
-            fileName: asset.name,
-            fileMimeType: asset.mimeType ?? null,
-            fileBase64,
-          },
-        ],
-      }));
-    } catch (error) {
-      console.error('Error picking meeting notes file:', error);
-      Alert.alert('File Not Imported', 'Could not read that notes file. Try a .docx, .pdf, .txt, or paste the notes.');
+    // Streams from disk — never loads the whole recording into memory.
+    const result = await FileSystem.uploadAsync(
+      `${supabaseUrl}/storage/v1/object/meeting-recordings/${storagePath}`,
+      input.uri,
+      {
+        httpMethod: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          apikey: anonKey,
+          'Content-Type': contentType,
+        },
+      }
+    );
+    if (result.status < 200 || result.status >= 300) {
+      throw new Error(`Upload failed (${result.status}).`);
+    }
+    return { fileName: input.fileName, storagePath };
+  };
+
+  const addAudioFiles = async (
+    inputs: { fileName: string; mimeType: string | null; webFile?: File | null; uri?: string | null }[]
+  ) => {
+    if (inputs.length === 0) return;
+    setUploadingAudioCount((count) => count + inputs.length);
+    for (const input of inputs) {
+      try {
+        const uploaded = await uploadAudioToStorage(input);
+        setNotesImportForm((form) => ({ ...form, audioFiles: [...form.audioFiles, uploaded] }));
+      } catch (error) {
+        console.error('Voice memo upload failed:', error);
+        Alert.alert('Upload Failed', `Could not upload ${input.fileName}. Please try again.`);
+      } finally {
+        setUploadingAudioCount((count) => Math.max(0, count - 1));
+      }
     }
   };
+
+  const removeAudioFile = (fileIndex: number) => {
+    const target = notesImportForm.audioFiles[fileIndex];
+    setNotesImportForm((form) => ({
+      ...form,
+      audioFiles: form.audioFiles.filter((_, index) => index !== fileIndex),
+    }));
+    if (target) {
+      supabase.storage.from('meeting-recordings').remove([target.storagePath]).then(undefined, () => {});
+    }
+  };
+
+  const handlePickNotesFile = async (audioOnly = false) => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: audioOnly
+          ? ['audio/*', 'audio/mp4', 'audio/x-m4a', 'audio/mpeg', 'audio/wav']
+          : [
+              'application/pdf',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              'text/plain',
+              'text/markdown',
+              'audio/*',
+              'audio/mp4',
+              'audio/x-m4a',
+            ],
+        copyToCacheDirectory: true,
+        multiple: true,
+        base64: false,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const audioAssets = result.assets.filter((asset) => isAudioFileName(asset.name, asset.mimeType));
+      const documentAssets = result.assets.filter((asset) => !isAudioFileName(asset.name, asset.mimeType));
+
+      for (const asset of documentAssets) {
+        const fileBase64 = await readAssetAsBase64(asset);
+        setNotesImportForm((form) => ({
+          ...form,
+          files: [
+            ...form.files,
+            {
+              fileName: asset.name,
+              fileMimeType: asset.mimeType ?? null,
+              fileBase64,
+            },
+          ],
+        }));
+      }
+
+      await addAudioFiles(audioAssets.map((asset) => ({
+        fileName: asset.name,
+        mimeType: asset.mimeType ?? null,
+        webFile: Platform.OS === 'web' ? asset.file ?? null : null,
+        uri: asset.uri,
+      })));
+    } catch (error) {
+      console.error('Error picking meeting notes file:', error);
+      Alert.alert('File Not Imported', 'Could not read that file. Try a voice memo (.m4a), .docx, .pdf, .txt, or paste the notes.');
+    }
+  };
+
+  const handleDroppedNotesFiles = async (dropped: File[]) => {
+    const audioDrops = dropped.filter((file) => isAudioFileName(file.name, file.type));
+    const documentDrops = dropped.filter((file) => !isAudioFileName(file.name, file.type));
+
+    for (const file of documentDrops) {
+      const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+      const supported =
+        file.type.startsWith('image/') ||
+        file.type === 'application/pdf' ||
+        file.type.startsWith('text/') ||
+        ['pdf', 'docx', 'txt', 'md', 'jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension);
+      if (!supported) {
+        Alert.alert('File Not Imported', `${file.name} isn't a supported type. Drop voice memos, .docx, .pdf, .txt, or images.`);
+        continue;
+      }
+      try {
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const value = typeof reader.result === 'string' ? reader.result : '';
+            resolve(value.includes(',') ? value.split(',').pop() ?? value : value);
+          };
+          reader.onerror = () => reject(reader.error ?? new Error('Could not read the dropped file.'));
+          reader.readAsDataURL(file);
+        });
+        setNotesImportForm((form) => ({
+          ...form,
+          files: [...form.files, { fileName: file.name, fileMimeType: file.type || null, fileBase64 }],
+        }));
+      } catch (error) {
+        console.error('Error reading dropped file:', error);
+        Alert.alert('File Not Imported', `Could not read ${file.name}.`);
+      }
+    }
+
+    await addAudioFiles(audioDrops.map((file) => ({
+      fileName: file.name,
+      mimeType: file.type || null,
+      webFile: file,
+    })));
+  };
+
+  // While the import sheet is open on web, the whole page is a drop target —
+  // drag voice memos (or notes files) from Finder straight in.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !showNotesImport || typeof document === 'undefined') return;
+
+    const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
+    const onDragOver = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      setNotesDropActive(true);
+    };
+    const onDragLeave = (event: DragEvent) => {
+      if ((event as unknown as { relatedTarget: unknown }).relatedTarget) return;
+      setNotesDropActive(false);
+    };
+    const onDrop = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      setNotesDropActive(false);
+      void handleDroppedNotesFiles(Array.from(event.dataTransfer?.files ?? []));
+    };
+
+    document.addEventListener('dragover', onDragOver);
+    document.addEventListener('dragleave', onDragLeave);
+    document.addEventListener('drop', onDrop);
+    return () => {
+      document.removeEventListener('dragover', onDragOver);
+      document.removeEventListener('dragleave', onDragLeave);
+      document.removeEventListener('drop', onDrop);
+      setNotesDropActive(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- drop handlers use functional state updates
+  }, [showNotesImport, communityId, session?.access_token]);
 
   const addNotesPhotos = async () => {
     try {
@@ -799,6 +987,7 @@ export default function MeetingsScreen() {
     const title = normalizeHiveBrandText(notesImportForm.title).trim() || 'HIVE Meeting';
     const date = parseAmericanDate(notesImportForm.date) ?? notesImportForm.date;
     const hasFile = notesImportForm.files.length > 0;
+    const hasAudio = notesImportForm.audioFiles.length > 0;
     const hasPastedNotes = notes.length >= 40;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -806,8 +995,13 @@ export default function MeetingsScreen() {
       return;
     }
 
-    if (!hasPastedNotes && !hasFile) {
-      Alert.alert('Notes Needed', 'Paste the Gemini notes or upload a .docx, .pdf, or text file.');
+    if (uploadingAudioCount > 0) {
+      Alert.alert('Still Uploading', 'The voice memos are still uploading — give it a moment, then try again.');
+      return;
+    }
+
+    if (!hasPastedNotes && !hasFile && !hasAudio) {
+      Alert.alert('Notes Needed', 'Drop in the voice memos, paste the notes, or upload a .docx, .pdf, or text file.');
       return;
     }
 
@@ -821,6 +1015,7 @@ export default function MeetingsScreen() {
           notesText: hasPastedNotes ? notes : undefined,
           linkedEventId: notesImportForm.linkedEventId,
           files: notesImportForm.files,
+          audioFiles: notesImportForm.audioFiles,
         },
       });
 
@@ -834,12 +1029,15 @@ export default function MeetingsScreen() {
         notes: '',
         linkedEventId: null,
         files: [],
+        audioFiles: [],
       });
       await fetchMeetings();
 
       Alert.alert(
-        'Notes Imported',
-        'Saved the notes in Meeting Summaries. Open the summary and tap Apply Notes when you are ready for Clive to create tasks, events, and board posts.'
+        hasAudio ? 'Transcribing' : 'Notes Imported',
+        hasAudio
+          ? 'The voice memos are transcribing now — the full transcript lands in Meeting Summaries in a few minutes. Then open it and tap Apply Notes when you are ready for Clive.'
+          : 'Saved the notes in Meeting Summaries. Open the summary and tap Apply Notes when you are ready for Clive to create tasks, events, and board posts.'
       );
     } catch (error) {
       console.error('Error importing meeting notes:', error);
@@ -1008,28 +1206,51 @@ export default function MeetingsScreen() {
             </Pressable>
           </View>
 
-          {/* Arrival Board — live check-in view for everyone on meeting day */}
-          <Pressable
-            onPress={() => router.push({ pathname: '/arrival-board', params: { from: 'meetings' } })}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-              alignSelf: 'flex-start',
-              backgroundColor: 'rgba(255,255,255,0.08)',
-              borderRadius: 999,
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              marginTop: 12,
-              opacity: pressed ? 0.75 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 14 }}>📺</Text>
-            <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
-              Arrival Board — who's in the room
-            </Text>
-          </Pressable>
+          {/* Meeting-night companions — open to everyone so the room can
+              follow along on their own devices instead of one shared screen. */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+            {/* Arrival Board — live check-in view for everyone on meeting day */}
+            <Pressable
+              onPress={() => router.push({ pathname: '/arrival-board', params: { from: 'meetings' } })}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                backgroundColor: 'rgba(255,255,255,0.08)',
+                borderRadius: 999,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 14 }}>📺</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
+                Arrival Board — who's in the room
+              </Text>
+            </Pressable>
+
+            {/* Meeting Helper — the live deck, follow along from any seat */}
+            <Pressable
+              onPress={() => router.push({ pathname: '/meeting-helper', params: { from: 'meetings' } })}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                backgroundColor: 'rgba(255,255,255,0.08)',
+                borderRadius: 999,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 14 }}>🎞️</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
+                Meeting Helper — follow the deck live
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Upcoming Meetings */}
@@ -1286,6 +1507,50 @@ export default function MeetingsScreen() {
               </View>
 
               <View className="mb-4">
+                <Text className="text-sm font-medium text-gray-700 mb-1">Voice Memos</Text>
+                {notesDropActive && (
+                  <View className="border-2 border-dashed border-honey-400 bg-honey-50 rounded-lg p-4 mb-3">
+                    <Text className="text-honey-900 font-semibold text-center">
+                      Drop the voice memos (or notes files) here 🎙️
+                    </Text>
+                  </View>
+                )}
+                {notesImportForm.audioFiles.length > 0 && (
+                  <View className="border border-honey-200 bg-honey-50 rounded-lg p-3 mb-3">
+                    {notesImportForm.audioFiles.map((file, index) => (
+                      <View key={`${file.storagePath}`} className={index > 0 ? 'mt-3 pt-3 border-t border-honey-200' : ''}>
+                        <Text className="text-honey-900 font-medium">🎙️ {file.fileName}</Text>
+                        <Pressable
+                          onPress={() => removeAudioFile(index)}
+                          className="bg-gray-200 px-3 py-2 rounded-lg active:bg-gray-300 self-start mt-2"
+                        >
+                          <Text className="text-gray-700 font-semibold">Remove</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <View className="flex-row flex-wrap gap-2 items-center">
+                  <Pressable
+                    onPress={() => handlePickNotesFile(true)}
+                    className="border border-dashed border-honey-400 bg-honey-50 rounded-lg px-4 py-3 active:bg-honey-100"
+                  >
+                    <Text className="text-honey-900 font-semibold">🎙️ Add voice memos</Text>
+                  </Pressable>
+                  {uploadingAudioCount > 0 && (
+                    <Text className="text-honey-700 text-sm">
+                      Uploading {uploadingAudioCount} file{uploadingAudioCount === 1 ? '' : 's'}…
+                    </Text>
+                  )}
+                </View>
+                <Text className="text-gray-500 text-sm mt-2">
+                  {Platform.OS === 'web'
+                    ? 'Drag & drop .m4a voice memos anywhere on this page, or tap to browse. Clive transcribes them automatically.'
+                    : 'Add the .m4a voice memos from the meeting — Clive transcribes them automatically.'}
+                </Text>
+              </View>
+
+              <View className="mb-4">
                 <Text className="text-sm font-medium text-gray-700 mb-1">Notes File</Text>
                 {notesImportForm.files.length > 0 && (
                   <View className="border border-honey-200 bg-honey-50 rounded-lg p-3 mb-3">
@@ -1305,7 +1570,7 @@ export default function MeetingsScreen() {
 
                 <View className="flex-row flex-wrap gap-2">
                   <Pressable
-                    onPress={handlePickNotesFile}
+                    onPress={() => handlePickNotesFile()}
                     className="border border-dashed border-gray-300 rounded-lg px-4 py-3 active:bg-gray-50"
                   >
                     <Text className="text-gray-700 font-semibold">Upload file</Text>

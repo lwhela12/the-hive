@@ -60,9 +60,11 @@ export function formatMeetingDate(meeting: ArrivalBoardMeeting | null) {
   return meeting.event_time ? `${dateLabel} · ${meeting.event_time}` : dateLabel;
 }
 
-// Energy is answered on a 1–10 scale; the board shows it as ⚡ dots out of 5.
+// Energy is answered on a 1–10 scale; show one ⚡ per point so the bolts
+// match the number people picked (5 bolts for a "10" read as confusing).
+export const ENERGY_DOTS_MAX = 10;
 export function getEnergyDots(level: number) {
-  return Math.min(5, Math.max(1, Math.round(level / 2)));
+  return Math.min(ENERGY_DOTS_MAX, Math.max(1, Math.round(level)));
 }
 
 export function getLocalIsoDate(date: Date) {

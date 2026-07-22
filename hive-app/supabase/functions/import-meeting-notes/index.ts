@@ -13,6 +13,13 @@ interface ImportMeetingNotesFile {
   fileBase64: string;
 }
 
+// Voice memos are uploaded to the meeting-recordings bucket by the client
+// (too large to inline as base64) — we only receive their storage paths.
+interface ImportMeetingNotesAudioFile {
+  fileName: string;
+  storagePath: string;
+}
+
 interface ImportMeetingNotesRequest {
   communityId: string;
   notesText?: string;
@@ -20,10 +27,13 @@ interface ImportMeetingNotesRequest {
   date?: string;
   linkedEventId?: string | null;
   files?: ImportMeetingNotesFile[];
+  audioFiles?: ImportMeetingNotesAudioFile[];
   fileName?: string | null;
   fileMimeType?: string | null;
   fileBase64?: string | null;
 }
+
+const MAX_AUDIO_FILES = 6;
 
 function todayLocalDate() {
   return new Date().toISOString().slice(0, 10);
@@ -89,7 +99,7 @@ function getRequestFiles(body: ImportMeetingNotesRequest) {
   return files.filter((file) => file.fileName && file.fileBase64);
 }
 
-async function getImportedNotesText(body: ImportMeetingNotesRequest) {
+async function getImportedNotesText(body: ImportMeetingNotesRequest, hasAudio: boolean) {
   const files = getRequestFiles(body);
   const pastedTextParts = body.notesText?.trim() ? [body.notesText.trim()] : [];
   const importedFiles = [];
@@ -98,9 +108,12 @@ async function getImportedNotesText(body: ImportMeetingNotesRequest) {
   if (pastedTextParts.length > 0) {
     sourceKinds.add('pasted_notes');
   }
+  if (hasAudio) {
+    sourceKinds.add('voice_memo_upload');
+  }
 
-  if (files.length === 0 && pastedTextParts.length === 0) {
-    throw new Error('Paste notes or upload a supported file.');
+  if (files.length === 0 && pastedTextParts.length === 0 && !hasAudio) {
+    throw new Error('Paste notes, upload a supported file, or add a voice memo.');
   }
 
   const totalBase64Length = files.reduce((total, file) => total + file.fileBase64.length, 0);
@@ -199,9 +212,14 @@ serve(async (req) => {
       return errorResponse('Missing communityId', 400);
     }
 
-    const imported = await getImportedNotesText(body);
+    const audioFiles = (body.audioFiles ?? [])
+      .filter((file) => file.fileName && file.storagePath)
+      .slice(0, MAX_AUDIO_FILES);
+    const hasAudio = audioFiles.length > 0;
 
-    if (imported.notesText.length < 20) {
+    const imported = await getImportedNotesText(body, hasAudio);
+
+    if (!hasAudio && imported.notesText.length < 20) {
       return errorResponse('The imported notes look empty. Paste or upload the full notes.', 400);
     }
 
@@ -240,7 +258,10 @@ serve(async (req) => {
       import_status: 'pending',
       imported_file: imported.importedFile,
       imported_files: imported.importedFiles,
-      summary: 'Notes imported. Apply them when you are ready for Clive to create tasks, events, and board updates.',
+      audio_files: audioFiles.map((file) => file.fileName),
+      summary: hasAudio
+        ? `Transcribing ${audioFiles.length} voice memo${audioFiles.length === 1 ? '' : 's'} — the full transcript will land here in a few minutes.`
+        : 'Notes imported. Apply them when you are ready for Clive to create tasks, events, and board updates.',
       decisions: [],
       details: [],
       wishes_surfaced: [],
@@ -254,12 +275,12 @@ serve(async (req) => {
       .from('meetings')
       .insert({
         date: meetingDate,
-        audio_url: null,
+        audio_url: hasAudio ? audioFiles[0].storagePath : null,
         transcript_raw: imported.notesText,
         transcript_attributed: imported.notesText,
         summary: JSON.stringify(summaryPayload),
         recorded_by: userId,
-        processing_status: 'complete',
+        processing_status: hasAudio ? 'transcribing' : 'complete',
         community_id: communityId,
         linked_event_id: body.linkedEventId || null,
       })
@@ -269,6 +290,65 @@ serve(async (req) => {
     if (meetingError || !meeting) {
       console.error('Failed to save imported meeting notes:', meetingError);
       return errorResponse(meetingError?.message || 'Failed to save meeting notes', 500);
+    }
+
+    // Kick off one AssemblyAI job per voice memo; the transcribe webhook
+    // stitches them into the meeting once every job lands.
+    if (hasAudio) {
+      const assemblyKey = Deno.env.get('ASSEMBLYAI_API_KEY') ?? '';
+      let submitted = 0;
+
+      for (const [index, audio] of audioFiles.entries()) {
+        let transcriptId: string | null = null;
+        let errorMessage: string | null = null;
+
+        try {
+          const { data: signed } = await supabaseAdmin.storage
+            .from('meeting-recordings')
+            .createSignedUrl(audio.storagePath, 7200);
+          if (!signed?.signedUrl) throw new Error('Could not sign the uploaded audio file.');
+
+          const transcriptResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
+            method: 'POST',
+            headers: { Authorization: assemblyKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              audio_url: signed.signedUrl,
+              speaker_labels: true,
+              webhook_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/transcribe`,
+            }),
+          });
+          const transcriptData = await transcriptResponse.json();
+          if (!transcriptResponse.ok || !transcriptData.id) {
+            throw new Error(transcriptData.error || `AssemblyAI rejected the file (${transcriptResponse.status}).`);
+          }
+          transcriptId = transcriptData.id;
+          submitted += 1;
+        } catch (error) {
+          errorMessage = error instanceof Error ? error.message : 'Transcription submit failed';
+          console.error(`Transcription submit failed for ${audio.fileName}:`, error);
+        }
+
+        await supabaseAdmin.from('meeting_transcription_jobs').insert({
+          meeting_id: meeting.id,
+          community_id: communityId,
+          transcript_id: transcriptId,
+          file_name: audio.fileName,
+          storage_path: audio.storagePath,
+          position: index,
+          status: transcriptId ? 'submitted' : 'failed',
+          error_message: errorMessage,
+        });
+      }
+
+      if (submitted === 0) {
+        await supabaseAdmin
+          .from('meetings')
+          .update({ processing_status: imported.notesText.length >= 20 ? 'complete' : 'failed' })
+          .eq('id', meeting.id);
+        if (imported.notesText.length < 20) {
+          return errorResponse('Could not start transcription for those voice memos. Please try again.', 502);
+        }
+      }
     }
 
     if (body.linkedEventId) {

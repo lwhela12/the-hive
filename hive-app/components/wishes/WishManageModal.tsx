@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Wish } from '../../types';
 
@@ -95,11 +95,15 @@ export function WishManageModal<TWish extends ManagedWish>({
 }: WishManageModalProps<TWish>) {
   const runAction = (handler?: (wish: TWish) => void) => {
     if (!wish || !handler) return;
-    try {
-      handler(wish);
-    } finally {
-      onClose();
+    const targetWish = wish;
+    onClose();
+    if (Platform.OS === 'web') {
+      handler(targetWish);
+      return;
     }
+    // iOS silently drops a modal (or alert) presented while this sheet is
+    // still dismissing — hand off only after the dismissal animation.
+    setTimeout(() => handler(targetWish), 380);
   };
 
   return (

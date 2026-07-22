@@ -5,6 +5,106 @@ import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY')!;
 
+function formatTranscript(transcript: {
+  utterances?: { speaker: string; text: string }[] | null;
+  text?: string | null;
+}) {
+  if (transcript.utterances && transcript.utterances.length > 0) {
+    return transcript.utterances
+      .map((u) => `Speaker ${u.speaker}: ${u.text}`)
+      .join('\n\n');
+  }
+  return transcript.text ?? '';
+}
+
+// Voice-memo imports: one webhook call per file. Store this file's transcript
+// on its job row; once every job for the meeting is terminal, stitch the full
+// transcript into the meeting so the normal Apply Notes flow takes over.
+// deno-lint-ignore no-explicit-any
+async function handleJobWebhook(supabaseAdmin: any, job: any, status: string) {
+  if (status === 'completed') {
+    const transcriptResponse = await fetch(
+      `https://api.assemblyai.com/v2/transcript/${job.transcript_id}`,
+      { headers: { Authorization: ASSEMBLYAI_API_KEY } }
+    );
+    const transcript = await transcriptResponse.json();
+    await supabaseAdmin
+      .from('meeting_transcription_jobs')
+      .update({
+        status: 'completed',
+        transcript_text: formatTranscript(transcript),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', job.id);
+  } else {
+    await supabaseAdmin
+      .from('meeting_transcription_jobs')
+      .update({
+        status: 'failed',
+        error_message: `AssemblyAI reported status: ${status}`,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', job.id);
+  }
+
+  const { data: jobs } = await supabaseAdmin
+    .from('meeting_transcription_jobs')
+    .select('*')
+    .eq('meeting_id', job.meeting_id)
+    .order('position', { ascending: true });
+
+  const allJobs = jobs ?? [];
+  if (allJobs.some((row: { status: string }) => row.status === 'submitted')) {
+    return jsonResponse({ success: true, pending: true });
+  }
+
+  const { data: meeting } = await supabaseAdmin
+    .from('meetings')
+    .select('*')
+    .eq('id', job.meeting_id)
+    .single();
+
+  // Duplicate webhook deliveries: only the first finalize pass should write.
+  if (!meeting || meeting.processing_status !== 'transcribing') {
+    return jsonResponse({ success: true, alreadyFinalized: true });
+  }
+
+  const multipleFiles = allJobs.length > 1;
+  const parts = allJobs.map((row: { file_name: string; status: string; transcript_text: string | null; error_message: string | null }) => {
+    const heading = multipleFiles ? `— ${row.file_name} —\n\n` : '';
+    if (row.status === 'completed' && row.transcript_text) {
+      return `${heading}${row.transcript_text}`;
+    }
+    return `${heading}[Transcription failed for ${row.file_name}: ${row.error_message ?? 'unknown error'}]`;
+  });
+
+  const pastedSeed = (meeting.transcript_raw ?? '').trim();
+  const combined = [pastedSeed, ...parts].filter(Boolean).join('\n\n');
+  const anyCompleted = allJobs.some((row: { status: string }) => row.status === 'completed');
+
+  let summaryPayload: Record<string, unknown> = {};
+  try {
+    summaryPayload = JSON.parse(meeting.summary ?? '{}');
+  } catch {
+    summaryPayload = {};
+  }
+  summaryPayload.summary = anyCompleted
+    ? 'Notes imported. Apply them when you are ready for Clive to create tasks, events, and board updates.'
+    : 'Transcription failed for the uploaded voice memos. You can paste the notes instead.';
+
+  await supabaseAdmin
+    .from('meetings')
+    .update({
+      transcript_raw: combined,
+      transcript_attributed: combined,
+      summary: JSON.stringify(summaryPayload),
+      processing_status: anyCompleted || pastedSeed ? 'complete' : 'failed',
+    })
+    .eq('id', meeting.id);
+
+  return jsonResponse({ success: true, finalized: true });
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   const corsResponse = handleCors(req);
@@ -19,6 +119,19 @@ serve(async (req) => {
   try {
     // Check if this is a webhook callback from AssemblyAI
     const body = await req.json();
+
+    // Voice-memo import jobs are matched by their job row first; anything
+    // without a job row falls through to the legacy single-recording path.
+    if (body.transcript_id && (body.status === 'completed' || body.status === 'error')) {
+      const { data: job } = await supabaseAdmin
+        .from('meeting_transcription_jobs')
+        .select('*')
+        .eq('transcript_id', body.transcript_id)
+        .maybeSingle();
+      if (job) {
+        return await handleJobWebhook(supabaseAdmin, job, body.status);
+      }
+    }
 
     if (body.status === 'completed') {
       // This is the webhook callback with completed transcript

@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native';
 import { Avatar } from '../ui/Avatar';
 import {
+  ENERGY_DOTS_MAX,
   getEnergyDots,
   getFirstName,
   getNumberAnswer,
@@ -102,15 +103,25 @@ export function ArrivalMemberCard({
           {energyDots !== null || energyMode ? (
             <View style={{ alignItems: 'center', marginTop: 'auto', paddingTop: (isTV ? 14 : 10) * scale }}>
               {energyDots !== null ? (
-                <View style={{ flexDirection: 'row', gap: isTV ? 4 : 2 }}>
-                  {[1, 2, 3, 4, 5].map((dot) => (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: isTV ? 2 : 1 }}>
+                  {Array.from({ length: ENERGY_DOTS_MAX }, (_, index) => index + 1).map((dot) => (
                     <Text
                       key={dot}
-                      style={{ fontSize: (isTV ? 18 : 13) * scale, opacity: dot <= energyDots ? 1 : 0.2 }}
+                      style={{ fontSize: (isTV ? 15 : 11) * scale, opacity: dot <= energyDots ? 1 : 0.18 }}
                     >
                       ⚡
                     </Text>
                   ))}
+                  <Text
+                    style={{
+                      fontFamily: 'Lato_700Bold',
+                      fontSize: (isTV ? 14 : 11) * scale,
+                      color: '#8a6b30',
+                      marginLeft: isTV ? 6 : 4,
+                    }}
+                  >
+                    {energyDots}/{ENERGY_DOTS_MAX}
+                  </Text>
                 </View>
               ) : null}
               {energyMode ? (
