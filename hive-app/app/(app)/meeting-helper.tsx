@@ -208,6 +208,16 @@ export default function MeetingHelperScreen() {
   const [completedAssists, setCompletedAssists] = useState<
     { id: string; description: string; assignedTo: string | null; relatedUserId: string | null; assigneeName: string }[]
   >([]);
+  // Tonight's live recap for the Wrap-Up slide — because the meeting happens
+  // IN the app now, the summary is just "what changed today".
+  const [tonightRecap, setTonightRecap] = useState<{
+    events: string[];
+    todoCount: number;
+    todoPeople: number;
+    wishComments: number;
+    granted: string[];
+    threads: string[];
+  } | null>(null);
   const [deckRefreshing, setDeckRefreshing] = useState(false);
 
   // HummDinger: which member's full check-in is expanded on the bubbles grid,
@@ -392,6 +402,32 @@ export default function MeetingHelperScreen() {
         }));
         setGrantedWishes(rows);
       })().catch((error) => console.warn('Could not load granted wishes', error)),
+
+      // Wrap-Up: everything that changed in the app since this morning —
+      // the meeting's real-time edits ARE the meeting notes.
+      (async () => {
+        const dayStart = new Date();
+        dayStart.setHours(0, 0, 0, 0);
+        const sinceToday = dayStart.toISOString();
+        const [eventsRes, todosRes, commentsRes, grantedRes, threadsRes] = await Promise.all([
+          supabase.from('events').select('title').eq('community_id', communityId).gte('created_at', sinceToday),
+          supabase.from('action_items').select('assigned_to').eq('community_id', communityId).gte('created_at', sinceToday),
+          (supabase as any).from('wish_comments').select('id').eq('community_id', communityId).gte('created_at', sinceToday),
+          (supabase as any).from('wishes').select('title, description').eq('community_id', communityId).eq('status', 'fulfilled').gte('fulfilled_at', sinceToday),
+          (supabase as any).from('board_posts').select('title').eq('community_id', communityId).gte('created_at', sinceToday),
+        ]);
+        const todoRows = (todosRes.data ?? []) as { assigned_to: string | null }[];
+        setTonightRecap({
+          events: ((eventsRes.data ?? []) as { title: string }[]).map((row) => row.title),
+          todoCount: todoRows.length,
+          todoPeople: new Set(todoRows.map((row) => row.assigned_to).filter(Boolean)).size,
+          wishComments: ((commentsRes.data ?? []) as unknown[]).length,
+          granted: ((grantedRes.data ?? []) as { title: string | null; description: string }[]).map(
+            (row) => (row.title ?? row.description).slice(0, 60)
+          ),
+          threads: ((threadsRes.data ?? []) as { title: string | null }[]).map((row) => row.title ?? '').filter(Boolean),
+        });
+      })().catch((error) => console.warn('Could not load tonight recap', error)),
 
       // News: hangs that already happened this cycle (the deck's main events
       // query only looks forward from today).
@@ -1980,6 +2016,56 @@ export default function MeetingHelperScreen() {
         noteKey="wrapup"
         emptyText="No wrap-up notes yet — decisions made tonight can land here."
       />
+      {/* The meeting happens IN the app now, so the summary writes itself:
+          everything that changed today, straight from the database. */}
+      {tonightRecap &&
+      (tonightRecap.events.length > 0 ||
+        tonightRecap.todoCount > 0 ||
+        tonightRecap.wishComments > 0 ||
+        tonightRecap.granted.length > 0 ||
+        tonightRecap.threads.length > 0) ? (
+        <View
+          style={{
+            marginTop: sz(26, 14),
+            backgroundColor: 'rgba(222,193,129,0.12)',
+            borderWidth: 1,
+            borderColor: GOLD_SOFT,
+            borderRadius: sz(20, 14),
+            paddingHorizontal: sz(24, 14),
+            paddingVertical: sz(18, 11),
+            gap: sz(8, 5),
+          }}
+        >
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
+            📸 Tonight in the app
+          </Text>
+          {tonightRecap.events.length > 0 ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), lineHeight: sz(30, 19), color: CHARCOAL }}>
+              🗓️ Scheduled: {tonightRecap.events.join(' · ')}
+            </Text>
+          ) : null}
+          {tonightRecap.todoCount > 0 ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), lineHeight: sz(30, 19), color: CHARCOAL }}>
+              ✅ {tonightRecap.todoCount} to-do{tonightRecap.todoCount === 1 ? '' : 's'} handed out across {tonightRecap.todoPeople} list{tonightRecap.todoPeople === 1 ? '' : 's'}
+            </Text>
+          ) : null}
+          {tonightRecap.wishComments > 0 ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), lineHeight: sz(30, 19), color: CHARCOAL }}>
+              💬 {tonightRecap.wishComments} note{tonightRecap.wishComments === 1 ? '' : 's'} left on wishes
+            </Text>
+          ) : null}
+          {tonightRecap.granted.length > 0 ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), lineHeight: sz(30, 19), color: CHARCOAL }}>
+              🌟 Granted: {tonightRecap.granted.join(' · ')}
+            </Text>
+          ) : null}
+          {tonightRecap.threads.length > 0 ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), lineHeight: sz(30, 19), color: CHARCOAL }}>
+              📌 New threads: {tonightRecap.threads.join(' · ')}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
       <View
         style={{
           marginTop: sz(40, 22),

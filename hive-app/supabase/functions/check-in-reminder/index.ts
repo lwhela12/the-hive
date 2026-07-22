@@ -384,24 +384,42 @@ serve(async (req) => {
                 .eq('category_id', boardId)
                 .eq('title', threadTitle)
                 .limit(1);
-              if (!existingThread?.length) {
-                const { data: adminRows } = await supabaseAdmin
-                  .from('community_memberships')
-                  .select('user_id')
-                  .eq('community_id', survey.community_id)
-                  .eq('role', 'admin')
-                  .limit(1);
-                const authorId = adminRows?.[0]?.user_id;
-                if (authorId) {
-                  await supabaseAdmin.from('board_posts').insert({
-                    community_id: survey.community_id,
-                    category_id: boardId,
-                    author_id: authorId,
-                    title: threadTitle,
-                    content:
-                      "The newsletter's brewing! 🗞️ Want a shout-out, a plug, or a reminder in it — \"come to my lemonade stand Tuesday!\"-style? Drop it in this thread and it goes straight into the newsletter.",
-                  });
-                }
+              const complimentTitle = `${month} Compliment Corner 💐`;
+              const { data: adminRows } = await supabaseAdmin
+                .from('community_memberships')
+                .select('user_id')
+                .eq('community_id', survey.community_id)
+                .eq('role', 'admin')
+                .limit(1);
+              const authorId = adminRows?.[0]?.user_id;
+              if (authorId && !existingThread?.length) {
+                await supabaseAdmin.from('board_posts').insert({
+                  community_id: survey.community_id,
+                  category_id: boardId,
+                  author_id: authorId,
+                  title: threadTitle,
+                  content:
+                    "The newsletter's brewing! 🗞️ Want a shout-out, a plug, or a reminder in it — \"come to my lemonade stand Tuesday!\"-style? Drop it in this thread and it goes straight into the newsletter.",
+                });
+              }
+              // Compliment Corner opens alongside the newsletter thread —
+              // a standing place to say something nice, harvested for the
+              // newsletter and the meeting.
+              const { data: existingCompliments } = await supabaseAdmin
+                .from('board_posts')
+                .select('id')
+                .eq('category_id', boardId)
+                .eq('title', complimentTitle)
+                .limit(1);
+              if (authorId && !existingCompliments?.length) {
+                await supabaseAdmin.from('board_posts').insert({
+                  community_id: survey.community_id,
+                  category_id: boardId,
+                  author_id: authorId,
+                  title: complimentTitle,
+                  content:
+                    'Want to compliment anyone this month? 💐 Drop it here — big, small, silly, sincere. Compliments get read out in the newsletter and at the meeting. No act of niceness too tiny.',
+                });
               }
               newsletterThread = threadTitle;
             }
