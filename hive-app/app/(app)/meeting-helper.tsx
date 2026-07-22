@@ -647,6 +647,19 @@ export default function MeetingHelperScreen() {
         )
         .select('id');
       if (error) throw error;
+      // The note is really a comment on the wish — leave it there too, so
+      // tapping any of the to-dos lands on the wish with the note in context
+      // and people can reply right on it.
+      if (aboutWishId && profile) {
+        const { error: commentError } = await (supabase as any).from('wish_comments').insert({
+          wish_id: aboutWishId,
+          user_id: profile.id,
+          community_id: communityId,
+          content: `📝 From the meeting: ${text}`,
+        });
+        if (commentError) console.warn('Wish comment skipped (non-blocking):', commentError);
+      }
+
       const assigneesLabel = assignees.length > 3
         ? `everyone (${assignees.length})`
         : assignees.map((member) => getFirstName(member.name)).join(' & ');

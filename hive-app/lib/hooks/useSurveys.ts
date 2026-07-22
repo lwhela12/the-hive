@@ -49,7 +49,10 @@ const RETIRED_SURVEY_PATTERNS = [
   /q1\s+review/i,
 ];
 
-const MONTHLY_CHECK_IN_WINDOW_DAYS = 3;
+// The check-in is open the WHOLE cycle now — the mid-month pulse, to-do
+// review, and hang ratings all depend on people popping in weeks before the
+// meeting. (Was 3 back when this was a pre-meeting-only form.)
+const MONTHLY_CHECK_IN_WINDOW_DAYS = 33;
 const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
 const DEFAULT_RESPONSE_PERIOD = 'default';
 

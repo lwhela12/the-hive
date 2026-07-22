@@ -2357,9 +2357,21 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Email reminders — the unsubscribe lever for app emails */}
+        {/* Settings cluster — condensed and capped on wide screens so the
+            cards don't stretch into oblongs (Email Reminders + App Feedback
+            share a row when there's room). */}
         {!immersiveSkillsGarden && (
-          <View className="mb-6">
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 880,
+              alignSelf: 'center',
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              columnGap: 16,
+            }}
+          >
+          <View className="mb-6" style={{ flexGrow: 1, flexBasis: 340, minWidth: 300 }}>
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
               Email Reminders
             </Text>
@@ -2399,11 +2411,8 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
           </View>
-        )}
 
-        {/* App Feedback */}
-        {!immersiveSkillsGarden && (
-          <View className="mb-6">
+          <View className="mb-6" style={{ flexGrow: 1, flexBasis: 340, minWidth: 300 }}>
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
               App Feedback
             </Text>
@@ -2426,16 +2435,22 @@ export default function ProfileScreen() {
               </View>
             </Pressable>
           </View>
+          </View>
         )}
 
         {/* Linked Logins */}
-        {!immersiveSkillsGarden && <LinkedLogins />}
+        {!immersiveSkillsGarden && (
+          <View style={{ width: '100%', maxWidth: 880, alignSelf: 'center' }}>
+            <LinkedLogins />
+          </View>
+        )}
 
         {/* Sign Out Button */}
         {!immersiveSkillsGarden && (
         <Pressable
           onPress={handleSignOut}
           className="bg-red-50 p-4 rounded-xl items-center active:bg-red-100 mb-6"
+          style={{ width: '100%', maxWidth: 420, alignSelf: 'center' }}
         >
           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-600">Sign Out</Text>
         </Pressable>

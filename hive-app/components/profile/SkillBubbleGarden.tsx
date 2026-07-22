@@ -434,7 +434,9 @@ function getFrontRowScale(width: number, compactLandscape = false) {
   const compactScale = compactLandscape ? PHONE_LANDSCAPE_SCALE : 1;
   const idealScale = ((effectiveWidth - sidePadding * 2) / (GARDEN_CAPACITY * fullBloomWidth)) * (compactLandscape ? 1.88 : 1.78) * compactScale;
   const minScale = (compactLandscape ? 0.56 : effectiveWidth < 520 ? 0.54 : 0.82) * compactScale;
-  const maxScale = (compactLandscape ? 0.88 : effectiveWidth > 1280 ? 1.46 : effectiveWidth > 860 ? 1.22 : 0.98) * compactScale;
+  // Mid-width gardens (member sheets, visitor views) bloom nearly as big as
+  // the full-width tend view — the read-only garden shouldn't look wilted.
+  const maxScale = (compactLandscape ? 0.88 : effectiveWidth > 1280 ? 1.46 : effectiveWidth > 860 ? 1.36 : 1.12) * compactScale;
 
   return clamp(idealScale, minScale, maxScale);
 }
@@ -3434,6 +3436,12 @@ export function SkillBubbleGarden({
         overflow: 'hidden',
       }}
     >
+      {width === 0 ? (
+        // First mount hasn't been measured yet — painting now would scatter
+        // flowers across a canvas sized for the wrong width (the "flowers in
+        // the sky" flash). Hold a quiet sky until onLayout reports in.
+        <View style={{ minHeight: meadowHeight, backgroundColor: '#32b8dd' }} />
+      ) : (
       <View
         style={{
           flex: compactLandscape ? 1 : undefined,
@@ -3651,6 +3659,7 @@ export function SkillBubbleGarden({
           </View>
         )}
       </View>
+      )}
 
       {editable && (
         <View
