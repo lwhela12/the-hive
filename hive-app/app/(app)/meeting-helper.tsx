@@ -173,7 +173,7 @@ export default function MeetingHelperScreen() {
 
     const today = getLocalIsoDate(new Date());
     const horizon = new Date();
-    horizon.setDate(horizon.getDate() + 45);
+    horizon.setDate(horizon.getDate() + 75);
     const sinceLastMeeting = new Date();
     sinceLastMeeting.setDate(sinceLastMeeting.getDate() - 35);
     const sinceIso = sinceLastMeeting.toISOString();
@@ -190,7 +190,7 @@ export default function MeetingHelperScreen() {
       })().catch((error) => console.warn('Could not load meeting notes', error)),
 
       // Meet Ups calendar: birthdays + events (incl. ongoing multi-day
-      // stretches) between now and the next meeting (~45-day horizon).
+      // stretches) between now and the meeting after next (~75-day horizon).
       (async () => {
         const { data } = await supabase
           .from('events')
@@ -680,13 +680,17 @@ export default function MeetingHelperScreen() {
       return new Date(year, month - 1, day);
     };
 
-    const nextMeetingAfterToday = events.find(
+    // Meetings run mid-month to mid-month, so one cycle straddles two calendar
+    // months — show through the meeting after next (or ~2 months) so tonight's
+    // planning can reach past the immediate cycle.
+    const upcomingMeetings = events.filter(
       (event) => event.event_type === 'meeting' && event.event_date > todayIso
     );
+    const farMeeting = upcomingMeetings[1] ?? null;
     const rangeStart = parseIsoDay(todayIso);
-    const rangeEnd = nextMeetingAfterToday
-      ? parseIsoDay(nextMeetingAfterToday.event_date)
-      : new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate() + 35);
+    const rangeEnd = farMeeting
+      ? parseIsoDay(farMeeting.event_date)
+      : new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate() + 60);
 
     // Whole weeks, Sunday through Saturday.
     const gridStart = new Date(rangeStart);
@@ -706,17 +710,29 @@ export default function MeetingHelperScreen() {
     const eventsOnDay = (dayIso: string) =>
       events.filter((event) => event.event_date <= dayIso && dayIso <= (event.end_date || event.event_date));
 
+    const isAwayEvent = (event: DeckEvent) =>
+      event.event_type !== 'meeting' &&
+      event.event_type !== 'birthday' &&
+      (!!event.end_date || /\b(out of town|away|trip|travel|galavant)/i.test(event.title));
+
     const eventEmoji = (event: DeckEvent) => {
       if (event.event_type === 'meeting') return '🐝';
       if (event.event_type === 'birthday') return '🎂';
-      if (event.end_date || /\b(out of town|away|trip|travel|galavant)/i.test(event.title)) return '✈️';
+      if (isAwayEvent(event)) return '✈️';
       return '📌';
     };
 
+    // Away events are titled "<FirstName> out of town" — match that first word
+    // back to the roster so the calendar can show a face instead of the title.
+    const memberForAwayEvent = (event: DeckEvent) => {
+      const firstWord = event.title.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+      return members.find((member) => getFirstName(member.name).toLowerCase() === firstWord) ?? null;
+    };
+
     const monthLabel = (date: Date) => date.toLocaleDateString('en-US', { month: 'short' });
-    const calendarTitle = nextMeetingAfterToday
-      ? `Between tonight & ${formatShortDate(nextMeetingAfterToday.event_date)}`
-      : 'The next few weeks';
+    const calendarTitle = farMeeting
+      ? `Between tonight & ${formatShortDate(farMeeting.event_date)}`
+      : 'The next two months';
 
     return (
       <View style={{ flex: 1 }}>
@@ -828,17 +844,26 @@ export default function MeetingHelperScreen() {
                     const dayIso = getLocalIsoDate(day);
                     const inWindow = day >= rangeStart && day <= rangeEnd;
                     const dayEvents = inWindow ? eventsOnDay(dayIso) : [];
-                    const isMeetingDay = dayEvents.some((event) => event.event_type === 'meeting');
-                    const isBusy = dayEvents.length > 0;
+                    const awayEvents = dayEvents.filter(isAwayEvent);
+                    const plannedEvents = dayEvents.filter((event) => !isAwayEvent(event));
+                    const isMeetingDay = plannedEvents.some((event) => event.event_type === 'meeting');
+                    // Away stretches don't claim the day — someone being out of
+                    // town still leaves the rest of the HIVE free to hang.
+                    const isBusy = plannedEvents.length > 0;
                     const isToday = dayIso === todayIso;
                     const firstOfMonth = day.getDate() === 1 || dayIso === getLocalIsoDate(gridStart);
-                    const primaryEvent = dayEvents[0];
+                    const primaryEvent = plannedEvents[0];
+                    // ✈️ marks the day a trip starts; → carries through the rest
+                    // of the stretch so a long trip reads as one thin line.
+                    const awayDeparts = awayEvents.some((event) => event.event_date === dayIso);
+                    const shownAway = awayEvents.slice(0, 3);
+                    const bubbleSize = sz(24, 14);
                     return (
                       <View
                         key={dayIso}
                         style={{
                           flex: 1,
-                          minHeight: sz(86, 52),
+                          minHeight: sz(60, 42),
                           margin: sz(3, 2),
                           borderRadius: sz(12, 8),
                           borderWidth: isMeetingDay || isToday ? 2 : 1,
@@ -862,11 +887,43 @@ export default function MeetingHelperScreen() {
                         >
                           {firstOfMonth ? `${monthLabel(day)} ` : ''}{day.getDate()}
                         </Text>
-                        {dayEvents.length > 0 ? (
+                        {primaryEvent ? (
                           <Text numberOfLines={isTV ? 2 : 1} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 9), lineHeight: sz(19, 12), color: GOLD_DEEP, marginTop: sz(3, 2) }}>
                             {eventEmoji(primaryEvent)}{isTV ? ` ${primaryEvent.title}` : ''}
-                            {dayEvents.length > 1 ? `  +${dayEvents.length - 1}` : ''}
+                            {plannedEvents.length > 1 ? `  +${plannedEvents.length - 1}` : ''}
                           </Text>
+                        ) : null}
+                        {shownAway.length > 0 ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: sz(3, 2) }}>
+                            {shownAway.map((event, index) => {
+                              const member = memberForAwayEvent(event);
+                              return (
+                                <View
+                                  key={event.id}
+                                  style={{
+                                    marginLeft: index === 0 ? 0 : -bubbleSize * 0.35,
+                                    borderRadius: 999,
+                                    borderWidth: 1,
+                                    borderColor: PAPER,
+                                  }}
+                                >
+                                  <Avatar
+                                    name={member?.name ?? event.title}
+                                    url={member?.avatar_url}
+                                    size={bubbleSize}
+                                  />
+                                </View>
+                              );
+                            })}
+                            {awayEvents.length > shownAway.length ? (
+                              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(12, 8), color: MUTED, marginLeft: sz(3, 2) }}>
+                                +{awayEvents.length - shownAway.length}
+                              </Text>
+                            ) : null}
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 9), color: MUTED, marginLeft: sz(3, 2) }}>
+                              {awayDeparts ? '✈️' : '→'}
+                            </Text>
+                          </View>
                         ) : null}
                       </View>
                     );
@@ -875,7 +932,7 @@ export default function MeetingHelperScreen() {
               ))}
             </View>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: MUTED, marginTop: sz(10, 7) }}>
-              🐝 meeting · 🎂 birthday · ✈️ away · 📌 event — blank days are your best shot at a hang.
+              🐝 meeting · 🎂 birthday · little faces → = who's away · 📌 event — blank days are your best shot at a hang.
             </Text>
           </View>
         </View>
