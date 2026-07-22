@@ -1202,28 +1202,8 @@ export default function MeetingsScreen() {
             </Pressable>
           </View>
 
-          {/* Arrival Board — live check-in view for everyone on meeting day */}
-          <Pressable
-            onPress={() => router.push({ pathname: '/arrival-board', params: { from: 'meetings' } })}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-              alignSelf: 'flex-start',
-              backgroundColor: 'rgba(255,255,255,0.08)',
-              borderRadius: 999,
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              marginTop: 12,
-              opacity: pressed ? 0.75 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 14 }}>📺</Text>
-            <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
-              Arrival Board — who's in the room
-            </Text>
-          </Pressable>
+          {/* Arrival Board pill removed — the deck's Room slide covers it and
+              the /arrival-board route still exists for direct links. */}
         </View>
 
         {/* Upcoming Meetings */}

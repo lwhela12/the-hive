@@ -2,6 +2,7 @@ import { Text, View } from 'react-native';
 import { Avatar } from '../ui/Avatar';
 import {
   ENERGY_DOTS_MAX,
+  getAttendance,
   getEnergyDots,
   getFirstName,
   getNumberAnswer,
@@ -34,6 +35,7 @@ export function ArrivalMemberCard({
   const energyLevel = getNumberAnswer(answers, 'q_energy_level');
   const energyMode = getTextAnswer(answers, 'q_energy_mode');
   const hardOut = getTextAnswer(answers, 'q_hard_out');
+  const attendance = getAttendance(response);
   const energyDots = energyLevel !== null ? getEnergyDots(energyLevel) : null;
   const scale = compact ? 0.78 : 1;
 
@@ -84,6 +86,19 @@ export function ArrivalMemberCard({
               }}
             >
               {feeling}
+            </Text>
+          ) : null}
+          {attendance === 'remote' || attendance === 'missing' ? (
+            <Text
+              style={{
+                fontFamily: 'Lato_700Bold',
+                fontSize: (isTV ? 15 : 11) * scale,
+                color: attendance === 'remote' ? '#8a6b30' : '#9a8060',
+                textAlign: 'center',
+                marginTop: (isTV ? 8 : 6) * scale,
+              }}
+            >
+              {attendance === 'remote' ? '💻 joining remotely' : '😢 missing this one'}
             </Text>
           ) : null}
           {hardOut ? (

@@ -23,12 +23,14 @@ import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 import {
   formatMeetingDate,
+  getAttendance,
   getCheckInOrder,
   getFirstName,
   getLocalIsoDate,
   getMonthNameFromPeriod,
   getTextAnswer,
   useArrivalBoard,
+  type ArrivalBoardMember,
 } from '../../lib/hooks/useArrivalBoard';
 
 const hiveBee = require('../../assets/HIVE Bee.png');
@@ -425,21 +427,24 @@ export default function MeetingHelperScreen() {
     }
   }, [deckRefreshing, loadDeckData, refreshArrivals]);
 
-  // Go-around order: Lucas leads by example (his call — he thanks everyone,
-  // so the sesh must reach him), then checked-in members in the order they
-  // submitted (a different voice order each month), then the rest.
+  // Go-around order: Lucas leads by example, then the absentees right after
+  // (he carries the torch for whoever can't speak for themselves — everyone
+  // stays on the HD board even when they miss), then present checked-in
+  // members in submit order (a different voice order each month), then the
+  // rest who haven't checked in.
   const memberOrder = useMemo(() => {
     const lucas = members.find((member) => getFirstName(member.name).toLowerCase() === 'lucas');
     const others = members.filter((member) => member.id !== lucas?.id);
-    const checkedIn = others
-      .filter((member) => responsesByUser.has(member.id))
-      .sort((a, b) => {
-        const aTime = responsesByUser.get(a.id)?.submitted_at ?? '';
-        const bTime = responsesByUser.get(b.id)?.submitted_at ?? '';
-        return aTime.localeCompare(bTime);
-      });
+    const bySubmitTime = (a: ArrivalBoardMember, b: ArrivalBoardMember) => {
+      const aTime = responsesByUser.get(a.id)?.submitted_at ?? '';
+      const bTime = responsesByUser.get(b.id)?.submitted_at ?? '';
+      return aTime.localeCompare(bTime);
+    };
+    const checkedIn = others.filter((member) => responsesByUser.has(member.id)).sort(bySubmitTime);
+    const absent = checkedIn.filter((member) => getAttendance(responsesByUser.get(member.id)) === 'missing');
+    const present = checkedIn.filter((member) => getAttendance(responsesByUser.get(member.id)) !== 'missing');
     const notYet = others.filter((member) => !responsesByUser.has(member.id));
-    return [...(lucas ? [lucas] : []), ...checkedIn, ...notYet];
+    return [...(lucas ? [lucas] : []), ...absent, ...present, ...notYet];
   }, [members, responsesByUser]);
 
   const wishesByUserId = useMemo(() => {
@@ -752,6 +757,25 @@ export default function MeetingHelperScreen() {
           No monthly check-in is live right now — once one opens, arrivals will glow here.
         </EmptyNote>
       ) : (
+        <View>
+          {(() => {
+            const remote = members.filter((member) => getAttendance(responsesByUser.get(member.id)) === 'remote');
+            const missing = members.filter((member) => getAttendance(responsesByUser.get(member.id)) === 'missing');
+            if (remote.length === 0 && missing.length === 0) return null;
+            const parts = [
+              remote.length > 0
+                ? `💻 Zooming in: ${remote.map((member) => getFirstName(member.name)).join(', ')} — fire up the Meet`
+                : null,
+              missing.length > 0
+                ? `😢 Missing tonight: ${missing.map((member) => getFirstName(member.name)).join(', ')}`
+                : null,
+            ].filter(Boolean);
+            return (
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), color: GOLD_DEEP, marginBottom: sz(12, 8) }}>
+                {parts.join('   ·   ')}
+              </Text>
+            );
+          })()}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: sz(-8, -5) }}>
           {getCheckInOrder(members, responsesByUser).map((member) => (
             <View key={member.id} style={{ width: `${100 / roomColumns}%`, padding: sz(8, 5) }}>
@@ -763,6 +787,7 @@ export default function MeetingHelperScreen() {
               />
             </View>
           ))}
+        </View>
         </View>
       )}
     </View>
@@ -795,33 +820,60 @@ export default function MeetingHelperScreen() {
     </View>
   );
 
+  // Slim by design (Lucas): the news + app updates live here; hang and help
+  // recaps moved to Plan the Meet Ups where the scheduling happens, and
+  // wishes granted are each member's own HummDinger story.
   const renderNews = () => (
     <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: sz(36, 20) }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: sz(30, 18) }}>
         <View>
-          <Kicker>Progress · credit where credit is due</Kicker>
+          <Kicker>Tonight · house business</Kicker>
           <SlideTitle>News from Nat</SlideTitle>
         </View>
-        <EditPill noteKey="news" />
       </View>
-      <NoteBody
-        noteKey="news"
-        emptyText="Nat hasn't dropped the news yet — drumroll, please."
-      />
-      {/* Slim by design (Lucas): app updates + new members here; hang and
-          help recaps live on Plan the Meet Ups where the scheduling happens,
-          and wishes granted are each member's own HummDinger story. */}
-      <View style={{ marginTop: sz(30, 18) }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8), marginBottom: sz(12, 8) }}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD }}>
-            ✨ App updates
-          </Text>
-          <EditPill noteKey="appnews" />
+      <View style={{ gap: sz(22, 12), maxWidth: sz(1240, 720) }}>
+        <View
+          style={{
+            backgroundColor: CARD,
+            borderWidth: 1,
+            borderColor: GOLD_SOFT,
+            borderRadius: sz(22, 14),
+            paddingHorizontal: sz(28, 16),
+            paddingVertical: sz(22, 13),
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8), marginBottom: sz(12, 8) }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
+              📣 The news
+            </Text>
+            <EditPill noteKey="news" />
+          </View>
+          <NoteBody
+            noteKey="news"
+            emptyText="Nat hasn't dropped the news yet — drumroll, please."
+          />
         </View>
-        <NoteBody
-          noteKey="appnews"
-          emptyText="No app news this month — smooth sailing."
-        />
+        <View
+          style={{
+            backgroundColor: 'rgba(222,193,129,0.12)',
+            borderWidth: 1,
+            borderColor: GOLD_SOFT,
+            borderRadius: sz(22, 14),
+            paddingHorizontal: sz(28, 16),
+            paddingVertical: sz(22, 13),
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8), marginBottom: sz(12, 8) }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
+              ✨ New in the app this month
+            </Text>
+            <EditPill noteKey="appnews" />
+          </View>
+          <NoteBody
+            noteKey="appnews"
+            emptyText="No app news this month — smooth sailing."
+          />
+        </View>
       </View>
     </View>
   );
@@ -1335,6 +1387,7 @@ export default function MeetingHelperScreen() {
           );
           const assistsByMember = completedAssists.filter((assist) => assist.assignedTo === member.id);
           const grantedThisCycle = grantedWishes.filter((wish) => wish.user_id === member.id);
+          const attendance = getAttendance(response);
           const hasDetails =
             detailSections.length > 0 ||
             !!topWish?.description ||
@@ -1379,6 +1432,15 @@ export default function MeetingHelperScreen() {
                 >
                   {nameToday}
                 </Text>
+                {attendance === 'missing' ? (
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: MUTED, marginTop: sz(3, 2) }}>
+                    😢 not here tonight — carry the torch
+                  </Text>
+                ) : attendance === 'remote' ? (
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP, marginTop: sz(3, 2) }}>
+                    💻 zooming in
+                  </Text>
+                ) : null}
                 <Text
                   numberOfLines={isExpanded ? undefined : 2}
                   style={{
@@ -1811,6 +1873,9 @@ export default function MeetingHelperScreen() {
                     {memberOrder.map((member) => {
                       const isUp = expandedHummdingerId === member.id;
                       const wasVisited = hummdingerVisited.has(member.id) && !isUp;
+                      const railAttendance = getAttendance(responsesByUser.get(member.id));
+                      const attendanceMark =
+                        railAttendance === 'missing' ? ' 😢' : railAttendance === 'remote' ? ' 💻' : '';
                       return (
                         <Text
                           key={member.id}
@@ -1829,7 +1894,7 @@ export default function MeetingHelperScreen() {
                           }}
                         >
                           {wasVisited ? '✓ ' : isUp ? '→ ' : '· '}
-                          {getFirstName(member.name)}
+                          {getFirstName(member.name)}{attendanceMark}
                         </Text>
                       );
                     })}
