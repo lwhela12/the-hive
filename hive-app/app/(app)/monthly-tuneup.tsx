@@ -46,6 +46,7 @@ const STEPS = [
   { key: 'hangs', label: 'Hang ideas' },
   { key: 'calendar', label: 'Calendar' },
   { key: 'helpers', label: 'Helpers' },
+  { key: 'todos', label: 'To-dos' },
   { key: 'checkin', label: 'Check-in' },
 ] as const;
 
@@ -223,6 +224,93 @@ export default function MonthlyTuneupScreen() {
       setHangRecapEvents(hangs.map((event) => ({ id: event.id, title: event.title })));
     })().catch((error) => console.warn('Could not load hang recap events', error));
   }, [communityId]);
+
+  // To-do review: open items to check off, plus this cycle's completed items
+  // (yours, and ones others did FOR you) — the memory joggers that keep wins
+  // like "we filmed the aerial straps act" from being forgotten by meeting day.
+  type TodoRow = { id: string; description: string; completed_at?: string | null; helperName?: string };
+  const [openTodos, setOpenTodos] = useState<TodoRow[]>([]);
+  const [doneTodos, setDoneTodos] = useState<TodoRow[]>([]);
+  const [doneForMe, setDoneForMe] = useState<TodoRow[]>([]);
+  const [newTodoText, setNewTodoText] = useState('');
+  const [todoSaving, setTodoSaving] = useState(false);
+
+  const loadTodos = useCallback(async () => {
+    if (!communityId || !profile) return;
+    const since = new Date();
+    since.setDate(since.getDate() - 35);
+    const [mineRes, doneRes, forMeRes] = await Promise.all([
+      supabase
+        .from('action_items')
+        .select('id, description')
+        .eq('community_id', communityId)
+        .eq('assigned_to', profile.id)
+        .or('completed.is.null,completed.is.false')
+        .is('archived_at', null)
+        .order('created_at', { ascending: false })
+        .limit(30),
+      supabase
+        .from('action_items')
+        .select('id, description, completed_at')
+        .eq('community_id', communityId)
+        .eq('assigned_to', profile.id)
+        .eq('completed', true)
+        .gte('completed_at', since.toISOString())
+        .order('completed_at', { ascending: false })
+        .limit(20),
+      (supabase as any)
+        .from('action_items')
+        .select('id, description, completed_at, assignee:profiles!assigned_to(name)')
+        .eq('community_id', communityId)
+        .eq('related_user_id', profile.id)
+        .neq('assigned_to', profile.id)
+        .eq('completed', true)
+        .gte('completed_at', since.toISOString())
+        .order('completed_at', { ascending: false })
+        .limit(20),
+    ]);
+    setOpenTodos((mineRes.data ?? []) as TodoRow[]);
+    setDoneTodos((doneRes.data ?? []) as TodoRow[]);
+    setDoneForMe(((forMeRes.data ?? []) as any[]).map((row) => ({
+      id: row.id,
+      description: row.description,
+      completed_at: row.completed_at,
+      helperName: row.assignee?.name ?? 'Someone',
+    })));
+  }, [communityId, profile?.id]);
+
+  useEffect(() => {
+    loadTodos();
+  }, [loadTodos]);
+
+  const handleToggleTodo = async (todo: TodoRow, nowDone: boolean) => {
+    if (!profile) return;
+    const { error } = await (supabase as any)
+      .from('action_items')
+      .update({ completed: nowDone, completed_at: nowDone ? new Date().toISOString() : null })
+      .eq('id', todo.id)
+      .eq('assigned_to', profile.id);
+    if (!error) await loadTodos();
+  };
+
+  const handleAddTodo = async () => {
+    const text = newTodoText.trim();
+    if (!text || !communityId || !profile || todoSaving) return;
+    setTodoSaving(true);
+    try {
+      const { error } = await (supabase as any).from('action_items').insert({
+        description: text,
+        assigned_to: profile.id,
+        community_id: communityId,
+      });
+      if (!error) {
+        setNewTodoText('');
+        await loadTodos();
+      }
+    } finally {
+      setTodoSaving(false);
+    }
+  };
 
   // Step 1 — HD wishes (same manage wiring as profile.tsx)
   const [managingWish, setManagingWish] = useState<Wish | null>(null);
@@ -1103,6 +1191,88 @@ export default function MonthlyTuneupScreen() {
     </View>
   );
 
+  const renderTodosStep = () => (
+    <View>
+      <StepHeader
+        title="Your to-do list ✅"
+        subtitle="Anything from the meetings or @notes land here. Check off what's done — it becomes your Progress memory-jogger at the next meeting, so wins don't get forgotten."
+      />
+      <View style={[cardStyle, { gap: 10 }]}>
+        {openTodos.length === 0 ? (
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9a8060' }}>
+            Nothing open — clean slate ✨
+          </Text>
+        ) : (
+          openTodos.map((todo) => (
+            <Pressable
+              key={todo.id}
+              onPress={() => handleToggleTodo(todo, true)}
+              style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 4 }}
+            >
+              <View style={{ width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: '#bd9348', marginTop: 1 }} />
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', flex: 1, lineHeight: 20 }}>
+                {todo.description}
+              </Text>
+            </Pressable>
+          ))
+        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+          <TextInput
+            value={newTodoText}
+            onChangeText={setNewTodoText}
+            placeholder="Add one (e.g. send Sara that Netherlands contact)"
+            placeholderTextColor="#b5ad9f"
+            onKeyPress={submitOnEnter(handleAddTodo)}
+            style={[inputStyle, { flex: 1 }]}
+          />
+          <Pressable
+            onPress={handleAddTodo}
+            disabled={todoSaving || !newTodoText.trim()}
+            style={({ pressed }) => ({
+              backgroundColor: newTodoText.trim() ? '#bd9348' : '#e5e7eb',
+              borderRadius: 12,
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              opacity: pressed || todoSaving ? 0.8 : 1,
+            })}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: newTodoText.trim() ? 'white' : '#9ca3af' }}>Add</Text>
+          </Pressable>
+        </View>
+      </View>
+      {doneTodos.length > 0 ? (
+        <View style={[cardStyle, { gap: 6, marginTop: 12 }]}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#166534' }}>
+            Done this cycle 🎉 (tap to un-check)
+          </Text>
+          {doneTodos.map((todo) => (
+            <Pressable key={todo.id} onPress={() => handleToggleTodo(todo, false)} style={{ flexDirection: 'row', gap: 8 }}>
+              <Text style={{ fontSize: 13 }}>✅</Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', flex: 1, lineHeight: 19 }}>
+                {todo.description}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {doneForMe.length > 0 ? (
+        <View style={[cardStyle, { gap: 6, marginTop: 12, backgroundColor: '#fdf3dc' }]}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
+            Done for you this cycle 💛
+          </Text>
+          {doneForMe.map((todo) => (
+            <Text key={todo.id} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b5b3e', lineHeight: 19 }}>
+              {todo.helperName}: {todo.description}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
+        All caught up? Tap Next.
+      </Text>
+    </View>
+  );
+
   // The check-in questions live right here in the flow — no separate survey
   // modal at the end. Answers save when the member taps Finish.
   const checkInQuestions = (monthlyCheckInSurvey?.questions ?? [])
@@ -1114,6 +1284,26 @@ export default function MonthlyTuneupScreen() {
         title="Check-in 📝"
         subtitle="Last stop — a few quick questions so HIVE and Clive arrive prepared. Your answers save when you tap Finish, and you can come back and change them any time this month."
       />
+      {doneTodos.length > 0 || doneForMe.length > 0 ? (
+        <View style={[cardStyle, { gap: 8, marginBottom: 14, backgroundColor: '#fdf3dc' }]}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
+            Memory joggers for your Progress answer ✍️
+          </Text>
+          {doneTodos.length > 0 ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b5b3e', lineHeight: 19 }}>
+              You checked off: {doneTodos.map((todo) => todo.description).join(' · ')}
+            </Text>
+          ) : null}
+          {doneForMe.length > 0 ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b5b3e', lineHeight: 19 }}>
+              Done for you: {doneForMe.map((todo) => `${todo.helperName} — ${todo.description}`).join(' · ')}
+            </Text>
+          ) : null}
+          <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12, color: '#9a8060' }}>
+            Worth a shout-out in Progress? Credit where credit is due 💛
+          </Text>
+        </View>
+      ) : null}
       {surveysLoading ? (
         <View style={{ paddingVertical: 32, alignItems: 'center' }}>
           <ActivityIndicator color="#bd9348" />
@@ -1163,6 +1353,8 @@ export default function MonthlyTuneupScreen() {
         return renderCalendarStep();
       case 'helpers':
         return renderHelpersStep();
+      case 'todos':
+        return renderTodosStep();
       case 'checkin':
         return renderCheckInStep();
       default:

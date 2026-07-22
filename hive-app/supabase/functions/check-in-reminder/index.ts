@@ -92,12 +92,23 @@ function getSurveyResponsePeriod(dueDateOnly: string): string {
 
 // The reminder window opens (meeting date - 3 days). Pure calendar subtraction
 // on an already-Pacific calendar date, so no timezone is involved here.
-function getWindowOpenDate(dueDateOnly: string): string {
+function addDaysToDateOnly(dueDateOnly: string, days: number): string {
   const [y, m, d] = dueDateOnly.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() - REMINDER_WINDOW_DAYS);
+  dt.setUTCDate(dt.getUTCDate() + days);
   return dt.toISOString().split('T')[0];
 }
+
+function getWindowOpenDate(dueDateOnly: string): string {
+  return addDaysToDateOnly(dueDateOnly, -REMINDER_WINDOW_DAYS);
+}
+
+// Three touches per cycle, all fired by the same daily cron:
+//   midpoint — ~2 weeks out (newsletter season): gentle to-do/progress nudge
+//   window   — 3 days before: the full check-in invitation (legacy behavior)
+//   day_of   — meeting day: last call, only to people not yet checked in
+type ReminderKind = 'window' | 'day_of' | 'midpoint';
+const MIDPOINT_DAYS_BEFORE = 14;
 
 // Format a 'YYYY-MM-DD' date as e.g. "August 15" for email/body copy.
 function formatMeetingDate(dueDateOnly: string): { month: string; day: number } {
@@ -106,7 +117,46 @@ function formatMeetingDate(dueDateOnly: string): { month: string; day: number } 
 }
 
 // Warm honey/gold check-in email — shared by the real send and the test preview.
-function checkInEmailHtml(name: string, month: string, day: number): string {
+function checkInEmailHtml(name: string, month: string, day: number, kind: ReminderKind = 'window'): string {
+  if (kind === 'day_of') {
+    return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
+      <div style="text-align: center; padding: 8px 0 4px;">
+        <span style="font-size: 40px;">🐝</span>
+      </div>
+      <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Meeting tonight!</h1>
+      <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">Last call to check in before we gather</p>
+      <p style="font-size: 15px;">Hi ${name},</p>
+      <p style="font-size: 15px;">Tonight's the <strong>${month} ${day} HIVE meeting</strong> and your check-in isn't in yet — no stress, it takes about <strong>2 minutes</strong> with the Looks good → buttons, and it lights you up on the Arrival Board.</p>
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${APP_URL}/monthly-tuneup" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Check in before tonight</a>
+      </div>
+      <p style="font-size: 13px; color: #9a9a9a; text-align: center;">See you at ${month} ${day}. 🍯</p>
+    </div>
+  `;
+  }
+  if (kind === 'midpoint') {
+    return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
+      <div style="text-align: center; padding: 8px 0 4px;">
+        <span style="font-size: 40px;">🍯</span>
+      </div>
+      <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Mid-month pulse</h1>
+      <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">Halfway to the ${month} ${day} meeting</p>
+      <p style="font-size: 15px;">Hi ${name},</p>
+      <p style="font-size: 15px;">No meeting tonight — just a gentle nudge while things are fresh:</p>
+      <ul style="font-size: 15px; padding-left: 20px;">
+        <li>Peek at your <strong>to-do list</strong> — check off anything you've finished (it feeds your Progress recap at the meeting, so wins don't get forgotten)</li>
+        <li>Life moved? Update your HD wish</li>
+        <li>Out of town coming up? Add the stretch to the calendar</li>
+      </ul>
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${APP_URL}/monthly-tuneup" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Take the 2-minute pulse</a>
+      </div>
+      <p style="font-size: 13px; color: #9a9a9a; text-align: center;">See you ${month} ${day}. 🐝</p>
+    </div>
+  `;
+  }
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
       <div style="text-align: center; padding: 8px 0 4px;">
@@ -225,17 +275,29 @@ serve(async (req) => {
         const dueDateOnly = toPacificDateOnly(new Date(survey.due_date));
         if (!dueDateOnly) continue;
 
-        // Fire only exactly 3 days before the meeting day (Pacific) — unless
-        // force_send is set (rescheduled meeting, window already passed).
+        // Which touch fires today (Pacific)? At most one per day; force_send
+        // always means the full window invitation (rescheduled meetings).
         const windowOpen = getWindowOpenDate(dueDateOnly);
-        if (!forceSend && todayStr !== windowOpen) {
+        const midpointDate = addDaysToDateOnly(dueDateOnly, -MIDPOINT_DAYS_BEFORE);
+        const kind: ReminderKind | null = forceSend || todayStr === windowOpen
+          ? 'window'
+          : todayStr === dueDateOnly
+            ? 'day_of'
+            : todayStr === midpointDate
+              ? 'midpoint'
+              : null;
+        if (!kind) {
           continue;
         }
 
-        // Forced sends dedup per due date so a reschedule can send once more.
+        // Forced sends dedup per due date so a reschedule can send once more;
+        // day-of and midpoint touches dedup under their own keys.
+        const basePeriod = getSurveyResponsePeriod(dueDateOnly);
         const period = forceSend
-          ? `${getSurveyResponsePeriod(dueDateOnly)}:${dueDateOnly}`
-          : getSurveyResponsePeriod(dueDateOnly);
+          ? `${basePeriod}:${dueDateOnly}`
+          : kind === 'window'
+            ? basePeriod
+            : `${basePeriod}:${kind}`;
 
         // Dedup: skip if we've already sent this survey's reminder for this period.
         const { data: existingReminders, error: dedupError } = await supabaseAdmin
@@ -269,7 +331,23 @@ serve(async (req) => {
           continue;
         }
 
-        const memberIds = memberships.map((m: { user_id: string }) => m.user_id);
+        let memberIds = memberships.map((m: { user_id: string }) => m.user_id);
+
+        // Day-of and midpoint touches only nag people who haven't checked in
+        // for this cycle — the window invitation still goes to everyone.
+        if (kind !== 'window') {
+          const { data: responded } = await supabaseAdmin
+            .from('survey_responses')
+            .select('user_id')
+            .eq('survey_id', survey.id)
+            .eq('response_period', basePeriod);
+          const respondedIds = new Set((responded ?? []).map((r: { user_id: string }) => r.user_id));
+          memberIds = memberIds.filter((id: string) => !respondedIds.has(id));
+          if (memberIds.length === 0) {
+            console.log(`Everyone already checked in for ${survey.id} ${basePeriod} — skipping ${kind}`);
+            continue;
+          }
+        }
 
         const { data: members, error: profilesError } = await supabaseAdmin
           .from('profiles')
@@ -283,11 +361,25 @@ serve(async (req) => {
         }
 
         const { month, day } = formatMeetingDate(dueDateOnly);
-        const notificationTitle = '🐝 Monthly check-in is open';
+        const notificationTitle =
+          kind === 'day_of'
+            ? '🐝 Meeting tonight — last call to check in'
+            : kind === 'midpoint'
+              ? '🍯 Mid-month pulse — 2-minute check-in'
+              : '🐝 Monthly check-in is open';
         const notificationBody =
-          `Take 5 minutes before the ${month} meeting — update your HDs and check in. ` +
-          `It shows up on the Arrival Board and helps set the room.`;
-        const emailSubject = `🐝 Your HIVE check-in is open — meeting ${month} ${day}`;
+          kind === 'day_of'
+            ? `Tonight's the ${month} ${day} meeting and your check-in isn't in yet — it takes ~2 minutes and lights you up on the Arrival Board.`
+            : kind === 'midpoint'
+              ? `Halfway to the ${month} ${day} meeting — peek at your to-do list, check off what you've finished, and jot progress while it's fresh.`
+              : `Take 5 minutes before the ${month} meeting — update your HDs and check in. ` +
+                `It shows up on the Arrival Board and helps set the room.`;
+        const emailSubject =
+          kind === 'day_of'
+            ? `🐝 Meeting tonight (${month} ${day}) — quick check-in if you haven't`
+            : kind === 'midpoint'
+              ? `🍯 Mid-month pulse — halfway to the ${month} ${day} meeting`
+              : `🐝 Your HIVE check-in is open — meeting ${month} ${day}`;
 
         surveysFired++;
 
@@ -298,7 +390,7 @@ serve(async (req) => {
 
             // Send email first so we can set email_sent accurately on the row.
             if (hasEmail) {
-              const emailBody = checkInEmailHtml(member.name ?? 'there', month, day);
+              const emailBody = checkInEmailHtml(member.name ?? 'there', month, day, kind);
 
               try {
                 const res = await fetch('https://api.resend.com/emails', {

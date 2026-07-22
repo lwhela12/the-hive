@@ -185,6 +185,9 @@ export default function MeetingHelperScreen() {
   const [wishes, setWishes] = useState<DeckWish[]>([]);
   const [grantedWishes, setGrantedWishes] = useState<GrantedWish[]>([]);
   const [helperPosts, setHelperPosts] = useState<HangIdea[]>([]);
+  const [completedAssists, setCompletedAssists] = useState<
+    { id: string; description: string; assignedTo: string | null; relatedUserId: string | null; assigneeName: string }[]
+  >([]);
   const [deckRefreshing, setDeckRefreshing] = useState(false);
 
   // HummDinger: which member's full check-in is expanded on the bubbles grid.
@@ -323,6 +326,28 @@ export default function MeetingHelperScreen() {
         }));
         setGrantedWishes(rows);
       })().catch((error) => console.warn('Could not load granted wishes', error)),
+
+      // HummDinger assists: to-dos completed since ~last meeting, with names,
+      // so help given and received is on-screen during each member's HD moment
+      // (the "we filmed Charlee's aerial straps act!" that June-vs-July brains
+      // forget by meeting night).
+      (async () => {
+        const { data } = await (supabase as any)
+          .from('action_items')
+          .select('id, description, completed_at, assigned_to, related_user_id, assignee:profiles!assigned_to(name)')
+          .eq('community_id', communityId)
+          .eq('completed', true)
+          .gte('completed_at', sinceIso)
+          .order('completed_at', { ascending: false })
+          .limit(60);
+        setCompletedAssists(((data ?? []) as any[]).map((row) => ({
+          id: row.id as string,
+          description: row.description as string,
+          assignedTo: (row.assigned_to ?? null) as string | null,
+          relatedUserId: (row.related_user_id ?? null) as string | null,
+          assigneeName: (row.assignee?.name ?? 'Someone') as string,
+        })));
+      })().catch((error) => console.warn('Could not load assists', error)),
 
       // Kudos: recent 15-min helper posts from the helper log board
       (async () => {
@@ -1151,7 +1176,12 @@ export default function MeetingHelperScreen() {
           const detailSections = HUMMDINGER_DETAIL_SECTIONS
             .map((section) => ({ ...section, text: getTextAnswer(answers, section.key) }))
             .filter((section) => !!section.text);
-          const hasDetails = detailSections.length > 0 || !!topWish?.description;
+          const assistsForMember = completedAssists.filter(
+            (assist) => assist.relatedUserId === member.id && assist.assignedTo !== member.id
+          );
+          const assistsByMember = completedAssists.filter((assist) => assist.assignedTo === member.id);
+          const hasDetails =
+            detailSections.length > 0 || !!topWish?.description || assistsForMember.length > 0 || assistsByMember.length > 0;
           const isExpanded = expandedHummdingerId === member.id;
           return (
             <View
@@ -1240,6 +1270,30 @@ export default function MeetingHelperScreen() {
                         </Text>
                       </View>
                     ))}
+                    {assistsForMember.length > 0 ? (
+                      <View>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
+                          Done for {getFirstName(member.name)} this cycle 💛
+                        </Text>
+                        {assistsForMember.map((assist) => (
+                          <Text key={assist.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 17), color: CHARCOAL }}>
+                            {getFirstName(assist.assigneeName)}: {assist.description}
+                          </Text>
+                        ))}
+                      </View>
+                    ) : null}
+                    {assistsByMember.length > 0 ? (
+                      <View>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
+                          {getFirstName(member.name)} checked off ✓
+                        </Text>
+                        {assistsByMember.map((assist) => (
+                          <Text key={assist.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 17), color: CHARCOAL }}>
+                            {assist.description}
+                          </Text>
+                        ))}
+                      </View>
+                    ) : null}
                     {/* Live note → to-do lists, typed as the room talks */}
                     <View
                       style={{
@@ -1568,14 +1622,18 @@ export default function MeetingHelperScreen() {
           </View>
         </View>
 
-        {/* Timekeeper pill — tap to change tonight's hard-out */}
+        {/* Timekeeper — a little analog clock in a right-side panel, with the
+            countdown to tonight's hard-out. Tap to change the hard-out. The
+            per-slide pace hint only appears once the meeting is actually
+            near (within 3h of the hard-out) — at lunchtime it's noise. */}
         {(() => {
           const [hour, minute] = hardOutTime.split(':').map(Number);
           const hardOutDate = new Date(clockNow);
           hardOutDate.setHours(hour, minute, 0, 0);
           const minutesLeft = Math.round((hardOutDate.getTime() - clockNow.getTime()) / 60_000);
           const slidesLeft = Math.max(1, slideCount - clampedIndex);
-          const paceMinutes = minutesLeft > 0 ? Math.max(1, Math.floor(minutesLeft / slidesLeft)) : null;
+          const meetingIsNear = minutesLeft > 0 && minutesLeft <= 180;
+          const paceMinutes = meetingIsNear ? Math.max(1, Math.floor(minutesLeft / slidesLeft)) : null;
           const clockLabel = clockNow.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
           const hardOutLabel = hardOutDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
           const leftLabel =
@@ -1583,7 +1641,10 @@ export default function MeetingHelperScreen() {
               ? `past ${hardOutLabel} 🌙`
               : minutesLeft >= 60
                 ? `${Math.floor(minutesLeft / 60)}h ${minutesLeft % 60}m 'til ${hardOutLabel}`
-                : `${minutesLeft}m 'til ${hardOutLabel}`;
+                : `${minutesLeft} min 'til ${hardOutLabel}`;
+          const clockSize = sz(96, 54);
+          const hourAngle = (clockNow.getHours() % 12) * 30 + clockNow.getMinutes() * 0.5;
+          const minuteAngle = clockNow.getMinutes() * 6;
           return (
             <Pressable
               onPress={() => {
@@ -1592,29 +1653,81 @@ export default function MeetingHelperScreen() {
               }}
               style={({ pressed }) => ({
                 position: 'absolute',
-                left: sz(40, 14),
-                bottom: sz(20, 12),
-                flexDirection: 'row',
+                right: sz(28, 10),
+                bottom: sz(72, 52),
                 alignItems: 'center',
-                gap: sz(10, 6),
-                backgroundColor: 'rgba(255,253,245,0.92)',
+                gap: sz(8, 5),
+                backgroundColor: 'rgba(255,253,245,0.94)',
                 borderWidth: 1,
                 borderColor: GOLD_SOFT,
-                borderRadius: 999,
-                paddingHorizontal: sz(16, 11),
-                paddingVertical: sz(8, 6),
+                borderRadius: sz(20, 14),
+                paddingHorizontal: sz(16, 10),
+                paddingVertical: sz(14, 9),
                 opacity: pressed ? 0.8 : 1,
               })}
             >
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: CHARCOAL }}>
-                🕐 {clockLabel}
+              <View
+                style={{
+                  width: clockSize,
+                  height: clockSize,
+                  borderRadius: clockSize / 2,
+                  borderWidth: 2,
+                  borderColor: GOLD,
+                  backgroundColor: CARD,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {[0, 90, 180, 270].map((angle) => (
+                  <View
+                    key={angle}
+                    style={{
+                      position: 'absolute',
+                      width: 2,
+                      height: clockSize * 0.08,
+                      backgroundColor: GOLD_SOFT,
+                      transform: [{ rotate: `${angle}deg` }, { translateY: -clockSize * 0.4 }],
+                    }}
+                  />
+                ))}
+                <View
+                  style={{
+                    position: 'absolute',
+                    width: 3,
+                    height: clockSize * 0.24,
+                    borderRadius: 2,
+                    backgroundColor: CHARCOAL,
+                    transform: [{ rotate: `${hourAngle}deg` }, { translateY: -clockSize * 0.12 }],
+                  }}
+                />
+                <View
+                  style={{
+                    position: 'absolute',
+                    width: 2,
+                    height: clockSize * 0.34,
+                    borderRadius: 2,
+                    backgroundColor: GOLD_DEEP,
+                    transform: [{ rotate: `${minuteAngle}deg` }, { translateY: -clockSize * 0.17 }],
+                  }}
+                />
+                <View style={{ position: 'absolute', width: 6, height: 6, borderRadius: 3, backgroundColor: GOLD_DEEP }} />
+              </View>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 11), color: CHARCOAL }}>
+                {clockLabel}
               </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(15, 10), color: minutesLeft <= 15 && minutesLeft > 0 ? '#b3261e' : MUTED }}>
+              <Text
+                style={{
+                  fontFamily: 'Lato_400Regular',
+                  fontSize: sz(14, 9),
+                  color: minutesLeft <= 15 && minutesLeft > 0 ? '#b3261e' : MUTED,
+                  textAlign: 'center',
+                }}
+              >
                 {leftLabel}
               </Text>
               {paceMinutes !== null ? (
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 9), color: MUTED }}>
-                  ~{paceMinutes} min/slide
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 8), color: MUTED, textAlign: 'center' }}>
+                  ≈{paceMinutes} min each for the{'\n'}{slidesLeft} slide{slidesLeft === 1 ? '' : 's'} left
                 </Text>
               ) : null}
             </Pressable>

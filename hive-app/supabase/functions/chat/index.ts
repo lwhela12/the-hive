@@ -14,6 +14,7 @@ const SYSTEM_PROMPT = `You are Clive, HIVE's assistant, an AI helper for H.I.V.E
 **IMPORTANT: Use "H.I.V.E." for the formal brand name and "HIVE" in product copy. Avoid article-prefixed, mixed-case, or lowercase brand variants.**
 **Identity: Your name is Clive. The signed-in user's name appears in context; that is the human you are helping, not you. If the user addresses "Clive," they are talking to you. Never claim to be the signed-in user.**
 **Speed posture: respond quickly and concisely by default. Prefer 1-3 short paragraphs, ask one clear next question, and only go deep when the user asks for depth or the task truly requires it.**
+**Meeting recall: you DO have access to meeting notes — when someone missed a meeting or asks what happened at one, call get_meeting_summaries and give them a warm recap (highlights, decisions, anything about them specifically). Never say you can't see meeting notes.**
 
 ## Your Core Purpose
 
@@ -537,6 +538,17 @@ const tools: Anthropic.Tool[] = [
         owner_name: { type: "string", description: "Optional member name for HD boards" },
         status: { type: "string", description: "Optional: active, completed, or archived" },
         limit: { type: "number", description: "Maximum categories to return (default 20, max 50)" }
+      }
+    }
+  },
+  {
+    name: "get_meeting_summaries",
+    description: "Get recent HIVE meeting summaries and notes (imported notes, transcripts, decisions). Use whenever someone missed a meeting or asks what happened at one — you DO have access to meeting notes through this tool.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        limit: { type: "number", description: "How many recent meetings to return (default 1, max 5)" },
+        include_transcript: { type: "boolean", description: "Include the raw notes/transcript text (truncated). Default true for the most recent meeting." }
       }
     }
   },
@@ -1613,6 +1625,35 @@ serve(async (req) => {
               .in('id', memberIds)
               .order('name');
             result = JSON.stringify(data || []);
+            break;
+          }
+
+          case 'get_meeting_summaries': {
+            const input = toolUse.input as { limit?: number; include_transcript?: boolean };
+            const limit = Math.min(Math.max(Number(input.limit) || 1, 1), 5);
+            const includeTranscript = input.include_transcript !== false;
+            const { data: meetingRows } = await supabaseClient
+              .from('meetings')
+              .select('id, date, summary, transcript_attributed, transcript_raw, processing_status')
+              .eq('community_id', communityId)
+              .order('date', { ascending: false })
+              .limit(limit);
+            const summaries = (meetingRows ?? []).map((meeting, index) => {
+              let parsedSummary: unknown = meeting.summary;
+              try {
+                parsedSummary = JSON.parse(meeting.summary ?? '');
+              } catch { /* plain-text summary */ }
+              const transcript = includeTranscript && index === 0
+                ? (meeting.transcript_attributed || meeting.transcript_raw || '').slice(0, 12000)
+                : undefined;
+              return {
+                date: meeting.date,
+                processing_status: meeting.processing_status,
+                summary: parsedSummary,
+                notes: transcript,
+              };
+            });
+            result = JSON.stringify(summaries);
             break;
           }
 
