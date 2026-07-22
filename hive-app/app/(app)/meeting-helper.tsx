@@ -770,30 +770,35 @@ export default function MeetingHelperScreen() {
   const roomColumns = isTV ? 5 : width >= 1024 ? 4 : width >= 760 ? 3 : width >= 480 ? 2 : 1;
   const renderRoom = () => (
     <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: sz(24, 12), marginBottom: sz(10, 6) }}>
+      <View style={{ alignItems: 'center', marginBottom: sz(24, 14) }}>
         <Image
           source={hiveLogo}
-          style={{ width: sz(150, 84), height: sz(98, 56) }}
+          style={{ width: sz(130, 74), height: sz(84, 48) }}
           contentFit="contain"
         />
-        <View style={{ flex: 1, minWidth: 240 }}>
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(40, 22), lineHeight: sz(50, 28), color: CHARCOAL }}>
-            {monthName} {meetingYear} Meeting
+        <Text
+          style={{
+            fontFamily: 'LibreBaskerville_700Bold',
+            fontSize: sz(58, 28),
+            lineHeight: sz(70, 36),
+            color: CHARCOAL,
+            textAlign: 'center',
+            marginTop: sz(10, 6),
+          }}
+        >
+          {monthName} {meetingYear} Meeting
+        </Text>
+        {meetingLine ? (
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(24, 14), color: GOLD_DEEP, marginTop: sz(8, 5), textAlign: 'center' }}>
+            {meetingLine}
           </Text>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 12), color: GOLD_DEEP, marginTop: sz(4, 2) }}>
-            {meetingLine} · grab a plate and check in 🍯
-          </Text>
-        </View>
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap', gap: sz(18, 10), marginBottom: sz(20, 12) }}>
-        <View style={{ flex: 1, minWidth: 240 }}>
-          <Kicker>Arrivals</Kicker>
-          <SlideTitle>Who's in the room</SlideTitle>
-        </View>
+        ) : null}
+        <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(19, 12), color: MUTED, marginTop: sz(6, 4), textAlign: 'center' }}>
+          grab a plate and check in 🍯
+        </Text>
         {survey ? (
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(22, 13), color: MUTED, paddingBottom: sz(10, 4) }}>
-            {checkedInCount} of {members.length} checked in
-            {lastUpdatedAt ? '  ·  live' : ''}
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 11), color: MUTED, marginTop: sz(10, 6) }}>
+            {checkedInCount} of {members.length} checked in{lastUpdatedAt ? '  ·  live' : ''}
           </Text>
         ) : null}
       </View>

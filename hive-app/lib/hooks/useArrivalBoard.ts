@@ -57,7 +57,17 @@ export function formatMeetingDate(meeting: ArrivalBoardMeeting | null) {
     month: 'long',
     day: 'numeric',
   });
-  return meeting.event_time ? `${dateLabel} · ${meeting.event_time}` : dateLabel;
+  return meeting.event_time ? `${dateLabel} · ${formatEventTime(meeting.event_time)}` : dateLabel;
+}
+
+// "17:30:00" reads like a stopwatch — render times as "5:30 PM".
+export function formatEventTime(raw: string) {
+  const [hour, minute] = raw.split(':').map(Number);
+  if (!Number.isFinite(hour)) return raw;
+  return new Date(2000, 0, 1, hour, minute || 0).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 // "Will we see you at the meeting?" — parsed loosely so copy tweaks to the
