@@ -774,8 +774,8 @@ export default function MeetingHelperScreen() {
     <View style={{ flex: 1 }}>
       <View style={{ alignItems: 'center', marginBottom: sz(24, 14) }}>
         <Image
-          source={hiveLogo}
-          style={{ width: sz(130, 74), height: sz(84, 48) }}
+          source={hiveBee}
+          style={{ width: sz(96, 56), height: sz(96, 56) }}
           contentFit="contain"
         />
         <Text
@@ -850,29 +850,42 @@ export default function MeetingHelperScreen() {
   );
 
   const renderOutline = () => (
-    <View style={{ flex: 1, justifyContent: 'center' }}>
-      <Kicker>Tonight</Kicker>
-      <SlideTitle>Outline</SlideTitle>
-      <View style={{ marginTop: sz(40, 22), gap: sz(20, 12) }}>
-        {AGENDA.map((item, index) => (
-          <View key={item.key} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(24, 14) }}>
-            <Text
-              style={{
-                fontFamily: 'LibreBaskerville_700Bold',
-                fontSize: sz(30, 17),
-                color: GOLD,
-                width: sz(48, 28),
-                textAlign: 'right',
-              }}
-            >
-              {index + 1}
-            </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(34, 19), color: CHARCOAL }}>
-              {item.label}
-            </Text>
-          </View>
-        ))}
+    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: sz(40, 16) }}>
+      <View style={{ flex: 1, justifyContent: 'center' }}>
+        <Kicker>Tonight</Kicker>
+        <SlideTitle>Outline</SlideTitle>
+        <View style={{ marginTop: sz(40, 22), gap: sz(20, 12) }}>
+          {AGENDA.map((item, index) => (
+            <View key={item.key} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(24, 14) }}>
+              <Text
+                style={{
+                  fontFamily: 'LibreBaskerville_700Bold',
+                  fontSize: sz(30, 17),
+                  color: GOLD,
+                  width: sz(48, 28),
+                  textAlign: 'right',
+                }}
+              >
+                {index + 1}
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(34, 19), color: CHARCOAL }}>
+                {item.label}
+              </Text>
+            </View>
+          ))}
+        </View>
       </View>
+      {/* The full HIVE crest gets its giant moment here (square frame — the
+          arrivals slide squished it into a rectangle). */}
+      {width >= 900 ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Image
+            source={hiveLogo}
+            style={{ width: sz(520, 300), height: sz(520, 300) }}
+            contentFit="contain"
+          />
+        </View>
+      ) : null}
     </View>
   );
 
