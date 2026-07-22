@@ -25,9 +25,9 @@ const BROADCAST_MENTION_HANDLES = new Set([
 const BROADCAST_MENTION_SUGGESTION: MentionTarget = {
   id: BROADCAST_MENTION_ID,
   name: 'Everyone in HIVE',
-  handle: 'hive',
+  handle: 'all',
   isBroadcast: true,
-  description: 'Tag the whole group',
+  description: 'Tag the whole group (@all, @everyone, and @hive all work)',
 };
 
 function normalizeMentionHandle(value?: string | null): string {
