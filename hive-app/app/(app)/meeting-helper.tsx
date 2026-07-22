@@ -271,6 +271,10 @@ export default function MeetingHelperScreen() {
   const [expandedPlanCard, setExpandedPlanCard] = useState<'hang' | 'help' | null>(null);
   const [meetingSchedulerDate, setMeetingSchedulerDate] = useState<string | null>(null);
 
+  // Month pager for the Meet Ups calendars — mini arrows page the two-month
+  // window without leaving the slide (the big edge arrows change slides).
+  const [monthOffset, setMonthOffset] = useState(0);
+
   // Quick-add: tap a calendar day on Plan the Meet Ups to pencil in a hang.
   const [quickAddDate, setQuickAddDate] = useState<string | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useState('');
@@ -283,7 +287,8 @@ export default function MeetingHelperScreen() {
 
     const today = getLocalIsoDate(new Date());
     const horizon = new Date();
-    horizon.setDate(horizon.getDate() + 75);
+    // Wide enough that the month pager has real data several months out.
+    horizon.setDate(horizon.getDate() + 190);
     const sinceLastMeeting = new Date();
     sinceLastMeeting.setDate(sinceLastMeeting.getDate() - 35);
     const sinceIso = sinceLastMeeting.toISOString();
@@ -1027,8 +1032,8 @@ export default function MeetingHelperScreen() {
     const todayIso = getLocalIsoDate(new Date());
     const today = new Date();
     const monthStarts = [
-      new Date(today.getFullYear(), today.getMonth(), 1),
-      new Date(today.getFullYear(), today.getMonth() + 1, 1),
+      new Date(today.getFullYear(), today.getMonth() + monthOffset, 1),
+      new Date(today.getFullYear(), today.getMonth() + monthOffset + 1, 1),
     ];
 
     // Check-in voices for the expandable Hang/Help cards — the hangs answer
@@ -1499,8 +1504,52 @@ export default function MeetingHelperScreen() {
           </View>
         ) : null}
 
-        {/* Middle: this month and next, side by side on the TV */}
-        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(28, 14), marginTop: sz(22, 12) }}>
+        {/* Mini month pager — pages the calendar window, NOT the slides */}
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: sz(10, 7), marginTop: sz(18, 10) }}>
+          {monthOffset !== 0 ? (
+            <Pressable
+              onPress={() => setMonthOffset(0)}
+              style={({ pressed }) => ({
+                borderWidth: 1,
+                borderColor: GOLD_SOFT,
+                borderRadius: 999,
+                paddingHorizontal: sz(14, 10),
+                paddingVertical: sz(6, 4),
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP }}>back to now</Text>
+            </Pressable>
+          ) : null}
+          {[
+            { label: '‹', delta: -1, hint: 'previous month' },
+            { label: '›', delta: 1, hint: 'next month' },
+          ].map((pager) => (
+            <Pressable
+              key={pager.label}
+              onPress={() => setMonthOffset((offset) => offset + pager.delta)}
+              accessibilityLabel={pager.hint}
+              style={({ pressed }) => ({
+                width: sz(38, 28),
+                height: sz(38, 28),
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: GOLD_SOFT,
+                backgroundColor: CARD,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 15), color: GOLD_DEEP, marginTop: -2 }}>
+                {pager.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Middle: two months side by side on the TV */}
+        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(28, 14), marginTop: sz(8, 5) }}>
           {monthStarts.map(renderMonth)}
         </View>
 
