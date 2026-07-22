@@ -1014,6 +1014,17 @@ export default function MeetingHelperScreen() {
     const helpVoices = voicesFor('q_hive_help_recap');
     const hangVoices = voicesFor('q_hangs_recap', recapNote);
 
+    // Survey says! Turnout per hang, counted from the check-ins' "I went 🙌"
+    // taps (the answer's first line is "Went to: A · B").
+    const hangPoll = pastHangs.map((hang) => {
+      const went = members.filter((member) => {
+        const raw = getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, 'q_hangs_recap');
+        const firstLine = raw.split('\n')[0] ?? '';
+        return firstLine.startsWith('Went to: ') && firstLine.includes(hang.title);
+      }).length;
+      return { ...hang, went };
+    });
+
     const nextMeetingEvent = events.find(
       (event) => event.event_type === 'meeting' && event.event_date > todayIso
     );
@@ -1261,8 +1272,10 @@ export default function MeetingHelperScreen() {
           })}
         </View>
 
-        {/* HIVE Hang expansion: idea fuel — the hang board + what people said
-            in their check-ins. Writers days, dooms days — it all counts. */}
+        {/* HIVE Hang expansion — the POP formula for hangs. Left: how did
+            last cycle land (real turnout meters from the check-in "I went 🙌"
+            taps — survey says!). Right: what should we do next. Async voices
+            count the same as in-person ones. */}
         {expandedPlanCard === 'hang' ? (
           <View
             style={{
@@ -1273,51 +1286,100 @@ export default function MeetingHelperScreen() {
               borderRadius: sz(18, 14),
               paddingHorizontal: sz(22, 14),
               paddingVertical: sz(16, 10),
-              gap: sz(10, 7),
+              flexDirection: isTV ? 'row' : 'column',
+              gap: sz(32, 14),
             }}
           >
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: sz(10, 7) }}>
+            <View style={{ flex: isTV ? 1 : undefined, gap: sz(10, 7) }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
-                💡 Ideas from the board
+                📊 How did we do?
               </Text>
-              {hangIdeas.length === 0 ? (
+              {hangPoll.length === 0 ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
-                  none yet — first to post picks the venue
+                  No hangs last cycle — blank scoreboard, let's fix that.
                 </Text>
               ) : (
-                hangIdeas.map((idea) => (
-                  <View
-                    key={idea.id}
-                    style={{
-                      backgroundColor: 'rgba(222,193,129,0.18)',
-                      borderRadius: 999,
-                      paddingHorizontal: sz(18, 12),
-                      paddingVertical: sz(8, 6),
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: GOLD_DEEP }}>
-                      {(idea.title ?? 'Untitled idea').trim() || 'Untitled idea'}
-                    </Text>
+                hangPoll.map((hang) => (
+                  <View key={hang.id} style={{ gap: sz(3, 2) }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 6) }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 12), color: CHARCOAL, flexShrink: 1 }}>
+                        {hang.title}
+                      </Text>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP }}>
+                        {hang.went > 0 ? `🙌 ${hang.went} went` : 'survey pending…'}
+                      </Text>
+                    </View>
+                    <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: 'rgba(222,193,129,0.18)', overflow: 'hidden' }}>
+                      <View
+                        style={{
+                          width: `${Math.round((hang.went / Math.max(1, members.length)) * 100)}%`,
+                          height: '100%',
+                          borderRadius: 999,
+                          backgroundColor: GOLD,
+                        }}
+                      />
+                    </View>
                   </View>
                 ))
               )}
-            </View>
-            {hangVoices.length > 0 ? (
-              <View style={{ gap: sz(4, 3) }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
-                  🗣️ From the check-ins
-                </Text>
-                {hangVoices.map((voice) => (
-                  <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
-                    {voice.text}
+              {hangVoices.length > 0 ? (
+                <View style={{ gap: sz(4, 3), marginTop: sz(6, 4) }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
+                    🗣️ What we thought
                   </Text>
-                ))}
+                  {hangVoices.map((voice) => (
+                    <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
+                      {voice.text}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+
+            <View style={{ flex: isTV ? 1 : undefined, gap: sz(10, 7) }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
+                💡 What should we do next?
+              </Text>
+              {hangIdeas.length === 0 ? (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
+                  No ideas on the board yet — first to post picks the venue.
+                </Text>
+              ) : (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(10, 7) }}>
+                  {hangIdeas.map((idea) => (
+                    <View
+                      key={idea.id}
+                      style={{
+                        backgroundColor: 'rgba(222,193,129,0.18)',
+                        borderRadius: 999,
+                        paddingHorizontal: sz(18, 12),
+                        paddingVertical: sz(8, 6),
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: GOLD_DEEP }}>
+                        {(idea.title ?? 'Untitled idea').trim() || 'Untitled idea'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
+                Pick one, tap a day on the calendar — writers days and project days count too 🐝
+              </Text>
+              <View style={{ marginTop: sz(4, 3) }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 6), marginBottom: sz(4, 3) }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: MUTED }}>
+                    This month's plans
+                  </Text>
+                  <EditPill noteKey="meetups" />
+                </View>
+                <NoteBody
+                  noteKey="meetups"
+                  emptyText="No meet-up plans written down yet — hatch some tonight."
+                />
               </View>
-            ) : null}
-            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
-              Pick one, tap a day on the calendar — writers days and project days count too 🐝
-            </Text>
+            </View>
           </View>
         ) : null}
 
@@ -1429,52 +1491,8 @@ export default function MeetingHelperScreen() {
           🐝 meeting · 🎂 birthday · little faces → = who's away · 📌 event — tap any open day to pencil in a hang right here.
         </Text>
 
-        {/* Bottom: last cycle's hangs (the "what did we think?" anchor) and
-            the running plans note. Everything else lives in the cards above. */}
-        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(36, 16), marginTop: sz(16, 10) }}>
-          <View style={{ flex: isTV ? 1 : undefined, gap: sz(8, 6) }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD }}>
-              🎉 Last cycle's hangs
-            </Text>
-            {pastHangs.length === 0 ? (
-              <EmptyNote>No hangs this cycle — let's fix that tonight.</EmptyNote>
-            ) : (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(10, 7) }}>
-                {pastHangs.map((hang) => (
-                  <View
-                    key={hang.id}
-                    style={{
-                      backgroundColor: 'rgba(222,193,129,0.18)',
-                      borderRadius: 999,
-                      paddingHorizontal: sz(18, 12),
-                      paddingVertical: sz(8, 6),
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 12), color: GOLD_DEEP }}>
-                      {hang.title}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(15, 10), color: MUTED }}>
-              What did we think? What's next? Tap a day above — bam, scheduled.
-            </Text>
-          </View>
-
-          <View style={{ flex: isTV ? 1 : undefined }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 6), marginBottom: sz(6, 4) }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: MUTED }}>
-                This month's plans
-              </Text>
-              <EditPill noteKey="meetups" />
-            </View>
-            <NoteBody
-              noteKey="meetups"
-              emptyText="No meet-up plans written down yet — hatch some tonight."
-            />
-          </View>
-        </View>
+        {/* Everything lives in the cards above now — recaps, polls, ideas,
+            and plans all expand from Meeting/Hang/Help. */}
 
         {/* Breathing room so the last row scrolls clear of the footer. */}
         <View style={{ height: sz(90, 64) }} />
