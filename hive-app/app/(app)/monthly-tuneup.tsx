@@ -201,6 +201,29 @@ export default function MonthlyTuneupScreen() {
   const [stepIndex, setStepIndex] = useState(0);
   const [finished, setFinished] = useState(false);
 
+  // Hangs since ~last meeting, for the check-in's went/didn't-go recap chips.
+  const [hangRecapEvents, setHangRecapEvents] = useState<{ id: string; title: string }[]>([]);
+  useEffect(() => {
+    if (!communityId) return;
+    (async () => {
+      const since = new Date();
+      since.setDate(since.getDate() - 35);
+      const { data } = await supabase
+        .from('events')
+        .select('id, title, event_date, end_date, event_type')
+        .eq('community_id', communityId)
+        .gte('event_date', since.toISOString().slice(0, 10))
+        .lte('event_date', new Date().toISOString().slice(0, 10))
+        .neq('event_type', 'meeting')
+        .neq('event_type', 'birthday')
+        .order('event_date', { ascending: true });
+      const hangs = ((data ?? []) as { id: string; title: string; end_date: string | null }[])
+        // Out-of-town stretches aren't hangs — same heuristic as the deck calendar.
+        .filter((event) => !(event.end_date || /\b(out of town|away|trip|travel|galavant)/i.test(event.title)));
+      setHangRecapEvents(hangs.map((event) => ({ id: event.id, title: event.title })));
+    })().catch((error) => console.warn('Could not load hang recap events', error));
+  }, [communityId]);
+
   // Step 1 — HD wishes (same manage wiring as profile.tsx)
   const [managingWish, setManagingWish] = useState<Wish | null>(null);
   const [editingWish, setEditingWish] = useState<Wish | null>(null);
@@ -1119,6 +1142,7 @@ export default function MonthlyTuneupScreen() {
               index={index}
               value={checkInAnswers[question.id]}
               onChange={(value) => setCheckInAnswer(question.id, value)}
+              hangEvents={hangRecapEvents}
             />
           ))}
           {checkInError ? (

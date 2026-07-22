@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,6 +6,11 @@ import { AppHeader } from '../../components/navigation';
 import { HoneyPotPaymentCard } from '../../components/hive/HoneyPotPaymentCard';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { fetchHoneyPotLedger, type HoneyPotLedgerEntry } from '../../lib/honeyPot';
+import {
+  duesTransactionsCoverMember,
+  getCurrentDuesPeriod,
+  QUARTERLY_DUES_AMOUNT,
+} from '../../lib/dues';
 import { useAuth } from '../../lib/hooks/useAuth';
 
 export default function HoneyPotScreen() {
@@ -39,6 +44,26 @@ export default function HoneyPotScreen() {
     loadLedger();
   }, [loadLedger]);
 
+  // At-a-glance dues status for whoever's looking — no ledger-scrolling
+  // required. Uses the same recognizer as the reminder emails.
+  const duesStatus = useMemo(() => {
+    if (!profile) return null;
+    const member = { id: profile.id, name: profile.name, email: profile.email };
+    const current = getCurrentDuesPeriod();
+    if (!duesTransactionsCoverMember(transactions, member, current)) {
+      return { covered: false, label: `Q${current.quarter} ${current.year} dues are due — $${QUARTERLY_DUES_AMOUNT} · CashApp $HiveLV` };
+    }
+    let coveredThrough = current;
+    for (let step = 0; step < 8; step += 1) {
+      const next = coveredThrough.quarter === 4
+        ? { year: coveredThrough.year + 1, quarter: 1 }
+        : { year: coveredThrough.year, quarter: coveredThrough.quarter + 1 };
+      if (!duesTransactionsCoverMember(transactions, member, next)) break;
+      coveredThrough = next;
+    }
+    return { covered: true, label: `You're paid up through Q${coveredThrough.quarter} ${coveredThrough.year} 🎉` };
+  }, [profile, transactions]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadLedger();
@@ -62,6 +87,34 @@ export default function HoneyPotScreen() {
               Community fund activity
             </Text>
           </View>
+          {!loading && duesStatus ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                backgroundColor: duesStatus.covered ? '#f0fdf4' : '#fffbeb',
+                borderWidth: 1,
+                borderColor: duesStatus.covered ? '#bbf7d0' : '#fde68a',
+                borderRadius: 14,
+                paddingHorizontal: 16,
+                paddingVertical: 13,
+                marginBottom: 14,
+              }}
+            >
+              <Text style={{ fontSize: 18 }}>{duesStatus.covered ? '✅' : '🐝'}</Text>
+              <Text
+                style={{
+                  fontFamily: 'Lato_700Bold',
+                  fontSize: 15,
+                  color: duesStatus.covered ? '#166534' : '#92400e',
+                  flex: 1,
+                }}
+              >
+                {duesStatus.label}
+              </Text>
+            </View>
+          ) : null}
           <HoneyPotPaymentCard />
           <HoneyPotLedger
             balance={balance}

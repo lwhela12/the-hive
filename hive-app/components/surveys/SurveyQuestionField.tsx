@@ -113,17 +113,107 @@ export function VoiceTextInput({
   );
 }
 
+export interface HangRecapEvent {
+  id: string;
+  title: string;
+}
+
+// The hangs-recap answer is one plain string so every existing display keeps
+// working: "Went to: A · B" on the first line, free-form thoughts after.
+const parseHangsAnswer = (raw: string) => {
+  const lines = raw.split('\n');
+  if (lines[0]?.startsWith('Went to: ')) {
+    return { attended: lines[0].slice('Went to: '.length).split(' · ').filter(Boolean), note: lines.slice(1).join('\n') };
+  }
+  return { attended: [] as string[], note: raw };
+};
+
+const composeHangsAnswer = (attended: string[], note: string) => {
+  const head = attended.length > 0 ? `Went to: ${attended.join(' · ')}` : '';
+  return [head, note].filter(Boolean).join('\n');
+};
+
+export function HangsRecapInput({
+  value,
+  onChange,
+  hangs,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  hangs: HangRecapEvent[];
+}) {
+  const { attended, note } = parseHangsAnswer(value);
+
+  if (hangs.length === 0) {
+    return (
+      <VoiceTextInput
+        value={value}
+        onChangeText={onChange}
+        placeholder="Any hangs, thoughts, or suggestions?"
+        multiline
+      />
+    );
+  }
+
+  const toggle = (title: string) => {
+    const next = attended.includes(title)
+      ? attended.filter((item) => item !== title)
+      : [...attended, title];
+    onChange(composeHangsAnswer(next, note));
+  };
+
+  return (
+    <View style={{ gap: 10, marginTop: 8 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {hangs.map((hang) => {
+          const active = attended.includes(hang.title);
+          return (
+            <Pressable
+              key={hang.id}
+              onPress={() => toggle(hang.title)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: active ? '#fdf3dc' : '#faf8f3',
+                borderWidth: 1,
+                borderColor: active ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
+                borderRadius: 999,
+                paddingHorizontal: 14,
+                paddingVertical: 9,
+              }}
+            >
+              <Text style={{ fontSize: 13 }}>{active ? '🙌' : '○'}</Text>
+              <Text style={{ fontFamily: active ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: active ? '#8a6b30' : '#6b7280' }}>
+                {hang.title}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <VoiceTextInput
+        value={note}
+        onChangeText={(nextNote) => onChange(composeHangsAnswer(attended, nextNote))}
+        placeholder="What did you think? Any suggestions or stories?"
+        multiline
+      />
+    </View>
+  );
+}
+
 // One survey question — same look everywhere the check-in renders.
 export function SurveyQuestionField({
   question,
   index,
   value,
   onChange,
+  hangEvents,
 }: {
   question: SurveyQuestion;
   index: number;
   value: any;
   onChange: (value: any) => void;
+  hangEvents?: HangRecapEvent[];
 }) {
   const textValue = typeof value === 'string' ? value : '';
 
@@ -151,6 +241,9 @@ export function SurveyQuestionField({
       )}
       {question.type === 'choice' && question.options && (
         <ChoiceInput options={question.options} value={value ?? ''} onChange={onChange} />
+      )}
+      {question.type === 'hangs' && (
+        <HangsRecapInput value={textValue} onChange={onChange} hangs={hangEvents ?? []} />
       )}
     </View>
   );

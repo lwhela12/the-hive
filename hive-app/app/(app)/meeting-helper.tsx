@@ -196,6 +196,18 @@ export default function MeetingHelperScreen() {
   const [liveNoteSaving, setLiveNoteSaving] = useState(false);
   const [liveNoteConfirmation, setLiveNoteConfirmation] = useState<string | null>(null);
 
+  // Gentle timekeeper: a clock pill with time-'til-hard-out (default 8pm,
+  // tap to change) and a soft per-remaining-slide pace hint — enough to say
+  // "peep the time!" without anyone feeling on the clock.
+  const [hardOutTime, setHardOutTime] = useState('20:00');
+  const [hardOutDraft, setHardOutDraft] = useState('');
+  const [showHardOutEditor, setShowHardOutEditor] = useState(false);
+  const [clockNow, setClockNow] = useState(() => new Date());
+  useEffect(() => {
+    const tick = setInterval(() => setClockNow(new Date()), 30_000);
+    return () => clearInterval(tick);
+  }, []);
+
   // Quick-add: tap a calendar day on Plan the Meet Ups to pencil in a hang.
   const [quickAddDate, setQuickAddDate] = useState<string | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useState('');
@@ -1556,6 +1568,59 @@ export default function MeetingHelperScreen() {
           </View>
         </View>
 
+        {/* Timekeeper pill — tap to change tonight's hard-out */}
+        {(() => {
+          const [hour, minute] = hardOutTime.split(':').map(Number);
+          const hardOutDate = new Date(clockNow);
+          hardOutDate.setHours(hour, minute, 0, 0);
+          const minutesLeft = Math.round((hardOutDate.getTime() - clockNow.getTime()) / 60_000);
+          const slidesLeft = Math.max(1, slideCount - clampedIndex);
+          const paceMinutes = minutesLeft > 0 ? Math.max(1, Math.floor(minutesLeft / slidesLeft)) : null;
+          const clockLabel = clockNow.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          const hardOutLabel = hardOutDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          const leftLabel =
+            minutesLeft <= 0
+              ? `past ${hardOutLabel} 🌙`
+              : minutesLeft >= 60
+                ? `${Math.floor(minutesLeft / 60)}h ${minutesLeft % 60}m 'til ${hardOutLabel}`
+                : `${minutesLeft}m 'til ${hardOutLabel}`;
+          return (
+            <Pressable
+              onPress={() => {
+                setHardOutDraft('');
+                setShowHardOutEditor(true);
+              }}
+              style={({ pressed }) => ({
+                position: 'absolute',
+                left: sz(40, 14),
+                bottom: sz(20, 12),
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: sz(10, 6),
+                backgroundColor: 'rgba(255,253,245,0.92)',
+                borderWidth: 1,
+                borderColor: GOLD_SOFT,
+                borderRadius: 999,
+                paddingHorizontal: sz(16, 11),
+                paddingVertical: sz(8, 6),
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: CHARCOAL }}>
+                🕐 {clockLabel}
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(15, 10), color: minutesLeft <= 15 && minutesLeft > 0 ? '#b3261e' : MUTED }}>
+                {leftLabel}
+              </Text>
+              {paceMinutes !== null ? (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(14, 9), color: MUTED }}>
+                  ~{paceMinutes} min/slide
+                </Text>
+              ) : null}
+            </Pressable>
+          );
+        })()}
+
         {/* Admin note editor */}
         <Modal
           visible={editKey !== null}
@@ -1743,6 +1808,84 @@ export default function MeetingHelperScreen() {
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'white' }}>
                     {quickAddSaving ? 'Adding…' : 'Add to calendar'}
                   </Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* Hard-out editor — "anyone got a hard out tonight?" */}
+        <Modal
+          visible={showHardOutEditor}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowHardOutEditor(false)}
+        >
+          <Pressable
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+            onPress={() => setShowHardOutEditor(false)}
+          >
+            <Pressable
+              onPress={(event) => event.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: 420,
+                backgroundColor: PAPER,
+                borderRadius: 22,
+                borderWidth: 1,
+                borderColor: GOLD_SOFT,
+                padding: 24,
+                gap: 12,
+              }}
+            >
+              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: CHARCOAL }}>
+                Tonight's hard out
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: MUTED }}>
+                When should the countdown aim for? No hard stop — people are always welcome to hang after.
+              </Text>
+              <TextInput
+                value={hardOutDraft}
+                onChangeText={setHardOutDraft}
+                placeholder="e.g. 8:00 PM"
+                placeholderTextColor={MUTED}
+                autoFocus
+                style={{
+                  borderWidth: 1,
+                  borderColor: GOLD_SOFT,
+                  borderRadius: 12,
+                  backgroundColor: CARD,
+                  paddingHorizontal: 14,
+                  paddingVertical: 11,
+                  fontFamily: 'Lato_400Regular',
+                  fontSize: 16,
+                  color: CHARCOAL,
+                }}
+              />
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
+                <Pressable
+                  onPress={() => setShowHardOutEditor(false)}
+                  style={({ pressed }) => ({ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, opacity: pressed ? 0.7 : 1 })}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: MUTED }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    const normalized = normalizeEventTimeInput(hardOutDraft);
+                    if (normalized.time) {
+                      setHardOutTime(normalized.time);
+                      setShowHardOutEditor(false);
+                    }
+                  }}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 26,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    backgroundColor: GOLD,
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'white' }}>Set</Text>
                 </Pressable>
               </View>
             </Pressable>

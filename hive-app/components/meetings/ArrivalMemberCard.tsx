@@ -33,6 +33,7 @@ export function ArrivalMemberCard({
   const feelingNote = getTextAnswer(answers, 'q_feeling_note');
   const energyLevel = getNumberAnswer(answers, 'q_energy_level');
   const energyMode = getTextAnswer(answers, 'q_energy_mode');
+  const hardOut = getTextAnswer(answers, 'q_hard_out');
   const energyDots = energyLevel !== null ? getEnergyDots(energyLevel) : null;
   const scale = compact ? 0.78 : 1;
 
@@ -83,6 +84,19 @@ export function ArrivalMemberCard({
               }}
             >
               {feeling}
+            </Text>
+          ) : null}
+          {hardOut ? (
+            <Text
+              style={{
+                fontFamily: 'Lato_700Bold',
+                fontSize: (isTV ? 15 : 11) * scale,
+                color: '#b3261e',
+                textAlign: 'center',
+                marginTop: (isTV ? 8 : 6) * scale,
+              }}
+            >
+              ⏰ hard out: {hardOut}
             </Text>
           ) : null}
           {feelingNote ? (

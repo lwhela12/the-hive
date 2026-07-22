@@ -4,7 +4,9 @@ import { supabase } from '../supabase';
 export interface SurveyQuestion {
   id: string;
   text: string;
-  type: 'short' | 'long' | 'scale' | 'choice';
+  // 'hangs' auto-populates the month's hang events as went/didn't-go chips
+  // plus a thoughts box; the answer is stored as plain text.
+  type: 'short' | 'long' | 'scale' | 'choice' | 'hangs';
   options?: string[];
   required: boolean;
 }
