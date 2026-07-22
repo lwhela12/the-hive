@@ -610,7 +610,10 @@ export default function MeetingHelperScreen() {
   // Live meeting notes from the HummDinger spotlight. Mentions use the same
   // rules as the boards — "@charlee" targets her list, "@all"/"@hive" fans
   // out to everyone, no @ lands on whoever's card is open.
-  const handleSaveLiveNote = async (aboutMember: { id: string; name: string }) => {
+  const handleSaveLiveNote = async (
+    aboutMember: { id: string; name: string },
+    aboutWishId?: string | null
+  ) => {
     const text = liveNoteDraft.trim();
     if (!text || !communityId || liveNoteSaving) return;
 
@@ -637,6 +640,9 @@ export default function MeetingHelperScreen() {
             assigned_to: member.id,
             community_id: communityId,
             related_user_id: aboutMember.id,
+            // Deep link: tapping the to-do soft-opens the wish it's about —
+            // the visual thread from someone's list back to the HD it serves.
+            related_wish_id: aboutWishId ?? null,
           }))
         )
         .select('id');
@@ -1902,7 +1908,7 @@ export default function MeetingHelperScreen() {
                 })()}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
                   <Pressable
-                    onPress={() => handleSaveLiveNote(member)}
+                    onPress={() => handleSaveLiveNote(member, topWish?.id ?? null)}
                     disabled={liveNoteSaving || !liveNoteDraft.trim()}
                     style={({ pressed }) => ({
                       paddingHorizontal: sz(22, 16),
