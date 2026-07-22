@@ -23,6 +23,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 import {
   formatMeetingDate,
+  getCheckInOrder,
   getFirstName,
   getLocalIsoDate,
   getMonthNameFromPeriod,
@@ -43,12 +44,13 @@ const CARD = '#fffdf5';
 
 const TAGLINE = 'HUMAN · INSIGHT · VISION · EXECUTION';
 
-const AGENDA = [
-  'News from Nat',
-  'Treasurer',
-  'Plan the Meet Ups',
-  'HummDinger Sesh',
-  'Wrap-Up',
+// Tonight's agenda — drives both the Outline slide and the frozen rail.
+const AGENDA: { key: string; label: string }[] = [
+  { key: 'news', label: 'News from Nat' },
+  { key: 'treasurer', label: 'Treasurer' },
+  { key: 'meetups', label: 'Plan the Meet Ups' },
+  { key: 'hummdinger', label: 'HummDinger Sesh' },
+  { key: 'wrapup', label: 'Wrap-Up' },
 ];
 
 // Nat's POP formula — the backbone of the HummDinger sesh.
@@ -92,6 +94,7 @@ const POP_ALT_PHRASING =
 
 type MeetingHelperNotes = {
   news?: string;
+  appnews?: string;
   meetups?: string;
   wrapup?: string;
 };
@@ -124,6 +127,7 @@ type GrantedWish = {
   id: string;
   title: string | null;
   description: string;
+  user_id: string;
   granterNames: string[];
 };
 
@@ -131,6 +135,10 @@ const EDIT_SLIDE_META: Record<EditableNoteKey, { title: string; placeholder: str
   news: {
     title: 'News from Nat',
     placeholder: "What's the news this month? Announcements, celebrations, house business…",
+  },
+  appnews: {
+    title: 'App updates',
+    placeholder: "What's new in the HIVE app this month? The 3 newest things to demo…",
   },
   meetups: {
     title: 'Plan the Meet Ups',
@@ -184,6 +192,7 @@ export default function MeetingHelperScreen() {
   const [hangIdeas, setHangIdeas] = useState<HangIdea[]>([]);
   const [wishes, setWishes] = useState<DeckWish[]>([]);
   const [grantedWishes, setGrantedWishes] = useState<GrantedWish[]>([]);
+  const [pastHangs, setPastHangs] = useState<DeckEvent[]>([]);
   const [helperPosts, setHelperPosts] = useState<HangIdea[]>([]);
   const [completedAssists, setCompletedAssists] = useState<
     { id: string; description: string; assignedTo: string | null; relatedUserId: string | null; assigneeName: string }[]
@@ -213,6 +222,12 @@ export default function MeetingHelperScreen() {
     const tick = setInterval(() => setClockNow(new Date()), 30_000);
     return () => clearInterval(tick);
   }, []);
+
+  // "BAM, schedule": next cycle's HIVE Help focus, posted straight to the
+  // helper board from the deck — no tab-toggling to Boards mid-meeting.
+  const [helpFocusDraft, setHelpFocusDraft] = useState('');
+  const [helpFocusSaving, setHelpFocusSaving] = useState(false);
+  const [helpFocusPosted, setHelpFocusPosted] = useState<string | null>(null);
 
   // Quick-add: tap a calendar day on Plan the Meet Ups to pencil in a hang.
   const [quickAddDate, setQuickAddDate] = useState<string | null>(null);
@@ -312,7 +327,7 @@ export default function MeetingHelperScreen() {
       (async () => {
         const { data } = await (supabase as any)
           .from('wishes')
-          .select('id, title, description, fulfilled_at, granters:wish_granters(granter_id, granter:profiles!granter_id(name))')
+          .select('id, title, description, user_id, fulfilled_at, granters:wish_granters(granter_id, granter:profiles!granter_id(name))')
           .eq('community_id', communityId)
           .eq('status', 'fulfilled')
           .not('fulfilled_at', 'is', null)
@@ -323,12 +338,31 @@ export default function MeetingHelperScreen() {
           id: wish.id as string,
           title: (wish.title ?? null) as string | null,
           description: (wish.description ?? '') as string,
+          user_id: wish.user_id as string,
           granterNames: ((wish.granters ?? []) as any[])
             .map((granter) => (granter.granter?.name ? getFirstName(granter.granter.name) : null))
             .filter((name: string | null): name is string => !!name),
         }));
         setGrantedWishes(rows);
       })().catch((error) => console.warn('Could not load granted wishes', error)),
+
+      // News: hangs that already happened this cycle (the deck's main events
+      // query only looks forward from today).
+      (async () => {
+        const { data } = await supabase
+          .from('events')
+          .select('id, title, event_date, end_date, event_type')
+          .eq('community_id', communityId)
+          .gte('event_date', getLocalIsoDate(sinceLastMeeting))
+          .lte('event_date', today)
+          .neq('event_type', 'meeting')
+          .neq('event_type', 'birthday')
+          .order('event_date', { ascending: true });
+        const hangs = ((data ?? []) as DeckEvent[]).filter(
+          (event) => !(event.end_date || /\b(out of town|away|trip|travel|galavant)/i.test(event.title))
+        );
+        setPastHangs(hangs);
+      })().catch((error) => console.warn('Could not load past hangs', error)),
 
       // HummDinger assists: to-dos completed since ~last meeting, with names,
       // so help given and received is on-screen during each member's HD moment
@@ -454,6 +488,50 @@ export default function MeetingHelperScreen() {
       setQuickAddError(error?.message || 'Could not save the event — please try again.');
     } finally {
       setQuickAddSaving(false);
+    }
+  };
+
+  const handlePostHelpFocus = async () => {
+    const focus = helpFocusDraft.trim();
+    if (!focus || !communityId || !profile || helpFocusSaving) return;
+    setHelpFocusSaving(true);
+    try {
+      const { data: categories } = await supabase
+        .from('board_categories')
+        .select('id, name, status')
+        .eq('community_id', communityId)
+        .or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%');
+      const helperBoard = ((categories ?? []) as { id: string; status?: string | null }[])
+        .find((row) => !row.status || row.status === 'active');
+      if (!helperBoard) throw new Error('No HIVE Help board found');
+
+      // The focus decided tonight belongs to the coming cycle — name the
+      // thread for the next meeting's month.
+      const todayIso = getLocalIsoDate(new Date());
+      const nextMeetingEvent = events.find(
+        (event) => event.event_type === 'meeting' && event.event_date > todayIso
+      );
+      const focusMonth = nextMeetingEvent
+        ? new Date(`${nextMeetingEvent.event_date}T12:00:00`)
+        : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
+      const title = `${focusMonth.toLocaleDateString('en-US', { month: 'long' })} HIVE Helpers — ${focus}`;
+
+      const { error } = await (supabase as any).from('board_posts').insert({
+        community_id: communityId,
+        category_id: helperBoard.id,
+        author_id: profile.id,
+        title,
+        content: `This cycle's HIVE Help focus: ${focus}\n\n(Decided together at the meeting — log your helps in this thread!)`,
+      });
+      if (error) throw error;
+      setHelpFocusPosted(title);
+      setHelpFocusDraft('');
+      await loadDeckData();
+    } catch (error) {
+      console.error('Could not post HIVE Help focus:', error);
+      Alert.alert('Hmm', 'Could not post the new focus — try again, or use the Boards tab.');
+    } finally {
+      setHelpFocusSaving(false);
     }
   };
 
@@ -675,7 +753,7 @@ export default function MeetingHelperScreen() {
         </EmptyNote>
       ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: sz(-8, -5) }}>
-          {members.map((member) => (
+          {getCheckInOrder(members, responsesByUser).map((member) => (
             <View key={member.id} style={{ width: `${100 / roomColumns}%`, padding: sz(8, 5) }}>
               <ArrivalMemberCard
                 member={member}
@@ -696,7 +774,7 @@ export default function MeetingHelperScreen() {
       <SlideTitle>Outline</SlideTitle>
       <View style={{ marginTop: sz(40, 22), gap: sz(20, 12) }}>
         {AGENDA.map((item, index) => (
-          <View key={item} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(24, 14) }}>
+          <View key={item.key} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(24, 14) }}>
             <Text
               style={{
                 fontFamily: 'LibreBaskerville_700Bold',
@@ -709,7 +787,7 @@ export default function MeetingHelperScreen() {
               {index + 1}
             </Text>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(34, 19), color: CHARCOAL }}>
-              {item}
+              {item.label}
             </Text>
           </View>
         ))}
@@ -730,54 +808,21 @@ export default function MeetingHelperScreen() {
         noteKey="news"
         emptyText="Nat hasn't dropped the news yet — drumroll, please."
       />
-      <View style={{ marginTop: sz(40, 22) }}>
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), letterSpacing: 2, textTransform: 'uppercase', color: GOLD, marginBottom: sz(14, 9) }}>
-          🌟 Wishes granted since last meeting
-        </Text>
-        {grantedWishes.length === 0 ? (
-          <EmptyNote>No wishes granted since we last met — plenty of wands still charged.</EmptyNote>
-        ) : (
-          <View style={{ gap: sz(14, 9) }}>
-            {grantedWishes.map((wish) => (
-              <Text
-                key={wish.id}
-                style={{ fontFamily: 'Lato_400Regular', fontSize: sz(24, 15), lineHeight: sz(36, 23), color: CHARCOAL }}
-              >
-                {getWishQuickTitle(wish, 72)}
-                {wish.granterNames.length > 0 ? (
-                  <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>
-                    {'  —  granted by '}{wish.granterNames.join(' & ')}
-                  </Text>
-                ) : null}
-              </Text>
-            ))}
-          </View>
-        )}
-      </View>
-      {helperPosts.length > 0 ? (
-        <View style={{ marginTop: sz(30, 18) }}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: MUTED, marginBottom: sz(12, 8) }}>
-            🤝 15-minute helpers this month
+      {/* Slim by design (Lucas): app updates + new members here; hang and
+          help recaps live on Plan the Meet Ups where the scheduling happens,
+          and wishes granted are each member's own HummDinger story. */}
+      <View style={{ marginTop: sz(30, 18) }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8), marginBottom: sz(12, 8) }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD }}>
+            ✨ App updates
           </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(14, 8) }}>
-            {helperPosts.map((post) => (
-              <View
-                key={post.id}
-                style={{
-                  backgroundColor: 'rgba(222,193,129,0.18)',
-                  borderRadius: 999,
-                  paddingHorizontal: sz(22, 14),
-                  paddingVertical: sz(10, 7),
-                }}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 12), color: GOLD_DEEP }}>
-                  {(post.title ?? 'A quiet favor').trim() || 'A quiet favor'}
-                </Text>
-              </View>
-            ))}
-          </View>
+          <EditPill noteKey="appnews" />
         </View>
-      ) : null}
+        <NoteBody
+          noteKey="appnews"
+          emptyText="No app news this month — smooth sailing."
+        />
+      </View>
     </View>
   );
 
@@ -1061,42 +1106,148 @@ export default function MeetingHelperScreen() {
           🐝 meeting · 🎂 birthday · little faces → = who's away · 📌 event — tap any open day to pencil in a hang right here.
         </Text>
 
-        {/* Bottom: this month's plans + fresh ideas */}
-        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(40, 16), marginTop: sz(16, 10) }}>
-          <View style={{ flex: isTV ? 1 : undefined }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: MUTED, marginBottom: sz(10, 7) }}>
-              This month
+        {/* Bottom: recap → decide → schedule, for Hangs and for Help.
+            "Last month was this, this and this — what did we think? What
+            next? BAM, schedule." */}
+        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(36, 16), marginTop: sz(16, 10) }}>
+          <View style={{ flex: isTV ? 1 : undefined, gap: sz(8, 6) }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
+              🎉 HIVE Hang — last cycle
             </Text>
-            <NoteBody
-              noteKey="meetups"
-              emptyText="No meet-up plans written down yet — hatch some tonight."
-            />
-          </View>
-          <View style={{ flex: isTV ? 1 : undefined }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD, marginBottom: sz(10, 7) }}>
-              Fresh hang ideas
-            </Text>
-            {hangIdeas.length === 0 ? (
-              <EmptyNote>No new ideas on the hang board yet — first one to post picks the venue.</EmptyNote>
+            {pastHangs.length === 0 ? (
+              <EmptyNote>No hangs this cycle — let's fix that tonight.</EmptyNote>
             ) : (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(12, 8) }}>
-                {hangIdeas.map((idea) => (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(10, 7) }}>
+                {pastHangs.map((hang) => (
                   <View
-                    key={idea.id}
+                    key={hang.id}
                     style={{
                       backgroundColor: 'rgba(222,193,129,0.18)',
                       borderRadius: 999,
-                      paddingHorizontal: sz(20, 14),
-                      paddingVertical: sz(9, 7),
+                      paddingHorizontal: sz(18, 12),
+                      paddingVertical: sz(8, 6),
                     }}
                   >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 13), color: GOLD_DEEP }}>
-                      {(idea.title ?? 'Untitled idea').trim() || 'Untitled idea'}
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 12), color: GOLD_DEEP }}>
+                      {hang.title}
                     </Text>
                   </View>
                 ))}
               </View>
             )}
+            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(15, 10), color: MUTED }}>
+              What did we think? What's next? Tap a day above — bam, scheduled.
+            </Text>
+            <View style={{ marginTop: sz(6, 4) }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: MUTED, marginBottom: sz(6, 4) }}>
+                Fresh ideas from the board
+              </Text>
+              {hangIdeas.length === 0 ? (
+                <EmptyNote>No new ideas on the hang board yet — first one to post picks the venue.</EmptyNote>
+              ) : (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(10, 7) }}>
+                  {hangIdeas.map((idea) => (
+                    <View
+                      key={idea.id}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: GOLD_SOFT,
+                        borderRadius: 999,
+                        paddingHorizontal: sz(18, 12),
+                        paddingVertical: sz(8, 6),
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: GOLD_DEEP }}>
+                        {(idea.title ?? 'Untitled idea').trim() || 'Untitled idea'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+
+          <View style={{ flex: isTV ? 1 : undefined, gap: sz(8, 6) }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
+              🤝 HIVE Help — last cycle
+            </Text>
+            {helperPosts.length === 0 ? (
+              <EmptyNote>No HIVE Help thread this cycle yet.</EmptyNote>
+            ) : (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(10, 7) }}>
+                {helperPosts.map((post) => (
+                  <View
+                    key={post.id}
+                    style={{
+                      backgroundColor: 'rgba(222,193,129,0.18)',
+                      borderRadius: 999,
+                      paddingHorizontal: sz(18, 12),
+                      paddingVertical: sz(8, 6),
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 12), color: GOLD_DEEP }}>
+                      {(post.title ?? 'A quiet favor').trim() || 'A quiet favor'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(15, 10), color: MUTED }}>
+              How'd it go? What should we focus on next?
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(8, 6) }}>
+              <TextInput
+                value={helpFocusDraft}
+                onChangeText={setHelpFocusDraft}
+                placeholder="Next HIVE Help focus (e.g. Shelter donation)"
+                placeholderTextColor={MUTED}
+                onSubmitEditing={handlePostHelpFocus}
+                style={{
+                  flex: 1,
+                  borderWidth: 1,
+                  borderColor: GOLD_SOFT,
+                  borderRadius: sz(12, 9),
+                  backgroundColor: CARD,
+                  paddingHorizontal: sz(14, 10),
+                  paddingVertical: sz(9, 7),
+                  fontFamily: 'Lato_400Regular',
+                  fontSize: sz(16, 11),
+                  color: CHARCOAL,
+                }}
+              />
+              <Pressable
+                onPress={handlePostHelpFocus}
+                disabled={helpFocusSaving || !helpFocusDraft.trim()}
+                style={({ pressed }) => ({
+                  paddingHorizontal: sz(20, 14),
+                  paddingVertical: sz(9, 7),
+                  borderRadius: 999,
+                  backgroundColor: GOLD,
+                  opacity: pressed || helpFocusSaving || !helpFocusDraft.trim() ? 0.6 : 1,
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: 'white' }}>
+                  {helpFocusSaving ? 'Posting…' : 'BAM 🐝'}
+                </Text>
+              </Pressable>
+            </View>
+            {helpFocusPosted ? (
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP }}>
+                Posted to the boards: "{helpFocusPosted}" ✓
+              </Text>
+            ) : null}
+            <View style={{ marginTop: sz(6, 4) }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 6), marginBottom: sz(6, 4) }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: MUTED }}>
+                  This month's plans
+                </Text>
+                <EditPill noteKey="meetups" />
+              </View>
+              <NoteBody
+                noteKey="meetups"
+                emptyText="No meet-up plans written down yet — hatch some tonight."
+              />
+            </View>
           </View>
         </View>
       </View>
@@ -1183,8 +1334,13 @@ export default function MeetingHelperScreen() {
             (assist) => assist.relatedUserId === member.id && assist.assignedTo !== member.id
           );
           const assistsByMember = completedAssists.filter((assist) => assist.assignedTo === member.id);
+          const grantedThisCycle = grantedWishes.filter((wish) => wish.user_id === member.id);
           const hasDetails =
-            detailSections.length > 0 || !!topWish?.description || assistsForMember.length > 0 || assistsByMember.length > 0;
+            detailSections.length > 0 ||
+            !!topWish?.description ||
+            assistsForMember.length > 0 ||
+            assistsByMember.length > 0 ||
+            grantedThisCycle.length > 0;
           const isExpanded = expandedHummdingerId === member.id;
           return (
             <View
@@ -1274,6 +1430,23 @@ export default function MeetingHelperScreen() {
                         </Text>
                       </View>
                     ))}
+                    {grantedThisCycle.length > 0 ? (
+                      <View>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
+                          Wishes granted this cycle 🌟
+                        </Text>
+                        {grantedThisCycle.map((wish) => (
+                          <Text key={wish.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 17), color: CHARCOAL }}>
+                            {getWishQuickTitle(wish, 72)}
+                            {wish.granterNames.length > 0 ? (
+                              <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>
+                                {'  —  granted by '}{wish.granterNames.join(' & ')}
+                              </Text>
+                            ) : null}
+                          </Text>
+                        ))}
+                      </View>
+                    ) : null}
                     {assistsForMember.length > 0 ? (
                       <View>
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginBottom: sz(4, 3) }}>
@@ -1490,13 +1663,6 @@ export default function MeetingHelperScreen() {
   // tonight's outline below with the current stop in gold, and the HummDinger
   // roster showing who's been through, who's up, and who's still to go.
   const showRail = isTV || width >= 1000;
-  const AGENDA: { key: string; label: string }[] = [
-    { key: 'news', label: 'News from Nat' },
-    { key: 'treasurer', label: 'Treasurer' },
-    { key: 'meetups', label: 'Plan the Meet Ups' },
-    { key: 'hummdinger', label: 'HummDinger Sesh' },
-    { key: 'wrapup', label: 'Wrap-Up' },
-  ];
 
   const renderRail = () => {
     const [hour, minute] = hardOutTime.split(':').map(Number);

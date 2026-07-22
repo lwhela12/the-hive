@@ -60,6 +60,23 @@ export function formatMeetingDate(meeting: ArrivalBoardMeeting | null) {
   return meeting.event_time ? `${dateLabel} · ${meeting.event_time}` : dateLabel;
 }
 
+// Arrival order: first to check in takes the 1 spot, and the order reshuffles
+// naturally every meeting. Not-yet-checked-in members trail alphabetically.
+export function getCheckInOrder(
+  members: ArrivalBoardMember[],
+  responsesByUser: Map<string, SurveyResponse>
+) {
+  const checkedIn = members
+    .filter((member) => responsesByUser.has(member.id))
+    .sort((a, b) => {
+      const aTime = responsesByUser.get(a.id)?.submitted_at ?? '';
+      const bTime = responsesByUser.get(b.id)?.submitted_at ?? '';
+      return aTime.localeCompare(bTime);
+    });
+  const notYet = members.filter((member) => !responsesByUser.has(member.id));
+  return [...checkedIn, ...notYet];
+}
+
 // Energy is answered on a 1–10 scale; show one ⚡ per point so the bolts
 // match the number people picked (5 bolts for a "10" read as confusing).
 export const ENERGY_DOTS_MAX = 10;
@@ -128,8 +145,16 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
         .filter((member): member is ArrivalBoardMember => !!member?.id && !!member.name)
         .sort((a, b) => a.name.localeCompare(b.name));
 
+      // Once the meeting day has passed, the room resets: cards gray out and
+      // don't repopulate until people check in for the NEXT meeting (whose
+      // due_date rolls forward when it gets scheduled).
+      const meetingDayIso = activeCheckIn?.due_date
+        ? getLocalIsoDate(new Date(new Date(activeCheckIn.due_date).getTime() - 12 * 60 * 60 * 1000))
+        : null;
+      const cycleOver = !!meetingDayIso && today > meetingDayIso;
+
       const byUser = new Map<string, SurveyResponse>();
-      if (activeCheckIn && period) {
+      if (activeCheckIn && period && !cycleOver) {
         const { data: responseRows } = await supabase
           .from('survey_responses')
           .select('*')

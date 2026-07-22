@@ -290,6 +290,36 @@ Deno.serve(async (req) => {
       return errorResponse('Failed to save meeting to database', 500);
     }
 
+    // Roll the monthly check-in forward to this meeting: due_date drives the
+    // response period, the arrival board, and every reminder touch. Stored as
+    // (meeting date + 1) at 00:00 UTC == 5pm Pacific on the meeting day —
+    // the same convention the check-in-reminder date math documents.
+    // Only ever move it FORWARD past the previous meeting; never backwards.
+    try {
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      const { data: activeSurveys } = await supabaseAdmin
+        .from('surveys')
+        .select('id, title, due_date')
+        .eq('community_id', communityId)
+        .eq('is_active', true);
+      const checkIn = (activeSurveys ?? []).find((s: { title?: string }) =>
+        /monthly\s+check-?in/i.test(s.title || '')
+      );
+      if (checkIn) {
+        const [y, m, d] = String(date).split('-').map(Number);
+        const newDue = new Date(Date.UTC(y, m - 1, d + 1)).toISOString();
+        if (!checkIn.due_date || newDue > checkIn.due_date) {
+          await supabaseAdmin.from('surveys').update({ due_date: newDue }).eq('id', checkIn.id);
+          console.log(`Check-in due_date rolled to ${newDue} for survey ${checkIn.id}`);
+        }
+      }
+    } catch (surveyError) {
+      console.error('Could not roll check-in due_date (non-blocking):', surveyError);
+    }
+
     return jsonResponse({
       success: true,
       event,

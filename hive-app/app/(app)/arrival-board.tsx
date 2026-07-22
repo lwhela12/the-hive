@@ -13,6 +13,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import {
   formatMeetingDate,
+  getCheckInOrder,
   getMonthNameFromPeriod,
   useArrivalBoard,
 } from '../../lib/hooks/useArrivalBoard';
@@ -159,7 +160,7 @@ export default function ArrivalBoardScreen() {
           </View>
         ) : (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: isTV ? -10 : -6 }}>
-            {members.map((member) => (
+            {getCheckInOrder(members, responsesByUser).map((member) => (
               <View key={member.id} style={{ width: `${100 / columns}%`, padding: isTV ? 10 : 6 }}>
                 <ArrivalMemberCard
                   member={member}
