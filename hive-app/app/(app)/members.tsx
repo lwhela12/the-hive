@@ -1488,6 +1488,18 @@ function MemberDetailModal({
                       </Text>
                     </Pressable>
                   )}
+                  {/* All roads lead back to the campfire — the tune-up is
+                      reachable from your own member card too. */}
+                  {isCurrentUser && (
+                    <Pressable
+                      onPress={() => { onClose(); router.push('/monthly-tuneup' as any); }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Open your monthly tune-up and check-in"
+                      style={{ backgroundColor: '#eef6ee', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: '#cfe3d2' }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2f7147' }}>🍯 Tune-up</Text>
+                    </Pressable>
+                  )}
                   {roleLabel && (
                     <View style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
                       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{roleLabel}</Text>

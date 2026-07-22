@@ -860,22 +860,45 @@ function MeadowAtmosphere({
         />
       </Svg>
       {showSun && (
+        // A real sun, not a haze — the read-only garden deserves the same
+        // bright morning as the tend view.
         <View
           pointerEvents="none"
           style={{
             position: 'absolute',
-            left: Math.max(16, width * 0.06),
-            top: Math.max(18, height * 0.06),
-            width: Math.min(190, width * 0.28),
-            height: Math.min(190, width * 0.28),
-            borderRadius: 999,
-            backgroundColor: 'rgba(255,229,110,0.38)',
-            shadowColor: '#f2c85a',
-            shadowOpacity: 0.36,
-            shadowRadius: 52,
-            shadowOffset: { width: 0, height: 0 },
+            left: Math.max(20, width * 0.06),
+            top: Math.max(22, height * 0.07),
+            width: Math.min(150, width * 0.2),
+            height: Math.min(150, width * 0.2),
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
-        />
+        >
+          <View
+            style={{
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              borderRadius: 999,
+              backgroundColor: 'rgba(255,229,110,0.35)',
+              transform: [{ scale: 1.45 }],
+            }}
+          />
+          <View
+            style={{
+              width: '78%',
+              height: '78%',
+              borderRadius: 999,
+              backgroundColor: '#ffd95e',
+              borderWidth: 3,
+              borderColor: 'rgba(242,200,90,0.9)',
+              shadowColor: '#f2c85a',
+              shadowOpacity: 0.5,
+              shadowRadius: 30,
+              shadowOffset: { width: 0, height: 0 },
+            }}
+          />
+        </View>
       )}
       {width > 0 && DISTANT_BLOOMS.map((bloom, index) => (
         <View
