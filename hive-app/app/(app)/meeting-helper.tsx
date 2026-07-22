@@ -228,6 +228,8 @@ export default function MeetingHelperScreen() {
   // "peep the time!" without anyone feeling on the clock.
   const [hardOutTime, setHardOutTime] = useState('20:00');
   const [hardOutDraft, setHardOutDraft] = useState('');
+  // Evening meetings: a bare "7:45" means PM unless someone says otherwise.
+  const [hardOutMeridiem, setHardOutMeridiem] = useState<'AM' | 'PM'>('PM');
   const [showHardOutEditor, setShowHardOutEditor] = useState(false);
   const [clockNow, setClockNow] = useState(() => new Date());
   useEffect(() => {
@@ -2313,6 +2315,7 @@ export default function MeetingHelperScreen() {
             <Pressable
               onPress={() => {
                 setHardOutDraft('');
+                setHardOutMeridiem('PM');
                 setShowHardOutEditor(true);
               }}
               style={({ pressed }) => ({
@@ -2637,24 +2640,44 @@ export default function MeetingHelperScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 20, color: MUTED }}>
                 When should the countdown aim for? No hard stop — people are always welcome to hang after.
               </Text>
-              <TextInput
-                value={hardOutDraft}
-                onChangeText={setHardOutDraft}
-                placeholder="e.g. 8:00 PM"
-                placeholderTextColor={MUTED}
-                autoFocus
-                style={{
-                  borderWidth: 1,
-                  borderColor: GOLD_SOFT,
-                  borderRadius: 12,
-                  backgroundColor: CARD,
-                  paddingHorizontal: 14,
-                  paddingVertical: 11,
-                  fontFamily: 'Lato_400Regular',
-                  fontSize: 16,
-                  color: CHARCOAL,
-                }}
-              />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <TextInput
+                  value={hardOutDraft}
+                  onChangeText={setHardOutDraft}
+                  placeholder="e.g. 8:00"
+                  placeholderTextColor={MUTED}
+                  autoFocus
+                  style={{
+                    flex: 1,
+                    borderWidth: 1,
+                    borderColor: GOLD_SOFT,
+                    borderRadius: 12,
+                    backgroundColor: CARD,
+                    paddingHorizontal: 14,
+                    paddingVertical: 11,
+                    fontFamily: 'Lato_400Regular',
+                    fontSize: 16,
+                    color: CHARCOAL,
+                  }}
+                />
+                <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: GOLD_SOFT, borderRadius: 999, overflow: 'hidden' }}>
+                  {(['AM', 'PM'] as const).map((meridiem) => (
+                    <Pressable
+                      key={meridiem}
+                      onPress={() => setHardOutMeridiem(meridiem)}
+                      style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        backgroundColor: hardOutMeridiem === meridiem ? GOLD : 'transparent',
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: hardOutMeridiem === meridiem ? 'white' : MUTED }}>
+                        {meridiem}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
                 <Pressable
                   onPress={() => setShowHardOutEditor(false)}
@@ -2666,7 +2689,14 @@ export default function MeetingHelperScreen() {
                   onPress={() => {
                     const normalized = normalizeEventTimeInput(hardOutDraft);
                     if (normalized.time) {
-                      setHardOutTime(normalized.time);
+                      let [hour, minute] = normalized.time.split(':').map(Number);
+                      // The toggle only kicks in when the text itself didn't
+                      // say am/pm — explicit text always wins.
+                      if (!/\b(am|pm)\b/i.test(hardOutDraft)) {
+                        if (hardOutMeridiem === 'PM' && hour < 12) hour += 12;
+                        if (hardOutMeridiem === 'AM' && hour >= 12) hour -= 12;
+                      }
+                      setHardOutTime(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
                       setShowHardOutEditor(false);
                     }
                   }}
