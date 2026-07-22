@@ -1122,42 +1122,9 @@ export default function MeetingHelperScreen() {
 
       return (
         <View key={monthStart.toISOString()} style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(16, 8), marginBottom: sz(8, 5) }}>
-            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(26, 16), color: CHARCOAL }}>
-              {monthLabel}
-            </Text>
-            {existingFocus ? (
-              <Text
-                numberOfLines={1}
-                style={{ flex: 1, fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(18, 12), color: GOLD_DEEP, textAlign: 'center' }}
-              >
-                Help Focus: {existingFocus.replace(/!+$/, '')} 🤝
-              </Text>
-            ) : (
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: sz(6, 4), justifyContent: 'center' }}>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(17, 11), color: GOLD_DEEP }}>
-                  Help Focus:
-                </Text>
-                <TextInput
-                  value={monthFocusDrafts[monthLabel] ?? ''}
-                  onChangeText={(value) => setMonthFocusDrafts((drafts) => ({ ...drafts, [monthLabel]: value }))}
-                  onSubmitEditing={() => handlePostHelpFocus(monthLabel)}
-                  placeholder={monthFocusSaving === monthLabel ? 'posting…' : 'type it, press enter'}
-                  placeholderTextColor="rgba(154,128,96,0.5)"
-                  style={{
-                    minWidth: sz(160, 110),
-                    borderBottomWidth: 1,
-                    borderColor: GOLD_SOFT,
-                    paddingVertical: sz(3, 2),
-                    fontFamily: 'Lato_400Regular',
-                    fontStyle: 'italic',
-                    fontSize: sz(17, 11),
-                    color: GOLD_DEEP,
-                  }}
-                />
-              </View>
-            )}
-          </View>
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(26, 16), color: CHARCOAL, marginBottom: sz(8, 5) }}>
+            {monthLabel}
+          </Text>
           <View
             style={{
               backgroundColor: CARD,
@@ -1167,6 +1134,39 @@ export default function MeetingHelperScreen() {
               padding: sz(10, 6),
             }}
           >
+            {/* The month's HIVE Help focus lives top-center of the calendar —
+                type it here and the board thread is created automatically. */}
+            {existingFocus ? (
+              <Text
+                numberOfLines={1}
+                style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(19, 12), color: GOLD_DEEP, textAlign: 'center', marginBottom: sz(8, 5) }}
+              >
+                Help Focus: {existingFocus.replace(/!+$/, '')} 🤝
+              </Text>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(6, 4), justifyContent: 'center', marginBottom: sz(8, 5) }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(18, 11), color: GOLD_DEEP }}>
+                  Help Focus:
+                </Text>
+                <TextInput
+                  value={monthFocusDrafts[monthLabel] ?? ''}
+                  onChangeText={(value) => setMonthFocusDrafts((drafts) => ({ ...drafts, [monthLabel]: value }))}
+                  onSubmitEditing={() => handlePostHelpFocus(monthLabel)}
+                  placeholder={monthFocusSaving === monthLabel ? 'posting…' : 'type it, press enter'}
+                  placeholderTextColor="rgba(154,128,96,0.5)"
+                  style={{
+                    minWidth: sz(180, 120),
+                    borderBottomWidth: 1,
+                    borderColor: GOLD_SOFT,
+                    paddingVertical: sz(3, 2),
+                    fontFamily: 'Lato_400Regular',
+                    fontStyle: 'italic',
+                    fontSize: sz(18, 11),
+                    color: GOLD_DEEP,
+                  }}
+                />
+              </View>
+            )}
             <View style={{ flexDirection: 'row', marginBottom: sz(6, 4) }}>
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((dayLabel) => (
                 <Text
@@ -1503,9 +1503,6 @@ export default function MeetingHelperScreen() {
         <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(28, 14), marginTop: sz(22, 12) }}>
           {monthStarts.map(renderMonth)}
         </View>
-        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), color: MUTED, marginTop: sz(10, 7) }}>
-          🐝 meeting · 🎂 birthday · little faces → = who's away · 📌 event — tap any open day to pencil in a hang right here.
-        </Text>
 
         {/* Everything lives in the cards above now — recaps, polls, ideas,
             and plans all expand from Meeting/Hang/Help. */}
