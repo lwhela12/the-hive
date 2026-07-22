@@ -190,8 +190,11 @@ export default function MeetingHelperScreen() {
   >([]);
   const [deckRefreshing, setDeckRefreshing] = useState(false);
 
-  // HummDinger: which member's full check-in is expanded on the bubbles grid.
+  // HummDinger: which member's full check-in is expanded on the bubbles grid,
+  // plus everyone who's had their turn this session (feeds the agenda rail's
+  // who's-left-to-go list).
   const [expandedHummdingerId, setExpandedHummdingerId] = useState<string | null>(null);
+  const [hummdingerVisited, setHummdingerVisited] = useState<Set<string>>(new Set());
 
   // Live meeting notes typed into an expanded HummDinger card. "@name" routes
   // the note onto that member's to-do list; no @ = the expanded member's list.
@@ -1192,6 +1195,7 @@ export default function MeetingHelperScreen() {
                 onPress={() => {
                   if (!hasDetails || isExpanded) return;
                   setExpandedHummdingerId(member.id);
+                  setHummdingerVisited((visited) => new Set(visited).add(member.id));
                   setLiveNoteDraft('');
                   setLiveNoteConfirmation(null);
                 }}
@@ -1482,8 +1486,200 @@ export default function MeetingHelperScreen() {
   const navStripWidth = sz(96, 52);
   const editMeta = editKey ? EDIT_SLIDE_META[editKey] : null;
 
+  // The frozen agenda rail (wide screens): analog clock + countdown on top,
+  // tonight's outline below with the current stop in gold, and the HummDinger
+  // roster showing who's been through, who's up, and who's still to go.
+  const showRail = isTV || width >= 1000;
+  const AGENDA: { key: string; label: string }[] = [
+    { key: 'news', label: 'News from Nat' },
+    { key: 'treasurer', label: 'Treasurer' },
+    { key: 'meetups', label: 'Plan the Meet Ups' },
+    { key: 'hummdinger', label: 'HummDinger Sesh' },
+    { key: 'wrapup', label: 'Wrap-Up' },
+  ];
+
+  const renderRail = () => {
+    const [hour, minute] = hardOutTime.split(':').map(Number);
+    const hardOutDate = new Date(clockNow);
+    hardOutDate.setHours(hour, minute, 0, 0);
+    const minutesLeft = Math.round((hardOutDate.getTime() - clockNow.getTime()) / 60_000);
+    const meetingIsNear = minutesLeft > 0 && minutesLeft <= 180;
+    const clockLabel = clockNow.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const hardOutLabel = hardOutDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const leftLabel =
+      minutesLeft <= 0
+        ? `past ${hardOutLabel} 🌙`
+        : minutesLeft >= 60
+          ? `${Math.floor(minutesLeft / 60)}h ${minutesLeft % 60}m 'til ${hardOutLabel}`
+          : `${minutesLeft} min 'til ${hardOutLabel}`;
+    const clockSize = sz(110, 84);
+    const hourAngle = (clockNow.getHours() % 12) * 30 + clockNow.getMinutes() * 0.5;
+    const minuteAngle = clockNow.getMinutes() * 6;
+    const activeKey = activeSlide.key;
+    const membersToGo = memberOrder.filter((member) => !hummdingerVisited.has(member.id)).length;
+    const hdPaceMinutes =
+      meetingIsNear && activeKey === 'hummdinger' && membersToGo > 0
+        ? Math.max(1, Math.floor(minutesLeft / membersToGo))
+        : null;
+
+    return (
+      <View
+        style={{
+          width: sz(300, 224),
+          borderLeftWidth: 1,
+          borderColor: GOLD_SOFT,
+          backgroundColor: 'rgba(255,253,245,0.75)',
+          paddingHorizontal: sz(22, 14),
+          paddingTop: sz(28, 16),
+          paddingBottom: sz(20, 12),
+        }}
+      >
+        <Pressable
+          onPress={() => {
+            setHardOutDraft('');
+            setShowHardOutEditor(true);
+          }}
+          style={({ pressed }) => ({ alignItems: 'center', gap: sz(8, 5), opacity: pressed ? 0.75 : 1 })}
+        >
+          <View
+            style={{
+              width: clockSize,
+              height: clockSize,
+              borderRadius: clockSize / 2,
+              borderWidth: 2,
+              borderColor: GOLD,
+              backgroundColor: CARD,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {[0, 90, 180, 270].map((angle) => (
+              <View
+                key={angle}
+                style={{
+                  position: 'absolute',
+                  width: 2,
+                  height: clockSize * 0.08,
+                  backgroundColor: GOLD_SOFT,
+                  transform: [{ rotate: `${angle}deg` }, { translateY: -clockSize * 0.4 }],
+                }}
+              />
+            ))}
+            <View
+              style={{
+                position: 'absolute',
+                width: 3,
+                height: clockSize * 0.24,
+                borderRadius: 2,
+                backgroundColor: CHARCOAL,
+                transform: [{ rotate: `${hourAngle}deg` }, { translateY: -clockSize * 0.12 }],
+              }}
+            />
+            <View
+              style={{
+                position: 'absolute',
+                width: 2,
+                height: clockSize * 0.34,
+                borderRadius: 2,
+                backgroundColor: GOLD_DEEP,
+                transform: [{ rotate: `${minuteAngle}deg` }, { translateY: -clockSize * 0.17 }],
+              }}
+            />
+            <View style={{ position: 'absolute', width: 7, height: 7, borderRadius: 4, backgroundColor: GOLD_DEEP }} />
+          </View>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 14), color: CHARCOAL }}>{clockLabel}</Text>
+          <Text
+            style={{
+              fontFamily: 'Lato_400Regular',
+              fontSize: sz(15, 10),
+              color: minutesLeft <= 15 && minutesLeft > 0 ? '#b3261e' : MUTED,
+              textAlign: 'center',
+            }}
+          >
+            {leftLabel}
+          </Text>
+        </Pressable>
+
+        <View style={{ height: 1, backgroundColor: GOLD_SOFT, marginVertical: sz(18, 11) }} />
+
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), letterSpacing: 2, textTransform: 'uppercase', color: GOLD, marginBottom: sz(10, 7) }}>
+          Tonight
+        </Text>
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          {AGENDA.map((item, agendaIndex) => {
+            const slidePosition = slides.findIndex((slide) => slide.key === item.key);
+            const isActive = activeKey === item.key;
+            return (
+              <View key={item.key}>
+                <Pressable
+                  onPress={() => setSlideIndex(slidePosition)}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'baseline',
+                    gap: sz(10, 7),
+                    paddingVertical: sz(7, 5),
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(17, 12), color: isActive ? GOLD_DEEP : 'rgba(189,147,72,0.45)' }}>
+                    {agendaIndex + 1}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: isActive ? 'Lato_700Bold' : 'Lato_400Regular',
+                      fontSize: sz(18, 12),
+                      color: isActive ? GOLD_DEEP : 'rgba(49,49,48,0.45)',
+                      flex: 1,
+                    }}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+                {item.key === 'hummdinger' ? (
+                  <View style={{ paddingLeft: sz(26, 18), paddingBottom: sz(6, 4) }}>
+                    {hdPaceMinutes !== null ? (
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 9), color: '#b3261e', marginBottom: sz(4, 3) }}>
+                        {membersToGo} to go · ≈{hdPaceMinutes} min each
+                      </Text>
+                    ) : null}
+                    {memberOrder.map((member) => {
+                      const isUp = expandedHummdingerId === member.id;
+                      const wasVisited = hummdingerVisited.has(member.id) && !isUp;
+                      return (
+                        <Text
+                          key={member.id}
+                          numberOfLines={1}
+                          style={{
+                            fontFamily: isUp ? 'Lato_700Bold' : 'Lato_400Regular',
+                            fontSize: sz(15, 10),
+                            lineHeight: sz(23, 16),
+                            color: isUp
+                              ? GOLD_DEEP
+                              : wasVisited
+                                ? 'rgba(49,49,48,0.28)'
+                                : activeKey === 'hummdinger'
+                                  ? 'rgba(49,49,48,0.6)'
+                                  : 'rgba(49,49,48,0.35)',
+                          }}
+                        >
+                          {wasVisited ? '✓ ' : isUp ? '→ ' : '· '}
+                          {getFirstName(member.name)}
+                        </Text>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+        </ScrollView>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: PAPER }} edges={['top']}>
+      <View style={{ flex: 1, flexDirection: 'row' }}>
       <View style={{ flex: 1 }}>
         {/* Corner watermark on every slide */}
         <Image
@@ -1622,11 +1818,10 @@ export default function MeetingHelperScreen() {
           </View>
         </View>
 
-        {/* Timekeeper — a little analog clock in a right-side panel, with the
-            countdown to tonight's hard-out. Tap to change the hard-out. The
-            per-slide pace hint only appears once the meeting is actually
-            near (within 3h of the hard-out) — at lunchtime it's noise. */}
-        {(() => {
+        {/* Compact timekeeper for narrow screens — wide screens get the full
+            agenda rail instead. Pace hint only appears once the meeting is
+            actually near (within 3h of the hard-out) — at lunchtime it's noise. */}
+        {!showRail && (() => {
           const [hour, minute] = hardOutTime.split(':').map(Number);
           const hardOutDate = new Date(clockNow);
           hardOutDate.setHours(hour, minute, 0, 0);
@@ -2004,6 +2199,10 @@ export default function MeetingHelperScreen() {
             </Pressable>
           </Pressable>
         </Modal>
+      </View>
+
+      {/* Frozen agenda rail — clock, outline, and the HummDinger roster */}
+      {showRail ? renderRail() : null}
       </View>
     </SafeAreaView>
   );

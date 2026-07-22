@@ -1136,20 +1136,18 @@ export default function MeetingsScreen() {
               </Text>
             </Pressable>
 
-            {/* Slide Deck */}
+            {/* Meeting Helper — the live deck. Cast it to the TV or follow
+                along from any seat (replaced the legacy Canva Slide Deck tile;
+                long-press still reaches the old deck-link editor for admins). */}
             <Pressable
-              onPress={handleSlideDeckPress}
+              onPress={() => router.push({ pathname: '/meeting-helper', params: { from: 'meetings' } })}
               onLongPress={() => {
-                if (isAdmin) {
-                  setShowDeckActions(true);
-                } else {
-                  void fetchLatestSlideDeckUrl();
-                }
+                if (isAdmin) setShowDeckActions(true);
               }}
               style={({ pressed }) => ({
                 flex: useCompactActions ? undefined : 1,
                 width: useCompactActions ? '48%' : undefined,
-                backgroundColor: effectiveSlideDeckUrl ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
+                backgroundColor: 'rgba(255,255,255,0.08)',
                 borderRadius: 14,
                 paddingVertical: 16,
                 alignItems: 'center',
@@ -1157,14 +1155,12 @@ export default function MeetingsScreen() {
               })}
             >
               <Text style={{ fontSize: 22, marginBottom: 4 }}>🎞️</Text>
-              <Text style={{ fontFamily: 'Lato_700Bold', color: effectiveSlideDeckUrl ? '#fff' : 'rgba(255,255,255,0.35)', fontSize: 13 }}>
-                Slide Deck
+              <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 13 }}>
+                Meeting Helper
               </Text>
-              {isAdmin && (
-                <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 2 }}>
-                  view / edit
-                </Text>
-              )}
+              <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 2 }}>
+                follow the deck live
+              </Text>
             </Pressable>
 
             {/* Import Notes */}
@@ -1206,51 +1202,28 @@ export default function MeetingsScreen() {
             </Pressable>
           </View>
 
-          {/* Meeting-night companions — open to everyone so the room can
-              follow along on their own devices instead of one shared screen. */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-            {/* Arrival Board — live check-in view for everyone on meeting day */}
-            <Pressable
-              onPress={() => router.push({ pathname: '/arrival-board', params: { from: 'meetings' } })}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                backgroundColor: 'rgba(255,255,255,0.08)',
-                borderRadius: 999,
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                opacity: pressed ? 0.75 : 1,
-              })}
-            >
-              <Text style={{ fontSize: 14 }}>📺</Text>
-              <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
-                Arrival Board — who's in the room
-              </Text>
-            </Pressable>
-
-            {/* Meeting Helper — the live deck, follow along from any seat */}
-            <Pressable
-              onPress={() => router.push({ pathname: '/meeting-helper', params: { from: 'meetings' } })}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                backgroundColor: 'rgba(255,255,255,0.08)',
-                borderRadius: 999,
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                opacity: pressed ? 0.75 : 1,
-              })}
-            >
-              <Text style={{ fontSize: 14 }}>🎞️</Text>
-              <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
-                Meeting Helper — follow the deck live
-              </Text>
-            </Pressable>
-          </View>
+          {/* Arrival Board — live check-in view for everyone on meeting day */}
+          <Pressable
+            onPress={() => router.push({ pathname: '/arrival-board', params: { from: 'meetings' } })}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              alignSelf: 'flex-start',
+              backgroundColor: 'rgba(255,255,255,0.08)',
+              borderRadius: 999,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              marginTop: 12,
+              opacity: pressed ? 0.75 : 1,
+            })}
+          >
+            <Text style={{ fontSize: 14 }}>📺</Text>
+            <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
+              Arrival Board — who's in the room
+            </Text>
+          </Pressable>
         </View>
 
         {/* Upcoming Meetings */}
