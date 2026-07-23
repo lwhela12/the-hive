@@ -114,7 +114,7 @@ export const ConversationItem = memo(function ConversationItem({
       onLongPress={() => setShowActions(true)}
       onHoverIn={isWeb ? () => setShowActions(true) : undefined}
       onHoverOut={isWeb ? () => setShowActions(false) : undefined}
-      className={`mx-3 mb-0.5 px-3 py-2.5 rounded-xl border ${
+      className={`mx-3 mb-0.5 px-3 py-2 rounded-xl border ${
         isActive
           ? 'bg-[#fdf3dc] border-gold/40'
           : 'border-transparent active:bg-gold/10'
@@ -123,13 +123,13 @@ export const ConversationItem = memo(function ConversationItem({
       <View className="flex-row items-center justify-between">
         {isWeb && (
           <View className="mr-2 opacity-50">
-            <Ionicons name="reorder-three-outline" size={18} color="#bd9348" />
+            <Ionicons name="reorder-three-outline" size={15} color="#bd9348" />
           </View>
         )}
         <Text
           numberOfLines={1}
           style={{ fontFamily: isActive ? 'Lato_700Bold' : 'Lato_400Regular' }}
-          className={`flex-1 text-base ${
+          className={`flex-1 text-[14px] ${
             isActive ? 'text-[#8e6f35]' : 'text-charcoal'
           }`}
         >
@@ -174,7 +174,7 @@ export const ConversationItem = memo(function ConversationItem({
       </View>
       <Text
         style={{ fontFamily: 'Lato_400Regular' }}
-        className="text-xs text-[#a09274] mt-1"
+        className="text-[11px] text-[#a09274] mt-0.5"
       >
         {getRelativeTime()}
       </Text>

@@ -687,11 +687,15 @@ export default function MeetingHelperScreen() {
       // tapping any of the to-dos lands on the wish with the note in context
       // and people can reply right on it.
       if (aboutWishId && profile) {
+        // Jots are written live during the meeting, so "the meeting" is
+        // whichever month it is right now (not the survey period, which
+        // already points at the NEXT meeting).
+        const meetingMonth = new Date().toLocaleString('en-US', { month: 'long' });
         const { error: commentError } = await (supabase as any).from('wish_comments').insert({
           wish_id: aboutWishId,
           user_id: profile.id,
           community_id: communityId,
-          content: `📝 From the meeting: ${text}`,
+          content: `📝 From the ${meetingMonth} meeting: ${text}`,
         });
         if (commentError) console.warn('Wish comment skipped (non-blocking):', commentError);
       }

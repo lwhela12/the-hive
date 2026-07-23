@@ -11,6 +11,7 @@ import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
+import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
 import { getSurveyResponsePeriod, isMonthlyCheckInSurvey, useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
 import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
@@ -2076,13 +2077,15 @@ export default function HiveScreen() {
     }),
     ...homeActionItems.map(a => {
       const deepLink = getActionItemDeepLink(a);
+      const jot = parseActionItemDescription(a.description);
+      const statusDetail = a.completed
+        ? `Done${a.completed_at ? ` · ${formatDateShort(a.completed_at)}` : ''}`
+        : a.due_date ? `Due ${formatDateShort(a.due_date)}` : undefined;
       return {
         id: `action-${a.id}`,
         emoji: '📝',
-        title: a.description,
-        detail: a.completed
-          ? `Done${a.completed_at ? ` · ${formatDateShort(a.completed_at)}` : ''}`
-          : a.due_date ? `Due ${formatDateShort(a.due_date)}` : undefined,
+        title: jot.text,
+        detail: [statusDetail, jot.context].filter(Boolean).join(' · ') || undefined,
         // Linked to-dos navigate on tap (like Recent Activity rows); the circle
         // still toggles done and long-press still archives. Unlinked to-dos
         // keep opening the detail sheet.

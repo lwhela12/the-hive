@@ -265,31 +265,23 @@ export const ConversationSidebar = memo(function ConversationSidebar({
 
   const sidebarContent = (
     <View className="flex-1 bg-[#fffdf5]">
-      {/* Header */}
-      <View
-        className="flex-row items-center justify-between px-4 py-3 border-b"
-        style={{ borderBottomColor: 'rgba(222,193,129,0.5)' }}
-      >
-        <View className="flex-row items-center">
-          <Image source={cliveIcon} style={{ width: 46, height: 46, borderRadius: 23, marginRight: 12 }} />
-          <Text
-            style={{ fontFamily: 'LibreBaskerville_700Bold' }}
-            className="text-2xl text-charcoal"
-          >
-            Clive
-          </Text>
-        </View>
-        <View className="flex-row items-center">
-          {!isMobile && onToggleCollapse && (
-            <Pressable
-              onPress={onToggleCollapse}
-              className="w-8 h-8 items-center justify-center rounded-full active:bg-gold/10"
-              accessibilityLabel="Collapse sidebar"
+      {/* Mobile drawer identity header — on desktop the page's gold AppHeader
+          carries the crest + "Clive", so the sidebar doesn't repeat it. */}
+      {isMobile && (
+        <View
+          className="flex-row items-center justify-between px-4 py-2.5 border-b"
+          style={{ borderBottomColor: 'rgba(222,193,129,0.5)' }}
+        >
+          <View className="flex-row items-center">
+            <Image source={cliveIcon} style={{ width: 32, height: 32, borderRadius: 16, marginRight: 8 }} />
+            <Text
+              style={{ fontFamily: 'LibreBaskerville_700Bold' }}
+              className="text-lg text-charcoal"
             >
-              <Text className="text-xl text-gold">«</Text>
-            </Pressable>
-          )}
-          {isMobile && onClose && (
+              Clive
+            </Text>
+          </View>
+          {onClose && (
             <Pressable
               onPress={onClose}
               className="w-8 h-8 items-center justify-center rounded-full active:bg-gold/10"
@@ -299,28 +291,39 @@ export const ConversationSidebar = memo(function ConversationSidebar({
             </Pressable>
           )}
         </View>
-      </View>
+      )}
 
-      {/* New Clive conversation button */}
-      <Pressable
-        onPress={isMobile ? closeAndNewConversation : onNewConversation}
-        className="mx-4 mt-4 mb-2 bg-gold py-3 px-4 rounded-full flex-row items-center justify-center active:opacity-80"
-        style={{
-          shadowColor: '#bd9348',
-          shadowOpacity: 0.28,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: 3 },
-          elevation: 3,
-        }}
-      >
-        <Text className="text-white text-lg mr-2">+</Text>
-        <Text
-          style={{ fontFamily: 'Lato_700Bold' }}
-          className="text-white text-base"
+      {/* New Clive conversation button (+ collapse control on desktop) */}
+      <View className="flex-row items-center mx-4 mt-4 mb-2">
+        <Pressable
+          onPress={isMobile ? closeAndNewConversation : onNewConversation}
+          className="flex-1 bg-gold py-2.5 px-4 rounded-full flex-row items-center justify-center active:opacity-80"
+          style={{
+            shadowColor: '#bd9348',
+            shadowOpacity: 0.28,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 3 },
+            elevation: 3,
+          }}
         >
-          New Clive Chat
-        </Text>
-      </Pressable>
+          <Text className="text-white text-base mr-2">+</Text>
+          <Text
+            style={{ fontFamily: 'Lato_700Bold' }}
+            className="text-white text-sm"
+          >
+            New Clive Chat
+          </Text>
+        </Pressable>
+        {!isMobile && onToggleCollapse && (
+          <Pressable
+            onPress={onToggleCollapse}
+            className="ml-2 w-8 h-8 items-center justify-center rounded-full active:bg-gold/10"
+            accessibilityLabel="Collapse sidebar"
+          >
+            <Text className="text-xl text-gold">«</Text>
+          </Pressable>
+        )}
+      </View>
 
       {/* Conversations List */}
       <ScrollView className="flex-1" showsVerticalScrollIndicator={true}>
@@ -336,13 +339,13 @@ export const ConversationSidebar = memo(function ConversationSidebar({
           </View>
           <Pressable
             onPress={handleCreateProject}
-            className="mx-3 mb-1 px-3 py-2.5 rounded-xl flex-row items-center active:bg-gold/10"
+            className="mx-3 mb-0.5 px-3 py-2 rounded-xl flex-row items-center active:bg-gold/10"
           >
-            <View style={{ width: 28, marginRight: 8 }}>
-              <Ionicons name="folder-open-outline" size={22} color="#bd9348" />
-              <Ionicons name="add" size={14} color="#bd9348" style={{ position: 'absolute', right: -1, bottom: -3 }} />
+            <View style={{ width: 24, marginRight: 8 }}>
+              <Ionicons name="folder-open-outline" size={18} color="#bd9348" />
+              <Ionicons name="add" size={12} color="#bd9348" style={{ position: 'absolute', right: 0, bottom: -2 }} />
             </View>
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal text-base">
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal text-[15px]">
               New project
             </Text>
           </Pressable>
@@ -353,7 +356,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
               <View key={project.id}>
                 {wrapDropTarget(project.id, (
                   <View
-                    className={`mx-3 px-3 py-2.5 rounded-xl flex-row items-center ${
+                    className={`mx-3 px-3 py-2 rounded-xl flex-row items-center ${
                       isDropTarget ? 'bg-gold/10 border border-gold/40' : ''
                     }`}
                   >
@@ -363,11 +366,11 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                     >
                       <Ionicons
                         name={isExpanded ? 'folder-open-outline' : 'folder-outline'}
-                        size={22}
+                        size={18}
                         color="#bd9348"
-                        style={{ marginRight: 12 }}
+                        style={{ marginRight: 10 }}
                       />
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="flex-1 text-charcoal text-base" numberOfLines={1}>
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="flex-1 text-charcoal text-[15px]" numberOfLines={1}>
                         {project.name}
                       </Text>
                     </Pressable>

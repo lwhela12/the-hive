@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, useWindowDimensions } from 'react-native';
+import { View, Image, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { ChatInterface } from '../../components/chat/ChatInterface';
@@ -9,6 +9,8 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useConversations } from '../../lib/hooks/useConversations';
 import { getStoredItemAsync, removeStoredItemAsync, setStoredItemAsync } from '../../lib/webStorage';
 import type { Conversation } from '../../types';
+
+const cliveIcon = require('../../assets/Clive_logo.png');
 
 export default function ChatScreen() {
   const { refineWish, prefill } = useLocalSearchParams<{ refineWish?: string; prefill?: string }>();
@@ -158,6 +160,12 @@ export default function ChatScreen() {
         <View className="flex-1">
           <AppHeader
             title="Clive"
+            titleIcon={
+              <Image
+                source={cliveIcon}
+                style={{ width: 24, height: 24, borderRadius: 12, marginRight: 7 }}
+              />
+            }
             onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
           />
 

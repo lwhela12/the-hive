@@ -174,8 +174,21 @@ export interface WishComment extends Record<string, unknown> {
   community_id: string;
   content: string;
   attachments?: Attachment[] | null;
+  parent_comment_id?: string | null;
+  edited_at?: string | null;
   created_at: string;
   user?: Profile;
+  reactions?: WishCommentReaction[];
+}
+
+export interface WishCommentReaction extends Record<string, unknown> {
+  id: string;
+  community_id: string;
+  comment_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+  user?: ReactionUserProfile | null;
 }
 
 export interface WishGranter extends Record<string, unknown> {
@@ -672,6 +685,12 @@ export interface Database {
         Row: WishComment;
         Insert: Omit<WishComment, 'id' | 'created_at'>;
         Update: Partial<Omit<WishComment, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      wish_comment_reactions: {
+        Row: WishCommentReaction;
+        Insert: Omit<WishCommentReaction, 'id' | 'created_at'>;
+        Update: Partial<Omit<WishCommentReaction, 'id' | 'created_at'>>;
         Relationships: [];
       };
       wish_granters: {
