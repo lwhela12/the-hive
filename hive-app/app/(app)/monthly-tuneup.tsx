@@ -325,6 +325,9 @@ export default function MonthlyTuneupScreen() {
   const [hangError, setHangError] = useState<string | null>(null);
   const [hangPosted, setHangPosted] = useState<string[]>([]);
   const [hangBoardName, setHangBoardName] = useState<string | null>(null);
+  // Ideas already pinned to the hang board — shown in the Hang-ideas step so
+  // the check-in reads "second one of these, or pitch something new".
+  const [existingHangIdeas, setExistingHangIdeas] = useState<string[]>([]);
 
   const [helperContent, setHelperContent] = useState('');
   const [helperPosting, setHelperPosting] = useState(false);
@@ -488,6 +491,23 @@ export default function MonthlyTuneupScreen() {
       if (cancelled) return;
       setHangBoardName(hangBoard?.name ?? null);
       setHelperThread(helperThreadInfo);
+
+      if (hangBoard) {
+        const { data: ideaPosts } = await supabase
+          .from('board_posts')
+          .select('title, status, created_at')
+          .eq('category_id', hangBoard.id)
+          .or('status.is.null,status.eq.active')
+          .order('created_at', { ascending: false })
+          .limit(6);
+        if (!cancelled) {
+          setExistingHangIdeas(
+            ((ideaPosts ?? []) as { title: string | null }[])
+              .map((post) => post.title)
+              .filter((title): title is string => !!title)
+          );
+        }
+      }
     };
 
     void loadBoardTargets();
@@ -957,6 +977,34 @@ export default function MonthlyTuneupScreen() {
         title="Hang ideas 🎉"
         subtitle={`Any ideas for fun HIVE hangs? They post straight to ${hangBoardName ?? 'the HIVE Hangs board'} so planning can start.`}
       />
+      {existingHangIdeas.length > 0 ? (
+        <View style={[cardStyle, { marginBottom: 10 }]}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: 8 }}>
+            💡 Already on the board — second one, or pitch something new
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {existingHangIdeas.map((idea) => (
+              <Pressable
+                key={idea}
+                onPress={() => setHangContent((prev) => (prev.trim() ? prev : `+1 for ${idea}!`))}
+                accessibilityLabel={`Second the idea: ${idea}`}
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.55)',
+                  borderRadius: 999,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648' }} numberOfLines={1}>
+                  {idea}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
       <View style={[cardStyle, { gap: 10 }]}>
         <TextInput
           value={hangTitle}
