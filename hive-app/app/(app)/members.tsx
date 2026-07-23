@@ -1791,23 +1791,6 @@ function MemberDetailModal({
               </View>
             )}
 
-            <ProfileShowcase
-              honeycombItems={memberHoneycombItems}
-              knownFor={member.known_for}
-              bio={member.bio}
-              miq={{
-                experiences: member.miq_experiences,
-                growth: member.miq_growth,
-                contribution: member.miq_contribution,
-              }}
-              style={{ marginBottom: 20 }}
-              knownForPlaceholder={PROFILE_EMPTY_COPY.knownFor}
-              bioPlaceholder={PROFILE_EMPTY_COPY.bio}
-              miqPlaceholder={PROFILE_EMPTY_COPY.miq}
-              showMiqWhenEmpty
-              showEmptyCells
-            />
-
             {/* Wishes for other members. Your own wishes are managed below. */}
             {!isCurrentUser && (
               <View style={{ marginBottom: 20 }}>
@@ -1876,29 +1859,6 @@ function MemberDetailModal({
                       ))
                     )}
                   </ScrollView>
-                </View>
-              </View>
-            )}
-
-            {/* Intro post */}
-            {showIntroPost && member.introPost && (
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>INTRODUCTION POST</Text>
-                <View style={{ backgroundColor: '#fdf8ec', borderRadius: 16, padding: 16 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 4 }}>{member.introPost.title}</Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#4b5563', lineHeight: 22 }}>
-                    {visibleIntro}
-                  </Text>
-                  {introNeedsToggle && (
-                    <Pressable
-                      onPress={() => setIntroExpanded(value => !value)}
-                      style={{ alignSelf: 'flex-start', backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
-                        {introExpanded ? 'Show less' : 'Read full intro'}
-                      </Text>
-                    </Pressable>
-                  )}
                 </View>
               </View>
             )}
@@ -2024,6 +1984,46 @@ function MemberDetailModal({
                         </Pressable>
                       </View>
                 )}
+              </View>
+            )}
+
+            <ProfileShowcase
+              honeycombItems={memberHoneycombItems}
+              knownFor={member.known_for}
+              bio={member.bio}
+              miq={{
+                experiences: member.miq_experiences,
+                growth: member.miq_growth,
+                contribution: member.miq_contribution,
+              }}
+              style={{ marginBottom: 20 }}
+              knownForPlaceholder={PROFILE_EMPTY_COPY.knownFor}
+              bioPlaceholder={PROFILE_EMPTY_COPY.bio}
+              miqPlaceholder={PROFILE_EMPTY_COPY.miq}
+              showMiqWhenEmpty
+              showEmptyCells
+            />
+
+            {/* Intro post */}
+            {showIntroPost && member.introPost && (
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>INTRODUCTION POST</Text>
+                <View style={{ backgroundColor: '#fdf8ec', borderRadius: 16, padding: 16 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 4 }}>{member.introPost.title}</Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#4b5563', lineHeight: 22 }}>
+                    {visibleIntro}
+                  </Text>
+                  {introNeedsToggle && (
+                    <Pressable
+                      onPress={() => setIntroExpanded(value => !value)}
+                      style={{ alignSelf: 'flex-start', backgroundColor: '#fffaf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
+                        {introExpanded ? 'Show less' : 'Read full intro'}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
               </View>
             )}
 
