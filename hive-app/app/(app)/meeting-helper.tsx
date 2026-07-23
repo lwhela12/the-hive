@@ -638,6 +638,25 @@ export default function MeetingHelperScreen() {
         content: `${monthLabel}'s HIVE Help focus: ${focus}\n\n(Decided together at the meeting — log your helps in this thread!)`,
       });
       if (error) throw error;
+
+      // The focus lands on everyone's to-do list too (Nat: the donation
+      // reminder should populate for the whole HIVE, not just the check-in).
+      if (members.length > 0) {
+        const monthMeeting = events.find(
+          (event) => event.event_type === 'meeting'
+            && new Date(`${event.event_date}T12:00:00`).toLocaleString('en-US', { month: 'long' }) === monthLabel
+        );
+        const { error: fanError } = await (supabase as any).from('action_items').insert(
+          members.map((member) => ({
+            community_id: communityId,
+            assigned_to: member.id,
+            description: `HIVE Help: ${focus} — bring your contribution to the ${monthLabel} meeting 🎁`,
+            due_date: monthMeeting?.event_date ?? null,
+          }))
+        );
+        if (fanError) console.warn('Focus to-do fan-out skipped:', fanError);
+      }
+
       setMonthFocusDrafts((drafts) => ({ ...drafts, [monthLabel]: '' }));
       await loadDeckData();
     } catch (error) {

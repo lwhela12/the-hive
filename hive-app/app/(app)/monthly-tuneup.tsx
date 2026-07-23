@@ -392,6 +392,34 @@ export default function MonthlyTuneupScreen() {
     }
   }, [checkInPrefilled, checkInDirty, checkInIsEditing, checkInResponse]);
 
+  // Draft answers write themselves (Nat: "maybe even pre-filled?") — the
+  // check-offs seed Progress and this session's kindness logs seed the HIVE
+  // Help recap. Only ever fills an EMPTY answer; keep it, edit it, delete it.
+  useEffect(() => {
+    if (surveysLoading || !monthlyCheckInSurvey) return;
+    if (doneTodos.length > 0 || doneForMe.length > 0) {
+      const current = String(checkInAnswers.q_pop_progress ?? '').trim();
+      if (!current) {
+        const lines = [
+          doneTodos.length > 0
+            ? `Checked off: ${doneTodos.map((todo) => parseActionItemDescription(todo.description).text).join(' · ')}.`
+            : null,
+          doneForMe.length > 0
+            ? `Done for me 💛: ${doneForMe.map((todo) => `${todo.helperName} — ${parseActionItemDescription(todo.description).text}`).join(' · ')}.`
+            : null,
+        ].filter(Boolean).join('\n');
+        setCheckInAnswer('q_pop_progress', lines);
+      }
+    }
+    if (helperPosted.length > 0) {
+      const current = String(checkInAnswers.q_hive_help_recap ?? '').trim();
+      if (!current) {
+        setCheckInAnswer('q_hive_help_recap', `I logged: ${helperPosted.join(' · ')}.`);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surveysLoading, monthlyCheckInSurvey, doneTodos, doneForMe, helperPosted]);
+
   const setCheckInAnswer = useCallback((questionId: string, value: any) => {
     setCheckInDirty(true);
     setCheckInAnswers((prev) => ({ ...prev, [questionId]: value }));
@@ -1184,6 +1212,23 @@ export default function MonthlyTuneupScreen() {
           ) : null}
         </View>
       ) : null}
+      {(() => {
+        const hangsRecap = checkInQuestions.find((question) => question.id === 'q_hangs_recap');
+        return hangsRecap ? (
+          <View style={[cardStyle, { marginBottom: 10 }]}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: 6 }}>
+              🍯 How did last cycle's hangs go?
+            </Text>
+            <SurveyQuestionField
+              question={hangsRecap}
+              index={-1}
+              value={checkInAnswers[hangsRecap.id]}
+              onChange={(value) => setCheckInAnswer(hangsRecap.id, value)}
+              hangEvents={hangRecapEvents}
+            />
+          </View>
+        ) : null;
+      })()}
       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: 6, marginTop: 4 }}>
         ✨ Or suggest your own
       </Text>
@@ -1421,6 +1466,21 @@ export default function MonthlyTuneupScreen() {
       </View>
       <PostedConfirmation lines={helperPosted} boardName={helperThread?.postTitle ?? helperThread?.boardName ?? null} />
 
+      {(() => {
+        const helpRecap = checkInQuestions.find((question) => question.id === 'q_hive_help_recap');
+        return helpRecap ? (
+          <View style={[cardStyle, { marginTop: 14 }]}>
+            <SurveyQuestionField
+              question={helpRecap}
+              index={-1}
+              value={checkInAnswers[helpRecap.id]}
+              onChange={(value) => setCheckInAnswer(helpRecap.id, value)}
+              hangEvents={hangRecapEvents}
+            />
+          </View>
+        ) : null;
+      })()}
+
       {/* Next month's focus: tap-to-second (confetti and all), or pitch fresh */}
       <View style={[cardStyle, { marginTop: 14, gap: 10, position: 'relative', overflow: 'hidden' }]}>
         <ConfettiBurst visible={helpConfetti} onDone={() => setHelpConfetti(false)} />
@@ -1611,26 +1671,6 @@ export default function MonthlyTuneupScreen() {
           </Text>
         </View>
       ) : null}
-      {doneTodos.length > 0 || doneForMe.length > 0 ? (
-        <View style={[cardStyle, { gap: 8, marginBottom: 14, backgroundColor: '#fdf3dc' }]}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
-            Memory joggers for your Progress answer ✍️
-          </Text>
-          {doneTodos.length > 0 ? (
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b5b3e', lineHeight: 19 }}>
-              You checked off: {doneTodos.map((todo) => todo.description).join(' · ')}
-            </Text>
-          ) : null}
-          {doneForMe.length > 0 ? (
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b5b3e', lineHeight: 19 }}>
-              Done for you: {doneForMe.map((todo) => `${todo.helperName} — ${todo.description}`).join(' · ')}
-            </Text>
-          ) : null}
-          <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12, color: '#9a8060' }}>
-            Worth a shout-out in Progress? Credit where credit is due 💛
-          </Text>
-        </View>
-      ) : null}
       {surveysLoading ? (
         <View style={{ paddingVertical: 32, alignItems: 'center' }}>
           <ActivityIndicator color="#bd9348" />
@@ -1652,7 +1692,7 @@ export default function MonthlyTuneupScreen() {
               </Text>
             </View>
           ) : null}
-          {checkInQuestions.map((question, index) => (
+          {checkInQuestions.filter((question) => question.id !== 'q_hangs_recap' && question.id !== 'q_hive_help_recap').map((question, index) => (
             <SurveyQuestionField
               key={question.id}
               question={question}

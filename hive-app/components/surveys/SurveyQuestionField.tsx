@@ -255,9 +255,12 @@ export function SurveyQuestionField({
   return (
     <View style={{ marginBottom: 24 }}>
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
-        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fdf3dc', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{index + 1}</Text>
-        </View>
+        {/* index -1 = question embedded in another step; no number chip */}
+        {index >= 0 && (
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fdf3dc', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{index + 1}</Text>
+          </View>
+        )}
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', flex: 1, lineHeight: 22 }}>
           {question.text}
           {question.required && <Text style={{ color: '#bd9348' }}> *</Text>}
