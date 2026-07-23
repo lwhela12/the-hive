@@ -1469,12 +1469,30 @@ export default function MonthlyTuneupScreen() {
   const checkInQuestions = (monthlyCheckInSurvey?.questions ?? [])
     .filter((question) => question.id !== 'q_carry_forward');
 
+  // "Don't forget your donation!" — derived from the month's HIVE Help
+  // thread title ("August HIVE Help — Shelter Donation"), so the reminder
+  // updates itself as each month's focus changes.
+  const helpFocusMatch = helperThread?.postTitle?.match(/HIVE Help(?:ers)?\s*[—–-]+\s*(.+)$/i);
+  const helpFocus = helpFocusMatch?.[1]?.trim() ?? null;
+  const helpFocusReminder = helpFocus
+    ? /donat/i.test(helpFocus)
+      ? `This month's HIVE Help is ${helpFocus} — don't forget to bring your donation to the meeting! 🎁`
+      : `This month's HIVE Help focus: ${helpFocus} — bring whatever it needs to the meeting! 🐝`
+    : null;
+
   const renderCheckInStep = () => (
     <View>
       <StepHeader
         title="Check-in 📝"
         subtitle="Last stop — a few quick questions so HIVE and Clive arrive prepared. Your answers save when you tap Finish, and you can come back and change them any time this month."
       />
+      {helpFocusReminder ? (
+        <View style={[cardStyle, { marginBottom: 14, backgroundColor: '#fdf3dc', borderColor: 'rgba(189,147,72,0.45)' }]}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 20, color: '#8a6b30' }}>
+            {helpFocusReminder}
+          </Text>
+        </View>
+      ) : null}
       {doneTodos.length > 0 || doneForMe.length > 0 ? (
         <View style={[cardStyle, { gap: 8, marginBottom: 14, backgroundColor: '#fdf3dc' }]}>
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
