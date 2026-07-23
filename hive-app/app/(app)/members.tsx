@@ -2525,13 +2525,8 @@ export default function MembersScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f6f4e5' }} edges={['top']}>
-      {/* Header */}
-      <AppHeader
-        title="Members"
-        subtitle={!loading && members.length > 0
-          ? `${members.length} members · search roles, skills, wishes, birthdays, and stories`
-          : undefined}
-      />
+      {/* Header — just the name; the search bar below carries the detail */}
+      <AppHeader title="Members" />
 
       {/* Search bar */}
       {!loading && members.length > 0 && (
