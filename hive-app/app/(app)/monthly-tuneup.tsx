@@ -1236,7 +1236,7 @@ export default function MonthlyTuneupScreen() {
       </View>
       <PostedConfirmation lines={hangPosted} boardName={hangBoardName} />
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
-        Post as many as you like — or tap Next to skip.
+        Post as many as you like — or tap "Looks good →" to skip.
       </Text>
     </View>
   );
@@ -1357,7 +1357,7 @@ export default function MonthlyTuneupScreen() {
         </View>
       ) : null}
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
-        Add as many as you like — or tap Next to skip.
+        Add as many as you like — or tap "Looks good →" to skip.
       </Text>
     </View>
   );
@@ -1490,7 +1490,7 @@ export default function MonthlyTuneupScreen() {
       </View>
 
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
-        Nothing to log? No worries — tap Next.
+        Nothing to log? No worries — tap "Looks good →".
       </Text>
     </View>
   );
