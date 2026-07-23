@@ -1819,7 +1819,7 @@ export default function BoardScreen() {
           <View>
             {selectedCategory.description ? (
               <View className="mb-4">
-                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-sm">
+                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic' }} className="text-charcoal/60 text-sm">
                   {selectedCategory.description}
                 </Text>
               </View>
