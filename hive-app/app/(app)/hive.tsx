@@ -1938,22 +1938,25 @@ export default function HiveScreen() {
     closeWishDetail();
   };
 
+  // Owner-only wish tools (Nat, 2026-07-23): the admin do-it-for-them override
+  // retired — check-ins walk everyone through their own wishes now, and one
+  // pencil per own-wish reads cleaner.
   const canEditWish = useCallback((wish: Wish) => (
-    !!profile && wish.status !== 'fulfilled' && (isAdmin || wish.user_id === profile.id)
-  ), [isAdmin, profile]);
-  const canDeleteWish = useCallback((wish: Wish) => !!profile && (isAdmin || wish.user_id === profile.id), [isAdmin, profile]);
+    !!profile && wish.status !== 'fulfilled' && wish.user_id === profile.id
+  ), [profile]);
+  const canDeleteWish = useCallback((wish: Wish) => !!profile && wish.user_id === profile.id, [profile]);
   const canGrantWish = useCallback((wish: Wish) => (
-    !!profile && wish.status === 'public' && (isAdmin || wish.user_id === profile.id)
-  ), [isAdmin, profile]);
+    !!profile && wish.status === 'public' && wish.user_id === profile.id
+  ), [profile]);
   const canArchiveWish = useCallback((wish: Wish) => (
     !!profile
     && wish.status === 'public'
     && wish.is_active !== false
-    && (isAdmin || wish.user_id === profile.id)
-  ), [isAdmin, profile]);
+    && wish.user_id === profile.id
+  ), [profile]);
   const canRefineWish = useCallback((wish: Wish) => (
-    !!profile && wish.status !== 'fulfilled' && (isAdmin || wish.user_id === profile.id)
-  ), [isAdmin, profile]);
+    !!profile && wish.status !== 'fulfilled' && wish.user_id === profile.id
+  ), [profile]);
   const canOpenWishActions = useCallback((wish: Wish) => (
     canGrantWish(wish) || canEditWish(wish) || canArchiveWish(wish) || canDeleteWish(wish) || canRefineWish(wish)
   ), [canArchiveWish, canDeleteWish, canEditWish, canGrantWish, canRefineWish]);
