@@ -661,7 +661,7 @@ export default function BoardScreen() {
     !!wish && !!profile && wish.user_id === profile.id
   ), [profile]);
   const canModerateLinkedWish = useCallback((wish: LinkedWish | null) => (
-    !!wish && !!profile && (isAdmin || wish.user_id === profile.id)
+    !!wish && !!profile && wish.user_id === profile.id
   ), [isAdmin, profile]);
 
   const getLinkedWishForPost = useCallback((post: Pick<BoardPost, 'id' | 'granted_wish_id'>) => (

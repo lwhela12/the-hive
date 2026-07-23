@@ -431,14 +431,14 @@ function HexShortcut({ emoji, label, sublabel, onPress }: {
 // 'panel' sections sit side by side in a row on wide screens; 'full' sections span the width.
 type HomeSectionKey = 'activity' | 'todos' | 'events' | 'shortcuts' | 'wishes';
 
-const DEFAULT_HOME_SECTION_ORDER: HomeSectionKey[] = ['activity', 'todos', 'events', 'shortcuts', 'wishes'];
+const DEFAULT_HOME_SECTION_ORDER: HomeSectionKey[] = ['shortcuts', 'activity', 'todos', 'events', 'wishes'];
 
 const HOME_SECTION_META: Record<HomeSectionKey, { title: string; emoji: string; layout: 'panel' | 'full' }> = {
   activity: { title: 'Recent Activity', emoji: '🐝', layout: 'panel' },
   todos: { title: 'My To Do List', emoji: '📝', layout: 'panel' },
   events: { title: 'Upcoming Events', emoji: '📅', layout: 'panel' },
   shortcuts: { title: 'Shortcuts', emoji: '🍯', layout: 'full' },
-  wishes: { title: 'Wishes', emoji: '⭐', layout: 'full' },
+  wishes: { title: 'Wishes', emoji: '⭐', layout: 'panel' },
 };
 
 // Resolve a saved order against the current section set: unknown saved keys are
@@ -2150,12 +2150,14 @@ export default function HiveScreen() {
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
   const visibleTodos = todoStatusTab === 'done' ? doneTodos : openTodos;
   const completedActionCount = homeActionItems.filter(action => action.completed).length;
+  // Four equal boxes (Nat's 2x2): panels wrap two-up on desktop, stack on
+  // phone — same boxes, same order, real continuity between the two.
   const dashboardSectionStyle = useMobileLayout
     ? { width: '100%' as const }
-    : { flex: 1, minWidth: 0 };
-  const dashboardPanelHeight = useMobileLayout ? 300 : 280;
-  const todoPanelMaxHeight = useMobileLayout ? 420 : 280;
-  const wishPanelHeight = useMobileLayout ? 460 : 360;
+    : { flexBasis: '47%' as const, flexGrow: 1, minWidth: 320 };
+  const dashboardPanelHeight = useMobileLayout ? 320 : 340;
+  const todoPanelMaxHeight = dashboardPanelHeight;
+  const wishPanelHeight = dashboardPanelHeight;
 
   // Group consecutive 'panel' sections so they share a row on wide screens
   // (and stack in order on mobile); 'full' sections always span the width.
@@ -2810,17 +2812,17 @@ export default function HiveScreen() {
                       shadowOffset: { width: 0, height: 5 },
                       elevation: 3,
                       overflow: 'hidden',
-                      maxHeight: todoPanelMaxHeight,
+                      height: todoPanelMaxHeight,
                       position: 'relative',
                     }}>
                       <ConfettiBurst visible={showConfetti} onDone={() => setShowConfetti(false)} />
                       <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10 }} />
                       {homeActionLoading ? (
-                        <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 32 }}>
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 32 }}>
                           <ActivityIndicator size="small" color="#bd9348" />
                         </View>
                       ) : visibleTodos.length === 0 ? (
-                        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 20, paddingVertical: 28 }}>
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, paddingVertical: 28 }}>
                           <Text style={{ fontSize: 32, marginBottom: 8 }}>✅</Text>
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', marginBottom: 4, textAlign: 'center' }}>All clear!</Text>
                           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', textAlign: 'center', lineHeight: 18 }}>
@@ -2999,7 +3001,7 @@ export default function HiveScreen() {
               }
               case 'wishes':
                 return (
-                  <View style={{ marginBottom: useMobileLayout ? 20 : 24 }}>
+                  <View>
                     <HeaderTabs
                       activeTab={wishStatusTab}
                       onChange={setWishStatusTab}
@@ -3225,7 +3227,7 @@ export default function HiveScreen() {
             HOME_SECTION_META[group[0]].layout === 'panel' ? (
               <View
                 key={group.join('-')}
-                style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: useMobileLayout ? 20 : 16, marginBottom: useMobileLayout ? 20 : 24 }}
+                style={{ flexDirection: useMobileLayout ? 'column' : 'row', flexWrap: useMobileLayout ? undefined : 'wrap', gap: useMobileLayout ? 20 : 16, marginBottom: useMobileLayout ? 20 : 24 }}
               >
                 {group.map((sectionKey) => (
                   <View key={sectionKey} style={dashboardSectionStyle}>

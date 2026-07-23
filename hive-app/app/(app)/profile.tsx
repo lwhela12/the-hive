@@ -151,7 +151,7 @@ export default function ProfileScreen() {
   });
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const canManageWish = useCallback((wish: Wish) => (
-    !!profile && (isAdmin || wish.user_id === profile.id)
+    !!profile && wish.user_id === profile.id
   ), [isAdmin, profile?.id]);
   const canGrantWish = useCallback((wish: Wish) => (
     wish.status === 'public' && canManageWish(wish)
