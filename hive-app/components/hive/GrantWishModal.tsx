@@ -293,7 +293,7 @@ export function GrantWishModal({
                   value={thankYouMessage}
                   onChangeText={setThankYouMessage}
                   placeholder="Thank you so much for helping me with..."
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor="#a09274"
                   multiline
                   blurOnSubmit={false}
                   onKeyPress={submitOnEnter(handleGrant)}

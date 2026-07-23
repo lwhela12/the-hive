@@ -17,7 +17,7 @@ export function WishBoard({
     return (
       <View className="bg-white rounded-xl p-8 items-center">
         <Text className="text-4xl mb-3">✨</Text>
-        <Text className="text-gray-500 text-center">{emptyMessage}</Text>
+        <Text className="text-label text-center">{emptyMessage}</Text>
       </View>
     );
   }

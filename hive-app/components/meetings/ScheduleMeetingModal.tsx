@@ -265,7 +265,7 @@ export function ScheduleMeetingModal({
                 Schedule Meeting
               </Text>
               <Pressable onPress={onClose} className="p-2">
-                <Text className="text-gray-500 text-lg">Cancel</Text>
+                <Text className="text-label text-lg">Cancel</Text>
               </Pressable>
             </View>
 
@@ -382,7 +382,7 @@ export function ScheduleMeetingModal({
                   </Pressable>
                 ))}
               </View>
-              <Text className="text-gray-500 text-xs mt-2">
+              <Text className="text-label text-xs mt-2">
                 HIVE meetings default to 30 minutes of arrival time plus a 2 hour meeting.
               </Text>
             </View>
@@ -406,7 +406,7 @@ export function ScheduleMeetingModal({
 
               {loadingMembers ? (
                 <View className="bg-gray-50 rounded-xl p-4">
-                  <Text className="text-gray-500 text-center">Loading members...</Text>
+                  <Text className="text-label text-center">Loading members...</Text>
                 </View>
               ) : (
                 <View className="bg-gray-50 rounded-xl p-3">

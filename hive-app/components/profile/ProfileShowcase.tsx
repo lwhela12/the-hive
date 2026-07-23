@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     color: '#bd9348',
   },
   storyLabel: {
-    color: '#9ca3af',
+    color: '#a09274',
     marginBottom: 0,
   },
   askText: {

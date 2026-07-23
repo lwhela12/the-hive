@@ -93,7 +93,7 @@ function Dropdown({ label, value, options, onChange, placeholder }: DropdownProp
         >
           {selectedOption?.label || placeholder}
         </Text>
-        <Ionicons name="chevron-down" size={16} color="#4b5563" />
+        <Ionicons name="chevron-down" size={16} color="#5c5648" />
       </Pressable>
 
       <Modal

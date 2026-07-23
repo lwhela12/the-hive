@@ -166,7 +166,7 @@ export function MemberPicker({
             value={search}
             onChangeText={setSearch}
             placeholder="Search members..."
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#a09274"
             className="bg-cream rounded-xl px-4 py-3"
             style={{ fontFamily: 'Lato_400Regular' }}
           />

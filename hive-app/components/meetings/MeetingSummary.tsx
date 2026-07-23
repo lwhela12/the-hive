@@ -610,7 +610,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           <Text className="text-xl font-bold text-hive-dark">
             {normalizeHiveBrandText(parsedSummary.title) || 'Meeting Summary'}
           </Text>
-          <Text className="text-gray-500">
+          <Text className="text-label">
             {formatDateLong(meeting.date)}
           </Text>
         </View>
@@ -866,7 +866,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
             <View className="bg-gray-50 rounded-xl p-4">
               {parsedSummary.details.map((detail, index) => (
                 <View key={index} className="flex-row mb-2 last:mb-0">
-                  <Text className="text-gray-500 mr-2">•</Text>
+                  <Text className="text-label mr-2">•</Text>
                   <Text className="text-gray-700 flex-1">{detail}</Text>
                 </View>
               ))}
@@ -925,12 +925,12 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                       {item.description}
                     </Text>
                     {item.assigned_user && (
-                      <Text className="text-sm text-gray-500 mt-1">
+                      <Text className="text-sm text-label mt-1">
                         Assigned to: {item.assigned_user.name}
                       </Text>
                     )}
                     {item.due_date && (
-                      <Text className="text-sm text-gray-500">
+                      <Text className="text-sm text-label">
                         Due: {formatDateShort(item.due_date)}
                       </Text>
                     )}
@@ -969,7 +969,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         {!parsedSummary.summary && !meeting.transcript_attributed && !meeting.transcript_raw && meeting.processing_status === 'complete' && (
           <View className="items-center py-8">
             <Text className="text-4xl mb-4">📝</Text>
-            <Text className="text-gray-500 text-center">
+            <Text className="text-label text-center">
               No content available for this meeting.
             </Text>
           </View>
@@ -986,7 +986,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         <View className="flex-1 bg-white">
           <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
             <Pressable onPress={() => setEditingProposal(null)} disabled={savingProposalEdit}>
-              <Text className="text-gray-500 text-base">Cancel</Text>
+              <Text className="text-label text-base">Cancel</Text>
             </Pressable>
             <Text className="text-lg font-bold text-hive-dark">{getProposalEditorTitle()}</Text>
             <Pressable
@@ -1050,7 +1050,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         <View className="flex-1 bg-white">
           <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
             <Pressable onPress={() => setShowAttributionModal(false)}>
-              <Text className="text-gray-500 text-base">Cancel</Text>
+              <Text className="text-label text-base">Cancel</Text>
             </Pressable>
             <Text className="text-lg font-bold text-hive-dark">Assign Speakers</Text>
             <Pressable

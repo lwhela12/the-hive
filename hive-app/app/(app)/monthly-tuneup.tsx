@@ -1134,7 +1134,7 @@ export default function MonthlyTuneupScreen() {
             opacity: pressed || hangPosting ? 0.8 : 1,
           })}
         >
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: hangContent.trim() ? 'white' : '#9ca3af' }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: hangContent.trim() ? 'white' : '#a09274' }}>
             {hangPosting ? 'Posting...' : 'Post hang idea'}
           </Text>
         </Pressable>
@@ -1236,7 +1236,7 @@ export default function MonthlyTuneupScreen() {
             opacity: pressed || savingEvent ? 0.8 : 1,
           })}
         >
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: eventTitle.trim() && eventDate ? 'white' : '#9ca3af' }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: eventTitle.trim() && eventDate ? 'white' : '#a09274' }}>
             {savingEvent ? 'Adding...' : 'Add to HIVE calendar'}
           </Text>
         </Pressable>
@@ -1313,7 +1313,7 @@ export default function MonthlyTuneupScreen() {
             opacity: pressed || helperPosting ? 0.8 : 1,
           })}
         >
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: helperContent.trim() ? 'white' : '#9ca3af' }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: helperContent.trim() ? 'white' : '#a09274' }}>
             {helperPosting ? 'Logging...' : 'Log kindness'}
           </Text>
         </Pressable>
@@ -1369,7 +1369,7 @@ export default function MonthlyTuneupScreen() {
               opacity: pressed || helpIdeaPosting ? 0.8 : 1,
             })}
           >
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: helpIdeaContent.trim() ? 'white' : '#9ca3af' }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: helpIdeaContent.trim() ? 'white' : '#a09274' }}>
               {helpIdeaPosting ? '…' : 'Pitch it'}
             </Text>
           </Pressable>
@@ -1427,7 +1427,7 @@ export default function MonthlyTuneupScreen() {
               opacity: pressed || todoSaving ? 0.8 : 1,
             })}
           >
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: newTodoText.trim() ? 'white' : '#9ca3af' }}>Add</Text>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: newTodoText.trim() ? 'white' : '#a09274' }}>Add</Text>
           </Pressable>
         </View>
       </View>
@@ -1439,7 +1439,7 @@ export default function MonthlyTuneupScreen() {
           {doneTodos.map((todo) => (
             <Pressable key={todo.id} onPress={() => handleToggleTodo(todo, false)} style={{ flexDirection: 'row', gap: 8 }}>
               <Text style={{ fontSize: 13 }}>✅</Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', flex: 1, lineHeight: 19 }}>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8e7a5e', flex: 1, lineHeight: 19 }}>
                 {todo.description}
               </Text>
             </Pressable>

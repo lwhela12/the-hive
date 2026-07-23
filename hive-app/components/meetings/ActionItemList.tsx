@@ -11,7 +11,7 @@ export function ActionItemList({ items, onToggle }: ActionItemListProps) {
   if (items.length === 0) {
     return (
       <View className="bg-white rounded-xl p-6 items-center">
-        <Text className="text-gray-500">No action items</Text>
+        <Text className="text-label">No action items</Text>
       </View>
     );
   }
@@ -45,12 +45,12 @@ export function ActionItemList({ items, onToggle }: ActionItemListProps) {
             </Text>
             <View className="flex-row items-center mt-1">
               {item.assigned_user && (
-                <Text className="text-sm text-gray-500 mr-3">
+                <Text className="text-sm text-label mr-3">
                   {item.assigned_user.name}
                 </Text>
               )}
               {item.due_date && (
-                <Text className="text-sm text-gray-400">
+                <Text className="text-sm text-softink">
                   Due {formatDateShort(item.due_date)}
                 </Text>
               )}

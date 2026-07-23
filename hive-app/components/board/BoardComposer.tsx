@@ -266,7 +266,7 @@ export function BoardComposer({
                 value={title}
                 onChangeText={setTitle}
                 placeholder="Give this thread a title..."
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#a09274"
                 maxLength={150}
                 returnKeyType="send"
                 onSubmitEditing={handleSubmit}
@@ -290,7 +290,7 @@ export function BoardComposer({
                   onSelectionChange={(event) => setContentSelection(event.nativeEvent.selection)}
                   selection={contentSelectionOverride ?? undefined}
                   placeholder="What would you like to share?"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor="#a09274"
                   multiline
                   blurOnSubmit={Platform.OS === 'web'}
                   submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}

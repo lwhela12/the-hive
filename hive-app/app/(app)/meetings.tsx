@@ -1225,7 +1225,7 @@ export default function MeetingsScreen() {
                     <Text className="font-semibold text-gray-800">
                       {normalizeHiveBrandText(event.title)}
                     </Text>
-                    <Text className="text-sm text-gray-500 mt-1">
+                    <Text className="text-sm text-label mt-1">
                       {formatDateLong(event.event_date)}
                       {event.event_time ? ` at ${event.event_time}` : ''}
                     </Text>
@@ -1305,10 +1305,10 @@ export default function MeetingsScreen() {
                   <Text className="font-semibold text-gray-800">
                     {getMeetingCardTitle(meeting)}
                   </Text>
-                  <Text className="text-sm text-gray-500 mt-1">
+                  <Text className="text-sm text-label mt-1">
                     {formatDateLong(meeting.date)}
                   </Text>
-                  <Text className="text-sm text-gray-500 mt-1">
+                  <Text className="text-sm text-label mt-1">
                     Status:{' '}
                     <Text
                       className={
@@ -1371,7 +1371,7 @@ export default function MeetingsScreen() {
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
             <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
               <Pressable onPress={closeNotesImport} disabled={importingNotes}>
-                <Text className="text-gray-500 text-base">Cancel</Text>
+                <Text className="text-label text-base">Cancel</Text>
               </Pressable>
               <Text className="text-lg font-bold text-hive-dark">Import Notes</Text>
               <Pressable
@@ -1394,7 +1394,7 @@ export default function MeetingsScreen() {
                       <Text className="font-semibold text-gray-800">
                         {selectedImportMeeting ? normalizeHiveBrandText(selectedImportMeeting.title) : 'Not linked to a scheduled meeting'}
                       </Text>
-                      <Text className="text-sm text-gray-500 mt-1">
+                      <Text className="text-sm text-label mt-1">
                         {selectedImportMeeting
                           ? `${formatDateLong(selectedImportMeeting.event_date)}${selectedImportMeeting.event_time ? ` at ${selectedImportMeeting.event_time}` : ''}`
                           : 'Use this for older notes, hand notes, or anything not on the calendar.'}
@@ -1417,11 +1417,11 @@ export default function MeetingsScreen() {
                         className={`rounded-lg p-3 mb-2 active:bg-gray-100 ${!notesImportForm.linkedEventId ? 'bg-honey-50 border border-honey-200' : 'bg-gray-50'}`}
                       >
                         <Text className="font-semibold text-gray-800">Standalone notes</Text>
-                        <Text className="text-sm text-gray-500 mt-1">Do not link to a scheduled meeting.</Text>
+                        <Text className="text-sm text-label mt-1">Do not link to a scheduled meeting.</Text>
                       </Pressable>
 
                       {meetingEvents.length === 0 ? (
-                        <Text className="text-sm text-gray-500 p-3">
+                        <Text className="text-sm text-label p-3">
                           No scheduled meetings found yet.
                         </Text>
                       ) : (
@@ -1432,7 +1432,7 @@ export default function MeetingsScreen() {
                             className={`rounded-lg p-3 mb-2 active:bg-gray-100 ${notesImportForm.linkedEventId === event.id ? 'bg-honey-50 border border-honey-200' : 'bg-gray-50'}`}
                           >
                             <Text className="font-semibold text-gray-800">{normalizeHiveBrandText(event.title)}</Text>
-                            <Text className="text-sm text-gray-500 mt-1">
+                            <Text className="text-sm text-label mt-1">
                               {formatDateLong(event.event_date)}{event.event_time ? ` at ${event.event_time}` : ''}
                             </Text>
                           </Pressable>
@@ -1497,7 +1497,7 @@ export default function MeetingsScreen() {
                     </Text>
                   )}
                 </View>
-                <Text className="text-gray-500 text-sm mt-2">
+                <Text className="text-label text-sm mt-2">
                   {Platform.OS === 'web'
                     ? 'Drag & drop .m4a voice memos anywhere on this page, or tap to browse. Clive transcribes them automatically.'
                     : 'Add the .m4a voice memos from the meeting — Clive transcribes them automatically.'}
@@ -1545,7 +1545,7 @@ export default function MeetingsScreen() {
                   )}
                 </View>
                 {notesImportForm.files.length === 0 && (
-                  <Text className="text-gray-500 text-sm mt-2">
+                  <Text className="text-label text-sm mt-2">
                     Upload .docx, .pdf, .txt, .md, or photos of handwritten notes. Or paste the notes below.
                   </Text>
                 )}
@@ -1581,7 +1581,7 @@ export default function MeetingsScreen() {
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
             <Pressable onPress={closeEventEdit}>
-              <Text className="text-gray-500 text-base">Cancel</Text>
+              <Text className="text-label text-base">Cancel</Text>
             </Pressable>
             <Text className="text-lg font-bold text-hive-dark">Edit Meeting</Text>
             <Pressable
@@ -1700,7 +1700,7 @@ export default function MeetingsScreen() {
                   }}
                   style={{ backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
                 >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#6b7280' }}>📺 Arrival Board</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#8e7a5e' }}>📺 Arrival Board</Text>
                 </Pressable>
               )}
               {isAdmin && (
@@ -1712,7 +1712,7 @@ export default function MeetingsScreen() {
                   }}
                   style={{ backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
                 >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#6b7280' }}>Change View Link</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#8e7a5e' }}>Change View Link</Text>
                 </Pressable>
               )}
             </View>
@@ -1742,7 +1742,7 @@ export default function MeetingsScreen() {
                 value={deckUrlDraft}
                 onChangeText={setDeckUrlDraft}
                 placeholder="https://www.canva.com/design/..."
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#a09274"
                 autoCapitalize="none"
                 autoCorrect={false}
                 autoFocus
@@ -1765,7 +1765,7 @@ export default function MeetingsScreen() {
                   onPress={() => setShowDeckEdit(false)}
                   style={{ flex: 1, backgroundColor: '#f0ede6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
                 >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#6b7280' }}>Cancel</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#8e7a5e' }}>Cancel</Text>
                 </Pressable>
                 <Pressable
                   onPress={handleSaveDeckUrl}

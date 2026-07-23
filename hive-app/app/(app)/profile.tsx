@@ -1786,7 +1786,7 @@ export default function ProfileScreen() {
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal text-base p-0"
                   placeholder="Your name"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#a09274"
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -1811,7 +1811,7 @@ export default function ProfileScreen() {
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal text-base p-0"
                   placeholder="(555) 555-5555"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#a09274"
                   keyboardType="phone-pad"
                 />
               ) : (
@@ -1846,7 +1846,7 @@ export default function ProfileScreen() {
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal text-base p-0"
                   placeholder="Founder, Tarot Reader, Spreadsheet Sorcerer..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#a09274"
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -1865,7 +1865,7 @@ export default function ProfileScreen() {
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal text-base p-0"
                   placeholder="Your occupation"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#a09274"
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -1884,7 +1884,7 @@ export default function ProfileScreen() {
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal text-base p-0"
                   placeholder="A few sentences about yourself..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#a09274"
                   multiline
                   numberOfLines={3}
                 />
@@ -1905,7 +1905,7 @@ export default function ProfileScreen() {
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal text-base p-0"
                   placeholder="What are you working on right now?"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#a09274"
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -1924,7 +1924,7 @@ export default function ProfileScreen() {
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal text-base p-0"
                   placeholder="Where are you from?"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#a09274"
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -1943,7 +1943,7 @@ export default function ProfileScreen() {
                   style={{ fontFamily: 'Lato_400Regular' }}
                   className="text-charcoal text-base p-0"
                   placeholder="What should HIVErs come to you for?"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#a09274"
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -1969,7 +1969,7 @@ export default function ProfileScreen() {
                     style={{ fontFamily: 'Lato_400Regular' }}
                     className="text-charcoal text-base p-0 mb-4"
                     placeholder="What experiences would make life feel rich?"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor="#a09274"
                     multiline
                   />
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">Ways I want to grow</Text>
@@ -1979,7 +1979,7 @@ export default function ProfileScreen() {
                     style={{ fontFamily: 'Lato_400Regular' }}
                     className="text-charcoal text-base p-0 mb-4"
                     placeholder="Who do I want to become?"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor="#a09274"
                     multiline
                   />
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">How I want to contribute</Text>
@@ -1989,7 +1989,7 @@ export default function ProfileScreen() {
                     style={{ fontFamily: 'Lato_400Regular' }}
                     className="text-charcoal text-base p-0"
                     placeholder="How do I want to help, serve, or create?"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor="#a09274"
                     multiline
                   />
                 </View>
@@ -2028,7 +2028,7 @@ export default function ProfileScreen() {
                         style={{ fontFamily: 'Lato_400Regular' }}
                         className="text-charcoal text-base p-0"
                         placeholder="Not set"
-                        placeholderTextColor="#9CA3AF"
+                        placeholderTextColor="#a09274"
                       />
                     ) : (
                       <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -2056,7 +2056,7 @@ export default function ProfileScreen() {
                     style={{ fontFamily: 'Lato_400Regular' }}
                     className="text-charcoal text-base p-0 mb-3"
                     placeholder={`Fun fact ${idx + 1}...`}
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor="#a09274"
                   />
                 ))
               ) : (
@@ -2238,7 +2238,7 @@ export default function ProfileScreen() {
                     >
                       Skills Garden 🌸
                     </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: compactProfileLandscape ? 9 : 11, color: '#9ca3af', marginTop: compactProfileLandscape ? 0 : 2 }}>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: compactProfileLandscape ? 9 : 11, color: '#a09274', marginTop: compactProfileLandscape ? 0 : 2 }}>
                       {bloomingSkillCount > 0
                         ? `${bloomingSkillCount} skill flower${bloomingSkillCount !== 1 ? 's' : ''} blooming`
                         : 'Seed your Skills Garden'}

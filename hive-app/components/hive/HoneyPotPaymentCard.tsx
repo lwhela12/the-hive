@@ -62,7 +62,7 @@ export function HoneyPotPaymentCard() {
           <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#1f2937', marginTop: 3 }}>
             Cash App {HONEY_POT_CASH_APP_HANDLE}
           </Text>
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#4b5563', marginTop: 6, lineHeight: 18 }}>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', marginTop: 6, lineHeight: 18 }}>
             Quarterly dues are ${QUARTERLY_DUES_AMOUNT}. A full year is ${ANNUAL_DUES_AMOUNT}.
           </Text>
         </View>

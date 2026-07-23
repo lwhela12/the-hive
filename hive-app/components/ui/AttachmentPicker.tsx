@@ -185,7 +185,7 @@ export function AttachmentPicker({
               className="flex-row items-center px-3 py-3 active:bg-cream"
             >
               <Ionicons name="camera-outline" size={18} color={canAddMore ? '#bd9348' : '#ccc'} />
-              <Text className={`ml-2 text-sm ${canAddMore ? 'text-charcoal' : 'text-gray-400'}`} style={{ fontFamily: 'Lato_700Bold' }}>
+              <Text className={`ml-2 text-sm ${canAddMore ? 'text-charcoal' : 'text-softink'}`} style={{ fontFamily: 'Lato_700Bold' }}>
                 Take photo
               </Text>
             </Pressable>
@@ -198,7 +198,7 @@ export function AttachmentPicker({
               className="flex-row items-center px-3 py-3 active:bg-cream border-t border-cream"
             >
               <Ionicons name="images-outline" size={18} color={canAddMore ? '#bd9348' : '#ccc'} />
-              <Text className={`ml-2 text-sm ${canAddMore ? 'text-charcoal' : 'text-gray-400'}`} style={{ fontFamily: 'Lato_700Bold' }}>
+              <Text className={`ml-2 text-sm ${canAddMore ? 'text-charcoal' : 'text-softink'}`} style={{ fontFamily: 'Lato_700Bold' }}>
                 Photo library
               </Text>
             </Pressable>
@@ -213,7 +213,7 @@ export function AttachmentPicker({
                   className="flex-row items-center px-3 py-3 active:bg-cream border-t border-cream"
                 >
                   <Ionicons name="videocam-outline" size={18} color={canAddFiles ? '#bd9348' : '#ccc'} />
-                  <Text className={`ml-2 text-sm ${canAddFiles ? 'text-charcoal' : 'text-gray-400'}`} style={{ fontFamily: 'Lato_700Bold' }}>
+                  <Text className={`ml-2 text-sm ${canAddFiles ? 'text-charcoal' : 'text-softink'}`} style={{ fontFamily: 'Lato_700Bold' }}>
                     Record video
                   </Text>
                 </Pressable>
@@ -226,7 +226,7 @@ export function AttachmentPicker({
                   className="flex-row items-center px-3 py-3 active:bg-cream border-t border-cream"
                 >
                   <Ionicons name="film-outline" size={18} color={canAddFiles ? '#bd9348' : '#ccc'} />
-                  <Text className={`ml-2 text-sm ${canAddFiles ? 'text-charcoal' : 'text-gray-400'}`} style={{ fontFamily: 'Lato_700Bold' }}>
+                  <Text className={`ml-2 text-sm ${canAddFiles ? 'text-charcoal' : 'text-softink'}`} style={{ fontFamily: 'Lato_700Bold' }}>
                     Video clip
                   </Text>
                 </Pressable>
@@ -242,7 +242,7 @@ export function AttachmentPicker({
                 className="flex-row items-center px-3 py-3 active:bg-cream border-t border-cream"
               >
                 <Ionicons name="document-attach-outline" size={18} color={canAddFiles ? '#bd9348' : '#ccc'} />
-                <Text className={`ml-2 text-sm ${canAddFiles ? 'text-charcoal' : 'text-gray-400'}`} style={{ fontFamily: 'Lato_700Bold' }}>
+                <Text className={`ml-2 text-sm ${canAddFiles ? 'text-charcoal' : 'text-softink'}`} style={{ fontFamily: 'Lato_700Bold' }}>
                   Doc
                 </Text>
               </Pressable>
@@ -279,7 +279,7 @@ export function AttachmentPicker({
           }`}
         >
           <Ionicons name="images-outline" size={20} color={canAddMore ? '#666' : '#ccc'} />
-          <Text className={`text-sm ${canAddMore ? 'text-gray-600' : 'text-gray-400'}`}>
+          <Text className={`text-sm ${canAddMore ? 'text-gray-600' : 'text-softink'}`}>
             {selectedImages.length === 0 ? 'Photos' : `${selectedImages.length}/${maxImages}`}
           </Text>
         </Pressable>
@@ -292,7 +292,7 @@ export function AttachmentPicker({
             }`}
           >
             <Ionicons name="film-outline" size={20} color={canAddFiles ? '#666' : '#ccc'} />
-            <Text className={`text-sm ${canAddFiles ? 'text-gray-600' : 'text-gray-400'}`}>
+            <Text className={`text-sm ${canAddFiles ? 'text-gray-600' : 'text-softink'}`}>
               Video
             </Text>
           </Pressable>
@@ -306,7 +306,7 @@ export function AttachmentPicker({
             }`}
           >
             <Ionicons name="attach-outline" size={20} color={canAddFiles ? '#666' : '#ccc'} />
-            <Text className={`text-sm ${canAddFiles ? 'text-gray-600' : 'text-gray-400'}`}>
+            <Text className={`text-sm ${canAddFiles ? 'text-gray-600' : 'text-softink'}`}>
               {selectedFiles.length === 0 ? 'Files' : `${selectedFiles.length}/${maxFiles}`}
             </Text>
           </Pressable>

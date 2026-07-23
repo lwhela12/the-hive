@@ -375,7 +375,7 @@ function ProfilePromptInput({
   multiline?: boolean;
   maxLength?: number;
 }) {
-  const countColor = value.length > maxLength * 0.9 ? '#bd9348' : '#9ca3af';
+  const countColor = value.length > maxLength * 0.9 ? '#bd9348' : '#a09274';
   return (
     <View style={{ marginBottom: 12 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
@@ -1112,7 +1112,7 @@ function MemberDetailModal({
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>Pick your skills</Text>
                   <Pressable onPress={() => { setShowSkillPicker(false); setSkillSearch(''); }} style={{ padding: 6 }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#9ca3af' }}>Done picking</Text>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#a09274' }}>Done picking</Text>
                   </Pressable>
                 </View>
                 {/* Selected count */}
@@ -1133,7 +1133,7 @@ function MemberDetailModal({
               <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
                 {/* Custom / type-your-own */}
                 <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#9ca3af', letterSpacing: 0.7, marginBottom: 8 }}>✍️ TYPE YOUR OWN</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#a09274', letterSpacing: 0.7, marginBottom: 8 }}>✍️ TYPE YOUR OWN</Text>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <TextInput
                       value={newSkillInput}
@@ -1158,7 +1158,7 @@ function MemberDetailModal({
                   if (filtered.length === 0) return null;
                   return (
                     <View key={cat.label} style={{ marginBottom: 20 }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#9ca3af', letterSpacing: 0.7, marginBottom: 10 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#a09274', letterSpacing: 0.7, marginBottom: 10 }}>
                         {cat.emoji} {cat.label.toUpperCase()}
                       </Text>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -1200,7 +1200,7 @@ function MemberDetailModal({
                   onPress={() => { setShowSkillPicker(false); setDraftSkillList(member.skills.map(s => s.description)); setSkillSearch(''); }}
                   style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}
                 >
-                  <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center' }}>Cancel</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e7a5e', textAlign: 'center' }}>Cancel</Text>
                 </Pressable>
                 <Pressable
                   onPress={async () => { await saveSkillsOnly(); setShowSkillPicker(false); setSkillSearch(''); }}
@@ -1224,7 +1224,7 @@ function MemberDetailModal({
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingBottom: 12 }}>
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>My HD Wishes 🌟</Text>
                 <Pressable onPress={() => setShowWishesSheet(false)} style={{ padding: 6 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#9ca3af' }}>Close</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#a09274' }}>Close</Text>
                 </Pressable>
               </View>
               <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
@@ -1332,7 +1332,7 @@ function MemberDetailModal({
                         {renderNewWishMentions()}
                         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                           <Pressable onPress={cancelNewWish} style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e7a5e', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
                           </Pressable>
                           <Pressable onPress={saveNewWish} disabled={!newWishInput.trim()} style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 10, opacity: newWishInput.trim() ? 1 : 0.4 }}>
                             <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', textAlign: 'center', fontSize: 13 }}>Add HD Wish</Text>
@@ -1402,12 +1402,12 @@ function MemberDetailModal({
                   <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>
                     {member.name.split(' ')[0]}'s Daily Answers
                   </Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#a09274', marginTop: 4 }}>
                     {dailyAnswers.length} question{dailyAnswers.length !== 1 ? 's' : ''} answered
                   </Text>
                 </View>
                 <Pressable onPress={() => setShowDailyAnswersSheet(false)} style={{ padding: 6 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#9ca3af' }}>Close</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#a09274' }}>Close</Text>
                 </Pressable>
               </View>
 
@@ -1415,7 +1415,7 @@ function MemberDetailModal({
                 {dailyAnswers.length === 0 ? (
                   <View style={{ backgroundColor: '#fdf8ec', borderRadius: 16, padding: 22, alignItems: 'center' }}>
                     <Text style={{ fontSize: 26, marginBottom: 8 }}>✨</Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center', lineHeight: 19 }}>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#a09274', textAlign: 'center', lineHeight: 19 }}>
                       No daily answers to peek at yet.
                     </Text>
                   </View>
@@ -1445,7 +1445,7 @@ function MemberDetailModal({
                         {answer.questionText}
                       </Text>
                       <View style={{ backgroundColor: 'white', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: 'rgba(222,193,129,0.25)' }}>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#4b5563' }}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#5c5648' }}>
                           {answer.answer}
                         </Text>
                       </View>
@@ -1474,7 +1474,7 @@ function MemberDetailModal({
               </View>
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginTop: 6 }}>{member.name}</Text>
               {(member.profile_title || member.occupation) && (
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', marginTop: 3 }}>{member.profile_title || member.occupation}</Text>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8e7a5e', marginTop: 3 }}>{member.profile_title || member.occupation}</Text>
               )}
               {/* Self actions: the round pencil + one Tune-up pill. No "You"
                   chip (you know who you are), admin shows as a quiet chip —
@@ -1757,7 +1757,7 @@ function MemberDetailModal({
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginBottom: 4 }}>
                           Deeper prompts are the next layer.
                         </Text>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: '#6b7280' }}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: '#8e7a5e' }}>
                           For now, use fun facts, favorites, skills, and wishes here. Once we choose the best deeper questions, we can make them permanent saved fields too.
                         </Text>
                       </View>
@@ -1966,7 +1966,7 @@ function MemberDetailModal({
                             onPress={cancelNewWish}
                             style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}
                           >
-                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#6b7280', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e7a5e', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
                           </Pressable>
                           <Pressable
                             onPress={saveNewWish}
@@ -2008,10 +2008,10 @@ function MemberDetailModal({
             {/* Intro post */}
             {showIntroPost && member.introPost && (
               <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>INTRODUCTION POST</Text>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#a09274', letterSpacing: 0.6, marginBottom: 8 }}>INTRODUCTION POST</Text>
                 <View style={{ backgroundColor: '#fdf8ec', borderRadius: 16, padding: 16 }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 4 }}>{member.introPost.title}</Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#4b5563', lineHeight: 22 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#5c5648', lineHeight: 22 }}>
                     {visibleIntro}
                   </Text>
                   {introNeedsToggle && (
@@ -2032,7 +2032,7 @@ function MemberDetailModal({
             <View style={{ marginBottom: 24 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <View>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#a09274', letterSpacing: 0.6 }}>
                     SKILLS GARDEN 🌸
                   </Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#b5a898', marginTop: 2 }}>
@@ -2056,7 +2056,7 @@ function MemberDetailModal({
               ) : member.skills.length === 0 ? (
                 <View style={{ backgroundColor: '#fdf8ec', borderRadius: 16, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center' }}>
                   <Text style={{ fontSize: 32, marginBottom: 8 }}>🌱</Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#a09274', textAlign: 'center' }}>
                     {PROFILE_EMPTY_COPY.skills}
                   </Text>
                 </View>
@@ -2079,7 +2079,7 @@ function MemberDetailModal({
               hitSlop={8}
               style={{ position: 'absolute', right: 18, top: 8, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ee', zIndex: 100, elevation: 100 }}
             >
-              <Ionicons name="close" size={24} color="#6b7280" />
+              <Ionicons name="close" size={24} color="#8e7a5e" />
             </Pressable>
           )}
         </View>
@@ -2538,7 +2538,7 @@ export default function MembersScreen() {
       {!loading && members.length > 0 && (
         <View style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#f6f4e5', borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.3)' }}>
           <View style={{ backgroundColor: '#fffdf5', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8 }}>
-            <Text style={{ color: '#9ca3af', marginRight: 8, fontSize: 15 }}>🔍</Text>
+            <Text style={{ color: '#a09274', marginRight: 8, fontSize: 15 }}>🔍</Text>
             <TextInput
               value={search}
               onChangeText={setSearch}
@@ -2548,7 +2548,7 @@ export default function MembersScreen() {
             />
             {search.length > 0 && (
               <Pressable onPress={() => setSearch('')}>
-                <Text style={{ color: '#9ca3af', fontSize: 18, lineHeight: 20 }}>×</Text>
+                <Text style={{ color: '#a09274', fontSize: 18, lineHeight: 20 }}>×</Text>
               </Pressable>
             )}
           </View>
@@ -2952,7 +2952,7 @@ export default function MembersScreen() {
                               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 8.5, color: '#bd9348', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 2 }} numberOfLines={1}>
                                 {spotlightLabel}
                               </Text>
-                              <Text style={{ fontFamily: member.known_for ? 'LibreBaskerville_400Regular' : 'Lato_400Regular', fontSize: member.known_for ? 10.8 : 10.5, color: '#4b5563', lineHeight: 14.5, textAlign: 'center', fontStyle: member.known_for ? 'italic' : 'normal' }} numberOfLines={2}>
+                              <Text style={{ fontFamily: member.known_for ? 'LibreBaskerville_400Regular' : 'Lato_400Regular', fontSize: member.known_for ? 10.8 : 10.5, color: '#5c5648', lineHeight: 14.5, textAlign: 'center', fontStyle: member.known_for ? 'italic' : 'normal' }} numberOfLines={2}>
                                 {spotlight}
                               </Text>
                             </View>

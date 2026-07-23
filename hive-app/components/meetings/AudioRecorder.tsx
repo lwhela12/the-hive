@@ -370,7 +370,7 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
       <View className="flex-row justify-between items-center mb-8">
         <Text className="text-xl font-bold text-hive-dark">Record Meeting</Text>
         <Pressable onPress={cancelRecording} disabled={uploading}>
-          <Text className="text-gray-500 text-base">Cancel</Text>
+          <Text className="text-label text-base">Cancel</Text>
         </Pressable>
       </View>
 
@@ -425,7 +425,7 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
         </Text>
 
         {/* Status */}
-        <Text className="text-gray-500 mt-2">
+        <Text className="text-label mt-2">
           {isRecording
             ? 'Recording...'
             : uploading
@@ -459,7 +459,7 @@ export function AudioRecorder({ onComplete, onCancel }: AudioRecorderProps) {
 
         {/* Keep screen on notice */}
         {isRecording && !wentToBackground && Platform.OS !== 'web' && (
-          <Text className="text-gray-400 text-xs mt-4 text-center">
+          <Text className="text-softink text-xs mt-4 text-center">
             Screen will stay on while recording
           </Text>
         )}

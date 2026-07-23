@@ -289,7 +289,7 @@ export function ProfileHoneycombCluster({
   return (
     <View onLayout={handleLayout} style={{ marginBottom: 14 }}>
       {!!title && (
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#a09274', letterSpacing: 0.6, marginBottom: 8 }}>
           {title}
         </Text>
       )}

@@ -159,7 +159,7 @@ function TransactionRow({ transaction }: { transaction: HoneyPotLedgerEntry }) {
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', lineHeight: 19 }}>
             {describeHoneyPotTransaction(transaction)}
           </Text>
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8e7a5e', marginTop: 4 }}>
             {formatLedgerDate(transaction.created_at)} · balance after {formatHoneyPotAmount(transaction.running_balance)}
           </Text>
           {glanceItems.length > 0 && (
@@ -304,7 +304,7 @@ export function HoneyPotLedger({
         </View>
       ) : filteredTransactions.length === 0 ? (
         <View style={{ backgroundColor: '#fff', borderRadius: 14, padding: 18, borderWidth: 1, borderColor: 'rgba(222,193,129,0.34)' }}>
-          <Text style={{ fontFamily: 'Lato_400Regular', color: '#6b7280', textAlign: 'center' }}>
+          <Text style={{ fontFamily: 'Lato_400Regular', color: '#8e7a5e', textAlign: 'center' }}>
             No Honey Pot entries here yet.
           </Text>
         </View>

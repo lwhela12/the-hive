@@ -310,7 +310,7 @@ export function BoardReplyComposer({
           onSelectionChange={(event) => setReplySelection(event.nativeEvent.selection)}
           selection={replySelectionOverride ?? undefined}
           placeholder={inputPlaceholder}
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor="#a09274"
           selectionColor="#313130"
           multiline
           blurOnSubmit={Platform.OS === 'web'}

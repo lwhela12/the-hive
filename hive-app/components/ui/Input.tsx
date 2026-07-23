@@ -15,7 +15,7 @@ export function Input({ label, error, className, ...props }: InputProps) {
         className={`bg-white border rounded-xl p-4 text-base ${
           error ? 'border-red-500' : 'border-gray-300'
         } ${className}`}
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor="#a09274"
         {...props}
       />
       {error && (

@@ -815,7 +815,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                   value={draftTitle}
                   onChangeText={setDraftTitle}
                   placeholder={roomTitle}
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor="#a09274"
                   className="rounded-2xl px-4 py-3 mb-5 text-charcoal"
                   style={{
                     fontFamily: 'Lato_400Regular',
@@ -838,7 +838,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                       if (value.trim()) setDraftImageUrl('');
                     }}
                     placeholder="💬"
-                    placeholderTextColor="#9ca3af"
+                    placeholderTextColor="#a09274"
                     className="w-16 h-12 rounded-2xl text-center text-xl mr-2"
                     style={{
                       fontFamily: 'Lato_400Regular',
@@ -1182,7 +1182,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                 onSelectionChange={messageMentionInput.textInputMentionProps.onSelectionChange}
                 selection={messageMentionInput.textInputMentionProps.selection}
                 placeholder="Message..."
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor="#a09274"
                 selectionColor="#313130"
                 multiline
                 blurOnSubmit={Platform.OS === 'web'}

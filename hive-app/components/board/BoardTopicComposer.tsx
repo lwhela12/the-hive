@@ -438,7 +438,7 @@ export function BoardTopicComposer({
                   }}
                 >
                   <Ionicons name="happy-outline" size={18} color="#bd9348" />
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', flex: 1 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8e7a5e', flex: 1 }}>
                     Type or paste any emoji →
                   </Text>
                   <TextInput
@@ -577,7 +577,7 @@ export function BoardTopicComposer({
                   : topicKind === 'helper_log'
                     ? '15min HIVE Helpers'
                     : 'e.g., Book Club, Recipes, Travel Plans...'}
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#a09274"
                 maxLength={90}
                 editable={topicKind !== 'helper_log'}
                 returnKeyType="send"
@@ -597,7 +597,7 @@ export function BoardTopicComposer({
                 value={description}
                 onChangeText={setDescription}
                 placeholder="What is this topic about? (optional)"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#a09274"
                 multiline
                 blurOnSubmit={Platform.OS === 'web'}
                 submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}

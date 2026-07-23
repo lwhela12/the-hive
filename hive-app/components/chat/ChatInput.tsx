@@ -196,7 +196,7 @@ export const ChatInput = memo(function ChatInput({
           onSelectionChange={mentionInput.textInputMentionProps.onSelectionChange}
           selection={mentionInput.textInputMentionProps.selection}
           placeholder={placeholder}
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor="#a09274"
           selectionColor="#313130"
           multiline
           blurOnSubmit={Platform.OS === 'web'}

@@ -2525,7 +2525,7 @@ export default function HiveScreen() {
                           elevation: isExpanded ? 2 : 0,
                         })}
                       >
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: isExpanded ? 11 : 9, color: '#4b5563', lineHeight: isExpanded ? 16 : 13 }} numberOfLines={isExpanded ? undefined : 4}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: isExpanded ? 11 : 9, color: '#5c5648', lineHeight: isExpanded ? 16 : 13 }} numberOfLines={isExpanded ? undefined : 4}>
                           {memberAnswer}
                         </Text>
                       </Pressable>
@@ -2939,7 +2939,7 @@ export default function HiveScreen() {
                             <EventsList events={visibleUpcomingEvents} onEditEvent={openEditEvent} />
                           ) : (
                             <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center' }}>
-                              <Text style={{ fontFamily: 'Lato_400Regular', color: '#9ca3af' }}>
+                              <Text style={{ fontFamily: 'Lato_400Regular', color: '#a09274' }}>
                                 {hideBirthdayEvents && upcomingEvents.length > 0 ? 'No upcoming events (birthdays hidden)' : 'No upcoming events'}
                               </Text>
                             </View>
@@ -3471,7 +3471,7 @@ export default function HiveScreen() {
                 if (taskError) setTaskError(null);
               }}
               placeholder="What do you need to do?"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor="#a09274"
               multiline
               blurOnSubmit={false}
               onKeyPress={submitOnEnter(handleAddTask)}
@@ -3509,7 +3509,7 @@ export default function HiveScreen() {
                 opacity: pressed ? 0.8 : 1,
               })}
             >
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: newTaskText.trim() ? 'white' : '#9ca3af' }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: newTaskText.trim() ? 'white' : '#a09274' }}>
                 {savingTask ? 'Saving...' : 'Add Task'}
               </Text>
             </Pressable>
@@ -3668,7 +3668,7 @@ export default function HiveScreen() {
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 8 }}>
                 Add HIVE to your Home Screen
               </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#6b7280', lineHeight: 20, marginBottom: 16 }}>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#8e7a5e', lineHeight: 20, marginBottom: 16 }}>
                 iPhone keeps this inside the browser share menu. HIVE can guide you there, but the final Add to Home Screen button has to come from Safari.
               </Text>
 
@@ -3740,7 +3740,7 @@ export default function HiveScreen() {
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 6 }}>
                 Catch up
               </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#6b7280', lineHeight: 20, marginBottom: 14 }}>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#8e7a5e', lineHeight: 20, marginBottom: 14 }}>
                 Answer the questions you missed, or peek at the days you already joined.
               </Text>
               <ScrollView
@@ -3784,7 +3784,7 @@ export default function HiveScreen() {
                             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', letterSpacing: 0.6 }}>
                               {dateLabel}
                             </Text>
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: myPastAnswer ? '#739a88' : '#9ca3af' }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: myPastAnswer ? '#739a88' : '#a09274' }}>
                               {myPastAnswer ? 'Answered' : 'Open'}
                             </Text>
                           </View>
@@ -3792,7 +3792,7 @@ export default function HiveScreen() {
                             {item.question.text}
                           </Text>
                           {myPastAnswer ? (
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', lineHeight: 18, marginTop: 8 }} numberOfLines={2}>
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8e7a5e', lineHeight: 18, marginTop: 8 }} numberOfLines={2}>
                               Your answer: {myPastAnswer}
                             </Text>
                           ) : null}
@@ -3854,7 +3854,7 @@ export default function HiveScreen() {
                   value={myAnswer}
                   onChangeText={setMyAnswer}
                   placeholder={isVoiceListening ? '' : 'Share your answer with HIVE...'}
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor="#a09274"
                   multiline
                   numberOfLines={4}
                   blurOnSubmit={false}
@@ -3908,7 +3908,7 @@ export default function HiveScreen() {
                   style={{ position: 'absolute', bottom: 10, right: 10 }}
                 />
               </View>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9ca3af', marginBottom: 14, marginTop: -6 }}>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#a09274', marginBottom: 14, marginTop: -6 }}>
                 Press Enter to send · Shift+Enter for a new line
               </Text>
               {answerError ? (

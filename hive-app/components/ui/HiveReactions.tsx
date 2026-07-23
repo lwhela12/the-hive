@@ -266,7 +266,7 @@ export function HiveReactionPickerModal({
                   value={customEmoji}
                   onChangeText={onCustomEmojiChange}
                   placeholder="Paste/type any emoji"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor="#a09274"
                   className="flex-1 bg-white rounded-xl px-3 py-2 text-base"
                   autoCapitalize="none"
                   autoCorrect={false}
