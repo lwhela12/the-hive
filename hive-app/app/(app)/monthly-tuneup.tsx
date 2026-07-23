@@ -20,6 +20,7 @@ import {
   setStoredItemAsync,
 } from '../../lib/webStorage';
 import { deleteWishById } from '../../lib/wishMutations';
+import { getCycleStart } from '../../lib/meetingCycle';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
 import {
@@ -202,13 +203,12 @@ export default function MonthlyTuneupScreen() {
   const [stepIndex, setStepIndex] = useState(0);
   const [finished, setFinished] = useState(false);
 
-  // Hangs since ~last meeting, for the check-in's went/didn't-go recap chips.
+  // Hangs since the last meeting, for the check-in's went/didn't-go recap chips.
   const [hangRecapEvents, setHangRecapEvents] = useState<{ id: string; title: string }[]>([]);
   useEffect(() => {
     if (!communityId) return;
     (async () => {
-      const since = new Date();
-      since.setDate(since.getDate() - 35);
+      const since = await getCycleStart(communityId, new Date().toISOString().slice(0, 10));
       const { data } = await supabase
         .from('events')
         .select('id, title, event_date, end_date, event_type')

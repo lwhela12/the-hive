@@ -18,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { fetchHoneyPotLedger } from '../../lib/honeyPot';
+import { getCycleStart } from '../../lib/meetingCycle';
+import { EditButton } from '../../components/ui/EditButton';
 import { getWishQuickTitle } from '../../lib/wishDisplay';
 import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
@@ -302,8 +304,8 @@ export default function MeetingHelperScreen() {
     const horizon = new Date();
     // Wide enough that the month pager has real data several months out.
     horizon.setDate(horizon.getDate() + 190);
-    const sinceLastMeeting = new Date();
-    sinceLastMeeting.setDate(sinceLastMeeting.getDate() - 35);
+    // "Since last meeting" means the ACTUAL last meeting, not a fixed 35 days.
+    const sinceLastMeeting = await getCycleStart(communityId, today);
     const sinceIso = sinceLastMeeting.toISOString();
 
     await Promise.all([
@@ -812,28 +814,11 @@ export default function MeetingHelperScreen() {
   const EditPill = useCallback(({ noteKey }: { noteKey: EditableNoteKey }) => {
     if (!isAdmin) return null;
     return (
-      <Pressable
+      <EditButton
         onPress={() => openNoteEditor(noteKey)}
-        accessibilityRole="button"
+        size={sz(34, 26)}
         accessibilityLabel={`Edit ${EDIT_SLIDE_META[noteKey].title}`}
-        style={({ pressed }) => ({
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 6,
-          alignSelf: 'flex-start',
-          paddingHorizontal: sz(18, 12),
-          paddingVertical: sz(9, 6),
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: GOLD_SOFT,
-          backgroundColor: pressed ? '#fbf0d7' : CARD,
-        })}
-      >
-        <Ionicons name="pencil" size={sz(18, 13)} color={GOLD_DEEP} />
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 12), color: GOLD_DEEP }}>
-          Edit
-        </Text>
-      </Pressable>
+      />
     );
   }, [isAdmin, openNoteEditor, sz]);
 
@@ -877,9 +862,11 @@ export default function MeetingHelperScreen() {
   const renderRoom = () => (
     <View style={{ flex: 1 }}>
       <View style={{ alignItems: 'center', marginBottom: sz(24, 14) }}>
+        {/* Crest + title mirror the timekeeper clock's lockup: a big mark
+            with the words tucked right underneath. */}
         <Image
           source={hiveBee}
-          style={{ width: sz(230, 118), height: sz(230, 118) }}
+          style={{ width: sz(300, 150), height: sz(300, 150) }}
           contentFit="contain"
         />
         <Text
@@ -889,7 +876,7 @@ export default function MeetingHelperScreen() {
             lineHeight: sz(70, 36),
             color: CHARCOAL,
             textAlign: 'center',
-            marginTop: sz(10, 6),
+            marginTop: sz(-16, -8),
           }}
         >
           {monthName} {meetingYear} Meeting

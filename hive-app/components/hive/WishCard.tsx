@@ -1,5 +1,6 @@
 import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { EditButton } from '../ui/EditButton';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { formatDateShort } from '../../lib/dateUtils';
@@ -89,31 +90,25 @@ export function WishCard({
               </MemberProfileLink>
             </View>
             {showManageButton ? (
-              <Pressable
+              <EditButton
                 onPress={(event) => {
                   event.stopPropagation();
                   onManage?.();
                 }}
-                className="w-8 h-8 rounded-full items-center justify-center active:bg-cream ml-2"
-                hitSlop={8}
-                accessibilityRole="button"
                 accessibilityLabel="Manage wish"
-              >
-                <Ionicons name="pencil-outline" size={17} color="#4A4A4A" />
-              </Pressable>
+                style={{ marginLeft: 8 }}
+              />
             ) : ((!isGranted && canEdit) || canDelete) && (
               <View className="flex-row items-center ml-2">
                 {canEdit && onEdit && (
-                  <Pressable
+                  <EditButton
                     onPress={(event) => {
                       event.stopPropagation();
                       onEdit();
                     }}
-                    className="w-8 h-8 rounded-full items-center justify-center active:bg-cream"
-                    hitSlop={8}
-                  >
-                    <Ionicons name="pencil-outline" size={17} color="#4A4A4A" />
-                  </Pressable>
+                    accessibilityLabel="Edit wish"
+                    style={{ marginRight: 4 }}
+                  />
                 )}
                 {canDelete && onDelete && (
                   <Pressable

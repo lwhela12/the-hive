@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { EditButton } from '../ui/EditButton';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDateShort } from '../../lib/dateUtils';
 import { getHdWishStatusLabel, getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
@@ -125,18 +126,14 @@ export function WishCombCard({
   ];
 
   const manageButton = onManage && (
-    <Pressable
+    <EditButton
       onPress={(event) => {
         event.stopPropagation();
         onManage(wish);
       }}
-      hitSlop={8}
-      accessibilityRole="button"
       accessibilityLabel="Manage wish"
       style={styles.manageButton}
-    >
-      <Ionicons name="pencil-outline" size={16} color="#7a6849" />
-    </Pressable>
+    />
   );
 
   const content = useHomeWishLayout ? (

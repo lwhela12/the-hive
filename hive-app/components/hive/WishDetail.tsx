@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { EditButton } from '../ui/EditButton';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../ui/Avatar';
@@ -301,15 +302,7 @@ export function WishDetail({
           Wish Details
         </Text>
         {canManage && onManage ? (
-          <Pressable
-            onPress={onManage}
-            className="w-10 h-10 items-center justify-center rounded-full active:bg-cream"
-            accessibilityRole="button"
-            accessibilityLabel="Manage wish"
-            hitSlop={8}
-          >
-            <Ionicons name="pencil-outline" size={19} color="#4A4A4A" />
-          </Pressable>
+          <EditButton onPress={onManage} accessibilityLabel="Manage wish" size={34} />
         ) : (
           <View className="w-10" />
         )}

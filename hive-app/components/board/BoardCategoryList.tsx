@@ -32,6 +32,7 @@ const EMOJI_MAP: Record<string, string> = {
 interface CategoryStats {
   count: number;
   latestActivity: string | null;
+  recentTitles?: string[];
 }
 
 export interface BoardCategorySearchMatchSummary {
@@ -56,9 +57,14 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   searchMatches,
 }: BoardCategoryListProps) {
   // Boards render as actual boards — a grid of pinned bulletin cards
-  // (mirrors the Boards nav icon). Column count follows the window.
-  const { width } = useWindowDimensions();
+  // (mirrors the Boards nav icon). Column count follows the window, and the
+  // cards stretch so the grid fills the screen instead of leaving dead space.
+  const { width, height } = useWindowDimensions();
   const numColumns = width >= 1100 ? 4 : width >= 760 ? 3 : 2;
+  const gridRows = Math.max(1, Math.ceil(categories.length / numColumns));
+  // Roughly the space below header/search/toolbar and above the tab bar.
+  const availableHeight = height - 300;
+  const cardMinHeight = Math.min(420, Math.max(190, Math.floor(availableHeight / gridRows) - 12));
 
   return (
     <FlatList
@@ -69,6 +75,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
       renderItem={({ item }) => {
         const emoji = item.icon ? EMOJI_MAP[item.icon] || item.icon : '📁';
         const count = postCounts?.[item.id]?.count ?? 0;
+        const recentTitles = postCounts?.[item.id]?.recentTitles ?? [];
         const countLabel = `${count} ${count === 1 ? 'thread' : 'threads'}`;
         const taggedNames = (item.member_tags ?? [])
           .map((tag) => tag.member?.name?.split(' ')[0])
@@ -119,8 +126,8 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                 borderWidth: 1,
                 borderColor: 'rgba(222,193,129,0.7)',
                 borderRadius: 18,
-                padding: 14,
-                minHeight: 148,
+                padding: 16,
+                minHeight: cardMinHeight,
                 shadowColor: '#bd9348',
                 shadowOpacity: 0.14,
                 shadowRadius: 12,
@@ -129,11 +136,11 @@ export const BoardCategoryList = memo(function BoardCategoryList({
               }}
             >
               <View className="flex-row items-start justify-between">
-                <Text style={{ fontSize: 30, lineHeight: 34 }}>{emoji}</Text>
-                <Text style={{ fontSize: 13, transform: [{ rotate: '18deg' }], opacity: 0.85 }}>📌</Text>
+                <Text style={{ fontSize: 32, lineHeight: 36 }}>{emoji}</Text>
+                <Text style={{ fontSize: 14, transform: [{ rotate: '18deg' }], opacity: 0.85 }}>📌</Text>
               </View>
               <Text
-                style={{ fontFamily: 'Lato_700Bold', fontSize: 15, lineHeight: 20, marginTop: 8 }}
+                style={{ fontFamily: 'Lato_700Bold', fontSize: 16, lineHeight: 21, marginTop: 8 }}
                 className={isCompleted ? 'text-charcoal/60' : 'text-charcoal'}
                 numberOfLines={2}
               >
@@ -141,16 +148,41 @@ export const BoardCategoryList = memo(function BoardCategoryList({
               </Text>
               {subtitle ? (
                 <Text
-                  style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 16, color: '#8e7a5e', marginTop: 3, flexGrow: 1 }}
+                  style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 16, color: '#8e7a5e', marginTop: 3 }}
                   numberOfLines={2}
                 >
                   {subtitle}
                 </Text>
+              ) : null}
+              {/* Micro thread previews — the reason the boards are board-sized */}
+              {recentTitles.length > 0 ? (
+                <View
+                  style={{
+                    marginTop: 10,
+                    borderTopWidth: 1,
+                    borderTopColor: 'rgba(222,193,129,0.32)',
+                    paddingTop: 8,
+                    gap: 5,
+                    flexGrow: 1,
+                  }}
+                >
+                  {recentTitles.map((title) => (
+                    <View key={title} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+                      <Text style={{ fontSize: 10, lineHeight: 17, color: '#bd9348' }}>▪</Text>
+                      <Text
+                        style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 17, color: 'rgba(49,49,48,0.75)', flex: 1 }}
+                        numberOfLines={1}
+                      >
+                        {title}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               ) : (
                 <View style={{ flexGrow: 1 }} />
               )}
               <Text
-                style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', marginTop: 8 }}
+                style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', marginTop: 10 }}
               >
                 {countLabel}
               </Text>

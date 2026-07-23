@@ -1,6 +1,7 @@
 import { View, Text, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { EditButton } from '../ui/EditButton';
 import { formatDateShort } from '../../lib/dateUtils';
 import { isVideoAttachment } from '../../lib/mediaAttachments';
 import { LinkifiedText } from '../ui/LinkifiedText';
@@ -238,16 +239,11 @@ export function BoardPostCard({
         </View>
       )}
       {canEdit && onEdit && (
-        <Pressable
+        <EditButton
           onPress={() => onEdit(post)}
-          accessibilityRole="button"
           accessibilityLabel="Edit thread"
-          hitSlop={8}
-          className="absolute top-3 right-3 w-8 h-8 rounded-full items-center justify-center bg-white/90 border border-gold/20 active:opacity-70"
-          style={{ zIndex: 2 }}
-        >
-          <Ionicons name="pencil-outline" size={16} color="#4A4A4A" />
-        </Pressable>
+          style={{ position: 'absolute', top: 12, right: 12, zIndex: 2 }}
+        />
       )}
     </View>
   );

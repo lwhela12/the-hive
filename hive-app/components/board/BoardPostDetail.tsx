@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { EditButton } from '../ui/EditButton';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -541,15 +542,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
           Thread
         </Text>
         {canManagePost && (
-          <Pressable
-            onPress={handleOpenEditComposer}
-            className="p-2"
-            accessibilityRole="button"
-            accessibilityLabel="Edit thread"
-            hitSlop={8}
-          >
-            <Ionicons name="pencil-outline" size={20} color="#4A4A4A" />
-          </Pressable>
+          <EditButton onPress={handleOpenEditComposer} accessibilityLabel="Edit thread" />
         )}
       </View>
 

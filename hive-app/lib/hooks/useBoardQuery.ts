@@ -38,12 +38,14 @@ async function fetchCategories(communityId: string): Promise<BoardCategory[]> {
 interface CategoryStats {
   count: number;
   latestActivity: string | null; // ISO timestamp of most recent activity
+  /** Freshest thread titles — the bulletin-card grid shows these as micro previews. */
+  recentTitles?: string[];
 }
 
 async function fetchPostCounts(communityId: string): Promise<Record<string, CategoryStats>> {
   const { data, error } = await supabase
     .from('board_posts')
-    .select('id, category_id, created_at, last_reply_at')
+    .select('id, category_id, title, status, created_at, last_reply_at')
     .eq('community_id', communityId);
 
   if (error) {
@@ -53,7 +55,8 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
 
   const stats: Record<string, CategoryStats> = {};
   const postCategoryById = new Map<string, string>();
-  (data || []).forEach((row: { id: string; category_id: string; created_at: string; last_reply_at?: string | null }) => {
+  const previewCandidates: Record<string, { title: string; activity: string }[]> = {};
+  (data || []).forEach((row: { id: string; category_id: string; title?: string | null; status?: string | null; created_at: string; last_reply_at?: string | null }) => {
     postCategoryById.set(row.id, row.category_id);
     if (!stats[row.category_id]) {
       stats[row.category_id] = { count: 0, latestActivity: null };
@@ -64,6 +67,15 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
     if (!stats[row.category_id].latestActivity || activity > stats[row.category_id].latestActivity!) {
       stats[row.category_id].latestActivity = activity;
     }
+    if (row.title && row.status !== 'archived') {
+      (previewCandidates[row.category_id] ??= []).push({ title: row.title, activity });
+    }
+  });
+  Object.entries(previewCandidates).forEach(([categoryId, candidates]) => {
+    stats[categoryId].recentTitles = candidates
+      .sort((a, b) => b.activity.localeCompare(a.activity))
+      .slice(0, 4)
+      .map((candidate) => candidate.title);
   });
 
   const { data: replies, error: repliesError } = await supabase
