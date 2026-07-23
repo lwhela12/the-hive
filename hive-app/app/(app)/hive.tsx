@@ -12,6 +12,7 @@ import { useWishes } from '../../lib/hooks/useWishes';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
+import { getEventEmoji } from '../../lib/eventDisplay';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
 import { getSurveyResponsePeriod, isMonthlyCheckInSurvey, useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
 import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
@@ -316,9 +317,7 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
         >
           <View className="flex-row items-start">
             <Text className="text-2xl mr-3">
-              {event.event_type === 'birthday' ? '🎂' :
-               event.event_type === 'meeting' ? '📅' :
-               event.event_type === 'queen_bee' ? '👑' : '📌'}
+              {getEventEmoji(event)}
             </Text>
             <View className="flex-1">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{event.title}</Text>
@@ -887,7 +886,7 @@ export default function HiveScreen() {
     setHomeActionLoading(true);
     let { data, error } = await supabase
       .from('action_items')
-      .select('*')
+      .select('*, about:profiles!related_user_id(name)')
       .eq('assigned_to', profile.id)
       .eq('community_id', communityId)
       .order('due_date', { ascending: true, nullsFirst: false })
@@ -896,7 +895,7 @@ export default function HiveScreen() {
     if (error && String(error.message ?? '').includes('archived_at')) {
       const fallback = await supabase
         .from('action_items')
-        .select('*')
+        .select('*, about:profiles!related_user_id(name)')
         .eq('assigned_to', profile.id)
         .eq('community_id', communityId)
         .order('due_date', { ascending: true, nullsFirst: false })
@@ -2085,11 +2084,22 @@ export default function HiveScreen() {
       const statusDetail = a.completed
         ? `Done${a.completed_at ? ` · ${formatDateShort(a.completed_at)}` : ''}`
         : a.due_date ? `Due ${formatDateShort(a.due_date)}` : undefined;
+      // One "re:" format everywhere: parsed suffixes normalize to "X's HD",
+      // and jots that predate the suffix derive it from related_user_id.
+      const aboutName = (a as any).about?.name as string | undefined;
+      const reSubject = jot.reLabel
+        ? jot.reLabel.replace(/[’']s HummDinger$/i, "'s HD")
+        : aboutName && a.related_user_id && a.related_user_id !== profile?.id
+          ? `${aboutName.trim().split(/\s+/)[0]}'s HD`
+          : null;
+      const jotContext = [jot.elaboration, jot.mentionTag, reSubject ? `re: ${reSubject}` : null]
+        .filter(Boolean)
+        .join(' · ');
       return {
         id: `action-${a.id}`,
         emoji: '📝',
         title: jot.text,
-        detail: [statusDetail, jot.context].filter(Boolean).join(' · ') || undefined,
+        detail: [statusDetail, jotContext || null].filter(Boolean).join(' · ') || undefined,
         // Linked to-dos navigate on tap (like Recent Activity rows); the circle
         // still toggles done and long-press still archives. Unlinked to-dos
         // keep opening the detail sheet.
@@ -2919,9 +2929,7 @@ export default function HiveScreen() {
                                         style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.22)' }}
                                       >
                                         <Text style={{ fontSize: 15, marginRight: 8 }}>
-                                          {event.event_type === 'birthday' ? '🎂' :
-                                           event.event_type === 'meeting' ? '📅' :
-                                           event.event_type === 'queen_bee' ? '👑' : '📌'}
+                                          {getEventEmoji(event)}
                                         </Text>
                                         <View style={{ flex: 1 }}>
                                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#5b5b5b' }}>{event.title}</Text>

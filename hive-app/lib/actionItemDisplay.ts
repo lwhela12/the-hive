@@ -11,6 +11,8 @@ export interface ParsedActionItemDescription {
   mentionTag: string | null;
   /** The "(re: ...)" subject, e.g. "Charlee's HummDinger" — null when none. */
   reLabel: string | null;
+  /** The riff after " — " when the jot reads "Thing — elaboration". */
+  elaboration: string | null;
   /** Ready-to-render muted context, e.g. "@hive · re: Charlee's HummDinger". */
   context: string | null;
 }
@@ -39,5 +41,5 @@ export function parseActionItemDescription(description: string): ParsedActionIte
     .filter(Boolean)
     .join(' · ') || null;
 
-  return { text: text || description.trim(), mentionTag, reLabel, context };
+  return { text: text || description.trim(), mentionTag, reLabel, elaboration, context };
 }
