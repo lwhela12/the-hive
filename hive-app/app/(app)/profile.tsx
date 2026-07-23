@@ -1646,10 +1646,11 @@ export default function ProfileScreen() {
                     {percent}% filled out
                   </Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 3, textAlign: 'center', paddingHorizontal: 12 }}>
-                    Pick a chip to move your bee closer to the hive.
+                    Tap one to fill it in — each moves your bee closer to the hive 🐝
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 7, marginTop: 10, maxWidth: Math.min(screenWidth - 28, 560) }}>
-                    {missing.map(item => (
+                    {/* The check-in has its own big button right below — no twin chip */}
+                    {missing.filter(item => item.label !== "Complete this month's check-in").map(item => (
                       <Pressable
                         key={item.label}
                         onPress={() => handleProfileStepPress(item.label)}
@@ -2364,11 +2365,12 @@ export default function ProfileScreen() {
           <View
             style={{
               width: '100%',
-              maxWidth: 880,
+              maxWidth: 1240,
               alignSelf: 'center',
               flexDirection: 'row',
               flexWrap: 'wrap',
               columnGap: 16,
+              alignItems: 'stretch',
             }}
           >
           <View className="mb-6" style={{ flexGrow: 1, flexBasis: 340, minWidth: 300 }}>
@@ -2435,13 +2437,11 @@ export default function ProfileScreen() {
               </View>
             </Pressable>
           </View>
-          </View>
-        )}
 
-        {/* Linked Logins */}
-        {!immersiveSkillsGarden && (
-          <View style={{ width: '100%', maxWidth: 880, alignSelf: 'center' }}>
+          {/* Linked Logins — third column of the settings row */}
+          <View className="mb-6" style={{ flexGrow: 1, flexBasis: 340, minWidth: 300 }}>
             <LinkedLogins />
+          </View>
           </View>
         )}
 

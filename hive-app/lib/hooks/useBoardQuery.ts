@@ -213,6 +213,11 @@ async function fetchPosts(
     if (aCompleted && !bCompleted) return 1;
     if (!aCompleted && bCompleted) return -1;
 
+    // Anchored threads (standing references like "HIVE Help Ideas") sink to
+    // the bottom so monthly threads read as an uninterrupted timeline.
+    if (a.is_anchored && !b.is_anchored) return 1;
+    if (!a.is_anchored && b.is_anchored) return -1;
+
     // Pinned posts always first
     if (a.is_pinned && !b.is_pinned) return -1;
     if (!a.is_pinned && b.is_pinned) return 1;

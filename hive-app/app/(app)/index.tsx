@@ -163,7 +163,7 @@ export default function ChatScreen() {
             titleIcon={
               <Image
                 source={cliveIcon}
-                style={{ width: 30, height: 30, borderRadius: 15, marginRight: 11 }}
+                style={{ width: 38, height: 38, borderRadius: 19, marginRight: 12 }}
               />
             }
             onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}

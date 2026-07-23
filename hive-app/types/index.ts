@@ -465,6 +465,8 @@ export interface BoardPost extends Record<string, unknown> {
   granted_wish_id?: string | null;
   attachments?: Attachment[] | null;
   is_pinned: boolean;
+  /** Standing reference threads sort to the bottom of their board. */
+  is_anchored?: boolean;
   is_locked: boolean;
   edited_at?: string;
   reply_count: number;
