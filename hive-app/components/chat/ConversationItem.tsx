@@ -114,21 +114,23 @@ export const ConversationItem = memo(function ConversationItem({
       onLongPress={() => setShowActions(true)}
       onHoverIn={isWeb ? () => setShowActions(true) : undefined}
       onHoverOut={isWeb ? () => setShowActions(false) : undefined}
-      className={`px-4 py-3 border-b border-gray-100 ${
-        isActive ? 'bg-gold/10' : 'bg-white active:bg-gray-50'
+      className={`mx-3 mb-0.5 px-3 py-2.5 rounded-xl border ${
+        isActive
+          ? 'bg-[#fdf3dc] border-gold/40'
+          : 'border-transparent active:bg-gold/10'
       }`}
     >
       <View className="flex-row items-center justify-between">
         {isWeb && (
-          <View className="mr-2 opacity-40">
-            <Ionicons name="reorder-three-outline" size={18} color="#313130" />
+          <View className="mr-2 opacity-50">
+            <Ionicons name="reorder-three-outline" size={18} color="#bd9348" />
           </View>
         )}
         <Text
           numberOfLines={1}
-          style={{ fontFamily: 'Lato_400Regular' }}
+          style={{ fontFamily: isActive ? 'Lato_700Bold' : 'Lato_400Regular' }}
           className={`flex-1 text-base ${
-            isActive ? 'text-gold font-semibold' : 'text-charcoal'
+            isActive ? 'text-[#8e6f35]' : 'text-charcoal'
           }`}
         >
           {displayTitle}
@@ -151,9 +153,9 @@ export const ConversationItem = memo(function ConversationItem({
                   e.stopPropagation?.();
                   handleMove();
                 }}
-                className="px-2 py-1 rounded hover:bg-gray-100 active:bg-gray-100"
+                className="px-2 py-1 rounded-full hover:bg-gold/10 active:bg-gold/10"
               >
-                <Text className="text-gray-500 text-xs">Move</Text>
+                <Text className="text-[#8e7a5e] text-xs">Move</Text>
               </Pressable>
             )}
             {onDelete && (
@@ -172,7 +174,7 @@ export const ConversationItem = memo(function ConversationItem({
       </View>
       <Text
         style={{ fontFamily: 'Lato_400Regular' }}
-        className="text-xs text-gray-400 mt-1"
+        className="text-xs text-[#a09274] mt-1"
       >
         {getRelativeTime()}
       </Text>

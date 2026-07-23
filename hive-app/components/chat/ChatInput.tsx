@@ -214,7 +214,7 @@ export const ChatInput = memo(function ChatInput({
           className={`w-7 h-7 rounded-full items-center justify-center ml-2 ${
             hasContent && !isLoading
               ? 'bg-gold active:opacity-80'
-              : 'bg-gray-300'
+              : 'bg-[#ddd3b6]'
           }`}
         >
           <Text className="text-sm text-white" style={{ marginTop: -1 }}>↑</Text>

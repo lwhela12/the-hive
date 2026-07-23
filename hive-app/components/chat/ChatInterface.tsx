@@ -148,7 +148,7 @@ const WelcomeState = memo(function WelcomeState({
         </Text>
         <Text
           style={{ fontFamily: 'Lato_400Regular' }}
-          className="text-base text-gray-500 text-center mb-7"
+          className="text-base text-[#8e7a5e] text-center mb-7"
         >
           Ask Clive for help thinking, writing, organizing, or turning a loose idea into a HIVE action.
         </Text>

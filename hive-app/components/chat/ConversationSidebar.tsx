@@ -264,28 +264,35 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   };
 
   const sidebarContent = (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-[#fffdf5]">
       {/* Header */}
-      <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-100">
+      <View
+        className="flex-row items-center justify-between px-4 py-3 border-b"
+        style={{ borderBottomColor: 'rgba(222,193,129,0.5)' }}
+      >
         <View className="flex-row items-center">
-          <Image source={cliveIcon} style={{ width: 28, height: 28, borderRadius: 6, marginRight: 10 }} />
+          <Image source={cliveIcon} style={{ width: 46, height: 46, borderRadius: 23, marginRight: 12 }} />
           <Text
             style={{ fontFamily: 'LibreBaskerville_700Bold' }}
-            className="text-xl text-charcoal"
+            className="text-2xl text-charcoal"
           >
             Clive
           </Text>
         </View>
         <View className="flex-row items-center">
           {!isMobile && onToggleCollapse && (
-            <Pressable onPress={onToggleCollapse} className="p-2">
-              <Text className="text-xl text-gray-400">«</Text>
+            <Pressable
+              onPress={onToggleCollapse}
+              className="w-8 h-8 items-center justify-center rounded-full active:bg-gold/10"
+              accessibilityLabel="Collapse sidebar"
+            >
+              <Text className="text-xl text-gold">«</Text>
             </Pressable>
           )}
           {isMobile && onClose && (
             <Pressable
               onPress={onClose}
-              className="w-8 h-8 items-center justify-center rounded-full active:bg-gray-100"
+              className="w-8 h-8 items-center justify-center rounded-full active:bg-gold/10"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Text className="text-2xl text-charcoal leading-none">×</Text>
@@ -297,7 +304,14 @@ export const ConversationSidebar = memo(function ConversationSidebar({
       {/* New Clive conversation button */}
       <Pressable
         onPress={isMobile ? closeAndNewConversation : onNewConversation}
-        className="mx-4 mt-4 mb-2 bg-gold py-3 px-4 rounded-xl flex-row items-center justify-center active:opacity-80"
+        className="mx-4 mt-4 mb-2 bg-gold py-3 px-4 rounded-full flex-row items-center justify-center active:opacity-80"
+        style={{
+          shadowColor: '#bd9348',
+          shadowOpacity: 0.28,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 3,
+        }}
       >
         <Text className="text-white text-lg mr-2">+</Text>
         <Text
@@ -313,20 +327,20 @@ export const ConversationSidebar = memo(function ConversationSidebar({
         <View>
           <View className="px-4 pt-4 pb-2 flex-row items-center">
             <Text
-              style={{ fontFamily: 'Lato_700Bold' }}
-              className="text-lg text-charcoal"
+              style={{ fontFamily: 'Lato_700Bold', letterSpacing: 0.8 }}
+              className="text-xs uppercase text-[#8e7a5e]"
             >
               Projects
             </Text>
-            <Ionicons name="chevron-down" size={16} color="#9CA3AF" style={{ marginLeft: 4, marginTop: 2 }} />
+            <Ionicons name="chevron-down" size={13} color="#bd9348" style={{ marginLeft: 4, marginTop: 1 }} />
           </View>
           <Pressable
             onPress={handleCreateProject}
-            className="mx-3 mb-1 px-3 py-2.5 rounded-xl flex-row items-center active:bg-gray-50"
+            className="mx-3 mb-1 px-3 py-2.5 rounded-xl flex-row items-center active:bg-gold/10"
           >
             <View style={{ width: 28, marginRight: 8 }}>
-              <Ionicons name="folder-open-outline" size={24} color="#313130" />
-              <Ionicons name="add" size={15} color="#313130" style={{ position: 'absolute', right: -2, bottom: -4 }} />
+              <Ionicons name="folder-open-outline" size={22} color="#bd9348" />
+              <Ionicons name="add" size={14} color="#bd9348" style={{ position: 'absolute', right: -1, bottom: -3 }} />
             </View>
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal text-base">
               New project
@@ -349,8 +363,8 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                     >
                       <Ionicons
                         name={isExpanded ? 'folder-open-outline' : 'folder-outline'}
-                        size={24}
-                        color={isDropTarget ? '#bd9348' : '#313130'}
+                        size={22}
+                        color="#bd9348"
                         style={{ marginRight: 12 }}
                       />
                       <Text style={{ fontFamily: 'Lato_400Regular' }} className="flex-1 text-charcoal text-base" numberOfLines={1}>
@@ -363,7 +377,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                       </Text>
                     ) : null}
                     {projectItems.length > 0 ? (
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-gray-400 ml-2">
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-[#a09274] ml-2">
                         {projectItems.length}
                       </Text>
                     ) : null}
@@ -391,7 +405,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                   </Pressable>
                 ) : null}
                 {isExpanded && projectItems.map((conversation) => (
-                  <View key={conversation.id} className="ml-8 mr-3">
+                  <View key={conversation.id} className="ml-5">
                     <ConversationItem
                       conversation={conversation}
                       isActive={conversation.id === currentConversationId}
@@ -414,8 +428,8 @@ export const ConversationSidebar = memo(function ConversationSidebar({
 
         {wrapDropTarget(null, (
           <Text
-            style={{ fontFamily: 'Lato_700Bold' }}
-            className={`px-4 pt-8 pb-3 text-lg text-charcoal ${
+            style={{ fontFamily: 'Lato_700Bold', letterSpacing: 0.8 }}
+            className={`px-4 pt-7 pb-2 text-xs uppercase text-[#8e7a5e] ${
               dropTargetProjectId === 'recents' ? 'bg-gold/10' : ''
             }`}
           >
@@ -427,7 +441,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
           <View className="px-4 py-8">
             <Text
               style={{ fontFamily: 'Lato_400Regular' }}
-              className="text-gray-400 text-center"
+              className="text-[#a09274] text-center"
             >
               No conversations yet
             </Text>
@@ -437,8 +451,8 @@ export const ConversationSidebar = memo(function ConversationSidebar({
             <View key={group}>
               {group !== 'Today' && (
                 <Text
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  className="px-4 py-2 text-xs text-gray-400 uppercase tracking-wide bg-gray-50"
+                  style={{ fontFamily: 'Lato_700Bold', letterSpacing: 0.8 }}
+                  className="px-4 pt-4 pb-1.5 text-[11px] text-[#b3a27f] uppercase"
                 >
                   {group}
                 </Text>
@@ -493,7 +507,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
             },
             drawerAnimatedStyle,
           ]}
-          className="bg-white shadow-2xl"
+          className="bg-[#fffdf5] shadow-2xl"
         >
           {sidebarContent}
         </Animated.View>
@@ -504,25 +518,33 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   // On web/desktop, render as fixed sidebar (collapsible)
   if (isCollapsed) {
     return (
-      <View className="w-12 border-r border-gray-200 h-full bg-white items-center pt-3">
+      <View
+        className="w-12 border-r h-full bg-[#fffdf5] items-center pt-3"
+        style={{ borderRightColor: 'rgba(222,193,129,0.5)' }}
+      >
         <Pressable
           onPress={onToggleCollapse}
-          className="p-2 rounded hover:bg-gray-100"
+          className="w-8 h-8 items-center justify-center rounded-full active:bg-gold/10"
+          accessibilityLabel="Expand sidebar"
         >
-          <Text className="text-xl text-gray-400">»</Text>
+          <Text className="text-xl text-gold">»</Text>
         </Pressable>
         <Pressable
           onPress={onNewConversation}
-          className="mt-2 p-2 bg-gold rounded-lg"
+          className="mt-2 w-8 h-8 items-center justify-center bg-gold rounded-full active:opacity-80"
+          accessibilityLabel="New Clive chat"
         >
-          <Text className="text-white text-lg">+</Text>
+          <Text className="text-white text-lg leading-none">+</Text>
         </Pressable>
       </View>
     );
   }
 
   return (
-    <View className="w-72 border-r border-gray-200 h-full">
+    <View
+      className="w-72 border-r h-full"
+      style={{ borderRightColor: 'rgba(222,193,129,0.5)' }}
+    >
       {sidebarContent}
     </View>
   );
