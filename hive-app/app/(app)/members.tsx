@@ -1544,7 +1544,7 @@ function MemberDetailModal({
                       gap: 6,
                     }}
                   >
-                    <Text style={{ fontSize: 14, lineHeight: 17 }}>🍯</Text>
+                    <Ionicons name="clipboard-outline" size={15} color="white" />
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>
                       Check-in
                     </Text>

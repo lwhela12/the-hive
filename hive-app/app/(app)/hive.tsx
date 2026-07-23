@@ -61,6 +61,8 @@ type TodoStatusTabKey = 'open' | 'done';
 type HomeTodo = {
   id: string;
   emoji: string;
+  /** Ionicons name — the check-in's one true mark (gold outline) beats emoji. */
+  iconName?: string;
   title: string;
   detail?: string;
   cta?: string;
@@ -2062,7 +2064,9 @@ export default function HiveScreen() {
 
       return {
         id: `survey-${s.id}`,
-        emoji: isMonthlyTuneUp ? '🧰' : '📋',
+        emoji: '📋',
+        // One mark for the check-in everywhere: the gold outlined clipboard.
+        iconName: 'clipboard-outline',
         title: isMonthlyTuneUp ? `${tuneUpMonthName} tune-up + check-in` : s.title,
         detail: isDone
           ? `Submitted ${formatDateShort(submittedAt)} · Tap to edit`
@@ -2230,7 +2234,11 @@ export default function HiveScreen() {
         ) : (
           <View style={circleStyle(false)} />
         )}
-        <Text style={{ fontSize: 18, flexShrink: 0 }}>{todo.emoji}</Text>
+        {todo.iconName ? (
+          <Ionicons name={todo.iconName as any} size={19} color="#bd9348" style={{ flexShrink: 0 }} />
+        ) : (
+          <Text style={{ fontSize: 18, flexShrink: 0 }}>{todo.emoji}</Text>
+        )}
         <View style={{ flex: 1 }}>
           <Text style={{
             fontFamily: isDone ? 'Lato_400Regular' : 'Lato_700Bold',
