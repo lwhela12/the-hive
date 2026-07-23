@@ -1479,17 +1479,6 @@ function MemberDetailModal({
               {/* Self actions: the round pencil + one Tune-up pill. No "You"
                   chip (you know who you are), admin shows as a quiet chip —
                   so every profile header reads the same, member to member. */}
-              {/* Self action: one pencil, one door — it leads backstage (the
-                  Profile tab), so this card always shows what everyone sees. */}
-              {isCurrentUser && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, justifyContent: 'center' }}>
-                  <EditButton
-                    onPress={() => { onClose(); router.push('/profile'); }}
-                    size={30}
-                    accessibilityLabel="Edit your profile (opens your backstage)"
-                  />
-                </View>
-              )}
               {(roleLabel || member.queen_bee_month) && (
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
                   {roleLabel && (
@@ -1523,32 +1512,16 @@ function MemberDetailModal({
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>›</Text>
                 </Pressable>
               )}
-              {/* One big gold action per profile: yours = the check-in
-                  (you'd never message yourself), everyone else's = Message.
-                  Same silhouette for every member. */}
+              {/* One action at the bottom of the stack: others get Message;
+                  you get the pencil — the single door to backstage, where the
+                  check-in button lives. The card itself is pure audience view. */}
               <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 12, width: '100%' }}>
                 {isCurrentUser ? (
-                  <Pressable
-                    onPress={() => { onClose(); router.push('/monthly-tuneup' as any); }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Open your monthly check-in"
-                    style={{
-                      backgroundColor: '#bd9348',
-                      borderRadius: 999,
-                      paddingVertical: 8,
-                      paddingHorizontal: 22,
-                      minWidth: 148,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexDirection: 'row',
-                      gap: 6,
-                    }}
-                  >
-                    <Ionicons name="clipboard-outline" size={15} color="white" />
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>
-                      Check-in
-                    </Text>
-                  </Pressable>
+                  <EditButton
+                    onPress={() => { onClose(); router.push('/profile'); }}
+                    size={36}
+                    accessibilityLabel="Edit your profile (opens your backstage)"
+                  />
                 ) : (
                   <Pressable
                     onPress={startDirectMessage}
