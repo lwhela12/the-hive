@@ -245,6 +245,43 @@ serve(async (req) => {
     }
     console.log(`[check-in-reminder] Running for ${todayStr} (America/Los_Angeles)`);
 
+    // Auto-seal yesterday's meeting: if a community had a meeting yesterday and
+    // nobody pressed Seal on the Wrap-Up slide, compose the live in-app record
+    // now — the notes write themselves. Never blocks the reminder run.
+    try {
+      const yesterdayStr = toPacificDateOnly(new Date(Date.now() - 24 * 3600_000));
+      if (yesterdayStr) {
+        const { data: meetingEvents } = await supabaseAdmin
+          .from('events')
+          .select('community_id')
+          .eq('event_type', 'meeting')
+          .eq('event_date', yesterdayStr);
+        const communityIds = [...new Set((meetingEvents ?? []).map((row: { community_id: string }) => row.community_id))];
+        for (const communityId of communityIds) {
+          const { data: sealedRows } = await supabaseAdmin
+            .from('meetings')
+            .select('id, summary')
+            .eq('community_id', communityId)
+            .eq('date', yesterdayStr);
+          const alreadySealed = (sealedRows ?? []).some(
+            (row: { summary: string | null }) => (row.summary ?? '').includes('"live_sealed_at"')
+          );
+          if (alreadySealed) continue;
+          const sealRes = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/seal-meeting`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ communityId, date: yesterdayStr }),
+          });
+          console.log(`[check-in-reminder] auto-seal ${communityId} ${yesterdayStr}: ${sealRes.status}`);
+        }
+      }
+    } catch (sealError) {
+      console.error('[check-in-reminder] auto-seal skipped:', sealError);
+    }
+
     // Fetch active surveys, then filter to monthly check-ins in JS.
     const { data: activeSurveys, error: surveysError } = await supabaseAdmin
       .from('surveys')

@@ -21,7 +21,7 @@ import type { Meeting, Event } from '../../types';
 interface MeetingSummaryPreview {
   title?: string;
   source?: string;
-  import_status?: 'pending' | 'preview' | 'applied';
+  import_status?: 'pending' | 'preview' | 'applied' | 'live';
   summary?: string;
   decisions?: string[];
   board_suggestions?: unknown[];
@@ -1076,6 +1076,7 @@ export default function MeetingsScreen() {
     if (parsed.import_status === 'pending') return 'needs preview';
     if (parsed.import_status === 'preview') return 'needs review';
     if (parsed.import_status === 'applied') return 'applied';
+    if (parsed.import_status === 'live') return 'live notes';
     return meeting.processing_status;
   };
 
@@ -1311,7 +1312,7 @@ export default function MeetingsScreen() {
                     Status:{' '}
                     <Text
                       className={
-                        cardStatus === 'applied' || cardStatus === 'complete'
+                        cardStatus === 'applied' || cardStatus === 'complete' || cardStatus === 'live notes'
                           ? 'text-green-600'
                           : cardStatus === 'failed'
                           ? 'text-red-600'

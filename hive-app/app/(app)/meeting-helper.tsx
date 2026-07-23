@@ -219,6 +219,9 @@ export default function MeetingHelperScreen() {
     threads: string[];
   } | null>(null);
   const [deckRefreshing, setDeckRefreshing] = useState(false);
+  // Wrap-Up "Seal tonight's notes" — composes the live app activity into a
+  // meeting record on the Meetings tab (the notes write themselves).
+  const [sealState, setSealState] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
 
   // HummDinger: which member's full check-in is expanded on the bubbles grid,
   // plus everyone who's had their turn this session (feeds the agenda rail's
@@ -841,15 +844,31 @@ export default function MeetingHelperScreen() {
       <Text
         style={{
           fontFamily: 'Lato_400Regular',
-          fontSize: sz(28, 16),
-          lineHeight: sz(44, 26),
-          color: CHARCOAL,
+          fontSize: sz(20, 14),
+          lineHeight: sz(31, 21),
+          color: 'rgba(49,49,48,0.87)',
         }}
       >
         {value}
       </Text>
     );
   }, [EmptyNote, notes, sz]);
+
+  const handleSealMeeting = async () => {
+    if (!communityId || sealState === 'saving' || sealState === 'done') return;
+    setSealState('saving');
+    try {
+      const { data, error } = await supabase.functions.invoke('seal-meeting', {
+        body: { communityId, date: getLocalIsoDate(new Date()) },
+      });
+      if (error) throw error;
+      if (!data?.sealed) throw new Error(data?.reason ?? 'Nothing to seal yet');
+      setSealState('done');
+    } catch (error) {
+      console.warn('Seal meeting failed', error);
+      setSealState('error');
+    }
+  };
 
   // ---- Slides ----
   // Welcome + Room merged (Lucas: this is the slide up as people arrive, and
@@ -860,7 +879,7 @@ export default function MeetingHelperScreen() {
       <View style={{ alignItems: 'center', marginBottom: sz(24, 14) }}>
         <Image
           source={hiveBee}
-          style={{ width: sz(170, 92), height: sz(170, 92) }}
+          style={{ width: sz(230, 118), height: sz(230, 118) }}
           contentFit="contain"
         />
         <Text
@@ -985,19 +1004,21 @@ export default function MeetingHelperScreen() {
           <SlideTitle>News from Nat</SlideTitle>
         </View>
       </View>
-      <View style={{ gap: sz(22, 12), maxWidth: sz(1240, 720) }}>
+      {/* Home-page vibes (Lucas): tighter paper cards, quiet labels, body
+          text that reads instead of shouting. */}
+      <View style={{ gap: sz(14, 9), maxWidth: sz(940, 640) }}>
         <View
           style={{
-            backgroundColor: CARD,
+            backgroundColor: '#fffdf5',
             borderWidth: 1,
             borderColor: GOLD_SOFT,
-            borderRadius: sz(22, 14),
-            paddingHorizontal: sz(28, 16),
-            paddingVertical: sz(22, 13),
+            borderRadius: sz(16, 12),
+            paddingHorizontal: sz(20, 13),
+            paddingVertical: sz(15, 10),
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8), marginBottom: sz(12, 8) }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 7), marginBottom: sz(8, 5) }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e7a5e' }}>
               📣 The news
             </Text>
             <EditPill noteKey="news" />
@@ -1009,16 +1030,16 @@ export default function MeetingHelperScreen() {
         </View>
         <View
           style={{
-            backgroundColor: 'rgba(222,193,129,0.12)',
+            backgroundColor: '#fdf3dc',
             borderWidth: 1,
             borderColor: GOLD_SOFT,
-            borderRadius: sz(22, 14),
-            paddingHorizontal: sz(28, 16),
-            paddingVertical: sz(22, 13),
+            borderRadius: sz(16, 12),
+            paddingHorizontal: sz(20, 13),
+            paddingVertical: sz(15, 10),
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8), marginBottom: sz(12, 8) }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 7), marginBottom: sz(8, 5) }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e7a5e' }}>
               ✨ New in the app this month
             </Text>
             <EditPill noteKey="appnews" />
@@ -2068,6 +2089,36 @@ export default function MeetingHelperScreen() {
               📌 New threads: {tonightRecap.threads.join(' · ')}
             </Text>
           ) : null}
+          <Pressable
+            onPress={handleSealMeeting}
+            disabled={sealState === 'saving' || sealState === 'done'}
+            style={{
+              alignSelf: 'flex-start',
+              marginTop: sz(10, 6),
+              backgroundColor: sealState === 'done' ? 'rgba(189,147,72,0.16)' : GOLD,
+              borderWidth: sealState === 'done' ? 1 : 0,
+              borderColor: GOLD_SOFT,
+              borderRadius: 999,
+              paddingHorizontal: sz(22, 14),
+              paddingVertical: sz(11, 8),
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: 'Lato_700Bold',
+                fontSize: sz(17, 12),
+                color: sealState === 'done' ? GOLD_DEEP : '#ffffff',
+              }}
+            >
+              {sealState === 'saving'
+                ? 'Sealing…'
+                : sealState === 'done'
+                  ? '✓ Sealed — it’s in Meeting Summaries'
+                  : sealState === 'error'
+                    ? 'Hmm, try sealing again'
+                    : '🍯 Seal tonight’s notes → Meeting Summaries'}
+            </Text>
+          </Pressable>
         </View>
       ) : null}
       <View

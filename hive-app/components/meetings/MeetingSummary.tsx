@@ -14,7 +14,7 @@ interface MeetingSummaryProps {
 interface ParsedSummary {
   title?: string;
   source?: string;
-  import_status?: 'pending' | 'preview' | 'applied';
+  import_status?: 'pending' | 'preview' | 'applied' | 'live';
   preview_generated_at?: string;
   applied_at?: string;
   summary?: string;

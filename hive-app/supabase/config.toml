@@ -128,3 +128,8 @@ verify_jwt = false
 # Auth and membership checks are handled in function code.
 [functions.apply-meeting-notes]
 verify_jwt = false
+
+# Compose the meeting-day live app activity into a meeting record.
+# Auth (member JWT or service key) is handled in function code.
+[functions.seal-meeting]
+verify_jwt = false
