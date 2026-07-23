@@ -13,6 +13,7 @@ import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { getEventEmoji } from '../../lib/eventDisplay';
+import { HiveIcon, type HiveIconName } from '../../components/ui/HiveIcon';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
 import { getSurveyResponsePeriod, isMonthlyCheckInSurvey, useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
 import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
@@ -399,8 +400,9 @@ function getRelativeTime(isoString: string): string {
   return `${Math.floor(days / 7)}w ago`;
 }
 
-function HexShortcut({ emoji, label, sublabel, onPress }: {
+function HexShortcut({ emoji, icon, label, sublabel, onPress }: {
   emoji: string;
+  icon?: HiveIconName;
   label: string;
   sublabel?: string;
   onPress: () => void;
@@ -417,7 +419,11 @@ function HexShortcut({ emoji, label, sublabel, onPress }: {
             strokeWidth={1.5}
           />
         </Svg>
-        <Text style={{ fontSize: 28, lineHeight: 32 }}>{emoji}</Text>
+        {icon ? (
+          <HiveIcon name={icon} size={32} color="#8e6f35" />
+        ) : (
+          <Text style={{ fontSize: 28, lineHeight: 32 }}>{emoji}</Text>
+        )}
       </View>
       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#2d2d2d', marginTop: 4, textAlign: 'center' }}>{label}</Text>
       {sublabel ? (
@@ -429,6 +435,17 @@ function HexShortcut({ emoji, label, sublabel, onPress }: {
 
 // Reorderable home screen sections (persisted per member in profiles.home_section_order).
 // 'panel' sections sit side by side in a row on wide screens; 'full' sections span the width.
+// Activity-type chrome icons map onto the HIVE icon family.
+const ACTIVITY_HIVE_ICON: Record<string, HiveIconName> = {
+  '💬': 'reply',
+  '📅': 'calendar',
+  '📝': 'note',
+  '✨': 'sparkle',
+  '🌟': 'star',
+  '✅': 'checkin',
+  '📋': 'board',
+};
+
 type HomeSectionKey = 'activity' | 'todos' | 'events' | 'shortcuts' | 'wishes';
 
 const DEFAULT_HOME_SECTION_ORDER: HomeSectionKey[] = ['shortcuts', 'activity', 'todos', 'events', 'wishes'];
@@ -460,15 +477,15 @@ type HomeShortcutKey = 'honey_pot' | 'boards' | 'messages' | 'members' | 'meetin
 
 const DEFAULT_HOME_SHORTCUTS: HomeShortcutKey[] = ['honey_pot', 'boards', 'messages'];
 
-const HOME_SHORTCUT_META: Record<HomeShortcutKey, { label: string; emoji: string; adminOnly?: boolean }> = {
-  honey_pot: { label: 'Honey Pot', emoji: '🍯' },
-  boards: { label: 'Boards', emoji: '📋' },
-  messages: { label: 'Messages', emoji: '💬' },
-  members: { label: 'Members', emoji: '🐝' },
-  meetings: { label: 'Meetings', emoji: '📅' },
-  profile: { label: 'My Profile', emoji: '👤' },
-  clive: { label: 'Clive', emoji: '✨' },
-  admin: { label: 'Admin', emoji: '⚙️', adminOnly: true },
+const HOME_SHORTCUT_META: Record<HomeShortcutKey, { label: string; emoji: string; icon: HiveIconName; adminOnly?: boolean }> = {
+  honey_pot: { label: 'Honey Pot', emoji: '🍯', icon: 'honeypot' },
+  boards: { label: 'Boards', emoji: '📋', icon: 'board' },
+  messages: { label: 'Messages', emoji: '💬', icon: 'message' },
+  members: { label: 'Members', emoji: '🐝', icon: 'bee' },
+  meetings: { label: 'Meetings', emoji: '📅', icon: 'calendar' },
+  profile: { label: 'My Profile', emoji: '👤', icon: 'person' },
+  clive: { label: 'Clive', emoji: '✨', icon: 'sparkle' },
+  admin: { label: 'Admin', emoji: '⚙️', icon: 'gear', adminOnly: true },
 };
 
 // Resolve saved shortcuts against the catalog: unknown keys and duplicates are
@@ -2068,7 +2085,7 @@ export default function HiveScreen() {
         id: `survey-${s.id}`,
         emoji: '📋',
         // One mark for the check-in everywhere: the gold outlined clipboard.
-        iconName: 'clipboard-outline',
+        iconName: 'checkin',
         title: isMonthlyTuneUp ? `${tuneUpMonthName} tune-up + check-in` : s.title,
         detail: isDone
           ? `Submitted ${formatDateShort(submittedAt)} · Tap to edit`
@@ -2101,6 +2118,7 @@ export default function HiveScreen() {
       return {
         id: `action-${a.id}`,
         emoji: '📝',
+        iconName: 'note',
         title: jot.text,
         detail: [statusDetail, jotContext || null].filter(Boolean).join(' · ') || undefined,
         // Linked to-dos navigate on tap (like Recent Activity rows); the circle
@@ -2133,6 +2151,7 @@ export default function HiveScreen() {
       return [{
         id: `quarterly-dues-${year}-q${quarter}`,
         emoji: '🍯',
+        iconName: 'honeypot',
         title: isDueToday ? 'Quarterly dues are due today!' : 'Quarterly dues are still due',
         detail: duesStatusLoading
           ? 'Checking payment status...'
@@ -2250,7 +2269,7 @@ export default function HiveScreen() {
           <View style={circleStyle(false)} />
         )}
         {todo.iconName ? (
-          <Ionicons name={todo.iconName as any} size={19} color="#bd9348" style={{ flexShrink: 0 }} />
+          <View style={{ flexShrink: 0 }}><HiveIcon name={todo.iconName as HiveIconName} size={19} color="#bd9348" /></View>
         ) : (
           <Text style={{ fontSize: 18, flexShrink: 0 }}>{todo.emoji}</Text>
         )}
@@ -2750,7 +2769,11 @@ export default function HiveScreen() {
                                   marginRight: 12,
                                   flexShrink: 0,
                                 }}>
-                                  <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
+                                  {ACTIVITY_HIVE_ICON[item.emoji] ? (
+                                    <HiveIcon name={ACTIVITY_HIVE_ICON[item.emoji]} size={17} color="#8e6f35" />
+                                  ) : (
+                                    <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
+                                  )}
                                 </View>
                                 {isUnread && (
                                   <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#bd9348', marginRight: 10, shadowColor: '#bd9348', shadowOpacity: 0.18, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } }} />
@@ -2987,6 +3010,7 @@ export default function HiveScreen() {
                       <HexShortcut
                         key={shortcutKey}
                         emoji={HOME_SHORTCUT_META[shortcutKey].emoji}
+                        icon={HOME_SHORTCUT_META[shortcutKey].icon}
                         label={HOME_SHORTCUT_META[shortcutKey].label}
                         sublabel={
                           shortcutKey === 'honey_pot'

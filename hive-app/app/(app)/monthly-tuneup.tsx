@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +23,7 @@ import {
 import { deleteWishById } from '../../lib/wishMutations';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
+import { HiveIcon } from '../../components/ui/HiveIcon';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
 import {
@@ -153,12 +154,15 @@ const inputStyle = {
   paddingVertical: 10,
 } as const;
 
-function StepHeader({ title, subtitle }: { title: string; subtitle: string }) {
+function StepHeader({ title, subtitle, icon }: { title: string; subtitle: string; icon?: ReactNode }) {
   return (
     <View style={{ marginBottom: 16 }}>
-      <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 6 }}>
-        {title}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d' }}>
+          {title}
+        </Text>
+        {icon}
+      </View>
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#7d715f' }}>
         {subtitle}
       </Text>
@@ -341,6 +345,9 @@ export default function MonthlyTuneupScreen() {
   const [helpIdeas, setHelpIdeas] = useState<string[]>([]);
   const [helpIdeaContent, setHelpIdeaContent] = useState('');
   const [helpIdeaPosting, setHelpIdeaPosting] = useState(false);
+  const [secondedHelpIdea, setSecondedHelpIdea] = useState<string | null>(null);
+  const [helpSeconding, setHelpSeconding] = useState(false);
+  const [helpConfetti, setHelpConfetti] = useState(false);
 
   const [helperContent, setHelperContent] = useState('');
   const [helperPosting, setHelperPosting] = useState(false);
@@ -975,6 +982,27 @@ export default function MonthlyTuneupScreen() {
     setAddWishModalVisible(false);
   };
 
+  // Second a help-focus idea with one tap — the +1 lands on the Ideas thread.
+  const handleSecondHelpIdea = async (idea: string) => {
+    if (secondedHelpIdea || helpSeconding || !profile || !communityId || !helpIdeasThreadId) return;
+    setHelpSeconding(true);
+    try {
+      const { error } = await (supabase as any).from('board_replies').insert({
+        community_id: communityId,
+        post_id: helpIdeasThreadId,
+        author_id: profile.id,
+        content: `+1 for ${idea}! 🙋`,
+      });
+      if (error) throw error;
+      setSecondedHelpIdea(idea);
+      setHelpConfetti(true);
+    } catch (error) {
+      console.warn('Could not second the help idea', error);
+    } finally {
+      setHelpSeconding(false);
+    }
+  };
+
   // Second an idea with one tap: the +1 lands as a reply on that idea's own
   // thread (votes live with the idea, not as clutter threads on the board).
   const handleSecondHangIdea = async (idea: { id: string; title: string }) => {
@@ -1116,7 +1144,7 @@ export default function MonthlyTuneupScreen() {
         <View style={[cardStyle, { marginBottom: 10, position: 'relative', overflow: 'hidden' }]}>
           <ConfettiBurst visible={hangConfetti} onDone={() => setHangConfetti(false)} />
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: 8 }}>
-            💡 Choose one from the list — tap to second it
+            💡 Choose one — tap to give it a +1
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {existingHangIdeas.map((idea) => {
@@ -1127,7 +1155,7 @@ export default function MonthlyTuneupScreen() {
                   key={idea.id}
                   onPress={() => void handleSecondHangIdea(idea)}
                   disabled={!!secondedHangIdeaId || !!hangSecondingId}
-                  accessibilityLabel={`Second the idea: ${idea.title}`}
+                  accessibilityLabel={`+1 the idea: ${idea.title}`}
                   style={({ pressed }) => ({
                     backgroundColor: isSeconded ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
                     borderWidth: 1,
@@ -1150,7 +1178,7 @@ export default function MonthlyTuneupScreen() {
           </View>
           {secondedHangIdeaId ? (
             <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12, color: '#8e7a5e', marginTop: 8 }}>
-              Seconded! Your +1 is on the idea's thread 🎉
+              +1 sent — it's on the idea's thread 🎉
             </Text>
           ) : null}
         </View>
@@ -1216,7 +1244,8 @@ export default function MonthlyTuneupScreen() {
   const renderCalendarStep = () => (
     <View>
       <StepHeader
-        title="Calendar 🗓️"
+        title="Calendar"
+        icon={<HiveIcon name="calendar" size={20} color="#8e6f35" />}
         subtitle="Upcoming events to add? Out of town at all? Anything you add shows up in Upcoming Events for everyone."
       />
       <View style={[cardStyle, { gap: 10 }]}>
@@ -1336,14 +1365,18 @@ export default function MonthlyTuneupScreen() {
   const renderHelpersStep = () => (
     <View>
       <StepHeader
-        title="HIVE helps 🐝"
-        subtitle="Little kindnesses out in the world since last meeting — no act too tiny! Picked up a candy wrapper on a walk? Gave your change to someone? Complimented a stranger? Donated a blanket to the dog shelter? Log it — it lands in this month's HIVE Helpers thread and gets its moment on the Progress slide 🌟 (totally optional, always). (Helped a HIVE member? That belongs on their wish — mark it granted!)"
+        title="HIVE helps"
+        icon={<Image source={hiveBee} style={{ width: 30, height: 30 }} contentFit="contain" />}
+        subtitle="Little kindnesses since last meeting — no act too tiny, totally optional. (Helped a HIVE member? That belongs on their wish — mark it granted!)"
       />
       {helperThread?.postTitle ? (
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348', marginTop: -6, marginBottom: 12 }}>
-          This month's thread: "{helperThread.postTitle}"
+          This month's focus: "{helperThread.postTitle.replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, '')}"
         </Text>
       ) : null}
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: 6 }}>
+        📝 Log a kindness you did
+      </Text>
       <View style={[cardStyle, { gap: 10 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
           <TextInput
@@ -1387,34 +1420,47 @@ export default function MonthlyTuneupScreen() {
       </View>
       <PostedConfirmation lines={helperPosted} boardName={helperThread?.postTitle ?? helperThread?.boardName ?? null} />
 
-      {/* Next month's focus: second an idea on the board or pitch a new one */}
-      <View style={[cardStyle, { marginTop: 14, gap: 10 }]}>
+      {/* Next month's focus: tap-to-second (confetti and all), or pitch fresh */}
+      <View style={[cardStyle, { marginTop: 14, gap: 10, position: 'relative', overflow: 'hidden' }]}>
+        <ConfettiBurst visible={helpConfetti} onDone={() => setHelpConfetti(false)} />
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e' }}>
-          💡 Next month's HIVE Help focus — second one, or pitch your own
+          💡 Next month's focus — choose one to +1
         </Text>
         {helpIdeas.length > 0 ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {helpIdeas.map((idea) => (
-              <Pressable
-                key={idea}
-                onPress={() => setHelpIdeaContent((prev) => (prev.trim() ? prev : `+1 for ${idea}!`))}
-                accessibilityLabel={`Second the idea: ${idea}`}
-                style={({ pressed }) => ({
-                  backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-                  borderWidth: 1,
-                  borderColor: 'rgba(222,193,129,0.55)',
-                  borderRadius: 999,
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                })}
-              >
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648' }} numberOfLines={1}>
-                  {idea}
-                </Text>
-              </Pressable>
-            ))}
+            {helpIdeas.map((idea) => {
+              const isSeconded = secondedHelpIdea === idea;
+              const isDimmed = !!secondedHelpIdea && !isSeconded;
+              return (
+                <Pressable
+                  key={idea}
+                  onPress={() => void handleSecondHelpIdea(idea)}
+                  disabled={!!secondedHelpIdea || helpSeconding}
+                  accessibilityLabel={`+1 the idea: ${idea}`}
+                  style={({ pressed }) => ({
+                    backgroundColor: isSeconded ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
+                    borderWidth: 1,
+                    borderColor: isSeconded ? '#bd9348' : 'rgba(222,193,129,0.55)',
+                    borderRadius: 999,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    opacity: isDimmed ? 0.35 : 1,
+                  })}
+                >
+                  <Text
+                    style={{ fontFamily: isSeconded ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: isSeconded ? 'white' : '#5c5648' }}
+                    numberOfLines={1}
+                  >
+                    {isSeconded ? `✓ ${idea}` : idea}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         ) : null}
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginTop: 2 }}>
+          ✨ Or pitch your own
+        </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TextInput
             value={helpIdeaContent}
@@ -1550,7 +1596,8 @@ export default function MonthlyTuneupScreen() {
   const renderCheckInStep = () => (
     <View>
       <StepHeader
-        title="Check-in 📝"
+        title="Check-in"
+        icon={<HiveIcon name="checkin" size={20} color="#8e6f35" />}
         subtitle="Last stop — a few quick questions so HIVE and Clive arrive prepared. Your answers save when you tap Finish, and you can come back and change them any time this month."
       />
       {helpFocusReminder ? (

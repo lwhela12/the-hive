@@ -15,6 +15,7 @@ import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
 import { Avatar } from '../../components/ui/Avatar';
 import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
+import { HiveIcon } from '../../components/ui/HiveIcon';
 import { clearLastAppPath } from '../../lib/navigationState';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
@@ -1701,8 +1702,8 @@ export default function ProfileScreen() {
                     maxWidth: Math.min(screenWidth - 28, 420),
                   }}
                 >
-                  <Ionicons
-                    name={monthlyCheckInIsEditing ? 'create-outline' : 'clipboard-outline'}
+                  <HiveIcon
+                    name={monthlyCheckInIsEditing ? 'note' : 'checkin'}
                     size={17}
                     color={monthlyCheckInIsEditing ? '#8e7a5e' : '#bd9348'}
                   />
