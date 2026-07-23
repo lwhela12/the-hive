@@ -258,11 +258,13 @@ const SEED_SURVEY: SurveyQuestion[] = [
   },
 ];
 
+// Sized for legibility (Nat, 2026-07-23): smalls were unreadable, so the
+// lower tiers grew the most — every bloom's center disc now fits a real label.
 const STAGES: StageDef[] = [
   { label: 'Seed', height: 24, canvasWidth: 72, labelWidth: 100 },
-  { label: 'Small bloom', height: 118, canvasWidth: 146, labelWidth: 152 },
-  { label: 'Medium bloom', height: 174, canvasWidth: 214, labelWidth: 220 },
-  { label: 'Large bloom', height: 230, canvasWidth: 270, labelWidth: 276 },
+  { label: 'Small bloom', height: 152, canvasWidth: 184, labelWidth: 190 },
+  { label: 'Medium bloom', height: 198, canvasWidth: 242, labelWidth: 248 },
+  { label: 'Large bloom', height: 240, canvasWidth: 282, labelWidth: 288 },
 ];
 
 const SPECIES_BY_CATEGORY: Record<SkillCategoryDef['species'], WildflowerSpecies[]> = {
@@ -595,7 +597,7 @@ function buildBouquetLayout(skills: GardenSkill[], width: number) {
   const usableWidth = Math.max(1, width - sidePadding * 2);
   const cellWidth = usableWidth / columns;
   const fullBloom = STAGES[STAGES.length - 1];
-  const scale = clamp((cellWidth * 0.92) / fullBloom.labelWidth, 0.3, 0.6);
+  const scale = clamp((cellWidth * 0.92) / fullBloom.labelWidth, 0.38, 0.72);
 
   // Brick-style stagger: full rows alternate with rows one bloom short,
   // each row centered, so offset rows sit in the gaps like a bouquet.
@@ -1005,7 +1007,7 @@ function renderFlowerCenterLabel({
 
   const lines = getEmbeddedLabelLines(label);
   const longestLine = lines.reduce((longest, line) => Math.max(longest, line.length), 0);
-  const fontSize = clamp(radius * (lines.length > 2 ? 0.23 : 0.27) - Math.max(0, longestLine - 9) * 0.12, 4.8, 13.8);
+  const fontSize = clamp(radius * (lines.length > 2 ? 0.23 : 0.27) - Math.max(0, longestLine - 9) * 0.12, 7.5, 14.5);
   const lineGap = fontSize * 1.02;
   const firstLineY = cy - ((lines.length - 1) * lineGap) / 2 + fontSize * 0.34;
 
