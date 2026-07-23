@@ -308,7 +308,12 @@ export function WishDetail({
         )}
       </View>
 
-      <ScrollView className="flex-1" contentContainerClassName="p-4">
+      {/* Reading-width frame — without it the wish sprawls edge-to-edge on
+          wide screens and the whole page feels unmoored. */}
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 16, maxWidth: 840, width: '100%', alignSelf: 'center' }}
+      >
         {/* Wish Card */}
         <View
           className={`rounded-2xl p-4 mb-6 border ${
@@ -474,6 +479,7 @@ export function WishDetail({
           <Pressable
             onPress={() => setShowGrantModal(true)}
             className="bg-gold py-3 rounded-xl flex-row items-center justify-center active:bg-gold/80"
+            style={{ maxWidth: 840, width: '100%', alignSelf: 'center' }}
           >
             <Ionicons name="checkmark-circle" size={20} color="#fff" />
             <Text
@@ -488,6 +494,7 @@ export function WishDetail({
 
       {/* Comment Input */}
       <View className="border-t px-4 py-3" style={{ borderTopColor: 'rgba(222,193,129,0.5)' }}>
+        <View style={{ maxWidth: 840, width: '100%', alignSelf: 'center' }}>
         {replyingTo && (
           <View className="flex-row items-center mb-2 bg-gold/10 border border-gold/25 rounded-full px-3 py-1.5 self-start">
             <Ionicons name="return-down-forward-outline" size={14} color="#bd9348" />
@@ -555,6 +562,7 @@ export function WishDetail({
               />
             )}
           </Pressable>
+        </View>
         </View>
       </View>
 

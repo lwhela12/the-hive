@@ -26,7 +26,18 @@ export function parseActionItemDescription(description: string): ParsedActionIte
   const reLabel = reMatch ? reMatch[1].trim() : null;
   if (reMatch) text = text.slice(0, text.length - reMatch[0].length).trim();
 
-  const context = [mentionTag, reLabel ? `re: ${reLabel}` : null].filter(Boolean).join(' · ') || null;
+  // "Thing — elaboration" jots split too: the action leads, the riff joins
+  // the detail line (only when both halves are substantial).
+  let elaboration: string | null = null;
+  const dashIndex = text.indexOf(' — ');
+  if (dashIndex >= 12 && dashIndex < text.length - 4) {
+    elaboration = text.slice(dashIndex + 3).trim();
+    text = text.slice(0, dashIndex).trim();
+  }
+
+  const context = [elaboration, mentionTag, reLabel ? `re: ${reLabel}` : null]
+    .filter(Boolean)
+    .join(' · ') || null;
 
   return { text: text || description.trim(), mentionTag, reLabel, context };
 }
