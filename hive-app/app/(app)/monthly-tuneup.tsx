@@ -24,6 +24,7 @@ import { deleteWishById } from '../../lib/wishMutations';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { HiveIcon } from '../../components/ui/HiveIcon';
+import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
 import {
@@ -243,8 +244,8 @@ export default function MonthlyTuneupScreen() {
 
   const loadTodos = useCallback(async () => {
     if (!communityId || !profile) return;
-    const since = new Date();
-    since.setDate(since.getDate() - 35);
+    // Meeting-to-meeting window — same cycle anchor as the deck and hangs.
+    const since = await getCycleStart(communityId, new Date().toISOString().slice(0, 10));
     const [mineRes, doneRes, forMeRes] = await Promise.all([
       supabase
         .from('action_items')
@@ -1498,7 +1499,8 @@ export default function MonthlyTuneupScreen() {
   const renderTodosStep = () => (
     <View>
       <StepHeader
-        title="Your to-do list ✅"
+        title="Your to-do list"
+        icon={<HiveIcon name="checkin" size={20} color="#8e6f35" />}
         subtitle="Anything from the meetings or @notes land here. Check off what's done — it becomes your Progress memory-jogger at the next meeting, so wins don't get forgotten."
       />
       <View style={[cardStyle, { gap: 10 }]}>
@@ -1513,9 +1515,9 @@ export default function MonthlyTuneupScreen() {
               onPress={() => handleToggleTodo(todo, true)}
               style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 4 }}
             >
-              <View style={{ width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: '#bd9348', marginTop: 1 }} />
+              <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#bd9348', marginTop: 1, backgroundColor: 'rgba(189,147,72,0.12)' }} />
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', flex: 1, lineHeight: 20 }}>
-                {todo.description}
+                {parseActionItemDescription(todo.description).text}
               </Text>
             </Pressable>
           ))
@@ -1546,14 +1548,16 @@ export default function MonthlyTuneupScreen() {
       </View>
       {doneTodos.length > 0 ? (
         <View style={[cardStyle, { gap: 6, marginTop: 12 }]}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#166534' }}>
-            Done this cycle 🎉 (tap to un-check)
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e' }}>
+            🎉 Done this cycle — tap to un-check
           </Text>
           {doneTodos.map((todo) => (
-            <Pressable key={todo.id} onPress={() => handleToggleTodo(todo, false)} style={{ flexDirection: 'row', gap: 8 }}>
-              <Text style={{ fontSize: 13 }}>✅</Text>
+            <Pressable key={todo.id} onPress={() => handleToggleTodo(todo, false)} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 2 }}>
+              <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: 'rgba(142,122,94,0.36)', backgroundColor: 'rgba(142,122,94,0.12)', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+                <Text style={{ color: '#8e7a5e', fontSize: 11, lineHeight: 13 }}>✓</Text>
+              </View>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8e7a5e', flex: 1, lineHeight: 19 }}>
-                {todo.description}
+                {parseActionItemDescription(todo.description).text}
               </Text>
             </Pressable>
           ))}
@@ -1561,8 +1565,8 @@ export default function MonthlyTuneupScreen() {
       ) : null}
       {doneForMe.length > 0 ? (
         <View style={[cardStyle, { gap: 6, marginTop: 12, backgroundColor: '#fdf3dc' }]}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
-            Done for you this cycle 💛
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8a6b30' }}>
+            💛 Done for you this cycle
           </Text>
           {doneForMe.map((todo) => (
             <Text key={todo.id} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b5b3e', lineHeight: 19 }}>
@@ -1572,7 +1576,7 @@ export default function MonthlyTuneupScreen() {
         </View>
       ) : null}
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
-        All caught up? Tap Next.
+        All caught up? Tap "Looks good →".
       </Text>
     </View>
   );
