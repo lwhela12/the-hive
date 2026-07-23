@@ -38,8 +38,8 @@ async function fetchCategories(communityId: string): Promise<BoardCategory[]> {
 interface CategoryStats {
   count: number;
   latestActivity: string | null; // ISO timestamp of most recent activity
-  /** Freshest thread titles — the bulletin-card grid shows these as micro previews. */
-  recentTitles?: string[];
+  /** Freshest threads — the bulletin-card grid shows these as tappable micro previews. */
+  recentThreads?: { id: string; title: string }[];
 }
 
 async function fetchPostCounts(communityId: string): Promise<Record<string, CategoryStats>> {
@@ -55,7 +55,7 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
 
   const stats: Record<string, CategoryStats> = {};
   const postCategoryById = new Map<string, string>();
-  const previewCandidates: Record<string, { title: string; activity: string }[]> = {};
+  const previewCandidates: Record<string, { id: string; title: string; activity: string }[]> = {};
   (data || []).forEach((row: { id: string; category_id: string; title?: string | null; status?: string | null; created_at: string; last_reply_at?: string | null }) => {
     postCategoryById.set(row.id, row.category_id);
     if (!stats[row.category_id]) {
@@ -68,14 +68,14 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
       stats[row.category_id].latestActivity = activity;
     }
     if (row.title && row.status !== 'archived') {
-      (previewCandidates[row.category_id] ??= []).push({ title: row.title, activity });
+      (previewCandidates[row.category_id] ??= []).push({ id: row.id, title: row.title, activity });
     }
   });
   Object.entries(previewCandidates).forEach(([categoryId, candidates]) => {
-    stats[categoryId].recentTitles = candidates
+    stats[categoryId].recentThreads = candidates
       .sort((a, b) => b.activity.localeCompare(a.activity))
       .slice(0, 4)
-      .map((candidate) => candidate.title);
+      .map((candidate) => ({ id: candidate.id, title: candidate.title }));
   });
 
   const { data: replies, error: repliesError } = await supabase

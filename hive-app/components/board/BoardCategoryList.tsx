@@ -32,7 +32,7 @@ const EMOJI_MAP: Record<string, string> = {
 interface CategoryStats {
   count: number;
   latestActivity: string | null;
-  recentTitles?: string[];
+  recentThreads?: { id: string; title: string }[];
 }
 
 export interface BoardCategorySearchMatchSummary {
@@ -44,6 +44,8 @@ export interface BoardCategorySearchMatchSummary {
 interface BoardCategoryListProps {
   categories: BoardCategory[];
   onSelect: (category: BoardCategory) => void;
+  /** Tapping a micro thread preview jumps straight into that thread. */
+  onSelectThread?: (category: BoardCategory, postId: string) => void;
   postCounts?: Record<string, CategoryStats>;
   emptyLabel?: string;
   searchMatches?: Record<string, BoardCategorySearchMatchSummary>;
@@ -52,6 +54,7 @@ interface BoardCategoryListProps {
 export const BoardCategoryList = memo(function BoardCategoryList({
   categories,
   onSelect,
+  onSelectThread,
   postCounts,
   emptyLabel = 'No boards here yet.',
   searchMatches,
@@ -75,7 +78,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
       renderItem={({ item }) => {
         const emoji = item.icon ? EMOJI_MAP[item.icon] || item.icon : '📁';
         const count = postCounts?.[item.id]?.count ?? 0;
-        const recentTitles = postCounts?.[item.id]?.recentTitles ?? [];
+        const recentThreads = postCounts?.[item.id]?.recentThreads ?? [];
         const countLabel = `${count} ${count === 1 ? 'thread' : 'threads'}`;
         const taggedNames = (item.member_tags ?? [])
           .map((tag) => tag.member?.name?.split(' ')[0])
@@ -154,28 +157,50 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                   {subtitle}
                 </Text>
               ) : null}
-              {/* Micro thread previews — the reason the boards are board-sized */}
-              {recentTitles.length > 0 ? (
+              {/* Micro thread previews — tap one to jump straight into that thread */}
+              {recentThreads.length > 0 ? (
                 <View
                   style={{
                     marginTop: 10,
                     borderTopWidth: 1,
                     borderTopColor: 'rgba(222,193,129,0.32)',
                     paddingTop: 8,
-                    gap: 5,
+                    gap: 3,
                     flexGrow: 1,
                   }}
                 >
-                  {recentTitles.map((title) => (
-                    <View key={title} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+                  {recentThreads.map((thread) => (
+                    <Pressable
+                      key={thread.id}
+                      onPress={(event) => {
+                        if (onSelectThread) {
+                          event.stopPropagation?.();
+                          onSelectThread(item, thread.id);
+                        } else {
+                          onSelect(item);
+                        }
+                      }}
+                      accessibilityRole="link"
+                      accessibilityLabel={`Open thread: ${thread.title}`}
+                      hitSlop={2}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        alignItems: 'flex-start',
+                        gap: 6,
+                        borderRadius: 8,
+                        paddingHorizontal: 4,
+                        paddingVertical: 2,
+                        backgroundColor: pressed ? 'rgba(222,193,129,0.18)' : 'transparent',
+                      })}
+                    >
                       <Text style={{ fontSize: 10, lineHeight: 17, color: '#bd9348' }}>▪</Text>
                       <Text
                         style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 17, color: 'rgba(49,49,48,0.75)', flex: 1 }}
                         numberOfLines={1}
                       >
-                        {title}
+                        {thread.title}
                       </Text>
-                    </View>
+                    </Pressable>
                   ))}
                 </View>
               ) : (

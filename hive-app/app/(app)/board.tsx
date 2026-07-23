@@ -1735,6 +1735,10 @@ export default function BoardScreen() {
             <BoardCategoryList
               categories={visibleCategories}
               onSelect={handleCategorySelect}
+              onSelectThread={(category, postId) => {
+                handleCategorySelect(category);
+                handlePostSelect(postId);
+              }}
               postCounts={postCounts}
               searchMatches={boardSearchQuery ? boardSearchMatchesByCategory : undefined}
               emptyLabel={boardSearchQuery
@@ -1845,24 +1849,9 @@ export default function BoardScreen() {
                   ? `Archived Threads (${threadSearch.trim() ? `${visiblePosts.length}/` : ''}${archivedPosts.length})`
                   : `Threads (${threadSearch.trim() ? `${visiblePosts.length}/` : ''}${activePosts.length})`}
               </Text>
+              {/* Board<->wish linking retired (Lucas 2026-07-23): boards and
+                  wishes live separate lives now. */}
               <View className="flex-row items-center" style={{ gap: 8 }}>
-                {canAddLinkedWish && (
-                  <Pressable
-                    onPress={() => setShowAddLinkedWishModal(true)}
-                    className="flex-row items-center rounded-full px-3 py-1.5 bg-white/70 border border-gold/15 active:opacity-70"
-                    hitSlop={8}
-                  >
-                    <Ionicons
-                      name="link-outline"
-                      size={14}
-                      color="#bd9348"
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                      Wish
-                    </Text>
-                  </Pressable>
-                )}
                 {archivedPosts.length > 0 && (
                   <Pressable
                     onPress={() => setThreadListView(threadListView === 'archive' ? 'active' : 'archive')}
@@ -1929,25 +1918,6 @@ export default function BoardScreen() {
         mentionableMembers={topicMembers}
         managementActions={editingPost ? (
           <>
-            {canManageThread(editingPost) && (
-              <Pressable
-                onPress={() => (
-                  editingPostLinkedWish
-                    ? handleUnlinkThreadWish(editingPost, handleCloseComposer)
-                    : handleLinkThreadWish(editingPost, handleCloseComposer)
-                )}
-                className="flex-row items-center bg-gold/10 border border-gold/20 rounded-full px-3 py-2 active:opacity-75"
-              >
-                <Ionicons
-                  name={editingPostLinkedWish ? 'unlink-outline' : 'link-outline'}
-                  size={16}
-                  color="#bd9348"
-                />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
-                  {editingPostLinkedWish ? 'Unlink Wish' : 'Link Wish'}
-                </Text>
-              </Pressable>
-            )}
             {canCompleteThread(editingPost) && (
               <Pressable
                 onPress={() => handlePrepareGrantThread(editingPost, handleCloseComposer)}
