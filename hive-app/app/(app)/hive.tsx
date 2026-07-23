@@ -2373,16 +2373,16 @@ export default function HiveScreen() {
                 minHeight: 176,
               }}
             >
+              {/* One kicker line — label + topic together, so the question is
+                  the only thing with real size in the panel. */}
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', letterSpacing: 0.9, marginBottom: 7 }}>
                 ✨ DAILY QUESTION
+                <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(189,147,72,0.75)' }}>
+                  {'  ·  '}{todayQuestion.emoji} {todayQuestion.category.toUpperCase()}
+                </Text>
               </Text>
               <Text
-                style={{ fontFamily: 'Lato_400Regular', fontSize: 9, color: '#bd9348', letterSpacing: 0.5, marginBottom: 3 }}
-              >
-                {todayQuestion.emoji} {todayQuestion.category.toUpperCase()}
-              </Text>
-              <Text
-                style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: useMobileLayout ? 12 : 13, color: '#2d2d2d', lineHeight: 18 }}
+                style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: useMobileLayout ? 13 : 15, color: '#2d2d2d', lineHeight: useMobileLayout ? 19 : 21 }}
                 numberOfLines={6}
               >
                 {todayQuestion.text}
