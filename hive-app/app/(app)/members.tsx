@@ -1479,15 +1479,14 @@ function MemberDetailModal({
               {/* Self actions: the round pencil + one Tune-up pill. No "You"
                   chip (you know who you are), admin shows as a quiet chip —
                   so every profile header reads the same, member to member. */}
-              {/* Self action: just the pencil — the check-in got promoted to
-                  the big gold button below (where Message sits for others). */}
+              {/* Self action: one pencil, one door — it leads backstage (the
+                  Profile tab), so this card always shows what everyone sees. */}
               {isCurrentUser && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, justifyContent: 'center' }}>
                   <EditButton
-                    onPress={() => setEditing(e => !e)}
+                    onPress={() => { onClose(); router.push('/profile'); }}
                     size={30}
-                    accessibilityLabel={editing ? 'Close profile editing' : 'Edit profile info'}
-                    style={editing ? { backgroundColor: '#fdf3dc', borderColor: '#bd9348' } : undefined}
+                    accessibilityLabel="Edit your profile (opens your backstage)"
                   />
                 </View>
               )}
@@ -1791,8 +1790,9 @@ function MemberDetailModal({
               </View>
             )}
 
-            {/* Wishes for other members. Your own wishes are managed below. */}
-            {!isCurrentUser && (
+            {/* Wishes — everyone (including you) sees the same member view.
+                Managing your wishes lives backstage on the Profile tab. */}
+            {true && (
               <View style={{ marginBottom: 20 }}>
                 <HeaderTabs
                   activeTab={wishStatusTab}
@@ -1863,8 +1863,9 @@ function MemberDetailModal({
               </View>
             )}
 
-            {/* Wishes management — current user only */}
-            {isCurrentUser && (
+            {/* Wish management moved backstage (Profile tab) — the member card
+                shows everyone the same view. Kept for reference; unreachable. */}
+            {false && (
               <View style={{ marginBottom: 24 }}>
                 <HeaderTabs
                   activeTab={wishStatusTab}
@@ -2038,29 +2039,11 @@ function MemberDetailModal({
                     {member.skills.filter(s => Number(s.enthusiasm_level ?? 0) > 0).length} skill flowers blooming
                   </Text>
                 </View>
-                {isCurrentUser && (
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {/* This is the visitor's view — the full garden (sun quiz, seed
-                        tray, planting) lives on the Profile screen. */}
-                    <Pressable
-                      onPress={() => { onClose(); router.push('/profile'); }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Tend your garden — plant seeds and take the garden quiz"
-                      style={{ backgroundColor: '#eef6ee', borderWidth: 1, borderColor: '#cfe3d2', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2f7147' }}>🌱 Tend garden</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => { setDraftSkillList(member.skills.map(s => s.description)); setShowSkillPicker(true); }}
-                      style={{ backgroundColor: '#fdf3dc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>Edit</Text>
-                    </Pressable>
-                  </View>
-                )}
+                {/* No self buttons here — tending and skill edits live
+                    backstage; this card is the member view for everyone. */}
               </View>
 
-              {member.skills.length === 0 && isCurrentUser ? (
+              {member.skills.length === 0 && false ? (
                 <Pressable
                   onPress={() => {
                     setDraftSkillList(member.skills.map(s => s.description));

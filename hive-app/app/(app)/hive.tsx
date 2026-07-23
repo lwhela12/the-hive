@@ -2373,19 +2373,22 @@ export default function HiveScreen() {
                 minHeight: 176,
               }}
             >
-              {/* One kicker line — label + topic together, so the question is
-                  the only thing with real size in the panel. */}
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', letterSpacing: 0.9, marginBottom: 7 }}>
+              {/* Same lockup recipe as the arrivals header: kicker → serif
+                  star → italic whisper. */}
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', letterSpacing: 0.9, marginBottom: 6 }} numberOfLines={1}>
                 ✨ DAILY QUESTION
-                <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(189,147,72,0.75)' }}>
-                  {'  ·  '}{todayQuestion.emoji} {todayQuestion.category.toUpperCase()}
-                </Text>
               </Text>
               <Text
                 style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: useMobileLayout ? 13 : 15, color: '#2d2d2d', lineHeight: useMobileLayout ? 19 : 21 }}
                 numberOfLines={6}
               >
                 {todayQuestion.text}
+              </Text>
+              <Text
+                style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 11, color: '#a09274', marginTop: 5 }}
+                numberOfLines={1}
+              >
+                {todayQuestion.emoji} {todayQuestion.category.toLowerCase()}
               </Text>
               <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 6, alignSelf: 'flex-start', marginTop: 10 }}>
                 <Pressable

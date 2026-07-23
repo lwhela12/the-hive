@@ -1556,6 +1556,14 @@ export default function ProfileScreen() {
       >
         {!immersiveSkillsGarden && (
         <>
+        {/* Backstage marker — the one place that's yours alone. The member
+            card on the Members tab is the audience view; this is the wings. */}
+        <View style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 5, marginBottom: 10 }}>
+          <Text style={{ fontSize: 11 }}>🛠</Text>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, letterSpacing: 1.1, textTransform: 'uppercase', color: '#8e6f35' }}>
+            Backstage · only you see this page
+          </Text>
+        </View>
         {/* Profile Header with Bee Progress Arc */}
         <FadeIn>
           {(() => {
