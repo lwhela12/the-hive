@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -967,6 +968,26 @@ export default function MonthlyTuneupScreen() {
     setEditingWish(null);
     setAddWishModalVisible(false);
   };
+
+  // Keyboard paging on web, deck-style: ← → step the wizard — but never
+  // while you're typing in a field (arrows belong to the text cursor there).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || finished) return;
+    const onKeyDown = (event: any) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toUpperCase?.() ?? '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        void goNext();
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        goBack();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
 
   const goBack = () => {
     if (stepIndex === 0) {
