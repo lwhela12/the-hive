@@ -12,7 +12,9 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { AppHeader } from '../../components/navigation';
 import { EditButton } from '../../components/ui/EditButton';
-import Svg, { Polygon } from 'react-native-svg';
+
+const memberHoneycombCell = require('../../assets/generated/member-honeycomb-cell.png');
+const memberHoneycombCellMe = require('../../assets/generated/member-honeycomb-cell-me.png');
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useChatRooms } from '../../lib/hooks/useChatRooms';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
@@ -304,28 +306,10 @@ function HoneycombCardShell({
   const topPadding = compact ? Math.max(16, height * 0.08) : Math.max(22, height * 0.09);
   const bottomPadding = compact ? Math.max(18, height * 0.09) : Math.max(24, height * 0.1);
 
-  // The comb is drawn in code from the brand tokens (paper fill, gray-orange
-  // gold walls) — the old PNG cells brought their own cartoon yellow, which
-  // is exactly what made them feel pasted-on instead of integrated.
-  const inset = isMe ? 2 : 1.5;
-  const hexPoints = [
-    [width / 2, inset],
-    [width - inset, height * 0.25],
-    [width - inset, height * 0.75],
-    [width / 2, height - inset],
-    [inset, height * 0.75],
-    [inset, height * 0.25],
-  ].map(([x, y]) => `${x},${y}`).join(' ');
-  const innerInset = inset + (compact ? 5 : 7);
-  const innerPoints = [
-    [width / 2, innerInset],
-    [width - innerInset, height * 0.25 + innerInset * 0.5],
-    [width - innerInset, height * 0.75 - innerInset * 0.5],
-    [width / 2, height - innerInset],
-    [innerInset, height * 0.75 - innerInset * 0.5],
-    [innerInset, height * 0.25 + innerInset * 0.5],
-  ].map(([x, y]) => `${x},${y}`).join(' ');
-
+  // The original comb artwork — its tessellation geometry is baked into the
+  // PNG and the placement math is tuned to it. A code-drawn brand re-skin was
+  // tried 2026-07-23 and reverted (cells didn't interlock); if we try again,
+  // reproduce the PNG's exact overlap geometry FIRST, then change materials.
   return (
     <View
       style={{
@@ -336,21 +320,11 @@ function HoneycombCardShell({
         elevation: 0,
       }}
     >
-      <Svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0 }}>
-        <Polygon
-          points={hexPoints}
-          fill={isMe ? '#fdf3dc' : '#fffdf5'}
-          stroke={isMe ? '#bd9348' : 'rgba(189,147,72,0.55)'}
-          strokeWidth={isMe ? 2.5 : 1.5}
-        />
-        {/* Inner comb wall — the doubled edge that makes it read as wax, not clipart */}
-        <Polygon
-          points={innerPoints}
-          fill="none"
-          stroke="rgba(222,193,129,0.45)"
-          strokeWidth={1}
-        />
-      </Svg>
+      <Image
+        source={isMe ? memberHoneycombCellMe : memberHoneycombCell}
+        contentFit="fill"
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+      />
       <View style={{ flex: 1, paddingHorizontal: horizontalPadding, paddingTop: topPadding, paddingBottom: bottomPadding, position: 'relative' }}>
         {children}
       </View>
@@ -2444,8 +2418,12 @@ export default function MembersScreen() {
   const visibleMembers = useMemo(() => {
     if (memberViewMode === 'directory') {
       return [...filtered].sort((a, b) => {
-        if (a.id === currentUserId) return -1;
-        if (b.id === currentUserId) return 1;
+        // "You" leads only on the default view; picking a real sort
+        // (birthday, match, wishes) shuffles you in with everyone else.
+        if (memberSort === 'first-name') {
+          if (a.id === currentUserId) return -1;
+          if (b.id === currentUserId) return 1;
+        }
 
         if (memberSort === 'next-birthday') {
           const aDays = daysUntilNextBirthday(a.birthday);
