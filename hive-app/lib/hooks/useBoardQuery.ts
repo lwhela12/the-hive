@@ -74,7 +74,7 @@ async function fetchPostCounts(communityId: string): Promise<Record<string, Cate
   Object.entries(previewCandidates).forEach(([categoryId, candidates]) => {
     stats[categoryId].recentThreads = candidates
       .sort((a, b) => b.activity.localeCompare(a.activity))
-      .slice(0, 4)
+      .slice(0, 15)
       .map((candidate) => ({ id: candidate.id, title: candidate.title }));
   });
 

@@ -1,6 +1,7 @@
 import { memo } from 'react';
-import { FlatList, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { FlatList, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import type { BoardCategory } from '../../types';
 
 const EMOJI_MAP: Record<string, string> = {
@@ -154,60 +155,85 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                   {subtitle}
                 </Text>
               ) : null}
-              {/* Micro thread previews — tap one to jump straight into that thread */}
+              <Text
+                style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 11, color: '#a09274', marginTop: 3 }}
+              >
+                {countLabel}
+              </Text>
+              {/* Thread list — scrolls inside the card (Recent Activity
+                  style); the bottom fade whispers "there's more". Tap a row
+                  to jump straight into that thread. */}
               {recentThreads.length > 0 ? (
                 <View
                   style={{
-                    marginTop: 10,
+                    marginTop: 8,
                     borderTopWidth: 1,
                     borderTopColor: 'rgba(222,193,129,0.32)',
-                    paddingTop: 8,
-                    gap: 3,
+                    paddingTop: 6,
                     flexGrow: 1,
+                    flexShrink: 1,
+                    minHeight: 60,
                   }}
                 >
-                  {recentThreads.map((thread) => (
-                    <Pressable
-                      key={thread.id}
-                      onPress={(event) => {
-                        if (onSelectThread) {
-                          event.stopPropagation?.();
-                          onSelectThread(item, thread.id);
-                        } else {
-                          onSelect(item);
-                        }
-                      }}
-                      accessibilityRole="link"
-                      accessibilityLabel={`Open thread: ${thread.title}`}
-                      hitSlop={2}
-                      style={({ pressed }) => ({
-                        flexDirection: 'row',
-                        alignItems: 'flex-start',
-                        gap: 6,
-                        borderRadius: 8,
-                        paddingHorizontal: 4,
-                        paddingVertical: 2,
-                        backgroundColor: pressed ? 'rgba(222,193,129,0.18)' : 'transparent',
-                      })}
-                    >
-                      <Text style={{ fontSize: 10, lineHeight: 17, color: '#bd9348' }}>▪</Text>
-                      <Text
-                        style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 17, color: 'rgba(49,49,48,0.75)', flex: 1 }}
-                        numberOfLines={1}
+                  <ScrollView
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 3, paddingBottom: 16 }}
+                  >
+                    {recentThreads.map((thread) => (
+                      <Pressable
+                        key={thread.id}
+                        onPress={(event) => {
+                          if (onSelectThread) {
+                            event.stopPropagation?.();
+                            onSelectThread(item, thread.id);
+                          } else {
+                            onSelect(item);
+                          }
+                        }}
+                        accessibilityRole="link"
+                        accessibilityLabel={`Open thread: ${thread.title}`}
+                        hitSlop={2}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row',
+                          alignItems: 'flex-start',
+                          gap: 6,
+                          borderRadius: 8,
+                          paddingHorizontal: 4,
+                          paddingVertical: 2,
+                          backgroundColor: pressed ? 'rgba(222,193,129,0.18)' : 'transparent',
+                        })}
                       >
-                        {thread.title}
-                      </Text>
-                    </Pressable>
-                  ))}
+                        <Text style={{ fontSize: 10, lineHeight: 17, color: '#bd9348' }}>▪</Text>
+                        <Text
+                          style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 17, color: 'rgba(49,49,48,0.75)', flex: 1 }}
+                          numberOfLines={1}
+                        >
+                          {thread.title}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                  {recentThreads.length > 4 ? (
+                    <Svg
+                      pointerEvents="none"
+                      width="100%"
+                      height={26}
+                      style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
+                    >
+                      <Defs>
+                        <SvgLinearGradient id="cardFade" x1="0" y1="0" x2="0" y2="1">
+                          <Stop offset="0" stopColor="#fffdf5" stopOpacity="0" />
+                          <Stop offset="1" stopColor="#fffdf5" stopOpacity="1" />
+                        </SvgLinearGradient>
+                      </Defs>
+                      <Rect x="0" y="0" width="100%" height="26" fill="url(#cardFade)" />
+                    </Svg>
+                  ) : null}
                 </View>
               ) : (
                 <View style={{ flexGrow: 1 }} />
               )}
-              <Text
-                style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', marginTop: 10 }}
-              >
-                {countLabel}
-              </Text>
               {matchLabel ? (
                 <Text
                   style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e6f35', marginTop: 3 }}
