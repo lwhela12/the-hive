@@ -22,6 +22,8 @@ interface ChatRoomItemProps {
   currentUserId?: string;
   onPress: () => void;
   onCustomize?: () => void;
+  /** Highlighted state for the desktop split view's open conversation. */
+  isActive?: boolean;
 }
 
 export const ChatRoomItem = memo(function ChatRoomItem({
@@ -29,6 +31,7 @@ export const ChatRoomItem = memo(function ChatRoomItem({
   currentUserId,
   onPress,
   onCustomize,
+  isActive = false,
 }: ChatRoomItemProps) {
   const otherMembers = getOtherRoomMembers(room, currentUserId);
   const otherMember = otherMembers[0];
@@ -163,14 +166,16 @@ export const ChatRoomItem = memo(function ChatRoomItem({
         marginVertical: 6,
         minHeight: 76,
         borderRadius: 20,
-        borderWidth: hasUnread ? 1.5 : 1,
-        borderColor: hasUnread ? theme.accent : theme.border,
-        backgroundColor: hasUnread ? theme.unreadBackground : theme.listBackground,
+        borderWidth: hasUnread || isActive ? 1.5 : 1,
+        borderColor: hasUnread || isActive ? theme.accent : theme.border,
+        backgroundColor: isActive
+          ? theme.unreadBackground
+          : hasUnread ? theme.unreadBackground : theme.listBackground,
         shadowColor: theme.accent,
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: hasUnread ? 0.16 : 0.09,
+        shadowOpacity: hasUnread || isActive ? 0.16 : 0.09,
         shadowRadius: 18,
-        elevation: hasUnread ? 4 : 2,
+        elevation: hasUnread || isActive ? 4 : 2,
       }}
     >
       <View

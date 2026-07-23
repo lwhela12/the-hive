@@ -54,6 +54,8 @@ interface RoomChatViewProps {
   room: ChatRoom & { members?: Array<ChatRoomMember & { user?: Profile }> };
   onBack: () => void;
   startCustomizing?: boolean;
+  /** Desktop split view embeds the chat beside the room list — no back arrow. */
+  hideBackButton?: boolean;
 }
 
 const CHAT_EMOJI_OPTIONS = ['💬', '✨', '🎯', '🍯', '📌', '💡', '🎉', '🧭', '🫶', '📅', '🏠', '📝'];
@@ -77,7 +79,7 @@ function getFirstGrapheme(value: string): string {
   return Array.from(trimmed)[0] ?? '';
 }
 
-export function RoomChatView({ room, onBack, startCustomizing = false }: RoomChatViewProps) {
+export function RoomChatView({ room, onBack, startCustomizing = false, hideBackButton = false }: RoomChatViewProps) {
   const { profile, communityId } = useAuth();
   const queryClient = useQueryClient();
   const {
@@ -730,9 +732,11 @@ export function RoomChatView({ room, onBack, startCustomizing = false }: RoomCha
           className="flex-row items-center px-4 py-3 border-b"
           style={{ backgroundColor: roomTheme.header, borderBottomColor: roomTheme.border }}
         >
-          <Pressable onPress={onBack} className="mr-3 w-9 h-9 rounded-full items-center justify-center">
-            <Ionicons name="chevron-back" size={28} color="#313130" />
-          </Pressable>
+          {!hideBackButton && (
+            <Pressable onPress={onBack} className="mr-3 w-9 h-9 rounded-full items-center justify-center">
+              <Ionicons name="chevron-back" size={28} color="#313130" />
+            </Pressable>
+          )}
           <View className="mr-3">{renderRoomIcon(42)}</View>
           <Pressable
             onPress={openCustomizeModal}
