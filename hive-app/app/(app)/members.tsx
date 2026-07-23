@@ -11,6 +11,8 @@ import { deleteWishById } from '../../lib/wishMutations';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { AppHeader } from '../../components/navigation';
+import { EditButton } from '../../components/ui/EditButton';
+import Svg, { Polygon } from 'react-native-svg';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useChatRooms } from '../../lib/hooks/useChatRooms';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
@@ -73,8 +75,6 @@ const ROLE_LABELS: Partial<Record<UserRole, string>> = {
   treasurer: 'Treasurer access',
 };
 
-const memberHoneycombCell = require('../../assets/generated/member-honeycomb-cell.png');
-const memberHoneycombCellMe = require('../../assets/generated/member-honeycomb-cell-me.png');
 
 const PROFILE_PROMPT_LIMITS = {
   name: 80,
@@ -304,6 +304,28 @@ function HoneycombCardShell({
   const topPadding = compact ? Math.max(16, height * 0.08) : Math.max(22, height * 0.09);
   const bottomPadding = compact ? Math.max(18, height * 0.09) : Math.max(24, height * 0.1);
 
+  // The comb is drawn in code from the brand tokens (paper fill, gray-orange
+  // gold walls) — the old PNG cells brought their own cartoon yellow, which
+  // is exactly what made them feel pasted-on instead of integrated.
+  const inset = isMe ? 2 : 1.5;
+  const hexPoints = [
+    [width / 2, inset],
+    [width - inset, height * 0.25],
+    [width - inset, height * 0.75],
+    [width / 2, height - inset],
+    [inset, height * 0.75],
+    [inset, height * 0.25],
+  ].map(([x, y]) => `${x},${y}`).join(' ');
+  const innerInset = inset + (compact ? 5 : 7);
+  const innerPoints = [
+    [width / 2, innerInset],
+    [width - innerInset, height * 0.25 + innerInset * 0.5],
+    [width - innerInset, height * 0.75 - innerInset * 0.5],
+    [width / 2, height - innerInset],
+    [innerInset, height * 0.75 - innerInset * 0.5],
+    [innerInset, height * 0.25 + innerInset * 0.5],
+  ].map(([x, y]) => `${x},${y}`).join(' ');
+
   return (
     <View
       style={{
@@ -314,11 +336,21 @@ function HoneycombCardShell({
         elevation: 0,
       }}
     >
-      <Image
-        source={isMe ? memberHoneycombCellMe : memberHoneycombCell}
-        contentFit="fill"
-        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-      />
+      <Svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0 }}>
+        <Polygon
+          points={hexPoints}
+          fill={isMe ? '#fdf3dc' : '#fffdf5'}
+          stroke={isMe ? '#bd9348' : 'rgba(189,147,72,0.55)'}
+          strokeWidth={isMe ? 2.5 : 1.5}
+        />
+        {/* Inner comb wall — the doubled edge that makes it read as wax, not clipart */}
+        <Polygon
+          points={innerPoints}
+          fill="none"
+          stroke="rgba(222,193,129,0.45)"
+          strokeWidth={1}
+        />
+      </Svg>
       <View style={{ flex: 1, paddingHorizontal: horizontalPadding, paddingTop: topPadding, paddingBottom: bottomPadding, position: 'relative' }}>
         {children}
       </View>
@@ -1470,53 +1502,46 @@ function MemberDetailModal({
               {(member.profile_title || member.occupation) && (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', marginTop: 3 }}>{member.profile_title || member.occupation}</Text>
               )}
-              {(isCurrentUser || roleLabel || member.queen_bee_month) && (
+              {/* Self actions: the round pencil + one Tune-up pill. No "You"
+                  chip (you know who you are), admin shows as a quiet chip —
+                  so every profile header reads the same, member to member. */}
+              {isCurrentUser && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, justifyContent: 'center' }}>
+                  <EditButton
+                    onPress={() => setEditing(e => !e)}
+                    size={30}
+                    accessibilityLabel={editing ? 'Close profile editing' : 'Edit profile info'}
+                    style={editing ? { backgroundColor: '#fdf3dc', borderColor: '#bd9348' } : undefined}
+                  />
+                  {/* All roads lead back to the campfire */}
+                  <Pressable
+                    onPress={() => { onClose(); router.push('/monthly-tuneup' as any); }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open your monthly tune-up and check-in"
+                    style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)' }}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8e6f35' }}>🍯 Tune-up</Text>
+                  </Pressable>
+                </View>
+              )}
+              {(roleLabel || member.queen_bee_month) && (
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  {isCurrentUser && (
-                    <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)' }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>You</Text>
-                    </View>
-                  )}
-                  {isCurrentUser && (
-                    <Pressable
-                      onPress={() => setEditing(e => !e)}
-                      accessibilityRole="button"
-                      accessibilityLabel={editing ? 'Close profile editing' : 'Edit profile info'}
-                      style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)' }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>
-                        {editing ? 'Close edit' : 'Edit info'}
-                      </Text>
-                    </Pressable>
-                  )}
-                  {/* All roads lead back to the campfire — the tune-up is
-                      reachable from your own member card too. */}
-                  {isCurrentUser && (
-                    <Pressable
-                      onPress={() => { onClose(); router.push('/monthly-tuneup' as any); }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Open your monthly tune-up and check-in"
-                      style={{ backgroundColor: '#eef6ee', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: '#cfe3d2' }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2f7147' }}>🍯 Tune-up</Text>
-                    </Pressable>
-                  )}
                   {roleLabel && (
-                    <View style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{roleLabel}</Text>
+                    <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.35)' }}>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8e7a5e' }}>{roleLabel}</Text>
                     </View>
                   )}
                   {member.queen_bee_month && (
-                    <View style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#bd9348' }}>👑 Queen Bee: {member.queen_bee_month}</Text>
+                    <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.35)' }}>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8e7a5e' }}>👑 Queen Bee: {member.queen_bee_month}</Text>
                     </View>
                   )}
                 </View>
               )}
               {/* Stacked identity column: what you do → where you're from → your answers → message */}
               {member.hometown && (
-                <View style={{ marginTop: 8, backgroundColor: '#f5f3ee', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#6b7280' }}>📍 {member.hometown}</Text>
+                <View style={{ marginTop: 8, backgroundColor: '#f6f4e5', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8e7a5e' }}>📍 {member.hometown}</Text>
                 </View>
               )}
               {member.questionAnswerCount > 0 && (
@@ -1524,9 +1549,9 @@ function MemberDetailModal({
                   onPress={() => setShowDailyAnswersSheet(true)}
                   accessibilityRole="button"
                   accessibilityLabel={`View ${member.name}'s daily question answers`}
-                  style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, backgroundColor: '#f5f3ee', paddingHorizontal: 15, paddingVertical: 4, borderRadius: 20 }}
+                  style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, backgroundColor: '#f6f4e5', paddingHorizontal: 15, paddingVertical: 4, borderRadius: 20 }}
                 >
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#6b7280' }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8e7a5e' }}>
                     ✨ {member.questionAnswerCount} daily Q&A{' '}
                   </Text>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>›</Text>
@@ -2785,11 +2810,16 @@ export default function MembersScreen() {
                     const isMe = member.id === currentUserId;
                     const titleLine = member.profile_title || member.occupation;
                     const profileCurrentWishes = member.wishes.filter(w => w.status === 'public' && w.is_active !== false);
-                    const spotlight = member.known_for || profileCurrentWishes[0]?.description || member.current_project || member.miq_experiences || member.skills[0]?.description || member.bio;
-                    const spotlightLabel = member.known_for
-                      ? 'Ask me about'
-                      : profileCurrentWishes[0]?.description === spotlight
-                        ? 'Wishing for'
+                    // The comb answers "what's everyone's focus right now" —
+                    // this month's HD leads; Ask-me-about is the fallback.
+                    const activeWishSpotlight = profileCurrentWishes[0]
+                      ? (profileCurrentWishes[0].title?.trim() || profileCurrentWishes[0].description)
+                      : null;
+                    const spotlight = activeWishSpotlight || member.known_for || member.current_project || member.miq_experiences || member.skills[0]?.description || member.bio;
+                    const spotlightLabel = activeWishSpotlight
+                      ? "This month's HD"
+                      : member.known_for
+                        ? 'Ask me about'
                         : member.current_project
                           ? 'Building'
                           : member.miq_experiences
