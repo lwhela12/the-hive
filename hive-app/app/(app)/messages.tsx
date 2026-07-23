@@ -9,6 +9,7 @@ import { useChatRooms, RoomWithData } from '../../lib/hooks/useChatRooms';
 import { prefetchRoomMessages } from '../../lib/hooks/useRoomMessagesQuery';
 import { getStoredItemAsync, removeStoredItemAsync, setStoredItemAsync } from '../../lib/webStorage';
 import { ChatRoomItem } from '../../components/messaging/ChatRoomItem';
+import { AppHeader } from '../../components/navigation';
 import { RoomChatView } from '../../components/messaging/RoomChatView';
 import { MemberPicker } from '../../components/messaging/MemberPicker';
 import type { Profile } from '../../types';
@@ -183,18 +184,18 @@ export default function MessagesScreen() {
           </Pressable>
         </View>
       ) : (
-        <View className="flex-row items-center justify-between bg-gold px-4 py-3">
-          <View className="w-10 h-10" />
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-base text-white">
-            Messages
-          </Text>
-          <Pressable
-            onPress={() => setShowMemberPicker(true)}
-            className="w-10 h-10 items-center justify-center active:opacity-70"
-          >
-            <Text className="text-white text-xl">+</Text>
-          </Pressable>
-        </View>
+        <AppHeader
+          title="Messages"
+          rightElement={
+            <Pressable
+              onPress={() => setShowMemberPicker(true)}
+              className="w-10 h-10 items-center justify-center active:opacity-70"
+              accessibilityLabel="New message"
+            >
+              <Text className="text-white text-xl">+</Text>
+            </Pressable>
+          }
+        />
       )}
 
       {/* Room list — FlatList keeps JS thread free during load */}

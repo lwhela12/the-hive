@@ -10,6 +10,7 @@ import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { AppHeader } from '../../components/navigation';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useChatRooms } from '../../lib/hooks/useChatRooms';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
@@ -1120,7 +1121,7 @@ function MemberDetailModal({
                   onChangeText={setSkillSearch}
                   placeholder="Search skills..."
                   placeholderTextColor="#b5ad9f"
-                  style={{ backgroundColor: '#faf8f3', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 4 }}
+                  style={{ backgroundColor: '#fdf8ec', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 4 }}
                 />
               </View>
               <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
@@ -1168,7 +1169,7 @@ function MemberDetailModal({
                                 }
                               }}
                               style={{
-                                backgroundColor: selected ? '#bd9348' : '#faf8f3',
+                                backgroundColor: selected ? '#bd9348' : '#fdf8ec',
                                 borderWidth: 1,
                                 borderColor: selected ? '#bd9348' : 'rgba(222,193,129,0.4)',
                                 borderRadius: 24,
@@ -1310,7 +1311,7 @@ function MemberDetailModal({
                     </View>
 
                     {addingWish && (
-                      <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16, marginTop: 12, marginBottom: 12 }}>
+                      <View style={{ backgroundColor: '#fdf8ec', borderRadius: 16, padding: 16, marginTop: 12, marginBottom: 12 }}>
                         <TextInput
                           value={newWishInput}
                           onChangeText={wishMentionInput.textInputMentionProps.onChangeText}
@@ -1406,7 +1407,7 @@ function MemberDetailModal({
 
               <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
                 {dailyAnswers.length === 0 ? (
-                  <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 22, alignItems: 'center' }}>
+                  <View style={{ backgroundColor: '#fdf8ec', borderRadius: 16, padding: 22, alignItems: 'center' }}>
                     <Text style={{ fontSize: 26, marginBottom: 8 }}>✨</Text>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center', lineHeight: 19 }}>
                       No daily answers to peek at yet.
@@ -1864,7 +1865,7 @@ function MemberDetailModal({
             {showIntroPost && member.introPost && (
               <View style={{ marginBottom: 20 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#9ca3af', letterSpacing: 0.6, marginBottom: 8 }}>INTRODUCTION POST</Text>
-                <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, padding: 16 }}>
+                <View style={{ backgroundColor: '#fdf8ec', borderRadius: 16, padding: 16 }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 4 }}>{member.introPost.title}</Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#4b5563', lineHeight: 22 }}>
                     {visibleIntro}
@@ -2051,7 +2052,7 @@ function MemberDetailModal({
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#bd9348' }}>+ Seed your Skills Garden 🌱</Text>
                 </Pressable>
               ) : member.skills.length === 0 ? (
-                <View style={{ backgroundColor: '#faf8f3', borderRadius: 16, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center' }}>
+                <View style={{ backgroundColor: '#fdf8ec', borderRadius: 16, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center' }}>
                   <Text style={{ fontSize: 32, marginBottom: 8 }}>🌱</Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
                     {PROFILE_EMPTY_COPY.skills}
@@ -2062,7 +2063,7 @@ function MemberDetailModal({
               )}
             </View>
 
-            <Pressable onPress={onClose} style={{ backgroundColor: '#faf8f3', borderRadius: 14, paddingVertical: 14, marginTop: 4 }}>
+            <Pressable onPress={onClose} style={{ backgroundColor: '#fdf8ec', borderRadius: 14, paddingVertical: 14, marginTop: 4 }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
             </Pressable>
             </View>
@@ -2523,27 +2524,25 @@ export default function MembersScreen() {
   const honeycombTextMaxWidth = Math.max(96, honeycombCellWidth - (isCompactHoneycomb ? 64 : 96));
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#faf8f3' }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f6f4e5' }} edges={['top']}>
       {/* Header */}
-      <View style={{ backgroundColor: '#bd9348', paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' }}>
-        <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: '#ffffff' }}>Members</Text>
-        {!loading && members.length > 0 && (
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
-            {members.length} members · search roles, skills, wishes, birthdays, and stories
-          </Text>
-        )}
-      </View>
+      <AppHeader
+        title="Members"
+        subtitle={!loading && members.length > 0
+          ? `${members.length} members · search roles, skills, wishes, birthdays, and stories`
+          : undefined}
+      />
 
       {/* Search bar */}
       {!loading && members.length > 0 && (
-        <View style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#faf8f3', borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.3)' }}>
-          <View style={{ backgroundColor: 'white', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(222,193,129,0.35)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8 }}>
+        <View style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#f6f4e5', borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.3)' }}>
+          <View style={{ backgroundColor: '#fffdf5', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8 }}>
             <Text style={{ color: '#9ca3af', marginRight: 8, fontSize: 15 }}>🔍</Text>
             <TextInput
               value={search}
               onChangeText={setSearch}
               placeholder="Search members, skills, wishes..."
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor="#a09274"
               style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', flex: 1 }}
             />
             {search.length > 0 && (
@@ -2556,7 +2555,7 @@ export default function MembersScreen() {
             style={{
               flexDirection: 'row',
               alignSelf: 'center',
-              backgroundColor: 'rgba(255,255,255,0.78)',
+              backgroundColor: '#fffdf5',
               borderRadius: 999,
               borderWidth: 1,
               borderColor: 'rgba(222,193,129,0.45)',
@@ -2606,7 +2605,7 @@ export default function MembersScreen() {
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 5,
-                  backgroundColor: 'rgba(255,255,255,0.78)',
+                  backgroundColor: '#fffdf5',
                   borderRadius: 999,
                   borderWidth: 1,
                   borderColor: 'rgba(222,193,129,0.45)',
@@ -2737,7 +2736,7 @@ export default function MembersScreen() {
                     <View
                       key={stat.label}
                       style={{
-                        backgroundColor: '#faf8f3',
+                        backgroundColor: '#fdf8ec',
                         borderWidth: 1,
                         borderColor: 'rgba(222,193,129,0.42)',
                         borderRadius: 12,

@@ -18,6 +18,12 @@ module.exports = {
         cream: '#f6f4e5',
         // Brand text
         charcoal: '#313130',
+        // Warm neutrals — codified from Home's panel grammar (see lib/theme.ts)
+        paper: '#fffdf5',
+        parchment: '#fdf8ec',
+        selected: '#fdf3dc',
+        label: '#8e7a5e',
+        softink: '#a09274',
         // Legacy aliases for easy migration
         honey: {
           50: '#f6f4e5',
