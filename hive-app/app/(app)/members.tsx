@@ -1479,6 +1479,8 @@ function MemberDetailModal({
               {/* Self actions: the round pencil + one Tune-up pill. No "You"
                   chip (you know who you are), admin shows as a quiet chip —
                   so every profile header reads the same, member to member. */}
+              {/* Self action: just the pencil — the check-in got promoted to
+                  the big gold button below (where Message sits for others). */}
               {isCurrentUser && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, justifyContent: 'center' }}>
                   <EditButton
@@ -1487,15 +1489,6 @@ function MemberDetailModal({
                     accessibilityLabel={editing ? 'Close profile editing' : 'Edit profile info'}
                     style={editing ? { backgroundColor: '#fdf3dc', borderColor: '#bd9348' } : undefined}
                   />
-                  {/* All roads lead back to the campfire */}
-                  <Pressable
-                    onPress={() => { onClose(); router.push('/monthly-tuneup' as any); }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Open your monthly tune-up and check-in"
-                    style={{ backgroundColor: '#fdf3dc', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.55)' }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8e6f35' }}>🍯 Tune-up</Text>
-                  </Pressable>
                 </View>
               )}
               {(roleLabel || member.queen_bee_month) && (
@@ -1531,30 +1524,57 @@ function MemberDetailModal({
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>›</Text>
                 </Pressable>
               )}
+              {/* One big gold action per profile: yours = the check-in
+                  (you'd never message yourself), everyone else's = Message.
+                  Same silhouette for every member. */}
               <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 12, width: '100%' }}>
-                <Pressable
-                  onPress={startDirectMessage}
-                  disabled={startingMessage}
-                  accessibilityRole="button"
-                  accessibilityLabel={isCurrentUser ? 'Open your messages' : `Message ${member.name}`}
-                  style={{
-                    backgroundColor: '#bd9348',
-                    borderRadius: 999,
-                    paddingVertical: 8,
-                    paddingHorizontal: 22,
-                    minWidth: 148,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexDirection: 'row',
-                    gap: 6,
-                    opacity: startingMessage ? 0.6 : 1,
-                  }}
-                >
-                  <Ionicons name="chatbubble-ellipses-outline" size={15} color="white" />
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>
-                    {startingMessage ? 'Opening...' : 'Message'}
-                  </Text>
-                </Pressable>
+                {isCurrentUser ? (
+                  <Pressable
+                    onPress={() => { onClose(); router.push('/monthly-tuneup' as any); }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open your monthly check-in"
+                    style={{
+                      backgroundColor: '#bd9348',
+                      borderRadius: 999,
+                      paddingVertical: 8,
+                      paddingHorizontal: 22,
+                      minWidth: 148,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 6,
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, lineHeight: 17 }}>🍯</Text>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>
+                      Check-in
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={startDirectMessage}
+                    disabled={startingMessage}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Message ${member.name}`}
+                    style={{
+                      backgroundColor: '#bd9348',
+                      borderRadius: 999,
+                      paddingVertical: 8,
+                      paddingHorizontal: 22,
+                      minWidth: 148,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 6,
+                      opacity: startingMessage ? 0.6 : 1,
+                    }}
+                  >
+                    <Ionicons name="chatbubble-ellipses-outline" size={15} color="white" />
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>
+                      {startingMessage ? 'Opening...' : 'Message'}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             </View>
 
