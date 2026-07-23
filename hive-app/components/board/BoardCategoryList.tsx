@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { BoardCategory } from '../../types';
 
@@ -55,13 +55,19 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   emptyLabel = 'No boards here yet.',
   searchMatches,
 }: BoardCategoryListProps) {
+  // Boards render as actual boards — a grid of pinned bulletin cards
+  // (mirrors the Boards nav icon). Column count follows the window.
+  const { width } = useWindowDimensions();
+  const numColumns = width >= 1100 ? 4 : width >= 760 ? 3 : 2;
+
   return (
     <FlatList
+      key={numColumns}
+      numColumns={numColumns}
       data={categories}
       keyExtractor={(item) => item.id}
-      renderItem={({ item, index }) => {
+      renderItem={({ item }) => {
         const emoji = item.icon ? EMOJI_MAP[item.icon] || item.icon : '📁';
-        const isLast = index === categories.length - 1;
         const count = postCounts?.[item.id]?.count ?? 0;
         const countLabel = `${count} ${count === 1 ? 'thread' : 'threads'}`;
         const taggedNames = (item.member_tags ?? [])
@@ -85,7 +91,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
           : item.status === 'archived'
             ? 'Archived'
             : null;
-        const subtitleParts = [statusLabel, boardKindLabel, goalLabel, item.description, countLabel].filter(Boolean);
+        const subtitleParts = [statusLabel, boardKindLabel, goalLabel, item.description].filter(Boolean);
         const subtitle = subtitleParts.join(' · ');
         const isCompleted = item.status === 'completed' || item.status === 'archived';
         const searchMatch = searchMatches?.[item.id];
@@ -103,35 +109,59 @@ export const BoardCategoryList = memo(function BoardCategoryList({
         return (
           <Pressable
             onPress={() => onSelect(item)}
-            className={`bg-white active:opacity-70 ${isCompleted ? 'opacity-70' : ''}`}
+            className={`active:opacity-80 ${isCompleted ? 'opacity-70' : ''}`}
+            style={{ width: `${100 / numColumns}%`, padding: 6 }}
           >
-            <View className={`flex-row items-center px-4 py-4 ${!isLast ? 'border-b border-cream' : ''}`}>
-              <Text className="text-3xl mr-4">{emoji}</Text>
-              <View className="flex-1">
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: '#fffdf5',
+                borderWidth: 1,
+                borderColor: 'rgba(222,193,129,0.7)',
+                borderRadius: 18,
+                padding: 14,
+                minHeight: 148,
+                shadowColor: '#bd9348',
+                shadowOpacity: 0.14,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: 2,
+              }}
+            >
+              <View className="flex-row items-start justify-between">
+                <Text style={{ fontSize: 30, lineHeight: 34 }}>{emoji}</Text>
+                <Text style={{ fontSize: 13, transform: [{ rotate: '18deg' }], opacity: 0.85 }}>📌</Text>
+              </View>
+              <Text
+                style={{ fontFamily: 'Lato_700Bold', fontSize: 15, lineHeight: 20, marginTop: 8 }}
+                className={isCompleted ? 'text-charcoal/60' : 'text-charcoal'}
+                numberOfLines={2}
+              >
+                {item.name}
+              </Text>
+              {subtitle ? (
                 <Text
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  className={`text-base ${isCompleted ? 'text-charcoal/60' : 'text-charcoal'}`}
-                >
-                  {item.name}
-                </Text>
-                <Text
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal/50 text-sm mt-0.5"
-                  numberOfLines={1}
+                  style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 16, color: '#8e7a5e', marginTop: 3, flexGrow: 1 }}
+                  numberOfLines={2}
                 >
                   {subtitle}
                 </Text>
-                {matchLabel ? (
-                  <Text
-                    style={{ fontFamily: 'Lato_700Bold' }}
-                    className="text-gold text-xs mt-1"
-                    numberOfLines={1}
-                  >
-                    {matchLabel}
-                  </Text>
-                ) : null}
-              </View>
-              <Text className="text-charcoal/30 text-xl ml-2">›</Text>
+              ) : (
+                <View style={{ flexGrow: 1 }} />
+              )}
+              <Text
+                style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', marginTop: 8 }}
+              >
+                {countLabel}
+              </Text>
+              {matchLabel ? (
+                <Text
+                  style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e6f35', marginTop: 3 }}
+                  numberOfLines={2}
+                >
+                  {matchLabel}
+                </Text>
+              ) : null}
             </View>
           </Pressable>
         );
@@ -147,7 +177,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
           </Text>
         </View>
       }
-      contentContainerStyle={{ paddingVertical: 8, flexGrow: 1 }}
+      contentContainerStyle={{ padding: 8, flexGrow: 1 }}
     />
   );
 });
