@@ -15,6 +15,7 @@ const SYSTEM_PROMPT = `You are Clive, HIVE's assistant, an AI helper for H.I.V.E
 **Identity: Your name is Clive. The signed-in user's name appears in context; that is the human you are helping, not you. If the user addresses "Clive," they are talking to you. Never claim to be the signed-in user.**
 **Speed posture: respond quickly and concisely by default. Prefer 1-3 short paragraphs, ask one clear next question, and only go deep when the user asks for depth or the task truly requires it.**
 **Meeting recall: you DO have access to meeting notes — when someone missed a meeting or asks what happened at one, call get_meeting_summaries and give them a warm recap (highlights, decisions, anything about them specifically). Never say you can't see meeting notes.**
+**Doing things for members: you can DO, not just chat. You can save and publish wishes (store_wish/publish_wish) and post to the boards on their behalf (post_to_board for new threads, add_board_reply to add to an existing thread) — everything posts under THEIR name. When someone asks you to add something to a board (a book rec, a recipe, an idea), find the right board/thread first, peek at how existing posts there are formatted, match that style, confirm the exact wording with them ("want me to post this?"), then post and tell them where it landed. Same for workshopped ideas: chat as long as they like, and when they say "add it," post it. Never post without a clear go-ahead.**
 
 ## Your Core Purpose
 
@@ -539,6 +540,31 @@ const tools: Anthropic.Tool[] = [
         status: { type: "string", description: "Optional: active, completed, or archived" },
         limit: { type: "number", description: "Maximum categories to return (default 20, max 50)" }
       }
+    }
+  },
+  {
+    name: "post_to_board",
+    description: "Create a new thread on a HIVE board on the member's behalf (posted under their name). Use when they ask you to add something to a board — a book rec, a recipe, an idea. ALWAYS confirm the exact title and content with them first, and match the formatting style of existing threads on that board (peek with search_board_posts/get_board_post). Use get_board_categories first to find the right board id.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        category_id: { type: "string", description: "UUID of the board (from get_board_categories)" },
+        title: { type: "string", description: "Thread title, matching the board's existing naming style" },
+        content: { type: "string", description: "Thread body, matching the board's formatting conventions" }
+      },
+      required: ["category_id", "title", "content"]
+    }
+  },
+  {
+    name: "add_board_reply",
+    description: "Add a reply to an existing board thread on the member's behalf (posted under their name). Use when their contribution belongs inside an existing thread (e.g. adding a book to a recs thread, an idea to HIVE Help Ideas) rather than as a new thread. ALWAYS confirm the wording with them first and match the thread's existing reply formatting (read it with get_board_post).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        post_id: { type: "string", description: "UUID of the thread to reply to (from search_board_posts or get_board_post)" },
+        content: { type: "string", description: "The reply text, matching the thread's formatting style" }
+      },
+      required: ["post_id", "content"]
     }
   },
   {
@@ -1951,6 +1977,41 @@ serve(async (req) => {
               owner: category.owner?.name || null,
               status: category.status || 'active',
             })));
+            break;
+          }
+
+          case 'post_to_board': {
+            const { category_id, title, content } = toolUse.input as {
+              category_id: string;
+              title: string;
+              content: string;
+            };
+            const { data: newPost, error } = await supabaseClient
+              .from('board_posts')
+              .insert({
+                community_id: communityId,
+                category_id,
+                author_id: userId,
+                title: title.trim(),
+                content: content.trim(),
+              })
+              .select('id, title')
+              .single();
+            result = error
+              ? `Error: ${error.message}`
+              : `Posted "${newPost.title}" (thread id ${newPost.id}).`;
+            break;
+          }
+
+          case 'add_board_reply': {
+            const { post_id, content } = toolUse.input as { post_id: string; content: string };
+            const { error } = await supabaseClient.from('board_replies').insert({
+              community_id: communityId,
+              post_id,
+              author_id: userId,
+              content: content.trim(),
+            });
+            result = error ? `Error: ${error.message}` : 'Reply posted.';
             break;
           }
 
