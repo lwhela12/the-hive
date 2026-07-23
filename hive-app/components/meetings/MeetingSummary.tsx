@@ -1032,7 +1032,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
               <>
                 {renderProposalInput('title', 'Post Title', 'Board post title')}
                 {renderProposalInput('person_name', 'Person', 'Optional member name')}
-                {renderProposalInput('category_hint', 'Board / Category Hint', 'HD goal, HIVE Approved, 15min HIVE Helpers...')}
+                {renderProposalInput('category_hint', 'Board / Category Hint', 'HD goal, HIVE Approved, HIVE Helpers...')}
                 {renderProposalInput('content', 'Post Content', 'What should the board post say?', { multiline: true })}
               </>
             )}

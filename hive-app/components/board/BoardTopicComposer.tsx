@@ -204,10 +204,10 @@ export function BoardTopicComposer({
   };
 
   const handleSubmit = async () => {
-    const finalGoalTitle = topicKind === 'helper_log' ? '15min HIVE Helpers' : null;
+    const finalGoalTitle = topicKind === 'helper_log' ? 'HIVE Helpers' : null;
     const finalOwnerUserId = topicKind === 'hd_board' ? ownerUserId || null : null;
     const finalName = topicKind === 'helper_log'
-      ? '15min HIVE Helpers'
+      ? 'HIVE Helpers'
       : topicKind === 'hd_board'
         ? (name.trim() || getMemberHdBoardName(selectedOwnerName))
         : name.trim();
@@ -347,7 +347,7 @@ export function BoardTopicComposer({
                   {[
                     { kind: 'discussion' as const, label: 'Discussion', icon: '💬' },
                     { kind: 'hd_board' as const, label: 'Member HD', icon: '💎' },
-                    { kind: 'helper_log' as const, label: '15min Helpers', icon: '🤝' },
+                    { kind: 'helper_log' as const, label: 'Helpers', icon: '🤝' },
                   ].map((option) => {
                     const selected = topicKind === option.kind;
                     return (
@@ -359,7 +359,7 @@ export function BoardTopicComposer({
                             setAudience('community');
                             setTaggedMemberIds([]);
                             setOwnerUserId('');
-                            setGoalTitle('15min HIVE Helpers');
+                            setGoalTitle('HIVE Helpers');
                             setSelectedEmoji('🤝');
                           }
                           if (option.kind === 'hd_board') {
@@ -575,7 +575,7 @@ export function BoardTopicComposer({
                 placeholder={topicKind === 'hd_board'
                   ? suggestedHdName || "e.g., Brit's HD Board"
                   : topicKind === 'helper_log'
-                    ? '15min HIVE Helpers'
+                    ? 'HIVE Helpers'
                     : 'e.g., Book Club, Recipes, Travel Plans...'}
                 placeholderTextColor="#a09274"
                 maxLength={90}

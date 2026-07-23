@@ -91,7 +91,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
             ? `Wish thread ${ownerLabel}`.trim()
             : `Member wishes ${ownerLabel}`.trim()
           : item.topic_kind === 'helper_log'
-            ? '15min HIVE helper log'
+            ? 'Everyone'
             : item.audience === 'members' && taggedNames.length > 0
               ? `For ${taggedNames.join(', ')}`
               : 'Everyone';
@@ -138,10 +138,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                 elevation: 2,
               }}
             >
-              <View className="flex-row items-start justify-between">
-                <Text style={{ fontSize: 32, lineHeight: 36 }}>{emoji}</Text>
-                <Text style={{ fontSize: 14, transform: [{ rotate: '18deg' }], opacity: 0.85 }}>📌</Text>
-              </View>
+              <Text style={{ fontSize: 32, lineHeight: 36 }}>{emoji}</Text>
               <Text
                 style={{ fontFamily: 'Lato_700Bold', fontSize: 16, lineHeight: 21, marginTop: 8 }}
                 className={isCompleted ? 'text-charcoal/60' : 'text-charcoal'}
