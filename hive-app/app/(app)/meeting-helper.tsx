@@ -634,7 +634,7 @@ export default function MeetingHelperScreen() {
         community_id: communityId,
         category_id: helperBoard.id,
         author_id: profile.id,
-        title: `${monthLabel} HIVE Helpers — ${focus}`,
+        title: `${monthLabel} HIVE Help — ${focus}`,
         content: `${monthLabel}'s HIVE Help focus: ${focus}\n\n(Decided together at the meeting — log your helps in this thread!)`,
       });
       if (error) throw error;
@@ -1187,7 +1187,8 @@ export default function MeetingHelperScreen() {
       // This month's HIVE Help focus lives right in the calendar header —
       // read from the "{Month} HIVE Helpers — {focus}" board thread, or type
       // it here and the thread is created automatically.
-      const focusPattern = new RegExp(`^${monthLabel}\\s+HIVE Helpers\\s*[—–-]+\\s*(.+)$`, 'i');
+      // Canonical: "{Month} HIVE Help — {Focus}"; legacy "HIVE Helpers" still parses.
+      const focusPattern = new RegExp(`^${monthLabel}\\s+HIVE Help(?:ers)?\\s*[—–-]+\\s*(.+)$`, 'i');
       const existingFocus = helperPosts
         .map((post) => (post.title ?? '').trim().match(focusPattern)?.[1])
         .find((match) => !!match);

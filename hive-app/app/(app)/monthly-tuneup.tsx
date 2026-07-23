@@ -328,6 +328,12 @@ export default function MonthlyTuneupScreen() {
   // Ideas already pinned to the hang board — shown in the Hang-ideas step so
   // the check-in reads "second one of these, or pitch something new".
   const [existingHangIdeas, setExistingHangIdeas] = useState<string[]>([]);
+  // Standing "HIVE Help Ideas" thread: future help-focus pitches live as
+  // replies there, and the check-in shows them the same second-or-pitch way.
+  const [helpIdeasThreadId, setHelpIdeasThreadId] = useState<string | null>(null);
+  const [helpIdeas, setHelpIdeas] = useState<string[]>([]);
+  const [helpIdeaContent, setHelpIdeaContent] = useState('');
+  const [helpIdeaPosting, setHelpIdeaPosting] = useState(false);
 
   const [helperContent, setHelperContent] = useState('');
   const [helperPosting, setHelperPosting] = useState(false);
@@ -462,14 +468,20 @@ export default function MonthlyTuneupScreen() {
       .eq('category_id', board.id)
       .or('status.is.null,status.eq.active')
       .order('created_at', { ascending: false })
-      .limit(1);
+      .limit(10);
 
     if (error) {
       console.warn('Could not load the current HIVE Helpers thread', error);
       return { boardId: board.id, boardName: board.name, postId: null, postTitle: null };
     }
 
-    const thread = ((data ?? []) as { id: string; title: string }[])[0];
+    // Monthly log thread only — never the standing "HIVE Help Ideas" thread.
+    // Prefer this month's; else the freshest monthly-looking one.
+    const monthPrefix = new Date().toLocaleDateString('en-US', { month: 'long' }).toLowerCase();
+    const candidates = ((data ?? []) as { id: string; title: string }[])
+      .filter((row) => !/ideas/i.test(row.title));
+    const thread =
+      candidates.find((row) => row.title.toLowerCase().startsWith(monthPrefix)) ?? candidates[0];
     return {
       boardId: board.id,
       boardName: board.name,
@@ -506,6 +518,33 @@ export default function MonthlyTuneupScreen() {
               .map((post) => post.title)
               .filter((title): title is string => !!title)
           );
+        }
+      }
+
+      if (helperThreadInfo?.boardId) {
+        const { data: ideasThreadRows } = await supabase
+          .from('board_posts')
+          .select('id, title')
+          .eq('category_id', helperThreadInfo.boardId)
+          .ilike('title', '%help ideas%')
+          .limit(1);
+        const ideasThread = ((ideasThreadRows ?? []) as { id: string }[])[0];
+        if (ideasThread && !cancelled) {
+          setHelpIdeasThreadId(ideasThread.id);
+          const { data: ideaReplies } = await supabase
+            .from('board_replies')
+            .select('content, created_at')
+            .eq('post_id', ideasThread.id)
+            .order('created_at', { ascending: false })
+            .limit(6);
+          if (!cancelled) {
+            setHelpIdeas(
+              ((ideaReplies ?? []) as { content: string | null }[])
+                .map((reply) => (reply.content ?? '').trim())
+                .filter(Boolean)
+                .map((content) => (content.length > 70 ? `${content.slice(0, 67)}…` : content))
+            );
+          }
         }
       }
     };
@@ -679,7 +718,7 @@ export default function MonthlyTuneupScreen() {
           community_id: communityId,
           category_id: thread.boardId,
           author_id: profile.id,
-          title: `${monthName} HIVE Helpers`,
+          title: `${monthName} HIVE Help`,
           content,
         })
         .select('id, title')
@@ -694,7 +733,7 @@ export default function MonthlyTuneupScreen() {
       thread = {
         ...thread,
         postId: data?.id ?? null,
-        postTitle: data?.title ?? `${monthName} HIVE Helpers`,
+        postTitle: data?.title ?? `${monthName} HIVE Help`,
       };
     }
 
@@ -702,6 +741,53 @@ export default function MonthlyTuneupScreen() {
     setHelperPosted((prev) => [...prev, deriveBoardPostTitle('', content)]);
     setHelperContent('');
     setHelperPosting(false);
+  };
+
+  // Future help-focus pitches land as replies on the standing Ideas thread
+  // (created on first use if it doesn't exist yet).
+  const handlePostHelpIdea = async () => {
+    const content = helpIdeaContent.trim();
+    if (!content || helpIdeaPosting || !profile || !communityId) return;
+
+    setHelpIdeaPosting(true);
+    try {
+      let threadId = helpIdeasThreadId;
+      if (!threadId) {
+        const board = helperThread?.boardId
+          ? { id: helperThread.boardId }
+          : await findBoardTarget('helpers');
+        if (!board) throw new Error('HIVE Helpers board not found');
+        const { data, error } = await (supabase as any)
+          .from('board_posts')
+          .insert({
+            community_id: communityId,
+            category_id: board.id,
+            author_id: profile.id,
+            title: 'HIVE Help Ideas 💡',
+            content: 'A standing thread of ideas for monthly HIVE Help focuses — add yours any time!',
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+        threadId = data.id as string;
+        setHelpIdeasThreadId(threadId);
+      }
+
+      const { error } = await (supabase as any).from('board_replies').insert({
+        community_id: communityId,
+        post_id: threadId,
+        author_id: profile.id,
+        content,
+      });
+      if (error) throw error;
+
+      setHelpIdeas((prev) => [content, ...prev].slice(0, 6));
+      setHelpIdeaContent('');
+    } catch (error) {
+      console.warn('Could not post help idea', error);
+    } finally {
+      setHelpIdeaPosting(false);
+    }
   };
 
   // Same create path as hive.tsx's event modal: the create-event edge function.
@@ -1233,6 +1319,63 @@ export default function MonthlyTuneupScreen() {
         </Pressable>
       </View>
       <PostedConfirmation lines={helperPosted} boardName={helperThread?.postTitle ?? helperThread?.boardName ?? null} />
+
+      {/* Next month's focus: second an idea on the board or pitch a new one */}
+      <View style={[cardStyle, { marginTop: 14, gap: 10 }]}>
+        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e' }}>
+          💡 Next month's HIVE Help focus — second one, or pitch your own
+        </Text>
+        {helpIdeas.length > 0 ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {helpIdeas.map((idea) => (
+              <Pressable
+                key={idea}
+                onPress={() => setHelpIdeaContent((prev) => (prev.trim() ? prev : `+1 for ${idea}!`))}
+                accessibilityLabel={`Second the idea: ${idea}`}
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.55)',
+                  borderRadius: 999,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648' }} numberOfLines={1}>
+                  {idea}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TextInput
+            value={helpIdeaContent}
+            onChangeText={setHelpIdeaContent}
+            placeholder="Beach cleanup? Food bank shift? Blood drive?..."
+            placeholderTextColor="#b5ad9f"
+            blurOnSubmit={false}
+            onKeyPress={submitOnEnter(handlePostHelpIdea)}
+            style={[inputStyle, { flex: 1 }]}
+          />
+          <Pressable
+            onPress={handlePostHelpIdea}
+            disabled={helpIdeaPosting || !helpIdeaContent.trim()}
+            style={({ pressed }) => ({
+              backgroundColor: helpIdeaContent.trim() ? '#bd9348' : '#e5e7eb',
+              borderRadius: 12,
+              paddingHorizontal: 16,
+              paddingVertical: 11,
+              opacity: pressed || helpIdeaPosting ? 0.8 : 1,
+            })}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: helpIdeaContent.trim() ? 'white' : '#9ca3af' }}>
+              {helpIdeaPosting ? '…' : 'Pitch it'}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
         Nothing to log? No worries — tap Next.
       </Text>
