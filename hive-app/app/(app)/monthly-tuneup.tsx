@@ -22,6 +22,7 @@ import {
 } from '../../lib/webStorage';
 import { deleteWishById } from '../../lib/wishMutations';
 import { getCycleStart } from '../../lib/meetingCycle';
+import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
 import {
@@ -328,7 +329,12 @@ export default function MonthlyTuneupScreen() {
   const [hangBoardName, setHangBoardName] = useState<string | null>(null);
   // Ideas already pinned to the hang board — shown in the Hang-ideas step so
   // the check-in reads "second one of these, or pitch something new".
-  const [existingHangIdeas, setExistingHangIdeas] = useState<string[]>([]);
+  const [existingHangIdeas, setExistingHangIdeas] = useState<{ id: string; title: string }[]>([]);
+  // Tap-to-second: picking an idea posts the +1 on that idea's own thread,
+  // lights the chip up, grays the rest, and throws a little confetti.
+  const [secondedHangIdeaId, setSecondedHangIdeaId] = useState<string | null>(null);
+  const [hangSecondingId, setHangSecondingId] = useState<string | null>(null);
+  const [hangConfetti, setHangConfetti] = useState(false);
   // Standing "HIVE Help Ideas" thread: future help-focus pitches live as
   // replies there, and the check-in shows them the same second-or-pitch way.
   const [helpIdeasThreadId, setHelpIdeasThreadId] = useState<string | null>(null);
@@ -508,16 +514,16 @@ export default function MonthlyTuneupScreen() {
       if (hangBoard) {
         const { data: ideaPosts } = await supabase
           .from('board_posts')
-          .select('title, status, created_at')
+          .select('id, title, status, created_at')
           .eq('category_id', hangBoard.id)
           .or('status.is.null,status.eq.active')
           .order('created_at', { ascending: false })
           .limit(6);
         if (!cancelled) {
           setExistingHangIdeas(
-            ((ideaPosts ?? []) as { title: string | null }[])
-              .map((post) => post.title)
-              .filter((title): title is string => !!title)
+            ((ideaPosts ?? []) as { id: string; title: string | null }[])
+              .filter((post): post is { id: string; title: string } => !!post.title)
+              .map((post) => ({ id: post.id, title: post.title }))
           );
         }
       }
@@ -969,6 +975,28 @@ export default function MonthlyTuneupScreen() {
     setAddWishModalVisible(false);
   };
 
+  // Second an idea with one tap: the +1 lands as a reply on that idea's own
+  // thread (votes live with the idea, not as clutter threads on the board).
+  const handleSecondHangIdea = async (idea: { id: string; title: string }) => {
+    if (secondedHangIdeaId || hangSecondingId || !profile || !communityId) return;
+    setHangSecondingId(idea.id);
+    try {
+      const { error } = await (supabase as any).from('board_replies').insert({
+        community_id: communityId,
+        post_id: idea.id,
+        author_id: profile.id,
+        content: "+1 — I'm in! 🙋",
+      });
+      if (error) throw error;
+      setSecondedHangIdeaId(idea.id);
+      setHangConfetti(true);
+    } catch (error) {
+      console.warn('Could not second the hang idea', error);
+    } finally {
+      setHangSecondingId(null);
+    }
+  };
+
   // Keyboard paging on web, deck-style: ← → step the wizard — but never
   // while you're typing in a field (arrows belong to the text cursor there).
   useEffect(() => {
@@ -1085,33 +1113,51 @@ export default function MonthlyTuneupScreen() {
         subtitle={`Any ideas for fun HIVE hangs? They post straight to ${hangBoardName ?? 'the HIVE Hangs board'} so planning can start.`}
       />
       {existingHangIdeas.length > 0 ? (
-        <View style={[cardStyle, { marginBottom: 10 }]}>
+        <View style={[cardStyle, { marginBottom: 10, position: 'relative', overflow: 'hidden' }]}>
+          <ConfettiBurst visible={hangConfetti} onDone={() => setHangConfetti(false)} />
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: 8 }}>
-            💡 Already on the board — second one, or pitch something new
+            💡 Choose one from the list — tap to second it
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {existingHangIdeas.map((idea) => (
-              <Pressable
-                key={idea}
-                onPress={() => setHangContent((prev) => (prev.trim() ? prev : `+1 for ${idea}!`))}
-                accessibilityLabel={`Second the idea: ${idea}`}
-                style={({ pressed }) => ({
-                  backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-                  borderWidth: 1,
-                  borderColor: 'rgba(222,193,129,0.55)',
-                  borderRadius: 999,
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                })}
-              >
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648' }} numberOfLines={1}>
-                  {idea}
-                </Text>
-              </Pressable>
-            ))}
+            {existingHangIdeas.map((idea) => {
+              const isSeconded = secondedHangIdeaId === idea.id;
+              const isDimmed = !!secondedHangIdeaId && !isSeconded;
+              return (
+                <Pressable
+                  key={idea.id}
+                  onPress={() => void handleSecondHangIdea(idea)}
+                  disabled={!!secondedHangIdeaId || !!hangSecondingId}
+                  accessibilityLabel={`Second the idea: ${idea.title}`}
+                  style={({ pressed }) => ({
+                    backgroundColor: isSeconded ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
+                    borderWidth: 1,
+                    borderColor: isSeconded ? '#bd9348' : 'rgba(222,193,129,0.55)',
+                    borderRadius: 999,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    opacity: isDimmed ? 0.35 : hangSecondingId === idea.id ? 0.7 : 1,
+                  })}
+                >
+                  <Text
+                    style={{ fontFamily: isSeconded ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: isSeconded ? 'white' : '#5c5648' }}
+                    numberOfLines={1}
+                  >
+                    {isSeconded ? `✓ ${idea.title}` : idea.title}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
+          {secondedHangIdeaId ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12, color: '#8e7a5e', marginTop: 8 }}>
+              Seconded! Your +1 is on the idea's thread 🎉
+            </Text>
+          ) : null}
         </View>
       ) : null}
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: 6, marginTop: 4 }}>
+        ✨ Or suggest your own
+      </Text>
       <View style={[cardStyle, { gap: 10 }]}>
         <TextInput
           value={hangTitle}
