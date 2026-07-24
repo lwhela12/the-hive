@@ -329,21 +329,30 @@ export default function MessagesScreen() {
         >
           {pinnedRooms.length > 0 && (
             <View style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.28)' }}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 10, gap: 4 }}
+              {/* Two rows, wrapped — one row ran the bubbles off the edge
+                  ("Infiniti E…") and wasted the column's width. Four across
+                  fits the 360px rail with the names intact (Nat 2026-07-24). */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  paddingHorizontal: 12,
+                  paddingTop: 12,
+                  paddingBottom: 10,
+                  rowGap: 8,
+                }}
               >
                 {pinnedRooms.map((room) => (
-                  <RoomBubble
-                    key={room.id}
-                    room={room}
-                    currentUserId={profile?.id}
-                    isActive={selectedRoom?.id === room.id}
-                    onPress={() => openRoom(room)}
-                  />
+                  <View key={room.id} style={{ width: '25%', alignItems: 'center' }}>
+                    <RoomBubble
+                      room={room}
+                      currentUserId={profile?.id}
+                      isActive={selectedRoom?.id === room.id}
+                      onPress={() => openRoom(room)}
+                    />
+                  </View>
                 ))}
-              </ScrollView>
+              </View>
             </View>
           )}
           {roomList}

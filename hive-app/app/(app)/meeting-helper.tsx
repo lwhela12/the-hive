@@ -481,6 +481,43 @@ export default function MeetingHelperScreen() {
         })));
       })().catch((error) => console.warn('Could not load assists', error)),
 
+      // Live notes jotted on the HummDinger spotlight. These used to live in
+      // component state only, so the list under each member vanished on reload
+      // even though the to-dos themselves were saved (Nat 2026-07-24: "I want
+      // those to stay there"). One jot fans out to one action_item per
+      // assignee, so regroup by who-it's-about + the text with the routing
+      // suffix stripped, which reconstructs the note exactly as it was typed.
+      (async () => {
+        const { data } = await (supabase as any)
+          .from('action_items')
+          .select('id, description, assigned_to, related_user_id, created_at, assignee:profiles!assigned_to(name)')
+          .eq('community_id', communityId)
+          .not('related_user_id', 'is', null)
+          .is('archived_at', null)
+          .gte('created_at', sinceIso)
+          .order('created_at', { ascending: true })
+          .limit(200);
+
+        const grouped = new Map<string, { id: string; aboutId: string; text: string; names: string[]; actionItemIds: string[] }>();
+        ((data ?? []) as any[]).forEach((row) => {
+          const aboutId = row.related_user_id as string;
+          const text = parseActionItemDescription(row.description as string).text;
+          const key = `${aboutId}::${text}`;
+          const entry = grouped.get(key) ?? { id: key, aboutId, text, names: [], actionItemIds: [] };
+          entry.names.push(getFirstName((row.assignee?.name ?? 'Someone') as string));
+          entry.actionItemIds.push(row.id as string);
+          grouped.set(key, entry);
+        });
+
+        setLiveNotesTaken(Array.from(grouped.values()).map((entry) => ({
+          id: entry.id,
+          aboutId: entry.aboutId,
+          text: entry.text,
+          assignees: entry.names.length > 3 ? `everyone (${entry.names.length})` : entry.names.join(' & '),
+          actionItemIds: entry.actionItemIds,
+        })));
+      })().catch((error) => console.warn('Could not load live notes', error)),
+
       // Kudos: recent 15-min helper posts from the helper log board
       (async () => {
         const { data: categories } = await supabase
@@ -753,10 +790,13 @@ export default function MeetingHelperScreen() {
         ? `everyone (${assignees.length})`
         : assignees.map((member) => getFirstName(member.name)).join(' & ');
       setLiveNoteConfirmation(`On ${assigneesLabel}'s list ✓`);
+      // Same key the reload builds, so a note doesn't double up when the deck
+      // refreshes underneath you.
+      const noteKey = `${aboutMember.id}::${text}`;
       setLiveNotesTaken((notes) => [
-        ...notes,
+        ...notes.filter((note) => note.id !== noteKey),
         {
-          id: `${Date.now()}-${notes.length}`,
+          id: noteKey,
           aboutId: aboutMember.id,
           text,
           assignees: assigneesLabel,
@@ -1766,6 +1806,11 @@ export default function MeetingHelperScreen() {
           const assistsByMember = completedAssists.filter((assist) => assist.assignedTo === member.id);
           const grantedThisCycle = grantedWishes.filter((wish) => wish.user_id === member.id);
           const attendance = getAttendance(response);
+          // Whether they brought anything WRITTEN. Every bubble opens either
+          // way: the meeting happens out loud, and someone who skipped the
+          // digital part still gets a turn — often the idea only forms once
+          // they start talking, and it needs somewhere to land (Nat
+          // 2026-07-24). An empty spotlight is still a live-note pad.
           const hasDetails =
             detailSections.length > 0 ||
             !!topWish?.description ||
@@ -1776,7 +1821,6 @@ export default function MeetingHelperScreen() {
             <View key={member.id} style={{ width: `${100 / bubbleColumns}%`, padding: sz(8, 5) }}>
               <Pressable
                 onPress={() => {
-                  if (!hasDetails) return;
                   setExpandedHummdingerId(member.id);
                   setHummdingerVisited((visited) => new Set(visited).add(member.id));
                   setLiveNoteDraft('');
@@ -1845,11 +1889,11 @@ export default function MeetingHelperScreen() {
                     {priorities}
                   </Text>
                 ) : null}
-                {hasDetails ? (
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 9), color: MUTED, marginTop: sz(8, 5) }}>
-                    {hummdingerVisited.has(member.id) ? '✓ tap for the full story' : 'tap for the full story ↓'}
-                  </Text>
-                ) : null}
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 9), color: MUTED, marginTop: sz(8, 5) }}>
+                  {hasDetails
+                    ? hummdingerVisited.has(member.id) ? '✓ tap for the full story' : 'tap for the full story ↓'
+                    : hummdingerVisited.has(member.id) ? '✓ tap to take notes' : 'tap to take notes ↓'}
+                </Text>
               </Pressable>
             </View>
           );
@@ -1950,6 +1994,15 @@ export default function MeetingHelperScreen() {
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={{ paddingHorizontal: sz(28, 16), paddingVertical: sz(20, 12), gap: sz(16, 10) }}>
+              {!topWish?.description
+                && grantedThisCycle.length === 0
+                && detailSections.length === 0
+                && assistsForMember.length === 0
+                && assistsByMember.length === 0 ? (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(17, 12), lineHeight: sz(25, 18), color: MUTED }}>
+                  Nothing written down yet — that's what the floor is for. Catch what {nameToday} says below.
+                </Text>
+              ) : null}
               {topWish?.description ? (
                 <View>
                   <Text style={sectionLabel}>This month's HD</Text>

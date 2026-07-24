@@ -59,20 +59,15 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   // Boards render as actual boards — a grid of pinned bulletin cards
   // (mirrors the Boards nav icon). Column count follows the window, and the
   // cards stretch so the grid fills the screen instead of leaving dead space.
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const numColumns = width >= 1100 ? 4 : width >= 760 ? 3 : 2;
   const compact = width < 760;
-  const gridRows = Math.max(1, Math.ceil(categories.length / numColumns));
-  // Roughly the space below header/search/toolbar and above the tab bar.
-  const availableHeight = height - 300;
-  // Every board is the same tile: the whole set should land on one laptop
-  // screen (Nat 2026-07-24). Thread previews used to stretch cards to 420 and
-  // pushed the grid off the bottom — the threads live one tap inside the
-  // board, which is where you go to read them anyway. Cards still grow to
-  // share the space, but capped so they never turn cavernous.
-  const cardMinHeight = compact
-    ? 118
-    : Math.min(230, Math.max(150, Math.floor(availableHeight / gridRows) - 12));
+  // Every board is the same tile, sized to its CONTENT — emoji, name,
+  // description, count — instead of stretching to divide up the screen.
+  // Stretching left each card two-thirds empty and pushed the second row
+  // toward the fold; tight tiles put the whole set on one laptop screen with
+  // the air below the grid rather than inside every card (Nat 2026-07-24).
+  const cardMinHeight = compact ? 118 : 150;
 
   return (
     <FlatList
