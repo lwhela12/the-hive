@@ -12,7 +12,7 @@ import { useWishes } from '../../lib/hooks/useWishes';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
-import { getEventEmoji } from '../../lib/eventDisplay';
+import { getEventEmoji, getEventHiveIcon } from '../../lib/eventDisplay';
 import { HiveIcon, type HiveIconName } from '../../components/ui/HiveIcon';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
 import { getSurveyResponsePeriod, isMonthlyCheckInSurvey, useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
@@ -317,9 +317,15 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
           className={`p-4 active:bg-gray-50 ${index < events.length - 1 ? 'border-b border-cream' : ''}`}
         >
           <View className="flex-row items-start">
-            <Text className="text-2xl mr-3">
-              {getEventEmoji(event)}
-            </Text>
+            {getEventHiveIcon(event) ? (
+              <View className="mr-3" style={{ marginTop: 2 }}>
+                <HiveIcon name={getEventHiveIcon(event)!} size={22} color="#8e6f35" />
+              </View>
+            ) : (
+              <Text className="text-2xl mr-3">
+                {getEventEmoji(event)}
+              </Text>
+            )}
             <View className="flex-1">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{event.title}</Text>
               <View className="flex-row flex-wrap items-center mt-1">
@@ -2953,9 +2959,15 @@ export default function HiveScreen() {
                                         key={event.id}
                                         style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.22)' }}
                                       >
-                                        <Text style={{ fontSize: 15, marginRight: 8 }}>
-                                          {getEventEmoji(event)}
-                                        </Text>
+                                        {getEventHiveIcon(event) ? (
+                                          <View style={{ marginRight: 8, marginTop: 1 }}>
+                                            <HiveIcon name={getEventHiveIcon(event)!} size={16} color="#8e6f35" />
+                                          </View>
+                                        ) : (
+                                          <Text style={{ fontSize: 15, marginRight: 8 }}>
+                                            {getEventEmoji(event)}
+                                          </Text>
+                                        )}
                                         <View style={{ flex: 1 }}>
                                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#5b5b5b' }}>{event.title}</Text>
                                           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 1 }}>

@@ -22,3 +22,21 @@ export function getEventEmoji(event: {
   if (/\b(hike|hiking|walk|park|camp|camping)\b/.test(title)) return '🥾';
   return '📌';
 }
+
+// Family-icon counterpart: returns a HiveIcon name when the event type has
+// earned its own drawing; null falls back to the smart emoji.
+export function getEventHiveIcon(event: {
+  title?: string | null;
+  event_type?: string | null;
+  end_date?: string | null;
+}): 'cake' | 'bee' | 'crown' | 'suitcase' | 'note' | 'pin' | null {
+  if (event.event_type === 'birthday') return 'cake';
+  if (event.event_type === 'meeting') return 'bee';
+  if (event.event_type === 'queen_bee') return 'crown';
+  const title = (event.title ?? '').toLowerCase();
+  if (/\b(out of town|travel|traveling|trip|away|galavant|vacation|flight)\b/.test(title) || event.end_date) return 'suitcase';
+  if (/\b(writer|writers|writing)\b/.test(title)) return 'note';
+  if (/\b(bday|birthday)\b/.test(title)) return 'cake';
+  if (getEventEmoji(event) === '📌') return 'pin';
+  return null;
+}

@@ -16,7 +16,11 @@ export type HiveIconName =
   | 'gear'
   | 'note'
   | 'checkin'
-  | 'star';
+  | 'star'
+  | 'suitcase'
+  | 'cake'
+  | 'pin'
+  | 'crown';
 
 export function HiveIcon({
   name,
@@ -129,6 +133,36 @@ export function HiveIcon({
         <G>
           <Path d="M12 3.6 L14.4 8.9 L20.3 9.6 L15.9 13.5 L17.2 19.3 L12 16.3 L6.8 19.3 L8.1 13.5 L3.7 9.6 L9.6 8.9 Z" {...stroke} />
           <Circle cx="12" cy="12.4" r="1.3" {...drop} />
+        </G>
+      );
+      case 'suitcase': return (
+        <G>
+          <Rect x="4.6" y="8" width="14.8" height="12.4" rx="2.2" {...stroke} />
+          <Path d="M9.4 8 V6.4 C9.4 5.6 10 5.1 10.8 5.1 H13.2 C14 5.1 14.6 5.6 14.6 6.4 V8" {...stroke} />
+          <Line x1="8.6" y1="8" x2="8.6" y2="20.4" {...stroke} />
+          <Line x1="15.4" y1="8" x2="15.4" y2="20.4" {...stroke} />
+          <Circle cx="12" cy="14" r="1.3" {...drop} />
+        </G>
+      );
+      case 'cake': return (
+        <G>
+          <Path d="M4.6 20.4 H19.4 V13.8 C19.4 12.7 18.5 11.8 17.4 11.8 H6.6 C5.5 11.8 4.6 12.7 4.6 13.8 Z" {...stroke} />
+          <Path d="M4.6 16 C6.4 17.6 8.2 15 10.1 16 C12 17 13.9 15 15.8 16 C17.2 16.7 18.2 16.4 19.4 15.6" {...stroke} />
+          <Line x1="12" y1="11.8" x2="12" y2="8.6" {...stroke} />
+          <Circle cx="12" cy="6.6" r="1.4" {...drop} />
+        </G>
+      );
+      case 'pin': return (
+        <G>
+          <Path d="M12 21 C12 21 5.6 14.9 5.6 10.1 C5.6 6.5 8.4 3.6 12 3.6 C15.6 3.6 18.4 6.5 18.4 10.1 C18.4 14.9 12 21 12 21 Z" {...stroke} />
+          <Circle cx="12" cy="10" r="1.5" {...drop} />
+        </G>
+      );
+      case 'crown': return (
+        <G>
+          <Path d="M5.2 16.8 L4.2 8.4 L8.6 11.4 L12 6.4 L15.4 11.4 L19.8 8.4 L18.8 16.8 Z" {...stroke} />
+          <Line x1="5.8" y1="20" x2="18.2" y2="20" {...stroke} />
+          <Circle cx="12" cy="13.4" r="1.3" {...drop} />
         </G>
       );
       default: return null;
