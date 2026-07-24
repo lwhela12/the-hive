@@ -2435,7 +2435,7 @@ export default function HiveScreen() {
               >
                 {todayQuestion.text}
               </Text>
-              <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 6, alignSelf: 'flex-start', marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignSelf: 'flex-start', marginTop: 10 }}>
                 <Pressable
                   onPress={() => setShowCatchUpModal(true)}
                   style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(189,147,72,0.35)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 }}
