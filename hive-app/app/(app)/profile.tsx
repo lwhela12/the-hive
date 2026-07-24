@@ -1176,7 +1176,7 @@ export default function ProfileScreen() {
     }
     if (label === "Complete this month's check-in") {
       // The unified tune-up flow is the front door for the monthly check-in.
-      router.push('/monthly-tuneup' as any);
+      router.push({ pathname: '/monthly-tuneup', params: { from: 'profile' } } as any);
       return;
     }
     if (
@@ -1686,7 +1686,7 @@ export default function ProfileScreen() {
 
               {monthlyCheckInSurvey ? (
                 <Pressable
-                  onPress={() => router.push('/monthly-tuneup' as any)}
+                  onPress={() => router.push({ pathname: '/monthly-tuneup', params: { from: 'profile' } } as any)}
                   className="active:opacity-75"
                   style={{
                     marginTop: 12,

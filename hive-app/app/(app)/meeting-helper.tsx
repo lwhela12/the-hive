@@ -1233,7 +1233,7 @@ export default function MeetingHelperScreen() {
                 numberOfLines={1}
                 style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(19, 12), color: GOLD_DEEP, textAlign: 'center', marginBottom: sz(8, 5) }}
               >
-                Help Focus: {existingFocus.replace(/!+$/, '')} 🤝
+                Help Focus: {existingFocus.replace(/!+$/, '')}
               </Text>
             ) : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(6, 4), justifyContent: 'center', marginBottom: sz(8, 5) }}>
@@ -1608,17 +1608,30 @@ export default function MeetingHelperScreen() {
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP }}>back to now</Text>
             </Pressable>
           ) : null}
+        </View>
+
+        {/* Middle: two months side by side on the TV — with carousel-style
+            pager arrows riding the calendar's flanks, vertically centered
+            (Nat: "between the 12 & 19"). */}
+        <View style={{ position: 'relative', marginTop: sz(8, 5) }}>
+          <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(28, 14), paddingHorizontal: sz(52, 38) }}>
+            {monthStarts.map(renderMonth)}
+          </View>
           {[
-            { label: '‹', delta: -1, hint: 'previous month' },
-            { label: '›', delta: 1, hint: 'next month' },
+            { label: '‹', delta: -1, hint: 'previous month', side: { left: 0 } },
+            { label: '›', delta: 1, hint: 'next month', side: { right: 0 } },
           ].map((pager) => (
             <Pressable
               key={pager.label}
               onPress={() => setMonthOffset((offset) => offset + pager.delta)}
               accessibilityLabel={pager.hint}
               style={({ pressed }) => ({
-                width: sz(38, 28),
-                height: sz(38, 28),
+                position: 'absolute',
+                top: '50%',
+                marginTop: -sz(21, 16),
+                ...pager.side,
+                width: sz(42, 32),
+                height: sz(42, 32),
                 borderRadius: 999,
                 borderWidth: 1,
                 borderColor: GOLD_SOFT,
@@ -1626,18 +1639,18 @@ export default function MeetingHelperScreen() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 opacity: pressed ? 0.7 : 1,
+                shadowColor: '#bd9348',
+                shadowOpacity: 0.14,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 3 },
+                elevation: 2,
               })}
             >
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 15), color: GOLD_DEEP, marginTop: -2 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(22, 17), color: GOLD_DEEP, marginTop: -2 }}>
                 {pager.label}
               </Text>
             </Pressable>
           ))}
-        </View>
-
-        {/* Middle: two months side by side on the TV */}
-        <View style={{ flexDirection: isTV ? 'row' : 'column', gap: sz(28, 14), marginTop: sz(8, 5) }}>
-          {monthStarts.map(renderMonth)}
         </View>
 
         {/* Everything lives in the cards above now — recaps, polls, ideas,

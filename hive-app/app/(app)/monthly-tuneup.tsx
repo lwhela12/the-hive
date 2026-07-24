@@ -1076,8 +1076,11 @@ export default function MonthlyTuneupScreen() {
 
   const goBack = () => {
     if (stepIndex === 0) {
+      // Retrace your steps: exits return to wherever you came from.
       if (from === 'admin') router.replace('/admin');
       else if (from === 'meetings') router.replace('/meetings');
+      else if (from === 'profile') router.replace('/profile' as any);
+      else if (from === 'hive') router.replace('/hive');
       else if (router.canGoBack()) router.back();
       else router.replace('/hive');
       return;

@@ -1536,7 +1536,7 @@ export default function HiveScreen() {
         router.push('/messages');
       }
     } else if (destination === 'tuneup') {
-      router.push('/monthly-tuneup');
+      router.push({ pathname: '/monthly-tuneup', params: { from: 'hive' } } as any);
     }
   }, [getActivityDestination, openEventFromActivity, openWishFromActivity, router]);
 
@@ -2111,7 +2111,7 @@ export default function HiveScreen() {
         cta: isDone ? undefined : 'Fill out →',
         isDone,
         completedAt: isDone ? submittedAt : null,
-        onPress: isMonthlyTuneUp ? () => router.push('/monthly-tuneup') : () => openSurvey(s),
+        onPress: isMonthlyTuneUp ? () => router.push({ pathname: '/monthly-tuneup', params: { from: 'hive' } } as any) : () => openSurvey(s),
       };
     }),
     ...homeActionItems.map(a => {
