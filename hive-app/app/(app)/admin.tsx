@@ -41,6 +41,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { MemberProfileLink } from '../../components/ui/MemberProfileLink';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
+import { HiveIcon } from '../../components/ui/HiveIcon';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { useSurveys } from '../../lib/hooks/useSurveys';
 import {
@@ -2041,15 +2042,15 @@ export default function AdminScreen() {
                             style={({ pressed }) => ({
                               flex: 1,
                               backgroundColor: selected
-                                ? type === 'deposit' ? '#22c55e' : '#ef4444'
-                                : pressed ? '#edf2f7' : '#f3f4f6',
+                                ? type === 'deposit' ? '#bd9348' : '#c0564a'
+                                : pressed ? '#fbf0d7' : '#f6f4e5',
                               borderRadius: 12,
                               paddingVertical: 10,
                             })}
                           >
                             <Text style={{
                               fontFamily: 'Lato_700Bold',
-                              color: selected ? 'white' : '#4b5563',
+                              color: selected ? 'white' : '#8e7a5e',
                               textAlign: 'center',
                               textTransform: 'capitalize',
                             }}>
@@ -2545,8 +2546,8 @@ export default function AdminScreen() {
                       Meeting tools
                     </Text>
                     {([
-                      { label: '🎞️ Meeting Helper — run the meeting from the TV', route: '/meeting-helper' },
-                      { label: '🧰 Monthly Tune-up — the check-in members fill out', route: '/monthly-tuneup' },
+                      { label: 'Meeting Helper — run the meeting from the TV', icon: 'tv' as const, route: '/meeting-helper' },
+                      { label: 'Monthly Tune-up — the check-in members fill out', icon: 'checkin' as const, route: '/monthly-tuneup' },
                     ] as const).map((tool) => (
                       <Pressable
                         key={tool.route}
@@ -2559,6 +2560,9 @@ export default function AdminScreen() {
                           backgroundColor: pressed ? '#fbf4e3' : 'transparent',
                         })}
                       >
+                        <View style={{ marginRight: 8 }}>
+                          <HiveIcon name={tool.icon} size={16} color="#8a6b30" />
+                        </View>
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', flex: 1 }}>
                           {tool.label}
                         </Text>
@@ -2582,8 +2586,11 @@ export default function AdminScreen() {
                             backgroundColor: pressed ? '#fbf4e3' : 'transparent',
                           })}
                         >
+                          <View style={{ marginRight: 8 }}>
+                            <HiveIcon name="chart" size={16} color="#8a6b30" />
+                          </View>
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', flex: 1 }}>
-                            📊 Check-in questions & responses
+                            Check-in questions & responses
                           </Text>
                           <Ionicons name="chevron-forward" size={15} color="#bd9348" />
                         </Pressable>
@@ -2616,7 +2623,7 @@ export default function AdminScreen() {
                             </Text>
                           )}
                           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 2 }}>
-                            {(survey.questions ?? []).length} question{(survey.questions ?? []).length === 1 ? '' : 's'} · Tap to edit & 📊 see responses
+                            {(survey.questions ?? []).length} question{(survey.questions ?? []).length === 1 ? '' : 's'} · Tap to edit & see responses
                           </Text>
                         </View>
                         <Pressable

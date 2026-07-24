@@ -20,7 +20,9 @@ export type HiveIconName =
   | 'suitcase'
   | 'cake'
   | 'pin'
-  | 'crown';
+  | 'crown'
+  | 'tv'
+  | 'chart';
 
 export function HiveIcon({
   name,
@@ -163,6 +165,23 @@ export function HiveIcon({
           <Path d="M5.2 16.8 L4.2 8.4 L8.6 11.4 L12 6.4 L15.4 11.4 L19.8 8.4 L18.8 16.8 Z" {...stroke} />
           <Line x1="5.8" y1="20" x2="18.2" y2="20" {...stroke} />
           <Circle cx="12" cy="13.4" r="1.3" {...drop} />
+        </G>
+      );
+      case 'tv': return (
+        <G>
+          <Rect x="3.6" y="6.2" width="16.8" height="11.6" rx="2.2" {...stroke} />
+          <Line x1="9" y1="21" x2="15" y2="21" {...stroke} />
+          <Line x1="12" y1="17.8" x2="12" y2="21" {...stroke} />
+          <Circle cx="12" cy="12" r="1.5" {...drop} />
+        </G>
+      );
+      case 'chart': return (
+        <G>
+          <Line x1="4.4" y1="20" x2="19.6" y2="20" {...stroke} />
+          <Line x1="7.6" y1="16.4" x2="7.6" y2="11.8" {...stroke} />
+          <Line x1="12" y1="16.4" x2="12" y2="7.2" {...stroke} />
+          <Line x1="16.4" y1="16.4" x2="16.4" y2="9.8" {...stroke} />
+          <Circle cx="12" cy="4.6" r="1.3" {...drop} />
         </G>
       );
       default: return null;
