@@ -2112,7 +2112,10 @@ export default function HiveScreen() {
         : aboutName && a.related_user_id && a.related_user_id !== profile?.id
           ? `${aboutName.trim().split(/\s+/)[0]}'s HD`
           : null;
-      const jotContext = [jot.elaboration, jot.mentionTag, reSubject ? `re: ${reSubject}` : null]
+      // Uniform shape for every meeting jot: "@who · re: X's HD". Old jots
+      // whose text never carried an @token fall back to @you — it's your list.
+      const mentionTag = jot.mentionTag ?? (reSubject ? '@you' : null);
+      const jotContext = [jot.elaboration, mentionTag, reSubject ? `re: ${reSubject}` : null]
         .filter(Boolean)
         .join(' · ');
       return {
