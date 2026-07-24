@@ -74,7 +74,7 @@ export default function HoneyPotScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <AppHeader title="Honey Pot" />
+      <AppHeader title="Honey Pot" onBackPress={() => router.back()} />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}

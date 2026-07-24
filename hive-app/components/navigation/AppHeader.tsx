@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 interface AppHeaderProps {
   title: string;
+  /** Back arrow in the left slot (for pushed pages like Honey Pot). */
+  onBackPress?: () => void;
   /** Small mark rendered just before the title (e.g. Clive's crest). */
   titleIcon?: React.ReactNode;
   /** Muted one-liner under the title (e.g. Members' count + search hint). */
@@ -16,6 +18,7 @@ interface AppHeaderProps {
 // Every tab screen should use this instead of hand-rolling a gold header.
 export const AppHeader = memo(function AppHeader({
   title,
+  onBackPress,
   titleIcon,
   subtitle,
   onMenuPress,
@@ -23,7 +26,17 @@ export const AppHeader = memo(function AppHeader({
 }: AppHeaderProps) {
   return (
     <View className="flex-row items-center justify-between px-4 py-3 bg-gold">
-      {onMenuPress ? (
+      {onBackPress ? (
+        <Pressable
+          onPress={onBackPress}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          className="w-10 h-10 items-center justify-center rounded-full active:opacity-70"
+          hitSlop={8}
+        >
+          <Ionicons name="chevron-back" size={24} color="white" />
+        </Pressable>
+      ) : onMenuPress ? (
         <Pressable
           onPress={onMenuPress}
           className="w-10 h-10 items-center justify-center rounded-full active:opacity-70"

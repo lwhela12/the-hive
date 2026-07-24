@@ -274,6 +274,13 @@ export function HoneyPotLedger({
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
         {FILTERS.map((item) => {
           const selected = filter === item.value;
+          const count = item.value === 'all'
+            ? transactions.length
+            : item.value === 'dues'
+              ? transactions.filter((transaction) => Boolean(getHoneyPotDuesLabel(transaction))).length
+              : item.value === 'deposits'
+                ? transactions.filter((transaction) => transaction.amount > 0).length
+                : transactions.filter((transaction) => transaction.amount < 0).length;
           return (
             <Pressable
               key={item.value}
@@ -289,7 +296,7 @@ export function HoneyPotLedger({
               })}
             >
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: selected ? 'white' : '#7c5f25' }}>
-                {item.label}
+                {item.label} ({count})
               </Text>
             </Pressable>
           );
