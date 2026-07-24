@@ -1023,7 +1023,7 @@ export default function MeetingHelperScreen() {
             paddingVertical: sz(15, 10),
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 7), marginBottom: sz(8, 5) }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: sz(8, 5) }}>
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e7a5e' }}>
               📣 The news
             </Text>
@@ -1044,7 +1044,7 @@ export default function MeetingHelperScreen() {
             paddingVertical: sz(15, 10),
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 7), marginBottom: sz(8, 5) }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: sz(8, 5) }}>
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e7a5e' }}>
               ✨ New in the app this month
             </Text>
@@ -1540,7 +1540,7 @@ export default function MeetingHelperScreen() {
                 Pick one, tap a day on the calendar — writers days and project days count too 🐝
               </Text>
               <View style={{ marginTop: sz(4, 3) }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 6), marginBottom: sz(4, 3) }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: sz(4, 3) }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: MUTED }}>
                     This month's plans
                   </Text>

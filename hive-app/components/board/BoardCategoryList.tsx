@@ -65,10 +65,15 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   // cards stretch so the grid fills the screen instead of leaving dead space.
   const { width, height } = useWindowDimensions();
   const numColumns = width >= 1100 ? 4 : width >= 760 ? 3 : 2;
+  // Phones get compact title-only tiles; the thread previews are a
+  // wide-screen luxury.
+  const compact = width < 760;
   const gridRows = Math.max(1, Math.ceil(categories.length / numColumns));
   // Roughly the space below header/search/toolbar and above the tab bar.
   const availableHeight = height - 300;
-  const cardMinHeight = Math.min(420, Math.max(190, Math.floor(availableHeight / gridRows) - 12));
+  const cardMinHeight = compact
+    ? 118
+    : Math.min(420, Math.max(190, Math.floor(availableHeight / gridRows) - 12));
 
   return (
     <FlatList
@@ -147,7 +152,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
               >
                 {item.name}
               </Text>
-              {subtitle ? (
+              {subtitle && !compact ? (
                 <Text
                   style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 16, color: '#8e7a5e', marginTop: 3 }}
                   numberOfLines={2}
@@ -163,7 +168,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
               {/* Thread list — scrolls inside the card (Recent Activity
                   style); the bottom fade whispers "there's more". Tap a row
                   to jump straight into that thread. */}
-              {recentThreads.length > 0 ? (
+              {!compact && recentThreads.length > 0 ? (
                 <View
                   style={{
                     marginTop: 8,
