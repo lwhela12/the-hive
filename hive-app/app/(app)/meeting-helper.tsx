@@ -646,6 +646,20 @@ export default function MeetingHelperScreen() {
           (event) => event.event_type === 'meeting'
             && new Date(`${event.event_date}T12:00:00`).toLocaleString('en-US', { month: 'long' }) === monthLabel
         );
+
+        // One live focus at a time. Every earlier focus's still-open to-do
+        // gets retired now, or they stack up on people's lists forever —
+        // July's "Pay it behind" was still sitting there in August (Nat
+        // 2026-07-24: "this is old news"). Finished ones keep their check.
+        const { error: retireError } = await (supabase as any)
+          .from('action_items')
+          .update({ archived_at: new Date().toISOString() })
+          .eq('community_id', communityId)
+          .ilike('description', 'HIVE Help:%')
+          .eq('completed', false)
+          .is('archived_at', null);
+        if (retireError) console.warn('Could not retire the previous focus to-dos:', retireError);
+
         const { error: fanError } = await (supabase as any).from('action_items').insert(
           members.map((member) => ({
             community_id: communityId,
@@ -1512,10 +1526,17 @@ export default function MeetingHelperScreen() {
               ) : null}
             </View>
 
+            {/* One question, one answer box: the ideas, then the plan you
+                write. The "how" line lives in the note's empty state instead
+                of standing as a third block (Nat 2026-07-24: "same thing
+                three times"). */}
             <View style={{ flex: isTV ? 1 : undefined, gap: sz(10, 7) }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
-                💡 What should we do next?
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
+                  💡 What should we do next?
+                </Text>
+                <EditPill noteKey="meetups" />
+              </View>
               {hangIdeas.length === 0 ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
                   No ideas on the board yet — first to post picks the venue.
@@ -1539,21 +1560,10 @@ export default function MeetingHelperScreen() {
                   ))}
                 </View>
               )}
-              <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
-                Pick one, tap a day on the calendar — writers days and project days count too 🐝
-              </Text>
-              <View style={{ marginTop: sz(4, 3) }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: sz(4, 3) }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: MUTED }}>
-                    This month's plans
-                  </Text>
-                  <EditPill noteKey="meetups" />
-                </View>
-                <NoteBody
-                  noteKey="meetups"
-                  emptyText="No meet-up plans written down yet — hatch some tonight."
-                />
-              </View>
+              <NoteBody
+                noteKey="meetups"
+                emptyText="Pick one and write it down — tap a day on the calendar to claim it. Writers days and project days count too 🐝"
+              />
             </View>
           </View>
         ) : null}
