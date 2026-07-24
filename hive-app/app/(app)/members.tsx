@@ -2474,6 +2474,20 @@ export default function MembersScreen() {
     typeof member.dailyMatchPercent === 'number' &&
     (member.dailyMatchSharedCount ?? 0) > 0
   );
+  const busiestAnswerDay = useMemo(() => {
+    const dayCounts = new Array(7).fill(0);
+    filtered.forEach(member => {
+      member.dailyAnswers.forEach(answer => {
+        const date = new Date(`${answer.questionDate}T12:00:00`);
+        if (!Number.isNaN(date.getTime())) dayCounts[date.getDay()] += 1;
+      });
+    });
+    const max = Math.max(...dayCounts);
+    if (max === 0) return null;
+    const names = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
+    return names[dayCounts.indexOf(max)];
+  }, [filtered]);
+
   const swarmThemeHighlights = useMemo(() => {
     const themes = new Map<string, { category: string; emoji: string; count: number }>();
     filtered.forEach(member => {
@@ -2693,30 +2707,16 @@ export default function MembersScreen() {
                       Connection snapshot from Daily Questions.
                     </Text>
                   </View>
-                  {bestMatch ? (
-                    <View style={{ alignSelf: width < 620 ? 'flex-start' : 'center', backgroundColor: '#fdf3dc', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: 'rgba(189,147,72,0.32)' }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#9a8060', textTransform: 'uppercase', letterSpacing: 0.6 }}>
-                        Strongest overlap
-                      </Text>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginTop: 2 }}>
-                        {bestMatch.name.split(' ')[0]} · {bestMatch.dailyMatchPercent}%
-                      </Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#7d715f', marginTop: 1 }}>
-                        {bestMatch.dailyMatchSharedCount} shared prompt{bestMatch.dailyMatchSharedCount === 1 ? '' : 's'}
-                        {(bestMatch.dailyMatchSimilarCount ?? 0) > 0 ? ` · ${bestMatch.dailyMatchSimilarCount} similar` : ''}
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={{ alignSelf: width < 620 ? 'flex-start' : 'center', backgroundColor: '#f5f3ee', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 9 }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8a8173' }}>
-                        Overlaps build as more answers come in.
-                      </Text>
-                    </View>
-                  )}
+
                 </View>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                   {[
+                    ...(bestMatch ? [{
+                      label: 'Strongest overlap',
+                      value: `${bestMatch.name.split(' ')[0]} · ${bestMatch.dailyMatchPercent}%`,
+                    }] : []),
+                    ...(busiestAnswerDay ? [{ label: 'Busiest day', value: busiestAnswerDay }] : []),
                     { label: 'Deck', value: `${DAILY_QUESTIONS.length} prompts` },
                     { label: 'HIVE answers', value: String(totalDailyAnswerCount) },
                     { label: 'Members joined', value: String(answeredMemberCount) },
