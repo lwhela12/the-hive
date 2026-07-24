@@ -40,9 +40,15 @@ export function HiveIcon({
     switch (name) {
       case 'honeypot': return (
         <G>
-          <Path d="M8 6.6 L8 5.4 C8 4.4 9.2 3.8 12 3.8 C14.8 3.8 16 4.4 16 5.4 L16 6.6" {...stroke} />
-          <Path d="M6.6 9.4 C5 11 4.2 12.9 4.2 14.8 C4.2 18.2 7.5 20.6 12 20.6 C16.5 20.6 19.8 18.2 19.8 14.8 C19.8 12.9 19 11 17.4 9.4 C16.2 8.2 14.4 7.4 12 7.4 C9.6 7.4 7.8 8.2 6.6 9.4 Z" {...stroke} />
-          <Circle cx="12" cy="12.3" r="1.5" {...drop} />
+          {/* Lid cap */}
+          <Path d="M8.4 6.4 C8.4 5.1 10 4.3 12 4.3 C14 4.3 15.6 5.1 15.6 6.4" {...stroke} />
+          {/* Wide rim band */}
+          <Rect x="6.4" y="6.4" width="11.2" height="3" rx="1.5" {...stroke} />
+          {/* Squat bulging body */}
+          <Path d="M7.6 9.4 C5.9 10.8 4.9 12.6 4.9 14.4 C4.9 17.8 8 20.3 12 20.3 C16 20.3 19.1 17.8 19.1 14.4 C19.1 12.6 18.1 10.8 16.4 9.4" {...stroke} />
+          {/* Honey dripping from the rim */}
+          <Path d="M10.2 9.4 L10.2 11" {...stroke} />
+          <Circle cx="10.2" cy="12.3" r="1.4" {...drop} />
         </G>
       );
       case 'board': return (

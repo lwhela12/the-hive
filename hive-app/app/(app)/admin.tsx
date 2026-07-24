@@ -768,12 +768,14 @@ function SurveyTimePicker({
 
 function AdminPanel({
   title,
+  titleIcon,
   action,
   style,
   bodyStyle,
   children,
 }: {
   title: string;
+  titleIcon?: ReactNode;
   action?: ReactNode;
   style?: StyleProp<ViewStyle>;
   bodyStyle?: StyleProp<ViewStyle>;
@@ -795,9 +797,12 @@ function AdminPanel({
             paddingVertical: 7,
           }}
         >
-          <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-            {title}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {titleIcon}
+            <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+              {title}
+            </Text>
+          </View>
         </View>
         {action ? <View style={{ paddingBottom: 4, marginLeft: 8 }}>{action}</View> : null}
       </View>
@@ -2016,7 +2021,7 @@ export default function AdminScreen() {
       >
         <View style={dashboardWrapStyle}>
           <View style={[dashboardCellStyle, panelOrderStyle(3)]}>
-            <AdminPanel title="Honey Pot" style={dashboardPanelStyle} bodyStyle={dashboardPanelBodyStyle}>
+            <AdminPanel title="Honey Pot" titleIcon={<HiveIcon name="honeypot" size={17} color="#8e6f35" />} style={dashboardPanelStyle} bodyStyle={dashboardPanelBodyStyle}>
               <ScrollView
                 style={panelScrollStyle}
                 contentContainerStyle={{ padding: 16 }}
@@ -2271,7 +2276,7 @@ export default function AdminScreen() {
           </View>
 
           <View style={[dashboardCellStyle, panelOrderStyle(4)]}>
-            <AdminPanel title="Honey Pot Transactions" style={dashboardPanelStyle} bodyStyle={dashboardPanelBodyStyle}>
+            <AdminPanel title="Honey Pot Transactions" titleIcon={<HiveIcon name="honeypot" size={17} color="#8e6f35" />} style={dashboardPanelStyle} bodyStyle={dashboardPanelBodyStyle}>
               <ScrollView
                 style={panelScrollStyle}
                 contentContainerStyle={{ padding: 14 }}
