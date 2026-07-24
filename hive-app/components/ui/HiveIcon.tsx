@@ -33,7 +33,9 @@ export function HiveIcon({
   size?: number;
   color?: string;
 }) {
-  const stroke = { stroke: color, strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' as const };
+  // Thin lines like the footer glyphs — 1.6 at 24-box stays airy even when
+  // the icon renders larger (strokes scale with size).
+  const stroke = { stroke: color, strokeWidth: 1.6, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' as const };
   const drop = { fill: color };
 
   const icon = (() => {
