@@ -1978,15 +1978,19 @@ export default function AdminScreen() {
   const dashboardPanelBodyStyle = { flex: 1 };
   const panelScrollStyle = { flex: 1 };
   const panelOrderStyle = (order: number) => ({ order } as unknown as ViewStyle);
+  // Mirrors Home's grid air: 36px gutters, centered 1380 cap.
   const dashboardWrapStyle: ViewStyle = {
     flexDirection: useMobileLayout ? 'column' : 'row',
     flexWrap: 'wrap',
-    marginHorizontal: useMobileLayout ? 0 : -8,
+    marginHorizontal: useMobileLayout ? 0 : -18,
+    maxWidth: useMobileLayout ? undefined : 1416,
+    width: '100%',
+    alignSelf: 'center',
   };
   const dashboardCellStyle: ViewStyle = {
     width: useMobileLayout ? '100%' : '50%',
-    paddingHorizontal: useMobileLayout ? 0 : 8,
-    marginBottom: useMobileLayout ? 18 : 14,
+    paddingHorizontal: useMobileLayout ? 0 : 18,
+    marginBottom: useMobileLayout ? 18 : 36,
   };
 
   if (!isAdmin && !isTreasurer) {
@@ -2004,8 +2008,8 @@ export default function AdminScreen() {
 
       <ScrollView
         className="flex-1"
-        scrollEnabled={useMobileLayout}
-        contentContainerStyle={dashboardOuterContentStyle}
+        alwaysBounceVertical
+        contentContainerStyle={[dashboardOuterContentStyle, { minHeight: '101%' }] as any}
         refreshControl={useMobileLayout ? (
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         ) : undefined}

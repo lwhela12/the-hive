@@ -426,7 +426,7 @@ function HexShortcut({ emoji, icon, label, sublabel, onPress }: {
           />
         </Svg>
         {icon ? (
-          <HiveIcon name={icon} size={32} color="#8e6f35" />
+          <View style={{ zIndex: 1 }}><HiveIcon name={icon} size={32} color="#8e6f35" /></View>
         ) : (
           <Text style={{ fontSize: 28, lineHeight: 32 }}>{emoji}</Text>
         )}

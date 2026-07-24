@@ -33,10 +33,10 @@ export function HoneyPotPaymentCard() {
   return (
     <View
       style={{
-        backgroundColor: '#f0fff4',
+        backgroundColor: '#fdf8ec',
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(34,197,94,0.24)',
+        borderColor: 'rgba(222,193,129,0.5)',
         padding: 16,
         marginBottom: 14,
       }}
@@ -56,10 +56,10 @@ export function HoneyPotPaymentCard() {
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 24, color: '#052e16' }}>$</Text>
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#167c3b', textTransform: 'uppercase' }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e7a5e', letterSpacing: 0.8, textTransform: 'uppercase' }}>
             Pay dues
           </Text>
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#1f2937', marginTop: 3 }}>
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginTop: 3 }}>
             Cash App {HONEY_POT_CASH_APP_HANDLE}
           </Text>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', marginTop: 6, lineHeight: 18 }}>
@@ -74,7 +74,7 @@ export function HoneyPotPaymentCard() {
           accessibilityRole="link"
           accessibilityLabel="Open HIVE Cash App payment link"
           style={({ pressed }) => ({
-            backgroundColor: pressed ? '#16a34a' : '#22c55e',
+            backgroundColor: pressed ? '#a37f3d' : '#bd9348',
             borderRadius: 999,
             paddingHorizontal: 14,
             paddingVertical: 10,
@@ -83,8 +83,8 @@ export function HoneyPotPaymentCard() {
             gap: 6,
           })}
         >
-          <Ionicons name="open-outline" size={16} color="#052e16" />
-          <Text style={{ fontFamily: 'Lato_700Bold', color: '#052e16', fontSize: 13 }}>
+          <Ionicons name="open-outline" size={16} color="#ffffff" />
+          <Text style={{ fontFamily: 'Lato_700Bold', color: '#ffffff', fontSize: 13 }}>
             Open Cash App
           </Text>
         </Pressable>
@@ -93,8 +93,8 @@ export function HoneyPotPaymentCard() {
           accessibilityRole="button"
           accessibilityLabel="Copy HIVE Cash App handle"
           style={({ pressed }) => ({
-            backgroundColor: pressed ? '#dcfce7' : '#ffffff',
-            borderColor: 'rgba(34,197,94,0.32)',
+            backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
+            borderColor: 'rgba(222,193,129,0.55)',
             borderWidth: 1,
             borderRadius: 999,
             paddingHorizontal: 14,
@@ -104,8 +104,8 @@ export function HoneyPotPaymentCard() {
             gap: 6,
           })}
         >
-          <Ionicons name="copy-outline" size={16} color="#167c3b" />
-          <Text style={{ fontFamily: 'Lato_700Bold', color: '#167c3b', fontSize: 13 }}>
+          <Ionicons name="copy-outline" size={16} color="#8e6f35" />
+          <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e6f35', fontSize: 13 }}>
             Copy handle
           </Text>
         </Pressable>

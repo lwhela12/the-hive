@@ -3,6 +3,7 @@ import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppHeader } from '../../components/navigation';
+import { HiveIcon } from '../../components/ui/HiveIcon';
 import { HoneyPotPaymentCard } from '../../components/hive/HoneyPotPaymentCard';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { fetchHoneyPotLedger, type HoneyPotLedgerEntry } from '../../lib/honeyPot';
@@ -22,7 +23,8 @@ export default function HoneyPotScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
-  const canRecord = isAdmin || isTreasurer;
+  // Treasurer-only (Nat 2026-07-23): admins see the ledger, Ollie records it.
+  const canRecord = isTreasurer;
 
   const loadLedger = useCallback(async () => {
     if (!communityId) return;
@@ -79,35 +81,31 @@ export default function HoneyPotScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={{ maxWidth: 980, width: '100%', alignSelf: 'center' }}>
-          <View style={{ marginBottom: 14 }}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d' }}>
-              Honey Pot Ledger
-            </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b7280', marginTop: 4 }}>
-              Community fund activity
-            </Text>
-          </View>
           {!loading && duesStatus ? (
             <View
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 10,
-                backgroundColor: duesStatus.covered ? '#f0fdf4' : '#fffbeb',
+                backgroundColor: duesStatus.covered ? '#fdf3dc' : '#fffbeb',
                 borderWidth: 1,
-                borderColor: duesStatus.covered ? '#bbf7d0' : '#fde68a',
+                borderColor: duesStatus.covered ? 'rgba(189,147,72,0.45)' : '#fde68a',
                 borderRadius: 14,
                 paddingHorizontal: 16,
                 paddingVertical: 13,
                 marginBottom: 14,
               }}
             >
-              <Text style={{ fontSize: 18 }}>{duesStatus.covered ? '✅' : '🐝'}</Text>
+              {duesStatus.covered ? (
+                <HiveIcon name="checkin" size={18} color="#8e6f35" />
+              ) : (
+                <HiveIcon name="honeypot" size={18} color="#92400e" />
+              )}
               <Text
                 style={{
                   fontFamily: 'Lato_700Bold',
                   fontSize: 15,
-                  color: duesStatus.covered ? '#166534' : '#92400e',
+                  color: duesStatus.covered ? '#8e6f35' : '#92400e',
                   flex: 1,
                 }}
               >
