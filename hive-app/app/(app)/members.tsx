@@ -2076,9 +2076,12 @@ function MemberDetailModal({
 
 export default function MembersScreen() {
   const { communityId, profile, session } = useAuth();
-  const { memberId: routeMemberId, view: routeViewParam } = useLocalSearchParams<{ memberId?: string | string[]; view?: string | string[] }>();
+  const { memberId: routeMemberId, view: routeViewParam, open: routeOpenParam } = useLocalSearchParams<{ memberId?: string | string[]; view?: string | string[]; open?: string | string[] }>();
   const memberId = Array.isArray(routeMemberId) ? routeMemberId[0] : routeMemberId;
   const routeView = Array.isArray(routeViewParam) ? routeViewParam[0] : routeViewParam;
+  // Nonce so a repeat trip to the same view re-fires the effect below even when
+  // this tab never unmounted (the boards `open` pattern).
+  const routeOpen = Array.isArray(routeOpenParam) ? routeOpenParam[0] : routeOpenParam;
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [members, setMembers] = useState<MemberData[]>([]);
@@ -2344,7 +2347,7 @@ export default function MembersScreen() {
     if (routeView === 'swarm') {
       setMemberViewMode('swarm');
     }
-  }, [routeView]);
+  }, [routeView, routeOpen]);
 
   const [openAnswersOnSelect, setOpenAnswersOnSelect] = useState(false);
   const openMemberProfile = useCallback((member: MemberData, showAnswers = false) => {

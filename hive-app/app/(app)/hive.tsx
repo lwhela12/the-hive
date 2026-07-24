@@ -747,7 +747,12 @@ export default function HiveScreen() {
     const target = catchUpReturnRef.current;
     if (!target) return;
     catchUpReturnRef.current = null;
-    router.replace(target as any);
+    // `open` is a nonce: the destination tab may never have unmounted, so its
+    // param effect needs something new to react to.
+    router.replace({
+      pathname: target.pathname,
+      params: { ...(target.params ?? {}), open: String(Date.now()) },
+    } as any);
   }, [router]);
 
   const closeCatchUpModal = useCallback(() => {
