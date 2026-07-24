@@ -2688,7 +2688,7 @@ export default function HiveScreen() {
                             <HeaderActionPill label="✓ All read" onPress={markAllActivityRead} />
                           )}
                           <HeaderActionPill
-                            label="@ Mentions me"
+                            label="@ me"
                             onPress={toggleActivityMentionsOnly}
                             selected={activityMentionsOnly}
                             accessibilityLabel="Only show activity that mentions me"

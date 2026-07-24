@@ -138,7 +138,7 @@ export function HeaderActionPill({
         large ? styles.pillLarge : null,
         {
           borderColor: selected ? '#bd9348' : 'rgba(222,193,129,0.72)',
-          backgroundColor: selected ? '#fdf3dc' : pressed ? '#fbf0d7' : '#fffdf5',
+          backgroundColor: selected ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
         },
         disabled ? styles.disabled : null,
       ]}
@@ -243,6 +243,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   pillTextSelected: {
-    color: '#8e6f35',
+    color: '#fffdf5',
   },
 });
