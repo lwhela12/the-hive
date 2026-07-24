@@ -1416,9 +1416,13 @@ export default function MonthlyTuneupScreen() {
 
   const renderHelpersStep = () => (
     <View>
+      {/* The crest asset is ~95% content with no trimmable padding, so it
+          squishes at step-header size (same reason it left the gold bars).
+          The drawn bee is the family mark for HIVE Help anyway, and it matches
+          the calendar/check-in icons on the other steps. */}
       <StepHeader
         title="HIVE helps"
-        icon={<Image source={hiveBee} style={{ width: 30, height: 30 }} contentFit="contain" />}
+        icon={<HiveIcon name="bee" size={20} color="#8e6f35" />}
         subtitle="Little kindnesses since last meeting — no act too tiny, totally optional. (Helped a HIVE member? That belongs on their wish — mark it granted!)"
       />
       {helperThread?.postTitle ? (
