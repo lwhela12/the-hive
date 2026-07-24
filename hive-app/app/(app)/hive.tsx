@@ -1429,7 +1429,17 @@ export default function HiveScreen() {
 
   // Deep link: /hive?openWishId=... opens that wish's detail sheet (used by the
   // profile App Feedback shortcut; works for any screen that wants to point at a wish).
-  const { openWishId } = useLocalSearchParams<{ openWishId?: string }>();
+  const { openWishId, catchup } = useLocalSearchParams<{ openWishId?: string; catchup?: string }>();
+
+  // Swarm Report theme pills (and anything else) can deep-link straight into
+  // the daily-question Catch-up modal.
+  useEffect(() => {
+    if (catchup === '1') {
+      setShowCatchUpModal(true);
+      router.setParams({ catchup: undefined } as any);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catchup]);
   const handledOpenWishIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!openWishId || !communityId) return;

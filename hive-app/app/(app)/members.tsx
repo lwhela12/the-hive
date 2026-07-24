@@ -2736,7 +2736,13 @@ export default function MembersScreen() {
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                       {swarmThemeHighlights.map(theme => (
-                        <View key={theme.category} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(222,193,129,0.34)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }}>
+                        <Pressable
+                          key={theme.category}
+                          onPress={() => router.push({ pathname: '/hive', params: { catchup: '1' } } as any)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Answer more ${theme.category} questions in Catch up`}
+                          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: pressed ? '#fbf0d7' : '#fffdf5', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 })}
+                        >
                           <Text style={{ fontSize: 13 }}>{theme.emoji}</Text>
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2d2d2d' }}>
                             {theme.category}
@@ -2744,7 +2750,8 @@ export default function MembersScreen() {
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>
                             {theme.count}
                           </Text>
-                        </View>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: 'rgba(189,147,72,0.6)' }}>›</Text>
+                        </Pressable>
                       ))}
                     </View>
                   </View>
