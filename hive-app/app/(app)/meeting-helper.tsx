@@ -465,6 +465,10 @@ export default function MeetingHelperScreen() {
           .select('id, description, completed_at, assigned_to, related_user_id, assignee:profiles!assigned_to(name)')
           .eq('community_id', communityId)
           .eq('completed', true)
+          // Archiving a to-do is how you say "this doesn't belong on my list" —
+          // it shouldn't then reappear on the deck as something you checked off
+          // (Nat 2026-07-24).
+          .is('archived_at', null)
           .gte('completed_at', sinceIso)
           .order('completed_at', { ascending: false })
           .limit(60);
