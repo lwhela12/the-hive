@@ -3248,7 +3248,7 @@ export default function HiveScreen() {
             HOME_SECTION_META[group[0]].layout === 'panel' ? (
               <View
                 key={group.join('-')}
-                style={{ flexDirection: useMobileLayout ? 'column' : 'row', flexWrap: useMobileLayout ? undefined : 'wrap', gap: useMobileLayout ? 20 : 24, marginBottom: useMobileLayout ? 20 : 28, maxWidth: 1380, width: '100%', alignSelf: 'center' }}
+                style={{ flexDirection: useMobileLayout ? 'column' : 'row', flexWrap: useMobileLayout ? undefined : 'wrap', gap: useMobileLayout ? 20 : 36, marginBottom: useMobileLayout ? 20 : 36, maxWidth: 1380, width: '100%', alignSelf: 'center' }}
               >
                 {group.map((sectionKey) => (
                   <View key={sectionKey} style={dashboardSectionStyle}>
