@@ -887,7 +887,7 @@ export default function BoardScreen() {
       return;
     }
 
-    Alert.alert('Delete Topic', message, [
+    Alert.alert('Delete Board', message, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: deleteCategory },
     ]);
@@ -947,7 +947,7 @@ export default function BoardScreen() {
       return;
     }
 
-    Alert.alert(restore ? 'Restore Topic' : 'Archive Topic', message, [
+    Alert.alert(restore ? 'Restore Board' : 'Archive Board', message, [
       { text: 'Cancel', style: 'cancel' },
       { text: restore ? 'Restore' : 'Archive', onPress: updateStatus },
     ]);
@@ -1632,7 +1632,7 @@ export default function BoardScreen() {
         className="min-w-10 h-10 px-2 items-center justify-center rounded-full active:opacity-70"
         hitSlop={8}
       >
-        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">+ Topic</Text>
+        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">+ Board</Text>
       </Pressable>
     ) : undefined;
     const boardListToolbar = (
@@ -1681,7 +1681,7 @@ export default function BoardScreen() {
             </Text>
             {canCreateCategories ? (
               <Pressable onPress={() => setShowTopicComposer(true)} className="w-10 h-10 items-center justify-center active:opacity-70">
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">+ Topic</Text>
+                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">+ Board</Text>
               </Pressable>
             ) : (
               <View className="w-10 h-10" />

@@ -1,6 +1,8 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { FlatList, Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { HiveIcon, type HiveIconName } from '../ui/HiveIcon';
+import { HIVE_ICON_PREFIX } from './BoardTopicComposer';
 import type { BoardCategory } from '../../types';
 
 const EMOJI_MAP: Record<string, string> = {
@@ -62,20 +64,45 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   const { width } = useWindowDimensions();
   const numColumns = width >= 1100 ? 4 : width >= 760 ? 3 : 2;
   const compact = width < 760;
-  // Every board is the same tile, sized to its CONTENT — emoji, name,
-  // description, count — instead of stretching to divide up the screen.
-  // Stretching left each card two-thirds empty and pushed the second row
-  // toward the fold; tight tiles put the whole set on one laptop screen with
-  // the air below the grid rather than inside every card (Nat 2026-07-24).
-  const cardMinHeight = compact ? 118 : 150;
+  // Fill the screen the way Home and Admin do: measure the space we actually
+  // got, divide it by the number of rows, and let the CARD CONTENTS grow with
+  // the card. Guessing at the height with `window.height - 300` was what left
+  // acres of dead space below the grid; a short fixed tile just moved the dead
+  // space instead of removing it (Nat 2026-07-24).
+  const [gridHeight, setGridHeight] = useState(0);
+  const gridRows = Math.max(1, Math.ceil(categories.length / numColumns));
+  const fittedHeight = gridHeight > 0
+    ? Math.floor(gridHeight / gridRows) - 12
+    : 0;
+  const cardMinHeight = compact
+    ? 118
+    : Math.max(150, Math.min(320, fittedHeight || 190));
+  // Roomier card, roomier contents — otherwise a tall card is just a small
+  // card with padding.
+  const scale = Math.max(0, Math.min(1, (cardMinHeight - 150) / 140));
+  const iconSize = Math.round(32 + scale * 14);
+  const titleSize = Math.round(16 + scale * 5);
+  const descLines = cardMinHeight > 250 ? 5 : cardMinHeight > 200 ? 4 : 2;
 
   return (
+    <View
+      style={{ flex: 1 }}
+      onLayout={(event) => {
+        const measured = Math.round(event.nativeEvent.layout.height);
+        if (measured > 0 && measured !== gridHeight) setGridHeight(measured);
+      }}
+    >
     <FlatList
       key={numColumns}
       numColumns={numColumns}
       data={categories}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => {
+        // "hive:<name>" draws the family mark; anything else is a legacy emoji
+        // (or a legacy unicode code point) and still renders as it always did.
+        const hiveIconName = item.icon?.startsWith(HIVE_ICON_PREFIX)
+          ? (item.icon.slice(HIVE_ICON_PREFIX.length) as HiveIconName)
+          : null;
         const emoji = item.icon ? EMOJI_MAP[item.icon] || item.icon : '📁';
         const count = postCounts?.[item.id]?.count ?? 0;
         const countLabel = `${count} ${count === 1 ? 'thread' : 'threads'}`;
@@ -89,11 +116,9 @@ export const BoardCategoryList = memo(function BoardCategoryList({
           ? item.goal_title
             ? `Wish thread ${ownerLabel}`.trim()
             : `Member wishes ${ownerLabel}`.trim()
-          : item.topic_kind === 'helper_log'
-            ? 'Everyone'
-            : item.audience === 'members' && taggedNames.length > 0
-              ? `For ${taggedNames.join(', ')}`
-              : 'Everyone';
+          // Boards belong to the whole HIVE now, so "Everyone ·" was a prefix
+          // on every single card saying nothing (Nat 2026-07-24).
+          : null;
         const goalLabel = item.topic_kind === 'hd_board' ? item.goal_title : null;
         const statusLabel = item.status === 'completed'
           ? 'Completed'
@@ -137,9 +162,15 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                 elevation: 2,
               }}
             >
-              <Text style={{ fontSize: 32, lineHeight: 36 }}>{emoji}</Text>
+              {hiveIconName ? (
+                <View style={{ height: iconSize + 4, justifyContent: 'center' }}>
+                  <HiveIcon name={hiveIconName} size={iconSize} color="#bd9348" />
+                </View>
+              ) : (
+                <Text style={{ fontSize: iconSize, lineHeight: iconSize + 4 }}>{emoji}</Text>
+              )}
               <Text
-                style={{ fontFamily: 'Lato_700Bold', fontSize: 16, lineHeight: 21, marginTop: 8 }}
+                style={{ fontFamily: 'Lato_700Bold', fontSize: titleSize, lineHeight: titleSize + 5, marginTop: 8 }}
                 className={isCompleted ? 'text-charcoal/60' : 'text-charcoal'}
                 numberOfLines={2}
               >
@@ -147,8 +178,8 @@ export const BoardCategoryList = memo(function BoardCategoryList({
               </Text>
               {subtitle && !compact ? (
                 <Text
-                  style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 16, color: '#8e7a5e', marginTop: 3 }}
-                  numberOfLines={2}
+                  style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 18, color: '#8e7a5e', marginTop: 4 }}
+                  numberOfLines={descLines}
                 >
                   {subtitle}
                 </Text>
@@ -184,5 +215,6 @@ export const BoardCategoryList = memo(function BoardCategoryList({
       }
       contentContainerStyle={{ padding: 8, flexGrow: 1 }}
     />
+    </View>
   );
 });

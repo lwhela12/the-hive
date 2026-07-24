@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getMemberBoardDisplayName, getMemberHdBoardName } from '../../lib/boardWishLinks';
+import { HiveIcon, type HiveIconName } from '../ui/HiveIcon';
 import type { BoardCategory, Profile } from '../../types';
 
 const BOARD_DRAFT_KEY = 'board-topic-draft';
@@ -33,8 +34,22 @@ interface BoardTopicComposerProps {
   managementActions?: ReactNode;
 }
 
-// Icon is now stored as the emoji character directly (not a code)
-// Old code-based entries are still handled by BoardCategoryList's EMOJI_MAP fallback
+// Board icons are stored as "hive:<name>" and drawn from the HIVE family.
+// Older boards hold a raw emoji (or, older still, a unicode code point) —
+// BoardCategoryList still renders those, so nothing breaks until someone
+// edits the board and picks a family mark.
+
+export const HIVE_ICON_PREFIX = 'hive:';
+const DEFAULT_BOARD_ICON = `${HIVE_ICON_PREFIX}message`;
+
+// The board icon set. Ordered so the marks a board actually reaches for come
+// first, then the general-purpose ones.
+const BOARD_ICON_CHOICES: HiveIconName[] = [
+  'message', 'trophy', 'book', 'handshake', 'palette', 'megaphone', 'sprout', 'fork',
+  'star', 'heart', 'calendar', 'honeypot', 'bee', 'crown', 'home', 'gift',
+  'target', 'question', 'note', 'chart', 'person', 'sparkle', 'pin', 'suitcase',
+  'cake', 'tv', 'board', 'checkin',
+];
 
 const EMOJI_CATEGORIES: { label: string; icon: string; emojis: string[] }[] = [
   {
@@ -80,12 +95,14 @@ const EMOJI_CATEGORIES: { label: string; icon: string; emojis: string[] }[] = [
 ];
 
 function getFirstEmoji(icon?: string): string {
-  if (!icon) return EMOJI_CATEGORIES[0].emojis[0];
+  // A family mark passes through whole — it isn't a grapheme.
+  if (icon?.startsWith(HIVE_ICON_PREFIX)) return icon;
+  if (!icon) return DEFAULT_BOARD_ICON;
   // If it looks like a Unicode code (old format), convert to emoji
   if (/^[0-9A-F]{4,6}$/i.test(icon)) {
     try { return String.fromCodePoint(parseInt(icon, 16)); } catch { /* fall through */ }
   }
-  return getGraphemes(icon)[0] ?? EMOJI_CATEGORIES[0].emojis[0];
+  return getGraphemes(icon)[0] ?? DEFAULT_BOARD_ICON;
 }
 
 function getGraphemes(value: string) {
@@ -113,7 +130,7 @@ export function BoardTopicComposer({
 }: BoardTopicComposerProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedEmoji, setSelectedEmoji] = useState(EMOJI_CATEGORIES[0].emojis[0]);
+  const [selectedEmoji, setSelectedEmoji] = useState(DEFAULT_BOARD_ICON);
   const [activeCategory, setActiveCategory] = useState(0);
   const [customEmoji, setCustomEmoji] = useState('');
   const [topicKind, setTopicKind] = useState<BoardTopicKind>('discussion');
@@ -157,16 +174,16 @@ export function BoardTopicComposer({
             const d = JSON.parse(raw);
             setName(d.name ?? '');
             setDescription(d.description ?? '');
-            setSelectedEmoji(d.emoji ?? EMOJI_CATEGORIES[0].emojis[0]);
+            setSelectedEmoji(d.emoji ?? DEFAULT_BOARD_ICON);
             setTopicKind(d.topicKind ?? 'discussion');
             setOwnerUserId(d.ownerUserId ?? '');
             setGoalTitle(d.goalTitle ?? '');
           } catch {
-            setName(''); setDescription(''); setSelectedEmoji(EMOJI_CATEGORIES[0].emojis[0]);
+            setName(''); setDescription(''); setSelectedEmoji(DEFAULT_BOARD_ICON);
             setTopicKind('discussion'); setOwnerUserId(''); setGoalTitle('');
           }
         } else {
-          setName(''); setDescription(''); setSelectedEmoji(EMOJI_CATEGORIES[0].emojis[0]);
+          setName(''); setDescription(''); setSelectedEmoji(DEFAULT_BOARD_ICON);
           setTopicKind('discussion'); setOwnerUserId(''); setGoalTitle('');
         }
       });
@@ -235,7 +252,7 @@ export function BoardTopicComposer({
       const success = await onSubmit(
         finalName,
         finalDescription,
-        topicKind === 'helper_log' ? '🤝' : topicKind === 'hd_board' ? (selectedEmoji || '💎') : selectedEmoji,
+        topicKind === 'helper_log' ? `${HIVE_ICON_PREFIX}handshake` : selectedEmoji,
         finalAudience,
         finalAudience === 'members' ? finalTaggedMemberIds : [],
         {
@@ -248,7 +265,7 @@ export function BoardTopicComposer({
         if (!existingCategory) AsyncStorage.removeItem(BOARD_DRAFT_KEY).catch(() => {});
         setName('');
         setDescription('');
-        setSelectedEmoji(EMOJI_CATEGORIES[0].emojis[0]);
+        setSelectedEmoji(DEFAULT_BOARD_ICON);
         setCustomEmoji('');
         setTopicKind('discussion');
         setAudience('community');
@@ -267,7 +284,7 @@ export function BoardTopicComposer({
     if (!existingCategory) AsyncStorage.removeItem(BOARD_DRAFT_KEY).catch(() => {});
     setName('');
     setDescription('');
-    setSelectedEmoji(EMOJI_CATEGORIES[0].emojis[0]);
+    setSelectedEmoji(DEFAULT_BOARD_ICON);
     setCustomEmoji('');
     setTopicKind('discussion');
     setAudience('community');
@@ -292,7 +309,7 @@ export function BoardTopicComposer({
     setAudience('members');
     setOwnerUserId(memberId);
     setTaggedMemberIds([memberId]);
-    if (!selectedEmoji || selectedEmoji === EMOJI_CATEGORIES[0].emojis[0]) setSelectedEmoji('💎');
+    if (!selectedEmoji || selectedEmoji === DEFAULT_BOARD_ICON) setSelectedEmoji('💎');
   };
 
   return (
@@ -306,7 +323,7 @@ export function BoardTopicComposer({
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">Cancel</Text>
             </Pressable>
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg">
-              {isEditMode ? 'Edit Topic' : 'New Topic'}
+              {isEditMode ? 'Edit Board' : 'New Board'}
             </Text>
             <Pressable
               onPress={handleSubmit}
@@ -322,10 +339,14 @@ export function BoardTopicComposer({
           <ScrollView className="flex-1 p-4" keyboardShouldPersistTaps="handled">
             {/* Preview */}
             <View className="items-center mb-6">
-              <View className="flex-row items-center px-4 py-2 bg-gold rounded-full">
-                <Text className="mr-1 text-lg">{selectedEmoji}</Text>
+              <View className="flex-row items-center px-4 py-2 bg-gold rounded-full" style={{ gap: 6 }}>
+                {selectedEmoji.startsWith(HIVE_ICON_PREFIX) ? (
+                  <HiveIcon name={selectedEmoji.slice(HIVE_ICON_PREFIX.length) as HiveIconName} size={18} color="#ffffff" />
+                ) : (
+                  <Text className="text-lg">{selectedEmoji}</Text>
+                )}
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white">
-                  {name || 'Topic Name'}
+                  {name || 'Board Name'}
                 </Text>
               </View>
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs mt-2">
@@ -339,50 +360,10 @@ export function BoardTopicComposer({
               </View>
             )}
 
-            {/* Board type */}
-            <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Board Type</Text>
-              <View className="bg-white rounded-xl p-3">
-                <View className="flex-row flex-wrap">
-                  {[
-                    { kind: 'discussion' as const, label: 'Discussion', icon: '💬' },
-                    { kind: 'hd_board' as const, label: 'Member HD', icon: '💎' },
-                    { kind: 'helper_log' as const, label: 'Helpers', icon: '🤝' },
-                  ].map((option) => {
-                    const selected = topicKind === option.kind;
-                    return (
-                      <Pressable
-                        key={option.kind}
-                        onPress={() => {
-                          setTopicKind(option.kind);
-                          if (option.kind === 'helper_log') {
-                            setAudience('community');
-                            setTaggedMemberIds([]);
-                            setOwnerUserId('');
-                            setGoalTitle('HIVE Helpers');
-                            setSelectedEmoji('🤝');
-                          }
-                          if (option.kind === 'hd_board') {
-                            setAudience('members');
-                            if (!selectedEmoji || selectedEmoji === '💬') setSelectedEmoji('💎');
-                          }
-                        }}
-                        className={`px-4 py-2.5 rounded-full mr-2 mb-2 border ${
-                          selected ? 'bg-gold border-gold' : 'bg-cream border-gold/20'
-                        }`}
-                      >
-                        <Text
-                          style={{ fontFamily: 'Lato_700Bold' }}
-                          className={selected ? 'text-white' : 'text-charcoal'}
-                        >
-                          {option.icon} {option.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            </View>
+            {/* Board Type picker retired (Nat 2026-07-24): the Member HD
+                boards are all gone and there's only ever one helper board, so
+                every board made here is a plain discussion board. Existing
+                helper/HD boards keep their kind — this only stops new ones. */}
 
             {topicKind === 'hd_board' && (
               <View className="mb-4">
@@ -419,155 +400,53 @@ export function BoardTopicComposer({
               </View>
             )}
 
-            {/* Emoji picker */}
+            {/* Icon picker — the HIVE family only. Stock emoji were the one
+                thing on this screen that didn't look like us (Nat 2026-07-24:
+                "always default to our original icons... very upscale and
+                sleek"). Boards created before this keep whatever emoji they
+                have until someone edits them. */}
             <View className="mb-4">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Choose an Icon</Text>
-              <View className="bg-white rounded-xl overflow-hidden">
-
-                {/* "Type any emoji" row */}
-                <Pressable
-                  onPress={() => customInputRef.current?.focus()}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
-                    borderBottomWidth: 1,
-                    borderBottomColor: 'rgba(222,193,129,0.2)',
-                    gap: 10,
-                  }}
-                >
-                  <Ionicons name="happy-outline" size={18} color="#bd9348" />
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8e7a5e', flex: 1 }}>
-                    Type or paste any emoji →
-                  </Text>
-                  <TextInput
-                    ref={customInputRef}
-                    value={customEmoji}
-                    onChangeText={handleCustomEmojiChange}
-                    style={{
-                      fontSize: 28,
-                      width: 44,
-                      height: 44,
-                      textAlign: 'center',
-                      borderWidth: 1,
-                      borderColor: customEmoji ? '#bd9348' : 'rgba(222,193,129,0.4)',
-                      borderRadius: 10,
-                      backgroundColor: customEmoji ? '#fdf3dc' : '#faf8f3',
-                    }}
-                    maxLength={8}
-                    autoCorrect={false}
-                    autoCapitalize="none"
-                    placeholder="🐝"
-                    placeholderTextColor="#d1d5db"
-                  />
-                </Pressable>
-
-                {/* Category tabs */}
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.2)' }}
-                  contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 6, gap: 4 }}
-                >
-                  {EMOJI_CATEGORIES.map((cat, i) => (
-                    <Pressable
-                      key={cat.label}
-                      onPress={() => setActiveCategory(i)}
-                      style={{
-                        paddingHorizontal: 10,
-                        paddingVertical: 5,
-                        borderRadius: 20,
-                        backgroundColor: activeCategory === i ? '#fdf3dc' : 'transparent',
-                        borderWidth: 1,
-                        borderColor: activeCategory === i ? '#bd9348' : 'transparent',
-                      }}
-                    >
-                      <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-
-                {/* Emoji grid */}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 8 }}>
-                  {EMOJI_CATEGORIES[activeCategory].emojis.map((emoji) => (
-                    <Pressable
-                      key={emoji}
-                      onPress={() => { setSelectedEmoji(emoji); setCustomEmoji(''); }}
-                      style={{
-                        width: 44,
-                        height: 44,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: 10,
-                        margin: 3,
-                        backgroundColor: selectedEmoji === emoji ? '#fdf3dc' : 'transparent',
-                        borderWidth: selectedEmoji === emoji ? 1.5 : 0,
-                        borderColor: '#bd9348',
-                      }}
-                    >
-                      <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            </View>
-
-            {/* Audience picker */}
-            {topicKind === 'discussion' && (
-            <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Tag</Text>
-              <View className="bg-white rounded-xl p-3">
-                <View className="flex-row flex-wrap">
-                  <Pressable
-                    onPress={() => {
-                      setAudience('community');
-                      setTaggedMemberIds([]);
-                    }}
-                    className={`px-4 py-2.5 rounded-full mr-2 mb-2 border ${
-                      audience === 'community' ? 'bg-gold border-gold' : 'bg-cream border-gold/20'
-                    }`}
-                  >
-                    <Text
-                      style={{ fontFamily: 'Lato_700Bold' }}
-                      className={audience === 'community' ? 'text-white' : 'text-charcoal'}
-                    >
-                      Everyone
-                    </Text>
-                  </Pressable>
-
-                  {members.map((member) => {
-                    const selected = audience === 'members' && taggedMemberIds.includes(member.id);
+              <View className="bg-white rounded-xl p-2">
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  {BOARD_ICON_CHOICES.map((iconName) => {
+                    const value = `${HIVE_ICON_PREFIX}${iconName}`;
+                    const selected = selectedEmoji === value;
                     return (
                       <Pressable
-                        key={member.id}
-                        onPress={() => toggleMember(member.id)}
-                        className={`px-4 py-2.5 rounded-full mr-2 mb-2 border ${
-                          selected ? 'bg-gold border-gold' : 'bg-cream border-gold/20'
-                        }`}
+                        key={iconName}
+                        onPress={() => setSelectedEmoji(value)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`${iconName} icon`}
+                        style={{
+                          width: 48,
+                          height: 48,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: 12,
+                          margin: 3,
+                          backgroundColor: selected ? '#fdf3dc' : 'transparent',
+                          borderWidth: selected ? 1.5 : 1,
+                          borderColor: selected ? '#bd9348' : 'rgba(222,193,129,0.28)',
+                        }}
                       >
-                        <Text
-                          style={{ fontFamily: 'Lato_700Bold' }}
-                          className={selected ? 'text-white' : 'text-charcoal'}
-                          numberOfLines={1}
-                        >
-                          {member.name.split(' ')[0]}
-                        </Text>
+                        <HiveIcon name={iconName} size={26} color={selected ? '#8e6f35' : '#bd9348'} />
                       </Pressable>
                     );
                   })}
                 </View>
-                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mt-1">
-                  Use Everyone for all-HIVE projects, or pick one or more members when the board belongs to specific people.
-                </Text>
               </View>
             </View>
-            )}
+
+            {/* Member tagging retired (Nat 2026-07-24): boards belong to the
+                whole HIVE now — the parent/child board-thread-comment web was
+                confusing enough without per-member ownership on top. */}
 
             {/* Name input */}
             <View className="mb-4">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
-                {topicKind === 'hd_board' ? 'Board Name' : 'Topic Name *'}
+                {topicKind === 'hd_board' ? 'Board Name' : 'Board Name *'}
               </Text>
               <TextInput
                 value={name}

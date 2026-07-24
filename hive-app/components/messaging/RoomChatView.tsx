@@ -21,6 +21,8 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useRoomMessagesQuery } from '../../lib/hooks/useRoomMessagesQuery';
 import { queryKeys } from '../../lib/queryClient';
 import { HiveIcon } from '../ui/HiveIcon';
+
+const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 import { RoomMessageItem } from './RoomMessageItem';
 import { RoomTypingIndicator } from './RoomTypingIndicator';
 import { SelectedImage, pickSingleImage } from '../../lib/imagePicker';
@@ -323,6 +325,19 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
       );
     }
 
+    // General wears the HIVE logo here exactly as it does in the room rail —
+    // the two sit side by side, so a generic people glyph in one and the crest
+    // in the other read as two different rooms (Nat 2026-07-24).
+    if (room.room_type === 'community') {
+      return (
+        <Image
+          source={hiveLogo}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+          resizeMode="cover"
+        />
+      );
+    }
+
     return (
       <View
         style={{
@@ -336,11 +351,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
           justifyContent: 'center',
         }}
       >
-        <Ionicons
-          name={room.room_type === 'community' ? 'people-outline' : room.room_type === 'group_dm' ? 'chatbubbles-outline' : 'person-outline'}
-          size={size * 0.5}
-          color={roomTheme.accent}
-        />
+        <HiveIcon name={room.room_type === 'group_dm' ? 'message' : 'person'} size={size * 0.5} color={roomTheme.accent} />
       </View>
     );
   };
