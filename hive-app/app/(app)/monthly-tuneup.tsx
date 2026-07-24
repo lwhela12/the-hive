@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -8,6 +8,7 @@ import {
   Text,
   TextInput,
   View,
+  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -166,6 +167,28 @@ function StepHeader({ title, subtitle, icon }: { title: string; subtitle: string
       </View>
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#7d715f' }}>
         {subtitle}
+      </Text>
+    </View>
+  );
+}
+
+// The little uppercase section headers inside the steps. They used to lead
+// with stock emoji (💡 ✨ 📝 🎉); chrome wears the hand-drawn family instead —
+// emoji are reserved for human content (Nat 2026-07-24).
+function MiniLabel({
+  icon,
+  children,
+  style,
+}: {
+  icon: ComponentProps<typeof HiveIcon>['name'];
+  children: ReactNode;
+  style?: ViewStyle;
+}) {
+  return (
+    <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 6 }, style]}>
+      <HiveIcon name={icon} size={14} color="#8e7a5e" />
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e' }}>
+        {children}
       </Text>
     </View>
   );
@@ -414,12 +437,11 @@ export default function MonthlyTuneupScreen() {
         setCheckInAnswer('q_pop_progress', lines);
       }
     }
-    if (helperPosted.length > 0) {
-      const current = String(checkInAnswers.q_hive_help_recap ?? '').trim();
-      if (!current) {
-        setCheckInAnswer('q_hive_help_recap', `I logged: ${helperPosted.join(' · ')}.`);
-      }
-    }
+    // (The HIVE Help recap used to be seeded with "I logged: …" the moment you
+    // logged a kindness, which turned the box directly below the log into a
+    // copy of it — Nat 2026-07-24, "the same thing twice". The logged acts
+    // already reach the deck on their own; this box is for what you THINK of
+    // the focus, so it stays yours to fill.)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [surveysLoading, monthlyCheckInSurvey, doneTodos, doneForMe, helperPosted]);
 
@@ -521,13 +543,18 @@ export default function MonthlyTuneupScreen() {
       return { boardId: board.id, boardName: board.name, postId: null, postTitle: null };
     }
 
-    // Monthly log thread only — never the standing "HIVE Help Ideas" thread.
-    // Prefer this month's; else the freshest monthly-looking one.
-    const monthPrefix = new Date().toLocaleDateString('en-US', { month: 'long' }).toLowerCase();
+    // Focus threads only — never the standing "HIVE Help Ideas" thread.
+    //
+    // Take the NEWEST one, full stop. This used to prefer whichever thread was
+    // titled with the current calendar month, which quietly lied: the focus
+    // turns over at a MEETING, not at midnight on the 1st. The July 21 meeting
+    // chose Shelter Donation (filed under August, since it runs to the Aug 19
+    // meeting), but because the calendar still said July, everyone kept being
+    // told the focus was "Pay it behind" (Nat 2026-07-24). A focus thread is
+    // only ever posted when a meeting picks one, so newest == current.
     const candidates = ((data ?? []) as { id: string; title: string }[])
       .filter((row) => !/ideas/i.test(row.title));
-    const thread =
-      candidates.find((row) => row.title.toLowerCase().startsWith(monthPrefix)) ?? candidates[0];
+    const thread = candidates[0];
     return {
       boardId: board.id,
       boardName: board.name,
@@ -1178,9 +1205,7 @@ export default function MonthlyTuneupScreen() {
       {existingHangIdeas.length > 0 ? (
         <View style={[cardStyle, { marginBottom: 10, position: 'relative', overflow: 'hidden' }]}>
           <ConfettiBurst visible={hangConfetti} onDone={() => setHangConfetti(false)} />
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: 8 }}>
-            💡 Choose one — tap to give it a +1
-          </Text>
+          <MiniLabel icon="star" style={{ marginBottom: 8 }}>Choose one — tap to give it a +1</MiniLabel>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {existingHangIdeas.map((idea) => {
               const isSeconded = secondedHangIdeaId === idea.id;
@@ -1235,9 +1260,9 @@ export default function MonthlyTuneupScreen() {
           </View>
         ) : null;
       })()}
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: 6, marginTop: 4 }}>
-        ✨ Or suggest your own
-      </Text>
+      <MiniLabel icon="sparkle" style={{ marginBottom: 6, marginTop: 4 }}>
+        {existingHangIdeas.length > 0 ? 'Or suggest your own' : 'Suggest one'}
+      </MiniLabel>
       <View style={[cardStyle, { gap: 10 }]}>
         <TextInput
           value={hangTitle}
@@ -1427,12 +1452,10 @@ export default function MonthlyTuneupScreen() {
       />
       {helperThread?.postTitle ? (
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348', marginTop: -6, marginBottom: 12 }}>
-          This month's focus: "{helperThread.postTitle.replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, '')}"
+          Current focus: "{helperThread.postTitle.replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, '')}"
         </Text>
       ) : null}
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: 6 }}>
-        📝 Log a kindness you did
-      </Text>
+      <MiniLabel icon="note" style={{ marginBottom: 6 }}>Log a kindness you did</MiniLabel>
       <View style={[cardStyle, { gap: 10 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
           <TextInput
@@ -1494,9 +1517,11 @@ export default function MonthlyTuneupScreen() {
       {/* Next month's focus: tap-to-second (confetti and all), or pitch fresh */}
       <View style={[cardStyle, { marginTop: 14, gap: 10, position: 'relative', overflow: 'hidden' }]}>
         <ConfettiBurst visible={helpConfetti} onDone={() => setHelpConfetti(false)} />
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e' }}>
-          💡 Next month's focus — choose one to +1
-        </Text>
+        {/* Only promise a choice when there's something to choose — an empty
+            "choose one to +1" over nothing was a dead end (Nat 2026-07-24). */}
+        {helpIdeas.length > 0 ? (
+          <MiniLabel icon="star">Next meeting's focus — choose one to +1</MiniLabel>
+        ) : null}
         {helpIdeas.length > 0 ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {helpIdeas.map((idea) => {
@@ -1529,9 +1554,9 @@ export default function MonthlyTuneupScreen() {
             })}
           </View>
         ) : null}
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginTop: 2 }}>
-          ✨ Or pitch your own
-        </Text>
+        <MiniLabel icon="sparkle" style={{ marginTop: 2 }}>
+          {helpIdeas.length > 0 ? 'Or pitch your own' : "Next meeting's focus — pitch one"}
+        </MiniLabel>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TextInput
             value={helpIdeaContent}
@@ -1571,7 +1596,7 @@ export default function MonthlyTuneupScreen() {
       <StepHeader
         title="Your to-do list"
         icon={<HiveIcon name="checkin" size={20} color="#8e6f35" />}
-        subtitle="Anything from the meetings or @notes land here. Check off what's done — it becomes your Progress memory-jogger at the next meeting, so wins don't get forgotten."
+        subtitle="Anything from the meetings lands here. Check off what's done — it becomes your Progress memory-jogger at the next meeting, so wins don't get forgotten."
       />
       <View style={[cardStyle, { gap: 10 }]}>
         {openTodos.length === 0 ? (
@@ -1661,12 +1686,13 @@ export default function MonthlyTuneupScreen() {
   // updates itself as each month's focus changes.
   const helpFocusMatch = helperThread?.postTitle?.match(/HIVE Help(?:ers)?\s*[—–-]+\s*(.+)$/i);
   const helpFocus = helpFocusMatch?.[1]?.trim() ?? null;
+  // "Current", not "this month's" — the focus turns over at each meeting.
   const helpFocusReminder = helpFocus
     ? /donat/i.test(helpFocus)
-      ? `This month's HIVE Help is ${helpFocus} — don't forget to bring your donation to the meeting! 🎁`
+      ? `The HIVE Help focus is ${helpFocus} — don't forget to bring your donation to the meeting!`
       // A focus is often an ACT, not an object — "pay it behind" in a
       // drive-through, trash picked up on a walk. Nothing to carry in.
-      : `This month's HIVE Help focus: ${helpFocus} — do yours out in the world, then tell us at the meeting! 🐝`
+      : `The HIVE Help focus is ${helpFocus} — do yours out in the world, then tell us at the meeting!`
     : null;
 
   const renderCheckInStep = () => (
