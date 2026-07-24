@@ -2893,7 +2893,7 @@ export default function HiveScreen() {
                       }
                     />
                     <View style={{
-                      backgroundColor: '#fdf3dc',
+                      backgroundColor: '#fffdf5',
                       borderRadius: 20,
                       borderTopLeftRadius: 0,
                       borderWidth: 1,
@@ -3069,7 +3069,7 @@ export default function HiveScreen() {
 
                     {loading.publicWishes && loading.grantedWishes ? (
                       <View style={{
-                        backgroundColor: '#fdf3dc',
+                        backgroundColor: '#fffdf5',
                         borderRadius: 20,
                         borderTopLeftRadius: 0,
                         borderWidth: 1,
@@ -3087,7 +3087,7 @@ export default function HiveScreen() {
                       </View>
                     ) : (
                       <View style={{
-                        backgroundColor: '#fdf3dc',
+                        backgroundColor: '#fffdf5',
                         borderRadius: 20,
                         borderTopLeftRadius: 0,
                         borderWidth: 1,
