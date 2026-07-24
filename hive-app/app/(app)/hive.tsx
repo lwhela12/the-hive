@@ -2121,13 +2121,13 @@ export default function HiveScreen() {
       // Uniform shape for every meeting jot: "@who · re: X's HD". Old jots
       // whose text never carried an @token fall back to @you — it's your list.
       const mentionTag = jot.mentionTag ?? (reSubject ? '@you' : null);
-      const jotContext = [jot.elaboration, mentionTag, reSubject ? `re: ${reSubject}` : null]
+      const jotContext = [mentionTag, reSubject ? `re: ${reSubject}` : null, jot.elaboration]
         .filter(Boolean)
         .join(' · ');
       return {
         id: `action-${a.id}`,
         emoji: '📝',
-        iconName: 'note',
+        iconName: /^HIVE Help:/i.test(jot.text) ? 'bee' : 'note',
         title: jot.text,
         detail: [statusDetail, jotContext || null].filter(Boolean).join(' · ') || undefined,
         // Linked to-dos navigate on tap (like Recent Activity rows); the circle
