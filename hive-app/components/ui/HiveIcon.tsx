@@ -51,20 +51,23 @@ export function HiveIcon({
           <Circle cx="10.2" cy="12.3" r="1.4" {...drop} />
         </G>
       );
+      // Matches the footer's grid-outline — one referent, one mark.
       case 'board': return (
         <G>
-          <Rect x="3.2" y="4.6" width="17.6" height="14.4" rx="2.4" {...stroke} />
-          <Line x1="7" y1="10.4" x2="14" y2="10.4" {...stroke} />
-          <Line x1="7" y1="14.4" x2="11.4" y2="14.4" {...stroke} />
-          <Circle cx="12" cy="6.9" r="1.3" {...drop} />
+          <Rect x="4" y="4" width="6.8" height="6.8" rx="1.8" {...stroke} />
+          <Rect x="13.2" y="4" width="6.8" height="6.8" rx="1.8" {...stroke} />
+          <Rect x="4" y="13.2" width="6.8" height="6.8" rx="1.8" {...stroke} />
+          <Rect x="13.2" y="13.2" width="6.8" height="6.8" rx="1.8" {...stroke} />
+          <Circle cx="16.6" cy="16.6" r="1.3" {...drop} />
         </G>
       );
+      // Matches the footer's chatbubble-ellipses — round bubble, dot trio.
       case 'message': return (
         <G>
-          <Path d="M4 7 C4 5.6 5.1 4.5 6.5 4.5 H17.5 C18.9 4.5 20 5.6 20 7 V12.8 C20 14.2 18.9 15.3 17.5 15.3 H9.4 L5.6 18.8 C5 19.3 4 18.9 4 18.1 Z" {...stroke} />
-          <Circle cx="8.6" cy="10" r="1.15" {...drop} />
-          <Circle cx="12" cy="10" r="1.15" {...drop} />
-          <Circle cx="15.4" cy="10" r="1.15" {...drop} />
+          <Path d="M12 4.2 C16.5 4.2 20 7.4 20 11.5 C20 15.6 16.5 18.8 12 18.8 C10.9 18.8 9.9 18.6 9 18.3 C7.9 18.9 6.4 19.5 4.9 19.8 C4.4 19.9 4 19.4 4.2 19 C4.7 17.9 5.1 16.7 5.2 15.7 C4.4 14.5 4 13.1 4 11.5 C4 7.4 7.5 4.2 12 4.2 Z" {...stroke} />
+          <Circle cx="8.6" cy="11.5" r="1.15" {...drop} />
+          <Circle cx="12" cy="11.5" r="1.15" {...drop} />
+          <Circle cx="15.4" cy="11.5" r="1.15" {...drop} />
         </G>
       );
       case 'reply': return (
