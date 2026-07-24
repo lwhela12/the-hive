@@ -262,7 +262,7 @@ const SEED_SURVEY: SurveyQuestion[] = [
 // lower tiers grew the most — every bloom's center disc now fits a real label.
 const STAGES: StageDef[] = [
   { label: 'Seed', height: 24, canvasWidth: 72, labelWidth: 100 },
-  { label: 'Small bloom', height: 152, canvasWidth: 184, labelWidth: 190 },
+  { label: 'Small bloom', height: 176, canvasWidth: 212, labelWidth: 218 },
   { label: 'Medium bloom', height: 198, canvasWidth: 242, labelWidth: 248 },
   { label: 'Large bloom', height: 240, canvasWidth: 282, labelWidth: 288 },
 ];
@@ -1007,7 +1007,7 @@ function renderFlowerCenterLabel({
 
   const lines = getEmbeddedLabelLines(label);
   const longestLine = lines.reduce((longest, line) => Math.max(longest, line.length), 0);
-  const fontSize = clamp(radius * (lines.length > 2 ? 0.23 : 0.27) - Math.max(0, longestLine - 9) * 0.12, 7.5, 14.5);
+  const fontSize = clamp(radius * (lines.length > 2 ? 0.23 : 0.27) - Math.max(0, longestLine - 9) * 0.12, 9, 14.5);
   const lineGap = fontSize * 1.02;
   const firstLineY = cy - ((lines.length - 1) * lineGap) / 2 + fontSize * 0.34;
 

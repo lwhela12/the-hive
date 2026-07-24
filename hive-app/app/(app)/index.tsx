@@ -158,19 +158,10 @@ export default function ChatScreen() {
 
         {/* Main chat area */}
         <View className="flex-1">
+          {/* No logos in the gold bars — all seven pages identical. Clive's
+              crest greets you at full size in the chat welcome state instead. */}
           <AppHeader
             title="Clive"
-            titleIcon={
-              // The crest overhangs the slim gold bar like a badge — the
-              // wrapper only claims 24px of bar height while the art renders
-              // at 48 (the asset has no trimmable padding; this is the way).
-              <View style={{ width: 48, height: 24, alignItems: 'center', justifyContent: 'center', overflow: 'visible', marginRight: 12 }}>
-                <Image
-                  source={cliveIcon}
-                  style={{ width: 48, height: 48, borderRadius: 24 }}
-                />
-              </View>
-            }
             onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
           />
 
