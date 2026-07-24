@@ -12,6 +12,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { AppHeader } from '../../components/navigation';
 import { EditButton } from '../../components/ui/EditButton';
+import { HiveIcon } from '../../components/ui/HiveIcon';
 
 const memberHoneycombCell = require('../../assets/generated/member-honeycomb-cell.png');
 const memberHoneycombCellMe = require('../../assets/generated/member-honeycomb-cell-me.png');
@@ -412,11 +413,14 @@ function MemberDetailModal({
   onClose,
   onMemberUpdated,
   communityId,
+  initialShowAnswers = false,
 }: {
   member: MemberData;
   onClose: () => void;
   onMemberUpdated: (member: MemberData) => void;
   communityId: string | null;
+  /** Open straight onto the Daily Answers sheet (comb chip deep link). */
+  initialShowAnswers?: boolean;
 }) {
   const router = useRouter();
   const { width: viewportWidth } = useWindowDimensions();
@@ -521,6 +525,7 @@ function MemberDetailModal({
     setEditing(false);
     setSaveError(null);
     setShowDeeper(false);
+    setShowDailyAnswersSheet(initialShowAnswers);
     setDraftName(member.name ?? '');
     setDraftOccupation(member.occupation ?? '');
     setDraftProfileTitle(member.profile_title ?? '');
@@ -1406,8 +1411,14 @@ function MemberDetailModal({
                     {dailyAnswers.length} question{dailyAnswers.length !== 1 ? 's' : ''} answered
                   </Text>
                 </View>
-                <Pressable onPress={() => setShowDailyAnswersSheet(false)} style={{ padding: 6 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#a09274' }}>Close</Text>
+                <Pressable
+                  onPress={() => setShowDailyAnswersSheet(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close daily answers"
+                  hitSlop={8}
+                  style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ee' }}
+                >
+                  <Ionicons name="close" size={24} color="#8e7a5e" />
                 </Pressable>
               </View>
 
@@ -2043,7 +2054,9 @@ function MemberDetailModal({
             </Pressable>
             </View>
           </ScrollView>
-          {!selectedWish && (
+          {/* Hidden while an overlay sheet is up — it was floating over the
+              Daily Answers header and colliding with that sheet's Close. */}
+          {!selectedWish && !showDailyAnswersSheet && (
             <Pressable
               onPress={onClose}
               onPressIn={onClose}
@@ -2333,7 +2346,9 @@ export default function MembersScreen() {
     }
   }, [routeView]);
 
-  const openMemberProfile = useCallback((member: MemberData) => {
+  const [openAnswersOnSelect, setOpenAnswersOnSelect] = useState(false);
+  const openMemberProfile = useCallback((member: MemberData, showAnswers = false) => {
+    setOpenAnswersOnSelect(showAnswers);
     setSelected(member);
   }, []);
 
@@ -2743,7 +2758,7 @@ export default function MembersScreen() {
                           accessibilityLabel={`Answer more ${theme.category} questions in Catch up`}
                           style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: pressed ? '#fbf0d7' : '#fffdf5', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 })}
                         >
-                          <Text style={{ fontSize: 13 }}>{theme.emoji}</Text>
+                          <HiveIcon name="star" size={13} color="#bd9348" />
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2d2d2d' }}>
                             {theme.category}
                           </Text>
@@ -2802,7 +2817,10 @@ export default function MembersScreen() {
                       : isCompactHoneycomb
                         ? '0 shared'
                         : '0 shared answers';
-                    const visibleChips = [wishChip, connectionChip];
+                    const visibleChips = [
+                      { key: 'answers', label: connectionChip },
+                      { key: 'wishes', label: wishChip },
+                    ];
                     return (
                       <Pressable
                         key={member.id}
@@ -2939,13 +2957,22 @@ export default function MembersScreen() {
                           )}
 
                           {visibleChips.length > 0 && (
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: isCompactHoneycomb ? 4 : 5, marginTop: isCompactHoneycomb ? 7 : 9, justifyContent: 'center' }}>
+                            <View style={{ flexDirection: 'column', alignItems: 'center', gap: isCompactHoneycomb ? 3 : 4, marginTop: isCompactHoneycomb ? 7 : 9 }}>
                               {visibleChips.slice(0, isCompactHoneycomb ? 1 : 2).map(chip => (
-                                <View key={chip} style={{ backgroundColor: 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 }}>
+                                <Pressable
+                                  key={chip.key}
+                                  onPress={(event) => {
+                                    event.stopPropagation();
+                                    openMemberProfile(member, chip.key === 'answers');
+                                  }}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={chip.key === 'answers' ? `See ${member.name}'s shared answers` : `See ${member.name}'s wishes`}
+                                  style={({ pressed }) => ({ backgroundColor: pressed ? 'rgba(222,193,129,0.7)' : 'rgba(245,234,209,0.86)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 })}
+                                >
                                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: isCompactHoneycomb ? 8 : 9, color: '#8a6a2f' }} numberOfLines={1}>
-                                    {chip}
+                                    {chip.label} ›
                                   </Text>
-                                </View>
+                                </Pressable>
                               ))}
                             </View>
                           )}
@@ -2966,6 +2993,7 @@ export default function MembersScreen() {
         <MemberDetailModal
           member={selected}
           communityId={communityId}
+          initialShowAnswers={openAnswersOnSelect}
           onClose={closeMemberProfile}
           onMemberUpdated={(updatedMember) => {
             setSelected(updatedMember);

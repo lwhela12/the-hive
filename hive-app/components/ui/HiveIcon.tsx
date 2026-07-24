@@ -33,9 +33,9 @@ export function HiveIcon({
   size?: number;
   color?: string;
 }) {
-  // Thin lines like the footer glyphs — 1.6 at 24-box stays airy even when
-  // the icon renders larger (strokes scale with size).
-  const stroke = { stroke: color, strokeWidth: 1.6, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' as const };
+  // Constant-weight lines: normalize the stroke by render size so it stays
+  // ~1.6 CSS px whether the icon draws at 16 or 32 (matches the footer).
+  const stroke = { stroke: color, strokeWidth: (1.6 * 24) / size, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' as const };
   const drop = { fill: color };
 
   const icon = (() => {
