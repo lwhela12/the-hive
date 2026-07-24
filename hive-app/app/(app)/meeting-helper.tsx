@@ -22,6 +22,8 @@ import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
 import { getWishQuickTitle } from '../../lib/wishDisplay';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
+import { submitOnEnter } from '../../lib/submitOnEnter';
+import { HiveIcon } from '../../components/ui/HiveIcon';
 import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
@@ -924,9 +926,12 @@ export default function MeetingHelperScreen() {
             {meetingLine}
           </Text>
         ) : null}
-        <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(23, 13), color: MUTED, marginTop: sz(8, 5), textAlign: 'center' }}>
-          grab a plate and check in 🍯
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: sz(8, 5), marginTop: sz(8, 5) }}>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(23, 13), color: MUTED, textAlign: 'center' }}>
+            grab a plate and check in
+          </Text>
+          <HiveIcon name="honeypot" size={sz(22, 13)} color={GOLD} />
+        </View>
         {survey ? (
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 11), color: MUTED, marginTop: sz(10, 6) }}>
             {checkedInCount} of {members.length} checked in{lastUpdatedAt ? '  ·  live' : ''}
@@ -1562,10 +1567,7 @@ export default function MeetingHelperScreen() {
                   ))}
                 </View>
               )}
-              <NoteBody
-                noteKey="meetups"
-                emptyText="Pick one and write it down — tap a day on the calendar to claim it. Writers days and project days count too 🐝"
-              />
+              <NoteBody noteKey="meetups" emptyText="No meet-up plans written down yet." />
             </View>
           </View>
         ) : null}
@@ -2017,6 +2019,10 @@ export default function MeetingHelperScreen() {
                   placeholder={`Jot a to-do — it lands on ${getFirstName(member.name)}'s list. Start a word with @ (like @Charlee, or @all) to send it to them instead.`}
                   placeholderTextColor={MUTED}
                   multiline
+                  // Enter files the jot; Shift+Enter is the newline. Mid-meeting
+                  // you're typing fast — reaching for the button broke the flow.
+                  blurOnSubmit={false}
+                  onKeyPress={submitOnEnter(() => handleSaveLiveNote(member, topWish?.id ?? null))}
                   style={{
                     borderWidth: 1,
                     borderColor: GOLD_SOFT,
@@ -2070,7 +2076,9 @@ export default function MeetingHelperScreen() {
                 </View>
                 {liveNotesTaken.filter((note) => note.aboutId === member.id).map((note) => (
                   <View key={note.id} style={{ flexDirection: 'row', gap: sz(8, 6), alignItems: 'flex-start' }}>
-                    <Text style={{ fontSize: sz(14, 11) }}>📝</Text>
+                    <View style={{ paddingTop: sz(3, 2) }}>
+                      <HiveIcon name="note" size={sz(15, 12)} color={GOLD} />
+                    </View>
                     <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: sz(15, 11), lineHeight: sz(22, 16), color: CHARCOAL }}>
                       {note.text}
                       <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>  → {note.assignees}</Text>

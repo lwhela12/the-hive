@@ -46,6 +46,11 @@ import { submitOnEnter } from '../../lib/submitOnEnter';
 import type { Profile, Wish } from '../../types';
 
 const hiveBee = require('../../assets/HIVE Bee.png');
+// The crest (bee inside a 30-ray sunburst ring) needs room to read — its
+// content is only 47% of the asset box, so at header size it collapses into a
+// smudge. The plain bee mark is one bold shape at 70% of its box: same brand,
+// legible small. Crest stays on the big moments (Nat 2026-07-24).
+const hiveBeeMark = require('../../assets/BEE ONLY IN GOLD BG.png');
 
 const STEPS = [
   { key: 'wishes', label: 'HD wishes' },
@@ -1802,6 +1807,28 @@ export default function MonthlyTuneupScreen() {
           >
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>Back to Home</Text>
           </Pressable>
+          {/* Never a dead end: finishing is a milestone, not a lock. Submitting
+              again just overwrites your answers, so you can keep tuning as
+              often as you like (Nat 2026-07-24). */}
+          <Pressable
+            onPress={() => {
+              setFinished(false);
+              setStepIndex(0);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back in and keep editing your tune-up"
+            style={({ pressed }) => ({
+              marginTop: 14,
+              borderRadius: 14,
+              paddingHorizontal: 24,
+              paddingVertical: 12,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#8a6b30' }}>
+              ← Keep editing — change anything you like
+            </Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -1832,8 +1859,8 @@ export default function MonthlyTuneupScreen() {
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Image
-              source={hiveBee}
-              style={{ width: 26, height: 26 }}
+              source={hiveBeeMark}
+              style={{ width: 30, height: 30 }}
               contentFit="contain"
             />
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 20, color: '#2d2d2d' }}>

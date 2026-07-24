@@ -19,7 +19,9 @@ import {
 } from '../../lib/hooks/useArrivalBoard';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 
-const hiveBee = require('../../assets/HIVE Bee.png');
+// The plain bee mark, not the crest — the crest's sunburst ring turns to mush
+// at header size (see monthly-tuneup for the full note).
+const hiveBee = require('../../assets/BEE ONLY IN GOLD BG.png');
 
 export default function ArrivalBoardScreen() {
   const router = useRouter();
