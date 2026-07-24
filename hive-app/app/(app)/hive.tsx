@@ -2177,7 +2177,7 @@ export default function HiveScreen() {
   const dashboardSectionStyle = useMobileLayout
     ? { width: '100%' as const }
     : { flexBasis: '47%' as const, flexGrow: 1, minWidth: 320 };
-  const dashboardPanelHeight = useMobileLayout ? 320 : 340;
+  const dashboardPanelHeight = useMobileLayout ? 310 : 316;
   const todoPanelMaxHeight = dashboardPanelHeight;
   const wishPanelHeight = dashboardPanelHeight;
 
@@ -3254,7 +3254,7 @@ export default function HiveScreen() {
             HOME_SECTION_META[group[0]].layout === 'panel' ? (
               <View
                 key={group.join('-')}
-                style={{ flexDirection: useMobileLayout ? 'column' : 'row', flexWrap: useMobileLayout ? undefined : 'wrap', gap: useMobileLayout ? 20 : 16, marginBottom: useMobileLayout ? 20 : 24 }}
+                style={{ flexDirection: useMobileLayout ? 'column' : 'row', flexWrap: useMobileLayout ? undefined : 'wrap', gap: useMobileLayout ? 20 : 24, marginBottom: useMobileLayout ? 20 : 28, maxWidth: 1380, width: '100%', alignSelf: 'center' }}
               >
                 {group.map((sectionKey) => (
                   <View key={sectionKey} style={dashboardSectionStyle}>
