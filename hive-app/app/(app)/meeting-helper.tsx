@@ -650,7 +650,10 @@ export default function MeetingHelperScreen() {
           members.map((member) => ({
             community_id: communityId,
             assigned_to: member.id,
-            description: `HIVE Help: ${focus} — bring your contribution to the ${monthLabel} meeting 🎁`,
+            // Not every focus is a thing you carry in: "pay it behind" happens
+            // in a drive-through, "pick up trash" happens on a walk. The nudge
+            // has to fit an ACT, not just a donation (Nat 2026-07-24).
+            description: `HIVE Help: ${focus} — however you pull it off, log it by the ${monthLabel} meeting`,
             due_date: monthMeeting?.event_date ?? null,
           }))
         );

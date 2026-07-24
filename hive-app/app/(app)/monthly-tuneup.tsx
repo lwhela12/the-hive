@@ -1657,7 +1657,9 @@ export default function MonthlyTuneupScreen() {
   const helpFocusReminder = helpFocus
     ? /donat/i.test(helpFocus)
       ? `This month's HIVE Help is ${helpFocus} — don't forget to bring your donation to the meeting! 🎁`
-      : `This month's HIVE Help focus: ${helpFocus} — bring whatever it needs to the meeting! 🐝`
+      // A focus is often an ACT, not an object — "pay it behind" in a
+      // drive-through, trash picked up on a walk. Nothing to carry in.
+      : `This month's HIVE Help focus: ${helpFocus} — do yours out in the world, then tell us at the meeting! 🐝`
     : null;
 
   const renderCheckInStep = () => (
