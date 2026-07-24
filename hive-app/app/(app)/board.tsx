@@ -27,7 +27,9 @@ import { deleteWishById } from '../../lib/wishMutations';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 
-type BoardListView = 'active' | 'archive';
+// Archived boards are no longer browsable (Nat 2026-07-24) — the boards-home
+// "Archive" pill is gone, so the list always shows active topics. Threads keep
+// an archive view only as a landing spot when search finds archived matches.
 type BoardThreadListView = 'active' | 'archive';
 type BoardCategoryStats = { count: number; latestActivity: string | null };
 type GrantThreadContext = {
@@ -162,7 +164,6 @@ export default function BoardScreen() {
   const [editingPost, setEditingPost] = useState<BoardPost | null>(null);
   const [showTopicComposer, setShowTopicComposer] = useState(false);
   const [editingTopic, setEditingTopic] = useState<BoardCategory | null>(null);
-  const [boardListView, setBoardListView] = useState<BoardListView>('active');
   const [threadListView, setThreadListView] = useState<BoardThreadListView>('active');
   const [boardSearch, setBoardSearch] = useState('');
   const [threadSearch, setThreadSearch] = useState('');
@@ -221,9 +222,6 @@ export default function BoardScreen() {
   const activeCategories = categories
     .filter((category) => !isArchivedCategory(category))
     .sort((a, b) => sortCategoriesForBoard(a, b, postCounts));
-  const archivedCategories = categories
-    .filter(isArchivedCategory)
-    .sort((a, b) => sortCategoriesForBoard(a, b, postCounts));
   const boardSearchQuery = boardSearch.trim().toLowerCase();
   const boardSearchMatchesByCategory = useMemo(() => {
     if (!boardSearchQuery) return {};
@@ -243,7 +241,7 @@ export default function BoardScreen() {
       return matches;
     }, {});
   }, [boardSearchIndex, boardSearchQuery]);
-  const listSourceCategories = boardListView === 'archive' ? archivedCategories : activeCategories;
+  const listSourceCategories = activeCategories;
   const visibleCategories = boardSearchQuery
     ? listSourceCategories
         .filter((category) => (
@@ -334,7 +332,6 @@ export default function BoardScreen() {
     const handleBoardsHome = () => {
       setBoardSearch('');
       setThreadSearch('');
-      setBoardListView('active');
       setThreadListView('active');
       resetBoardToList();
     };
@@ -378,7 +375,6 @@ export default function BoardScreen() {
 
     setBoardSearch('');
     setThreadSearch('');
-    setBoardListView('active');
     setThreadListView('active');
     setShowComposer(false);
     setEditingPost(null);
@@ -912,7 +908,7 @@ export default function BoardScreen() {
     const nextStatus = restore ? 'active' : 'archived';
     const message = restore
       ? `Restore "${category.name}" to the active board list?`
-      : `Archive "${category.name}"? It will move out of the main board list, but posts will stay available in Archive.`;
+      : `Archive "${category.name}"? It disappears from the board list for everyone and can't be reopened from the app.`;
 
     const updateStatus = async () => {
       try {
@@ -1328,7 +1324,7 @@ export default function BoardScreen() {
     const restore = !!post.archived_at;
     const message = restore
       ? `Restore "${post.title}" to this board?`
-      : `Archive "${post.title}"? It will move out of the active thread list, but you can restore it from Archived.`;
+      : `Archive "${post.title}"? It moves out of the thread list — search still finds it if you need it back.`;
 
     const updateArchiveState = async () => {
       try {
@@ -1348,9 +1344,6 @@ export default function BoardScreen() {
             : current
         ));
 
-        if (!restore && threadListView === 'active') {
-          setThreadListView('active');
-        }
         invalidatePosts();
         await refetchPosts();
         onDone?.();
@@ -1368,7 +1361,7 @@ export default function BoardScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: restore ? 'Restore' : 'Archive', onPress: updateArchiveState },
     ]);
-  }, [canManageThread, communityId, invalidatePosts, profile, refetchPosts, threadListView, updatePostInCache]);
+  }, [canManageThread, communityId, invalidatePosts, profile, refetchPosts, updatePostInCache]);
 
   const handleDeleteThread = useCallback((post: BoardPost, onDone?: () => void) => {
     if (!communityId || !canManageThread(post)) return;
@@ -1667,27 +1660,8 @@ export default function BoardScreen() {
         </View>
         <View className="flex-row items-center justify-between px-4 pb-2">
           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/50 text-xs uppercase tracking-wide">
-            {boardSearchQuery
-              ? `${boardListView === 'archive' ? 'Archived' : 'Active'} Results (${visibleCategories.length})`
-              : boardListView === 'archive' ? 'Archived Boards' : 'Boards'}
+            {boardSearchQuery ? `Results (${visibleCategories.length})` : 'Boards'}
           </Text>
-          {archivedCategories.length > 0 && (
-            <Pressable
-              onPress={() => setBoardListView(boardListView === 'archive' ? 'active' : 'archive')}
-              className="flex-row items-center rounded-full px-3 py-1.5 active:opacity-70"
-              hitSlop={8}
-            >
-              <Ionicons
-                name={boardListView === 'archive' ? 'arrow-back-outline' : 'archive-outline'}
-                size={15}
-                color="rgba(49,49,48,0.48)"
-                style={{ marginRight: 4 }}
-              />
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/50 text-xs">
-                {boardListView === 'archive' ? 'Active' : `Archive (${archivedCategories.length})`}
-              </Text>
-            </Pressable>
-          )}
         </View>
       </View>
     );
@@ -1742,10 +1716,8 @@ export default function BoardScreen() {
               postCounts={postCounts}
               searchMatches={boardSearchQuery ? boardSearchMatchesByCategory : undefined}
               emptyLabel={boardSearchQuery
-                ? `No ${boardListView === 'archive' ? 'archived' : 'active'} boards or threads found for "${boardSearch.trim()}".`
-                : boardListView === 'archive'
-                  ? 'No archived boards yet.'
-                  : 'No boards here yet.'}
+                ? `No boards or threads found for "${boardSearch.trim()}".`
+                : 'No boards here yet.'}
             />
           </View>
         )}
@@ -1851,21 +1823,23 @@ export default function BoardScreen() {
               </Text>
               {/* Board<->wish linking retired (Lucas 2026-07-23): boards and
                   wishes live separate lives now. */}
+              {/* No archive toggle — this view is only reachable when a search
+                  lands on archived threads, so it just needs a way back out. */}
               <View className="flex-row items-center" style={{ gap: 8 }}>
-                {archivedPosts.length > 0 && (
+                {threadListView === 'archive' && (
                   <Pressable
-                    onPress={() => setThreadListView(threadListView === 'archive' ? 'active' : 'archive')}
+                    onPress={() => setThreadListView('active')}
                     className="flex-row items-center rounded-full px-3 py-1.5 active:opacity-70"
                     hitSlop={8}
                   >
                     <Ionicons
-                      name={threadListView === 'archive' ? 'arrow-back-outline' : 'archive-outline'}
+                      name="arrow-back-outline"
                       size={15}
                       color="rgba(49,49,48,0.48)"
                       style={{ marginRight: 4 }}
                     />
                     <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/50 text-xs">
-                      {threadListView === 'archive' ? 'Active' : `Archive (${archivedPosts.length})`}
+                      Threads
                     </Text>
                   </Pressable>
                 )}
