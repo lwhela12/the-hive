@@ -400,12 +400,15 @@ export default function MonthlyTuneupScreen() {
     if (doneTodos.length > 0 || doneForMe.length > 0) {
       const current = String(checkInAnswers.q_pop_progress ?? '').trim();
       if (!current) {
+        // Don't staple a period onto something that already ends in
+        // punctuation — "doggy manners help is appreciated!." read as a typo.
+        const endSentence = (value: string) => (/[.!?…]$/.test(value) ? value : `${value}.`);
         const lines = [
           doneTodos.length > 0
-            ? `Checked off: ${doneTodos.map((todo) => parseActionItemDescription(todo.description).text).join(' · ')}.`
+            ? endSentence(`Checked off: ${doneTodos.map((todo) => parseActionItemDescription(todo.description).text).join(' · ')}`)
             : null,
           doneForMe.length > 0
-            ? `Done for me 💛: ${doneForMe.map((todo) => `${todo.helperName} — ${parseActionItemDescription(todo.description).text}`).join(' · ')}.`
+            ? endSentence(`Done for me 💛: ${doneForMe.map((todo) => `${todo.helperName} — ${parseActionItemDescription(todo.description).text}`).join(' · ')}`)
             : null,
         ].filter(Boolean).join('\n');
         setCheckInAnswer('q_pop_progress', lines);

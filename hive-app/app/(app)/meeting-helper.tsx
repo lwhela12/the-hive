@@ -21,6 +21,7 @@ import { fetchHoneyPotLedger } from '../../lib/honeyPot';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
 import { getWishQuickTitle } from '../../lib/wishDisplay';
+import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
@@ -513,14 +514,15 @@ export default function MeetingHelperScreen() {
     }
   }, [deckRefreshing, loadDeckData, refreshArrivals]);
 
-  // Go-around order: Lucas leads by example, then the absentees right after
-  // (he carries the torch for whoever can't speak for themselves — everyone
-  // stays on the HD board even when they miss), then present checked-in
-  // members in submit order (a different voice order each month), then the
-  // rest who haven't checked in.
+  // Go-around order: Nat leads by example (her call, 2026-07-24 — she used to
+  // sit wherever the sort put her), then the absentees right after (the torch
+  // gets carried for whoever can't speak for themselves — everyone stays on
+  // the HD board even when they miss), then present checked-in members in
+  // submit order (a different voice order each month), then the rest who
+  // haven't checked in.
   const memberOrder = useMemo(() => {
-    const lucas = members.find((member) => getFirstName(member.name).toLowerCase() === 'lucas');
-    const others = members.filter((member) => member.id !== lucas?.id);
+    const leader = members.find((member) => getFirstName(member.name).toLowerCase() === 'nat');
+    const others = members.filter((member) => member.id !== leader?.id);
     const bySubmitTime = (a: ArrivalBoardMember, b: ArrivalBoardMember) => {
       const aTime = responsesByUser.get(a.id)?.submitted_at ?? '';
       const bTime = responsesByUser.get(b.id)?.submitted_at ?? '';
@@ -530,7 +532,7 @@ export default function MeetingHelperScreen() {
     const absent = checkedIn.filter((member) => getAttendance(responsesByUser.get(member.id)) === 'missing');
     const present = checkedIn.filter((member) => getAttendance(responsesByUser.get(member.id)) !== 'missing');
     const notYet = others.filter((member) => !responsesByUser.has(member.id));
-    return [...(lucas ? [lucas] : []), ...absent, ...present, ...notYet];
+    return [...(leader ? [leader] : []), ...absent, ...present, ...notYet];
   }, [members, responsesByUser]);
 
   const wishesByUserId = useMemo(() => {
@@ -1709,26 +1711,27 @@ export default function MeetingHelperScreen() {
         {POP_ALT_PHRASING}
       </Text>
 
-      {/* Compact POP-formula header — the talking points for the go-around */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(16, 8), marginTop: sz(20, 12) }}>
+      {/* POP-formula header — a legend, not a headline. Kept deliberately
+          slim so the member bubbles below get the room (Nat 2026-07-24). */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(12, 7), marginTop: sz(14, 10) }}>
         {POP_SECTIONS.map((section) => (
           <View
             key={section.key}
             style={{
               flex: 1,
-              minWidth: sz(240, 150),
+              minWidth: sz(200, 140),
               backgroundColor: CARD,
               borderWidth: 1,
               borderColor: GOLD_SOFT,
-              borderRadius: sz(16, 12),
-              paddingHorizontal: sz(22, 13),
-              paddingVertical: sz(14, 9),
+              borderRadius: sz(14, 11),
+              paddingHorizontal: sz(16, 11),
+              paddingVertical: sz(9, 7),
             }}
           >
-            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(24, 15), color: CHARCOAL }}>
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(18, 13), color: CHARCOAL }}>
               {section.label}
             </Text>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 11), lineHeight: sz(24, 15), color: GOLD_DEEP, marginTop: sz(4, 2) }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), lineHeight: sz(18, 14), color: GOLD_DEEP, marginTop: sz(2, 1) }}>
               {section.prompt}
             </Text>
           </View>
@@ -1739,7 +1742,7 @@ export default function MeetingHelperScreen() {
           emptier. Tap a bubble to expand the full check-in (and tap again to
           tuck it away) — thorough write-ups get their moment without empty
           ones being singled out. */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: sz(-8, -5), marginTop: sz(28, 16) }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: sz(-8, -5), marginTop: sz(20, 13) }}>
         {memberOrder.map((member) => {
           const response = responsesByUser.get(member.id);
           const answers = response?.answers ?? {};
@@ -1780,17 +1783,17 @@ export default function MeetingHelperScreen() {
                   borderWidth: hummdingerVisited.has(member.id) ? 2 : 1,
                   borderColor: hummdingerVisited.has(member.id) ? GOLD : GOLD_SOFT,
                   borderRadius: sz(20, 14),
-                  paddingHorizontal: sz(16, 10),
-                  paddingVertical: sz(20, 13),
+                  paddingHorizontal: sz(18, 11),
+                  paddingVertical: sz(26, 16),
                   outlineWidth: 0,
                 }}
               >
-                <Avatar name={member.name} url={member.avatar_url} size={sz(72, 48)} />
+                <Avatar name={member.name} url={member.avatar_url} size={sz(88, 56)} />
                 <Text
                   numberOfLines={1}
                   style={{
                     fontFamily: 'LibreBaskerville_700Bold',
-                    fontSize: sz(24, 15),
+                    fontSize: sz(26, 16),
                     color: CHARCOAL,
                     marginTop: sz(12, 8),
                     textAlign: 'center',
@@ -1859,8 +1862,23 @@ export default function MeetingHelperScreen() {
     const answers = response?.answers ?? {};
     const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
     const topWish = (wishesByUserId.get(member.id) ?? [])[0];
+    // The tune-up SEEDS an empty Progress answer with "Checked off: …" and
+    // "Done for me 💛: …" lines. This card already renders both as their own
+    // properly-formatted sections below, so echoing the seed under PROGRESS
+    // said everything twice (Nat 2026-07-24: "kind of messy"). Drop the seeded
+    // lines here and keep whatever the member actually wrote; if that's
+    // nothing, the section doesn't appear at all.
     const detailSections = HUMMDINGER_DETAIL_SECTIONS
-      .map((section) => ({ ...section, text: getTextAnswer(answers, section.key) }))
+      .map((section) => {
+        const text = getTextAnswer(answers, section.key);
+        if (section.key !== 'q_pop_progress') return { ...section, text };
+        const ownWords = text
+          .split('\n')
+          .filter((line) => !/^\s*(checked off|done for me\s*💛?)\s*:/i.test(line))
+          .join('\n')
+          .trim();
+        return { ...section, text: ownWords };
+      })
       .filter((section) => !!section.text);
     const assistsForMember = completedAssists.filter(
       (assist) => assist.relatedUserId === member.id && assist.assignedTo !== member.id
@@ -1870,6 +1888,7 @@ export default function MeetingHelperScreen() {
     const attendance = getAttendance(response);
     const sectionLabel = { fontFamily: 'Lato_700Bold' as const, fontSize: sz(15, 11), letterSpacing: 1.5, textTransform: 'uppercase' as const, color: GOLD, marginBottom: sz(4, 3) };
     const sectionText = { fontFamily: 'Lato_400Regular' as const, fontSize: sz(18, 13), lineHeight: sz(27, 19), color: CHARCOAL };
+    const sectionContext = { fontFamily: 'Lato_400Regular' as const, fontSize: sz(14, 10), lineHeight: sz(19, 14), color: MUTED };
 
     return (
       <Modal visible animationType="fade" transparent onRequestClose={() => setExpandedHummdingerId(null)}>
@@ -1953,23 +1972,37 @@ export default function MeetingHelperScreen() {
                 </View>
               ))}
               {assistsForMember.length > 0 ? (
-                <View>
+                <View style={{ gap: sz(6, 4) }}>
                   <Text style={sectionLabel}>Done for {getFirstName(member.name)} this cycle 💛</Text>
-                  {assistsForMember.map((assist) => (
-                    <Text key={assist.id} style={sectionText}>
-                      {getFirstName(assist.assigneeName)}: {assist.description}
-                    </Text>
-                  ))}
+                  {assistsForMember.map((assist) => {
+                    const jot = parseActionItemDescription(assist.description);
+                    return (
+                      <View key={assist.id}>
+                        <Text style={sectionText}>
+                          {getFirstName(assist.assigneeName)}: {jot.text}
+                        </Text>
+                        {jot.context ? <Text style={sectionContext}>{jot.context}</Text> : null}
+                      </View>
+                    );
+                  })}
                 </View>
               ) : null}
               {assistsByMember.length > 0 ? (
-                <View>
+                <View style={{ gap: sz(6, 4) }}>
                   <Text style={sectionLabel}>{getFirstName(member.name)} checked off ✓</Text>
-                  {assistsByMember.map((assist) => (
-                    <Text key={assist.id} style={sectionText}>
-                      {assist.description}
-                    </Text>
-                  ))}
+                  {/* Jots arrive as raw routing text ("@Nat do the thing (re:
+                      Someone's HummDinger)") — the @token and re: subject are
+                      addressing, not reading material, so they drop to a quiet
+                      second line the way the Home to-do list shows them. */}
+                  {assistsByMember.map((assist) => {
+                    const jot = parseActionItemDescription(assist.description);
+                    return (
+                      <View key={assist.id}>
+                        <Text style={sectionText}>{jot.text}</Text>
+                        {jot.context ? <Text style={sectionContext}>{jot.context}</Text> : null}
+                      </View>
+                    );
+                  })}
                 </View>
               ) : null}
               <View style={{ borderTopWidth: 1, borderColor: GOLD_SOFT, paddingTop: sz(14, 9), gap: sz(8, 6) }}>
