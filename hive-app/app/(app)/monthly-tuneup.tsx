@@ -8,6 +8,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
   type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -233,7 +234,15 @@ export default function MonthlyTuneupScreen() {
     myResponses,
     submitResponse,
     loading: surveysLoading,
+    refetch: refetchSurveys,
   } = useSurveys(communityId ?? undefined, profile?.id);
+
+  // Deck-style chrome (Nat 2026-07-24: "looks nice"). The flank arrows only
+  // appear where there's margin to spare — on a phone they'd sit on top of the
+  // form fields.
+  const { width: windowWidth } = useWindowDimensions();
+  const showFlankArrows = windowWidth >= 900;
+  const [tuneupRefreshing, setTuneupRefreshing] = useState(false);
 
   const [stepIndex, setStepIndex] = useState(0);
   const [finished, setFinished] = useState(false);
@@ -1871,6 +1880,42 @@ export default function MonthlyTuneupScreen() {
             Step {stepIndex + 1} of {STEPS.length} · {STEPS[stepIndex].label}
           </Text>
         </View>
+        {/* Deck chrome: refresh + exit, quiet until you reach for them. */}
+        <Pressable
+          onPress={async () => {
+            if (tuneupRefreshing) return;
+            setTuneupRefreshing(true);
+            try {
+              await Promise.all([refetchSurveys(), refreshWishes()]);
+            } finally {
+              setTuneupRefreshing(false);
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Refresh tune-up data"
+          hitSlop={10}
+          style={({ pressed }) => ({ opacity: pressed ? 0.9 : 0.4, paddingHorizontal: 6 })}
+        >
+          {tuneupRefreshing ? (
+            <ActivityIndicator size="small" color="#8a6b30" />
+          ) : (
+            <Ionicons name="refresh" size={20} color="#8a6b30" />
+          )}
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            if (from === 'admin') router.replace('/admin');
+            else if (from === 'meetings') router.replace('/meetings');
+            else if (from === 'profile') router.replace('/profile' as any);
+            else router.replace('/hive');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Leave the tune-up"
+          hitSlop={10}
+          style={({ pressed }) => ({ opacity: pressed ? 0.9 : 0.4, paddingHorizontal: 6 })}
+        >
+          <Ionicons name="close" size={22} color="#8a6b30" />
+        </Pressable>
       </View>
 
       {/* Progress dots */}
@@ -1888,13 +1933,58 @@ export default function MonthlyTuneupScreen() {
         ))}
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        {renderStep()}
-      </ScrollView>
+      <View style={{ flex: 1 }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: showFlankArrows ? 56 : 16,
+            paddingBottom: 32,
+          }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {renderStep()}
+        </ScrollView>
+        {/* Flank arrows, the deck's pattern. The content gets extra side
+            padding when they're up so they never sit on a field. */}
+        {showFlankArrows && stepIndex > 0 ? (
+          <Pressable
+            onPress={goBack}
+            accessibilityRole="button"
+            accessibilityLabel="Previous step"
+            style={({ pressed }) => ({
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 44,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 1 : 0.32,
+            })}
+          >
+            <Ionicons name="chevron-back" size={30} color="#bd9348" />
+          </Pressable>
+        ) : null}
+        {showFlankArrows ? (
+          <Pressable
+            onPress={() => void goNext()}
+            accessibilityRole="button"
+            accessibilityLabel={stepIndex >= STEPS.length - 1 ? 'Finish the tune-up' : 'Next step'}
+            style={({ pressed }) => ({
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: 44,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 1 : 0.32,
+            })}
+          >
+            <Ionicons name="chevron-forward" size={30} color="#bd9348" />
+          </Pressable>
+        ) : null}
+      </View>
 
       {/* Footer: Back / Next — Next always available so every step is skippable */}
       <View

@@ -287,6 +287,9 @@ export default function MeetingHelperScreen() {
   // page, Meet link and all). The Help card expands instead of scheduling.
   const [planMode, setPlanMode] = useState<'hang' | 'meeting'>('hang');
   const [expandedPlanCard, setExpandedPlanCard] = useState<'hang' | 'help' | null>(null);
+  // A hang idea "armed" from the What-should-we-do pills: the next calendar
+  // day you tap opens the quick-add already titled with it.
+  const [armedHangIdea, setArmedHangIdea] = useState<string | null>(null);
   const [meetingSchedulerDate, setMeetingSchedulerDate] = useState<string | null>(null);
 
   // Month pager for the Meet Ups calendars — mini arrows page the two-month
@@ -619,6 +622,8 @@ export default function MeetingHelperScreen() {
       setQuickAddDate(null);
       setQuickAddTitle('');
       setQuickAddTime('');
+      // The idea has been claimed — disarm so the next day you tap starts fresh.
+      setArmedHangIdea(null);
       await loadDeckData();
     } catch (error: any) {
       setQuickAddError(error?.message || 'Could not save the event — please try again.');
@@ -1378,7 +1383,9 @@ export default function MeetingHelperScreen() {
                           return;
                         }
                         setQuickAddDate(dayIso);
-                        setQuickAddTitle('');
+                        // An armed idea rides in as the title; you fill in the
+                        // time and place. Nothing armed = blank, as before.
+                        setQuickAddTitle(armedHangIdea ?? '');
                         setQuickAddTime('');
                         setQuickAddError(null);
                       }}
@@ -1506,13 +1513,15 @@ export default function MeetingHelperScreen() {
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 18), color: MUTED, marginTop: sz(4, 3) }}>
                   {column.blurb}
                 </Text>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: isSelected ? GOLD_DEEP : 'rgba(154,128,96,0.55)', marginTop: sz(6, 4) }}>
-                  {column.key === 'meeting'
-                    ? isSelected ? '● tap a day below to schedule the meeting' : '○ select, then tap a day to schedule'
-                    : column.key === 'hang'
-                      ? planMode === 'hang' ? '● tap a day below to pencil one in · tap for ideas' : '○ select, then tap a day to pencil in'
+                {/* The hang card says nothing extra — the panel it opens
+                    explains itself (Nat 2026-07-24). */}
+                {column.key === 'hang' ? null : (
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: isSelected ? GOLD_DEEP : 'rgba(154,128,96,0.55)', marginTop: sz(6, 4) }}>
+                    {column.key === 'meeting'
+                      ? isSelected ? '● tap a day below to schedule the meeting' : '○ select, then tap a day to schedule'
                       : expandedPlanCard === 'help' ? '▾ voices from the check-ins' : '▸ tap for voices from the check-ins'}
-                </Text>
+                  </Text>
+                )}
               </Pressable>
             );
           })}
@@ -1537,9 +1546,12 @@ export default function MeetingHelperScreen() {
             }}
           >
             <View style={{ flex: isTV ? 1 : undefined, gap: sz(10, 7) }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
-                📊 How did we do?
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(8, 5) }}>
+                <HiveIcon name="chart" size={sz(16, 12)} color={GOLD} />
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
+                  How did we do?
+                </Text>
+              </View>
               {hangPoll.length === 0 ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
                   No hangs last cycle — blank scoreboard, let's fix that.
@@ -1583,9 +1595,12 @@ export default function MeetingHelperScreen() {
                 three times"). */}
             <View style={{ flex: isTV ? 1 : undefined, gap: sz(10, 7) }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
-                  💡 What should we do next?
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(8, 5) }}>
+                  <HiveIcon name="star" size={sz(16, 12)} color={GOLD} />
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
+                    What should we do next?
+                  </Text>
+                </View>
                 <EditPill noteKey="meetups" />
               </View>
               {hangIdeas.length === 0 ? (
@@ -1594,23 +1609,50 @@ export default function MeetingHelperScreen() {
                 </Text>
               ) : (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(10, 7) }}>
-                  {hangIdeas.map((idea) => (
-                    <View
-                      key={idea.id}
-                      style={{
-                        backgroundColor: 'rgba(222,193,129,0.18)',
-                        borderRadius: 999,
-                        paddingHorizontal: sz(18, 12),
-                        paddingVertical: sz(8, 6),
-                      }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: GOLD_DEEP }}>
-                        {(idea.title ?? 'Untitled idea').trim() || 'Untitled idea'}
-                      </Text>
-                    </View>
-                  ))}
+                  {/* Arm an idea, then tap a day — the quick-add opens with the
+                      title already filled so you only add time and place.
+                      Tapping the armed pill again disarms it, and a day tapped
+                      with nothing armed behaves exactly as it always did: you
+                      are never forced to pick from this list (Nat 2026-07-24). */}
+                  {hangIdeas.map((idea) => {
+                    const label = (idea.title ?? 'Untitled idea').trim() || 'Untitled idea';
+                    const isArmed = armedHangIdea === label;
+                    return (
+                      <Pressable
+                        key={idea.id}
+                        onPress={() => {
+                          setArmedHangIdea(isArmed ? null : label);
+                          // Make sure a day tap pencils in a hang, not a meeting.
+                          setPlanMode('hang');
+                        }}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isArmed }}
+                        accessibilityLabel={isArmed ? `Unpick ${label}` : `Pick ${label}, then tap a day to schedule it`}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: sz(6, 4),
+                          backgroundColor: isArmed ? GOLD : pressed ? 'rgba(222,193,129,0.34)' : 'rgba(222,193,129,0.18)',
+                          borderWidth: 1,
+                          borderColor: isArmed ? GOLD : 'transparent',
+                          borderRadius: 999,
+                          paddingHorizontal: sz(18, 12),
+                          paddingVertical: sz(8, 6),
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(16, 11), color: isArmed ? 'white' : GOLD_DEEP }}>
+                          {isArmed ? `✓ ${label}` : label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               )}
+              {armedHangIdea ? (
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), color: GOLD_DEEP }}>
+                  Now tap a day on the calendar to pencil in “{armedHangIdea}”.
+                </Text>
+              ) : null}
               <NoteBody noteKey="meetups" emptyText="No meet-up plans written down yet." />
             </View>
           </View>
