@@ -1,7 +1,6 @@
 import { memo } from 'react';
-import { FlatList, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { FlatList, Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import type { BoardCategory } from '../../types';
 
 const EMOJI_MAP: Record<string, string> = {
@@ -45,8 +44,6 @@ export interface BoardCategorySearchMatchSummary {
 interface BoardCategoryListProps {
   categories: BoardCategory[];
   onSelect: (category: BoardCategory) => void;
-  /** Tapping a micro thread preview jumps straight into that thread. */
-  onSelectThread?: (category: BoardCategory, postId: string) => void;
   postCounts?: Record<string, CategoryStats>;
   emptyLabel?: string;
   searchMatches?: Record<string, BoardCategorySearchMatchSummary>;
@@ -55,7 +52,6 @@ interface BoardCategoryListProps {
 export const BoardCategoryList = memo(function BoardCategoryList({
   categories,
   onSelect,
-  onSelectThread,
   postCounts,
   emptyLabel = 'No boards here yet.',
   searchMatches,
@@ -65,15 +61,18 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   // cards stretch so the grid fills the screen instead of leaving dead space.
   const { width, height } = useWindowDimensions();
   const numColumns = width >= 1100 ? 4 : width >= 760 ? 3 : 2;
-  // Phones get compact title-only tiles; the thread previews are a
-  // wide-screen luxury.
   const compact = width < 760;
   const gridRows = Math.max(1, Math.ceil(categories.length / numColumns));
   // Roughly the space below header/search/toolbar and above the tab bar.
   const availableHeight = height - 300;
+  // Every board is the same tile: the whole set should land on one laptop
+  // screen (Nat 2026-07-24). Thread previews used to stretch cards to 420 and
+  // pushed the grid off the bottom — the threads live one tap inside the
+  // board, which is where you go to read them anyway. Cards still grow to
+  // share the space, but capped so they never turn cavernous.
   const cardMinHeight = compact
     ? 118
-    : Math.min(420, Math.max(190, Math.floor(availableHeight / gridRows) - 12));
+    : Math.min(230, Math.max(150, Math.floor(availableHeight / gridRows) - 12));
 
   return (
     <FlatList
@@ -84,7 +83,6 @@ export const BoardCategoryList = memo(function BoardCategoryList({
       renderItem={({ item }) => {
         const emoji = item.icon ? EMOJI_MAP[item.icon] || item.icon : '📁';
         const count = postCounts?.[item.id]?.count ?? 0;
-        const recentThreads = postCounts?.[item.id]?.recentThreads ?? [];
         const countLabel = `${count} ${count === 1 ? 'thread' : 'threads'}`;
         const taggedNames = (item.member_tags ?? [])
           .map((tag) => tag.member?.name?.split(' ')[0])
@@ -165,80 +163,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
               >
                 {countLabel}
               </Text>
-              {/* Thread list — scrolls inside the card (Recent Activity
-                  style); the bottom fade whispers "there's more". Tap a row
-                  to jump straight into that thread. */}
-              {!compact && recentThreads.length > 0 ? (
-                <View
-                  style={{
-                    marginTop: 8,
-                    borderTopWidth: 1,
-                    borderTopColor: 'rgba(222,193,129,0.32)',
-                    paddingTop: 6,
-                    flexGrow: 1,
-                    flexShrink: 1,
-                    minHeight: 60,
-                  }}
-                >
-                  <ScrollView
-                    nestedScrollEnabled
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 3, paddingBottom: 16 }}
-                  >
-                    {recentThreads.map((thread) => (
-                      <Pressable
-                        key={thread.id}
-                        onPress={(event) => {
-                          if (onSelectThread) {
-                            event.stopPropagation?.();
-                            onSelectThread(item, thread.id);
-                          } else {
-                            onSelect(item);
-                          }
-                        }}
-                        accessibilityRole="link"
-                        accessibilityLabel={`Open thread: ${thread.title}`}
-                        hitSlop={2}
-                        style={({ pressed }) => ({
-                          flexDirection: 'row',
-                          alignItems: 'flex-start',
-                          gap: 6,
-                          borderRadius: 8,
-                          paddingHorizontal: 4,
-                          paddingVertical: 2,
-                          backgroundColor: pressed ? 'rgba(222,193,129,0.18)' : 'transparent',
-                        })}
-                      >
-                        <Text style={{ fontSize: 10, lineHeight: 17, color: '#bd9348' }}>▪</Text>
-                        <Text
-                          style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 17, color: 'rgba(49,49,48,0.75)', flex: 1 }}
-                          numberOfLines={1}
-                        >
-                          {thread.title}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                  {recentThreads.length > 4 ? (
-                    <Svg
-                      pointerEvents="none"
-                      width="100%"
-                      height={26}
-                      style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
-                    >
-                      <Defs>
-                        <SvgLinearGradient id="cardFade" x1="0" y1="0" x2="0" y2="1">
-                          <Stop offset="0" stopColor="#fffdf5" stopOpacity="0" />
-                          <Stop offset="1" stopColor="#fffdf5" stopOpacity="1" />
-                        </SvgLinearGradient>
-                      </Defs>
-                      <Rect x="0" y="0" width="100%" height="26" fill="url(#cardFade)" />
-                    </Svg>
-                  ) : null}
-                </View>
-              ) : (
-                <View style={{ flexGrow: 1 }} />
-              )}
+              <View style={{ flexGrow: 1 }} />
               {matchLabel ? (
                 <Text
                   style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e6f35', marginTop: 3 }}
