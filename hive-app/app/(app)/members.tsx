@@ -2753,7 +2753,7 @@ export default function MembersScreen() {
                       {swarmThemeHighlights.map(theme => (
                         <Pressable
                           key={theme.category}
-                          onPress={() => router.push({ pathname: '/hive', params: { catchup: '1' } } as any)}
+                          onPress={() => router.push({ pathname: '/hive', params: { catchup: '1', from: 'swarm' } } as any)}
                           accessibilityRole="button"
                           accessibilityLabel={`Answer more ${theme.category} questions in Catch up`}
                           style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: pressed ? '#fbf0d7' : '#fffdf5', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 })}

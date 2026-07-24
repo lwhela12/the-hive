@@ -80,6 +80,11 @@ type HomeTodo = {
 const CALENDAR_DURATION_MS = 2.5 * 60 * 60 * 1000; // 30-min arrival + 2-hour meeting
 const CATCH_UP_BATCH_SIZE = 7;
 const CATCH_UP_MAX_DAYS = DAILY_QUESTIONS.length;
+// Screens that deep-link into Catch up (/hive?catchup=1&from=X) and where
+// closing it should put you back. Add a line here when a new door opens.
+const CATCH_UP_RETURN_PATHS: Record<string, { pathname: string; params?: Record<string, string> }> = {
+  swarm: { pathname: '/members', params: { view: 'swarm' } },
+};
 
 const getRecentDailyQuestions = (days = CATCH_UP_BATCH_SIZE) => {
   const dayCount = Math.min(Math.max(days, 1), CATCH_UP_MAX_DAYS);
@@ -633,6 +638,11 @@ export default function HiveScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAnswerModal, setShowAnswerModal] = useState(false);
   const [showCatchUpModal, setShowCatchUpModal] = useState(false);
+  // Where to go when the daily-question sheets close. Screens that deep-link
+  // into Catch up (?catchup=1&from=...) land you on the HIVE tab, so without
+  // this you'd get dumped here instead of back where you tapped. Survives the
+  // Catch up -> Answer hop; cleared by the Home reset.
+  const catchUpReturnRef = useRef<(typeof CATCH_UP_RETURN_PATHS)[string] | null>(null);
   const [catchUpDayCount, setCatchUpDayCount] = useState(CATCH_UP_BATCH_SIZE);
   const [showAddHomeGuide, setShowAddHomeGuide] = useState(false);
   const [myAnswer, setMyAnswer] = useState('');
@@ -732,6 +742,24 @@ export default function HiveScreen() {
     setShowAnswerModal(true);
   };
 
+  // Retrace to whoever sent us into the daily questions, once.
+  const retraceFromDailyQuestions = useCallback(() => {
+    const target = catchUpReturnRef.current;
+    if (!target) return;
+    catchUpReturnRef.current = null;
+    router.replace(target as any);
+  }, [router]);
+
+  const closeCatchUpModal = useCallback(() => {
+    setShowCatchUpModal(false);
+    retraceFromDailyQuestions();
+  }, [retraceFromDailyQuestions]);
+
+  const closeAnswerModal = useCallback(() => {
+    setShowAnswerModal(false);
+    retraceFromDailyQuestions();
+  }, [retraceFromDailyQuestions]);
+
   const getMyAnswerForPrompt = (prompt: ReturnType<typeof getTodayQuestion>) => {
     if (!profile?.id) return '';
     if (prompt.dateKey === todayDateKey) return mySubmittedAnswer;
@@ -784,7 +812,7 @@ export default function HiveScreen() {
       next.set(currentAnswerPrompt.dateKey, answersForDate);
       return next;
     });
-    setShowAnswerModal(false);
+    closeAnswerModal();
     fetchTodayAnswers();
     fetchRecentAnswers();
   };
@@ -1169,6 +1197,8 @@ export default function HiveScreen() {
     setShowAddTaskModal(false);
     setSelectedActionItemId(null);
     setTaskError(null);
+    // Home means home — drop any pending retrace instead of bouncing away.
+    catchUpReturnRef.current = null;
     setShowCatchUpModal(false);
     setShowAnswerModal(false);
     setShowAddHomeGuide(false);
@@ -1429,17 +1459,20 @@ export default function HiveScreen() {
 
   // Deep link: /hive?openWishId=... opens that wish's detail sheet (used by the
   // profile App Feedback shortcut; works for any screen that wants to point at a wish).
-  const { openWishId, catchup } = useLocalSearchParams<{ openWishId?: string; catchup?: string }>();
+  const { openWishId, catchup, from } = useLocalSearchParams<{ openWishId?: string; catchup?: string; from?: string }>();
 
   // Swarm Report theme pills (and anything else) can deep-link straight into
-  // the daily-question Catch-up modal.
+  // the daily-question Catch-up modal. `from` says where to put you back when
+  // the sheet closes — otherwise closing it strands you on the HIVE tab.
   useEffect(() => {
     if (catchup === '1') {
+      const origin = Array.isArray(from) ? from[0] : from;
+      catchUpReturnRef.current = CATCH_UP_RETURN_PATHS[origin ?? ''] ?? null;
       setShowCatchUpModal(true);
-      router.setParams({ catchup: undefined } as any);
+      router.setParams({ catchup: undefined, from: undefined } as any);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catchup]);
+  }, [catchup, from]);
   const handledOpenWishIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!openWishId || !communityId) return;
@@ -3783,9 +3816,9 @@ export default function HiveScreen() {
       </Modal>
 
       {/* Daily Question Catch-Up Modal */}
-      <Modal visible={showCatchUpModal} animationType="slide" transparent onRequestClose={() => setShowCatchUpModal(false)}>
+      <Modal visible={showCatchUpModal} animationType="slide" transparent onRequestClose={closeCatchUpModal}>
         <Pressable
-          onPress={() => setShowCatchUpModal(false)}
+          onPress={closeCatchUpModal}
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
         >
           <Pressable
@@ -3829,6 +3862,8 @@ export default function HiveScreen() {
                     <Pressable
                       key={item.dateKey}
                       onPress={() => {
+                        // Hop to the answer sheet — the pending return travels
+                        // with you, so closing that lands you back at the door.
                         setShowCatchUpModal(false);
                         openAnswerModal(item, myPastAnswer);
                       }}
@@ -3888,7 +3923,7 @@ export default function HiveScreen() {
                 ) : null}
               </ScrollView>
               <Pressable
-                onPress={() => setShowCatchUpModal(false)}
+                onPress={closeCatchUpModal}
                 style={{ backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14, marginTop: 6 }}
               >
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
@@ -3899,7 +3934,7 @@ export default function HiveScreen() {
       </Modal>
 
       {/* Daily Question Answer Modal */}
-      <Modal visible={showAnswerModal} animationType="slide" transparent onRequestClose={() => setShowAnswerModal(false)}>
+      <Modal visible={showAnswerModal} animationType="slide" transparent onRequestClose={closeAnswerModal}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
             <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
@@ -3983,9 +4018,9 @@ export default function HiveScreen() {
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Pressable
                   onPress={() => {
-                    setShowAnswerModal(false);
                     setMyAnswer(getMyAnswerForPrompt(currentAnswerPrompt));
                     setAnswerError(null);
+                    closeAnswerModal();
                   }}
                   style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}
                 >
