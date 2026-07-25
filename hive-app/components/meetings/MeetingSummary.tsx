@@ -859,22 +859,31 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
 
-        {/* The deck in outline. Each section is its own card: a serif heading,
-            real bullets, and indented POP lines that hang under the person they
-            belong to (Nat 2026-07-25 — "easier to follow along"). */}
+        {/* The deck in outline. Each section is its own card: a small serif
+            heading over a hairline, then quiet body text. Only the thing that
+            names the line — a person, a board, a label — carries weight, so the
+            eye lands on names instead of fighting a wall of bold. */}
         {parsedSummary.sections && parsedSummary.sections.length > 0 && (
           <View className="mb-6">
             {parsedSummary.sections.map((section) => (
               <View
                 key={section.title}
-                className="mb-4 bg-paper rounded-2xl border border-gold/25 px-5 py-4"
+                className="mb-4 bg-paper rounded-2xl border border-gold/20 px-5 pt-4 pb-3"
               >
                 <Text
-                  style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d' }}
-                  className="mb-3"
+                  style={{
+                    fontFamily: 'LibreBaskerville_400Regular',
+                    fontSize: 12,
+                    letterSpacing: 1.4,
+                    color: '#9a7c42',
+                    textTransform: 'uppercase',
+                  }}
                 >
                   {section.title}
                 </Text>
+                <View
+                  style={{ height: 1, backgroundColor: '#bd934826', marginTop: 8, marginBottom: 12 }}
+                />
                 {section.lines.map((line, index) => {
                   const indented = line.startsWith('    ');
                   const text = line.trim();
@@ -886,11 +895,11 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                     const [label, ...rest] = text.split(': ');
                     const body = rest.join(': ');
                     return (
-                      <View key={index} style={{ paddingLeft: 18, marginBottom: 4 }}>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#6b5b3e' }}>
+                      <View key={index} style={{ paddingLeft: 20, marginBottom: 5 }}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#6f6559' }}>
                           {body ? (
                             <>
-                              <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e6f35' }}>{label}: </Text>
+                              <Text style={{ fontFamily: 'Lato_700Bold', color: '#a08347' }}>{label}: </Text>
                               {body}
                             </>
                           ) : text}
@@ -898,15 +907,22 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                       </View>
                     );
                   }
+                  // "Sara: Europe is happening" — the name leads, the rest reads.
+                  const lead = text.match(/^([^:]{1,32}):\s+(.+)$/);
                   return (
                     <View
                       key={index}
                       className="flex-row"
-                      style={{ marginBottom: 6, marginTop: startsBlock ? 12 : 0 }}
+                      style={{ marginBottom: 9, marginTop: startsBlock ? 14 : 0 }}
                     >
-                      <Text style={{ color: '#bd9348', fontSize: 15, lineHeight: 22, marginRight: 8 }}>•</Text>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, lineHeight: 22, color: '#2d2d2d', flex: 1 }}>
-                        {text}
+                      <Text style={{ color: '#c9a76a', fontSize: 13, lineHeight: 22, marginRight: 10 }}>◆</Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14.5, lineHeight: 22, color: '#3f3a33', flex: 1 }}>
+                        {lead ? (
+                          <>
+                            <Text style={{ fontFamily: 'Lato_700Bold', color: '#2d2d2d' }}>{lead[1]}: </Text>
+                            {lead[2]}
+                          </>
+                        ) : text}
                       </Text>
                     </View>
                   );
