@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
   useWindowDimensions,
-  type ViewStyle,
+  type TextStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -179,25 +179,19 @@ function StepHeader({ title, subtitle, icon }: { title: string; subtitle: string
   );
 }
 
-// The little uppercase section headers inside the steps. They used to lead
-// with stock emoji (💡 ✨ 📝 🎉); chrome wears the hand-drawn family instead —
-// emoji are reserved for human content (Nat 2026-07-24).
-function MiniLabel({
-  icon,
-  children,
-  style,
-}: {
-  icon: ComponentProps<typeof HiveIcon>['name'];
-  children: ReactNode;
-  style?: ViewStyle;
-}) {
+// ONE way to say what a box is for (Nat 2026-07-25: the same screen had an
+// all-caps brown label above one box, bold charcoal inside the next, and an
+// emoji + all-caps tan inside a third).
+//
+// The rule: every box carries exactly one heading, in bold charcoal, as the
+// first thing INSIDE the box. No all-caps, no emoji, nothing floating above
+// the card. It matches how survey questions have always rendered, which is
+// the style that already appears most often.
+function BoxHeading({ children, style }: { children: ReactNode; style?: TextStyle }) {
   return (
-    <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 6 }, style]}>
-      <HiveIcon name={icon} size={14} color="#8e7a5e" />
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e' }}>
-        {children}
-      </Text>
-    </View>
+    <Text style={[{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 22, marginBottom: 8 }, style]}>
+      {children}
+    </Text>
   );
 }
 
@@ -1349,14 +1343,10 @@ export default function MonthlyTuneupScreen() {
           </View>
         ) : null;
       })()}
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 22, marginBottom: 8 }}>
-        {existingHangIdeas.length > 0
-          ? 'What should we do this month? Select one, or suggest your own.'
-          : 'What should we do this month?'}
-      </Text>
       {existingHangIdeas.length > 0 ? (
         <View style={[cardStyle, { marginBottom: 10, position: 'relative', overflow: 'hidden' }]}>
           <ConfettiBurst visible={hangConfetti} onDone={() => setHangConfetti(false)} />
+          <BoxHeading>What should we do this month? Select one, or suggest your own.</BoxHeading>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {existingHangIdeas.map((idea) => {
               const isSeconded = secondedHangIdeaId === idea.id;
@@ -1395,6 +1385,9 @@ export default function MonthlyTuneupScreen() {
         </View>
       ) : null}
       <View style={[cardStyle, { gap: 10 }]}>
+        <BoxHeading style={{ marginBottom: 0 }}>
+          {existingHangIdeas.length > 0 ? 'Suggest a new one' : 'What should we do this month?'}
+        </BoxHeading>
         <TextInput
           value={hangTitle}
           onChangeText={setHangTitle}
@@ -1457,6 +1450,7 @@ export default function MonthlyTuneupScreen() {
         subtitle="Upcoming events to add? Out of town at all? Anything you add shows up in Upcoming Events for everyone."
       />
       <View style={[cardStyle, { gap: 10 }]}>
+        <BoxHeading style={{ marginBottom: 0 }}>Add an event</BoxHeading>
         <Pressable
           onPress={handleOutOfTownPreset}
           style={({ pressed }) => ({
@@ -1586,8 +1580,8 @@ export default function MonthlyTuneupScreen() {
           Current focus: "{helperThread.postTitle.replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, '')}"
         </Text>
       ) : null}
-      <MiniLabel icon="note" style={{ marginBottom: 6 }}>Log a kindness you did</MiniLabel>
       <View style={[cardStyle, { gap: 10 }]}>
+        <BoxHeading style={{ marginBottom: 0 }}>Log a kindness you did</BoxHeading>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
           <TextInput
             value={helperContent}
@@ -1650,9 +1644,11 @@ export default function MonthlyTuneupScreen() {
         <ConfettiBurst visible={helpConfetti} onDone={() => setHelpConfetti(false)} />
         {/* Only promise a choice when there's something to choose — an empty
             "choose one to +1" over nothing was a dead end (Nat 2026-07-24). */}
-        {helpIdeas.length > 0 ? (
-          <MiniLabel icon="star">Next meeting's focus — choose one to +1</MiniLabel>
-        ) : null}
+        <BoxHeading style={{ marginBottom: 0 }}>
+          {helpIdeas.length > 0
+            ? "Next meeting's focus — pick one, or pitch your own."
+            : "Next meeting's focus — pitch one."}
+        </BoxHeading>
         {helpIdeas.length > 0 ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {helpIdeas.map((idea) => {
@@ -1685,9 +1681,6 @@ export default function MonthlyTuneupScreen() {
             })}
           </View>
         ) : null}
-        <MiniLabel icon="sparkle" style={{ marginTop: 2 }}>
-          {helpIdeas.length > 0 ? 'Or pitch your own' : "Next meeting's focus — pitch one"}
-        </MiniLabel>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TextInput
             value={helpIdeaContent}
@@ -1730,6 +1723,7 @@ export default function MonthlyTuneupScreen() {
         subtitle="Anything from the meetings lands here. Check off what's done — it becomes your Progress memory-jogger at the next meeting, so wins don't get forgotten."
       />
       <View style={[cardStyle, { gap: 10 }]}>
+        <BoxHeading style={{ marginBottom: 0 }}>Still open — tap to check off</BoxHeading>
         {openTodos.length === 0 ? (
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9a8060' }}>
             Nothing open — clean slate ✨
@@ -1774,9 +1768,7 @@ export default function MonthlyTuneupScreen() {
       </View>
       {doneTodos.length > 0 ? (
         <View style={[cardStyle, { gap: 6, marginTop: 12 }]}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e' }}>
-            🎉 Done this cycle — tap to un-check
-          </Text>
+          <BoxHeading>Done this cycle — tap to un-check</BoxHeading>
           {doneTodos.map((todo) => (
             <Pressable key={todo.id} onPress={() => handleToggleTodo(todo, false)} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 2 }}>
               <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: 'rgba(142,122,94,0.36)', backgroundColor: 'rgba(142,122,94,0.12)', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
@@ -1791,9 +1783,7 @@ export default function MonthlyTuneupScreen() {
       ) : null}
       {doneForMe.length > 0 ? (
         <View style={[cardStyle, { gap: 6, marginTop: 12, backgroundColor: '#fdf3dc' }]}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8a6b30' }}>
-            💛 Done for you this cycle
-          </Text>
+          <BoxHeading>Done for you this cycle 💛</BoxHeading>
           {doneForMe.map((todo) => (
             <Text key={todo.id} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#6b5b3e', lineHeight: 19 }}>
               {todo.helperName}: {todo.description}
