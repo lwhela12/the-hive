@@ -1734,7 +1734,7 @@ export default function MonthlyTuneupScreen() {
           <TextInput
             value={helpIdeaContent}
             onChangeText={setHelpIdeaContent}
-            placeholder="Beach cleanup? Food bank shift? Blood drive?..."
+            placeholder="Add your own idea here…"
             placeholderTextColor="#b5ad9f"
             blurOnSubmit={false}
             onKeyPress={submitOnEnter(handlePostHelpIdea)}
