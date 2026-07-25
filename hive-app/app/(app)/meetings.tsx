@@ -1183,6 +1183,34 @@ export default function MeetingsScreen() {
               </Text>
             </Pressable>
 
+            {/* Newsletter Draft — everything since the last meeting, gathered
+                into the same shape as a meeting summary so writing the
+                newsletter is picking what to keep, not remembering what
+                happened. Nat writes it elsewhere, so the tile leads to a
+                Copy button. */}
+            {isAdmin && (
+              <Pressable
+                onPress={() => router.push({ pathname: '/newsletter' as any, params: { from: 'meetings' } })}
+                style={({ pressed }) => ({
+                  flex: useCompactActions ? undefined : 1,
+                  width: useCompactActions ? '48%' : undefined,
+                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  borderRadius: 14,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.75 : 1,
+                })}
+              >
+                <Text style={{ fontSize: 22, marginBottom: 4 }}>🗞️</Text>
+                <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 13 }}>
+                  Newsletter
+                </Text>
+                <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 2 }}>
+                  draft from this cycle
+                </Text>
+              </Pressable>
+            )}
+
             {/* Schedule */}
             <Pressable
               onPress={() => setShowScheduler(true)}

@@ -23,7 +23,7 @@ import {
   setStoredItemAsync,
 } from '../../lib/webStorage';
 import { deleteWishById } from '../../lib/wishMutations';
-import { getCycleStart } from '../../lib/meetingCycle';
+import { getCycleStart, getHalfwayDoneKey } from '../../lib/meetingCycle';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { pickSpotlightWish } from '../../lib/wishDisplay';
@@ -55,14 +55,40 @@ const hiveBee = require('../../assets/HIVE Bee.png');
 // legible small. Crest stays on the big moments (Nat 2026-07-24).
 const hiveBeeMark = require('../../assets/BEE ONLY IN GOLD BG.png');
 
-const STEPS = [
+type StepKey = 'wishes' | 'hangs' | 'calendar' | 'helpers' | 'todos' | 'checkin' | 'newsletter';
+type Step = { key: StepKey; label: string };
+
+const STEPS: Step[] = [
   { key: 'wishes', label: 'HD wishes' },
   { key: 'hangs', label: 'Hang ideas' },
   { key: 'calendar', label: 'Calendar' },
   { key: 'helpers', label: 'Helpers' },
   { key: 'todos', label: 'To-dos' },
   { key: 'checkin', label: 'Check-in' },
+];
+
+// Halfway between meetings the ask is smaller and the reason is different: the
+// newsletter goes out, so this walks you through the app instead of relying on
+// you to remember to go update it (Nat 2026-07-25). Newsletter leads because
+// it's why you got the nudge. Calendar and the full POP check-in belong to the
+// meeting and stay out of it.
+const MIDPOINT_STEPS: Step[] = [
+  { key: 'newsletter', label: 'Newsletter' },
+  { key: 'todos', label: 'To-dos' },
+  { key: 'helpers', label: 'Helpers' },
+  { key: 'wishes', label: 'HD wishes' },
+  { key: 'hangs', label: 'Hang ideas' },
+];
+
+// What someone might want in the newsletter. Pills, not a blank box — the whole
+// point is walking people through it rather than asking them to compose.
+const NEWSLETTER_KINDS = [
+  { key: 'shoutout', label: 'Shout-out', prompt: 'Who deserves a nod this month?' },
+  { key: 'plug', label: 'Plug an event', prompt: '"Come to my lemonade stand Tuesday!"' },
+  { key: 'reminder', label: 'A reminder', prompt: "What shouldn't the HIVE forget?" },
+  { key: 'compliment', label: 'Compliment someone', prompt: 'Big, small, silly, sincere.' },
 ] as const;
+type NewsletterKind = (typeof NEWSLETTER_KINDS)[number]['key'];
 
 type BoardTarget = { id: string; name: string };
 
@@ -91,8 +117,10 @@ type TuneupDraft = {
   checkInAnswers?: Record<string, unknown>;
 };
 
-const getTuneupDraftKey = (communityId: string, userId: string) =>
-  `the-hive:tuneup-draft:${communityId}:${userId}`;
+// The halfway flow keeps its own draft — a half-finished full tune-up must
+// not restore you into the middle of the short one, or vice versa.
+const getTuneupDraftKey = (communityId: string, userId: string, midpoint = false) =>
+  `the-hive:tuneup-draft:${communityId}:${userId}${midpoint ? ':midpoint' : ''}`;
 
 function getFirstName(name?: string | null) {
   const trimmed = (name ?? '').trim();
@@ -221,7 +249,10 @@ function PostedConfirmation({ lines, boardName }: { lines: string[]; boardName?:
 
 export default function MonthlyTuneupScreen() {
   const router = useRouter();
-  const { from } = useLocalSearchParams<{ from?: string }>();
+  const { from, mode } = useLocalSearchParams<{ from?: string; mode?: string }>();
+  // The halfway nudge deep-links here with mode=midpoint.
+  const isMidpoint = mode === 'midpoint';
+  const steps = isMidpoint ? MIDPOINT_STEPS : STEPS;
   const { profile, communityId } = useAuth();
   const { wishes, loading: wishesLoading, refresh: refreshWishes, grantWish } = useWishes();
   const {
@@ -241,6 +272,14 @@ export default function MonthlyTuneupScreen() {
   const [tuneupRefreshing, setTuneupRefreshing] = useState(false);
 
   const [stepIndex, setStepIndex] = useState(0);
+  // Halfway check-in: what you'd like in the newsletter. Answers land as
+  // replies on the threads that already exist for them, so nothing here is a
+  // new pile to maintain and it's visible on the boards like everything else.
+  const [newsletterKind, setNewsletterKind] = useState<NewsletterKind>('shoutout');
+  const [newsletterText, setNewsletterText] = useState('');
+  const [newsletterPosting, setNewsletterPosting] = useState(false);
+  const [newsletterError, setNewsletterError] = useState<string | null>(null);
+  const [newsletterPosted, setNewsletterPosted] = useState<{ content: string; thread: string }[]>([]);
   const [finished, setFinished] = useState(false);
 
   // Hangs since the last meeting, for the check-in's went/didn't-go recap chips.
@@ -532,7 +571,7 @@ export default function MonthlyTuneupScreen() {
   ), []);
   const canRefineWish = useCallback((wish: Wish) => wish.status !== 'fulfilled', []);
 
-  const findBoardTarget = useCallback(async (kind: 'hangs' | 'helpers'): Promise<BoardTarget | null> => {
+  const findBoardTarget = useCallback(async (kind: 'hangs' | 'helpers' | 'announcements'): Promise<BoardTarget | null> => {
     if (!communityId) return null;
 
     let query = supabase
@@ -542,7 +581,9 @@ export default function MonthlyTuneupScreen() {
 
     query = kind === 'hangs'
       ? query.ilike('name', '%hang%')
-      : query.or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%');
+      : kind === 'announcements'
+        ? query.ilike('name', '%announcement%')
+        : query.or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%');
 
     const { data, error } = await query;
     if (error) {
@@ -585,6 +626,77 @@ export default function MonthlyTuneupScreen() {
 
     return { error: null, boardName: board.name };
   }, [communityId, findBoardTarget, profile]);
+
+  // The midpoint cron already opens "{Month} Newsletter" and "{Month}
+  // Compliment Corner" on Announcements. Find whichever exists; only create one
+  // if a member gets here first (or the cron didn't run).
+  const findOrCreateNewsletterThread = useCallback(async (
+    kind: 'newsletter' | 'compliments',
+  ): Promise<HelperThread | null> => {
+    if (!profile || !communityId) return null;
+    const board = await findBoardTarget('announcements');
+    if (!board) return null;
+
+    const { data: existing } = await supabase
+      .from('board_posts')
+      .select('id, title, created_at')
+      .eq('community_id', communityId)
+      .eq('category_id', board.id)
+      .ilike('title', kind === 'newsletter' ? '%newsletter%' : '%compliment%')
+      .is('archived_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const found = ((existing ?? []) as { id: string; title: string }[])[0];
+    if (found) {
+      return { boardId: board.id, boardName: board.name, postId: found.id, postTitle: found.title };
+    }
+
+    const month = new Date().toLocaleString('en-US', { month: 'long' });
+    const title = kind === 'newsletter'
+      ? `${month} Newsletter — shout-outs & mentions 📣`
+      : `${month} Compliment Corner 💐`;
+    const content = kind === 'newsletter'
+      ? "The newsletter's brewing! 🗞️ Want a shout-out, a plug, or a reminder in it — \"come to my lemonade stand Tuesday!\"-style? Drop it in this thread and it goes straight into the newsletter."
+      : 'Want to compliment anyone this month? 💐 Drop it here — big, small, silly, sincere. Compliments get read out in the newsletter and at the meeting. No act of niceness too tiny.';
+
+    const { data: created, error } = await (supabase as any)
+      .from('board_posts')
+      .insert({ community_id: communityId, category_id: board.id, author_id: profile.id, title, content })
+      .select('id, title')
+      .single();
+    if (error || !created) return { boardId: board.id, boardName: board.name, postId: null, postTitle: null };
+    return { boardId: board.id, boardName: board.name, postId: created.id, postTitle: created.title };
+  }, [communityId, findBoardTarget, profile]);
+
+  const submitNewsletterItem = async () => {
+    const content = newsletterText.trim();
+    if (!content || !profile || !communityId || newsletterPosting) return;
+    setNewsletterPosting(true);
+    setNewsletterError(null);
+    try {
+      const thread = await findOrCreateNewsletterThread(
+        newsletterKind === 'compliment' ? 'compliments' : 'newsletter'
+      );
+      if (!thread?.postId) {
+        setNewsletterError('Could not find the newsletter thread. You can post it from the Boards tab instead.');
+        return;
+      }
+      const { error } = await (supabase as any).from('board_replies').insert({
+        community_id: communityId,
+        post_id: thread.postId,
+        author_id: profile.id,
+        content,
+      });
+      if (error) {
+        setNewsletterError(`Could not post that: ${error.message}`);
+        return;
+      }
+      setNewsletterPosted((current) => [...current, { content, thread: thread.postTitle ?? 'the newsletter thread' }]);
+      setNewsletterText('');
+    } finally {
+      setNewsletterPosting(false);
+    }
+  };
 
   // Helpers step posts as a REPLY on the current monthly thread of the HIVE
   // Helpers board (one thread per month, e.g. "June Pay It Forward Success").
@@ -701,7 +813,7 @@ export default function MonthlyTuneupScreen() {
 
   // Wizard progress survives a full relaunch: restore any saved draft once the
   // profile/community are known, save (debounced) on change, clear on finish.
-  const draftKey = communityId && profile ? getTuneupDraftKey(communityId, profile.id) : null;
+  const draftKey = communityId && profile ? getTuneupDraftKey(communityId, profile.id, isMidpoint) : null;
   const [draftRestored, setDraftRestored] = useState(false);
 
   useEffect(() => {
@@ -721,7 +833,7 @@ export default function MonthlyTuneupScreen() {
             const draftIsFresh = typeof draft.savedAt === 'number'
               && Date.now() - draft.savedAt < 60 * 60 * 1000;
             if (draftIsFresh && typeof draft.stepIndex === 'number' && Number.isFinite(draft.stepIndex)) {
-              setStepIndex(Math.min(Math.max(Math.trunc(draft.stepIndex), 0), STEPS.length - 1));
+              setStepIndex(Math.min(Math.max(Math.trunc(draft.stepIndex), 0), steps.length - 1));
             }
             if (typeof draft.helperContent === 'string') setHelperContent(draft.helperContent);
             if (typeof draft.hangTitle === 'string') setHangTitle(draft.hangTitle);
@@ -1267,7 +1379,7 @@ export default function MonthlyTuneupScreen() {
   };
 
   const goNext = async () => {
-    if (stepIndex >= STEPS.length - 1) {
+    if (stepIndex >= steps.length - 1) {
       // Finishing: save any check-in answers the member touched this session.
       if (monthlyCheckInSurvey && checkInDirty && !checkInSaving && hasRealCheckInAnswers()) {
         setCheckInSaving(true);
@@ -1282,6 +1394,9 @@ export default function MonthlyTuneupScreen() {
         setCheckInDirty(false);
       }
       await logInsteadOnFinish();
+      if (isMidpoint && communityId && profile) {
+        void setStoredItemAsync(getHalfwayDoneKey(communityId, profile.id), '1');
+      }
       setFinished(true);
       return;
     }
@@ -1782,6 +1897,103 @@ export default function MonthlyTuneupScreen() {
     </View>
   );
 
+  // Halfway step 1. Pills first so nobody faces a blank box: pick the KIND of
+  // thing you want in the newsletter and the prompt changes to match.
+  const renderNewsletterStep = () => {
+    const active = NEWSLETTER_KINDS.find((kind) => kind.key === newsletterKind) ?? NEWSLETTER_KINDS[0];
+    return (
+      <View>
+        <StepHeader
+          title="Want anything in the newsletter?"
+          subtitle="It goes out soon. Shout-outs, plugs, reminders, compliments — this is the easiest way in."
+          icon={<Text style={{ fontSize: 22 }}>🗞️</Text>}
+        />
+
+        <View style={[cardStyle, { gap: 12 }]}>
+          <BoxHeading style={{ marginBottom: 0 }}>What have you got?</BoxHeading>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {NEWSLETTER_KINDS.map((kind) => {
+              const selected = kind.key === newsletterKind;
+              return (
+                <Pressable
+                  key={kind.key}
+                  onPress={() => setNewsletterKind(kind.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={kind.label}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: selected ? '#fdf3dc' : '#faf8f3',
+                    borderWidth: 1,
+                    borderColor: selected ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
+                    borderRadius: 14,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                  }}
+                >
+                  <Text style={{ fontSize: 14 }}>{selected ? '●' : '○'}</Text>
+                  <Text
+                    style={{
+                      fontFamily: selected ? 'Lato_700Bold' : 'Lato_400Regular',
+                      fontSize: 14,
+                      color: selected ? '#8a6b30' : '#6b7280',
+                    }}
+                  >
+                    {kind.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TextInput
+              value={newsletterText}
+              onChangeText={setNewsletterText}
+              placeholder={active.prompt}
+              placeholderTextColor="#b5ad9f"
+              blurOnSubmit={false}
+              onKeyPress={submitOnEnter(submitNewsletterItem)}
+              style={[inputStyle, { flex: 1 }]}
+            />
+            <Pressable
+              onPress={() => void submitNewsletterItem()}
+              disabled={newsletterPosting || !newsletterText.trim()}
+              style={({ pressed }) => ({
+                backgroundColor: newsletterText.trim() ? '#bd9348' : '#e5e7eb',
+                borderRadius: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 11,
+                opacity: pressed || newsletterPosting ? 0.8 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: newsletterText.trim() ? 'white' : '#a09274' }}>
+                {newsletterPosting ? '…' : 'Add it'}
+              </Text>
+            </Pressable>
+          </View>
+
+          {newsletterError ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626' }}>{newsletterError}</Text>
+          ) : null}
+        </View>
+
+        {newsletterPosted.length > 0 ? (
+          <PostedConfirmation
+            lines={newsletterPosted.map((item) => item.content)}
+            boardName={newsletterPosted[newsletterPosted.length - 1]?.thread}
+          />
+        ) : null}
+
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
+          Nothing this time? No worries — tap "Looks good →".
+        </Text>
+      </View>
+    );
+  };
+
   const renderTodosStep = () => (
     <View>
       <StepHeader
@@ -1934,7 +2146,7 @@ export default function MonthlyTuneupScreen() {
   );
 
   const renderStep = () => {
-    switch (STEPS[stepIndex].key) {
+    switch (steps[stepIndex].key) {
       case 'wishes':
         return renderWishesStep();
       case 'hangs':
@@ -1947,6 +2159,8 @@ export default function MonthlyTuneupScreen() {
         return renderTodosStep();
       case 'checkin':
         return renderCheckInStep();
+      case 'newsletter':
+        return renderNewsletterStep();
       default:
         return null;
     }
@@ -1972,10 +2186,12 @@ export default function MonthlyTuneupScreen() {
               marginBottom: 10,
             }}
           >
-            You're all tuned up for the {monthName} meeting!
+            {isMidpoint ? "That's the halfway check-in done!" : `You're all tuned up for the ${monthName} meeting!`}
           </Text>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 22, color: '#7d715f', textAlign: 'center', marginBottom: 32 }}>
-            Wishes refreshed, ideas posted, calendar updated — HIVE thanks you.
+            {isMidpoint
+              ? 'Anything you added goes straight into the newsletter — HIVE thanks you.'
+              : 'Wishes refreshed, ideas posted, calendar updated — HIVE thanks you.'}
           </Text>
           <Pressable
             onPress={() => router.replace('/hive')}
@@ -2046,11 +2262,11 @@ export default function MonthlyTuneupScreen() {
               contentFit="contain"
             />
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 20, color: '#2d2d2d' }}>
-              {monthName} Tune-up
+              {isMidpoint ? 'Halfway Check-in' : `${monthName} Tune-up`}
             </Text>
           </View>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 2 }}>
-            Step {stepIndex + 1} of {STEPS.length} · {STEPS[stepIndex].label}
+            Step {stepIndex + 1} of {steps.length} · {steps[stepIndex].label}
           </Text>
         </View>
         {/* Deck chrome: refresh + exit, quiet until you reach for them. */}
@@ -2093,7 +2309,7 @@ export default function MonthlyTuneupScreen() {
 
       {/* Progress dots */}
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, paddingVertical: 12 }}>
-        {STEPS.map((step, index) => (
+        {steps.map((step, index) => (
           <View
             key={step.key}
             style={{
@@ -2142,7 +2358,7 @@ export default function MonthlyTuneupScreen() {
           <Pressable
             onPress={() => void goNext()}
             accessibilityRole="button"
-            accessibilityLabel={stepIndex >= STEPS.length - 1 ? 'Finish the tune-up' : 'Next step'}
+            accessibilityLabel={stepIndex >= steps.length - 1 ? 'Finish the tune-up' : 'Next step'}
             style={({ pressed }) => ({
               position: 'absolute',
               right: 0,
@@ -2199,7 +2415,7 @@ export default function MonthlyTuneupScreen() {
           })}
         >
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'white' }}>
-            {stepIndex === STEPS.length - 1
+            {stepIndex === steps.length - 1
               ? checkInSaving ? 'Saving...' : checkInDirty ? 'Save & finish ✓' : 'Finish ✓'
               : 'Looks good →'}
           </Text>

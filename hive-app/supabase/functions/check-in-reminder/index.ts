@@ -142,17 +142,17 @@ function checkInEmailHtml(name: string, month: string, day: number, kind: Remind
       <div style="text-align: center; padding: 8px 0 4px;">
         <span style="font-size: 40px;">🍯</span>
       </div>
-      <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Mid-month pulse</h1>
+      <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Halfway check-in</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">Halfway to the ${month} ${day} meeting</p>
       <p style="font-size: 15px;">Hi ${name},</p>
-      <p style="font-size: 15px;">No meeting tonight — just a gentle nudge while things are fresh:</p>
+      <p style="font-size: 15px;">No meeting tonight — but the newsletter goes out soon, and this is the easy way in:</p>
       <ul style="font-size: 15px; padding-left: 20px;">
-        <li>Peek at your <strong>to-do list</strong> — check off anything you've finished (it feeds your Progress recap at the meeting, so wins don't get forgotten)</li>
+        <li>Want a <strong>shout-out, a plug, or a reminder</strong> in the newsletter? Say so and it lands there</li>
+        <li>Check off anything you've finished on your <strong>to-do list</strong> — wins shouldn't get forgotten</li>
         <li>Life moved? Update your HD wish</li>
-        <li>Out of town coming up? Add the stretch to the calendar</li>
       </ul>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${APP_URL}/monthly-tuneup" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Take the 2-minute pulse</a>
+        <a href="${APP_URL}/monthly-tuneup?mode=midpoint" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Take the 2-minute check-in</a>
       </div>
       <p style="font-size: 13px; color: #9a9a9a; text-align: center;">See you ${month} ${day}. 🐝</p>
     </div>
@@ -469,20 +469,20 @@ serve(async (req) => {
           kind === 'day_of'
             ? '🐝 Meeting tonight — last call to check in'
             : kind === 'midpoint'
-              ? '🍯 Mid-month pulse — 2-minute check-in'
+              ? '🍯 Halfway check-in — anything for the newsletter?'
               : '🐝 Monthly check-in is open';
         const notificationBody =
           kind === 'day_of'
             ? `Tonight's the ${month} ${day} meeting and your check-in isn't in yet — it takes ~2 minutes and lights you up on the Arrival Board.`
             : kind === 'midpoint'
-              ? `The newsletter's brewing 🗞️ — want a shout-out or reminder in it? Drop it in the "${newsletterThread ?? `${month} Newsletter`}" thread on the boards. And while you're in: peek at your to-do list and check off what's done.`
+              ? `The newsletter's brewing 🗞️ — want a shout-out, a plug, or a reminder in it? The 2-minute halfway check-in walks you there.`
               : `Take 5 minutes before the ${month} meeting — update your HDs and check in. ` +
                 `It shows up on the Arrival Board and helps set the room.`;
         const emailSubject =
           kind === 'day_of'
             ? `🐝 Meeting tonight (${month} ${day}) — quick check-in if you haven't`
             : kind === 'midpoint'
-              ? `🍯 Mid-month pulse — halfway to the ${month} ${day} meeting`
+              ? `🍯 Halfway check-in — the ${month} newsletter is brewing`
               : `🐝 Your HIVE check-in is open — meeting ${month} ${day}`;
 
         surveysFired++;

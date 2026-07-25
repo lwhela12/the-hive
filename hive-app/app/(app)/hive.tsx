@@ -6,6 +6,7 @@ import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
 import Svg, { Polygon } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
+import { getHalfwayDoneKey } from '../../lib/meetingCycle';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
@@ -37,7 +38,7 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateRangeShort, formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { submitOnEnter } from '../../lib/submitOnEnter';
-import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { addHomeResetListener } from '../../lib/homeNavigation';
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
@@ -2119,7 +2120,40 @@ export default function HiveScreen() {
     ]);
   };
 
+  // Halfway between meetings the newsletter goes out. The nudge used to be a
+  // push with nowhere to land in-app, so Home carries the short check-in for a
+  // stretch of days — and stops the moment you've done it, because stale
+  // to-dos piling up is exactly what we're avoiding (Nat 2026-07-25).
+  const [halfwayDone, setHalfwayDone] = useState(false);
+  useEffect(() => {
+    if (!communityId || !profile) return;
+    let cancelled = false;
+    void getStoredItemAsync(getHalfwayDoneKey(communityId, profile.id)).then((value) => {
+      if (!cancelled) setHalfwayDone(value === '1');
+    });
+    return () => { cancelled = true; };
+  }, [communityId, profile?.id]);
+
+  const nextMeetingEvent = upcomingEvents.find((event) => event.event_type === 'meeting');
+  const daysToMeeting = nextMeetingEvent
+    ? Math.round((Date.parse(`${nextMeetingEvent.event_date}T12:00:00Z`) - Date.now()) / 86_400_000)
+    : null;
+  const inHalfwayWindow = daysToMeeting !== null && daysToMeeting >= 8 && daysToMeeting <= 20;
+
   const homeTodos: HomeTodo[] = [
+    ...(inHalfwayWindow && !halfwayDone
+      ? [{
+          id: 'halfway-checkin',
+          emoji: '🗞️',
+          title: 'Halfway check-in',
+          detail: "The newsletter's brewing — want a shout-out, a plug, or a reminder in it?",
+          cta: 'Take 2 min →',
+          onPress: () => router.push({
+            pathname: '/monthly-tuneup',
+            params: { from: 'hive', mode: 'midpoint' },
+          } as any),
+        } as HomeTodo]
+      : []),
     ...availableSurveys.map(s => {
       const response = myResponses.get(s.id);
       const submittedAt = response?.submitted_at ?? null;

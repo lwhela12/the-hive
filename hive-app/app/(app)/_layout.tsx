@@ -377,6 +377,13 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
+          name="newsletter"
+          options={{
+            title: 'Newsletter Draft',
+            href: null,
+          }}
+        />
+        <Tabs.Screen
           name="admin"
           options={{
             title: 'Admin',

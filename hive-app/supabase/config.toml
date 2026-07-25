@@ -133,3 +133,9 @@ verify_jwt = false
 # Auth (member JWT or service key) is handled in function code.
 [functions.seal-meeting]
 verify_jwt = false
+
+# Harvest the cycle (newsletter thread, compliments, helper log, grants,
+# check-ins) into the same sections[] shape the meeting summary uses.
+# Auth (member JWT or service key) is handled in function code.
+[functions.draft-newsletter]
+verify_jwt = false

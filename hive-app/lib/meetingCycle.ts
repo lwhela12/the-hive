@@ -73,3 +73,10 @@ export async function postHangSuggestionToBoard(input: {
   }
   return true;
 }
+
+// Home shows the halfway nudge for a stretch of days, so it needs to know when
+// you've actually done it — there's no survey row for the short flow, the way
+// the pre-meeting check-in has one. Keyed by month: one halfway pass per cycle
+// is the whole idea.
+export const getHalfwayDoneKey = (communityId: string, userId: string) =>
+  `the-hive:halfway-done:${communityId}:${userId}:${new Date().toISOString().slice(0, 7)}`;
