@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
@@ -39,6 +40,73 @@ function cleanJotText(description: string) {
   return text || description.trim();
 }
 
+
+
+// Turn each person's check-in into one readable line. Everything handed over is
+// already attributed — this is condensing known facts, not interpreting audio,
+// which is why the speaker-attribution problem that sank transcripts doesn't
+// apply. If anything goes wrong we fall back to the verbatim lines: a longer
+// summary beats a failed seal.
+async function condenseHummdingers(
+  people: { name: string; hd: string; progress: string; obstacles: string; priorities: string; took: string[] }[],
+): Promise<string[]> {
+  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+  if (!apiKey || people.length === 0) return [];
+
+  const brief = people.map((person) => [
+    `PERSON: ${person.name}`,
+    person.hd ? `their HD: ${person.hd}` : '',
+    person.progress ? `progress: ${person.progress}` : '',
+    person.obstacles ? `stuck on / how HIVE can help: ${person.obstacles}` : '',
+    person.priorities ? `focused on next: ${person.priorities}` : '',
+    person.took.length ? `took on: ${person.took.join(' · ')}` : '',
+  ].filter(Boolean).join('\n')).join('\n\n');
+
+  const system = [
+    'You condense HIVE members\' monthly check-ins into one line each for a',
+    'meeting recap that someone who missed the meeting will skim.',
+    '',
+    'Return ONLY a JSON array, one object per person, in the order given:',
+    '[{"name": "Sara", "line": "Europe trip is locked in (Aug 6-Sep 8); still hunting for a mental-health person."}]',
+    '',
+    'Each line: one or two short sentences, under 200 characters. Lead with what',
+    'changed or what they are working on, then what they need help with if',
+    'anything. Use only the facts given — never invent. Skip a person entirely',
+    'if they said nothing worth reporting. No markdown, no names inside the line.',
+    'Exactly ONE object per person — never split someone across two entries.',
+  ].join('\n');
+
+  try {
+    const anthropic = new Anthropic({ apiKey });
+    const response = await anthropic.messages.create({
+      model: 'claude-opus-5',
+      max_tokens: 2000,
+      system,
+      messages: [{ role: 'user', content: brief }],
+    });
+    if ((response as { stop_reason?: string }).stop_reason === 'refusal') return [];
+
+    const text = response.content
+      .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
+      .trim();
+    const json = text.slice(text.indexOf('['), text.lastIndexOf(']') + 1);
+    const rows = JSON.parse(json) as { name?: string; line?: string }[];
+    // One line per person, whatever the model returns — a long check-in
+    // sometimes comes back split across two entries for the same name.
+    const byPerson = new Map<string, string>();
+    rows.filter((row) => row?.name && row?.line).forEach((row) => {
+      const name = String(row.name).trim();
+      const line = String(row.line).trim();
+      byPerson.set(name, byPerson.has(name) ? `${byPerson.get(name)} ${line}` : line);
+    });
+    return Array.from(byPerson, ([name, line]) => `${name}: ${line}`);
+  } catch (error) {
+    console.warn('HummDinger condensing failed; keeping the full check-in lines:', error);
+    return [];
+  }
+}
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -328,6 +396,7 @@ serve(async (req) => {
 
     // One block per person: their HD, their POP, and what they walked away with.
     const hdLines: string[] = [];
+    const people: { name: string; hd: string; progress: string; obstacles: string; priorities: string; took: string[] }[] = [];
     const seen = new Set<string>();
     checkIns.forEach((entry) => {
       if (seen.has(entry.userId)) return;
@@ -342,13 +411,24 @@ serve(async (req) => {
       });
       if (!hd && !progress && !obstacles && !priorities && took.length === 0) return;
 
+      people.push({ name: entry.name, hd: hd ?? '', progress, obstacles, priorities, took });
       hdLines.push(`${entry.name}${hd ? ` — ${hd}` : ''}`);
       if (progress) hdLines.push(`    Progress: ${progress}`);
       if (obstacles) hdLines.push(`    Obstacles / how HIVE can help: ${obstacles}`);
       if (priorities) hdLines.push(`    Priorities: ${priorities}`);
       if (took.length > 0) hdLines.push(`    Took on: ${took.join(' · ')}`);
     });
-    if (hdLines.length > 0) sections.push({ title: "HummDingers — everyone's POP", lines: hdLines });
+    // One tight line per person, not their check-in pasted in full. This is the
+    // only place a model earns its keep here: everything else in this summary is
+    // a fact to arrange, but "36 lines of verbatim POP" -> "Sara: Europe trip is
+    // locked in (Aug 6-Sep 8); still hunting for a mental-health person" is
+    // genuine condensing (Nat 2026-07-25: "it's a summary, not word for word").
+    const condensed = await condenseHummdingers(people);
+    if (condensed.length > 0) {
+      sections.push({ title: 'HummDingers', lines: condensed });
+    } else if (hdLines.length > 0) {
+      sections.push({ title: "HummDingers — everyone's POP", lines: hdLines });
+    }
 
     // Granted wishes are the whole point of the HIVE, so they keep a section of
     // their own rather than being buried in a wrap-up. The rest of the old
