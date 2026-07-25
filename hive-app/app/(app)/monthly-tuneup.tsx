@@ -253,13 +253,35 @@ export default function MonthlyTuneupScreen() {
   useEffect(() => {
     if (!communityId) return;
     (async () => {
-      const since = await getCycleStart(communityId, new Date().toISOString().slice(0, 10));
+      const today = new Date().toISOString().slice(0, 10);
+      const since = await getCycleStart(communityId, today);
+
+      // The window runs meeting-to-meeting, not "up to today". You fill the
+      // tune-up in the RUN-UP to the next meeting, so a hang scheduled for
+      // next week has happened by the time everyone's in the room — capping at
+      // today meant a cycle's hangs were invisible right when people were
+      // being asked about them, and the whole rating card fell back to a bare
+      // text box (Nat 2026-07-25). Falls back to five weeks out when no next
+      // meeting is on the calendar yet.
+      const { data: nextMeeting } = await supabase
+        .from('events')
+        .select('event_date')
+        .eq('community_id', communityId)
+        .eq('event_type', 'meeting')
+        .gte('event_date', today)
+        .order('event_date', { ascending: true })
+        .limit(1);
+      const fallback = new Date();
+      fallback.setDate(fallback.getDate() + 35);
+      const until = (nextMeeting?.[0] as { event_date?: string } | undefined)?.event_date
+        ?? fallback.toISOString().slice(0, 10);
+
       const { data } = await supabase
         .from('events')
         .select('id, title, event_date, end_date, event_type')
         .eq('community_id', communityId)
         .gte('event_date', since.toISOString().slice(0, 10))
-        .lte('event_date', new Date().toISOString().slice(0, 10))
+        .lte('event_date', until)
         .neq('event_type', 'meeting')
         .neq('event_type', 'birthday')
         .order('event_date', { ascending: true });
