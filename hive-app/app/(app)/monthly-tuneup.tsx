@@ -1938,9 +1938,11 @@ export default function MonthlyTuneupScreen() {
     return (
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          {/* The finish screen is the one place with room to spare — the crest
+              earns its detail at this size (Nat 2026-07-25). */}
           <Image
             source={hiveBee}
-            style={{ width: 84, height: 84, marginBottom: 16 }}
+            style={{ width: 150, height: 150, marginBottom: 20 }}
             contentFit="contain"
           />
           <Text
