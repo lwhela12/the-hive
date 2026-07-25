@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
@@ -40,121 +39,6 @@ function cleanJotText(description: string) {
   return text || description.trim();
 }
 
-
-// Claude writes the recap. Everything it receives is a fact the app already
-// recorded and attributed, so there is nothing for it to infer about who said
-// what — it is arranging known facts into prose, not interpreting audio.
-// If the call fails for any reason, the caller's counts line is used instead:
-// a plain summary is a far better outcome than a failed seal.
-async function writeRecap(input: {
-  month: string;
-  facts: {
-    events: { title: string; event_date: string }[];
-    todoGroups: Map<string, { names: string[]; about: string | null }>;
-    notes: { content: string; wish?: { user?: { name?: string } | null } | null }[];
-    granted: { title: string | null; description: string; user?: { name?: string } | null }[];
-    threads: string[];
-    checkIns: { name: string; answers: Record<string, unknown> }[];
-  };
-  fallback: string;
-}): Promise<string> {
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-  if (!apiKey) return input.fallback;
-
-  const { events, todoGroups, notes, granted, threads, checkIns } = input.facts;
-
-  const answerText = (answers: Record<string, unknown>, key: string) => {
-    const value = answers[key];
-    return typeof value === 'string' ? value.trim() : '';
-  };
-
-  const lines: string[] = [];
-  if (checkIns.length > 0) {
-    lines.push('WHERE EVERYONE IS (from their check-ins):');
-    checkIns.forEach((entry) => {
-      const progress = answerText(entry.answers, 'q_pop_progress');
-      const obstacles = answerText(entry.answers, 'q_pop_obstacles');
-      const priorities = answerText(entry.answers, 'q_pop_priorities');
-      if (!progress && !obstacles && !priorities) return;
-      lines.push(`- ${entry.name}:`);
-      if (progress) lines.push(`    progress: ${progress}`);
-      if (obstacles) lines.push(`    stuck on / needs: ${obstacles}`);
-      if (priorities) lines.push(`    focused on next: ${priorities}`);
-    });
-  }
-  if (granted.length > 0) {
-    lines.push('WISHES GRANTED:');
-    granted.forEach((wish) => {
-      const owner = wish.user?.name ? firstName(wish.user.name) : 'someone';
-      lines.push(`- ${owner}: ${(wish.title ?? wish.description).slice(0, 120)}`);
-    });
-  }
-  if (todoGroups.size > 0) {
-    lines.push('WHO TOOK ON WHAT:');
-    todoGroups.forEach((group, text) => {
-      const who = group.names.length > 3 ? `${group.names.length} members` : group.names.join(', ');
-      lines.push(`- ${text}${who ? ` — ${who}` : ''}${group.about ? ` (about ${group.about}'s HD)` : ''}`);
-    });
-  }
-  if (notes.length > 0) {
-    lines.push('NOTES TAKEN ON WISHES:');
-    notes.forEach((note) => {
-      const owner = note.wish?.user?.name ? firstName(note.wish.user.name) : 'someone';
-      lines.push(`- on ${owner}'s wish: ${note.content.replace(/^📝 From the [A-Za-z]+ meeting:\s*/i, '').slice(0, 200)}`);
-    });
-  }
-  if (events.length > 0) {
-    lines.push('SCHEDULED:');
-    events.forEach((event) => lines.push(`- ${event.title} (${event.event_date})`));
-  }
-  if (threads.length > 0) {
-    lines.push(`NEW BOARD THREADS: ${threads.join(' · ')}`);
-  }
-
-  const system = [
-    'You write the recap of a HIVE meeting for a member who could not make it.',
-    'HIVE is a 12-person community that practises "high-definition wishing": people',
-    'articulate what they actually need (an "HD"), and others grant those wishes.',
-    '',
-    'Write 2-4 short paragraphs of warm, plain prose. Lead with what actually',
-    'happened and what changed for people — not with statistics. Name people by',
-    'first name. Mention what someone is stuck on when it is the kind of thing a',
-    'friend could help with, and say plainly who took on what.',
-    '',
-    'Rules:',
-    '- Use ONLY the facts given. Never invent an attendee, a decision, or a quote.',
-    '- If something is missing, leave it out rather than guessing.',
-    '- No headings, no bullet lists, no markdown — just paragraphs.',
-    '- Do not open with "In this meeting" or "The team discussed".',
-  ].join('\n');
-
-  try {
-    const anthropic = new Anthropic({ apiKey });
-    const response = await anthropic.messages.create({
-      model: 'claude-opus-5',
-      max_tokens: 4000,
-      system,
-      messages: [{
-        role: 'user',
-        content: `Here is everything the app recorded for the ${input.month} HIVE meeting.\n\n${lines.join('\n')}`,
-      }],
-    });
-
-    // A refusal returns HTTP 200 with empty or partial content — check before
-    // reading, or an unlucky turn of phrase silently produces a blank recap.
-    if ((response as { stop_reason?: string }).stop_reason === 'refusal') return input.fallback;
-
-    const text = response.content
-      .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
-      .map((block) => block.text.trim())
-      .join('\n\n')
-      .trim();
-    return text || input.fallback;
-  } catch (error) {
-    console.warn('Recap write failed; falling back to the counts line:', error);
-    return input.fallback;
-  }
-}
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -243,15 +127,41 @@ serve(async (req) => {
     // The check-ins are the other half of the meeting: what people said they're
     // working on, stuck on, and focused on. They're what makes a recap readable
     // to someone who wasn't there, rather than a list of clicks.
+    const [notesRow, ledgerRows, memberRows, wishRows] = await Promise.all([
+      supabaseAdmin.from('communities').select('meeting_helper_notes').eq('id', communityId).maybeSingle(),
+      supabaseAdmin.from('honey_pot_transactions').select('amount').eq('community_id', communityId),
+      supabaseAdmin.from('community_memberships').select('user:profiles!user_id(id, name)').eq('community_id', communityId),
+      supabaseAdmin.from('wishes')
+        .select('title, description, user_id, is_spotlight, created_at')
+        .eq('community_id', communityId).eq('status', 'public')
+        .order('created_at', { ascending: false }),
+    ]);
+    const deckNotes = ((notesRow.data as any)?.meeting_helper_notes ?? {}) as Record<string, string>;
+    const potBalance = ((ledgerRows.data ?? []) as { amount: number | string }[])
+      .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+    const memberNames = new Map<string, string>();
+    ((memberRows.data ?? []) as any[]).forEach((row) => {
+      if (row.user?.id) memberNames.set(row.user.id, firstName(row.user.name ?? 'Someone'));
+    });
+    // Same rule the app uses everywhere: your starred wish, else your newest.
+    const hdByUser = new Map<string, string>();
+    ((wishRows.data ?? []) as any[]).forEach((wish) => {
+      const label = (wish.title || wish.description || '').trim();
+      if (!label) return;
+      if (wish.is_spotlight) hdByUser.set(wish.user_id, label);
+      else if (!hdByUser.has(wish.user_id)) hdByUser.set(wish.user_id, label);
+    });
+
     const { data: checkInRows } = await supabaseAdmin
       .from('survey_responses')
-      .select('answers, submitted_at, user:profiles!user_id(name), survey:surveys!survey_id(title)')
+      .select('answers, submitted_at, user_id, user:profiles!user_id(name), survey:surveys!survey_id(title)')
       .gte('submitted_at', new Date(Date.parse(startIso) - 45 * 24 * 3600_000).toISOString())
       .order('submitted_at', { ascending: false })
       .limit(40);
     const checkIns = ((checkInRows ?? []) as any[])
       .filter((row) => /check-in/i.test(row.survey?.title ?? ''))
       .map((row) => ({
+        userId: row.user_id as string,
         name: row.user?.name ? firstName(row.user.name) : 'Someone',
         answers: (row.answers ?? {}) as Record<string, unknown>,
       }));
@@ -322,17 +232,82 @@ serve(async (req) => {
       try { previous = JSON.parse(existing.summary); } catch { previous = {}; }
     }
 
+    // THE SUMMARY IS THE DECK, IN OUTLINE (Nat 2026-07-25: "we don't need to
+    // double up our work"). Same running order as the meeting helper — News,
+    // Treasurer, Meet-Ups, HummDingers, Wrap-Up — so catching up reads like
+    // walking the slides, and nothing has to be written twice or recorded.
+    const answerOf = (answers: Record<string, unknown>, key: string) => {
+      const value = answers[key];
+      return typeof value === 'string' ? value.trim() : '';
+    };
+    const bulletsFrom = (text?: string) => (text ?? '')
+      .split(/\n+/)
+      .map((line) => line.replace(/^[\s•\-*]+/, '').trim())
+      .filter(Boolean);
+
+    const sections: { title: string; lines: string[] }[] = [];
+
+    const newsLines = [...bulletsFrom(deckNotes.news)];
+    const appLines = bulletsFrom(deckNotes.appnews).map((line) => `App update: ${line}`);
+    if (newsLines.length || appLines.length) {
+      sections.push({ title: 'News from Nat', lines: [...newsLines, ...appLines] });
+    }
+
+    sections.push({
+      title: 'Treasurer',
+      lines: [`Honey Pot balance: $${potBalance.toFixed(2)}`],
+    });
+
+    const meetupLines = [
+      ...bulletsFrom(deckNotes.meetups),
+      ...events.map((event) => `Scheduled: ${event.title} (${event.event_date})`),
+    ];
+    if (meetupLines.length > 0) sections.push({ title: 'HIVE Hangs & Help', lines: meetupLines });
+
+    // One block per person: their HD, their POP, and what they walked away with.
+    const hdLines: string[] = [];
+    const seen = new Set<string>();
+    checkIns.forEach((entry) => {
+      if (seen.has(entry.userId)) return;
+      seen.add(entry.userId);
+      const hd = hdByUser.get(entry.userId);
+      const progress = answerOf(entry.answers, 'q_pop_progress');
+      const obstacles = answerOf(entry.answers, 'q_pop_obstacles');
+      const priorities = answerOf(entry.answers, 'q_pop_priorities');
+      const took: string[] = [];
+      todoGroups.forEach((group, text) => {
+        if (group.names.includes(entry.name)) took.push(text);
+      });
+      if (!hd && !progress && !obstacles && !priorities && took.length === 0) return;
+
+      hdLines.push(`${entry.name}${hd ? ` — ${hd}` : ''}`);
+      if (progress) hdLines.push(`    Progress: ${progress}`);
+      if (obstacles) hdLines.push(`    Obstacles / how HIVE can help: ${obstacles}`);
+      if (priorities) hdLines.push(`    Priorities: ${priorities}`);
+      if (took.length > 0) hdLines.push(`    Took on: ${took.join(' · ')}`);
+    });
+    if (hdLines.length > 0) sections.push({ title: "HummDingers — everyone's POP", lines: hdLines });
+
+    const wrapLines = [
+      ...bulletsFrom(deckNotes.wrapup),
+      ...granted.map((wish) => {
+        const owner = wish.user?.name ? firstName(wish.user.name) : 'Someone';
+        const granters = (wish.granters ?? [])
+          .map((row) => (row.granter?.name ? firstName(row.granter.name) : null))
+          .filter(Boolean);
+        return `Wish granted for ${owner}: ${(wish.title ?? wish.description).slice(0, 90)}${granters.length ? ` (thanks ${granters.join(', ')})` : ''}`;
+      }),
+      ...threads.map((title) => `New board thread: ${title}`),
+    ];
+    if (wrapLines.length > 0) sections.push({ title: 'Wrap-Up', lines: wrapLines });
+
     // The recap itself. The counts line above is the fallback and the floor —
     // accurate but lifeless ("8 to-dos handed out across 10 lists"). Someone who
     // missed the meeting deserves prose, so Claude writes it from the structured
     // facts. This is NOT transcription: there's no audio and no speaker
     // attribution to get wrong — every fact below is already labelled with whose
     // it is, which is exactly the problem that killed the transcript approach.
-    const narrative = await writeRecap({
-      month,
-      facts: { events, todoGroups, notes, granted, threads, checkIns },
-      fallback: summaryText,
-    });
+    const narrative = summaryText;
 
     const summaryPayload = {
       ...previous,
@@ -348,7 +323,7 @@ serve(async (req) => {
       action_items_created: todos.length,
       events_created: events.length,
       live_sealed_at: new Date().toISOString(),
-      recap_written_by: narrative === summaryText ? 'counts' : 'clive',
+      sections,
     };
 
     let meetingId = existing?.id ?? null;

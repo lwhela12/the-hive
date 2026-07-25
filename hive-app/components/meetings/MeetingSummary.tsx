@@ -19,6 +19,8 @@ interface ParsedSummary {
   applied_at?: string;
   summary?: string;
   decisions?: string[];
+  /** The meeting deck in outline form — same running order as the helper. */
+  sections?: { title: string; lines: string[] }[];
   details?: string[];
   action_items?: {
     description: string;
@@ -854,6 +856,38 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                 </View>
               ))}
             </View>
+          </View>
+        )}
+
+        {/* The deck in outline. Indented lines (Progress / Obstacles / …) keep
+            their indent so a person's block reads as one unit. */}
+        {parsedSummary.sections && parsedSummary.sections.length > 0 && (
+          <View className="mb-6">
+            {parsedSummary.sections.map((section) => (
+              <View key={section.title} className="mb-4">
+                <Text className="text-lg font-semibold text-gray-700 mb-2">
+                  {section.title}
+                </Text>
+                <View className="bg-gray-50 rounded-xl p-4">
+                  {section.lines.map((line, index) => {
+                    const indented = line.startsWith('    ');
+                    const text = line.trim();
+                    return (
+                      <View
+                        key={`${section.title}-${index}`}
+                        className="flex-row mb-1.5"
+                        style={indented ? { paddingLeft: 16 } : undefined}
+                      >
+                        {indented ? null : <Text className="text-label mr-2">•</Text>}
+                        <Text className={indented ? 'text-gray-600 flex-1' : 'text-gray-800 flex-1 font-medium'}>
+                          {text}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
           </View>
         )}
 
