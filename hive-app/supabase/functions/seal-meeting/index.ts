@@ -99,7 +99,9 @@ serve(async (req) => {
         .gte('fulfilled_at', startIso).lt('fulfilled_at', endIso),
       supabaseAdmin
         .from('board_posts')
-        .select('title')
+        // The board name comes along: "Comedy" means nothing without
+        // "Favorite Movies" in front of it (Nat 2026-07-25).
+        .select('title, category:board_categories!category_id(name)')
         .eq('community_id', communityId)
         .gte('created_at', startIso).lt('created_at', endIso),
     ]);
@@ -121,8 +123,10 @@ serve(async (req) => {
       user?: { name?: string } | null;
       granters?: { granter?: { name?: string } | null }[];
     }[];
-    const threads = ((threadsRes.data ?? []) as { title: string | null }[])
-      .map((row) => row.title).filter(Boolean) as string[];
+    const threadRows = ((threadsRes.data ?? []) as any[])
+      .filter((row) => row.title)
+      .map((row) => ({ title: row.title as string, board: (row.category?.name ?? '') as string }));
+    const threads = threadRows.map((row) => row.title);
 
     // The check-ins are the other half of the meeting: what people said they're
     // working on, stuck on, and focused on. They're what makes a recap readable
@@ -252,7 +256,7 @@ serve(async (req) => {
     // board threads join the news: they're things to tell people about.
     const newsLines = [
       ...bulletsFrom(deckNotes.news),
-      ...threads.map((title) => `New board thread: ${title}`),
+      ...threadRows.map((row) => (row.board ? `${row.board} → ${row.title}` : `New thread: ${row.title}`)),
     ];
     if (newsLines.length > 0) sections.push({ title: 'News from Nat', lines: newsLines });
 
