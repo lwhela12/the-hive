@@ -247,11 +247,17 @@ serve(async (req) => {
 
     const sections: { title: string; lines: string[] }[] = [];
 
-    const newsLines = [...bulletsFrom(deckNotes.news)];
-    const appLines = bulletsFrom(deckNotes.appnews).map((line) => `App update: ${line}`);
-    if (newsLines.length || appLines.length) {
-      sections.push({ title: 'News from Nat', lines: [...newsLines, ...appLines] });
-    }
+    // News and App updates are separate headers — they're different kinds of
+    // announcement and were reading as one long list (Nat 2026-07-25). New
+    // board threads join the news: they're things to tell people about.
+    const newsLines = [
+      ...bulletsFrom(deckNotes.news),
+      ...threads.map((title) => `New board thread: ${title}`),
+    ];
+    if (newsLines.length > 0) sections.push({ title: 'News from Nat', lines: newsLines });
+
+    const appLines = bulletsFrom(deckNotes.appnews);
+    if (appLines.length > 0) sections.push({ title: 'App updates', lines: appLines });
 
     sections.push({
       title: 'Treasurer',
@@ -288,25 +294,19 @@ serve(async (req) => {
     });
     if (hdLines.length > 0) sections.push({ title: "HummDingers — everyone's POP", lines: hdLines });
 
-    const wrapLines = [
-      ...bulletsFrom(deckNotes.wrapup),
-      ...granted.map((wish) => {
-        const owner = wish.user?.name ? firstName(wish.user.name) : 'Someone';
-        const granters = (wish.granters ?? [])
-          .map((row) => (row.granter?.name ? firstName(row.granter.name) : null))
-          .filter(Boolean);
-        return `Wish granted for ${owner}: ${(wish.title ?? wish.description).slice(0, 90)}${granters.length ? ` (thanks ${granters.join(', ')})` : ''}`;
-      }),
-      ...threads.map((title) => `New board thread: ${title}`),
-    ];
-    if (wrapLines.length > 0) sections.push({ title: 'Wrap-Up', lines: wrapLines });
+    // Granted wishes are the whole point of the HIVE, so they keep a section of
+    // their own rather than being buried in a wrap-up. The rest of the old
+    // wrap-up (raw detail dump, board-post list) is gone — the sections above
+    // already say all of it.
+    const grantedLines = granted.map((wish) => {
+      const owner = wish.user?.name ? firstName(wish.user.name) : 'Someone';
+      const granters = (wish.granters ?? [])
+        .map((row) => (row.granter?.name ? firstName(row.granter.name) : null))
+        .filter(Boolean);
+      return `${owner}: ${(wish.title ?? wish.description).slice(0, 90)}${granters.length ? ` — thanks ${granters.join(', ')}` : ''}`;
+    });
+    if (grantedLines.length > 0) sections.push({ title: 'Wishes granted 🌟', lines: grantedLines });
 
-    // The recap itself. The counts line above is the fallback and the floor —
-    // accurate but lifeless ("8 to-dos handed out across 10 lists"). Someone who
-    // missed the meeting deserves prose, so Claude writes it from the structured
-    // facts. This is NOT transcription: there's no audio and no speaker
-    // attribution to get wrong — every fact below is already labelled with whose
-    // it is, which is exactly the problem that killed the transcript approach.
     const narrative = summaryText;
 
     const summaryPayload = {

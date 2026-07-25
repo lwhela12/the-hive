@@ -859,40 +859,65 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
           </View>
         )}
 
-        {/* The deck in outline. Indented lines (Progress / Obstacles / …) keep
-            their indent so a person's block reads as one unit. */}
+        {/* The deck in outline. Each section is its own card: a serif heading,
+            real bullets, and indented POP lines that hang under the person they
+            belong to (Nat 2026-07-25 — "easier to follow along"). */}
         {parsedSummary.sections && parsedSummary.sections.length > 0 && (
           <View className="mb-6">
             {parsedSummary.sections.map((section) => (
-              <View key={section.title} className="mb-4">
-                <Text className="text-lg font-semibold text-gray-700 mb-2">
+              <View
+                key={section.title}
+                className="mb-4 bg-paper rounded-2xl border border-gold/25 px-5 py-4"
+              >
+                <Text
+                  style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#2d2d2d' }}
+                  className="mb-3"
+                >
                   {section.title}
                 </Text>
-                <View className="bg-gray-50 rounded-xl p-4">
-                  {section.lines.map((line, index) => {
-                    const indented = line.startsWith('    ');
-                    const text = line.trim();
+                {section.lines.map((line, index) => {
+                  const indented = line.startsWith('    ');
+                  const text = line.trim();
+                  // A person's name opens their block — give it air above.
+                  const startsBlock = !indented
+                    && index > 0
+                    && section.lines[index - 1].startsWith('    ');
+                  if (indented) {
+                    const [label, ...rest] = text.split(': ');
+                    const body = rest.join(': ');
                     return (
-                      <View
-                        key={`${section.title}-${index}`}
-                        className="flex-row mb-1.5"
-                        style={indented ? { paddingLeft: 16 } : undefined}
-                      >
-                        {indented ? null : <Text className="text-label mr-2">•</Text>}
-                        <Text className={indented ? 'text-gray-600 flex-1' : 'text-gray-800 flex-1 font-medium'}>
-                          {text}
+                      <View key={index} style={{ paddingLeft: 18, marginBottom: 4 }}>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21, color: '#6b5b3e' }}>
+                          {body ? (
+                            <>
+                              <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e6f35' }}>{label}: </Text>
+                              {body}
+                            </>
+                          ) : text}
                         </Text>
                       </View>
                     );
-                  })}
-                </View>
+                  }
+                  return (
+                    <View
+                      key={index}
+                      className="flex-row"
+                      style={{ marginBottom: 6, marginTop: startsBlock ? 12 : 0 }}
+                    >
+                      <Text style={{ color: '#bd9348', fontSize: 15, lineHeight: 22, marginRight: 8 }}>•</Text>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, lineHeight: 22, color: '#2d2d2d', flex: 1 }}>
+                        {text}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
             ))}
           </View>
         )}
 
         {/* Details */}
-        {parsedSummary.details && parsedSummary.details.length > 0 && (
+        {!parsedSummary.sections && parsedSummary.details && parsedSummary.details.length > 0 && (
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-700 mb-2">
               Details
@@ -909,7 +934,7 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
         )}
 
         {/* Created Board Posts */}
-        {parsedSummary.board_posts_created && parsedSummary.board_posts_created.length > 0 && (
+        {!parsedSummary.sections && parsedSummary.board_posts_created && parsedSummary.board_posts_created.length > 0 && (
           <View className="mb-6">
             <Text className="text-lg font-semibold text-gray-700 mb-2">
               Board Posts Created
