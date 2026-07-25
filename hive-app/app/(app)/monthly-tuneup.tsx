@@ -1248,10 +1248,28 @@ export default function MonthlyTuneupScreen() {
     await postHelperLog(content);
   };
 
+  // Clicking straight through the tune-up used to file a check-in made only of
+  // the Progress line the app seeds for you — which then counted as showing up
+  // on the arrival board (Nat 2026-07-25: "it should say hasn't checked in yet
+  // like everyone else"). A check-in needs at least one answer YOU put there.
+  const hasRealCheckInAnswers = () => {
+    const seededProgress = String(checkInAnswers.q_pop_progress ?? '')
+      .split('\n')
+      .filter((line) => !/^\s*(checked off|done for me\s*💛?)\s*:/i.test(line))
+      .join('')
+      .trim();
+    return Object.entries(checkInAnswers).some(([key, value]) => {
+      if (key === 'q_pop_progress') return !!seededProgress;
+      if (typeof value === 'number') return true;
+      if (Array.isArray(value)) return value.length > 0;
+      return String(value ?? '').trim().length > 0;
+    });
+  };
+
   const goNext = async () => {
     if (stepIndex >= STEPS.length - 1) {
       // Finishing: save any check-in answers the member touched this session.
-      if (monthlyCheckInSurvey && checkInDirty && !checkInSaving) {
+      if (monthlyCheckInSurvey && checkInDirty && !checkInSaving && hasRealCheckInAnswers()) {
         setCheckInSaving(true);
         setCheckInError(null);
         const result = await submitResponse(monthlyCheckInSurvey.id, checkInAnswers);
