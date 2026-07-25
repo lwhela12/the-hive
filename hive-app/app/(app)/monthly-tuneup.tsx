@@ -26,6 +26,7 @@ import { deleteWishById } from '../../lib/wishMutations';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { HiveIcon } from '../../components/ui/HiveIcon';
+import { pickSpotlightWish } from '../../lib/wishDisplay';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
@@ -473,11 +474,34 @@ export default function MonthlyTuneupScreen() {
   ));
 
   // You can hold several wishes, but only ONE reaches the HD page, the comb
-  // card and the meeting deck: your newest PUBLIC one (wishes arrive
-  // newest-first, and private wishes never leave your profile). That was
-  // invisible here, so people couldn't tell which wish they were about to
-  // stand up and talk about (Nat 2026-07-25).
-  const spotlightWishId = liveWishes.find((wish) => wish.status === 'public')?.id ?? null;
+  // card and the meeting deck. You pick it here; if you never do, it's your
+  // newest public one, which is what the app always did (Nat 2026-07-25).
+  const spotlightWishId = pickSpotlightWish(liveWishes)?.id ?? null;
+
+  const setSpotlightWish = useCallback(async (wishId: string) => {
+    if (!profile) return;
+    // Clear first, then set — the partial unique index allows exactly one
+    // starred wish per member, so the order matters.
+    const { error: clearError } = await (supabase as any)
+      .from('wishes')
+      .update({ is_spotlight: false })
+      .eq('user_id', profile.id)
+      .eq('is_spotlight', true);
+    if (clearError) {
+      Alert.alert('Hmm', 'Could not update your HD spotlight — try again.');
+      return;
+    }
+    const { error } = await (supabase as any)
+      .from('wishes')
+      .update({ is_spotlight: true })
+      .eq('id', wishId)
+      .eq('user_id', profile.id);
+    if (error) {
+      Alert.alert('Hmm', 'Could not update your HD spotlight — try again.');
+      return;
+    }
+    await refreshWishes();
+  }, [profile, refreshWishes]);
 
   // All wishes on this screen belong to the signed-in member, so the manage
   // permissions collapse to status checks (same rules profile.tsx applies).
@@ -1167,15 +1191,43 @@ export default function MonthlyTuneupScreen() {
 
   const renderWishCard = (wish: Wish) => {
     const isSpotlight = wish.id === spotlightWishId;
+    // Only public wishes can take the spotlight — a private one never leaves
+    // your profile, so starring it would promise something that can't happen.
+    const canBeSpotlight = wish.status === 'public' && wish.is_active !== false;
     return (
       <View key={wish.id} style={{ gap: 6 }}>
-        {isSpotlight ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 2 }}>
-            <HiveIcon name="star" size={14} color="#bd9348" />
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#bd9348' }}>
-              This month's HD — the one the HIVE sees
+        {canBeSpotlight ? (
+          <Pressable
+            onPress={() => { if (!isSpotlight) void setSpotlightWish(wish.id); }}
+            disabled={isSpotlight}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSpotlight }}
+            accessibilityLabel={isSpotlight
+              ? "This is this month's HD"
+              : `Make "${wish.title || wish.description}" this month's HD`}
+            hitSlop={6}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              paddingLeft: 2,
+              alignSelf: 'flex-start',
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <HiveIcon name="star" size={14} color={isSpotlight ? '#bd9348' : '#c9bda6'} />
+            <Text
+              style={{
+                fontFamily: 'Lato_700Bold',
+                fontSize: 11,
+                letterSpacing: 0.8,
+                textTransform: 'uppercase',
+                color: isSpotlight ? '#bd9348' : '#a09274',
+              }}
+            >
+              {isSpotlight ? "This month's HD — the one the HIVE sees" : 'Make this my HD'}
             </Text>
-          </View>
+          </Pressable>
         ) : null}
         <View
           style={isSpotlight ? {
@@ -1197,7 +1249,7 @@ export default function MonthlyTuneupScreen() {
         </View>
         {isSpotlight && liveWishes.length > 1 ? (
           <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12, color: '#9a8060', paddingLeft: 2 }}>
-            Your other wishes stay on your profile — post a newer public one to hand over the spotlight.
+            Your other wishes stay on your profile — star a different one to hand over the spotlight.
           </Text>
         ) : null}
       </View>

@@ -34,7 +34,7 @@ import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { WishManageModal } from '../../components/wishes/WishManageModal';
 import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
-import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
+import { getHdWishTabLabel, pickSpotlightWish, type HdWishTabKey } from '../../lib/wishDisplay';
 import { useWishes } from '../../lib/hooks/useWishes';
 
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
@@ -568,7 +568,7 @@ function MemberDetailModal({
     const fetchVisibleWishes = async () => {
       let { data, error } = await (supabase as any)
         .from('wishes')
-        .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+        .select('id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
         .eq('user_id', member.id)
         .eq('community_id', communityId)
         .in('status', ['public', 'fulfilled'])
@@ -577,7 +577,7 @@ function MemberDetailModal({
       if (error && String(error.message ?? '').includes('title')) {
         const fallback = await (supabase as any)
           .from('wishes')
-          .select('id, description, status, is_active, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+          .select('id, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
           .eq('user_id', member.id)
           .eq('community_id', communityId)
           .in('status', ['public', 'fulfilled'])
@@ -595,7 +595,7 @@ function MemberDetailModal({
       ) {
         const fallback = await (supabase as any)
           .from('wishes')
-          .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+          .select('id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
           .eq('user_id', member.id)
           .eq('community_id', communityId)
           .in('status', ['public', 'fulfilled'])
@@ -607,7 +607,7 @@ function MemberDetailModal({
       if (error && String(error.message ?? '').includes('title')) {
         const fallback = await (supabase as any)
           .from('wishes')
-          .select('id, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+          .select('id, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
           .eq('user_id', member.id)
           .eq('community_id', communityId)
           .in('status', ['public', 'fulfilled'])
@@ -705,7 +705,7 @@ function MemberDetailModal({
 
     let { data, error } = await (supabase as any)
       .from('wishes')
-      .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+      .select('id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
       .eq('user_id', member.id)
       .eq('community_id', communityId)
       .in('status', ['public', 'fulfilled'])
@@ -720,7 +720,7 @@ function MemberDetailModal({
     ) {
       const fallback = await (supabase as any)
         .from('wishes')
-        .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+        .select('id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
         .eq('user_id', member.id)
         .eq('community_id', communityId)
         .in('status', ['public', 'fulfilled'])
@@ -732,7 +732,7 @@ function MemberDetailModal({
     if (error && String(error.message ?? '').includes('title')) {
       const fallback = await (supabase as any)
         .from('wishes')
-        .select('id, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+        .select('id, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
         .eq('user_id', member.id)
         .eq('community_id', communityId)
         .in('status', ['public', 'fulfilled'])
@@ -854,7 +854,7 @@ function MemberDetailModal({
     const { data, error } = await (supabase as any)
       .from('wishes')
       .insert({ user_id: member.id, community_id: communityId, description: desc, raw_input: desc, status: 'public', is_active: true, extracted_from: 'manual' })
-      .select('id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+      .select('id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
       .single();
     if (error) {
       console.warn('[Members] wish save failed', error);
@@ -2188,7 +2188,7 @@ export default function MembersScreen() {
           .in('user_id', userIds),
         supabase
           .from('wishes')
-          .select('user_id, id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+          .select('user_id, id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
           .eq('community_id', communityId)
           .in('user_id', userIds)
           .in('status', ['public', 'fulfilled'])
@@ -2211,7 +2211,7 @@ export default function MembersScreen() {
       if (wishesError && String(wishesError.message ?? '').includes('title')) {
         const fallback = await supabase
           .from('wishes')
-          .select('user_id, id, description, status, is_active, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+          .select('user_id, id, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
           .eq('community_id', communityId)
           .in('user_id', userIds)
           .in('status', ['public', 'fulfilled'])
@@ -2229,7 +2229,7 @@ export default function MembersScreen() {
       ) {
         const fallback = await supabase
           .from('wishes')
-          .select('user_id, id, title, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+          .select('user_id, id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
           .eq('community_id', communityId)
           .in('user_id', userIds)
           .in('status', ['public', 'fulfilled'])
@@ -2241,7 +2241,7 @@ export default function MembersScreen() {
       if (wishesError && String(wishesError.message ?? '').includes('title')) {
         const fallback = await supabase
           .from('wishes')
-          .select('user_id, id, description, status, is_active, created_at, fulfilled_at, thank_you_message')
+          .select('user_id, id, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
           .eq('community_id', communityId)
           .in('user_id', userIds)
           .in('status', ['public', 'fulfilled'])
@@ -2791,8 +2791,9 @@ export default function MembersScreen() {
                     const profileCurrentWishes = member.wishes.filter(w => w.status === 'public' && w.is_active !== false);
                     // The comb answers "what's everyone's focus right now" —
                     // this month's HD leads; Ask-me-about is the fallback.
-                    const activeWishSpotlight = profileCurrentWishes[0]
-                      ? (profileCurrentWishes[0].title?.trim() || profileCurrentWishes[0].description)
+                    const spotlightWish = pickSpotlightWish(profileCurrentWishes);
+                    const activeWishSpotlight = spotlightWish
+                      ? (spotlightWish.title?.trim() || spotlightWish.description)
                       : null;
                     const spotlight = activeWishSpotlight || member.known_for || member.current_project || member.miq_experiences || member.skills[0]?.description || member.bio;
                     const spotlightLabel = activeWishSpotlight

@@ -11,6 +11,23 @@ export function getHdWishTabLabel(tab: HdWishTabKey) {
   return HD_WISH_TAB_LABELS[tab];
 }
 
+/**
+ * "This month's HD" — the ONE wish that reaches the comb card, the HD page and
+ * the meeting deck. A member can star the one they mean (is_spotlight); if
+ * nobody has starred anything, it falls back to what the app always did: their
+ * newest public wish. Every surface calls this so they can't disagree.
+ *
+ * Pass a member's wishes newest-first (that's how every query returns them).
+ */
+export function pickSpotlightWish<T extends {
+  status?: string | null;
+  is_active?: boolean | null;
+  is_spotlight?: boolean | null;
+}>(wishes: T[]): T | null {
+  const live = wishes.filter((wish) => wish.status === 'public' && wish.is_active !== false);
+  return live.find((wish) => wish.is_spotlight) ?? live[0] ?? null;
+}
+
 export function getHdWishStatusLabel(status: Wish['status']) {
   if (status === 'fulfilled') return getHdWishTabLabel('granted');
   if (status === 'public') return getHdWishTabLabel('public');

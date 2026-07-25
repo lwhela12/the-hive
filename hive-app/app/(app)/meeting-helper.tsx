@@ -20,7 +20,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { fetchHoneyPotLedger } from '../../lib/honeyPot';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
-import { getWishQuickTitle } from '../../lib/wishDisplay';
+import { getWishQuickTitle, pickSpotlightWish } from '../../lib/wishDisplay';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { HiveIcon } from '../../components/ui/HiveIcon';
@@ -132,6 +132,11 @@ type DeckWish = {
   description: string;
   user_id: string;
   memberName: string;
+  // Carried so the deck honours a member's starred HD instead of assuming
+  // their newest one (see pickSpotlightWish).
+  status?: string | null;
+  is_active?: boolean | null;
+  is_spotlight?: boolean | null;
 };
 
 type HangIdea = {
@@ -372,11 +377,11 @@ export default function MeetingHelperScreen() {
       (async () => {
         const { data } = await (supabase as any)
           .from('wishes')
-          .select('id, title, description, status, is_active, user_id, user:profiles!user_id(id, name)')
+          .select('id, title, description, status, is_active, is_spotlight, user_id, user:profiles!user_id(id, name)')
           .eq('community_id', communityId)
           .eq('status', 'public')
-          // Newest first so members with several active wishes lead with this
-          // month's HD on the HummDinger bubbles.
+          // Newest first, so a member who never starred a wish still leads with
+          // their most recent one.
           .order('created_at', { ascending: false });
         const rows = ((data ?? []) as any[])
           .filter((wish) => wish.is_active !== false)
@@ -386,6 +391,9 @@ export default function MeetingHelperScreen() {
             description: (wish.description ?? '') as string,
             user_id: wish.user_id as string,
             memberName: (wish.user?.name ?? 'Someone') as string,
+            status: (wish.status ?? null) as string | null,
+            is_active: (wish.is_active ?? null) as boolean | null,
+            is_spotlight: (wish.is_spotlight ?? false) as boolean,
           }))
           .sort((a, b) => a.memberName.localeCompare(b.memberName));
         setWishes(rows);
@@ -1836,7 +1844,7 @@ export default function MeetingHelperScreen() {
           const answers = response?.answers ?? {};
           const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
           const memberWishes = wishesByUserId.get(member.id) ?? [];
-          const topWish = memberWishes[0];
+          const topWish = pickSpotlightWish(memberWishes) ?? memberWishes[0];
           const hdGoal = topWish ? getWishQuickTitle(topWish, 40) : null;
           const priorities = getTextAnswer(answers, 'q_pop_priorities');
           const detailSections = HUMMDINGER_DETAIL_SECTIONS
@@ -1953,7 +1961,8 @@ export default function MeetingHelperScreen() {
     const response = responsesByUser.get(member.id);
     const answers = response?.answers ?? {};
     const nameToday = getTextAnswer(answers, 'q_name_today') || getFirstName(member.name);
-    const topWish = (wishesByUserId.get(member.id) ?? [])[0];
+    const memberWishList = wishesByUserId.get(member.id) ?? [];
+    const topWish = pickSpotlightWish(memberWishList) ?? memberWishList[0];
     // The tune-up SEEDS an empty Progress answer with "Checked off: …" and
     // "Done for me 💛: …" lines. This card already renders both as their own
     // properly-formatted sections below, so echoing the seed under PROGRESS

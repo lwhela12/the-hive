@@ -154,6 +154,8 @@ export interface Wish extends Record<string, unknown> {
   raw_input?: string;
   status: WishStatus;
   is_active: boolean;
+  /** Member-chosen "this month's HD". Unset = fall back to newest public. */
+  is_spotlight?: boolean | null;
   extracted_from: ExtractionSource;
   fulfilled_by?: string;
   thank_you_message?: string;
