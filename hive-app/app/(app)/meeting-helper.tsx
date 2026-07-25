@@ -449,15 +449,31 @@ export default function MeetingHelperScreen() {
         });
       })().catch((error) => console.warn('Could not load tonight recap', error)),
 
-      // News: hangs that already happened this cycle (the deck's main events
-      // query only looks forward from today).
+      // The cycle's hangs — meeting to meeting, NOT "up to today". The deck is
+      // shown ON meeting night, by which point a hang scheduled for last week
+      // has happened; capping at today meant a cycle with hangs still ahead of
+      // it read "no hangs last cycle — blank scoreboard" (Nat 2026-07-25).
+      // Same window the tune-up's rating cards use, so the two agree.
       (async () => {
+        const { data: nextMeetingRows } = await supabase
+          .from('events')
+          .select('event_date')
+          .eq('community_id', communityId)
+          .eq('event_type', 'meeting')
+          .gte('event_date', today)
+          .order('event_date', { ascending: true })
+          .limit(1);
+        const cycleEnd = new Date();
+        cycleEnd.setDate(cycleEnd.getDate() + 35);
+        const until = (nextMeetingRows?.[0] as { event_date?: string } | undefined)?.event_date
+          ?? getLocalIsoDate(cycleEnd);
+
         const { data } = await supabase
           .from('events')
           .select('id, title, event_date, end_date, event_type')
           .eq('community_id', communityId)
           .gte('event_date', getLocalIsoDate(sinceLastMeeting))
-          .lte('event_date', today)
+          .lte('event_date', until)
           .neq('event_type', 'meeting')
           .neq('event_type', 'birthday')
           .order('event_date', { ascending: true });
@@ -1584,7 +1600,7 @@ export default function MeetingHelperScreen() {
               </View>
               {hangPoll.length === 0 ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
-                  No hangs last cycle — blank scoreboard, let's fix that.
+                  No hangs this cycle — blank scoreboard, let's fix that.
                 </Text>
               ) : (
                 hangPoll.map((hang) => (
@@ -1596,7 +1612,7 @@ export default function MeetingHelperScreen() {
                       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: GOLD_DEEP }}>
                         {hang.went > 0
                           ? `🙌 ${hang.went} went${hang.avgRating ? ` · 🍯 ${hang.avgRating}/5${hang.avgRating >= 4.5 ? ' — we LOVED it' : hang.avgRating >= 3.5 ? ' — a hit' : ''}` : ''}`
-                          : 'survey pending…'}
+                          : 'waiting on the check-ins'}
                       </Text>
                     </View>
                     <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: 'rgba(222,193,129,0.18)', overflow: 'hidden' }}>
