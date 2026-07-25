@@ -472,6 +472,13 @@ export default function MonthlyTuneupScreen() {
     (wish.status === 'public' || wish.status === 'private') && wish.is_active !== false
   ));
 
+  // You can hold several wishes, but only ONE reaches the HD page, the comb
+  // card and the meeting deck: your newest PUBLIC one (wishes arrive
+  // newest-first, and private wishes never leave your profile). That was
+  // invisible here, so people couldn't tell which wish they were about to
+  // stand up and talk about (Nat 2026-07-25).
+  const spotlightWishId = liveWishes.find((wish) => wish.status === 'public')?.id ?? null;
+
   // All wishes on this screen belong to the signed-in member, so the manage
   // permissions collapse to status checks (same rules profile.tsx applies).
   const canGrantWish = useCallback((wish: Wish) => wish.status === 'public', []);
@@ -1158,23 +1165,51 @@ export default function MonthlyTuneupScreen() {
 
   if (!profile) return null;
 
-  const renderWishCard = (wish: Wish) => (
-    <WishCombCard
-      key={wish.id}
-      wish={wish}
-      ownerId={profile.id}
-      ownerName={profile.name}
-      ownerAvatarUrl={profile.avatar_url}
-      compact
-      onManage={(selectedWish) => setManagingWish(selectedWish as Wish)}
-    />
-  );
+  const renderWishCard = (wish: Wish) => {
+    const isSpotlight = wish.id === spotlightWishId;
+    return (
+      <View key={wish.id} style={{ gap: 6 }}>
+        {isSpotlight ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 2 }}>
+            <HiveIcon name="star" size={14} color="#bd9348" />
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#bd9348' }}>
+              This month's HD — the one the HIVE sees
+            </Text>
+          </View>
+        ) : null}
+        <View
+          style={isSpotlight ? {
+            borderWidth: 2,
+            borderColor: '#bd9348',
+            borderRadius: 20,
+            padding: 3,
+            backgroundColor: 'rgba(222,193,129,0.12)',
+          } : undefined}
+        >
+          <WishCombCard
+            wish={wish}
+            ownerId={profile.id}
+            ownerName={profile.name}
+            ownerAvatarUrl={profile.avatar_url}
+            compact
+            onManage={(selectedWish) => setManagingWish(selectedWish as Wish)}
+          />
+        </View>
+        {isSpotlight && liveWishes.length > 1 ? (
+          <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12, color: '#9a8060', paddingLeft: 2 }}>
+            Your other wishes stay on your profile — post a newer public one to hand over the spotlight.
+          </Text>
+        ) : null}
+      </View>
+    );
+  };
 
   const renderWishesStep = () => (
     <View style={{ gap: 12 }}>
       <StepHeader
-        title="Your HD wishes 🌟"
-        subtitle="Let's check in on your HDs — still true? Anything new? What's changed since last meeting? Did anyone help you? Mark it granted and give them credit 🌟"
+        title="Your HD wishes"
+        icon={<HiveIcon name="star" size={20} color="#8e6f35" />}
+        subtitle="Let's check in on your HDs — still true? Anything new? What's changed since last meeting? Did anyone help you? Mark it granted and give them credit."
       />
       {wishesLoading ? (
         <View style={{ paddingVertical: 32, alignItems: 'center' }}>

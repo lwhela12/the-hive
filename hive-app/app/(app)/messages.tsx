@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useChatRooms, RoomWithData } from '../../lib/hooks/useChatRooms';
 import { prefetchRoomMessages } from '../../lib/hooks/useRoomMessagesQuery';
@@ -74,6 +75,43 @@ function RoomBubble({
   );
 }
 
+// The rail is a "start a chat" strip, not a second copy of the list below it.
+// It used to show the first six ROOMS — the same rooms already listed underneath
+// — so it duplicated the list and hid anyone you hadn't messaged yet. Now it's
+// General plus every member, whether or not a conversation exists (Nat
+// 2026-07-25). Pinned favourites can layer on later, iMessage-style.
+function MemberBubble({
+  member,
+  isActive,
+  onPress,
+}: {
+  member: Profile;
+  isActive: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} className="items-center active:opacity-75" style={{ width: 72 }}>
+      <View
+        style={{
+          padding: 2,
+          borderRadius: 31,
+          borderWidth: 2,
+          borderColor: isActive ? '#bd9348' : 'transparent',
+        }}
+      >
+        <Avatar name={member.name} url={member.avatar_url} size={54} />
+      </View>
+      <Text
+        style={{ fontFamily: isActive ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 11, marginTop: 3 }}
+        className={isActive ? 'text-[#8e6f35]' : 'text-charcoal/70'}
+        numberOfLines={1}
+      >
+        {member.name.split(' ')[0]}
+      </Text>
+    </Pressable>
+  );
+}
+
 export default function MessagesScreen() {
   const { roomId } = useLocalSearchParams<{ roomId?: string }>();
   const router = useRouter();
@@ -85,6 +123,7 @@ export default function MessagesScreen() {
   const [selectedRoom, setSelectedRoom] = useState<RoomWithData | null>(null);
   const [customizeRoomOnOpen, setCustomizeRoomOnOpen] = useState(false);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
+  const [railMembers, setRailMembers] = useState<Profile[]>([]);
   const hasPrefetchedRef = useRef(false);
   const ignoredDirectRoomIdRef = useRef<string | null>(null);
   const selectedRoomStorageKey = communityId ? `the-hive:last-chat-room:${communityId}` : null;
@@ -175,6 +214,28 @@ export default function MessagesScreen() {
     await refetch();
     setRefreshing(false);
   };
+
+  // Everyone in the HIVE except you — the rail's cast.
+  useEffect(() => {
+    if (!communityId || !profile) return;
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from('community_memberships')
+        .select('user:profiles(*)')
+        .eq('community_id', communityId)
+        .neq('user_id', profile.id);
+      if (cancelled || error || !data) return;
+      const people = (data as unknown as { user: Profile | null }[])
+        .map((row) => row.user)
+        .filter((person): person is Profile => person !== null)
+        .sort((a, b) => a.name.localeCompare(b.name));
+      setRailMembers(people);
+    })().catch((error) => console.warn('Could not load the chat rail', error));
+
+    return () => { cancelled = true; };
+  }, [communityId, profile]);
 
   const handleStartDM = async (member: Profile) => {
     if (!profile || !communityId) return;
@@ -305,9 +366,12 @@ export default function MessagesScreen() {
     );
   }
 
-  // Desktop: Mac-Messages-style split — pinned bubbles + list on the left,
-  // the open conversation filling the right.
-  const pinnedRooms = rooms.slice(0, 6);
+  // Desktop: Mac-Messages-style split — the rail + your conversations on the
+  // left, the open one filling the right.
+  const communityRoom = rooms.find((room) => room.room_type === 'community') ?? null;
+  const activeDmMemberId = selectedRoom && selectedRoom.room_type !== 'community'
+    ? getOtherRoomMembers(selectedRoom, profile?.id)[0]?.id ?? null
+    : null;
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
@@ -327,11 +391,10 @@ export default function MessagesScreen() {
         <View
           style={{ width: 360, borderRightWidth: 1, borderRightColor: 'rgba(222,193,129,0.5)' }}
         >
-          {pinnedRooms.length > 0 && (
+          {(communityRoom || railMembers.length > 0) && (
             <View style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.28)' }}>
-              {/* Two rows, wrapped — one row ran the bubbles off the edge
-                  ("Infiniti E…") and wasted the column's width. Four across
-                  fits the 360px rail with the names intact (Nat 2026-07-24). */}
+              {/* Wrapped rows, four across — one row ran the bubbles off the
+                  edge ("Infiniti E…") and wasted the column's width. */}
               <View
                 style={{
                   flexDirection: 'row',
@@ -342,13 +405,22 @@ export default function MessagesScreen() {
                   rowGap: 8,
                 }}
               >
-                {pinnedRooms.map((room) => (
-                  <View key={room.id} style={{ width: '25%', alignItems: 'center' }}>
+                {communityRoom ? (
+                  <View key={communityRoom.id} style={{ width: '25%', alignItems: 'center' }}>
                     <RoomBubble
-                      room={room}
+                      room={communityRoom}
                       currentUserId={profile?.id}
-                      isActive={selectedRoom?.id === room.id}
-                      onPress={() => openRoom(room)}
+                      isActive={selectedRoom?.id === communityRoom.id}
+                      onPress={() => openRoom(communityRoom)}
+                    />
+                  </View>
+                ) : null}
+                {railMembers.map((member) => (
+                  <View key={member.id} style={{ width: '25%', alignItems: 'center' }}>
+                    <MemberBubble
+                      member={member}
+                      isActive={activeDmMemberId === member.id}
+                      onPress={() => void handleStartDM(member)}
                     />
                   </View>
                 ))}
