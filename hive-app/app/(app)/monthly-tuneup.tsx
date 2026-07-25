@@ -549,6 +549,9 @@ export default function MonthlyTuneupScreen() {
       .eq('community_id', communityId)
       .eq('category_id', board.id)
       .or('status.is.null,status.eq.active')
+      // An archived focus thread is retired — it must not keep winning
+      // "newest", or archiving a mistaken one leaves it in charge.
+      .is('archived_at', null)
       .order('created_at', { ascending: false })
       .limit(10);
 
