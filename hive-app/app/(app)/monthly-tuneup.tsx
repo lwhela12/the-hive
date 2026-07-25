@@ -392,6 +392,8 @@ export default function MonthlyTuneupScreen() {
   // Tap-to-second: picking an idea posts the +1 on that idea's own thread,
   // lights the chip up, grays the rest, and throws a little confetti.
   const [secondedHangIdeaId, setSecondedHangIdeaId] = useState<string | null>(null);
+  // The reply row a +1 created, so tapping again can take it back.
+  const [secondedHangReplyId, setSecondedHangReplyId] = useState<string | null>(null);
   const [hangSecondingId, setHangSecondingId] = useState<string | null>(null);
   const [hangConfetti, setHangConfetti] = useState(false);
   // Standing "HIVE Help Ideas" thread: future help-focus pitches live as
@@ -401,6 +403,7 @@ export default function MonthlyTuneupScreen() {
   const [helpIdeaContent, setHelpIdeaContent] = useState('');
   const [helpIdeaPosting, setHelpIdeaPosting] = useState(false);
   const [secondedHelpIdea, setSecondedHelpIdea] = useState<string | null>(null);
+  const [secondedHelpReplyId, setSecondedHelpReplyId] = useState<string | null>(null);
   const [helpSeconding, setHelpSeconding] = useState(false);
   const [helpConfetti, setHelpConfetti] = useState(false);
 
@@ -1106,21 +1109,39 @@ export default function MonthlyTuneupScreen() {
   };
 
   // Second a help-focus idea with one tap — the +1 lands on the Ideas thread.
+  // A +1 is a vote, not a commitment: tap the same chip again to take it back,
+  // or tap a different one to move your vote (Nat 2026-07-25 got stuck after
+  // the confetti with no way out). The reply we created is deleted either way,
+  // so the thread never keeps a vote you withdrew.
   const handleSecondHelpIdea = async (idea: string) => {
-    if (secondedHelpIdea || helpSeconding || !profile || !communityId || !helpIdeasThreadId) return;
+    if (helpSeconding || !profile || !communityId || !helpIdeasThreadId) return;
+    const undoing = secondedHelpIdea === idea;
     setHelpSeconding(true);
     try {
-      const { error } = await (supabase as any).from('board_replies').insert({
+      if (secondedHelpReplyId) {
+        const { error: undoError } = await (supabase as any)
+          .from('board_replies')
+          .delete()
+          .eq('id', secondedHelpReplyId)
+          .eq('author_id', profile.id);
+        if (undoError) throw undoError;
+        setSecondedHelpIdea(null);
+        setSecondedHelpReplyId(null);
+      }
+      if (undoing) return;
+
+      const { data, error } = await (supabase as any).from('board_replies').insert({
         community_id: communityId,
         post_id: helpIdeasThreadId,
         author_id: profile.id,
         content: `+1 for ${idea}! 🙋`,
-      });
+      }).select('id').single();
       if (error) throw error;
       setSecondedHelpIdea(idea);
+      setSecondedHelpReplyId((data as { id: string }).id);
       setHelpConfetti(true);
     } catch (error) {
-      console.warn('Could not second the help idea', error);
+      console.warn('Could not update the help idea vote', error);
     } finally {
       setHelpSeconding(false);
     }
@@ -1129,20 +1150,34 @@ export default function MonthlyTuneupScreen() {
   // Second an idea with one tap: the +1 lands as a reply on that idea's own
   // thread (votes live with the idea, not as clutter threads on the board).
   const handleSecondHangIdea = async (idea: { id: string; title: string }) => {
-    if (secondedHangIdeaId || hangSecondingId || !profile || !communityId) return;
+    if (hangSecondingId || !profile || !communityId) return;
+    const undoing = secondedHangIdeaId === idea.id;
     setHangSecondingId(idea.id);
     try {
-      const { error } = await (supabase as any).from('board_replies').insert({
+      if (secondedHangReplyId) {
+        const { error: undoError } = await (supabase as any)
+          .from('board_replies')
+          .delete()
+          .eq('id', secondedHangReplyId)
+          .eq('author_id', profile.id);
+        if (undoError) throw undoError;
+        setSecondedHangIdeaId(null);
+        setSecondedHangReplyId(null);
+      }
+      if (undoing) return;
+
+      const { data, error } = await (supabase as any).from('board_replies').insert({
         community_id: communityId,
         post_id: idea.id,
         author_id: profile.id,
         content: "+1 — I'm in! 🙋",
-      });
+      }).select('id').single();
       if (error) throw error;
       setSecondedHangIdeaId(idea.id);
+      setSecondedHangReplyId((data as { id: string }).id);
       setHangConfetti(true);
     } catch (error) {
-      console.warn('Could not second the hang idea', error);
+      console.warn('Could not update the hang idea vote', error);
     } finally {
       setHangSecondingId(null);
     }
@@ -1343,19 +1378,26 @@ export default function MonthlyTuneupScreen() {
           </View>
         ) : null;
       })()}
-      {existingHangIdeas.length > 0 ? (
-        <View style={[cardStyle, { marginBottom: 10, position: 'relative', overflow: 'hidden' }]}>
-          <ConfettiBurst visible={hangConfetti} onDone={() => setHangConfetti(false)} />
-          <BoxHeading>What should we do this month? Select one, or suggest your own.</BoxHeading>
+      {/* One question, one box: the chips ARE the choices and the writing area
+          is the "or your own" option, the way a multiple-choice question with
+          an Other field works. Two cards each saying "or suggest your own" was
+          the same question asked twice (Nat 2026-07-25). */}
+      <View style={[cardStyle, { gap: 10, position: 'relative', overflow: 'hidden' }]}>
+        <ConfettiBurst visible={hangConfetti} onDone={() => setHangConfetti(false)} />
+        <BoxHeading style={{ marginBottom: 0 }}>
+          {existingHangIdeas.length > 0
+            ? 'What should we do this month? Pick one, or write your own below.'
+            : 'What should we do this month?'}
+        </BoxHeading>
+        {existingHangIdeas.length > 0 ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {existingHangIdeas.map((idea) => {
               const isSeconded = secondedHangIdeaId === idea.id;
-              const isDimmed = !!secondedHangIdeaId && !isSeconded;
               return (
                 <Pressable
                   key={idea.id}
                   onPress={() => void handleSecondHangIdea(idea)}
-                  disabled={!!secondedHangIdeaId || !!hangSecondingId}
+                  disabled={!!hangSecondingId}
                   accessibilityLabel={`+1 the idea: ${idea.title}`}
                   style={({ pressed }) => ({
                     backgroundColor: isSeconded ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
@@ -1364,7 +1406,7 @@ export default function MonthlyTuneupScreen() {
                     borderRadius: 999,
                     paddingHorizontal: 12,
                     paddingVertical: 6,
-                    opacity: isDimmed ? 0.35 : hangSecondingId === idea.id ? 0.7 : 1,
+                    opacity: hangSecondingId === idea.id ? 0.7 : 1,
                   })}
                 >
                   <Text
@@ -1377,17 +1419,12 @@ export default function MonthlyTuneupScreen() {
               );
             })}
           </View>
-          {secondedHangIdeaId ? (
-            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12, color: '#8e7a5e', marginTop: 8 }}>
-              +1 sent — it's on the idea's thread 🎉
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-      <View style={[cardStyle, { gap: 10 }]}>
-        <BoxHeading style={{ marginBottom: 0 }}>
-          {existingHangIdeas.length > 0 ? 'Suggest a new one' : 'What should we do this month?'}
-        </BoxHeading>
+        ) : null}
+        {secondedHangIdeaId ? (
+          <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12, color: '#8e7a5e' }}>
+            +1 sent — it's on the idea's thread 🎉 (tap again to take it back)
+          </Text>
+        ) : null}
         <TextInput
           value={hangTitle}
           onChangeText={setHangTitle}
@@ -1653,12 +1690,11 @@ export default function MonthlyTuneupScreen() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {helpIdeas.map((idea) => {
               const isSeconded = secondedHelpIdea === idea;
-              const isDimmed = !!secondedHelpIdea && !isSeconded;
               return (
                 <Pressable
                   key={idea}
                   onPress={() => void handleSecondHelpIdea(idea)}
-                  disabled={!!secondedHelpIdea || helpSeconding}
+                  disabled={helpSeconding}
                   accessibilityLabel={`+1 the idea: ${idea}`}
                   style={({ pressed }) => ({
                     backgroundColor: isSeconded ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
@@ -1667,7 +1703,7 @@ export default function MonthlyTuneupScreen() {
                     borderRadius: 999,
                     paddingHorizontal: 12,
                     paddingVertical: 6,
-                    opacity: isDimmed ? 0.35 : 1,
+                    opacity: helpSeconding ? 0.7 : 1,
                   })}
                 >
                   <Text
