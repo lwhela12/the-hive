@@ -1302,10 +1302,29 @@ export default function MonthlyTuneupScreen() {
 
   const renderHangsStep = () => (
     <View>
+      {/* Chronological, the way the month actually goes: look back at the
+          hangs that happened, then +1 an idea already on the board, then pitch
+          something new (Nat 2026-07-25). */}
       <StepHeader
-        title="Hang ideas 🎉"
+        title="Hang ideas"
+        icon={<HiveIcon name="cake" size={20} color="#8e6f35" />}
         subtitle={`Any ideas for fun HIVE hangs? They post straight to ${hangBoardName ?? 'the HIVE Hangs board'} so planning can start.`}
       />
+      {(() => {
+        const hangsRecap = checkInQuestions.find((question) => question.id === 'q_hangs_recap');
+        return hangsRecap ? (
+          <View style={[cardStyle, { marginBottom: 10 }]}>
+            <MiniLabel icon="chart" style={{ marginBottom: 6 }}>How did last cycle's hangs go?</MiniLabel>
+            <SurveyQuestionField
+              question={hangsRecap}
+              index={-1}
+              value={checkInAnswers[hangsRecap.id]}
+              onChange={(value) => setCheckInAnswer(hangsRecap.id, value)}
+              hangEvents={hangRecapEvents}
+            />
+          </View>
+        ) : null;
+      })()}
       {existingHangIdeas.length > 0 ? (
         <View style={[cardStyle, { marginBottom: 10, position: 'relative', overflow: 'hidden' }]}>
           <ConfettiBurst visible={hangConfetti} onDone={() => setHangConfetti(false)} />
@@ -1347,23 +1366,6 @@ export default function MonthlyTuneupScreen() {
           ) : null}
         </View>
       ) : null}
-      {(() => {
-        const hangsRecap = checkInQuestions.find((question) => question.id === 'q_hangs_recap');
-        return hangsRecap ? (
-          <View style={[cardStyle, { marginBottom: 10 }]}>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: 6 }}>
-              🍯 How did last cycle's hangs go?
-            </Text>
-            <SurveyQuestionField
-              question={hangsRecap}
-              index={-1}
-              value={checkInAnswers[hangsRecap.id]}
-              onChange={(value) => setCheckInAnswer(hangsRecap.id, value)}
-              hangEvents={hangRecapEvents}
-            />
-          </View>
-        ) : null;
-      })()}
       <MiniLabel icon="sparkle" style={{ marginBottom: 6, marginTop: 4 }}>
         {existingHangIdeas.length > 0 ? 'Or suggest your own' : 'Suggest one'}
       </MiniLabel>
