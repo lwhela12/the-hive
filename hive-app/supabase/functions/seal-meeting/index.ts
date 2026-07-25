@@ -156,6 +156,34 @@ serve(async (req) => {
       else if (!hdByUser.has(wish.user_id)) hdByUser.set(wish.user_id, label);
     });
 
+    const [nextMeetingRows, upcomingRows, focusRows] = await Promise.all([
+      supabaseAdmin.from('events')
+        .select('title, event_date, event_time')
+        .eq('community_id', communityId).eq('event_type', 'meeting')
+        .gt('event_date', date).order('event_date', { ascending: true }).limit(1),
+      supabaseAdmin.from('events')
+        .select('title, event_date, end_date, event_type')
+        .eq('community_id', communityId)
+        .gt('event_date', date).order('event_date', { ascending: true }).limit(20),
+      supabaseAdmin.from('board_posts')
+        .select('title, created_at, category:board_categories!category_id(name)')
+        .eq('community_id', communityId)
+        .is('archived_at', null)
+        .order('created_at', { ascending: false }).limit(30),
+    ]);
+    const nextMeeting = ((nextMeetingRows.data ?? []) as any[])[0] ?? null;
+    // Same exclusions the deck's calendar uses: meetings, birthdays, and
+    // out-of-town stretches aren't hangs.
+    const upcomingHangs = ((upcomingRows.data ?? []) as any[]).filter((event) => (
+      event.event_type !== 'meeting'
+      && event.event_type !== 'birthday'
+      && !event.end_date
+      && !/\b(out of town|away|trip|travel|galavant)/i.test(event.title ?? '')
+    )).slice(0, 6);
+    const helpFocus = ((focusRows.data ?? []) as any[])
+      .filter((row) => /helper/i.test(row.category?.name ?? '') && !/ideas/i.test(row.title ?? ''))
+      .map((row) => (row.title as string).replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, ''))[0] ?? null;
+
     const { data: checkInRows } = await supabaseAdmin
       .from('survey_responses')
       .select('answers, submitted_at, user_id, user:profiles!user_id(name), survey:surveys!survey_id(title)')
@@ -268,11 +296,35 @@ serve(async (req) => {
       lines: [`Honey Pot balance: $${potBalance.toFixed(2)}`],
     });
 
-    const meetupLines = [
-      ...bulletsFrom(deckNotes.meetups),
-      ...events.map((event) => `Scheduled: ${event.title} (${event.event_date})`),
-    ];
-    if (meetupLines.length > 0) sections.push({ title: 'HIVE Hangs & Help', lines: meetupLines });
+    // The deck's Plan-the-Meet-Ups slide, in the same order: when we meet next,
+    // what the HIVE Help focus is, and what's already on the calendar.
+    const prettyDate = (value: string) => {
+      const [year, month, day] = value.split('-').map(Number);
+      return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC',
+      });
+    };
+    // 17:30 is a database value, not something anyone says out loud.
+    const prettyTime = (value: string) => {
+      const [rawHour, minute] = value.split(':');
+      const hour = Number(rawHour);
+      const suffix = hour >= 12 ? 'PM' : 'AM';
+      const twelve = hour % 12 === 0 ? 12 : hour % 12;
+      return `${twelve}:${minute} ${suffix}`;
+    };
+    const meetupLines: string[] = [];
+    if (nextMeeting) {
+      meetupLines.push(`Next HIVE meeting: ${prettyDate(nextMeeting.event_date)}${nextMeeting.event_time ? ` · ${prettyTime(nextMeeting.event_time)}` : ''}`);
+    }
+    if (helpFocus) meetupLines.push(`HIVE Help focus: ${helpFocus}`);
+    if (upcomingHangs.length > 0) {
+      meetupLines.push('Upcoming HIVE hangs:');
+      upcomingHangs.forEach((hang) => {
+        meetupLines.push(`    ${hang.title} — ${prettyDate(hang.event_date)}`);
+      });
+    }
+    meetupLines.push(...bulletsFrom(deckNotes.meetups));
+    if (meetupLines.length > 0) sections.push({ title: 'Plan the Meet Ups', lines: meetupLines });
 
     // One block per person: their HD, their POP, and what they walked away with.
     const hdLines: string[] = [];
