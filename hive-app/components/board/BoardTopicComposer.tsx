@@ -40,16 +40,7 @@ interface BoardTopicComposerProps {
 // edits the board and picks a family mark.
 
 export const HIVE_ICON_PREFIX = 'hive:';
-const DEFAULT_BOARD_ICON = `${HIVE_ICON_PREFIX}message`;
-
-// The board icon set. Ordered so the marks a board actually reaches for come
-// first, then the general-purpose ones.
-const BOARD_ICON_CHOICES: HiveIconName[] = [
-  'message', 'trophy', 'book', 'handshake', 'palette', 'megaphone', 'sprout', 'fork',
-  'star', 'heart', 'calendar', 'honeypot', 'bee', 'crown', 'home', 'gift',
-  'target', 'question', 'note', 'chart', 'person', 'sparkle', 'pin', 'suitcase',
-  'cake', 'tv', 'board', 'checkin',
-];
+const DEFAULT_BOARD_ICON = '💬';
 
 const EMOJI_CATEGORIES: { label: string; icon: string; emojis: string[] }[] = [
   {
@@ -252,7 +243,7 @@ export function BoardTopicComposer({
       const success = await onSubmit(
         finalName,
         finalDescription,
-        topicKind === 'helper_log' ? `${HIVE_ICON_PREFIX}handshake` : selectedEmoji,
+        topicKind === 'helper_log' ? '🤝' : selectedEmoji,
         finalAudience,
         finalAudience === 'members' ? finalTaggedMemberIds : [],
         {
@@ -400,41 +391,99 @@ export function BoardTopicComposer({
               </View>
             )}
 
-            {/* Icon picker — the HIVE family only. Stock emoji were the one
-                thing on this screen that didn't look like us (Nat 2026-07-24:
-                "always default to our original icons... very upscale and
-                sleek"). Boards created before this keep whatever emoji they
-                have until someone edits them. */}
+            {/* Emoji picker. We tried the drawn family here and Nat preferred
+                the emoji after seeing it live (2026-07-24) — a board's face is
+                member-chosen content, which is exactly where the house rule
+                says emoji belong. The family marks stay available via
+                "hive:<name>" if a board ever wants one. */}
             <View className="mb-4">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Choose an Icon</Text>
-              <View className="bg-white rounded-xl p-2">
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                  {BOARD_ICON_CHOICES.map((iconName) => {
-                    const value = `${HIVE_ICON_PREFIX}${iconName}`;
-                    const selected = selectedEmoji === value;
-                    return (
-                      <Pressable
-                        key={iconName}
-                        onPress={() => setSelectedEmoji(value)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                        accessibilityLabel={`${iconName} icon`}
-                        style={{
-                          width: 48,
-                          height: 48,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderRadius: 12,
-                          margin: 3,
-                          backgroundColor: selected ? '#fdf3dc' : 'transparent',
-                          borderWidth: selected ? 1.5 : 1,
-                          borderColor: selected ? '#bd9348' : 'rgba(222,193,129,0.28)',
-                        }}
-                      >
-                        <HiveIcon name={iconName} size={26} color={selected ? '#8e6f35' : '#bd9348'} />
-                      </Pressable>
-                    );
-                  })}
+              <View className="bg-white rounded-xl overflow-hidden">
+                {/* "Type any emoji" row */}
+                <Pressable
+                  onPress={() => customInputRef.current?.focus()}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    borderBottomWidth: 1,
+                    borderBottomColor: 'rgba(222,193,129,0.2)',
+                    gap: 10,
+                  }}
+                >
+                  <Ionicons name="happy-outline" size={18} color="#bd9348" />
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8e7a5e', flex: 1 }}>
+                    Type or paste any emoji →
+                  </Text>
+                  <TextInput
+                    ref={customInputRef}
+                    value={customEmoji}
+                    onChangeText={handleCustomEmojiChange}
+                    style={{
+                      fontSize: 28,
+                      width: 44,
+                      height: 44,
+                      textAlign: 'center',
+                      borderWidth: 1,
+                      borderColor: customEmoji ? '#bd9348' : 'rgba(222,193,129,0.4)',
+                      borderRadius: 10,
+                      backgroundColor: customEmoji ? '#fdf3dc' : '#faf8f3',
+                    }}
+                    maxLength={8}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    placeholder="🐝"
+                    placeholderTextColor="#d1d5db"
+                  />
+                </Pressable>
+
+                {/* Category tabs */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.2)' }}
+                  contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 6, gap: 4 }}
+                >
+                  {EMOJI_CATEGORIES.map((cat, i) => (
+                    <Pressable
+                      key={cat.label}
+                      onPress={() => setActiveCategory(i)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: 20,
+                        backgroundColor: activeCategory === i ? '#fdf3dc' : 'transparent',
+                        borderWidth: 1,
+                        borderColor: activeCategory === i ? '#bd9348' : 'transparent',
+                      }}
+                    >
+                      <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+
+                {/* Emoji grid */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 8 }}>
+                  {EMOJI_CATEGORIES[activeCategory].emojis.map((emoji) => (
+                    <Pressable
+                      key={emoji}
+                      onPress={() => { setSelectedEmoji(emoji); setCustomEmoji(''); }}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: 10,
+                        margin: 3,
+                        backgroundColor: selectedEmoji === emoji ? '#fdf3dc' : 'transparent',
+                        borderWidth: selectedEmoji === emoji ? 1.5 : 0,
+                        borderColor: '#bd9348',
+                      }}
+                    >
+                      <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                    </Pressable>
+                  ))}
                 </View>
               </View>
             </View>

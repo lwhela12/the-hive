@@ -1709,6 +1709,10 @@ export default function BoardScreen() {
             <BoardCategoryList
               categories={visibleCategories}
               onSelect={handleCategorySelect}
+              onSelectThread={(category, postId) => {
+                handleCategorySelect(category);
+                handlePostSelect(postId);
+              }}
               postCounts={postCounts}
               searchMatches={boardSearchQuery ? boardSearchMatchesByCategory : undefined}
               emptyLabel={boardSearchQuery

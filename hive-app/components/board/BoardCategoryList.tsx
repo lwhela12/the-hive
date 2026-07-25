@@ -46,6 +46,8 @@ export interface BoardCategorySearchMatchSummary {
 interface BoardCategoryListProps {
   categories: BoardCategory[];
   onSelect: (category: BoardCategory) => void;
+  /** Tapping a thread preview jumps straight into that thread. */
+  onSelectThread?: (category: BoardCategory, postId: string) => void;
   postCounts?: Record<string, CategoryStats>;
   emptyLabel?: string;
   searchMatches?: Record<string, BoardCategorySearchMatchSummary>;
@@ -54,6 +56,7 @@ interface BoardCategoryListProps {
 export const BoardCategoryList = memo(function BoardCategoryList({
   categories,
   onSelect,
+  onSelectThread,
   postCounts,
   emptyLabel = 'No boards here yet.',
   searchMatches,
@@ -82,7 +85,22 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   const scale = Math.max(0, Math.min(1, (cardMinHeight - 150) / 140));
   const iconSize = Math.round(32 + scale * 14);
   const titleSize = Math.round(16 + scale * 5);
-  const descLines = cardMinHeight > 250 ? 5 : cardMinHeight > 200 ? 4 : 2;
+  const descLines = 2;
+
+  // Whatever room is left after the header goes to thread links — however many
+  // happen to fit, no scrolling, no fade (Nat 2026-07-25: "you don't have to
+  // make all 26 fit"). Wide screens only; on a phone this would be clutter.
+  const THREAD_ROW_HEIGHT = 21;
+  const headerHeight =
+    32                    // card padding, top + bottom
+    + iconSize + 4        // the emoji
+    + 8 + (titleSize + 5) * 2   // title, up to two lines
+    + 4 + 18 * descLines  // description
+    + 3 + 16              // the "N threads" line
+    + 10;                 // the divider above the list
+  const threadCapacity = compact
+    ? 0
+    : Math.max(0, Math.floor((cardMinHeight - headerHeight) / THREAD_ROW_HEIGHT));
 
   return (
     <View
@@ -104,6 +122,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
           ? (item.icon.slice(HIVE_ICON_PREFIX.length) as HiveIconName)
           : null;
         const emoji = item.icon ? EMOJI_MAP[item.icon] || item.icon : '📁';
+        const recentThreads = (postCounts?.[item.id]?.recentThreads ?? []).slice(0, threadCapacity);
         const count = postCounts?.[item.id]?.count ?? 0;
         const countLabel = `${count} ${count === 1 ? 'thread' : 'threads'}`;
         const taggedNames = (item.member_tags ?? [])
@@ -189,6 +208,49 @@ export const BoardCategoryList = memo(function BoardCategoryList({
               >
                 {countLabel}
               </Text>
+              {recentThreads.length > 0 ? (
+                <View
+                  style={{
+                    marginTop: 8,
+                    paddingTop: 6,
+                    borderTopWidth: 1,
+                    borderTopColor: 'rgba(222,193,129,0.32)',
+                  }}
+                >
+                  {recentThreads.map((thread) => (
+                    <Pressable
+                      key={thread.id}
+                      onPress={(event) => {
+                        if (onSelectThread) {
+                          event.stopPropagation?.();
+                          onSelectThread(item, thread.id);
+                        } else {
+                          onSelect(item);
+                        }
+                      }}
+                      accessibilityRole="link"
+                      accessibilityLabel={`Open thread: ${thread.title}`}
+                      hitSlop={2}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        alignItems: 'flex-start',
+                        gap: 6,
+                        borderRadius: 6,
+                        paddingHorizontal: 3,
+                        backgroundColor: pressed ? 'rgba(222,193,129,0.2)' : 'transparent',
+                      })}
+                    >
+                      <Text style={{ fontSize: 9, lineHeight: 21, color: '#bd9348' }}>▪</Text>
+                      <Text
+                        style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 21, color: 'rgba(49,49,48,0.75)', flex: 1 }}
+                        numberOfLines={1}
+                      >
+                        {thread.title}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
               <View style={{ flexGrow: 1 }} />
               {matchLabel ? (
                 <Text
