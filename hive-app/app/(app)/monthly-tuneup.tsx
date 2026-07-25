@@ -1870,15 +1870,12 @@ export default function MonthlyTuneupScreen() {
       <StepHeader
         title="Check-in"
         icon={<HiveIcon name="checkin" size={20} color="#8e6f35" />}
-        subtitle="Last stop — a few quick questions so HIVE and Clive arrive prepared. Your answers save when you tap Finish, and you can come back and change them any time this month."
+        subtitle="Last stop — a few quick questions so HIVE and Clive arrive prepared. Answers save when you tap Finish."
       />
-      {helpFocusReminder ? (
-        <View style={[cardStyle, { marginBottom: 14, backgroundColor: '#fdf3dc', borderColor: 'rgba(189,147,72,0.45)' }]}>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 20, color: '#8a6b30' }}>
-            {helpFocusReminder}
-          </Text>
-        </View>
-      ) : null}
+      {/* The HIVE Help reminder banner used to sit here too, stacking a third
+          bold-then-info block on top of the header and the submitted line
+          before you reached question 1. The HIVE helps step already names the
+          focus in gold (Nat 2026-07-25). */}
       {surveysLoading ? (
         <View style={{ paddingVertical: 32, alignItems: 'center' }}>
           <ActivityIndicator color="#bd9348" />
@@ -1894,9 +1891,9 @@ export default function MonthlyTuneupScreen() {
         <View style={[cardStyle, { gap: 4 }]}>
           {checkInAlreadyDone ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-              <Ionicons name="checkmark-circle" size={16} color="#166534" />
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#166534' }}>
-                Submitted for {monthName} — edits here overwrite your earlier answers.
+              <Ionicons name="checkmark-circle" size={14} color="#9a8060" />
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
+                Already submitted for {monthName} — edits overwrite your earlier answers.
               </Text>
             </View>
           ) : null}
