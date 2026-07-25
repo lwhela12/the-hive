@@ -1389,8 +1389,10 @@ export default function MonthlyTuneupScreen() {
             ? 'What should we do this month? Pick one, or write your own below.'
             : 'What should we do this month?'}
         </BoxHeading>
+        {/* Stacked cards with a bubble on the left — the same shape as the
+            hang rating cards a few inches up the page (Nat 2026-07-25). */}
         {existingHangIdeas.length > 0 ? (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          <View style={{ gap: 8 }}>
             {existingHangIdeas.map((idea) => {
               const isSeconded = secondedHangIdeaId === idea.id;
               return (
@@ -1398,22 +1400,30 @@ export default function MonthlyTuneupScreen() {
                   key={idea.id}
                   onPress={() => void handleSecondHangIdea(idea)}
                   disabled={!!hangSecondingId}
-                  accessibilityLabel={`+1 the idea: ${idea.title}`}
-                  style={({ pressed }) => ({
-                    backgroundColor: isSeconded ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSeconded }}
+                  accessibilityLabel={isSeconded ? `Take back your +1 for ${idea.title}` : `+1 the idea: ${idea.title}`}
+                  style={{
+                    alignSelf: 'flex-start',
+                    maxWidth: '100%',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: isSeconded ? '#fdf3dc' : '#faf8f3',
                     borderWidth: 1,
-                    borderColor: isSeconded ? '#bd9348' : 'rgba(222,193,129,0.55)',
-                    borderRadius: 999,
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
+                    borderColor: isSeconded ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
+                    borderRadius: 14,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
                     opacity: hangSecondingId === idea.id ? 0.7 : 1,
-                  })}
+                  }}
                 >
+                  <Text style={{ fontSize: 15 }}>{isSeconded ? '🙋' : '○'}</Text>
                   <Text
-                    style={{ fontFamily: isSeconded ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: isSeconded ? 'white' : '#5c5648' }}
-                    numberOfLines={1}
+                    style={{ fontFamily: isSeconded ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 14, color: isSeconded ? '#8a6b30' : '#6b7280', flexShrink: 1 }}
+                    numberOfLines={2}
                   >
-                    {isSeconded ? `✓ ${idea.title}` : idea.title}
+                    {idea.title}
                   </Text>
                 </Pressable>
               );
@@ -1687,7 +1697,7 @@ export default function MonthlyTuneupScreen() {
             : "Next meeting's focus — pitch one."}
         </BoxHeading>
         {helpIdeas.length > 0 ? (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          <View style={{ gap: 8 }}>
             {helpIdeas.map((idea) => {
               const isSeconded = secondedHelpIdea === idea;
               return (
@@ -1695,22 +1705,30 @@ export default function MonthlyTuneupScreen() {
                   key={idea}
                   onPress={() => void handleSecondHelpIdea(idea)}
                   disabled={helpSeconding}
-                  accessibilityLabel={`+1 the idea: ${idea}`}
-                  style={({ pressed }) => ({
-                    backgroundColor: isSeconded ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSeconded }}
+                  accessibilityLabel={isSeconded ? `Take back your +1 for ${idea}` : `+1 the idea: ${idea}`}
+                  style={{
+                    alignSelf: 'flex-start',
+                    maxWidth: '100%',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: isSeconded ? '#fdf3dc' : '#faf8f3',
                     borderWidth: 1,
-                    borderColor: isSeconded ? '#bd9348' : 'rgba(222,193,129,0.55)',
-                    borderRadius: 999,
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
+                    borderColor: isSeconded ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
+                    borderRadius: 14,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
                     opacity: helpSeconding ? 0.7 : 1,
-                  })}
+                  }}
                 >
+                  <Text style={{ fontSize: 15 }}>{isSeconded ? '🙋' : '○'}</Text>
                   <Text
-                    style={{ fontFamily: isSeconded ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 13, color: isSeconded ? 'white' : '#5c5648' }}
-                    numberOfLines={1}
+                    style={{ fontFamily: isSeconded ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 14, color: isSeconded ? '#8a6b30' : '#6b7280', flexShrink: 1 }}
+                    numberOfLines={2}
                   >
-                    {isSeconded ? `✓ ${idea}` : idea}
+                    {idea}
                   </Text>
                 </Pressable>
               );
