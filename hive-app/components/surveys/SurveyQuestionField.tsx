@@ -252,7 +252,7 @@ export function FocusRecapInput({
         <VoiceTextInput
           value={instead}
           onChangeText={(next) => onChange(composeFocusAnswer(choice, next, note))}
-          placeholder="What did you do instead?"
+          placeholder="What did you do? (this gets logged on the HIVE Helpers board)"
         />
       ) : null}
       <VoiceTextInput

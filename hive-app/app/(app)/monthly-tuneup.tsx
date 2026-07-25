@@ -27,6 +27,7 @@ import { getCycleStart } from '../../lib/meetingCycle';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { pickSpotlightWish } from '../../lib/wishDisplay';
+import { parseFocusAnswer } from '../../components/surveys/SurveyQuestionField';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
@@ -807,8 +808,10 @@ export default function MonthlyTuneupScreen() {
     setHangContent('');
   };
 
-  const handlePostHelperLog = async () => {
-    const content = helperContent.trim();
+  // Posting a kindness to the HIVE Helpers thread. Called from the check-in's
+  // "I did something else" answer — the separate "Log a kindness" box is gone,
+  // since telling us what you did instead IS the log (Nat 2026-07-25).
+  const postHelperLog = async (content: string) => {
     if (!content || helperPosting) return;
     if (!profile || !communityId) {
       setHelperError('Your profile is still loading. Please try again in a moment.');
@@ -882,7 +885,6 @@ export default function MonthlyTuneupScreen() {
 
     setHelperThread(thread);
     setHelperPosted((prev) => [...prev, deriveBoardPostTitle('', content)]);
-    setHelperContent('');
     setHelperPosting(false);
   };
 
@@ -1220,6 +1222,32 @@ export default function MonthlyTuneupScreen() {
     setStepIndex((index) => Math.max(0, index - 1));
   };
 
+  // "I did something else" + what you did = the kindness log. It posts to the
+  // HIVE Helpers thread when you finish, and only if that exact line isn't
+  // already there — so editing your answer or re-entering the tune-up doesn't
+  // spam the board with copies.
+  const logInsteadOnFinish = async () => {
+    if (!profile || !communityId) return;
+    const raw = String(checkInAnswers.q_hive_help_recap ?? '');
+    const { choice, instead } = parseFocusAnswer(raw);
+    const content = instead.trim();
+    if (choice !== 'I did something else' || !content) return;
+
+    const thread = helperThread ?? await findHelperThread();
+    if (!thread?.postId) return;
+
+    const { data: already } = await supabase
+      .from('board_replies')
+      .select('id')
+      .eq('post_id', thread.postId)
+      .eq('author_id', profile.id)
+      .eq('content', content)
+      .limit(1);
+    if ((already ?? []).length > 0) return;
+
+    await postHelperLog(content);
+  };
+
   const goNext = async () => {
     if (stepIndex >= STEPS.length - 1) {
       // Finishing: save any check-in answers the member touched this session.
@@ -1235,6 +1263,7 @@ export default function MonthlyTuneupScreen() {
         setCheckInSubmitted(true);
         setCheckInDirty(false);
       }
+      await logInsteadOnFinish();
       setFinished(true);
       return;
     }
@@ -1630,48 +1659,6 @@ export default function MonthlyTuneupScreen() {
           Current focus: "{helperThread.postTitle.replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, '')}"
         </Text>
       ) : null}
-      <View style={[cardStyle, { gap: 10 }]}>
-        <BoxHeading style={{ marginBottom: 0 }}>Log a kindness you did</BoxHeading>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-          <TextInput
-            value={helperContent}
-            onChangeText={setHelperContent}
-            placeholder="What tiny (or huge) kindness did you do?"
-            placeholderTextColor="#b5ad9f"
-            multiline
-            blurOnSubmit={false}
-            onKeyPress={submitOnEnter(handlePostHelperLog)}
-            style={[inputStyle, { flex: 1, minHeight: 90, textAlignVertical: 'top' }]}
-          />
-          <VoiceMicButton
-            size={20}
-            style={{ marginBottom: 10 }}
-            onTranscript={(text) => {
-              const trimmed = text.trim();
-              if (!trimmed) return;
-              setHelperContent((prev) => (prev ? `${prev.replace(/\s+$/, '')} ${trimmed}` : trimmed));
-            }}
-          />
-        </View>
-        {helperError ? (
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626' }}>{helperError}</Text>
-        ) : null}
-        <Pressable
-          onPress={handlePostHelperLog}
-          disabled={helperPosting || !helperContent.trim()}
-          style={({ pressed }) => ({
-            backgroundColor: helperContent.trim() ? '#bd9348' : '#e5e7eb',
-            borderRadius: 12,
-            paddingVertical: 12,
-            alignItems: 'center',
-            opacity: pressed || helperPosting ? 0.8 : 1,
-          })}
-        >
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: helperContent.trim() ? 'white' : '#a09274' }}>
-            {helperPosting ? 'Logging...' : 'Log kindness'}
-          </Text>
-        </Pressable>
-      </View>
       <PostedConfirmation lines={helperPosted} boardName={helperThread?.postTitle ?? helperThread?.boardName ?? null} />
 
       {(() => {
