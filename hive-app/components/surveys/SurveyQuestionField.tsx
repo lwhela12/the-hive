@@ -146,19 +146,53 @@ const composeHangsAnswer = (attended: HangAttendance[], note: string) => {
   return [head, note].filter(Boolean).join('\n');
 };
 
-// The HIVE Help recap, encoded the same way as the hangs one: a parseable
-// first line, free thoughts after. Structured beats prose here — a 1-5 score
-// can be averaged onto the deck the way hang ratings are, where a paragraph
-// can only be quoted (Nat 2026-07-25).
+// The HIVE Help recap. Encoded with a parseable first line like the hangs
+// answer, so the deck can COUNT how the focus landed instead of only quoting
+// paragraphs — that difference is the whole point of structuring it.
+//
+// Options carry a score so the deck can average them; "did something else" and
+// "didn't get to it" have none (one is a different act, the other isn't one).
+export const FOCUS_OPTIONS: { label: string; score: number | null }[] = [
+  { label: 'Loved it', score: 5 },
+  { label: 'Liked it', score: 4 },
+  { label: 'It was OK', score: 3 },
+  { label: 'Not for me', score: 2 },
+  { label: 'I did something else', score: null },
+  { label: "Didn't get to it", score: null },
+];
+
+const DID_SOMETHING_ELSE = 'I did something else';
+
 export const parseFocusAnswer = (raw: string) => {
   const lines = raw.split('\n');
-  const match = lines[0]?.match(/^Did it(?:\s\((\d)\/5\))?$/);
-  if (!match) return { didIt: false, rating: null as number | null, note: raw };
-  return { didIt: true, rating: match[1] ? Number(match[1]) : null, note: lines.slice(1).join('\n') };
+  const head = lines[0]?.trim() ?? '';
+  const elseMatch = head.match(/^I did something else(?:\s*:\s*(.*))?$/);
+  if (elseMatch) {
+    return { choice: DID_SOMETHING_ELSE, instead: elseMatch[1]?.trim() ?? '', note: lines.slice(1).join('\n') };
+  }
+  const option = FOCUS_OPTIONS.find((entry) => entry.label === head);
+  if (!option) return { choice: null as string | null, instead: '', note: raw };
+  return { choice: option.label, instead: '', note: lines.slice(1).join('\n') };
 };
 
-const composeFocusAnswer = (didIt: boolean, rating: number | null, note: string) => {
-  const head = didIt ? `Did it${rating ? ` (${rating}/5)` : ''}` : '';
+/** The 1-5 score behind an answer, or null when it doesn't carry one. */
+export const focusAnswerScore = (raw: string) => {
+  const { choice } = parseFocusAnswer(raw);
+  return FOCUS_OPTIONS.find((entry) => entry.label === choice)?.score ?? null;
+};
+
+/** Did they do SOMETHING — the focus itself or their own act? */
+export const focusAnswerDidIt = (raw: string) => {
+  const { choice } = parseFocusAnswer(raw);
+  return !!choice && choice !== "Didn't get to it";
+};
+
+const composeFocusAnswer = (choice: string | null, instead: string, note: string) => {
+  const head = !choice
+    ? ''
+    : choice === DID_SOMETHING_ELSE
+      ? `${DID_SOMETHING_ELSE}${instead.trim() ? `: ${instead.trim()}` : ''}`
+      : choice;
   return [head, note].filter(Boolean).join('\n');
 };
 
@@ -171,64 +205,60 @@ export function FocusRecapInput({
   onChange: (value: string) => void;
   focusTitle?: string | null;
 }) {
-  const { didIt, rating, note } = parseFocusAnswer(value);
-  const label = focusTitle?.trim() || 'this month’s focus';
+  const { choice, instead, note } = parseFocusAnswer(value);
 
   return (
     <View style={{ gap: 10, marginTop: 8 }}>
-      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
-        Tap if you did it — no worries either way.
-      </Text>
-      <View
-        style={{
-          alignSelf: 'flex-start',
-          maxWidth: '100%',
-          backgroundColor: didIt ? '#fdf3dc' : '#faf8f3',
-          borderWidth: 1,
-          borderColor: didIt ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
-          borderRadius: 14,
-          paddingHorizontal: 14,
-          paddingVertical: 10,
-          gap: 8,
-        }}
-      >
-        <Pressable
-          onPress={() => onChange(composeFocusAnswer(!didIt, didIt ? null : rating, note))}
-          accessibilityRole="button"
-          accessibilityState={{ selected: didIt }}
-          accessibilityLabel={didIt ? `You did ${label} — tap to undo` : `I did ${label}`}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
-        >
-          <Text style={{ fontSize: 15 }}>{didIt ? '🙌' : '○'}</Text>
-          <Text
-            style={{ fontFamily: didIt ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 14, color: didIt ? '#8a6b30' : '#6b7280', flexShrink: 1 }}
-            numberOfLines={2}
-          >
-            {label}
-          </Text>
-        </Pressable>
-        {didIt ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 26 }}>
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>how'd it feel?</Text>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <Pressable
-                key={star}
-                onPress={() => onChange(composeFocusAnswer(true, rating === star ? null : star, note))}
-                hitSlop={6}
+      {focusTitle?.trim() ? (
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
+          The focus was “{focusTitle.trim()}”.
+        </Text>
+      ) : null}
+      <View style={{ gap: 8 }}>
+        {FOCUS_OPTIONS.map((option) => {
+          const active = choice === option.label;
+          return (
+            <Pressable
+              key={option.label}
+              onPress={() => onChange(composeFocusAnswer(active ? null : option.label, instead, note))}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              style={{
+                alignSelf: 'flex-start',
+                maxWidth: '100%',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                backgroundColor: active ? '#fdf3dc' : '#faf8f3',
+                borderWidth: 1,
+                borderColor: active ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
+                borderRadius: 14,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+              }}
+            >
+              <Text style={{ fontSize: 15 }}>{active ? '🙌' : '○'}</Text>
+              <Text
+                style={{ fontFamily: active ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 14, color: active ? '#8a6b30' : '#6b7280', flexShrink: 1 }}
+                numberOfLines={2}
               >
-                <Text style={{ fontSize: 17, opacity: rating && star <= rating ? 1 : 0.25 }}>🍯</Text>
-              </Pressable>
-            ))}
-            {rating ? (
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>{rating}/5</Text>
-            ) : null}
-          </View>
-        ) : null}
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
+      {choice === DID_SOMETHING_ELSE ? (
+        <VoiceTextInput
+          value={instead}
+          onChangeText={(next) => onChange(composeFocusAnswer(choice, next, note))}
+          placeholder="What did you do instead?"
+        />
+      ) : null}
       <VoiceTextInput
         value={note}
-        onChangeText={(nextNote) => onChange(composeFocusAnswer(didIt, rating, nextNote))}
-        placeholder="Anything else? Suggestions, changes, a story…"
+        onChangeText={(next) => onChange(composeFocusAnswer(choice, instead, next))}
+        placeholder="Anything else you'd like to share?"
         multiline
       />
     </View>

@@ -22,6 +22,7 @@ import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
 import { getWishQuickTitle, pickSpotlightWish } from '../../lib/wishDisplay';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
+import { parseFocusAnswer, focusAnswerDidIt, focusAnswerScore } from '../../components/surveys/SurveyQuestionField';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { Avatar } from '../../components/ui/Avatar';
@@ -1217,26 +1218,25 @@ export default function MeetingHelperScreen() {
           text: clean(getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, key)),
         }))
         .filter((voice) => !!voice.text);
-    // The focus answer stores "Did it (4/5)" on line one, thoughts after — so
-    // the deck can report how many did it and how it landed, instead of only
-    // quoting paragraphs (Nat 2026-07-25).
-    const focusNote = (raw: string) => {
-      const lines = raw.split('\n');
-      return (/^Did it(\s\(\d\/5\))?$/.test(lines[0] ?? '') ? lines.slice(1).join('\n') : raw).trim();
-    };
+    // The focus answer keeps its choice on line one, thoughts after — so the
+    // deck can report how many did it and how it landed, not just quote
+    // paragraphs (Nat 2026-07-25).
+    const focusNote = (raw: string) => parseFocusAnswer(raw).note.trim();
     const helpVoices = voicesFor('q_hive_help_recap', focusNote);
     const hangVoices = voicesFor('q_hangs_recap', recapNote);
 
     const focusTally = members.reduce(
       (tally, member) => {
         const raw = getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, 'q_hive_help_recap');
-        const match = raw.split('\n')[0]?.match(/^Did it(?:\s\((\d)\/5\))?$/);
-        if (!match) return tally;
-        tally.did += 1;
-        if (match[1]) tally.ratings.push(Number(match[1]));
+        if (!raw.trim()) return tally;
+        if (focusAnswerDidIt(raw)) tally.did += 1;
+        const score = focusAnswerScore(raw);
+        if (score) tally.ratings.push(score);
+        const { choice, instead } = parseFocusAnswer(raw);
+        if (choice === 'I did something else' && instead) tally.instead.push(`${getFirstName(member.name)}: ${instead}`);
         return tally;
       },
-      { did: 0, ratings: [] as number[] }
+      { did: 0, ratings: [] as number[], instead: [] as string[] }
     );
     const focusAvg = focusTally.ratings.length > 0
       ? Math.round((focusTally.ratings.reduce((sum, value) => sum + value, 0) / focusTally.ratings.length) * 10) / 10
@@ -1714,6 +1714,11 @@ export default function MeetingHelperScreen() {
                   🙌 {focusTally.did} of {members.length} did it
                   {focusAvg ? ` · 🍯 ${focusAvg}/5${focusAvg >= 4.5 ? ' — we LOVED it' : focusAvg >= 3.5 ? ' — a hit' : ''}` : ''}
                 </Text>
+                {focusTally.instead.length > 0 ? (
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(15, 10), color: MUTED }}>
+                    Did their own thing — {focusTally.instead.join(' · ')}
+                  </Text>
+                ) : null}
                 <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: 'rgba(222,193,129,0.18)', overflow: 'hidden' }}>
                   <View
                     style={{
