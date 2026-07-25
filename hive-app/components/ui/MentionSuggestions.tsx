@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   getBroadcastMentionSuggestion,
@@ -41,7 +41,9 @@ export function MentionSuggestions({
       className={`bg-white border border-gold/30 rounded-xl overflow-hidden shadow-sm ${
         placement === 'above' ? 'mb-2' : 'mt-2'
       }`}
-      style={{ zIndex: 100, elevation: 20 }}
+      // A ten-person HIVE makes a long list; cap it and let it scroll rather
+      // than push the composer off whatever screen it's on (Nat 2026-07-25).
+      style={{ zIndex: 100, elevation: 20, maxHeight: 240 }}
     >
       {visibleSuggestions.length === 0 ? (
         <View className="flex-row items-center px-3 py-2">
@@ -61,6 +63,7 @@ export function MentionSuggestions({
               Tag someone or everyone
             </Text>
           </View>
+          <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
           {visibleSuggestions.map((member, index) => {
             const handle = getMentionTargetHandle(member);
             return (
@@ -96,6 +99,7 @@ export function MentionSuggestions({
               </Pressable>
             );
           })}
+          </ScrollView>
         </>
       )}
     </View>

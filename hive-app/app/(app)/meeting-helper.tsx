@@ -2182,6 +2182,23 @@ export default function MeetingHelperScreen() {
               ) : null}
               <View style={{ borderTopWidth: 1, borderColor: GOLD_SOFT, paddingTop: sz(14, 9), gap: sz(8, 6) }}>
                 <Text style={sectionLabel}>Live note → to-do list</Text>
+                {(() => {
+                  const mentionQuery = getActiveMentionQuery(liveNoteDraft, liveNoteCursor);
+                  if (mentionQuery === null) return null;
+                  return (
+                    <MentionSuggestions
+                      suggestions={getMentionSuggestions(mentionQuery, members)}
+                      query={mentionQuery}
+                      active
+                      placement="above"
+                      onSelect={(target) => {
+                        const next = insertMention(liveNoteDraft, liveNoteCursor, target);
+                        setLiveNoteDraft(next.text);
+                        setLiveNoteCursor(next.cursorIndex);
+                      }}
+                    />
+                  );
+                })()}
                 <TextInput
                   value={liveNoteDraft}
                   onChangeText={(value) => {
@@ -2209,22 +2226,6 @@ export default function MeetingHelperScreen() {
                     minHeight: sz(64, 48),
                   }}
                 />
-                {(() => {
-                  const mentionQuery = getActiveMentionQuery(liveNoteDraft, liveNoteCursor);
-                  if (mentionQuery === null) return null;
-                  return (
-                    <MentionSuggestions
-                      suggestions={getMentionSuggestions(mentionQuery, members)}
-                      query={mentionQuery}
-                      active
-                      onSelect={(target) => {
-                        const next = insertMention(liveNoteDraft, liveNoteCursor, target);
-                        setLiveNoteDraft(next.text);
-                        setLiveNoteCursor(next.cursorIndex);
-                      }}
-                    />
-                  );
-                })()}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
                   <Pressable
                     onPress={() => handleSaveLiveNote(member, topWish?.id ?? null)}
