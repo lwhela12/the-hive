@@ -1327,16 +1327,18 @@ export default function MonthlyTuneupScreen() {
       {/* Chronological, the way the month actually goes: look back at the
           hangs that happened, then +1 an idea already on the board, then pitch
           something new (Nat 2026-07-25). */}
+      {/* The page header says HIVE hangs; each box then says its own job in
+          bold. It used to stack a section label ON a question that repeated
+          the same thing three ways (Nat 2026-07-25: "it's too much"). */}
       <StepHeader
-        title="Hang ideas"
+        title="HIVE hangs"
         icon={<HiveIcon name="cake" size={20} color="#8e6f35" />}
-        subtitle={`Any ideas for fun HIVE hangs? They post straight to ${hangBoardName ?? 'the HIVE Hangs board'} so planning can start.`}
+        subtitle={`Rate the ones you made it to, then pick what's next — ideas post straight to ${hangBoardName ?? 'the HIVE Hangs board'} so planning can start.`}
       />
       {(() => {
         const hangsRecap = checkInQuestions.find((question) => question.id === 'q_hangs_recap');
         return hangsRecap ? (
           <View style={[cardStyle, { marginBottom: 10 }]}>
-            <MiniLabel icon="chart" style={{ marginBottom: 6 }}>How did last cycle's hangs go?</MiniLabel>
             <SurveyQuestionField
               question={hangsRecap}
               index={-1}
@@ -1347,10 +1349,14 @@ export default function MonthlyTuneupScreen() {
           </View>
         ) : null;
       })()}
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 22, marginBottom: 8 }}>
+        {existingHangIdeas.length > 0
+          ? 'What should we do this month? Select one, or suggest your own.'
+          : 'What should we do this month?'}
+      </Text>
       {existingHangIdeas.length > 0 ? (
         <View style={[cardStyle, { marginBottom: 10, position: 'relative', overflow: 'hidden' }]}>
           <ConfettiBurst visible={hangConfetti} onDone={() => setHangConfetti(false)} />
-          <MiniLabel icon="star" style={{ marginBottom: 8 }}>Choose one — tap to give it a +1</MiniLabel>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {existingHangIdeas.map((idea) => {
               const isSeconded = secondedHangIdeaId === idea.id;
@@ -1388,9 +1394,6 @@ export default function MonthlyTuneupScreen() {
           ) : null}
         </View>
       ) : null}
-      <MiniLabel icon="sparkle" style={{ marginBottom: 6, marginTop: 4 }}>
-        {existingHangIdeas.length > 0 ? 'Or suggest your own' : 'Suggest one'}
-      </MiniLabel>
       <View style={[cardStyle, { gap: 10 }]}>
         <TextInput
           value={hangTitle}
