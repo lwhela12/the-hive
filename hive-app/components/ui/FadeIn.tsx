@@ -1,5 +1,4 @@
-import { useEffect, useRef } from 'react';
-import { Animated, ViewStyle } from 'react-native';
+import { View, ViewStyle } from 'react-native';
 
 interface FadeInProps {
   children: React.ReactNode;
@@ -9,33 +8,11 @@ interface FadeInProps {
 }
 
 /**
- * Wraps children in a fade-in animation on mount.
- * Use to smooth out content that loads asynchronously.
+ * Historically wrapped children in a fade-in-on-mount animation.
+ * House rule (Nat, 2026-07-25): no soft arrivals anywhere — content that
+ * starts invisible reads as "something didn't load." Renders instantly now;
+ * the wrapper and its props stay so call sites don't churn.
  */
-export function FadeIn({ children, duration = 350, delay = 0, style }: FadeInProps) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(8)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration,
-        delay,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration,
-        delay,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  return (
-    <Animated.View style={[{ opacity, transform: [{ translateY }] }, style]}>
-      {children}
-    </Animated.View>
-  );
+export function FadeIn({ children, style }: FadeInProps) {
+  return <View style={style}>{children}</View>;
 }
