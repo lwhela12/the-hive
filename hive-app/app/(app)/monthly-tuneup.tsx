@@ -676,12 +676,15 @@ export default function MonthlyTuneupScreen() {
             .select('content, created_at')
             .eq('post_id', ideasThread.id)
             .order('created_at', { ascending: false })
-            .limit(6);
+            .limit(24);
           if (!cancelled) {
             setHelpIdeas(
               ((ideaReplies ?? []) as { content: string | null }[])
                 .map((reply) => (reply.content ?? '').trim())
                 .filter(Boolean)
+                // Votes live on this same thread as replies, so a "+1 for X"
+                // would come back next month looking like an idea of its own.
+                .filter((content) => !/^\+1\b/.test(content))
                 .map((content) => (content.length > 70 ? `${content.slice(0, 67)}…` : content))
             );
           }
