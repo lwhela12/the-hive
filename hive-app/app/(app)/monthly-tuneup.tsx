@@ -1671,7 +1671,6 @@ export default function MonthlyTuneupScreen() {
               value={checkInAnswers[helpRecap.id]}
               onChange={(value) => setCheckInAnswer(helpRecap.id, value)}
               hangEvents={hangRecapEvents}
-              focusTitle={helpFocus}
             />
           </View>
         ) : null;

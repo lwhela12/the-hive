@@ -199,21 +199,14 @@ const composeFocusAnswer = (choice: string | null, instead: string, note: string
 export function FocusRecapInput({
   value,
   onChange,
-  focusTitle,
 }: {
   value: string;
   onChange: (value: string) => void;
-  focusTitle?: string | null;
 }) {
   const { choice, instead, note } = parseFocusAnswer(value);
 
   return (
     <View style={{ gap: 10, marginTop: 8 }}>
-      {focusTitle?.trim() ? (
-        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
-          The focus was “{focusTitle.trim()}”.
-        </Text>
-      ) : null}
       <View style={{ gap: 8 }}>
         {FOCUS_OPTIONS.map((option) => {
           const active = choice === option.label;
@@ -376,14 +369,12 @@ export function SurveyQuestionField({
   value,
   onChange,
   hangEvents,
-  focusTitle,
 }: {
   question: SurveyQuestion;
   index: number;
   value: any;
   onChange: (value: any) => void;
   hangEvents?: HangRecapEvent[];
-  focusTitle?: string | null;
 }) {
   const textValue = typeof value === 'string' ? value : '';
 
@@ -419,7 +410,7 @@ export function SurveyQuestionField({
         <HangsRecapInput value={textValue} onChange={onChange} hangs={hangEvents ?? []} />
       )}
       {question.type === 'focus' && (
-        <FocusRecapInput value={textValue} onChange={onChange} focusTitle={focusTitle} />
+        <FocusRecapInput value={textValue} onChange={onChange} />
       )}
     </View>
   );
