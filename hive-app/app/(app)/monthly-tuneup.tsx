@@ -1620,7 +1620,7 @@ export default function MonthlyTuneupScreen() {
       <StepHeader
         title="HIVE helps"
         icon={<HiveIcon name="bee" size={20} color="#8e6f35" />}
-        subtitle="Little kindnesses since last meeting — no act too tiny, totally optional. (Helped a HIVE member? That belongs on their wish — mark it granted!)"
+        subtitle="Little kindnesses since last meeting — no act too tiny, totally optional."
       />
       {helperThread?.postTitle ? (
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348', marginTop: -6, marginBottom: 12 }}>
@@ -1681,6 +1681,7 @@ export default function MonthlyTuneupScreen() {
               value={checkInAnswers[helpRecap.id]}
               onChange={(value) => setCheckInAnswer(helpRecap.id, value)}
               hangEvents={hangRecapEvents}
+              focusTitle={helpFocus}
             />
           </View>
         ) : null;
@@ -1734,6 +1735,11 @@ export default function MonthlyTuneupScreen() {
               );
             })}
           </View>
+        ) : null}
+        {secondedHelpIdea ? (
+          <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12, color: '#8e7a5e' }}>
+            +1 sent — it's on the ideas thread 🎉 (tap again to take it back)
+          </Text>
         ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TextInput

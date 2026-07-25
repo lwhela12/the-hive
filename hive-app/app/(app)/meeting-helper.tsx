@@ -1217,8 +1217,30 @@ export default function MeetingHelperScreen() {
           text: clean(getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, key)),
         }))
         .filter((voice) => !!voice.text);
-    const helpVoices = voicesFor('q_hive_help_recap');
+    // The focus answer stores "Did it (4/5)" on line one, thoughts after — so
+    // the deck can report how many did it and how it landed, instead of only
+    // quoting paragraphs (Nat 2026-07-25).
+    const focusNote = (raw: string) => {
+      const lines = raw.split('\n');
+      return (/^Did it(\s\(\d\/5\))?$/.test(lines[0] ?? '') ? lines.slice(1).join('\n') : raw).trim();
+    };
+    const helpVoices = voicesFor('q_hive_help_recap', focusNote);
     const hangVoices = voicesFor('q_hangs_recap', recapNote);
+
+    const focusTally = members.reduce(
+      (tally, member) => {
+        const raw = getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, 'q_hive_help_recap');
+        const match = raw.split('\n')[0]?.match(/^Did it(?:\s\((\d)\/5\))?$/);
+        if (!match) return tally;
+        tally.did += 1;
+        if (match[1]) tally.ratings.push(Number(match[1]));
+        return tally;
+      },
+      { did: 0, ratings: [] as number[] }
+    );
+    const focusAvg = focusTally.ratings.length > 0
+      ? Math.round((focusTally.ratings.reduce((sum, value) => sum + value, 0) / focusTally.ratings.length) * 10) / 10
+      : null;
 
     // Survey says! Turnout + average enjoyment per hang, from the check-ins'
     // "I went 🙌" taps and 🍯 ratings ("Went to: Taste (4/5) · Drag Brunch").
@@ -1682,6 +1704,28 @@ export default function MeetingHelperScreen() {
               gap: sz(12, 8),
             }}
           >
+            {/* Survey says, for the focus: how many did it and how it landed.
+                This is the whole reason the recap is structured rather than a
+                paragraph — counts and averages can be shown, prose can only be
+                read aloud. */}
+            {focusTally.did > 0 ? (
+              <View style={{ gap: sz(4, 3) }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 13), color: GOLD_DEEP }}>
+                  🙌 {focusTally.did} of {members.length} did it
+                  {focusAvg ? ` · 🍯 ${focusAvg}/5${focusAvg >= 4.5 ? ' — we LOVED it' : focusAvg >= 3.5 ? ' — a hit' : ''}` : ''}
+                </Text>
+                <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: 'rgba(222,193,129,0.18)', overflow: 'hidden' }}>
+                  <View
+                    style={{
+                      width: `${Math.round((focusTally.did / Math.max(1, members.length)) * 100)}%`,
+                      height: '100%',
+                      borderRadius: 999,
+                      backgroundColor: GOLD,
+                    }}
+                  />
+                </View>
+              </View>
+            ) : null}
             {helpVoices.length > 0 ? (
               <View style={{ gap: sz(4, 3) }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginTop: sz(4, 3) }}>

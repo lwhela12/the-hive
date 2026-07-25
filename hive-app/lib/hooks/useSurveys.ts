@@ -6,7 +6,9 @@ export interface SurveyQuestion {
   text: string;
   // 'hangs' auto-populates the month's hang events as went/didn't-go chips
   // plus a thoughts box; the answer is stored as plain text.
-  type: 'short' | 'long' | 'scale' | 'choice' | 'hangs';
+  // 'focus' does the same for the month's HIVE Help focus: did it + a 1-5
+  // score, so the deck can average it instead of only quoting paragraphs
+  type: 'short' | 'long' | 'scale' | 'choice' | 'hangs' | 'focus';
   options?: string[];
   required: boolean;
 }

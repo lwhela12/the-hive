@@ -146,6 +146,95 @@ const composeHangsAnswer = (attended: HangAttendance[], note: string) => {
   return [head, note].filter(Boolean).join('\n');
 };
 
+// The HIVE Help recap, encoded the same way as the hangs one: a parseable
+// first line, free thoughts after. Structured beats prose here — a 1-5 score
+// can be averaged onto the deck the way hang ratings are, where a paragraph
+// can only be quoted (Nat 2026-07-25).
+export const parseFocusAnswer = (raw: string) => {
+  const lines = raw.split('\n');
+  const match = lines[0]?.match(/^Did it(?:\s\((\d)\/5\))?$/);
+  if (!match) return { didIt: false, rating: null as number | null, note: raw };
+  return { didIt: true, rating: match[1] ? Number(match[1]) : null, note: lines.slice(1).join('\n') };
+};
+
+const composeFocusAnswer = (didIt: boolean, rating: number | null, note: string) => {
+  const head = didIt ? `Did it${rating ? ` (${rating}/5)` : ''}` : '';
+  return [head, note].filter(Boolean).join('\n');
+};
+
+export function FocusRecapInput({
+  value,
+  onChange,
+  focusTitle,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  focusTitle?: string | null;
+}) {
+  const { didIt, rating, note } = parseFocusAnswer(value);
+  const label = focusTitle?.trim() || 'this month’s focus';
+
+  return (
+    <View style={{ gap: 10, marginTop: 8 }}>
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
+        Tap if you did it — no worries either way.
+      </Text>
+      <View
+        style={{
+          alignSelf: 'flex-start',
+          maxWidth: '100%',
+          backgroundColor: didIt ? '#fdf3dc' : '#faf8f3',
+          borderWidth: 1,
+          borderColor: didIt ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
+          borderRadius: 14,
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          gap: 8,
+        }}
+      >
+        <Pressable
+          onPress={() => onChange(composeFocusAnswer(!didIt, didIt ? null : rating, note))}
+          accessibilityRole="button"
+          accessibilityState={{ selected: didIt }}
+          accessibilityLabel={didIt ? `You did ${label} — tap to undo` : `I did ${label}`}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+        >
+          <Text style={{ fontSize: 15 }}>{didIt ? '🙌' : '○'}</Text>
+          <Text
+            style={{ fontFamily: didIt ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 14, color: didIt ? '#8a6b30' : '#6b7280', flexShrink: 1 }}
+            numberOfLines={2}
+          >
+            {label}
+          </Text>
+        </Pressable>
+        {didIt ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 26 }}>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>how'd it feel?</Text>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <Pressable
+                key={star}
+                onPress={() => onChange(composeFocusAnswer(true, rating === star ? null : star, note))}
+                hitSlop={6}
+              >
+                <Text style={{ fontSize: 17, opacity: rating && star <= rating ? 1 : 0.25 }}>🍯</Text>
+              </Pressable>
+            ))}
+            {rating ? (
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>{rating}/5</Text>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+      <VoiceTextInput
+        value={note}
+        onChangeText={(nextNote) => onChange(composeFocusAnswer(didIt, rating, nextNote))}
+        placeholder="Anything else? Suggestions, changes, a story…"
+        multiline
+      />
+    </View>
+  );
+}
+
 export function HangsRecapInput({
   value,
   onChange,
@@ -257,12 +346,14 @@ export function SurveyQuestionField({
   value,
   onChange,
   hangEvents,
+  focusTitle,
 }: {
   question: SurveyQuestion;
   index: number;
   value: any;
   onChange: (value: any) => void;
   hangEvents?: HangRecapEvent[];
+  focusTitle?: string | null;
 }) {
   const textValue = typeof value === 'string' ? value : '';
 
@@ -296,6 +387,9 @@ export function SurveyQuestionField({
       )}
       {question.type === 'hangs' && (
         <HangsRecapInput value={textValue} onChange={onChange} hangs={hangEvents ?? []} />
+      )}
+      {question.type === 'focus' && (
+        <FocusRecapInput value={textValue} onChange={onChange} focusTitle={focusTitle} />
       )}
     </View>
   );

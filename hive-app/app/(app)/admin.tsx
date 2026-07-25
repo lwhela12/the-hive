@@ -195,12 +195,13 @@ const HONEY_POT_FEEDBACK_STYLE: Record<HoneyPotFeedback['tone'], {
   },
 };
 
-const SURVEY_QUESTION_TYPES: SurveyQuestion['type'][] = ['short', 'long', 'scale', 'choice', 'hangs'];
+const SURVEY_QUESTION_TYPES: SurveyQuestion['type'][] = ['short', 'long', 'scale', 'choice', 'hangs', 'focus'];
 const SURVEY_TYPE_LABELS: Record<SurveyQuestion['type'], string> = {
   short: 'Short',
   long: 'Long',
   scale: 'Scale',
   choice: 'Choice',
+  focus: 'HIVE Help focus',
   hangs: 'Hangs recap',
 };
 
