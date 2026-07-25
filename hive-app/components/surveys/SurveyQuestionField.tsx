@@ -184,12 +184,20 @@ export function HangsRecapInput({
 
   return (
     <View style={{ gap: 10, marginTop: 8 }}>
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
+        Tap the ones you made it to, then rate them.
+      </Text>
       {hangs.map((hang) => {
         const entry = attended.find((candidate) => candidate.title === hang.title);
         return (
+          // The card hugs its title instead of ruling a line across the whole
+          // step, and there's no "didn't make it" label sitting way off to the
+          // right — not going is simply not tapping it (Nat 2026-07-25).
           <View
             key={hang.id}
             style={{
+              alignSelf: 'flex-start',
+              maxWidth: '100%',
               backgroundColor: entry ? '#fdf3dc' : '#faf8f3',
               borderWidth: 1,
               borderColor: entry ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
@@ -199,13 +207,19 @@ export function HangsRecapInput({
               gap: 8,
             }}
           >
-            <Pressable onPress={() => toggle(hang.title)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable
+              onPress={() => toggle(hang.title)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !!entry }}
+              accessibilityLabel={entry ? `You went to ${hang.title} — tap to undo` : `I went to ${hang.title}`}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+            >
               <Text style={{ fontSize: 15 }}>{entry ? '🙌' : '○'}</Text>
-              <Text style={{ fontFamily: entry ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 14, color: entry ? '#8a6b30' : '#6b7280', flex: 1 }}>
+              <Text
+                style={{ fontFamily: entry ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 14, color: entry ? '#8a6b30' : '#6b7280', flexShrink: 1 }}
+                numberOfLines={2}
+              >
                 {hang.title}
-              </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
-                {entry ? 'went!' : "didn't make it"}
               </Text>
             </Pressable>
             {entry ? (
