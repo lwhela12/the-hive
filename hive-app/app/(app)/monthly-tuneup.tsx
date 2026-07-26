@@ -57,6 +57,9 @@ const hiveBee = require('../../assets/HIVE Bee.png');
 // smudge. The plain bee mark is one bold shape at 70% of its box: same brand,
 // legible small. Crest stays on the big moments (Nat 2026-07-24).
 const hiveBeeMark = require('../../assets/BEE ONLY IN GOLD BG.png');
+// The full crest — same mark the General room wears, so "everyone" reads the
+// same wherever you pick it.
+const hiveCrest = require('../../assets/HIVE Logo Transparent  BG.png');
 
 type StepKey = 'wishes' | 'hangs' | 'calendar' | 'helpers' | 'todos' | 'checkin' | 'newsletter';
 type Step = { key: StepKey; label: string };
@@ -2102,7 +2105,7 @@ export default function MonthlyTuneupScreen() {
         <StepHeader
           title="Want anything in the newsletter?"
           subtitle="It goes out soon. Shout-outs, plugs, reminders, compliments — this is the easiest way in."
-          icon={<Text style={{ fontSize: 22 }}>🗞️</Text>}
+          icon={<HiveIcon name="megaphone" size={20} color="#8e6f35" />}
         />
 
         <View style={[cardStyle, { gap: 12 }]}>
@@ -2176,12 +2179,12 @@ export default function MonthlyTuneupScreen() {
                           justifyContent: 'center',
                           borderWidth: selected ? 2.5 : 1,
                           borderColor: selected ? '#bd9348' : 'rgba(222,193,129,0.4)',
-                          backgroundColor: isEveryone ? '#fdf3dc' : 'transparent',
+                          backgroundColor: 'transparent',
                           opacity: selected ? 1 : 0.85,
                         }}
                       >
                         {isEveryone ? (
-                          <HiveIcon name="bee" size={24} color="#8e6f35" />
+                          <Image source={hiveCrest} style={{ width: 46, height: 46 }} contentFit="contain" />
                         ) : (
                           <Avatar name={member.name} url={member.avatar_url} size={46} />
                         )}
