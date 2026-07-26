@@ -195,6 +195,35 @@ serve(async (req) => {
     .maybeSingle();
   const inviterName = (inviterProfile?.name ?? '').trim().split(/\s+/)[0] || '';
 
+  // "See you on the 19th" beats "see you at the next meeting" — a date is
+  // something you can put in a calendar. Entirely optional: if the lookup
+  // fails or nothing is scheduled, the line just reads without a date rather
+  // than holding up the invite.
+  let nextMeetingLabel = '';
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: nextMeeting } = await supabaseAdmin
+      .from('events')
+      .select('event_date')
+      .eq('community_id', communityId)
+      .eq('event_type', 'meeting')
+      .gte('event_date', today)
+      .order('event_date', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const eventDate = (nextMeeting as { event_date?: string } | null)?.event_date;
+    if (eventDate) {
+      // Noon keeps the date from sliding a day backwards across time zones.
+      nextMeetingLabel = new Date(`${eventDate}T12:00:00`).toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+      });
+    }
+  } catch (meetingLookupError) {
+    console.error('Could not look up the next meeting for the invite email:', meetingLookupError);
+  }
+
   if (RESEND_API_KEY) {
     try {
       await fetch('https://api.resend.com/emails', {
@@ -213,25 +242,38 @@ serve(async (req) => {
               <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Welcome to the HIVE</h1>
               <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 22px;">${inviterName ? `${inviterName} invited you` : "You've been invited"} to join ${communityName}</p>
 
+              <p style="font-size: 15px;">We are so glad you're here, and we can't wait to meet you in person.</p>
+
               <p style="font-size: 15px;">The HIVE is a small group of people who help each other get things done. Everyone shares what they're working on and what they could use a hand with — and the rest of us go "oh, I can help with that." That's the whole idea.</p>
 
-              <div style="text-align: center; margin: 26px 0;">
+              <p style="font-size: 15px;">This link is your way into the members' side:</p>
+
+              <div style="text-align: center; margin: 22px 0;">
                 <a href="${inviteUrl}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Come on in</a>
               </div>
 
+              <div style="background: #fdf3dc; border: 1px solid rgba(222,193,129,0.7); border-radius: 12px; padding: 14px 16px; margin: 22px 0;">
+                <p style="font-size: 14px; margin: 0;"><strong>Finding your way back later:</strong> go to <a href="https://www.the-hive.app" style="color: #8a6b30;">the-hive.app</a> and click <strong>Member Log In</strong>. Or bookmark <a href="https://app.the-hive.app" style="color: #8a6b30;">app.the-hive.app</a> and go straight there. No need to dig up this email again.</p>
+              </div>
+
               <h2 style="color: #8a6b30; font-size: 15px; margin: 26px 0 8px;">Once you're in</h2>
-              <p style="font-size: 15px; margin: 0 0 12px;">No rush, and nothing has to be perfect. Poke around — you can't break anything.</p>
+              <p style="font-size: 15px; margin: 0 0 12px;">No rush, and nothing has to be perfect. Click around — you can't break anything.</p>
               <ol style="font-size: 15px; padding-left: 20px; margin: 0;">
-                <li style="margin-bottom: 8px;"><strong>Fill out your profile.</strong> A photo and a birthday go a long way — we like cake.</li>
+                <li style="margin-bottom: 8px;"><strong>Fill out your profile.</strong> A photo and a birthday go a long way — we like cake. It'll nudge you through the rest a bit at a time.</li>
+                <li style="margin-bottom: 8px;"><strong>Meet everyone.</strong> Have a read through the other members' profiles — it's a lovely head start on knowing who you're walking into a room with.</li>
+                <li style="margin-bottom: 8px;"><strong>Answer the daily question.</strong> One little question a day. It's the easiest way to start feeling like part of the group before you've even met us.</li>
                 <li style="margin-bottom: 8px;"><strong>Add a few things you're good at.</strong> Anything counts: sourdough, spreadsheets, knowing a guy. This is how someone's wish finds its way to you.</li>
                 <li style="margin-bottom: 8px;"><strong>Post one wish.</strong> Something you'd genuinely love help with. Start small — "I want someone to teach me three easy weeknight dinners" beats "I want to be healthier."</li>
-                <li style="margin-bottom: 8px;"><strong>Have a wander.</strong> The boards are where we swap recommendations, plan hangs, and argue about movies.</li>
               </ol>
 
               <h2 style="color: #8a6b30; font-size: 15px; margin: 26px 0 8px;">Stuck? Ask Clive</h2>
               <p style="font-size: 15px; margin: 0 0 12px;">Clive is the HIVE's helper, and he lives in the app — tap the sparkles. He can explain how anything works, help you put a fuzzy wish into words, tell you what happened at a meeting you missed, or just chat. He's the fastest way to get unstuck, and he doesn't mind daft questions.</p>
 
-              <p style="font-size: 15px;">And if all else fails, ${inviterName || 'whoever invited you'} is a text away. 💛</p>
+              <p style="font-size: 15px;">And if all else fails, ${inviterName || 'whoever invited you'} is a text away — ask away, no question is too small. 💛</p>
+
+              <p style="font-size: 15px; margin-top: 22px;">${nextMeetingLabel
+                ? `See you at the next meeting on <strong>${nextMeetingLabel}</strong>! 🐝`
+                : `See you at the next meeting! 🐝`}</p>
 
               <p style="font-size: 13px; color: #9a9a9a; text-align: center; margin-top: 26px;">Your link works for the next 30 days. See you in there. 🍯</p>
               <p style="font-size: 12px; color: #c0c0c0; text-align: center; word-break: break-all;">${inviteUrl}</p>
