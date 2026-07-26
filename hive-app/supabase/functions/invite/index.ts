@@ -95,7 +95,12 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  // 30 days, not 7. People get invited right before a holiday, or they mean to
+  // do it on the weekend and don't — and a dead link is a terrible first
+  // impression for a community whose whole thing is warmth (Nat 2026-07-25).
+  // Re-sending refreshes the window, so this only sets how long someone can
+  // dawdle before needing a nudge.
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data: community } = await supabaseAdmin
     .from('communities')
@@ -181,6 +186,15 @@ serve(async (req) => {
   const inviteUrl = `${getInviteUrlBase()}?token=${encodeURIComponent(token_invite)}`;
   const communityName = normalizeHiveBrandName(community?.name);
 
+  // "Nat invited you" lands better than "you have been invited" — an invitation
+  // from a person, not from software.
+  const { data: inviterProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('name')
+    .eq('id', userId)
+    .maybeSingle();
+  const inviterName = (inviterProfile?.name ?? '').trim().split(/\s+/)[0] || '';
+
   if (RESEND_API_KEY) {
     try {
       await fetch('https://api.resend.com/emails', {
@@ -192,12 +206,25 @@ serve(async (req) => {
         body: JSON.stringify({
           from: FROM_EMAIL,
           to: email,
-          subject: `You're invited to join ${communityName}`,
+          subject: `🍯 You're invited to the HIVE`,
           html: `
-            <p>You've been invited to join <strong>${communityName}</strong>.</p>
-            <p>Use this link to accept your invite:</p>
-            <p><a href="${inviteUrl}">${inviteUrl}</a></p>
-            <p>This invite expires in 7 days.</p>
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
+              <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🐝</span></div>
+              <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Welcome to the HIVE</h1>
+              <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${inviterName ? `${inviterName} invited you` : "You've been invited"} to join ${communityName}</p>
+              <p style="font-size: 15px;">The HIVE is a small group who help each other get things done — everyone says what they're working on and what they could use a hand with, and the rest of us go "oh, I can help with that."</p>
+              <p style="font-size: 15px;"><strong>Three things to do when you land:</strong></p>
+              <ul style="font-size: 15px; padding-left: 20px;">
+                <li>Fill out your profile so people know who you are</li>
+                <li>Add a few things you're good at — that's how wishes find you</li>
+                <li>Post one wish of your own. Start small; it doesn't have to be perfect</li>
+              </ul>
+              <div style="text-align: center; margin: 28px 0;">
+                <a href="${inviteUrl}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Come on in</a>
+              </div>
+              <p style="font-size: 13px; color: #9a9a9a; text-align: center;">No rush — this link works for the next 30 days. 🍯</p>
+              <p style="font-size: 12px; color: #c0c0c0; text-align: center; word-break: break-all;">${inviteUrl}</p>
+            </div>
           `
         })
       });
