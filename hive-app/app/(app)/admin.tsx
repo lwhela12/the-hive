@@ -2031,14 +2031,11 @@ export default function AdminScreen() {
                 nestedScrollEnabled
                 showsVerticalScrollIndicator={true}
               >
-                {/* The pot, named, then what's in it, then what you can do to
-                    it — the icon reads as the pot itself here instead of as
-                    decoration on the tab (Nat 2026-07-26). */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 2 }}>
-                  <HiveIcon name="honeypot" size={18} color="#8e6f35" />
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e6f35' }}>
-                    Honey Pot
-                  </Text>
+                {/* Just the pot over the total — the tab above already says
+                    "Honey Pot", so the word twice was one too many
+                    (Nat 2026-07-26). */}
+                <View style={{ alignItems: 'center', marginBottom: 4 }}>
+                  <HiveIcon name="honeypot" size={22} color="#8e6f35" />
                 </View>
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 28, color: '#bd9348', textAlign: 'center', marginBottom: 16 }}>
                   ${honeyPotBalance.toFixed(2)}

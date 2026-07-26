@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx expo export --platform web && node -e \"require('fs').writeFileSync('dist/version.json', JSON.stringify({ buildId: process.env.VERCEL_GIT_COMMIT_SHA || String(Date.now()) }))\"",
+  "buildCommand": "EXPO_PUBLIC_BUILD_ID=\"$VERCEL_GIT_COMMIT_SHA\" npx expo export --platform web && node -e \"require('fs').writeFileSync('dist/version.json', JSON.stringify({ buildId: process.env.VERCEL_GIT_COMMIT_SHA || String(Date.now()) }))\"",
   "outputDirectory": "dist",
   "framework": null,
   "headers": [

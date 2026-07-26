@@ -3,13 +3,26 @@ import { Platform } from 'react-native';
 
 // "Fresh honey" update detection (web only — native builds are no-ops).
 //
-// Vercel writes dist/version.json at build time (see vercel.json buildCommand).
-// It is served with Cache-Control: no-cache so a fetch always reflects the
-// currently deployed build. We remember the buildId that was live when the
-// session started, re-check every POLL_INTERVAL_MS and whenever the tab is
-// foregrounded, and flag `updateAvailable` when the deployed buildId changes.
+// Vercel writes dist/version.json at build time and stamps the same commit into
+// the bundle as EXPO_PUBLIC_BUILD_ID (see vercel.json buildCommand). version.json
+// is served no-cache, so fetching it always reports the currently deployed build.
+//
+// We compare that against the build THIS bundle was compiled from. The old code
+// compared it against whatever the server happened to report when the session
+// started, which meant the banner could almost never fire: refreshing the page
+// re-pinned the baseline to the newest build, so a deploy that landed before you
+// loaded was invisible, and a stale bundle handed over by the service worker
+// went unnoticed forever (Nat 2026-07-26: "how come I'm not getting the banner").
+//
+// Knowing our own build id makes it a fact rather than a guess — if what's
+// deployed isn't what we're running, there's fresh honey, no matter how you got
+// here.
 
-const POLL_INTERVAL_MS = 5 * 60 * 1000; // ~5 minutes
+const RUNNING_BUILD_ID = process.env.EXPO_PUBLIC_BUILD_ID ?? '';
+
+// Two minutes: version.json is a few bytes and served no-store, and a banner
+// that shows up five minutes late has usually been beaten by a manual refresh.
+const POLL_INTERVAL_MS = 2 * 60 * 1000;
 
 // Module-level singleton so every consumer (banner, refresh pill) shares one
 // baseline and one polling loop no matter how many components mount the hook.
@@ -39,8 +52,20 @@ async function checkForUpdate() {
   const deployedBuildId = await fetchDeployedBuildId();
   if (!deployedBuildId) return;
 
+  // Normal case: we know which build we are, so any difference is fresh honey —
+  // including one deployed before this tab was ever opened.
+  if (RUNNING_BUILD_ID) {
+    if (deployedBuildId !== RUNNING_BUILD_ID) {
+      updateAvailable = true;
+      notifyListeners();
+    }
+    return;
+  }
+
+  // Fallback for local dev and any build without a stamped id: we can't know
+  // what we're running, so only notice the build CHANGING mid-session. Better
+  // than nagging every dev server about a mismatch it can't do anything about.
   if (baselineBuildId === null) {
-    // First successful fetch of the session — remember what we're running.
     baselineBuildId = deployedBuildId;
     return;
   }
