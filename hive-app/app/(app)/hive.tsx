@@ -39,7 +39,8 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateRangeShort, formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { submitOnEnter } from '../../lib/submitOnEnter';
-import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem, setStoredItemAsync } from '../../lib/webStorage';
+import { getAppNewsSeenKey, getUnseenAppNews, type AppNewsEntry } from '../../lib/appNews';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { addHomeResetListener } from '../../lib/homeNavigation';
@@ -2204,6 +2205,28 @@ export default function HiveScreen() {
   // push with nowhere to land in-app, so Home carries the short check-in for a
   // stretch of days — and stops the moment you've done it, because stale
   // to-dos piling up is exactly what we're avoiding (Nat 2026-07-25).
+  // What's new in the app. A quiet strip rather than a pop-up: an interstitial
+  // on every login becomes the thing everyone learns to dismiss without
+  // reading (Nat 2026-07-26 wants to see whether even this is distracting).
+  const [unseenNews, setUnseenNews] = useState<AppNewsEntry[]>([]);
+  const [newsExpanded, setNewsExpanded] = useState(false);
+  useEffect(() => {
+    if (!profile) return;
+    let cancelled = false;
+    void getStoredItemAsync(getAppNewsSeenKey(profile.id)).then((lastSeenId) => {
+      if (!cancelled) setUnseenNews(getUnseenAppNews(lastSeenId));
+    });
+    return () => { cancelled = true; };
+  }, [profile?.id]);
+
+  const dismissAppNews = useCallback(() => {
+    setUnseenNews([]);
+    setNewsExpanded(false);
+    if (!profile) return;
+    const newest = getUnseenAppNews(null)[0];
+    if (newest) void setStoredItemAsync(getAppNewsSeenKey(profile.id), newest.id);
+  }, [profile?.id]);
+
   const [halfwayDone, setHalfwayDone] = useState(false);
   useEffect(() => {
     if (!communityId || !profile) return;
@@ -2577,6 +2600,59 @@ export default function HiveScreen() {
           <RefreshControl refreshing={refreshing || isLoading} onRefresh={onRefresh} tintColor="#bd9348" />
         }
       >
+        {/* What's new — a strip, not a pop-up. Tapping opens the list; the x
+            marks everything read and it doesn't come back until we ship
+            something else. */}
+        {unseenNews.length > 0 ? (
+          <View style={{ backgroundColor: '#fdf3dc', borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.75)' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Pressable
+                onPress={() => setNewsExpanded((open) => !open)}
+                accessibilityRole="button"
+                accessibilityLabel={`What's new in the HIVE — ${unseenNews.length} update${unseenNews.length === 1 ? '' : 's'}`}
+                style={({ pressed }) => ({ flex: 1, paddingVertical: 9, paddingHorizontal: 14, opacity: pressed ? 0.7 : 1 })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8e6f35' }}>
+                  ✨ {unseenNews.length} new thing{unseenNews.length === 1 ? '' : 's'} in the HIVE
+                  <Text style={{ fontFamily: 'Lato_400Regular', color: '#a08a5e' }}>
+                    {newsExpanded ? '  — tap to hide' : '  — tap to see'}
+                  </Text>
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={dismissAppNews}
+                accessibilityRole="button"
+                accessibilityLabel="Mark what's new as read"
+                hitSlop={8}
+                style={({ pressed }) => ({ paddingVertical: 9, paddingHorizontal: 14, opacity: pressed ? 0.6 : 1 })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#7b6b59' }}>✕</Text>
+              </Pressable>
+            </View>
+            {newsExpanded ? (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}>
+                {unseenNews.map((entry) => (
+                  <View key={entry.id}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: '#2d2d2d' }}>
+                      {entry.title}
+                    </Text>
+                    {entry.detail ? (
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18, color: '#7b6b59' }}>
+                        {entry.detail}
+                      </Text>
+                    ) : null}
+                  </View>
+                ))}
+                <Pressable onPress={dismissAppNews} accessibilityRole="button" hitSlop={6}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#bd9348', marginTop: 2 }}>
+                    Got it, thanks →
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* Combined Daily Question + Member Answer Bubbles */}
         <View style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(189,147,72,0.45)', backgroundColor: '#fffbf0' }}>
           <View style={{ flexDirection: 'row' }}>

@@ -22,6 +22,7 @@ import { fetchHoneyPotLedger } from '../../lib/honeyPot';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
 import { getWishQuickTitle, pickSpotlightWish } from '../../lib/wishDisplay';
+import { getAppNews } from '../../lib/appNews';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { parseFocusAnswer, focusAnswerDidIt, focusAnswerScore } from '../../components/surveys/SurveyQuestionField';
 import { submitOnEnter } from '../../lib/submitOnEnter';
@@ -238,6 +239,10 @@ export default function MeetingHelperScreen() {
   // HummDinger: which member's full check-in is expanded on the bubbles grid,
   // plus everyone who's had their turn this session (feeds the agenda rail's
   // who's-left-to-go list).
+  // The last handful of shipped changes, shown on the News slide so the app
+  // update note doesn't rely on Nat remembering what we did.
+  const recentAppNews = useMemo(() => getAppNews(6), []);
+
   const [expandedHummdingerId, setExpandedHummdingerId] = useState<string | null>(null);
   const [hummdingerVisited, setHummdingerVisited] = useState<Set<string>>(new Set());
 
@@ -1182,6 +1187,21 @@ export default function MeetingHelperScreen() {
             noteKey="appnews"
             emptyText="No app news this month — smooth sailing."
           />
+          {/* What actually shipped, so this doesn't depend on remembering.
+              It's a prompt, not the content: whatever Nat types above is what
+              reaches the deck and the newsletter, in her words. */}
+          {recentAppNews.length > 0 ? (
+            <View style={{ marginTop: sz(10, 7), borderTopWidth: 1, borderTopColor: GOLD_SOFT, paddingTop: sz(9, 6), gap: sz(3, 2) }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(11, 9), letterSpacing: 1.2, textTransform: 'uppercase', color: MUTED }}>
+                Shipped recently — for your notes
+              </Text>
+              {recentAppNews.map((entry) => (
+                <Text key={entry.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 10), lineHeight: sz(19, 14), color: MUTED }}>
+                  · {entry.title}
+                </Text>
+              ))}
+            </View>
+          ) : null}
         </View>
       </View>
     </View>
