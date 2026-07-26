@@ -667,7 +667,7 @@ export default function MonthlyTuneupScreen() {
 
     const month = new Date().toLocaleString('en-US', { month: 'long' });
     const title = kind === 'newsletter'
-      ? `${month} Newsletter — shout-outs & mentions 📣`
+      ? `${month} Newsletter 📰`
       : `${month} Compliment Corner 💐`;
     const content = kind === 'newsletter'
       ? "The newsletter's brewing! 🗞️ Want a shout-out, a plug, or a reminder in it — \"come to my lemonade stand Tuesday!\"-style? Drop it in this thread and it goes straight into the newsletter."

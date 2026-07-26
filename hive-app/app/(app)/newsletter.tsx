@@ -134,18 +134,23 @@ export default function NewsletterScreen() {
         : new Date().toLocaleString('en-US', { month: 'long' });
       const title = `${month} Newsletter 📰`;
 
+      // Match on the month, not the exact title — this is the same thread that
+      // opened at month-end to collect shout-outs, and publishing turns it into
+      // the newsletter in place. The replies that fed it stay underneath.
       const { data: existing } = await supabase
         .from('board_posts')
         .select('id')
         .eq('category_id', board.id)
-        .eq('title', title)
+        .ilike('title', `${month}%`)
+        .is('archived_at', null)
+        .order('created_at', { ascending: true })
         .limit(1);
 
       const content = prose ?? asPlainText();
       if ((existing ?? []).length > 0) {
         const { error: updateError } = await (supabase as any)
           .from('board_posts')
-          .update({ content, edited_at: new Date().toISOString() })
+          .update({ title, content, is_pinned: true, edited_at: new Date().toISOString() })
           .eq('id', (existing as { id: string }[])[0].id);
         if (updateError) {
           setPostError(`Could not update the post: ${updateError.message}`);

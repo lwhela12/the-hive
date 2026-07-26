@@ -440,7 +440,12 @@ serve(async (req) => {
             const boardId = boardRows.find((row) => row.topic_kind === 'newsletter')?.id ?? boardRows[0]?.id;
             const complimentBoardId = boardRows.find((row) => row.topic_kind === 'compliments')?.id ?? boardId;
             if (boardId) {
-              const threadTitle = `${newsletterMonth} Newsletter — shout-outs & mentions 📣`;
+              // ONE thread per month, not two. It opens as the collection spot and
+              // becomes the published newsletter in place when Nat posts it, so
+              // the shout-outs that fed the letter stay underneath it. A board
+              // of twelve threads a year reads as an archive; twenty-four reads
+              // as a mess (Nat 2026-07-25).
+              const threadTitle = `${newsletterMonth} Newsletter 📰`;
               const { data: existingThread } = await supabaseAdmin
                 .from('board_posts')
                 .select('id')
