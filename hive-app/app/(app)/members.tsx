@@ -53,6 +53,7 @@ interface MemberData {
   profile_title?: string | null;
   bio?: string | null;
   current_project?: string | null;
+  currently_reading?: string | null;
   hometown?: string | null;
   favorite_book?: string | null;
   favorite_food?: string | null;
@@ -511,6 +512,8 @@ function MemberDetailModal({
         : null,
     },
     { label: 'Project', value: member.current_project },
+    // From their monthly check-in, so it's current rather than aspirational.
+    { label: 'Reading', value: member.currently_reading },
     { label: 'Book', value: member.favorite_book },
     { label: 'Food', value: member.favorite_food },
     { label: 'Hobby', value: member.favorite_hobby },

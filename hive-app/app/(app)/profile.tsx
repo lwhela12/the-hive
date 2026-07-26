@@ -69,6 +69,41 @@ const hasProfileListItem = (value: unknown) =>
 
 const SKILLS_GARDEN_CAPACITY = 10;
 const DEEP_PROFILE_STEPS = ['Basics', 'Now', 'Favorites', '3MIQ'] as const;
+// One switch per email the HIVE sends. email_reminders_enabled stays the
+// master off-switch underneath these; the newsletter is sent by hand from Wix,
+// so that row records intent for Nat rather than controlling a send.
+const EMAIL_PREFERENCES: {
+  column: string;
+  label: string;
+  onHint: string;
+  offHint: string;
+}[] = [
+  {
+    column: 'email_meeting_checkin_enabled',
+    label: 'Before the meeting',
+    onHint: 'On — your check-in link, 3 days before we meet',
+    offHint: "Off — you'll still see it on Home",
+  },
+  {
+    column: 'email_midpoint_checkin_enabled',
+    label: 'Month-end newsletter nudge',
+    onHint: 'On — a 2-minute chance to add something to the newsletter',
+    offHint: "Off — the newsletter still comes out without you",
+  },
+  {
+    column: 'email_newsletter_enabled',
+    label: 'The newsletter itself',
+    onHint: 'On — the round-up on the 1st',
+    offHint: 'Off — Nat removes you from the list by hand',
+  },
+  {
+    column: 'email_reminders_enabled',
+    label: 'All app emails',
+    onHint: 'On — the three above can still be set individually',
+    offHint: 'Off — nothing from the app, whatever the settings above say',
+  },
+];
+
 const PROFILE_FORM_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type WishStatusTabKey = HdWishTabKey;
@@ -1205,6 +1240,9 @@ export default function ProfileScreen() {
     { label: 'From', value: (profile as any).hometown },
     { label: 'Birthday', value: formatBirthdayForDisplay(profile.birthday) },
     { label: 'Project', value: (profile as any).current_project },
+    // Collected in the monthly check-in, not typed here — it changes too often
+    // to survive as something you'd remember to come back and edit.
+    { label: 'Reading', value: (profile as any).currently_reading },
     { label: 'Book', value: (profile as any).favorite_book },
     { label: 'Food', value: (profile as any).favorite_food },
     { label: 'Hobby', value: (profile as any).favorite_hobby },
@@ -2371,43 +2409,62 @@ export default function ProfileScreen() {
           >
           <View className="mb-6" style={{ flexGrow: 1, flexBasis: 340, minWidth: 300 }}>
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
-              Email Reminders
+              Emails
             </Text>
-            <View className="bg-white rounded-xl shadow-sm p-4 flex-row items-center justify-between">
-              <View className="flex-1 pr-3">
-                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
-                  Check-in & meeting emails
-                </Text>
-                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
-                  {profile?.email_reminders_enabled !== false
-                    ? 'On — a couple of gentle emails per month'
-                    : "Off — you'll still see in-app notes and pushes"}
-                </Text>
-              </View>
-              <Pressable
-                onPress={async () => {
-                  if (!profile) return;
-                  const next = profile.email_reminders_enabled === false;
-                  const { error } = await (supabase as any)
-                    .from('profiles')
-                    .update({ email_reminders_enabled: next })
-                    .eq('id', profile.id);
-                  if (error) {
-                    Alert.alert('Error', 'Could not update your email preference. Please try again.');
-                    return;
-                  }
-                  await refreshProfile();
-                }}
-                className={`px-4 py-2 rounded-full active:opacity-80 ${profile?.email_reminders_enabled !== false ? 'bg-gold' : 'bg-gray-200'}`}
-              >
-                <Text
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  className={profile?.email_reminders_enabled !== false ? 'text-white text-sm' : 'text-gray-600 text-sm'}
-                >
-                  {profile?.email_reminders_enabled !== false ? 'On' : 'Off'}
-                </Text>
-              </Pressable>
+            {/* One switch per email, not one for all of them. The HIVE sends
+                three a cycle plus the newsletter and Izzy said one a month is
+                plenty — so instead of cutting one for everybody, people mute
+                the ones they don't want (Nat 2026-07-26). */}
+            <View className="bg-white rounded-xl shadow-sm px-4 py-1">
+              {EMAIL_PREFERENCES.map((preference, index) => {
+                const isOn = (profile as any)?.[preference.column] !== false;
+                return (
+                  <View
+                    key={preference.column}
+                    className="flex-row items-center justify-between py-3"
+                    style={index > 0 ? { borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.3)' } : undefined}
+                  >
+                    <View className="flex-1 pr-3">
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+                        {preference.label}
+                      </Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
+                        {isOn ? preference.onHint : preference.offHint}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={async () => {
+                        if (!profile) return;
+                        const next = (profile as any)[preference.column] === false;
+                        const { error } = await (supabase as any)
+                          .from('profiles')
+                          .update({ [preference.column]: next })
+                          .eq('id', profile.id);
+                        if (error) {
+                          Alert.alert('Error', 'Could not update your email preference. Please try again.');
+                          return;
+                        }
+                        await refreshProfile();
+                      }}
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: isOn }}
+                      className={`px-4 py-2 rounded-full active:opacity-80 ${isOn ? 'bg-gold' : 'bg-gray-200'}`}
+                    >
+                      <Text
+                        style={{ fontFamily: 'Lato_700Bold' }}
+                        className={isOn ? 'text-white text-sm' : 'text-gray-600 text-sm'}
+                      >
+                        {isOn ? 'On' : 'Off'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
             </View>
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-2">
+              Turning the newsletter off here tells Nat — she takes you off the
+              Wix list by hand, so give her a day or two.
+            </Text>
           </View>
 
           {/* App Feedback moved to the Home shortcut hexes — settings is for

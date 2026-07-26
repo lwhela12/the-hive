@@ -29,6 +29,8 @@ interface MemberProfile {
   email: string | null;
   push_token: string | null;
   email_reminders_enabled?: boolean | null;
+  email_midpoint_checkin_enabled?: boolean | null;
+  email_meeting_checkin_enabled?: boolean | null;
 }
 
 // Copied from meeting-reminder/index.ts — sends an Expo push notification.
@@ -409,7 +411,7 @@ serve(async (req) => {
 
         const { data: members, error: profilesError } = await supabaseAdmin
           .from('profiles')
-          .select('id, name, email, push_token, email_reminders_enabled')
+          .select('id, name, email, push_token, email_reminders_enabled, email_midpoint_checkin_enabled, email_meeting_checkin_enabled')
           .in('id', memberIds);
 
         if (profilesError || !members?.length) {
@@ -532,8 +534,18 @@ serve(async (req) => {
             // push-only meant 8 people never heard about it at all. Members who
             // flipped off Email Reminders in their profile still never get app
             // emails.
+            // Per-kind opt-out on top of the master switch. The HIVE sends
+            // three app emails a cycle plus the newsletter and Izzy said one a
+            // month is plenty — rather than cut one for everybody, each member
+            // silences the ones they don't want (Nat 2026-07-26). The
+            // meeting-day last call rides the pre-meeting toggle: someone who
+            // muted the invitation does not want a chaser for it either.
+            const wantsThisKind = kind === 'midpoint'
+              ? member.email_midpoint_checkin_enabled !== false
+              : member.email_meeting_checkin_enabled !== false;
             const hasEmail =
               member.email_reminders_enabled !== false &&
+              wantsThisKind &&
               !!(RESEND_API_KEY && member.email);
             let emailDelivered = false;
 

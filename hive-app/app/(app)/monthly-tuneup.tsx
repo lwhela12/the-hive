@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -62,7 +62,7 @@ const hiveBeeMark = require('../../assets/BEE ONLY IN GOLD BG.png');
 // same wherever you pick it.
 const hiveCrest = require('../../assets/HIVE Logo Transparent  BG.png');
 
-type StepKey = 'wishes' | 'hangs' | 'calendar' | 'helpers' | 'todos' | 'checkin' | 'newsletter';
+type StepKey = 'wishes' | 'hangs' | 'calendar' | 'helpers' | 'todos' | 'checkin' | 'newsletter' | 'reading' | 'profile';
 type Step = { key: StepKey; label: string };
 
 const STEPS: Step[] = [
@@ -71,7 +71,36 @@ const STEPS: Step[] = [
   { key: 'calendar', label: 'Calendar' },
   { key: 'helpers', label: 'Helpers' },
   { key: 'todos', label: 'To-dos' },
+  // Light and quick, and it earns its place: it's mingle fodder for before the
+  // meeting starts, so it doesn't have to take up floor time (Nat 2026-07-26).
+  { key: 'reading', label: 'Reading' },
   { key: 'checkin', label: 'Check-in' },
+];
+
+// Four times a year the check-in also walks you past your own profile. Nobody
+// goes and edits it unprompted — but people DO answer a link that arrives, so
+// the profile comes to them (Nat 2026-07-26). Quarter-end months only, and it
+// goes last so it never delays the part the meeting needs.
+const PROFILE_REVIEW_STEP: Step = { key: 'profile', label: 'Your profile' };
+
+function isQuarterEndMonth(date: Date) {
+  return [2, 5, 8, 11].includes(date.getMonth()); // Mar, Jun, Sep, Dec
+}
+
+// Fields the quarterly review walks through. Multi-line ones get a taller box.
+const PROFILE_REVIEW_FIELDS: {
+  column: string;
+  label: string;
+  prompt: string;
+  placeholder: string;
+  multiline?: boolean;
+}[] = [
+  { column: 'current_project', label: 'What you\u2019re focused on', prompt: 'Still what you\u2019re working on?', placeholder: 'The thing taking up your brain right now', multiline: true },
+  { column: 'bio', label: 'Your bio', prompt: 'Still sound like you?', placeholder: 'A couple of lines about you', multiline: true },
+  { column: 'known_for', label: 'Ask me about', prompt: 'Still what you want to be asked about?', placeholder: 'The thing you love being asked about' },
+  { column: 'favorite_food', label: 'Favourite food', prompt: 'Still true?', placeholder: 'Go on' },
+  { column: 'favorite_book', label: 'Favourite book', prompt: 'Still true?', placeholder: 'The one you press on people' },
+  { column: 'favorite_hobby', label: 'Favourite hobby', prompt: 'Still true?', placeholder: 'What you do for the joy of it' },
 ];
 
 // Halfway between meetings the ask is smaller and the reason is different: the
@@ -259,8 +288,20 @@ export default function MonthlyTuneupScreen() {
   const { from, mode } = useLocalSearchParams<{ from?: string; mode?: string }>();
   // The halfway nudge deep-links here with mode=midpoint.
   const isMidpoint = mode === 'midpoint';
-  const steps = isMidpoint ? MIDPOINT_STEPS : STEPS;
+  const steps = useMemo(() => {
+    if (isMidpoint) return MIDPOINT_STEPS;
+    return isQuarterEndMonth(new Date()) ? [...STEPS, PROFILE_REVIEW_STEP] : STEPS;
+  }, [isMidpoint]);
   const { profile, communityId } = useAuth();
+
+  // Reading + the quarterly profile pass both write to `profiles`, so they
+  // share one dirty flag and one save that runs when the tune-up finishes.
+  const [readingDraft, setReadingDraft] = useState('');
+  const [readingDirty, setReadingDirty] = useState(false);
+  const [profileDrafts, setProfileDrafts] = useState<Record<string, string>>({});
+  const [profileDirty, setProfileDirty] = useState(false);
+  const [editingProfileField, setEditingProfileField] = useState<string | null>(null);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const { members: mentionableMembers } = useMentionableMembers(communityId);
   const { wishes, loading: wishesLoading, refresh: refreshWishes, grantWish } = useWishes();
   const {
@@ -1418,6 +1459,46 @@ export default function MonthlyTuneupScreen() {
     });
   };
 
+  // Seed both from whatever the profile already says, so the quarterly pass
+  // opens showing your real answers rather than empty boxes.
+  useEffect(() => {
+    if (!profile) return;
+    setReadingDraft(((profile as any).currently_reading ?? '') as string);
+    setProfileDrafts(
+      PROFILE_REVIEW_FIELDS.reduce<Record<string, string>>((drafts, field) => {
+        drafts[field.column] = ((profile as any)[field.column] ?? '') as string;
+        return drafts;
+      }, {})
+    );
+  }, [profile?.id]);
+
+  const saveProfileEdits = async () => {
+    if (!profile || (!readingDirty && !profileDirty)) return true;
+
+    const updates: Record<string, string | null> = {};
+    if (readingDirty) updates.currently_reading = readingDraft.trim() || null;
+    if (profileDirty) {
+      PROFILE_REVIEW_FIELDS.forEach((field) => {
+        updates[field.column] = (profileDrafts[field.column] ?? '').trim() || null;
+      });
+    }
+
+    const { error } = await (supabase as any)
+      .from('profiles')
+      .update(updates)
+      .eq('id', profile.id);
+
+    if (error) {
+      setProfileSaveError('Could not save that to your profile — try again.');
+      return false;
+    }
+
+    setProfileSaveError(null);
+    setReadingDirty(false);
+    setProfileDirty(false);
+    return true;
+  };
+
   const goNext = async () => {
     if (stepIndex >= steps.length - 1) {
       // Finishing: save any check-in answers the member touched this session.
@@ -1436,6 +1517,10 @@ export default function MonthlyTuneupScreen() {
         setCheckInSubmitted(true);
         setCheckInDirty(false);
       }
+      // Reading and the quarterly profile pass write on the way out, same as
+      // the check-in answers above. A failure here stops the finish so the
+      // member doesn't lose what they typed.
+      if (!(await saveProfileEdits())) return;
       await logInsteadOnFinish();
       if (isMidpoint && communityId && profile) {
         void setStoredItemAsync(getHalfwayDoneKey(communityId, profile.id), '1');
@@ -2264,6 +2349,143 @@ export default function MonthlyTuneupScreen() {
     );
   };
 
+  const renderReadingStep = () => (
+    <View>
+      <StepHeader
+        title="What are you reading?"
+        icon={<HiveIcon name="book" size={20} color="#8e6f35" />}
+        subtitle="Mingle fodder for before we start — so it doesn't have to eat floor time."
+      />
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#9a8060', marginBottom: 10 }}>
+        Book, audiobook, the same three articles all month, nothing at all — any
+        answer is a fine answer. It lands on your profile so people can find
+        their fellow readers.
+      </Text>
+      <TextInput
+        value={readingDraft}
+        onChangeText={(value) => { setReadingDraft(value); setReadingDirty(true); }}
+        placeholder="Currently reading…"
+        placeholderTextColor="#b5ad9f"
+        style={{
+          borderWidth: 1,
+          borderColor: 'rgba(222,193,129,0.6)',
+          borderRadius: 12,
+          backgroundColor: '#fffdf5',
+          paddingHorizontal: 14,
+          paddingVertical: 11,
+          fontFamily: 'Lato_400Regular',
+          fontSize: 15,
+          color: '#2d2d2d',
+        }}
+      />
+      {profileSaveError ? (
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626', marginTop: 8 }}>
+          {profileSaveError}
+        </Text>
+      ) : null}
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 10 }}>
+        Not reading anything? Leave it blank — "Looks good →" moves you on.
+      </Text>
+    </View>
+  );
+
+  // The quarterly pass. Everything is prefilled with what's already there and
+  // every row is skippable — a blank form is exactly what nobody fills in, so
+  // the default action is "yep, still right" rather than "compose something".
+  const renderProfileReviewStep = () => (
+    <View>
+      <StepHeader
+        title="A quick look at your profile"
+        icon={<HiveIcon name="person" size={20} color="#8e6f35" />}
+        subtitle="Once a quarter. Everything below is what people see now — change what's stale, skip the rest."
+      />
+      <View style={{ gap: 10 }}>
+        {PROFILE_REVIEW_FIELDS.map((field) => {
+          const current = (profileDrafts[field.column] ?? '').trim();
+          const isEditing = editingProfileField === field.column;
+          return (
+            <View
+              key={field.column}
+              style={{
+                borderWidth: 1,
+                borderColor: 'rgba(222,193,129,0.55)',
+                borderRadius: 14,
+                backgroundColor: '#fffdf5',
+                padding: 12,
+                gap: 6,
+              }}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, letterSpacing: 1.1, textTransform: 'uppercase', color: '#8e6f35' }}>
+                {field.label}
+              </Text>
+              {isEditing ? (
+                <TextInput
+                  value={profileDrafts[field.column] ?? ''}
+                  onChangeText={(value) => {
+                    setProfileDrafts((drafts) => ({ ...drafts, [field.column]: value }));
+                    setProfileDirty(true);
+                  }}
+                  placeholder={field.placeholder}
+                  placeholderTextColor="#b5ad9f"
+                  multiline={field.multiline}
+                  autoFocus
+                  style={{
+                    borderWidth: 1,
+                    borderColor: 'rgba(222,193,129,0.6)',
+                    borderRadius: 10,
+                    backgroundColor: '#ffffff',
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    fontFamily: 'Lato_400Regular',
+                    fontSize: 15,
+                    color: '#2d2d2d',
+                    minHeight: field.multiline ? 74 : undefined,
+                  }}
+                />
+              ) : (
+                <Text
+                  style={{
+                    fontFamily: 'Lato_400Regular',
+                    fontSize: 15,
+                    lineHeight: 21,
+                    color: current ? '#2d2d2d' : '#a09274',
+                    fontStyle: current ? 'normal' : 'italic',
+                  }}
+                >
+                  {current || 'Nothing here yet'}
+                </Text>
+              )}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Pressable
+                  onPress={() => setEditingProfileField(isEditing ? null : field.column)}
+                  accessibilityRole="button"
+                  hitSlop={6}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+                    {isEditing ? 'Done' : current ? 'Change it' : 'Add one'}
+                  </Text>
+                </Pressable>
+                {!isEditing && current ? (
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
+                    {field.prompt} Leave it be if so.
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      {profileSaveError ? (
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626', marginTop: 10 }}>
+          {profileSaveError}
+        </Text>
+      ) : null}
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
+        All still right? Just tap "Looks good →" — nothing changes unless you change it.
+      </Text>
+    </View>
+  );
+
   const renderTodosStep = () => (
     <View>
       <StepHeader
@@ -2431,6 +2653,10 @@ export default function MonthlyTuneupScreen() {
         return renderCheckInStep();
       case 'newsletter':
         return renderNewsletterStep();
+      case 'reading':
+        return renderReadingStep();
+      case 'profile':
+        return renderProfileReviewStep();
       default:
         return null;
     }
