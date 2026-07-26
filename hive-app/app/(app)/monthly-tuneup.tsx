@@ -288,10 +288,15 @@ export default function MonthlyTuneupScreen() {
   const { from, mode } = useLocalSearchParams<{ from?: string; mode?: string }>();
   // The halfway nudge deep-links here with mode=midpoint.
   const isMidpoint = mode === 'midpoint';
+  // mode=quarterly forces the longer version on regardless of the month, so
+  // Admin can walk it in July rather than waiting until September.
+  const forceQuarterly = mode === 'quarterly';
   const steps = useMemo(() => {
     if (isMidpoint) return MIDPOINT_STEPS;
-    return isQuarterEndMonth(new Date()) ? [...STEPS, PROFILE_REVIEW_STEP] : STEPS;
-  }, [isMidpoint]);
+    return forceQuarterly || isQuarterEndMonth(new Date())
+      ? [...STEPS, PROFILE_REVIEW_STEP]
+      : STEPS;
+  }, [isMidpoint, forceQuarterly]);
   const { profile, communityId } = useAuth();
 
   // Reading + the quarterly profile pass both write to `profiles`, so they

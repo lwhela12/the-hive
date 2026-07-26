@@ -1838,8 +1838,10 @@ function SkillPlant({
     Animated.timing(depart, {
       toValue: 1,
       useNativeDriver: true,
-      duration: 700,
-      easing: Easing.bezier(0.48, 0, 0.12, 1),
+      // 700ms was a long time to watch for something you do repeatedly. The
+      // curve holds through the neck, then accelerates down the stem.
+      duration: 520,
+      easing: Easing.bezier(0.6, 0, 0.2, 1),
     }).start(({ finished }) => {
       if (finished) {
         onReturnToSeed(skill, returnSlotIndex);
@@ -1921,38 +1923,52 @@ function SkillPlant({
   const entryTranslateX = grow.interpolate({ inputRange: [0, 1], outputRange: [entryOriginOffset, 0] });
   const entryTranslateY = justPlanted
     ? grow.interpolate({
-        inputRange: [0, 0.16, 0.34, 0.56, 0.76, 0.9, 1],
-        outputRange: [entryLift, entryLift * 0.92, entryLift * 0.58, entryLift * 0.2, -18, 8, 0],
+        inputRange: [0, 0.18, 0.42, 0.68, 0.86, 1],
+        outputRange: [entryLift, entryLift * 0.74, entryLift * 0.26, -8, 3, 0],
       })
     : grow.interpolate({ inputRange: [0, 1], outputRange: [entryLift, 0] });
+  // Planting is the exit run backwards: the seed lands, a stem rises out of it,
+  // then the head opens. The old curve stretched to 1.9x tall while 8% wide —
+  // a thin spike that sprang, which read as a boing rather than a growing
+  // thing (Nat 2026-07-26). Width now trails height, the way a plant actually
+  // does it, and the overshoot is a settle rather than a bounce.
   const entryScaleX = justPlanted
     ? grow.interpolate({
-        inputRange: [0, 0.16, 0.34, 0.56, 0.76, 0.9, 1],
-        outputRange: [0.1, 0.16, 0.08, 0.34, 1.2, 0.94, 1],
+        inputRange: [0, 0.18, 0.42, 0.68, 0.86, 1],
+        outputRange: [0.22, 0.28, 0.4, 0.82, 1.06, 1],
       })
-    : grow.interpolate({ inputRange: [0, 0.42, 0.74, 1], outputRange: [0.78, 0.28, 1.12, 1] });
+    : grow.interpolate({ inputRange: [0, 0.42, 0.74, 1], outputRange: [0.78, 0.62, 1.06, 1] });
   const entryScaleY = justPlanted
     ? grow.interpolate({
-        inputRange: [0, 0.16, 0.34, 0.56, 0.76, 0.9, 1],
-        outputRange: [0.04, 0.18, 1.9, 1.34, 0.86, 1.06, 1],
+        inputRange: [0, 0.18, 0.42, 0.68, 0.86, 1],
+        outputRange: [0.12, 0.34, 0.78, 1.04, 1.02, 1],
       })
-    : grow.interpolate({ inputRange: [0, 0.42, 0.74, 1], outputRange: [0.76, 1.3, 0.94, 1] });
+    : grow.interpolate({ inputRange: [0, 0.42, 0.74, 1], outputRange: [0.76, 1.12, 0.98, 1] });
   const entryOpacity = justPlanted
     ? grow.interpolate({ inputRange: [0, 0.04, 0.18, 1], outputRange: [0.38, 0.68, 1, 1] })
     : grow.interpolate({ inputRange: [0, 0.16, 0.52, 1], outputRange: [0.72, 0.86, 1, 1] });
+  // Two beats, not one slide. Beat one (to 0.3): the flower NECKS — narrows
+  // while keeping its height, the way a genie starts entering the lamp. Beat
+  // two: it's drawn down the stem toward its seed slot, base first.
+  //
+  // It used to shrink and slide at the same time, collapsing to a 2.5% sliver
+  // that stayed fully opaque until the very end — so you watched it become a
+  // squashed streak and then blink out. It now arrives at a quarter size,
+  // still recognisably a flower, and the puff hides the last of it.
   const departTranslateY = depart.interpolate({
-    inputRange: [0, 0.22, 0.48, 0.7, 0.88, 1],
-    outputRange: [0, soilDrop * 0.06, soilDrop * 0.28, soilDrop * 0.62, soilDrop * 0.9, soilDrop],
+    inputRange: [0, 0.3, 0.55, 0.78, 1],
+    outputRange: [0, soilDrop * 0.04, soilDrop * 0.34, soilDrop * 0.74, soilDrop],
   });
   const departScaleX = depart.interpolate({
-    inputRange: [0, 0.22, 0.48, 0.7, 0.88, 1],
-    outputRange: [1, 1.22, 0.96, 0.52, 0.24, 0.08],
+    inputRange: [0, 0.3, 0.55, 0.78, 1],
+    outputRange: [1, 0.46, 0.36, 0.3, 0.24],
   });
   const departScaleY = depart.interpolate({
-    inputRange: [0, 0.22, 0.48, 0.7, 0.88, 1],
-    outputRange: [1, 0.74, 0.44, 0.22, 0.09, 0.025],
+    inputRange: [0, 0.3, 0.55, 0.78, 1],
+    outputRange: [1, 0.94, 0.68, 0.42, 0.24],
   });
-  const departOpacity = depart.interpolate({ inputRange: [0, 0.82, 0.94, 1], outputRange: [1, 0.96, 0.72, 0] });
+  // Holds its colour almost the whole way, then goes as the puff lands.
+  const departOpacity = depart.interpolate({ inputRange: [0, 0.72, 0.92, 1], outputRange: [1, 1, 0.5, 0] });
   // Drift horizontally toward the seed slot this flower returns to, so the
   // eye can follow it from bloom back into the tray.
   const returnSlotDriftX = width > 0
@@ -1962,8 +1978,10 @@ function SkillPlant({
     inputRange: [0, 0.35, 1],
     outputRange: [0, returnSlotDriftX * 0.22, returnSlotDriftX],
   });
-  const puffOpacity = depart.interpolate({ inputRange: [0, 0.76, 0.9, 1], outputRange: [0, 0, 0.9, 0] });
-  const puffScale = depart.interpolate({ inputRange: [0, 0.76, 1], outputRange: [0.3, 0.4, 1.5] });
+  // The puff punctuates the ARRIVAL. It used to fire at 76-100%, by which
+  // point the flower had already gone, so the landing had no full stop.
+  const puffOpacity = depart.interpolate({ inputRange: [0, 0.62, 0.8, 1], outputRange: [0, 0, 0.95, 0] });
+  const puffScale = depart.interpolate({ inputRange: [0, 0.62, 1], outputRange: [0.25, 0.45, 1.6] });
   const wiggleRotate = capWiggle.interpolate({
     inputRange: [0, 0.2, 0.45, 0.7, 1],
     outputRange: ['0deg', '-3deg', '2.4deg', '-1.4deg', '0deg'],
@@ -2046,6 +2064,11 @@ function SkillPlant({
           Animated.multiply(entryOpacity, departOpacity),
           getDepthOpacity(depthBand)
         ),
+        // Scale from the ROOT, not the middle. This lived in the web-only
+        // block, so the browser folded a flower into its base while the iOS
+        // app squashed it about its centre — same code, two animations
+        // (Nat 2026-07-26). React Native supports transformOrigin natively.
+        transformOrigin: '50% 100%',
         ...(Platform.OS === 'web'
           ? ({
               cursor: editable ? 'pointer' : 'default',
@@ -2056,7 +2079,6 @@ function SkillPlant({
               transitionProperty: 'left, top',
               transitionDuration: compactLandscape ? '420ms' : '920ms',
               transitionTimingFunction: 'cubic-bezier(0.18, 0.9, 0.16, 1)',
-              transformOrigin: '50% 100%',
             } as any)
           : {}),
       }}

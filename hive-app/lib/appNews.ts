@@ -20,6 +20,10 @@ export type AppNewsEntry = {
   date: string;
   title: string;
   detail?: string;
+  /** Where to go to actually try it. Omit when there's nowhere sensible. */
+  href?: { pathname: string; params?: Record<string, string> };
+  /** What the tap says it will do, e.g. "Open your emails". */
+  action?: string;
 };
 
 export const APP_NEWS: AppNewsEntry[] = [
@@ -27,19 +31,25 @@ export const APP_NEWS: AppNewsEntry[] = [
     id: '2026-07-26-email-choices',
     date: '2026-07-26',
     title: 'Choose which emails you get',
-    detail: 'Profile → Emails. Mute the ones you do not want; the rest keep coming.',
+    detail: 'Mute the ones you do not want; the rest keep coming.',
+    href: { pathname: '/profile' },
+    action: 'Open your email settings',
   },
   {
     id: '2026-07-26-currently-reading',
     date: '2026-07-26',
     title: 'Tell everyone what you are reading',
-    detail: 'It is a question in the monthly check-in now, and it shows on your profile.',
+    detail: 'A new question in the monthly check-in — it shows on your profile.',
+    href: { pathname: '/monthly-tuneup' },
+    action: 'Go to the check-in',
   },
   {
     id: '2026-07-26-quarterly-profile',
     date: '2026-07-26',
     title: 'A quick profile look-over, four times a year',
     detail: 'The check-in shows what you already wrote so you can skip or tweak it.',
+    href: { pathname: '/profile' },
+    action: 'See your profile',
   },
   {
     id: '2026-07-26-tap-outside',
@@ -52,6 +62,8 @@ export const APP_NEWS: AppNewsEntry[] = [
     date: '2026-07-26',
     title: 'The Skills Garden fills the space',
     detail: 'Fewer skills bloom bigger; more skills share the meadow.',
+    href: { pathname: '/profile' },
+    action: 'Visit your garden',
   },
 ];
 

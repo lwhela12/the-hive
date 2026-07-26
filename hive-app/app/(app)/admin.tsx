@@ -2526,7 +2526,7 @@ export default function AdminScreen() {
           {isAdmin && (
             <View style={[dashboardCellStyle, panelOrderStyle(2)]}>
               <AdminPanel
-                title="Surveys"
+                title="Meeting Tools"
                 style={dashboardPanelStyle}
                 bodyStyle={dashboardPanelBodyStyle}
                 action={(
@@ -2570,6 +2570,9 @@ export default function AdminScreen() {
                       // their answers turn into.
                       { label: 'Newsletter Draft — the month, gathered for you', icon: 'megaphone' as const, route: '/newsletter', params: {} },
                       { label: 'Halfway Check-in — the short month-end version', icon: 'checkin' as const, route: '/monthly-tuneup', params: { mode: 'midpoint' } },
+                      // The quarterly pass only shows itself in Mar/Jun/Sep/Dec,
+                      // so there'd otherwise be no way to look at it in July.
+                      { label: 'Quarterly Check-in — the longer profile look-over', icon: 'person' as const, route: '/monthly-tuneup', params: { mode: 'quarterly' } },
                     ] as const).map((tool) => (
                       <Pressable
                         key={`${tool.route}-${tool.label}`}

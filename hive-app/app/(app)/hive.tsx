@@ -2631,18 +2631,48 @@ export default function HiveScreen() {
             </View>
             {newsExpanded ? (
               <View style={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}>
-                {unseenNews.map((entry) => (
-                  <View key={entry.id}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: '#2d2d2d' }}>
-                      {entry.title}
-                    </Text>
-                    {entry.detail ? (
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18, color: '#7b6b59' }}>
-                        {entry.detail}
+                {unseenNews.map((entry) => {
+                  // Reading about a new thing is half of it — the row takes you
+                  // to the thing itself (Nat 2026-07-26). Entries with nowhere
+                  // sensible to land stay plain text rather than faking a tap.
+                  const body = (
+                    <>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: '#2d2d2d' }}>
+                        {entry.title}
                       </Text>
-                    ) : null}
-                  </View>
-                ))}
+                      {entry.detail ? (
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18, color: '#7b6b59' }}>
+                          {entry.detail}
+                        </Text>
+                      ) : null}
+                      {entry.href ? (
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#bd9348', marginTop: 1 }}>
+                          {entry.action ?? 'Take a look'} →
+                        </Text>
+                      ) : null}
+                    </>
+                  );
+
+                  if (!entry.href) return <View key={entry.id}>{body}</View>;
+
+                  return (
+                    <Pressable
+                      key={entry.id}
+                      accessibilityRole="link"
+                      accessibilityLabel={`${entry.title}. ${entry.action ?? 'Take a look'}`}
+                      onPress={() => {
+                        dismissAppNews();
+                        router.push({
+                          pathname: entry.href!.pathname as any,
+                          params: { from: 'hive', ...(entry.href!.params ?? {}) },
+                        });
+                      }}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                    >
+                      {body}
+                    </Pressable>
+                  );
+                })}
                 <Pressable onPress={dismissAppNews} accessibilityRole="button" hitSlop={6}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#bd9348', marginTop: 2 }}>
                     Got it, thanks →
