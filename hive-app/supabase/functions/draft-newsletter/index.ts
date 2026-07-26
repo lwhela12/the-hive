@@ -129,6 +129,12 @@ async function writeNewsletter(month: string, factsText: string): Promise<string
     'community. She pastes your draft into Wix, tweaks it, and sends it. Write',
     'the letter she would write — not a summary of data.',
     '',
+    'THIS IS PUBLIC. Anyone can read it — friends, family, people following',
+    'along. Members share a private space too, and none of that belongs here:',
+    'no HD wishes, no what-someone-needs-help-with, no meeting internals. Talk',
+    'about the HIVE as a group. If a fact would embarrass someone to see',
+    'forwarded, leave it out.',
+    '',
     'HER VOICE: warm, chatty, a little goofy. Short paragraphs. Exclamation',
     'points and em-dashes. Emoji sprinkled, never wall-to-wall. She says',
     '"Hivers", "the buzz", "keep the HIVE humming". She addresses everyone',
@@ -239,13 +245,19 @@ serve(async (req) => {
       pastEventRows,
       meetingRows,
     ] = await Promise.all([
+      // Meetings are members-only by nature, so the public newsletter never
+      // names one. Kept as a query only so the shape below stays readable.
       supabaseAdmin.from('events')
         .select('title, event_date, event_time')
         .eq('community_id', communityId).eq('event_type', 'meeting')
+        .eq('visibility', 'public')
         .gte('event_date', date).order('event_date', { ascending: true }).limit(1),
+      // "Everyone's invited" only. Anything left HIVErs Only never leaves the
+      // members' side — a privacy default has to fail closed.
       supabaseAdmin.from('events')
         .select('title, event_date, end_date, event_type, related_user_id')
         .eq('community_id', communityId)
+        .eq('visibility', 'public')
         .gte('event_date', date).order('event_date', { ascending: true }).limit(30),
       supabaseAdmin.from('board_posts')
         .select('id, title, content, created_at, author_id, category:board_categories!category_id(name)')
@@ -279,6 +291,7 @@ serve(async (req) => {
       supabaseAdmin.from('events')
         .select('title, event_date, event_type, description, location')
         .eq('community_id', communityId)
+        .eq('visibility', 'public')
         .gte('event_date', cycleStart).lt('event_date', date)
         .order('event_date', { ascending: true }).limit(30),
       // The meeting deck's News and App updates — "Around the HIVE" is written
@@ -489,8 +502,9 @@ serve(async (req) => {
       .map((row) => (row.category?.name ? `${row.category.name} → ${row.title}` : String(row.title)));
     if (newThreads.length > 0) sections.push({ title: 'New on the boards', lines: newThreads });
 
-    const condensed = await condensePeople(people);
-    if (condensed.length > 0) sections.push({ title: "Who's up to what", lines: condensed });
+    // No HDs, no POP, no "here's what Sara needs" — the newsletter is public
+    // and those live on the members' side (Nat 2026-07-25). The meeting summary
+    // is where that belongs; this is the face we show the world.
 
     // The letter is written FROM the outline, so the facts are identical — one
     // is for reading, the other for checking.

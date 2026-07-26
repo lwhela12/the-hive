@@ -68,19 +68,12 @@ function isCompletableHdAsk(category: BoardCategory) {
   return category.topic_kind === 'hd_board' && !!category.goal_title;
 }
 
-function getCategorySortRank(category: BoardCategory) {
-  if (category.topic_kind === 'hd_board') return 0;
-  if (category.topic_kind === 'helper_log') return 1;
-  if (category.category_type === 'announcements') return 2;
-  if (category.category_type === 'general') return 3;
-  if (category.category_type === 'resources' || category.name.toLowerCase() === 'hive approved') return 4;
-  return 5;
-}
-
+// Boards sort A-Z, full stop (Nat 2026-07-25). The old ranking put system
+// boards first and everything else by display_order, which meant the grid
+// reshuffled as boards were added and nobody could predict where anything was.
+// Alphabetical is boring, and boring is findable.
 function sortCategoriesByBoardOrder(a: BoardCategory, b: BoardCategory) {
-  const rankDelta = getCategorySortRank(a) - getCategorySortRank(b);
-  if (rankDelta !== 0) return rankDelta;
-  return a.display_order - b.display_order || a.name.localeCompare(b.name);
+  return a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
 }
 
 function sortCategoriesForBoard(

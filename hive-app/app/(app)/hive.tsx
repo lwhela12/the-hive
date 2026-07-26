@@ -39,6 +39,7 @@ import { formatDateRangeShort, formatDateShort, formatTime, parseAmericanDate } 
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { addHomeResetListener } from '../../lib/homeNavigation';
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
@@ -854,6 +855,9 @@ export default function HiveScreen() {
   const [eventTime, setEventTime] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [eventLocation, setEventLocation] = useState('');
+  // Who's it for? Defaults to HIVErs Only — an event goes public because
+  // someone said so, never because nobody said otherwise.
+  const [eventAudience, setEventAudience] = useState<EventAudience>('members');
   const [savingEvent, setSavingEvent] = useState(false);
   const [eventError, setEventError] = useState<string | null>(null);
   const [homeActionItems, setHomeActionItems] = useState<ActionItem[]>([]);
@@ -877,6 +881,7 @@ export default function HiveScreen() {
     setEventTime(event.event_time || '');
     setEventDescription(event.description || '');
     setEventLocation(event.location || '');
+    setEventAudience((event as any).visibility === 'public' ? 'public' : 'members');
     setShowEventModal(true);
   }, [formatDateForInput]);
 
@@ -1838,6 +1843,7 @@ export default function HiveScreen() {
     setEventTime('');
     setEventDescription('');
     setEventLocation('');
+    setEventAudience('members');
     setShowEventModal(true);
   };
 
@@ -1853,6 +1859,7 @@ export default function HiveScreen() {
     setEventTime('');
     setEventDescription('');
     setEventLocation('');
+    setEventAudience('members');
   };
 
   const saveEvent = async () => {
@@ -1914,6 +1921,7 @@ export default function HiveScreen() {
             event_time: normalizedTime.time,
             description: descriptionWithTimeNote || null,
             location: eventLocation || null,
+            visibility: eventAudience,
           })
           .eq('id', editingEvent.id);
 
@@ -1930,6 +1938,7 @@ export default function HiveScreen() {
         if (eventEndDateIso) newEvent.end_date = eventEndDateIso;
         if (normalizedTime.time) newEvent.event_time = normalizedTime.time;
         if (eventLocation.trim()) newEvent.location = eventLocation.trim();
+        newEvent.visibility = eventAudience;
 
         const { error } = await supabase.functions.invoke('create-event', {
           body: newEvent,
@@ -3510,6 +3519,9 @@ export default function HiveScreen() {
                         className="border border-gray-300 rounded-lg px-4 py-3 text-base mb-4"
                         style={{ textAlignVertical: 'top', minHeight: 80 }}
                       />
+                      <View className="mb-4">
+                        <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
+                      </View>
 
                       {eventError && (
                         <View className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-3">

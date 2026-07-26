@@ -11,6 +11,8 @@ interface CreateEventPayload {
   event_time?: string | null;
   description?: string | null;
   location?: string | null;
+  /** 'members' (HIVErs Only) or 'public' (everyone's invited). */
+  visibility?: string | null;
 }
 
 serve(async (req) => {
@@ -68,6 +70,9 @@ serve(async (req) => {
     title,
     event_date: eventDate,
     event_type: 'custom',
+    // Anything but an explicit 'public' stays members-only — a privacy default
+    // has to fail closed.
+    visibility: payload.visibility === 'public' ? 'public' : 'members',
     created_by: userId,
     community_id: communityId,
   };

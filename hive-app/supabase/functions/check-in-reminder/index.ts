@@ -433,10 +433,12 @@ serve(async (req) => {
               .from('board_categories')
               .select('id, name, status, topic_kind')
               .eq('community_id', survey.community_id)
-              .or('topic_kind.eq.newsletter,name.ilike.%newsletter%,name.ilike.%announcement%')
-              .order('topic_kind', { ascending: false })
-              .limit(1);
-            const boardId = boards?.[0]?.id;
+              .or('topic_kind.eq.newsletter,topic_kind.eq.compliments,name.ilike.%newsletter%,name.ilike.%announcement%');
+            const boardRows = (boards ?? []) as { id: string; topic_kind?: string | null }[];
+            // Compliment Corner is its own board now; newsletter threads stay
+            // on the newsletter board. Fall back to whatever turned up.
+            const boardId = boardRows.find((row) => row.topic_kind === 'newsletter')?.id ?? boardRows[0]?.id;
+            const complimentBoardId = boardRows.find((row) => row.topic_kind === 'compliments')?.id ?? boardId;
             if (boardId) {
               const threadTitle = `${newsletterMonth} Newsletter — shout-outs & mentions 📣`;
               const { data: existingThread } = await supabaseAdmin
@@ -446,13 +448,16 @@ serve(async (req) => {
                 .eq('title', threadTitle)
                 .limit(1);
               const complimentTitle = `${newsletterMonth} Compliment Corner 💐`;
+              // These threads speak in Nat's voice, so they should carry her
+              // name. "any admin, limit 1" was a coin flip that kept posting
+              // them as Lucas.
               const { data: adminRows } = await supabaseAdmin
                 .from('community_memberships')
-                .select('user_id')
+                .select('user_id, user:profiles!user_id(name)')
                 .eq('community_id', survey.community_id)
-                .eq('role', 'admin')
-                .limit(1);
-              const authorId = adminRows?.[0]?.user_id;
+                .eq('role', 'admin');
+              const admins = (adminRows ?? []) as { user_id: string; user?: { name?: string | null } | null }[];
+              const authorId = (admins.find((row) => /^nat\b/i.test(row.user?.name ?? '')) ?? admins[0])?.user_id;
               if (authorId && !existingThread?.length) {
                 await supabaseAdmin.from('board_posts').insert({
                   community_id: survey.community_id,
@@ -469,13 +474,13 @@ serve(async (req) => {
               const { data: existingCompliments } = await supabaseAdmin
                 .from('board_posts')
                 .select('id')
-                .eq('category_id', boardId)
+                .eq('category_id', complimentBoardId)
                 .eq('title', complimentTitle)
                 .limit(1);
               if (authorId && !existingCompliments?.length) {
                 await supabaseAdmin.from('board_posts').insert({
                   community_id: survey.community_id,
-                  category_id: boardId,
+                  category_id: complimentBoardId,
                   author_id: authorId,
                   title: complimentTitle,
                   content:

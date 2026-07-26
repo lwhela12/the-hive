@@ -573,19 +573,21 @@ export default function MonthlyTuneupScreen() {
   ), []);
   const canRefineWish = useCallback((wish: Wish) => wish.status !== 'fulfilled', []);
 
-  const findBoardTarget = useCallback(async (kind: 'hangs' | 'helpers' | 'newsletter'): Promise<BoardTarget | null> => {
+  const findBoardTarget = useCallback(async (kind: 'hangs' | 'helpers' | 'newsletter' | 'compliments'): Promise<BoardTarget | null> => {
     if (!communityId) return null;
 
     let query = supabase
       .from('board_categories')
-      .select('id, name, status')
+      .select('id, name, status, topic_kind')
       .eq('community_id', communityId);
 
     query = kind === 'hangs'
       ? query.ilike('name', '%hang%')
-      : kind === 'newsletter'
-        // topic_kind, not name — renaming the board must not break the check-in.
-        ? query.or('topic_kind.eq.newsletter,name.ilike.%newsletter%,name.ilike.%announcement%')
+      : kind === 'compliments'
+        ? query.or('topic_kind.eq.compliments,name.ilike.%compliment%')
+        : kind === 'newsletter'
+          // topic_kind, not name — renaming the board must not break the check-in.
+          ? query.or('topic_kind.eq.newsletter,name.ilike.%newsletter%,name.ilike.%announcement%')
         : query.or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%');
 
     const { data, error } = await query;
@@ -594,8 +596,17 @@ export default function MonthlyTuneupScreen() {
       return null;
     }
 
-    const rows = ((data ?? []) as { id: string; name: string; status?: string | null }[])
-      .filter((row) => !row.status || row.status === 'active');
+    const rows = ((data ?? []) as { id: string; name: string; status?: string | null; topic_kind?: string | null }[])
+      .filter((row) => !row.status || row.status === 'active')
+      // A purpose-built board always beats a name match. Without this, the
+      // newsletter lookup's Announcements fallback could win over the real
+      // HIVE Newsletter board and quietly fork the threads in two.
+      .sort((a, b) => {
+        const rank = (row: { topic_kind?: string | null }) => (
+          row.topic_kind === kind || (kind === 'helpers' && row.topic_kind === 'helper_log') ? 0 : 1
+        );
+        return rank(a) - rank(b);
+      });
     // Prefer a month-specific board when one exists (e.g. "HIVE Helpers July"),
     // so monthly helper boards route automatically as they're created.
     const monthName = new Date().toLocaleDateString('en-US', { month: 'long' }).toLowerCase();
@@ -637,7 +648,7 @@ export default function MonthlyTuneupScreen() {
     kind: 'newsletter' | 'compliments',
   ): Promise<HelperThread | null> => {
     if (!profile || !communityId) return null;
-    const board = await findBoardTarget('newsletter');
+    const board = await findBoardTarget(kind === 'compliments' ? 'compliments' : 'newsletter');
     if (!board) return null;
 
     const { data: existing } = await supabase
