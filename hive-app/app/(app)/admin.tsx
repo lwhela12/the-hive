@@ -43,6 +43,7 @@ import { MemberProfileLink } from '../../components/ui/MemberProfileLink';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { HiveIcon } from '../../components/ui/HiveIcon';
+import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { useSurveys } from '../../lib/hooks/useSurveys';
 import {
@@ -768,16 +769,16 @@ function SurveyTimePicker({
   );
 }
 
+// Panel tabs are text only — the gold header bar is the mark, an icon inside it
+// just crowds the word (Nat 2026-07-26). Icons belong in the panel body.
 function AdminPanel({
   title,
-  titleIcon,
   action,
   style,
   bodyStyle,
   children,
 }: {
   title: string;
-  titleIcon?: ReactNode;
   action?: ReactNode;
   style?: StyleProp<ViewStyle>;
   bodyStyle?: StyleProp<ViewStyle>;
@@ -799,12 +800,9 @@ function AdminPanel({
             paddingVertical: 7,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {titleIcon}
-            <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
-              {title}
-            </Text>
-          </View>
+          <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+            {title}
+          </Text>
         </View>
         {action ? <View style={{ paddingBottom: 4, marginLeft: 8 }}>{action}</View> : null}
       </View>
@@ -2026,13 +2024,22 @@ export default function AdminScreen() {
       >
         <View style={dashboardWrapStyle}>
           <View style={[dashboardCellStyle, panelOrderStyle(3)]}>
-            <AdminPanel title="Honey Pot" titleIcon={<HiveIcon name="honeypot" size={17} color="#8e6f35" />} style={dashboardPanelStyle} bodyStyle={dashboardPanelBodyStyle}>
+            <AdminPanel title="Honey Pot" style={dashboardPanelStyle} bodyStyle={dashboardPanelBodyStyle}>
               <ScrollView
                 style={panelScrollStyle}
                 contentContainerStyle={{ padding: 16 }}
                 nestedScrollEnabled
                 showsVerticalScrollIndicator={true}
               >
+                {/* The pot, named, then what's in it, then what you can do to
+                    it — the icon reads as the pot itself here instead of as
+                    decoration on the tab (Nat 2026-07-26). */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 2 }}>
+                  <HiveIcon name="honeypot" size={18} color="#8e6f35" />
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e6f35' }}>
+                    Honey Pot
+                  </Text>
+                </View>
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 28, color: '#bd9348', textAlign: 'center', marginBottom: 16 }}>
                   ${honeyPotBalance.toFixed(2)}
                 </Text>
@@ -2281,7 +2288,7 @@ export default function AdminScreen() {
           </View>
 
           <View style={[dashboardCellStyle, panelOrderStyle(4)]}>
-            <AdminPanel title="Honey Pot Transactions" titleIcon={<HiveIcon name="honeypot" size={17} color="#8e6f35" />} style={dashboardPanelStyle} bodyStyle={dashboardPanelBodyStyle}>
+            <AdminPanel title="Honey Pot Transactions" style={dashboardPanelStyle} bodyStyle={dashboardPanelBodyStyle}>
               <ScrollView
                 style={panelScrollStyle}
                 contentContainerStyle={{ padding: 14 }}
@@ -2670,7 +2677,7 @@ export default function AdminScreen() {
 
       {/* Survey Create Modal */}
       <Modal visible={showSurveyModal} animationType="slide" transparent onRequestClose={() => setShowSurveyModal(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <ModalBackdrop onClose={() => setShowSurveyModal(false)} style={{ justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 20, color: '#2d2d2d', marginBottom: 16 }}>Create Survey</Text>
             <TextInput
@@ -2718,12 +2725,12 @@ export default function AdminScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </ModalBackdrop>
       </Modal>
 
       {/* Survey Editor Modal */}
       <Modal visible={!!editingSurvey} animationType="slide" transparent onRequestClose={closeSurveyEditor}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <ModalBackdrop onClose={closeSurveyEditor} style={{ justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '94%' }}>
             <ScrollView
               showsVerticalScrollIndicator={true}
@@ -3276,12 +3283,12 @@ export default function AdminScreen() {
               </View>
             </ScrollView>
           </View>
-        </View>
+        </ModalBackdrop>
       </Modal>
 
       {/* Queen Bee Modal */}
-      <Modal visible={showQueenBeeModal} animationType="slide" transparent>
-        <View className="flex-1 bg-black/50 justify-end">
+      <Modal visible={showQueenBeeModal} animationType="slide" transparent onRequestClose={() => setShowQueenBeeModal(false)}>
+        <ModalBackdrop onClose={() => setShowQueenBeeModal(false)} style={{ justifyContent: 'flex-end' }}>
           <View className="bg-white rounded-t-3xl p-6">
             <Text className="text-xl font-bold text-gray-800 mb-4">
               {editingQueenBee ? 'Edit Queen Bee' : 'Set Queen Bee'}
@@ -3377,12 +3384,12 @@ export default function AdminScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </ModalBackdrop>
       </Modal>
 
       {/* Event Modal */}
-      <Modal visible={showEventModal} animationType="slide" transparent>
-        <View className="flex-1 bg-black/50 justify-end">
+      <Modal visible={showEventModal} animationType="slide" transparent onRequestClose={() => setShowEventModal(false)}>
+        <ModalBackdrop onClose={() => setShowEventModal(false)} style={{ justifyContent: 'flex-end' }}>
           <View className="bg-white rounded-t-3xl p-6">
             <Text className="text-xl font-bold text-gray-800 mb-4">
               Add Event
@@ -3430,7 +3437,7 @@ export default function AdminScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </ModalBackdrop>
       </Modal>
     </SafeAreaView>
   );

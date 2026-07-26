@@ -15,6 +15,7 @@ import { deleteWishById } from '../../lib/wishMutations';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { getEventEmoji, getEventHiveIcon } from '../../lib/eventDisplay';
 import { HiveIcon, type HiveIconName } from '../../components/ui/HiveIcon';
+import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
 import { getSurveyResponsePeriod, isMonthlyCheckInSurvey, useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
 import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
@@ -4061,7 +4062,7 @@ export default function HiveScreen() {
 
       {/* Daily Question Answer Modal */}
       <Modal visible={showAnswerModal} animationType="slide" transparent onRequestClose={closeAnswerModal}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <ModalBackdrop onClose={closeAnswerModal} style={{ justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
             <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
@@ -4164,7 +4165,7 @@ export default function HiveScreen() {
               </View>
             </View>
           </View>
-        </View>
+        </ModalBackdrop>
       </Modal>
 
       {/* Survey Modal */}
