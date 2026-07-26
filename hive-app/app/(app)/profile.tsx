@@ -2162,17 +2162,19 @@ export default function ProfileScreen() {
                   shadowRadius: 18,
                   shadowOffset: { width: 0, height: 5 },
                   elevation: 3,
-                  height: profileWishPanelHeight,
+                  // A cap, not a height. Fixed at 520 this panel held a lake of
+                  // empty cream under a single short wish (Nat 2026-07-26).
+                  // Now it hugs its content and only starts scrolling once
+                  // there's genuinely more than fits.
+                  maxHeight: profileWishPanelHeight,
                   overflow: 'hidden',
                 }}>
                   <ScrollView
                     nestedScrollEnabled
                     showsVerticalScrollIndicator={true}
-                    style={{ flex: 1 }}
                     contentContainerStyle={{
                       padding: 12,
                       paddingBottom: 12,
-                      flexGrow: visibleProfileWishes.length === 0 ? 1 : undefined,
                     }}
                   >
                     {visibleProfileWishes.length === 0 ? (
@@ -2195,13 +2197,21 @@ export default function ProfileScreen() {
 
         {/* Skills Garden */}
         {!initialLoading && (
-          <FadeIn delay={50} style={immersiveSkillsGarden ? { flex: 1 } : undefined}>
+          <FadeIn
+            delay={50}
+            style={immersiveSkillsGarden ? { flex: 1 } : undefined}
+            // Measured HERE, on the direct child of the scroll content. On the
+            // inner View this reported y = 0 (its offset within this wrapper),
+            // so the Skills Garden chip scrolled to the top of the page — which
+            // is where you already were, so it looked like a dead button
+            // (Nat 2026-07-26: "nothing comes up").
+            onLayout={(event) => {
+              skillsGardenY.current = event.nativeEvent.layout.y;
+            }}
+          >
             <View
               className={immersiveSkillsGarden ? 'mb-0' : compactProfileLandscape ? 'mb-2' : 'mb-6'}
               style={immersiveSkillsGarden ? { flex: 1 } : undefined}
-              onLayout={(event) => {
-                skillsGardenY.current = event.nativeEvent.layout.y;
-              }}
             >
               {!immersiveSkillsGarden && (
                 <View className={compactProfileLandscape ? 'flex-row items-center justify-between mb-0 px-1' : 'flex-row items-center justify-between mb-1'}>
