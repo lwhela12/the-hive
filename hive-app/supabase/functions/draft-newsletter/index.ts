@@ -17,6 +17,13 @@ interface DraftRequest {
   communityId: string;
   /** Local date the draft is "as of". Defaults to today in Pacific time. */
   date?: string;
+  /**
+   * Writing the letter takes the better part of a minute; gathering takes about
+   * a second. The screen asks for the facts first so there's something to read,
+   * then asks again for the letter. Defaults true so any other caller still
+   * gets the whole thing in one go.
+   */
+  includeProse?: boolean;
 }
 
 function pacificToday() {
@@ -42,71 +49,6 @@ function prettyTime(value: string) {
   const twelve = hour % 12 === 0 ? 12 : hour % 12;
   return `${twelve}:${minute} ${suffix}`;
 }
-
-/**
- * One line per person for "Who's up to what". Same idea as the meeting recap's
- * condenser, but newsletter voice: what they're chasing and where a neighbor
- * could lend a hand. Falls back to no section rather than a wall of text — a
- * short draft beats a bloated one.
- */
-async function condensePeople(
-  people: { name: string; hd: string; progress: string; needs: string; helped: string[] }[],
-): Promise<string[]> {
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-  if (!apiKey || people.length === 0) return [];
-
-  const brief = people.map((person) => [
-    `PERSON: ${person.name}`,
-    person.hd ? `what they're chasing: ${person.hd}` : '',
-    person.progress ? `recent progress: ${person.progress}` : '',
-    person.needs ? `could use help with: ${person.needs}` : '',
-    person.helped.length ? `checked off: ${person.helped.join(' · ')}` : '',
-  ].filter(Boolean).join('\n')).join('\n\n');
-
-  const system = [
-    "You condense HIVE members' updates into one warm line each for a community",
-    'newsletter that everyone skims over coffee.',
-    '',
-    'Return ONLY a JSON array, one object per person, in the order given:',
-    '[{"name": "Sara", "line": "Europe is locked in for Aug 6-Sep 8 — still hunting for friendly faces and cheap places to stay along the way."}]',
-    '',
-    'Each line: one sentence, under 180 characters. Lead with what they are up',
-    'to, then what they could use a hand with. Use only the facts given — never',
-    'invent. Skip a person entirely if there is nothing worth reporting.',
-    'Exactly ONE object per person — never split someone across two entries.',
-    'No markdown, no names inside the line.',
-  ].join('\n');
-
-  try {
-    const anthropic = new Anthropic({ apiKey });
-    const response = await anthropic.messages.create({
-      model: 'claude-opus-5',
-      max_tokens: 2000,
-      system,
-      messages: [{ role: 'user', content: brief }],
-    });
-    if ((response as { stop_reason?: string }).stop_reason === 'refusal') return [];
-
-    const text = response.content
-      .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
-      .map((block) => block.text)
-      .join('')
-      .trim();
-    const json = text.slice(text.indexOf('['), text.lastIndexOf(']') + 1);
-    const rows = JSON.parse(json) as { name?: string; line?: string }[];
-    const byPerson = new Map<string, string>();
-    rows.filter((row) => row?.name && row?.line).forEach((row) => {
-      const name = String(row.name).trim();
-      const line = String(row.line).trim();
-      byPerson.set(name, byPerson.has(name) ? `${byPerson.get(name)} ${line}` : line);
-    });
-    return Array.from(byPerson, ([name, line]) => `${name}: ${line}`);
-  } catch (error) {
-    console.warn('Newsletter condensing failed; skipping the people section:', error);
-    return [];
-  }
-}
-
 
 /**
  * Turn the gathered facts into an actual letter.
@@ -144,7 +86,6 @@ async function writeNewsletter(month: string, factsText: string): Promise<string
     'nothing to say:',
     '  Yellow!            (greeting — a sentence or two of hello)',
     `  Here's the buzz from ${month}`,
-    '  Hummdingers        (what people are chasing and where they need a hand)',
     '  HIVE Hangs         (what happened, then what is coming up)',
     '  HIVE Help          (the focus, and a nudge to log it on 15min HIVE Helpers)',
     '  Around the HIVE    (app and community updates)',
@@ -391,27 +332,6 @@ serve(async (req) => {
       doneByUser.set(name, list);
     });
 
-    const answerOf = (answers: Record<string, unknown>, key: string) => {
-      const value = answers[key];
-      return typeof value === 'string' ? value.trim() : '';
-    };
-    const seen = new Set<string>();
-    const people: { name: string; hd: string; progress: string; needs: string; helped: string[] }[] = [];
-    ((checkInRows.data ?? []) as any[])
-      .filter((row) => /check-in/i.test(row.survey?.title ?? ''))
-      .forEach((row) => {
-        if (seen.has(row.user_id)) return;
-        seen.add(row.user_id);
-        const name = row.user?.name ? firstName(row.user.name) : 'Someone';
-        const answers = (row.answers ?? {}) as Record<string, unknown>;
-        const hd = hdByUser.get(row.user_id) ?? '';
-        const progress = answerOf(answers, 'q_pop_progress');
-        const needs = answerOf(answers, 'q_pop_obstacles');
-        const helped = doneByUser.get(name) ?? [];
-        if (!hd && !progress && !needs && helped.length === 0) return;
-        people.push({ name, hd, progress, needs, helped });
-      });
-
     const sections: { title: string; lines: string[] }[] = [];
 
     // What's coming up leads — someone skimming needs the next date more than
@@ -516,7 +436,7 @@ serve(async (req) => {
     const factsText = sections
       .map((section) => `${section.title}\n${section.lines.map((line) => `- ${line.trim()}`).join('\n')}`)
       .join('\n\n');
-    const prose = await writeNewsletter(monthLabel, factsText);
+    const prose = body.includeProse === false ? null : await writeNewsletter(monthLabel, factsText);
 
     return jsonResponse({
       success: true,
@@ -531,7 +451,6 @@ serve(async (req) => {
         compliments: compliments.length,
         helper_logs: helperLogs.length,
         granted: grantedLines.length,
-        people: condensed.length,
       },
     });
   } catch (error) {

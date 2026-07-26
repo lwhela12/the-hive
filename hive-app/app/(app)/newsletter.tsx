@@ -35,6 +35,7 @@ export default function NewsletterScreen() {
   // The letter is what she pastes into Wix; the outline is for checking the
   // facts behind it. Same data, two readings.
   const [view, setView] = useState<'letter' | 'facts'>('letter');
+  const [writing, setWriting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [posting, setPosting] = useState(false);
   const [postedTo, setPostedTo] = useState<string | null>(null);
@@ -47,12 +48,18 @@ export default function NewsletterScreen() {
     else router.replace('/meetings');
   };
 
+  // Gathering takes about a second; writing the letter takes the better part of
+  // a minute. So do it in two passes — put the facts on screen straight away,
+  // then swap in the letter when it lands. Staring at a spinner for a minute is
+  // the same wait, just worse (Nat 2026-07-25).
   const loadDraft = useCallback(async () => {
     if (!communityId) return;
     setLoading(true);
     setError(null);
+    setProse(null);
+
     const { data, error: invokeError } = await supabase.functions.invoke('draft-newsletter', {
-      body: { communityId },
+      body: { communityId, includeProse: false },
     });
     if (invokeError || !data?.success) {
       setError('Could not gather the draft just now. Try again in a moment.');
@@ -60,9 +67,20 @@ export default function NewsletterScreen() {
       return;
     }
     setSections((data.sections ?? []) as SummarySection[]);
-    setProse(typeof data.prose === 'string' && data.prose.trim() ? data.prose : null);
     setCycleStart(data.cycle_start ?? null);
     setLoading(false);
+
+    if ((data.sections ?? []).length === 0) return;
+
+    setWriting(true);
+    const { data: written } = await supabase.functions.invoke('draft-newsletter', {
+      body: { communityId, includeProse: true },
+    });
+    if (written?.success) {
+      if ((written.sections ?? []).length > 0) setSections(written.sections as SummarySection[]);
+      setProse(typeof written.prose === 'string' && written.prose.trim() ? written.prose : null);
+    }
+    setWriting(false);
   }, [communityId]);
 
   useEffect(() => {
@@ -134,12 +152,16 @@ export default function NewsletterScreen() {
           return;
         }
       } else {
+        // Pinned so the published letter sits above the shout-out thread that
+        // fed it — the board should read as an archive of newsletters, not a
+        // pile of collection threads.
         const { error: insertError } = await (supabase as any).from('board_posts').insert({
           community_id: communityId,
           category_id: board.id,
           author_id: profile.id,
           title,
           content,
+          is_pinned: true,
         });
         if (insertError) {
           setPostError(`Could not post it: ${insertError.message}`);
@@ -237,6 +259,27 @@ export default function NewsletterScreen() {
           </View>
         ) : (
           <>
+            {writing ? (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  alignSelf: 'center',
+                  gap: 8,
+                  marginBottom: 14,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 999,
+                  backgroundColor: '#fdf3dc',
+                }}
+              >
+                <ActivityIndicator size="small" color="#bd9348" />
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8a6b30' }}>
+                  Writing the letter — here are the facts meanwhile
+                </Text>
+              </View>
+            ) : null}
+
             {prose ? (
               <View style={{ flexDirection: 'row', alignSelf: 'center', gap: 6, marginBottom: 14 }}>
                 {(['letter', 'facts'] as const).map((option) => {
