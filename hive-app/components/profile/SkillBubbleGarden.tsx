@@ -429,6 +429,70 @@ function getDefaultPosition(skill: GardenSkill, index: number, count: number) {
   };
 }
 
+// ── Depth ───────────────────────────────────────────────────────────────────
+// Wide gardens used to stagger on `index % 2` — two heights, alternating, every
+// flower the same size. That's a picket fence, not a meadow, and it left the
+// top of a 560px canvas empty (Nat 2026-07-26). Four bands instead, and a band
+// decides three things at once so they can't disagree: how far back the flower
+// sits, how big it draws, and how much it hazes out.
+//
+// Phones keep their own ten-value pattern below — it was already doing this.
+const DEPTH_BANDS = [0, 2, 1, 3, 0, 3, 1, 2, 0, 2];
+const MAX_DEPTH_BAND = 3;
+
+function getDepthBand(index: number) {
+  return DEPTH_BANDS[index % DEPTH_BANDS.length];
+}
+
+/**
+ * How much room the grass gives for depth, i.e. how far the back band can sit
+ * behind the front one. Depends only on how deep the grass is, so the meadow
+ * height and the plant anchors can compute it independently and still agree.
+ */
+function getDepthLiftRange(groundHeight: number, bottomInset: number) {
+  return Math.max(24, groundHeight * 0.82 - bottomInset);
+}
+
+/**
+ * Bands spread evenly across the available room rather than each taking a fixed
+ * step. A fixed step got clipped by the grass on wide screens, which squashed
+ * the two back bands together and undid the depth they were there to create.
+ */
+function getDepthLift(index: number, groundHeight: number, bottomInset: number) {
+  return (getDepthBand(index) / MAX_DEPTH_BAND) * getDepthLiftRange(groundHeight, bottomInset);
+}
+
+/** Things further away are smaller. This is most of the depth illusion. */
+function getDepthScaleFactor(band: number) {
+  return 1 - band * 0.055;
+}
+
+/** ...and slightly hazier, which is the rest of it. */
+function getDepthOpacity(band: number) {
+  return 1 - band * 0.045;
+}
+
+/**
+ * How deep the grass is. Wide gardens plant across four depth bands, and every
+ * root has to land IN the meadow — at the old 108 the back band would have
+ * hovered above the grass line like cut flowers. Deeper grass also eats into
+ * the empty sky that made the canvas feel half-used.
+ */
+function getGroundHeight(width: number, compactLandscape: boolean) {
+  if (compactLandscape) return GROUND_HEIGHT * 0.75;
+  if (width < 520) return GROUND_HEIGHT;
+  return GROUND_HEIGHT * 1.6;
+}
+
+/** The deepest band actually occupied by this many flowers. */
+function getMaxUsedDepthBand(skillCount: number) {
+  let maxBand = 0;
+  for (let index = 0; index < Math.min(skillCount, DEPTH_BANDS.length); index += 1) {
+    maxBand = Math.max(maxBand, getDepthBand(index));
+  }
+  return maxBand;
+}
+
 function getFrontRowScale(width: number, compactLandscape = false) {
   const effectiveWidth = Math.max(width || 0, 360);
   const fullBloomWidth = STAGES[STAGES.length - 1].labelWidth;
@@ -441,6 +505,19 @@ function getFrontRowScale(width: number, compactLandscape = false) {
   const maxScale = (compactLandscape ? 0.88 : effectiveWidth > 1280 ? 1.46 : effectiveWidth > 860 ? 1.36 : 1.12) * compactScale;
 
   return clamp(idealScale, minScale, maxScale);
+}
+
+/**
+ * The scale a plant actually draws at, once depth is taken into account. Pass
+ * the slot index; omit it for callers that just want the front-row size.
+ * Only wide gardens use depth — phones and compact landscape have their own
+ * hand-tuned stagger and stay flat.
+ */
+function getPlantScale(width: number, compactLandscape = false, index?: number) {
+  const baseScale = getFrontRowScale(width, compactLandscape);
+  if (index === undefined || compactLandscape || width < 520) return baseScale;
+
+  return baseScale * getDepthScaleFactor(getDepthBand(index));
 }
 
 function getFrontRowCenterX(index: number, count: number, width: number) {
@@ -563,9 +640,10 @@ function getFrontRowAnchorY(height: number, width: number, index: number, compac
     const lift = clamp(staggerPattern[index % staggerPattern.length], 0, maxLift);
     return plantedBaseAnchor - lift;
   }
-  const stagger = index % 2 === 1 ? clamp(width < 520 ? 28 : 54, 28, 68) : 0;
+  // Every root stays inside the grass, same rule the phone branch above uses.
+  const bottomInset = clamp(width < 520 ? 34 : 48, 32, 58);
 
-  return baseAnchor - stagger;
+  return baseAnchor - getDepthLift(index, groundHeight, bottomInset);
 }
 
 function getMeadowHeight(skillCount: number, width: number, compactLandscape = false) {
@@ -575,9 +653,31 @@ function getMeadowHeight(skillCount: number, width: number, compactLandscape = f
     return clamp(base + extra, base, 390 * PHONE_LANDSCAPE_SCALE);
   }
 
-  const base = skillCount === 0 ? (width < 420 ? 330 : 370) : (width < 420 ? 500 : 560);
-  const extra = Math.max(0, skillCount - (width < 420 ? 10 : 18)) * (width < 420 ? 8 : 5);
-  return clamp(base + extra, base, width < 420 ? 720 : 780);
+  if (skillCount === 0) return width < 420 ? 330 : 370;
+
+  if (width < 520) {
+    const base = width < 420 ? 500 : 560;
+    const extra = Math.max(0, skillCount - (width < 420 ? 10 : 18)) * (width < 420 ? 8 : 5);
+    return clamp(base + extra, base, width < 420 ? 720 : 780);
+  }
+
+  // Wide gardens size to what's actually planted rather than sitting at a flat
+  // 560 with the top 40% empty sky (Nat 2026-07-26). Derived from the same
+  // numbers the plants are positioned with, so a deeper band can never be
+  // clipped: bottom inset + how far back the deepest occupied band sits + the
+  // tallest a bloom can draw at that depth, plus headroom.
+  const bottomInset = clamp(48, 32, 58);
+  const groundHeight = getGroundHeight(width, false);
+  // Same room the anchors use, scaled to the deepest band actually planted —
+  // three flowers shouldn't reserve sky for a back row that isn't there.
+  const maxLift = (getMaxUsedDepthBand(skillCount) / MAX_DEPTH_BAND)
+    * getDepthLiftRange(groundHeight, bottomInset);
+  const tallestBloom = getStageCanvasHeight(STAGES[STAGES.length - 1]) * getFrontRowScale(width) + LABEL_HEIGHT;
+  // A little sky over the tallest bloom so nothing is jammed against the top.
+  const needed = bottomInset + maxLift + tallestBloom + 44;
+  const extra = Math.max(0, skillCount - 18) * 5;
+
+  return clamp(needed + extra, 380, 780);
 }
 
 type BouquetPlantLayout = { centerX: number; anchorY: number; scale: number };
@@ -1560,7 +1660,10 @@ function SkillPlant({
   const bloomStep = getBloomStep(level);
   const stage = getStage(level);
   const category = getCategoryForSkill(skill.description);
-  const rowScale = layoutOverride?.scale ?? getFrontRowScale(width, compactLandscape);
+  const rowScale = layoutOverride?.scale ?? getPlantScale(width, compactLandscape, index);
+  // Which depth band this plant sits in, so size, haze and draw order all
+  // agree. Overridden layouts (the read-only bouquet) are flat by design.
+  const depthBand = layoutOverride || compactLandscape || width < 520 ? 0 : getDepthBand(index);
   const bloomHasEmbeddedLabel = bloomStep > 0;
   const showLabel = !bloomHasEmbeddedLabel && (selected || count <= 10 || featured);
   const plantWidth = stage.labelWidth * rowScale;
@@ -1870,7 +1973,10 @@ function SkillPlant({
         position: 'absolute',
         left,
         top,
-        zIndex: selected ? 90 : 20 + index,
+        // Draw order follows depth, not insertion order. It used to be
+        // `20 + index`, which let a flower standing further back paint on top
+        // of one in front of it.
+        zIndex: selected ? 90 : 20 + (MAX_DEPTH_BAND - depthBand) * 12 + (index % 12),
         transform: [
           { translateX: Animated.add(Animated.add(pan.x, entryTranslateX), departTranslateX) },
           { translateY: Animated.add(Animated.add(pan.y, entryTranslateY), departTranslateY) },
@@ -1879,7 +1985,11 @@ function SkillPlant({
           { scaleX: departScaleX },
           { scaleY: departScaleY },
         ],
-        opacity: Animated.multiply(entryOpacity, departOpacity),
+        // Haze with distance — the quiet half of the depth illusion.
+        opacity: Animated.multiply(
+          Animated.multiply(entryOpacity, departOpacity),
+          getDepthOpacity(depthBand)
+        ),
         ...(Platform.OS === 'web'
           ? ({
               cursor: editable ? 'pointer' : 'default',
@@ -3292,7 +3402,7 @@ export function SkillBubbleGarden({
   }, [visibleSkills]);
   const compactLandscape = editable && viewport.width > viewport.height && viewport.height < 540;
   const narrowPortrait = editable && !compactLandscape && width > 0 && width < 560;
-  const groundHeight = compactLandscape ? GROUND_HEIGHT * 0.75 : GROUND_HEIGHT;
+  const groundHeight = getGroundHeight(width, compactLandscape);
   // Read-only gardens on narrow (portrait phone) canvases switch to the tidy
   // bouquet grid; editable gardens always keep their hand-placed layout.
   const bouquetLayout = useMemo(
@@ -3555,7 +3665,9 @@ export function SkillBubbleGarden({
           const cardWidth = Math.min(272, Math.max(200, width - 24));
           const centerX = getFrontRowCenterX(beePopover.slotIndex, GARDEN_CAPACITY, width);
           const anchorY = getFrontRowAnchorY(meadowHeight, width, beePopover.slotIndex, compactLandscape, groundHeight);
-          const rowScale = getFrontRowScale(width, compactLandscape);
+          // Same slot index as the anchor above, so the popover keeps sitting
+          // on the flower now that depth changes how big it draws.
+          const rowScale = getPlantScale(width, compactLandscape, beePopover.slotIndex);
           const spriteHeight = getStageCanvasHeight(getStage(getLevel(beePopover.skill))) * rowScale;
           const cardLeft = clamp(centerX - cardWidth / 2, 10, Math.max(10, width - cardWidth - 10));
           const cardBottom = clamp(
