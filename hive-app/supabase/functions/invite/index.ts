@@ -95,12 +95,10 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
-  // 30 days, not 7. People get invited right before a holiday, or they mean to
-  // do it on the weekend and don't — and a dead link is a terrible first
-  // impression for a community whose whole thing is warmth (Nat 2026-07-25).
-  // Re-sending refreshes the window, so this only sets how long someone can
-  // dawdle before needing a nudge.
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  // 7 days (Nat 2026-07-26, reverting the 30 set on 07-25). A week is a nudge;
+  // a month is a shelf. Re-sending refreshes the window and reuses the same
+  // link, so an expired invite costs one tap in Admin, not a lost member.
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data: community } = await supabaseAdmin
     .from('communities')
@@ -275,7 +273,7 @@ serve(async (req) => {
                 ? `See you at the next meeting on <strong>${nextMeetingLabel}</strong>! 🐝`
                 : `See you at the next meeting! 🐝`}</p>
 
-              <p style="font-size: 13px; color: #9a9a9a; text-align: center; margin-top: 26px;">Your link works for the next 30 days. See you in there. 🍯</p>
+              <p style="font-size: 13px; color: #9a9a9a; text-align: center; margin-top: 26px;">Your link works for the next 7 days. See you in there. 🍯</p>
               <p style="font-size: 12px; color: #c0c0c0; text-align: center; word-break: break-all;">${inviteUrl}</p>
             </div>
           `
