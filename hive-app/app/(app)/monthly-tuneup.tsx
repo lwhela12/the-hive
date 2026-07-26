@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -74,18 +74,14 @@ const STEPS: Step[] = [
   // Light and quick, and it earns its place: it's mingle fodder for before the
   // meeting starts, so it doesn't have to take up floor time (Nat 2026-07-26).
   { key: 'reading', label: 'Reading' },
+  // Every month, straight after Reading. Built as a quarterly thing, but it's
+  // one page with everything on it rather than a click-through, so it reads as
+  // one extra step rather than a chore — "it doesn't seem too long to me"
+  // (Nat 2026-07-26, after walking it). Nobody edits their profile
+  // unprompted; people DO answer a link that arrives, so it comes to them.
+  { key: 'profile', label: 'Your profile' },
   { key: 'checkin', label: 'Check-in' },
 ];
-
-// Four times a year the check-in also walks you past your own profile. Nobody
-// goes and edits it unprompted — but people DO answer a link that arrives, so
-// the profile comes to them (Nat 2026-07-26). Quarter-end months only, and it
-// goes last so it never delays the part the meeting needs.
-const PROFILE_REVIEW_STEP: Step = { key: 'profile', label: 'Your profile' };
-
-function isQuarterEndMonth(date: Date) {
-  return [2, 5, 8, 11].includes(date.getMonth()); // Mar, Jun, Sep, Dec
-}
 
 // Fields the quarterly review walks through. Multi-line ones get a taller box.
 const PROFILE_REVIEW_FIELDS: {
@@ -288,15 +284,7 @@ export default function MonthlyTuneupScreen() {
   const { from, mode } = useLocalSearchParams<{ from?: string; mode?: string }>();
   // The halfway nudge deep-links here with mode=midpoint.
   const isMidpoint = mode === 'midpoint';
-  // mode=quarterly forces the longer version on regardless of the month, so
-  // Admin can walk it in July rather than waiting until September.
-  const forceQuarterly = mode === 'quarterly';
-  const steps = useMemo(() => {
-    if (isMidpoint) return MIDPOINT_STEPS;
-    return forceQuarterly || isQuarterEndMonth(new Date())
-      ? [...STEPS, PROFILE_REVIEW_STEP]
-      : STEPS;
-  }, [isMidpoint, forceQuarterly]);
+  const steps = isMidpoint ? MIDPOINT_STEPS : STEPS;
   const { profile, communityId } = useAuth();
 
   // Reading + the quarterly profile pass both write to `profiles`, so they
@@ -2402,7 +2390,7 @@ export default function MonthlyTuneupScreen() {
       <StepHeader
         title="A quick look at your profile"
         icon={<HiveIcon name="person" size={20} color="#8e6f35" />}
-        subtitle="Once a quarter. Everything below is what people see now — change what's stale, skip the rest."
+        subtitle="Everything below is what people see now — change what's stale, skip the rest."
       />
       <View style={{ gap: 10 }}>
         {PROFILE_REVIEW_FIELDS.map((field) => {

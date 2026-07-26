@@ -46,8 +46,8 @@ export const APP_NEWS: AppNewsEntry[] = [
   {
     id: '2026-07-26-quarterly-profile',
     date: '2026-07-26',
-    title: 'A quick profile look-over, four times a year',
-    detail: 'The check-in shows what you already wrote so you can skip or tweak it.',
+    title: 'The check-in looks over your profile with you',
+    detail: 'One page showing what you already wrote — skip it or tweak it.',
     href: { pathname: '/profile' },
     action: 'See your profile',
   },

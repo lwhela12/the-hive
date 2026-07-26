@@ -2565,14 +2565,11 @@ export default function AdminScreen() {
                     </Text>
                     {([
                       { label: 'Meeting Helper — run the meeting from the TV', icon: 'tv' as const, route: '/meeting-helper', params: {} },
-                      { label: 'Monthly Tune-up — the check-in members fill out', icon: 'checkin' as const, route: '/monthly-tuneup', params: {} },
+                      { label: 'Monthly Tune-up — the check-in members fill out, profile pass and all', icon: 'checkin' as const, route: '/monthly-tuneup', params: {} },
                       // The month-end pair: what members are asked, and what
                       // their answers turn into.
                       { label: 'Newsletter Draft — the month, gathered for you', icon: 'megaphone' as const, route: '/newsletter', params: {} },
                       { label: 'Halfway Check-in — the short month-end version', icon: 'checkin' as const, route: '/monthly-tuneup', params: { mode: 'midpoint' } },
-                      // The quarterly pass only shows itself in Mar/Jun/Sep/Dec,
-                      // so there'd otherwise be no way to look at it in July.
-                      { label: 'Quarterly Check-in — the longer profile look-over', icon: 'person' as const, route: '/monthly-tuneup', params: { mode: 'quarterly' } },
                     ] as const).map((tool) => (
                       <Pressable
                         key={`${tool.route}-${tool.label}`}
