@@ -76,23 +76,6 @@ function sortCategoriesByBoardOrder(a: BoardCategory, b: BoardCategory) {
   return a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
 }
 
-function sortCategoriesForBoard(
-  a: BoardCategory,
-  b: BoardCategory,
-  postCounts?: Record<string, BoardCategoryStats>
-) {
-  const aActivity = postCounts?.[a.id]?.latestActivity ?? null;
-  const bActivity = postCounts?.[b.id]?.latestActivity ?? null;
-
-  if (aActivity && bActivity && aActivity !== bActivity) {
-    return bActivity.localeCompare(aActivity);
-  }
-  if (aActivity && !bActivity) return -1;
-  if (!aActivity && bActivity) return 1;
-
-  return sortCategoriesByBoardOrder(a, b);
-}
-
 function getCategorySearchText(category: BoardCategory) {
   const taggedNames = (category.member_tags ?? [])
     .map((tag) => tag.member?.name)
@@ -214,7 +197,7 @@ export default function BoardScreen() {
   const { data: boardSearchIndex = {}, refetch: refetchBoardSearchIndex } = useBoardSearchIndexQuery(communityId ?? undefined);
   const activeCategories = categories
     .filter((category) => !isArchivedCategory(category))
-    .sort((a, b) => sortCategoriesForBoard(a, b, postCounts));
+    .sort(sortCategoriesByBoardOrder);
   const boardSearchQuery = boardSearch.trim().toLowerCase();
   const boardSearchMatchesByCategory = useMemo(() => {
     if (!boardSearchQuery) return {};
@@ -241,7 +224,7 @@ export default function BoardScreen() {
           matchesMemberSearchText([getCategorySearchText(category)], boardSearchQuery)
           || !!boardSearchMatchesByCategory[category.id]
         ))
-        .sort((a, b) => sortCategoriesForBoard(a, b, postCounts))
+        .sort(sortCategoriesByBoardOrder)
     : listSourceCategories;
 
   const {
