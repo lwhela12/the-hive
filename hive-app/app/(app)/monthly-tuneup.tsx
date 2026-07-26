@@ -75,9 +75,7 @@ const STEPS: Step[] = [
 const MIDPOINT_STEPS: Step[] = [
   { key: 'newsletter', label: 'Newsletter' },
   { key: 'todos', label: 'To-dos' },
-  { key: 'helpers', label: 'Helpers' },
-  { key: 'wishes', label: 'HD wishes' },
-  { key: 'hangs', label: 'Hang ideas' },
+  { key: 'helpers', label: 'HIVE Help' },
 ];
 
 // What someone might want in the newsletter. Pills, not a blank box — the whole
@@ -99,6 +97,8 @@ type HelperThread = {
   boardName: string;
   postId: string | null;
   postTitle: string | null;
+  /** The focus thread's own description — "bring something to donate". */
+  postContent: string | null;
 };
 
 // Wizard draft persisted across relaunches (per community + member).
@@ -662,7 +662,7 @@ export default function MonthlyTuneupScreen() {
       .limit(1);
     const found = ((existing ?? []) as { id: string; title: string }[])[0];
     if (found) {
-      return { boardId: board.id, boardName: board.name, postId: found.id, postTitle: found.title };
+      return { boardId: board.id, boardName: board.name, postId: found.id, postTitle: found.title, postContent: null };
     }
 
     const month = new Date().toLocaleString('en-US', { month: 'long' });
@@ -678,8 +678,8 @@ export default function MonthlyTuneupScreen() {
       .insert({ community_id: communityId, category_id: board.id, author_id: profile.id, title, content })
       .select('id, title')
       .single();
-    if (error || !created) return { boardId: board.id, boardName: board.name, postId: null, postTitle: null };
-    return { boardId: board.id, boardName: board.name, postId: created.id, postTitle: created.title };
+    if (error || !created) return { boardId: board.id, boardName: board.name, postId: null, postTitle: null, postContent: null };
+    return { boardId: board.id, boardName: board.name, postId: created.id, postTitle: created.title, postContent: null };
   }, [communityId, findBoardTarget, profile]);
 
   const submitNewsletterItem = async () => {
@@ -722,7 +722,7 @@ export default function MonthlyTuneupScreen() {
 
     const { data, error } = await supabase
       .from('board_posts')
-      .select('id, title, status, created_at')
+      .select('id, title, content, status, created_at')
       .eq('community_id', communityId)
       .eq('category_id', board.id)
       .or('status.is.null,status.eq.active')
@@ -734,7 +734,7 @@ export default function MonthlyTuneupScreen() {
 
     if (error) {
       console.warn('Could not load the current HIVE Helpers thread', error);
-      return { boardId: board.id, boardName: board.name, postId: null, postTitle: null };
+      return { boardId: board.id, boardName: board.name, postId: null, postTitle: null, postContent: null };
     }
 
     // Focus threads only — never the standing "HIVE Help Ideas" thread.
@@ -746,7 +746,7 @@ export default function MonthlyTuneupScreen() {
     // meeting), but because the calendar still said July, everyone kept being
     // told the focus was "Pay it behind" (Nat 2026-07-24). A focus thread is
     // only ever posted when a meeting picks one, so newest == current.
-    const candidates = ((data ?? []) as { id: string; title: string }[])
+    const candidates = ((data ?? []) as { id: string; title: string; content: string | null }[])
       .filter((row) => !/ideas/i.test(row.title));
     const thread = candidates[0];
     return {
@@ -754,6 +754,7 @@ export default function MonthlyTuneupScreen() {
       boardName: board.name,
       postId: thread?.id ?? null,
       postTitle: thread?.title ?? null,
+      postContent: thread?.content ?? null,
     };
   }, [communityId, findBoardTarget]);
 
@@ -1817,10 +1818,34 @@ export default function MonthlyTuneupScreen() {
           icon={<HiveIcon name="bee" size={20} color="#8e6f35" />}
           subtitle="A nudge, not a test — there's no wrong answer here."
         />
+        {/* Name the focus AND say what it means. "Shelter Donation" is a label;
+            "bring something to our next meet up" is the actual ask, and it's
+            been sitting unused in the thread body this whole time. Nobody
+            should have to go find the board to remember the job
+            (Nat 2026-07-25). */}
         {focus ? (
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348', marginTop: -6, marginBottom: 12 }}>
-            This month's help: "{focus}"
-          </Text>
+          <View
+            style={{
+              backgroundColor: '#fdf3dc',
+              borderWidth: 1,
+              borderColor: 'rgba(222,193,129,0.55)',
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              marginTop: -2,
+              marginBottom: 14,
+              gap: 4,
+            }}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#8a6b30' }}>
+              This month's HIVE Help: {focus}
+            </Text>
+            {helperThread?.postContent?.trim() ? (
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#6f6559' }}>
+                {helperThread.postContent.trim()}
+              </Text>
+            ) : null}
+          </View>
         ) : null}
         <PostedConfirmation lines={helperPosted} boardName={helperThread?.postTitle ?? helperThread?.boardName ?? null} />
 
@@ -1934,9 +1959,16 @@ export default function MonthlyTuneupScreen() {
         subtitle="Little kindnesses since last meeting — no act too tiny, totally optional."
       />
       {helperThread?.postTitle ? (
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348', marginTop: -6, marginBottom: 12 }}>
-          Current focus: "{helperThread.postTitle.replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, '')}"
-        </Text>
+        <View style={{ marginTop: -6, marginBottom: 12, gap: 2 }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+            Current focus: "{helperThread.postTitle.replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, '')}"
+          </Text>
+          {helperThread.postContent?.trim() ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18, color: '#9a8060' }}>
+              {helperThread.postContent.trim()}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
       <PostedConfirmation lines={helperPosted} boardName={helperThread?.postTitle ?? helperThread?.boardName ?? null} />
 
