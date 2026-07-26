@@ -2134,11 +2134,15 @@ export default function HiveScreen() {
     return () => { cancelled = true; };
   }, [communityId, profile?.id]);
 
-  const nextMeetingEvent = upcomingEvents.find((event) => event.event_type === 'meeting');
-  const daysToMeeting = nextMeetingEvent
-    ? Math.round((Date.parse(`${nextMeetingEvent.event_date}T12:00:00Z`) - Date.now()) / 86_400_000)
-    : null;
-  const inHalfwayWindow = daysToMeeting !== null && daysToMeeting >= 8 && daysToMeeting <= 20;
+  // The newsletter goes out on the 1st, so the check-in that feeds it rides the
+  // CALENDAR, not the meeting date — meetings wander with availability, and
+  // "two weeks before whenever we meet" was a moving target nobody could plan
+  // around. The card runs the last 5 days of the month and drops the moment you
+  // finish, because stale to-dos piling up is what we're avoiding.
+  const todayDate = new Date();
+  const daysLeftInMonth =
+    new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0).getDate() - todayDate.getDate();
+  const inHalfwayWindow = daysLeftInMonth <= 4;
 
   const homeTodos: HomeTodo[] = [
     ...(inHalfwayWindow && !halfwayDone
@@ -2146,7 +2150,7 @@ export default function HiveScreen() {
           id: 'halfway-checkin',
           emoji: '🗞️',
           title: 'Halfway check-in',
-          detail: "The newsletter's brewing — want a shout-out, a plug, or a reminder in it?",
+          detail: "The newsletter goes out on the 1st — want a shout-out, a plug, or a reminder in it?",
           cta: 'Take 2 min →',
           onPress: () => router.push({
             pathname: '/monthly-tuneup',

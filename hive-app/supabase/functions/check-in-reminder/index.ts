@@ -105,11 +105,26 @@ function getWindowOpenDate(dueDateOnly: string): string {
 }
 
 // Three touches per cycle, all fired by the same daily cron:
-//   midpoint — ~2 weeks out (newsletter season): gentle to-do/progress nudge
+//   midpoint — 3rd-to-last day of the month: the newsletter check-in
 //   window   — 3 days before: the full check-in invitation (legacy behavior)
 //   day_of   — meeting day: last call, only to people not yet checked in
+//
+// The midpoint touch is pinned to the CALENDAR, not to the meeting. Meetings
+// are usually the 2nd Wednesday but bounce around with availability, and the
+// newsletter goes out on the 1st regardless — so "14 days before whenever the
+// meeting lands" was a moving target nobody could plan around. Month-end is
+// predictable AND still roughly halfway between meetings (Nat 2026-07-25).
 type ReminderKind = 'window' | 'day_of' | 'midpoint';
-const MIDPOINT_DAYS_BEFORE = 14;
+const NEWSLETTER_LEAD_DAYS = 3;
+
+// The 3rd-to-last day of the month the given Pacific date falls in, so members
+// get the last 3 days to add something before the 1st.
+function newsletterCheckInDate(todayDateOnly: string): string {
+  const [year, month] = todayDateOnly.split('-').map(Number);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const day = daysInMonth - (NEWSLETTER_LEAD_DAYS - 1);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
 
 // Format a 'YYYY-MM-DD' date as e.g. "August 15" for email/body copy.
 function formatMeetingDate(dueDateOnly: string): { month: string; day: number } {
@@ -143,7 +158,7 @@ function checkInEmailHtml(name: string, month: string, day: number, kind: Remind
         <span style="font-size: 40px;">🍯</span>
       </div>
       <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Halfway check-in</h1>
-      <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">Halfway to the ${month} ${day} meeting</p>
+      <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The newsletter goes out on the 1st</p>
       <p style="font-size: 15px;">Hi ${name},</p>
       <p style="font-size: 15px;">No meeting tonight — but the newsletter goes out soon, and this is the easy way in:</p>
       <ul style="font-size: 15px; padding-left: 20px;">
@@ -154,7 +169,7 @@ function checkInEmailHtml(name: string, month: string, day: number, kind: Remind
       <div style="text-align: center; margin: 28px 0;">
         <a href="${APP_URL}/monthly-tuneup?mode=midpoint" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Take the 2-minute check-in</a>
       </div>
-      <p style="font-size: 13px; color: #9a9a9a; text-align: center;">See you ${month} ${day}. 🐝</p>
+      <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Anything you add lands in the newsletter. 🐝</p>
     </div>
   `;
   }
@@ -316,7 +331,7 @@ serve(async (req) => {
         // Which touch fires today (Pacific)? At most one per day; force_send
         // always means the full window invitation (rescheduled meetings).
         const windowOpen = getWindowOpenDate(dueDateOnly);
-        const midpointDate = addDaysToDateOnly(dueDateOnly, -MIDPOINT_DAYS_BEFORE);
+        const midpointDate = newsletterCheckInDate(todayStr);
         const kind: ReminderKind | null = forceSend || todayStr === windowOpen
           ? 'window'
           : todayStr === dueDateOnly
@@ -335,7 +350,11 @@ serve(async (req) => {
           ? `${basePeriod}:${dueDateOnly}`
           : kind === 'window'
             ? basePeriod
-            : `${basePeriod}:${kind}`;
+            : kind === 'midpoint'
+              // Month-end touch dedups by calendar month — it no longer belongs
+              // to a meeting's cycle, so a reschedule must not re-fire it.
+              ? `${todayStr.slice(0, 7)}:midpoint`
+              : `${basePeriod}:${kind}`;
 
         // Dedup: skip if we've already sent this survey's reminder for this period.
         const { data: existingReminders, error: dedupError } = await supabaseAdmin
@@ -371,9 +390,10 @@ serve(async (req) => {
 
         let memberIds = memberships.map((m: { user_id: string }) => m.user_id);
 
-        // Day-of and midpoint touches only nag people who haven't checked in
-        // for this cycle — the window invitation still goes to everyone.
-        if (kind !== 'window') {
+        // Day-of only nags people who haven't checked in for this cycle. The
+        // window invitation and the month-end newsletter ask go to everyone —
+        // having filed a check-in says nothing about wanting a shout-out.
+        if (kind === 'day_of') {
           const { data: responded } = await supabaseAdmin
             .from('survey_responses')
             .select('user_id')
@@ -399,6 +419,9 @@ serve(async (req) => {
         }
 
         const { month, day } = formatMeetingDate(dueDateOnly);
+        // The newsletter covers the month that's ending, so its threads are
+        // named for that month — not for whenever the next meeting lands.
+        const newsletterMonth = MONTH_NAMES[Number(todayStr.split('-')[1]) - 1] ?? month;
 
         // Midpoint doubles as newsletter season: open the "{Month} Newsletter"
         // thread on Announcements so shout-outs and reminders ("come to my
@@ -414,14 +437,14 @@ serve(async (req) => {
               .limit(1);
             const boardId = boards?.[0]?.id;
             if (boardId) {
-              const threadTitle = `${month} Newsletter — shout-outs & mentions 📣`;
+              const threadTitle = `${newsletterMonth} Newsletter — shout-outs & mentions 📣`;
               const { data: existingThread } = await supabaseAdmin
                 .from('board_posts')
                 .select('id')
                 .eq('category_id', boardId)
                 .eq('title', threadTitle)
                 .limit(1);
-              const complimentTitle = `${month} Compliment Corner 💐`;
+              const complimentTitle = `${newsletterMonth} Compliment Corner 💐`;
               const { data: adminRows } = await supabaseAdmin
                 .from('community_memberships')
                 .select('user_id')
@@ -482,7 +505,7 @@ serve(async (req) => {
           kind === 'day_of'
             ? `🐝 Meeting tonight (${month} ${day}) — quick check-in if you haven't`
             : kind === 'midpoint'
-              ? `🍯 Halfway check-in — the ${month} newsletter is brewing`
+              ? `🍯 Halfway check-in — the newsletter goes out on the 1st`
               : `🐝 Your HIVE check-in is open — meeting ${month} ${day}`;
 
         surveysFired++;

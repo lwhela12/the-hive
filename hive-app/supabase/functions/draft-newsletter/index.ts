@@ -127,20 +127,29 @@ serve(async (req) => {
       if (isAuthError(auth)) return errorResponse(auth.error, auth.status);
     }
 
-    // The cycle runs meeting to meeting, never calendar month — the HIVE Help
-    // focus and everything else turns over at a MEETING, not at midnight on
-    // the 1st. Everything below is "since we last gathered".
-    const { data: lastMeetingRows } = await supabaseAdmin
-      .from('events')
-      .select('event_date')
-      .eq('community_id', communityId)
-      .eq('event_type', 'meeting')
-      .lte('event_date', date)
-      .order('event_date', { ascending: false })
-      .limit(1);
-    const cycleStart = (lastMeetingRows ?? [])[0]?.event_date
-      ?? new Date(Date.parse(`${date}T00:00:00Z`) - 30 * 24 * 3600_000).toISOString().slice(0, 10);
+    // The newsletter is a CALENDAR thing, not a meeting thing: it goes out on
+    // the 1st and covers the month that just ended. Meetings wander (usually
+    // 2nd Wednesday, but availability moves them), so anchoring the draft to
+    // the last meeting would leave the first week or two of a month out of the
+    // newsletter entirely (Nat 2026-07-25).
+    //
+    // Run it in the first week of a month and it covers the previous month;
+    // run it mid-month and it covers this month so far.
+    const [year, month, day] = date.split('-').map(Number);
+    const coversPreviousMonth = day <= 7;
+    const startYear = coversPreviousMonth && month === 1 ? year - 1 : year;
+    const startMonth = coversPreviousMonth ? (month === 1 ? 12 : month - 1) : month;
+    const cycleStart = `${startYear}-${String(startMonth).padStart(2, '0')}-01`;
+    const cycleEnd = coversPreviousMonth
+      ? `${year}-${String(month).padStart(2, '0')}-01`
+      : null;
     const startIso = `${cycleStart}T00:00:00Z`;
+    // Only bound the top end when we're reporting a finished month — a
+    // mid-month draft should include everything up to right now.
+    const endIso = cycleEnd ? `${cycleEnd}T00:00:00Z` : null;
+    const withinWindow = (timestamp?: string | null) => (
+      !!timestamp && timestamp >= startIso && (!endIso || timestamp < endIso)
+    );
 
     const [
       nextMeetingRows,
@@ -224,6 +233,7 @@ serve(async (req) => {
         .order('created_at', { ascending: true })
         .limit(limit);
       return ((data ?? []) as any[])
+        .filter((reply) => withinWindow(reply.created_at))
         .map((reply) => ({
           name: memberNames.get(reply.author_id) ?? 'Someone',
           content: String(reply.content ?? '').trim(),
@@ -247,6 +257,7 @@ serve(async (req) => {
           .order('created_at', { ascending: true })
           .limit(30);
         return ((data ?? []) as any[])
+          .filter((reply) => withinWindow(reply.created_at))
           .map((reply) => ({
             name: memberNames.get(reply.author_id) ?? 'Someone',
             content: String(reply.content ?? '').trim(),
@@ -266,6 +277,7 @@ serve(async (req) => {
 
     const doneByUser = new Map<string, string[]>();
     ((todoRows.data ?? []) as any[]).forEach((todo) => {
+      if (!withinWindow(todo.completed_at)) return;
       const name = todo.assignee?.name ? firstName(todo.assignee.name) : null;
       if (!name) return;
       const list = doneByUser.get(name) ?? [];
@@ -337,16 +349,18 @@ serve(async (req) => {
       });
     }
 
-    const grantedLines = ((grantedRows.data ?? []) as any[]).map((wish) => {
+    const grantedLines = ((grantedRows.data ?? []) as any[])
+      .filter((wish) => withinWindow(wish.fulfilled_at))
+      .map((wish) => {
       const owner = wish.user?.name ? firstName(wish.user.name) : 'Someone';
-      return `${owner}: ${(wish.title || wish.description || '').slice(0, 120)}`;
-    });
+        return `${owner}: ${(wish.title || wish.description || '').slice(0, 120)}`;
+      });
     if (grantedLines.length > 0) sections.push({ title: 'Wishes granted 🌟', lines: grantedLines });
 
     // New threads worth telling people about — the boards move faster than
     // anyone checks them.
     const newThreads = posts
-      .filter((row) => row.created_at >= startIso)
+      .filter((row) => withinWindow(row.created_at))
       .filter((row) => !/newsletter|compliment/i.test(row.title ?? ''))
       .slice(0, 8)
       .map((row) => (row.category?.name ? `${row.category.name} → ${row.title}` : String(row.title)));
@@ -359,6 +373,7 @@ serve(async (req) => {
       success: true,
       date,
       cycle_start: cycleStart,
+      cycle_end: cycleEnd,
       sections,
       counts: {
         shout_outs: shoutOuts.length,

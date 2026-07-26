@@ -2556,12 +2556,16 @@ export default function AdminScreen() {
                       Meeting tools
                     </Text>
                     {([
-                      { label: 'Meeting Helper — run the meeting from the TV', icon: 'tv' as const, route: '/meeting-helper' },
-                      { label: 'Monthly Tune-up — the check-in members fill out', icon: 'checkin' as const, route: '/monthly-tuneup' },
+                      { label: 'Meeting Helper — run the meeting from the TV', icon: 'tv' as const, route: '/meeting-helper', params: {} },
+                      { label: 'Monthly Tune-up — the check-in members fill out', icon: 'checkin' as const, route: '/monthly-tuneup', params: {} },
+                      // The month-end pair: what members are asked, and what
+                      // their answers turn into.
+                      { label: 'Newsletter Draft — the month, gathered for you', icon: 'megaphone' as const, route: '/newsletter', params: {} },
+                      { label: 'Halfway Check-in — the short month-end version', icon: 'checkin' as const, route: '/monthly-tuneup', params: { mode: 'midpoint' } },
                     ] as const).map((tool) => (
                       <Pressable
-                        key={tool.route}
-                        onPress={() => router.push({ pathname: tool.route, params: { from: 'admin' } })}
+                        key={`${tool.route}-${tool.label}`}
+                        onPress={() => router.push({ pathname: tool.route as any, params: { from: 'admin', ...tool.params } })}
                         style={({ pressed }) => ({
                           flexDirection: 'row',
                           alignItems: 'center',
