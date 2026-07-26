@@ -275,6 +275,8 @@ export default function MonthlyTuneupScreen() {
   // Halfway check-in: what you'd like in the newsletter. Answers land as
   // replies on the threads that already exist for them, so nothing here is a
   // new pile to maintain and it's visible on the boards like everything else.
+  const [halfwayHelpStatus, setHalfwayHelpStatus] = useState<'done' | 'not_yet' | 'other' | null>(null);
+  const [halfwayHelpLog, setHalfwayHelpLog] = useState('');
   const [newsletterKind, setNewsletterKind] = useState<NewsletterKind>('shoutout');
   const [newsletterText, setNewsletterText] = useState('');
   const [newsletterPosting, setNewsletterPosting] = useState(false);
@@ -1340,7 +1342,7 @@ export default function MonthlyTuneupScreen() {
   // already there — so editing your answer or re-entering the tune-up doesn't
   // spam the board with copies.
   const logInsteadOnFinish = async () => {
-    if (!profile || !communityId) return;
+    if (!profile || !communityId || isMidpoint) return;
     const raw = String(checkInAnswers.q_hive_help_recap ?? '');
     const { choice, instead } = parseFocusAnswer(raw);
     const content = instead.trim();
@@ -1382,7 +1384,10 @@ export default function MonthlyTuneupScreen() {
   const goNext = async () => {
     if (stepIndex >= steps.length - 1) {
       // Finishing: save any check-in answers the member touched this session.
-      if (monthlyCheckInSurvey && checkInDirty && !checkInSaving && hasRealCheckInAnswers()) {
+      // The halfway pass must never file a check-in — that's the pre-meeting
+      // ritual, and filing one now would light you up on the Arrival Board
+      // weeks early.
+      if (!isMidpoint && monthlyCheckInSurvey && checkInDirty && !checkInSaving && hasRealCheckInAnswers()) {
         setCheckInSaving(true);
         setCheckInError(null);
         const result = await submitResponse(monthlyCheckInSurvey.id, checkInAnswers);
@@ -1777,6 +1782,135 @@ export default function MonthlyTuneupScreen() {
     </View>
   );
 
+  // At the meeting, HIVE Help is a REVIEW — how did it go, what's next month's
+  // focus. Halfway through, neither question makes sense yet: the month isn't
+  // over and the next focus gets picked in the room. The only useful question
+  // now is "have you done it yet?" (Nat 2026-07-25).
+  //
+  // It also must not touch the check-in survey. Answering "how'd it go" here
+  // used to file a real check-in — which would light you up on the Arrival
+  // Board weeks before the meeting. This step is board posts and local state,
+  // nothing else.
+  const renderHalfwayHelpStep = () => {
+    const focus = helperThread?.postTitle?.replace(/^.*HIVE Help(?:ers)?\s*[—–-]+\s*/i, '') ?? null;
+    const options = [
+      { key: 'done' as const, label: focus ? `Done it ✅` : 'Done it ✅' },
+      { key: 'not_yet' as const, label: "Not yet — I'll get to it" },
+      { key: 'other' as const, label: 'I did something else' },
+    ];
+    const wantsLog = halfwayHelpStatus === 'done' || halfwayHelpStatus === 'other';
+    return (
+      <View>
+        <StepHeader
+          title="Your HIVE Help"
+          icon={<HiveIcon name="bee" size={20} color="#8e6f35" />}
+          subtitle="A nudge, not a test — there's no wrong answer here."
+        />
+        {focus ? (
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348', marginTop: -6, marginBottom: 12 }}>
+            This month's help: "{focus}"
+          </Text>
+        ) : null}
+        <PostedConfirmation lines={helperPosted} boardName={helperThread?.postTitle ?? helperThread?.boardName ?? null} />
+
+        <View style={[cardStyle, { marginTop: 14, gap: 12 }]}>
+          <BoxHeading style={{ marginBottom: 0 }}>Have you done your HIVE Help yet?</BoxHeading>
+          <View style={{ gap: 8 }}>
+            {options.map((option) => {
+              const selected = halfwayHelpStatus === option.key;
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => setHalfwayHelpStatus(selected ? null : option.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={option.label}
+                  style={{
+                    alignSelf: 'flex-start',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: selected ? '#fdf3dc' : '#faf8f3',
+                    borderWidth: 1,
+                    borderColor: selected ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
+                    borderRadius: 14,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                  }}
+                >
+                  <Text style={{ fontSize: 14 }}>{selected ? '●' : '○'}</Text>
+                  <Text
+                    style={{
+                      fontFamily: selected ? 'Lato_700Bold' : 'Lato_400Regular',
+                      fontSize: 14,
+                      color: selected ? '#8a6b30' : '#6b7280',
+                    }}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {halfwayHelpStatus === 'not_yet' ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 13, color: '#8e7a5e' }}>
+              No stress — there's still time before the meeting. 💛
+            </Text>
+          ) : null}
+
+          {/* Some focuses are one job ("bring a donation"); others are open-ended
+              ("pay it behind", "pick up trash on a walk") and happen more than
+              once. Logging stays optional either way. */}
+          {wantsLog ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TextInput
+                value={halfwayHelpLog}
+                onChangeText={setHalfwayHelpLog}
+                placeholder={halfwayHelpStatus === 'other' ? 'What did you do instead?' : 'Want to log it? (optional)'}
+                placeholderTextColor="#b5ad9f"
+                blurOnSubmit={false}
+                onKeyPress={submitOnEnter(() => {
+                  const content = halfwayHelpLog.trim();
+                  if (!content) return;
+                  void postHelperLog(content).then(() => setHalfwayHelpLog(''));
+                })}
+                style={[inputStyle, { flex: 1 }]}
+              />
+              <Pressable
+                onPress={() => {
+                  const content = halfwayHelpLog.trim();
+                  if (!content) return;
+                  void postHelperLog(content).then(() => setHalfwayHelpLog(''));
+                }}
+                disabled={helperPosting || !halfwayHelpLog.trim()}
+                style={({ pressed }) => ({
+                  backgroundColor: halfwayHelpLog.trim() ? '#bd9348' : '#e5e7eb',
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 11,
+                  opacity: pressed || helperPosting ? 0.8 : 1,
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: halfwayHelpLog.trim() ? 'white' : '#a09274' }}>
+                  {helperPosting ? '…' : 'Log it'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {helperError ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626' }}>{helperError}</Text>
+          ) : null}
+        </View>
+
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
+          Next month's focus gets picked at the meeting — nothing to decide here.
+        </Text>
+      </View>
+    );
+  };
+
   const renderHelpersStep = () => (
     <View>
       {/* The crest asset is ~95% content with no trimmable padding, so it
@@ -2155,7 +2289,7 @@ export default function MonthlyTuneupScreen() {
       case 'calendar':
         return renderCalendarStep();
       case 'helpers':
-        return renderHelpersStep();
+        return isMidpoint ? renderHalfwayHelpStep() : renderHelpersStep();
       case 'todos':
         return renderTodosStep();
       case 'checkin':
