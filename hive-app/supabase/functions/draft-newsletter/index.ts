@@ -107,6 +107,82 @@ async function condensePeople(
   }
 }
 
+
+/**
+ * Turn the gathered facts into an actual letter.
+ *
+ * The outline version was "not incorrect... just very very literal" (Nat
+ * 2026-07-25) — a data dump, where hers is a warm monthly letter with a
+ * particular shape and a particular voice. So the facts stay the source of
+ * truth and this writes them up; if it fails, the outline is still there.
+ *
+ * The one thing it must never do is put words in Nat's mouth. "A Note from
+ * Nat" comes back as a bracketed placeholder for her to fill, and anything not
+ * in the facts is left as a bracket rather than invented.
+ */
+async function writeNewsletter(month: string, factsText: string): Promise<string | null> {
+  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+  if (!apiKey || !factsText.trim()) return null;
+
+  const system = [
+    "You draft the HIVE's monthly newsletter for Nat, who runs a 12-person",
+    'community. She pastes your draft into Wix, tweaks it, and sends it. Write',
+    'the letter she would write — not a summary of data.',
+    '',
+    'HER VOICE: warm, chatty, a little goofy. Short paragraphs. Exclamation',
+    'points and em-dashes. Emoji sprinkled, never wall-to-wall. She says',
+    '"Hivers", "the buzz", "keep the HIVE humming". She addresses everyone',
+    'directly as "you". She celebrates people by name.',
+    '',
+    'HER STRUCTURE — use these headings, in this order, skipping any with',
+    'nothing to say:',
+    '  Yellow!            (greeting — a sentence or two of hello)',
+    `  Here's the buzz from ${month}`,
+    '  Hummdingers        (what people are chasing and where they need a hand)',
+    '  HIVE Hangs         (what happened, then what is coming up)',
+    '  HIVE Help          (the focus, and a nudge to log it on 15min HIVE Helpers)',
+    '  Around the HIVE    (app and community updates)',
+    '  Wishes granted     (only if there are any)',
+    '  Shout-outs         (only if there are any)',
+    '  Compliment Corner  (only if there are any)',
+    '  Keep the HIVE humming  (a short numbered list of 4-6 easy asks)',
+    '  A Note from Nat',
+    '',
+    'HARD RULES:',
+    '- Use ONLY the facts given. Never invent an event, a name, a date, or a',
+    '  detail. If a section has no facts, leave it out entirely.',
+    '- Never write "A Note from Nat" yourself. Output exactly this under that',
+    '  heading: [Your note here, Nat 💛]',
+    '- Where you need something only Nat knows, write it as a bracket, e.g.',
+    '  [add anything I missed] — do not guess.',
+    '- Plain text, no markdown asterisks or hashes. Headings on their own line.',
+    '- Sign off: "Love in the biggest way," then "Nat" on the next line.',
+    '- Keep it skimmable. Someone reads this over coffee.',
+  ].join('\n');
+
+  try {
+    const anthropic = new Anthropic({ apiKey });
+    const response = await anthropic.messages.create({
+      model: 'claude-opus-5',
+      max_tokens: 4000,
+      system,
+      messages: [{
+        role: 'user',
+        content: `Everything that happened in the HIVE this cycle:\n\n${factsText}\n\nWrite the ${month} newsletter.`,
+      }],
+    });
+    if ((response as { stop_reason?: string }).stop_reason === 'refusal') return null;
+    return response.content
+      .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
+      .trim() || null;
+  } catch (error) {
+    console.warn('Newsletter writing failed; the outline still stands:', error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
@@ -160,6 +236,8 @@ serve(async (req) => {
       grantedRows,
       todoRows,
       checkInRows,
+      pastEventRows,
+      meetingRows,
     ] = await Promise.all([
       supabaseAdmin.from('events')
         .select('title, event_date, event_time')
@@ -195,6 +273,21 @@ serve(async (req) => {
         .select('answers, submitted_at, user_id, user:profiles!user_id(name), survey:surveys!survey_id(title)')
         .gte('submitted_at', new Date(Date.parse(startIso) - 45 * 24 * 3600_000).toISOString())
         .order('submitted_at', { ascending: false }).limit(40),
+      // Hangs that already HAPPENED. Nat's newsletter reports on the month as
+      // much as it looks ahead ("Hivers were showing up for each other all
+      // over!"), and a draft with only upcoming events can't write that.
+      supabaseAdmin.from('events')
+        .select('title, event_date, event_type, description, location')
+        .eq('community_id', communityId)
+        .gte('event_date', cycleStart).lt('event_date', date)
+        .order('event_date', { ascending: true }).limit(30),
+      // The meeting deck's News and App updates — "Around the HIVE" is written
+      // from these, and they're already typed once on the helper.
+      supabaseAdmin.from('meetings')
+        .select('date, summary')
+        .eq('community_id', communityId)
+        .gte('date', cycleStart)
+        .order('date', { ascending: false }).limit(3),
     ]);
 
     const nextMeeting = ((nextMeetingRows.data ?? []) as any[])[0] ?? null;
@@ -328,6 +421,36 @@ serve(async (req) => {
     }
     if (comingUp.length > 0) sections.push({ title: "What's coming up", lines: comingUp });
 
+    const pastHangs = ((pastEventRows.data ?? []) as any[]).filter((event) => (
+      event.event_type !== 'meeting' && event.event_type !== 'birthday'
+    ));
+    if (pastHangs.length > 0) {
+      sections.push({
+        title: 'Hangs that happened',
+        lines: pastHangs.map((event) => (
+          `${event.title} — ${prettyDate(event.event_date)}${event.location ? ` · ${event.location}` : ''}`
+        )),
+      });
+    }
+
+    // Pull News from Nat / App updates straight off the meeting summary — the
+    // deck already carries them, so nobody types them twice.
+    const deckLines: { news: string[]; app: string[] } = { news: [], app: [] };
+    ((meetingRows.data ?? []) as any[]).forEach((meeting) => {
+      if (!meeting.summary) return;
+      try {
+        const parsed = JSON.parse(meeting.summary) as { sections?: { title: string; lines: string[] }[] };
+        (parsed.sections ?? []).forEach((section) => {
+          if (/^news from/i.test(section.title)) deckLines.news.push(...section.lines);
+          if (/^app updates/i.test(section.title)) deckLines.app.push(...section.lines);
+        });
+      } catch {
+        // A legacy or plain-text summary — nothing to harvest.
+      }
+    });
+    if (deckLines.news.length > 0) sections.push({ title: 'News from the meeting', lines: deckLines.news });
+    if (deckLines.app.length > 0) sections.push({ title: 'Around the HIVE (app updates)', lines: deckLines.app });
+
     if (shoutOuts.length > 0) {
       sections.push({
         title: 'Shout-outs & mentions',
@@ -369,9 +492,23 @@ serve(async (req) => {
     const condensed = await condensePeople(people);
     if (condensed.length > 0) sections.push({ title: "Who's up to what", lines: condensed });
 
+    // The letter is written FROM the outline, so the facts are identical — one
+    // is for reading, the other for checking.
+    const monthLabel = new Date(Date.UTC(
+      Number(cycleStart.slice(0, 4)),
+      Number(cycleStart.slice(5, 7)) - 1,
+      15,
+    )).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+    const factsText = sections
+      .map((section) => `${section.title}\n${section.lines.map((line) => `- ${line.trim()}`).join('\n')}`)
+      .join('\n\n');
+    const prose = await writeNewsletter(monthLabel, factsText);
+
     return jsonResponse({
       success: true,
       date,
+      month: monthLabel,
+      prose,
       cycle_start: cycleStart,
       cycle_end: cycleEnd,
       sections,

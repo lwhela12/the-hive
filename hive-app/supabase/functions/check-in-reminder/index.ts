@@ -431,9 +431,10 @@ serve(async (req) => {
           try {
             const { data: boards } = await supabaseAdmin
               .from('board_categories')
-              .select('id, name, status')
+              .select('id, name, status, topic_kind')
               .eq('community_id', survey.community_id)
-              .ilike('name', '%announcement%')
+              .or('topic_kind.eq.newsletter,name.ilike.%newsletter%,name.ilike.%announcement%')
+              .order('topic_kind', { ascending: false })
               .limit(1);
             const boardId = boards?.[0]?.id;
             if (boardId) {
@@ -478,7 +479,7 @@ serve(async (req) => {
                   author_id: authorId,
                   title: complimentTitle,
                   content:
-                    'Want to compliment anyone this month? 💐 Drop it here — big, small, silly, sincere. Compliments get read out in the newsletter and at the meeting. No act of niceness too tiny.',
+                    'Want to compliment anyone this month? 💐 Drop it here — big, small, silly, sincere. @ them and they get a little love note the moment you post it. Compliments also get read out in the newsletter and at the meeting. No act of niceness too tiny.',
                 });
               }
               newsletterThread = threadTitle;

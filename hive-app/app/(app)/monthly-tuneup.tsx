@@ -86,7 +86,7 @@ const NEWSLETTER_KINDS = [
   { key: 'shoutout', label: 'Shout-out', prompt: 'Who deserves a nod this month?' },
   { key: 'plug', label: 'Plug an event', prompt: '"Come to my lemonade stand Tuesday!"' },
   { key: 'reminder', label: 'A reminder', prompt: "What shouldn't the HIVE forget?" },
-  { key: 'compliment', label: 'Compliment someone', prompt: 'Big, small, silly, sincere.' },
+  { key: 'compliment', label: 'Compliment someone', prompt: '@ them and they get a little love note.' },
 ] as const;
 type NewsletterKind = (typeof NEWSLETTER_KINDS)[number]['key'];
 
@@ -571,7 +571,7 @@ export default function MonthlyTuneupScreen() {
   ), []);
   const canRefineWish = useCallback((wish: Wish) => wish.status !== 'fulfilled', []);
 
-  const findBoardTarget = useCallback(async (kind: 'hangs' | 'helpers' | 'announcements'): Promise<BoardTarget | null> => {
+  const findBoardTarget = useCallback(async (kind: 'hangs' | 'helpers' | 'newsletter'): Promise<BoardTarget | null> => {
     if (!communityId) return null;
 
     let query = supabase
@@ -581,8 +581,9 @@ export default function MonthlyTuneupScreen() {
 
     query = kind === 'hangs'
       ? query.ilike('name', '%hang%')
-      : kind === 'announcements'
-        ? query.ilike('name', '%announcement%')
+      : kind === 'newsletter'
+        // topic_kind, not name — renaming the board must not break the check-in.
+        ? query.or('topic_kind.eq.newsletter,name.ilike.%newsletter%,name.ilike.%announcement%')
         : query.or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%');
 
     const { data, error } = await query;
@@ -634,7 +635,7 @@ export default function MonthlyTuneupScreen() {
     kind: 'newsletter' | 'compliments',
   ): Promise<HelperThread | null> => {
     if (!profile || !communityId) return null;
-    const board = await findBoardTarget('announcements');
+    const board = await findBoardTarget('newsletter');
     if (!board) return null;
 
     const { data: existing } = await supabase
@@ -657,7 +658,7 @@ export default function MonthlyTuneupScreen() {
       : `${month} Compliment Corner 💐`;
     const content = kind === 'newsletter'
       ? "The newsletter's brewing! 🗞️ Want a shout-out, a plug, or a reminder in it — \"come to my lemonade stand Tuesday!\"-style? Drop it in this thread and it goes straight into the newsletter."
-      : 'Want to compliment anyone this month? 💐 Drop it here — big, small, silly, sincere. Compliments get read out in the newsletter and at the meeting. No act of niceness too tiny.';
+      : 'Want to compliment anyone this month? 💐 Drop it here — big, small, silly, sincere. @ them and they get a little love note the moment you post it. Compliments also get read out in the newsletter and at the meeting. No act of niceness too tiny.';
 
     const { data: created, error } = await (supabase as any)
       .from('board_posts')

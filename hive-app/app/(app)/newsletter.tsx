@@ -25,13 +25,20 @@ const hiveBee = require('../../assets/BEE ONLY IN GOLD BG.png');
 export default function NewsletterScreen() {
   const router = useRouter();
   const { from } = useLocalSearchParams<{ from?: string }>();
-  const { communityId } = useAuth();
+  const { communityId, profile } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sections, setSections] = useState<SummarySection[]>([]);
   const [cycleStart, setCycleStart] = useState<string | null>(null);
+  const [prose, setProse] = useState<string | null>(null);
+  // The letter is what she pastes into Wix; the outline is for checking the
+  // facts behind it. Same data, two readings.
+  const [view, setView] = useState<'letter' | 'facts'>('letter');
   const [copied, setCopied] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [postedTo, setPostedTo] = useState<string | null>(null);
+  const [postError, setPostError] = useState<string | null>(null);
 
   const close = () => {
     if (from === 'meetings') router.replace('/meetings');
@@ -53,6 +60,7 @@ export default function NewsletterScreen() {
       return;
     }
     setSections((data.sections ?? []) as SummarySection[]);
+    setProse(typeof data.prose === 'string' && data.prose.trim() ? data.prose : null);
     setCycleStart(data.cycle_start ?? null);
     setLoading(false);
   }, [communityId]);
@@ -62,16 +70,86 @@ export default function NewsletterScreen() {
   }, [loadDraft]);
 
   // Plain text, because it's going into whatever she writes the newsletter in.
+  const asPlainText = () => sections
+    .map((section) => [
+      section.title.toUpperCase(),
+      ...section.lines.map((line) => (line.startsWith('    ') ? `    - ${line.trim()}` : `- ${line}`)),
+    ].join('\n'))
+    .join('\n\n');
+
   const copyAll = async () => {
-    const text = sections
-      .map((section) => [
-        section.title.toUpperCase(),
-        ...section.lines.map((line) => (line.startsWith('    ') ? `    - ${line.trim()}` : `- ${line}`)),
-      ].join('\n'))
-      .join('\n\n');
+    // Copy what you're looking at — the letter goes to Wix, the outline is for
+    // when you want the raw material instead.
+    const text = view === 'letter' && prose ? prose : asPlainText();
     await Clipboard.setStringAsync(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // The newsletter should be reachable more than one way: email from Wix, the
+  // public site, and here. This is the in-app door — post the draft, then edit
+  // the thread to match whatever actually went out.
+  const postToBoard = async () => {
+    if (!communityId || !profile || posting || sections.length === 0) return;
+    setPosting(true);
+    setPostError(null);
+    try {
+      const { data: boards } = await supabase
+        .from('board_categories')
+        .select('id, name, topic_kind')
+        .eq('community_id', communityId)
+        .or('topic_kind.eq.newsletter,name.ilike.%newsletter%')
+        .order('topic_kind', { ascending: false })
+        .limit(1);
+      const board = ((boards ?? []) as { id: string; name: string }[])[0];
+      if (!board) {
+        setPostError('Could not find the HIVE Newsletter board.');
+        return;
+      }
+
+      const month = cycleStart
+        ? new Date(Date.UTC(
+            Number(cycleStart.slice(0, 4)),
+            Number(cycleStart.slice(5, 7)) - 1,
+            15,
+          )).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })
+        : new Date().toLocaleString('en-US', { month: 'long' });
+      const title = `${month} Newsletter 📰`;
+
+      const { data: existing } = await supabase
+        .from('board_posts')
+        .select('id')
+        .eq('category_id', board.id)
+        .eq('title', title)
+        .limit(1);
+
+      const content = prose ?? asPlainText();
+      if ((existing ?? []).length > 0) {
+        const { error: updateError } = await (supabase as any)
+          .from('board_posts')
+          .update({ content, edited_at: new Date().toISOString() })
+          .eq('id', (existing as { id: string }[])[0].id);
+        if (updateError) {
+          setPostError(`Could not update the post: ${updateError.message}`);
+          return;
+        }
+      } else {
+        const { error: insertError } = await (supabase as any).from('board_posts').insert({
+          community_id: communityId,
+          category_id: board.id,
+          author_id: profile.id,
+          title,
+          content,
+        });
+        if (insertError) {
+          setPostError(`Could not post it: ${insertError.message}`);
+          return;
+        }
+      }
+      setPostedTo(`${board.name} → ${title}`);
+    } finally {
+      setPosting(false);
+    }
   };
 
   const sinceLabel = cycleStart
@@ -98,7 +176,7 @@ export default function NewsletterScreen() {
             Newsletter Draft
           </Text>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a7c42' }}>
-            {sinceLabel ? `Everything since ${sinceLabel}` : 'Since the last meeting'}
+            {sinceLabel ? `Everything since ${sinceLabel}` : 'This cycle'}
           </Text>
         </View>
         <Pressable
@@ -159,7 +237,82 @@ export default function NewsletterScreen() {
           </View>
         ) : (
           <>
-            <SummarySections sections={sections} />
+            {prose ? (
+              <View style={{ flexDirection: 'row', alignSelf: 'center', gap: 6, marginBottom: 14 }}>
+                {(['letter', 'facts'] as const).map((option) => {
+                  const selected = view === option;
+                  return (
+                    <Pressable
+                      key={option}
+                      onPress={() => setView(option)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 7,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: selected ? 'rgba(189,147,72,0.7)' : 'rgba(189,147,72,0.25)',
+                        backgroundColor: selected ? '#fdf3dc' : 'transparent',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: selected ? 'Lato_700Bold' : 'Lato_400Regular',
+                          fontSize: 13,
+                          color: selected ? '#8a6b30' : '#9a8060',
+                        }}
+                      >
+                        {option === 'letter' ? 'The letter' : 'The facts'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {view === 'letter' && prose ? (
+              <View className="mb-4 bg-paper rounded-2xl border border-gold/20 px-5 py-5">
+                <Text
+                  selectable
+                  style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 24, color: '#3f3a33' }}
+                >
+                  {prose}
+                </Text>
+              </View>
+            ) : (
+              <SummarySections sections={sections} />
+            )}
+            <Pressable
+              onPress={() => void postToBoard()}
+              disabled={posting}
+              style={({ pressed }) => ({
+                alignSelf: 'center',
+                marginTop: 6,
+                marginBottom: 10,
+                paddingHorizontal: 18,
+                paddingVertical: 10,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: 'rgba(189,147,72,0.45)',
+                backgroundColor: pressed ? '#fbf4e3' : 'transparent',
+                opacity: posting ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
+                {posting ? 'Posting…' : '📰 Post to the Newsletter board'}
+              </Text>
+            </Pressable>
+            {postedTo ? (
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7a9a6b', textAlign: 'center', marginBottom: 8 }}>
+                Posted — {postedTo}. Edit it there to match what actually went out.
+              </Text>
+            ) : null}
+            {postError ? (
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#dc2626', textAlign: 'center', marginBottom: 8 }}>
+                {postError}
+              </Text>
+            ) : null}
             <Text
               style={{
                 fontFamily: 'Lato_400Regular',
@@ -169,7 +322,9 @@ export default function NewsletterScreen() {
                 marginTop: 8,
               }}
             >
-              Gathered from the boards, to-dos, and check-ins — nothing was written twice.
+              {view === 'letter' && prose
+                ? 'A draft in your voice, from real facts only. Anything in [brackets] is yours to fill.'
+                : 'Gathered from the boards, to-dos, and check-ins — nothing was written twice.'}
             </Text>
           </>
         )}
