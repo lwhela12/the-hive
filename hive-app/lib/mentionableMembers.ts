@@ -1,7 +1,7 @@
 import type { Profile } from '../types';
 import { supabase } from './supabase';
 
-export type MentionableMember = Pick<Profile, 'id' | 'name'>;
+export type MentionableMember = Pick<Profile, 'id' | 'name'> & { avatar_url?: string | null };
 
 export async function fetchCommunityMentionableMembers(communityId: string): Promise<MentionableMember[]> {
   const { data: memberships, error: membershipError } = await supabase
@@ -19,7 +19,7 @@ export async function fetchCommunityMentionableMembers(communityId: string): Pro
 
   const { data: profilesData, error: profilesError } = await supabase
     .from('profiles')
-    .select('id, name')
+    .select('id, name, avatar_url')
     .in('id', userIds);
 
   if (profilesError) {

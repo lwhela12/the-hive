@@ -25,6 +25,7 @@ import {
 import { deleteWishById } from '../../lib/wishMutations';
 import { getCycleStart, getHalfwayDoneKey } from '../../lib/meetingCycle';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { Avatar } from '../../components/ui/Avatar';
 import { getMentionTargetHandle } from '../../lib/mentions';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { HiveIcon } from '../../components/ui/HiveIcon';
@@ -2148,10 +2149,15 @@ export default function MonthlyTuneupScreen() {
           {newsletterKind === 'compliment' ? (
             <View style={{ gap: 8 }}>
               <BoxHeading style={{ marginBottom: 0 }}>Who's it for?</BoxHeading>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                {[...mentionableMembers.filter((member) => member.id !== profile?.id),
-                  { id: '__everyone__', name: 'Everyone' }].map((member) => {
+              {/* Faces, not a list of words — you're picking a person, and every
+                  other member list in the app shows their bubble. */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                {[
+                  ...mentionableMembers.filter((member) => member.id !== profile?.id),
+                  { id: '__everyone__', name: 'Everyone', avatar_url: null },
+                ].map((member) => {
                   const selected = complimentTarget?.id === member.id;
+                  const isEveryone = member.id === '__everyone__';
                   return (
                     <Pressable
                       key={member.id}
@@ -2159,19 +2165,32 @@ export default function MonthlyTuneupScreen() {
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
                       accessibilityLabel={`Compliment ${member.name}`}
-                      style={{
-                        backgroundColor: selected ? '#fdf3dc' : '#faf8f3',
-                        borderWidth: 1,
-                        borderColor: selected ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
-                        borderRadius: 999,
-                        paddingHorizontal: 12,
-                        paddingVertical: 7,
-                      }}
+                      style={{ alignItems: 'center', width: 62, gap: 4 }}
                     >
+                      <View
+                        style={{
+                          width: 52,
+                          height: 52,
+                          borderRadius: 26,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderWidth: selected ? 2.5 : 1,
+                          borderColor: selected ? '#bd9348' : 'rgba(222,193,129,0.4)',
+                          backgroundColor: isEveryone ? '#fdf3dc' : 'transparent',
+                          opacity: selected ? 1 : 0.85,
+                        }}
+                      >
+                        {isEveryone ? (
+                          <HiveIcon name="bee" size={24} color="#8e6f35" />
+                        ) : (
+                          <Avatar name={member.name} url={member.avatar_url} size={46} />
+                        )}
+                      </View>
                       <Text
+                        numberOfLines={1}
                         style={{
                           fontFamily: selected ? 'Lato_700Bold' : 'Lato_400Regular',
-                          fontSize: 13,
+                          fontSize: 12,
                           color: selected ? '#8a6b30' : '#6b7280',
                         }}
                       >
