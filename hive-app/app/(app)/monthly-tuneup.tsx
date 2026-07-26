@@ -1841,7 +1841,7 @@ export default function MonthlyTuneupScreen() {
       <View>
         <StepHeader
           title="Your HIVE Help"
-          icon={<HiveIcon name="bee" size={20} color="#8e6f35" />}
+          icon={<HiveIcon name="handshake" size={20} color="#8e6f35" />}
           subtitle="A nudge, not a test — there's no wrong answer here."
         />
         {/* Name the focus AND say what it means. "Shelter Donation" is a label;
@@ -1975,13 +1975,13 @@ export default function MonthlyTuneupScreen() {
 
   const renderHelpersStep = () => (
     <View>
-      {/* The crest asset is ~95% content with no trimmable padding, so it
-          squishes at step-header size (same reason it left the gold bars).
-          The drawn bee is the family mark for HIVE Help anyway, and it matches
-          the calendar/check-in icons on the other steps. */}
+      {/* A handshake, not the bee: the bee already heads the tune-up itself, so
+          using it again here made two different steps wear the same mark
+          (Nat 2026-07-26). Two hands also just says "helping each other" more
+          plainly than a bee does. */}
       <StepHeader
         title="HIVE helps"
-        icon={<HiveIcon name="bee" size={20} color="#8e6f35" />}
+        icon={<HiveIcon name="handshake" size={20} color="#8e6f35" />}
         subtitle="Little kindnesses since last meeting — no act too tiny, totally optional."
       />
       {helperThread?.postTitle ? (
