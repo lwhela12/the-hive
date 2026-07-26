@@ -516,7 +516,10 @@ const resolveHomeSectionOrder = (saved?: readonly string[] | null): HomeSectionK
 // Customizable home shortcut hexes (persisted per member in profiles.home_shortcuts).
 type HomeShortcutKey = 'honey_pot' | 'boards' | 'messages' | 'members' | 'meetings' | 'profile' | 'clive' | 'feedback' | 'admin';
 
-const DEFAULT_HOME_SHORTCUTS: HomeShortcutKey[] = ['honey_pot', 'boards', 'messages'];
+// Messages gave up its slot: it's already in the tab bar, and a bug report you
+// can't find never gets made. Anyone who'd rather have Messages back can swap
+// it in from Customize (Nat 2026-07-25).
+const DEFAULT_HOME_SHORTCUTS: HomeShortcutKey[] = ['honey_pot', 'boards', 'feedback'];
 
 const HOME_SHORTCUT_META: Record<HomeShortcutKey, { label: string; emoji: string; icon: HiveIconName; adminOnly?: boolean }> = {
   honey_pot: { label: 'Honey Pot', emoji: '🍯', icon: 'honeypot' },
