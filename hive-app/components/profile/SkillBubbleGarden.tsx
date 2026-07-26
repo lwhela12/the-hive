@@ -260,11 +260,14 @@ const SEED_SURVEY: SurveyQuestion[] = [
 
 // Sized for legibility (Nat, 2026-07-23): smalls were unreadable, so the
 // lower tiers grew the most — every bloom's center disc now fits a real label.
+// Growth you can actually see. Small → large used to be only 1.36x, so
+// watering a flower barely changed it; it's 1.55x now, and the top end is
+// bigger outright (Nat 2026-07-26: "they can start bigger & grow even bigger").
 const STAGES: StageDef[] = [
   { label: 'Seed', height: 24, canvasWidth: 72, labelWidth: 100 },
   { label: 'Small bloom', height: 176, canvasWidth: 212, labelWidth: 218 },
-  { label: 'Medium bloom', height: 198, canvasWidth: 242, labelWidth: 248 },
-  { label: 'Large bloom', height: 240, canvasWidth: 282, labelWidth: 288 },
+  { label: 'Medium bloom', height: 210, canvasWidth: 254, labelWidth: 260 },
+  { label: 'Large bloom', height: 272, canvasWidth: 318, labelWidth: 324 },
 ];
 
 const SPECIES_BY_CATEGORY: Record<SkillCategoryDef['species'], WildflowerSpecies[]> = {
@@ -445,29 +448,36 @@ function getDepthBand(index: number) {
 }
 
 /**
- * How much room the grass gives for depth, i.e. how far the back band can sit
- * behind the front one. Depends only on how deep the grass is, so the meadow
- * height and the plant anchors can compute it independently and still agree.
+ * The tallest a bloom can draw at the front of a given garden. Several things
+ * are derived from this, so it lives in one place.
  */
-function getDepthLiftRange(groundHeight: number, bottomInset: number) {
-  return Math.max(24, groundHeight * 0.82 - bottomInset);
+function getTallestPlantHeight(width: number, compactLandscape = false) {
+  return getStageCanvasHeight(STAGES[STAGES.length - 1]) * getFrontRowScale(width, compactLandscape)
+    + LABEL_HEIGHT;
 }
 
 /**
- * Bands spread evenly across the available room rather than each taking a fixed
- * step. A fixed step got clipped by the grass on wide screens, which squashed
- * the two back bands together and undid the depth they were there to create.
+ * How much room the bands spread over on a wide garden. Proportional to how
+ * big the flowers are, which is the whole trick: bigger blooms get MORE
+ * stagger to sit in rather than being shrunk to fit (Nat 2026-07-26).
+ *
+ * Roots end up above the grass strip and out in the far field — which is where
+ * the meadow's distant blooms are painted, so they still read as planted.
  */
-function getDepthLift(index: number, groundHeight: number, bottomInset: number) {
-  return (getDepthBand(index) / MAX_DEPTH_BAND) * getDepthLiftRange(groundHeight, bottomInset);
+function getWideDepthLiftRange(width: number) {
+  return getTallestPlantHeight(width) * 0.62;
 }
 
-/** Things further away are smaller. This is most of the depth illusion. */
+/**
+ * Things further away are a little smaller — but only a little. The depth here
+ * comes from how far apart the bands sit, not from shrinking flowers down;
+ * everything is meant to stay big.
+ */
 function getDepthScaleFactor(band: number) {
-  return 1 - band * 0.055;
+  return 1 - band * 0.03;
 }
 
-/** ...and slightly hazier, which is the rest of it. */
+/** ...and slightly hazier, which does the rest of the work. */
 function getDepthOpacity(band: number) {
   return 1 - band * 0.045;
 }
@@ -498,11 +508,19 @@ function getFrontRowScale(width: number, compactLandscape = false) {
   const fullBloomWidth = STAGES[STAGES.length - 1].labelWidth;
   const sidePadding = clamp(effectiveWidth * 0.045, effectiveWidth < 520 ? 18 : 30, effectiveWidth > 1280 ? 96 : 58);
   const compactScale = compactLandscape ? PHONE_LANDSCAPE_SCALE : 1;
+  // Wide gardens size a bloom against its BAND-MATES, not against all ten
+  // slots. Depth splits the row into four bands, so a flower's real neighbours
+  // are roughly four slots away — dividing by ten sized every flower for a
+  // crowd that isn't standing next to it and kept the whole meadow small.
+  if (!compactLandscape && effectiveWidth >= 520) {
+    const usableWidth = effectiveWidth - sidePadding * 2;
+    const bandMateGap = (usableWidth * 4) / Math.max(1, GARDEN_CAPACITY - 1);
+    return clamp((bandMateGap * 0.95) / fullBloomWidth, 0.95, 1.5);
+  }
+
   const idealScale = ((effectiveWidth - sidePadding * 2) / (GARDEN_CAPACITY * fullBloomWidth)) * (compactLandscape ? 1.88 : 1.78) * compactScale;
-  const minScale = (compactLandscape ? 0.56 : effectiveWidth < 520 ? 0.54 : 0.82) * compactScale;
-  // Mid-width gardens (member sheets, visitor views) bloom nearly as big as
-  // the full-width tend view — the read-only garden shouldn't look wilted.
-  const maxScale = (compactLandscape ? 0.88 : effectiveWidth > 1280 ? 1.46 : effectiveWidth > 860 ? 1.36 : 1.12) * compactScale;
+  const minScale = (compactLandscape ? 0.56 : 0.54) * compactScale;
+  const maxScale = (compactLandscape ? 0.88 : 1.12) * compactScale;
 
   return clamp(idealScale, minScale, maxScale);
 }
@@ -640,10 +658,9 @@ function getFrontRowAnchorY(height: number, width: number, index: number, compac
     const lift = clamp(staggerPattern[index % staggerPattern.length], 0, maxLift);
     return plantedBaseAnchor - lift;
   }
-  // Every root stays inside the grass, same rule the phone branch above uses.
-  const bottomInset = clamp(width < 520 ? 34 : 48, 32, 58);
-
-  return baseAnchor - getDepthLift(index, groundHeight, bottomInset);
+  // Bands spread over a range sized to the blooms themselves, so growing the
+  // flowers automatically pushes them further apart instead of crowding them.
+  return baseAnchor - (getDepthBand(index) / MAX_DEPTH_BAND) * getWideDepthLiftRange(width);
 }
 
 function getMeadowHeight(skillCount: number, width: number, compactLandscape = false) {
@@ -667,17 +684,14 @@ function getMeadowHeight(skillCount: number, width: number, compactLandscape = f
   // clipped: bottom inset + how far back the deepest occupied band sits + the
   // tallest a bloom can draw at that depth, plus headroom.
   const bottomInset = clamp(48, 32, 58);
-  const groundHeight = getGroundHeight(width, false);
   // Same room the anchors use, scaled to the deepest band actually planted —
   // three flowers shouldn't reserve sky for a back row that isn't there.
-  const maxLift = (getMaxUsedDepthBand(skillCount) / MAX_DEPTH_BAND)
-    * getDepthLiftRange(groundHeight, bottomInset);
-  const tallestBloom = getStageCanvasHeight(STAGES[STAGES.length - 1]) * getFrontRowScale(width) + LABEL_HEIGHT;
+  const maxLift = (getMaxUsedDepthBand(skillCount) / MAX_DEPTH_BAND) * getWideDepthLiftRange(width);
   // A little sky over the tallest bloom so nothing is jammed against the top.
-  const needed = bottomInset + maxLift + tallestBloom + 44;
+  const needed = bottomInset + maxLift + getTallestPlantHeight(width) + 44;
   const extra = Math.max(0, skillCount - 18) * 5;
 
-  return clamp(needed + extra, 380, 780);
+  return clamp(needed + extra, 420, 1080);
 }
 
 type BouquetPlantLayout = { centerX: number; anchorY: number; scale: number };
