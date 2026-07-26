@@ -84,8 +84,12 @@ const CATCH_UP_BATCH_SIZE = 7;
 const CATCH_UP_MAX_DAYS = DAILY_QUESTIONS.length;
 // Screens that deep-link into Catch up (/hive?catchup=1&from=X) and where
 // closing it should put you back. Add a line here when a new door opens.
+// Retrace your steps: anything that deep-links into Home says where it came
+// from, and closing the sheet puts you back there instead of stranding you on
+// the HIVE tab.
 const CATCH_UP_RETURN_PATHS: Record<string, { pathname: string; params?: Record<string, string> }> = {
   swarm: { pathname: '/members', params: { view: 'swarm' } },
+  profile: { pathname: '/profile' },
 };
 
 const getRecentDailyQuestions = (days = CATCH_UP_BATCH_SIZE) => {
@@ -864,10 +868,20 @@ export default function HiveScreen() {
     }
   }, [activeWishStorageKey]);
 
+  // Where to put you back when a deep-linked wish sheet closes. Without it,
+  // Profile → App Feedback stranded you on the HIVE tab — the same "where did I
+  // go?" the Swarm pills had (Nat 2026-07-25).
+  const wishReturnRef = useRef<{ pathname: string; params?: Record<string, string> } | null>(null);
+
   const closeWishDetail = useCallback(() => {
     setSelectedWish(null);
     clearSelectedWishResume();
-  }, [clearSelectedWishResume]);
+    const back = wishReturnRef.current;
+    if (back) {
+      wishReturnRef.current = null;
+      router.replace(back as any);
+    }
+  }, [clearSelectedWishResume, router]);
 
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
@@ -1513,8 +1527,10 @@ export default function HiveScreen() {
     if (!openWishId || !communityId) return;
     if (handledOpenWishIdRef.current === openWishId) return;
     handledOpenWishIdRef.current = openWishId;
+    const origin = Array.isArray(from) ? from[0] : from;
+    wishReturnRef.current = CATCH_UP_RETURN_PATHS[origin ?? ''] ?? null;
     void openWishById(openWishId, { alertOnUnavailable: true });
-  }, [openWishId, communityId, openWishById]);
+  }, [openWishId, communityId, openWishById, from]);
 
   const openEventFromActivity = useCallback(async (eventId: string) => {
     if (!communityId) return;

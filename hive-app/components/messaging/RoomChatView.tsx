@@ -119,6 +119,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
   const [draftImageUrl, setDraftImageUrl] = useState(currentCustomImageUrl);
   const [draftThemeKey, setDraftThemeKey] = useState<ChatRoomThemeKey>(currentThemeKey);
   const [savingCustomization, setSavingCustomization] = useState(false);
+  const [deletingRoom, setDeletingRoom] = useState(false);
   const [uploadingCustomizationImage, setUploadingCustomizationImage] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
@@ -733,6 +734,43 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
 
   const draftTheme = CHAT_ROOM_THEMES[draftThemeKey];
 
+  // The General room belongs to the community, not to whoever opened it.
+  const isGeneralRoom = !!room.is_community_room || /^general$/i.test(room.name ?? '');
+
+  const handleDeleteRoom = async () => {
+    if (deletingRoom || isGeneralRoom) return;
+    const label = roomTitle || 'this chat';
+    const message = `Delete ${label}?\n\nEvery message in it goes too, for everyone. This can't be undone.`;
+
+    const confirmed = typeof window !== 'undefined' && window.confirm
+      ? window.confirm(message)
+      : await new Promise<boolean>((resolve) => {
+          Alert.alert('Delete chat', message, [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Delete', style: 'destructive', onPress: () => resolve(true) },
+          ]);
+        });
+    if (!confirmed) return;
+
+    setDeletingRoom(true);
+    try {
+      // Messages and membership first — a room row left without them is worse
+      // than one left whole.
+      await supabase.from('room_messages').delete().eq('room_id', room.id);
+      await supabase.from('chat_room_members').delete().eq('room_id', room.id);
+      const { error } = await supabase.from('chat_rooms').delete().eq('id', room.id);
+      if (error) throw error;
+
+      setShowCustomizeModal(false);
+      onBack();
+    } catch (error) {
+      console.warn('Could not delete the room', error);
+      Alert.alert('Could not delete', 'That chat could not be deleted. Please try again.');
+    } finally {
+      setDeletingRoom(false);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1" edges={['top']} style={{ backgroundColor: roomTheme.header }}>
       <KeyboardAvoidingView
@@ -991,6 +1029,24 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                   )}
                 </Pressable>
               </View>
+
+              {/* Delete the chat. Lives at the bottom of the settings sheet,
+                  behind a confirm — leaving stale rooms lying around meant
+                  asking someone with database access to clear them, which is
+                  not a feature (Nat 2026-07-25). General is the community's
+                  room and isn't deletable. */}
+              {!isGeneralRoom && (
+                <Pressable
+                  onPress={handleDeleteRoom}
+                  disabled={deletingRoom}
+                  className="h-12 rounded-2xl items-center justify-center mt-3"
+                  style={{ opacity: deletingRoom ? 0.6 : 1 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-600">
+                    {deletingRoom ? 'Deleting…' : 'Delete this chat'}
+                  </Text>
+                </Pressable>
+              )}
             </Pressable>
           </Pressable>
         </Modal>

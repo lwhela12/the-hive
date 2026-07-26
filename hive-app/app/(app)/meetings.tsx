@@ -1072,11 +1072,8 @@ export default function MeetingsScreen() {
   };
 
   const getMeetingCardStatus = (meeting: Meeting) => {
-    const parsed = parseMeetingSummaryPreview(meeting.summary);
-    if (parsed.import_status === 'pending') return 'needs preview';
-    if (parsed.import_status === 'preview') return 'needs review';
-    if (parsed.import_status === 'applied') return 'applied';
-    if (parsed.import_status === 'live') return 'live notes';
+    // Import states are gone with the notes flow; a meeting is just written or
+    // not written now.
     return meeting.processing_status;
   };
 
@@ -1164,24 +1161,7 @@ export default function MeetingsScreen() {
               </Text>
             </Pressable>
 
-            {/* Import Notes */}
-            <Pressable
-              onPress={() => openNotesImport()}
-              style={({ pressed }) => ({
-                flex: useCompactActions ? undefined : 1,
-                width: useCompactActions ? '48%' : undefined,
-                backgroundColor: 'rgba(255,255,255,0.08)',
-                borderRadius: 14,
-                paddingVertical: 16,
-                alignItems: 'center',
-                opacity: pressed ? 0.75 : 1,
-              })}
-            >
-              <Text style={{ fontSize: 22, marginBottom: 4 }}>📝</Text>
-              <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 13 }}>
-                Import Notes
-              </Text>
-            </Pressable>
+
 
             {/* Newsletter Draft — everything since the last meeting, gathered
                 into the same shape as a meeting summary so writing the
@@ -1340,7 +1320,7 @@ export default function MeetingsScreen() {
                     Status:{' '}
                     <Text
                       className={
-                        cardStatus === 'applied' || cardStatus === 'complete' || cardStatus === 'live notes'
+                        cardStatus === 'complete'
                           ? 'text-green-600'
                           : cardStatus === 'failed'
                           ? 'text-red-600'
@@ -1352,9 +1332,7 @@ export default function MeetingsScreen() {
                   </Text>
                 </View>
                 <Text className="text-2xl">
-                  {cardStatus === 'needs preview' || cardStatus === 'needs review'
-                    ? '↪'
-                    : meeting.processing_status === 'complete'
+                  {meeting.processing_status === 'complete'
                     ? '✓'
                     : meeting.processing_status === 'failed'
                     ? '✗'
@@ -1388,215 +1366,6 @@ export default function MeetingsScreen() {
         onSchedule={handleScheduleMeeting}
       />
 
-      {/* Import Gemini meeting notes */}
-      <Modal
-        visible={showNotesImport}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={closeNotesImport}
-      >
-        <SafeAreaView className="flex-1 bg-white" edges={['top']}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-            <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
-              <Pressable onPress={closeNotesImport} disabled={importingNotes}>
-                <Text className="text-label text-base">Cancel</Text>
-              </Pressable>
-              <Text className="text-lg font-bold text-hive-dark">Import Notes</Text>
-              <Pressable
-                onPress={handleImportNotes}
-                disabled={importingNotes || !hasImportableNotes}
-                className={importingNotes || !hasImportableNotes ? 'opacity-50' : ''}
-              >
-                <Text className="text-honey-600 text-base font-semibold">
-                  {importingNotes ? 'Importing...' : 'Import'}
-                </Text>
-              </Pressable>
-            </View>
-
-            <ScrollView className="flex-1 p-4" keyboardShouldPersistTaps="handled">
-              <View className="mb-4">
-                <Text className="text-sm font-medium text-gray-700 mb-1">Meeting</Text>
-                <View className="border border-gray-300 rounded-lg p-3 bg-white">
-                  <View className="flex-row items-start justify-between gap-3">
-                    <View className="flex-1">
-                      <Text className="font-semibold text-gray-800">
-                        {selectedImportMeeting ? normalizeHiveBrandText(selectedImportMeeting.title) : 'Not linked to a scheduled meeting'}
-                      </Text>
-                      <Text className="text-sm text-label mt-1">
-                        {selectedImportMeeting
-                          ? `${formatDateLong(selectedImportMeeting.event_date)}${selectedImportMeeting.event_time ? ` at ${selectedImportMeeting.event_time}` : ''}`
-                          : 'Use this for older notes, hand notes, or anything not on the calendar.'}
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={() => setShowMeetingPicker((showing) => !showing)}
-                      className="bg-gray-100 px-3 py-2 rounded-lg active:bg-gray-200"
-                    >
-                      <Text className="text-gray-700 font-semibold">
-                        {showMeetingPicker ? 'Done' : 'Choose'}
-                      </Text>
-                    </Pressable>
-                  </View>
-
-                  {showMeetingPicker && (
-                    <View className="mt-3 pt-3 border-t border-gray-200">
-                      <Pressable
-                        onPress={() => selectNotesImportMeeting(null)}
-                        className={`rounded-lg p-3 mb-2 active:bg-gray-100 ${!notesImportForm.linkedEventId ? 'bg-honey-50 border border-honey-200' : 'bg-gray-50'}`}
-                      >
-                        <Text className="font-semibold text-gray-800">Standalone notes</Text>
-                        <Text className="text-sm text-label mt-1">Do not link to a scheduled meeting.</Text>
-                      </Pressable>
-
-                      {meetingEvents.length === 0 ? (
-                        <Text className="text-sm text-label p-3">
-                          No scheduled meetings found yet.
-                        </Text>
-                      ) : (
-                        meetingEvents.map((event) => (
-                          <Pressable
-                            key={event.id}
-                            onPress={() => selectNotesImportMeeting(event)}
-                            className={`rounded-lg p-3 mb-2 active:bg-gray-100 ${notesImportForm.linkedEventId === event.id ? 'bg-honey-50 border border-honey-200' : 'bg-gray-50'}`}
-                          >
-                            <Text className="font-semibold text-gray-800">{normalizeHiveBrandText(event.title)}</Text>
-                            <Text className="text-sm text-label mt-1">
-                              {formatDateLong(event.event_date)}{event.event_time ? ` at ${event.event_time}` : ''}
-                            </Text>
-                          </Pressable>
-                        ))
-                      )}
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              <View className="mb-4">
-                <Text className="text-sm font-medium text-gray-700 mb-1">Title</Text>
-                <TextInput
-                  value={notesImportForm.title}
-                  onChangeText={(title) => setNotesImportForm((form) => ({ ...form, title: normalizeHiveBrandText(title) }))}
-                  className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                  placeholder="HIVE Meeting"
-                />
-              </View>
-
-              <View className="mb-4">
-                <EventDatePicker
-                  value={notesImportForm.date}
-                  onChange={(date) => setNotesImportForm((form) => ({ ...form, date }))}
-                />
-              </View>
-
-              <View className="mb-4">
-                <Text className="text-sm font-medium text-gray-700 mb-1">Voice Memos</Text>
-                {notesDropActive && (
-                  <View className="border-2 border-dashed border-honey-400 bg-honey-50 rounded-lg p-4 mb-3">
-                    <Text className="text-honey-900 font-semibold text-center">
-                      Drop the voice memos (or notes files) here 🎙️
-                    </Text>
-                  </View>
-                )}
-                {notesImportForm.audioFiles.length > 0 && (
-                  <View className="border border-honey-200 bg-honey-50 rounded-lg p-3 mb-3">
-                    {notesImportForm.audioFiles.map((file, index) => (
-                      <View key={`${file.storagePath}`} className={index > 0 ? 'mt-3 pt-3 border-t border-honey-200' : ''}>
-                        <Text className="text-honey-900 font-medium">🎙️ {file.fileName}</Text>
-                        <Pressable
-                          onPress={() => removeAudioFile(index)}
-                          className="bg-gray-200 px-3 py-2 rounded-lg active:bg-gray-300 self-start mt-2"
-                        >
-                          <Text className="text-gray-700 font-semibold">Remove</Text>
-                        </Pressable>
-                      </View>
-                    ))}
-                  </View>
-                )}
-                <View className="flex-row flex-wrap gap-2 items-center">
-                  <Pressable
-                    onPress={() => handlePickNotesFile(true)}
-                    className="border border-dashed border-honey-400 bg-honey-50 rounded-lg px-4 py-3 active:bg-honey-100"
-                  >
-                    <Text className="text-honey-900 font-semibold">🎙️ Add voice memos</Text>
-                  </Pressable>
-                  {uploadingAudioCount > 0 && (
-                    <Text className="text-honey-700 text-sm">
-                      Uploading {uploadingAudioCount} file{uploadingAudioCount === 1 ? '' : 's'}…
-                    </Text>
-                  )}
-                </View>
-                <Text className="text-label text-sm mt-2">
-                  {Platform.OS === 'web'
-                    ? 'Drag & drop .m4a voice memos anywhere on this page, or tap to browse. Clive transcribes them automatically.'
-                    : 'Add the .m4a voice memos from the meeting — Clive transcribes them automatically.'}
-                </Text>
-              </View>
-
-              <View className="mb-4">
-                <Text className="text-sm font-medium text-gray-700 mb-1">Notes File</Text>
-                {notesImportForm.files.length > 0 && (
-                  <View className="border border-honey-200 bg-honey-50 rounded-lg p-3 mb-3">
-                    {notesImportForm.files.map((file, index) => (
-                      <View key={`${file.fileName}-${index}`} className={index > 0 ? 'mt-3 pt-3 border-t border-honey-200' : ''}>
-                        <Text className="text-honey-900 font-medium">{file.fileName}</Text>
-                        <Pressable
-                          onPress={() => removeNotesFile(index)}
-                          className="bg-gray-200 px-3 py-2 rounded-lg active:bg-gray-300 self-start mt-2"
-                        >
-                          <Text className="text-gray-700 font-semibold">Remove</Text>
-                        </Pressable>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                <View className="flex-row flex-wrap gap-2">
-                  <Pressable
-                    onPress={() => handlePickNotesFile()}
-                    className="border border-dashed border-gray-300 rounded-lg px-4 py-3 active:bg-gray-50"
-                  >
-                    <Text className="text-gray-700 font-semibold">Upload file</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={addNotesPhotos}
-                    className="border border-dashed border-gray-300 rounded-lg px-4 py-3 active:bg-gray-50"
-                  >
-                    <Text className="text-gray-700 font-semibold">Add photos</Text>
-                  </Pressable>
-                  {Platform.OS !== 'web' && (
-                    <Pressable
-                      onPress={takeNotesPhoto}
-                      className="border border-dashed border-gray-300 rounded-lg px-4 py-3 active:bg-gray-50"
-                    >
-                      <Text className="text-gray-700 font-semibold">Take photo</Text>
-                      </Pressable>
-                  )}
-                </View>
-                {notesImportForm.files.length === 0 && (
-                  <Text className="text-label text-sm mt-2">
-                    Upload .docx, .pdf, .txt, .md, or photos of handwritten notes. Or paste the notes below.
-                  </Text>
-                )}
-              </View>
-
-              <View className="mb-4">
-                <Text className="text-sm font-medium text-gray-700 mb-1">Gemini Notes</Text>
-                <TextInput
-                  value={notesImportForm.notes}
-                  onChangeText={(notes) => setNotesImportForm((form) => ({ ...form, notes }))}
-                  className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                  placeholder="Paste Google Meet notes here"
-                  multiline
-                  blurOnSubmit={false}
-                  onKeyPress={submitOnEnter(handleImportNotes)}
-                  textAlignVertical="top"
-                  style={{ minHeight: 260 }}
-                />
-              </View>
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </Modal>
 
       {/* Edit Meeting Modal */}
       <Modal

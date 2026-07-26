@@ -684,7 +684,7 @@ export default function ProfileScreen() {
           .limit(1)
           .maybeSingle();
         if (data?.id) {
-          router.push({ pathname: '/hive', params: { openWishId: data.id } });
+          router.push({ pathname: '/hive', params: { openWishId: data.id, from: 'profile' } });
           return;
         }
       } catch (error) {
