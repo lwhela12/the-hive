@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Easing,
   LayoutChangeEvent,
@@ -456,16 +457,47 @@ function getTallestPlantHeight(width: number, compactLandscape = false) {
     + LABEL_HEIGHT;
 }
 
+const GARDEN_SIDE_PADDING = (width: number) => clamp(width * 0.045, width < 520 ? 18 : 30, width > 1280 ? 96 : 58);
+const GARDEN_BOTTOM_INSET = 48;
+const GARDEN_SKY_ROOM = 44;
+
 /**
- * How much room the bands spread over on a wide garden. Proportional to how
- * big the flowers are, which is the whole trick: bigger blooms get MORE
- * stagger to sit in rather than being shrunk to fit (Nat 2026-07-26).
+ * How big each flower draws, given how many are sharing the meadow.
  *
- * Roots end up above the grass strip and out in the far field — which is where
- * the meadow's distant blooms are painted, so they still read as planted.
+ * The garden is a fixed pane now, so the flowers divide it between them: four
+ * skills bloom huge, twenty bloom small, and adding one makes everyone else a
+ * little smaller (Nat 2026-07-26, and it's the fix for a garden that used to
+ * overflow the screen). Area-based rather than width-based, because the blooms
+ * spread over four depth bands rather than standing in a line.
  */
-function getWideDepthLiftRange(width: number) {
-  return getTallestPlantHeight(width) * 0.62;
+function getPackedScale(width: number, height: number, count: number, compactLandscape = false) {
+  if (compactLandscape || width < 520) return getFrontRowScale(width, compactLandscape);
+
+  const usableWidth = Math.max(1, width - GARDEN_SIDE_PADDING(width) * 2);
+  const usableHeight = Math.max(1, height - GARDEN_BOTTOM_INSET - GARDEN_SKY_ROOM);
+  const bloom = STAGES[STAGES.length - 1];
+  const unitArea = bloom.labelWidth * (getStageCanvasHeight(bloom) + LABEL_HEIGHT);
+  // Above 1 because blooms are allowed to overlap — petals tucking behind each
+  // other is the look, so each needs less room than its own bounding box.
+  const OVERLAP_ALLOWANCE = 1.35;
+  const areaPerFlower = (usableWidth * usableHeight * OVERLAP_ALLOWANCE) / Math.max(1, count);
+  // A lone skill would otherwise take the whole area budget and grow taller
+  // than the pane it's standing in, so cap by what actually fits.
+  const tallestThatFits = usableHeight / (getStageCanvasHeight(bloom) + LABEL_HEIGHT);
+
+  return clamp(Math.sqrt(areaPerFlower / unitArea), 0.5, Math.min(2.4, tallestThatFits));
+}
+
+/**
+ * Whatever vertical room the blooms didn't take, the stagger spreads into — so
+ * the depth bands always use the full pane rather than a fixed offset that
+ * either wasted space or overflowed it.
+ */
+function getDepthLiftRange(height: number, plantScale: number) {
+  const usableHeight = Math.max(1, height - GARDEN_BOTTOM_INSET - GARDEN_SKY_ROOM);
+  const tallestPlant = (getStageCanvasHeight(STAGES[STAGES.length - 1]) + LABEL_HEIGHT) * plantScale;
+
+  return Math.max(40, usableHeight - tallestPlant);
 }
 
 /**
@@ -638,7 +670,7 @@ function buildFlowerSlots(skills: GardenSkill[], pinnedSlots: Record<string, num
     .filter((slot): slot is FlowerSlot => Boolean(slot));
 }
 
-function getFrontRowAnchorY(height: number, width: number, index: number, compactLandscape = false, groundHeight = GROUND_HEIGHT) {
+function getFrontRowAnchorY(height: number, width: number, index: number, compactLandscape = false, groundHeight = GROUND_HEIGHT, depthLiftRange?: number) {
   const baseAnchor = height - clamp(width < 520 ? 34 : 48, 32, 58);
   if (compactLandscape) {
     const foregroundTop = height - groundHeight;
@@ -658,12 +690,17 @@ function getFrontRowAnchorY(height: number, width: number, index: number, compac
     const lift = clamp(staggerPattern[index % staggerPattern.length], 0, maxLift);
     return plantedBaseAnchor - lift;
   }
-  // Bands spread over a range sized to the blooms themselves, so growing the
-  // flowers automatically pushes them further apart instead of crowding them.
-  return baseAnchor - (getDepthBand(index) / MAX_DEPTH_BAND) * getWideDepthLiftRange(width);
+  // Bands spread across whatever vertical room the blooms left over, so the
+  // pane is always fully used whether it holds four flowers or twenty.
+  return baseAnchor - (getDepthBand(index) / MAX_DEPTH_BAND) * (depthLiftRange ?? 0);
 }
 
-function getMeadowHeight(skillCount: number, width: number, compactLandscape = false) {
+function getMeadowHeight(
+  skillCount: number,
+  width: number,
+  compactLandscape = false,
+  viewportHeight = 0
+) {
   if (compactLandscape) {
     const base = (skillCount === 0 ? 285 : 350) * PHONE_LANDSCAPE_SCALE;
     const extra = Math.max(0, skillCount - GARDEN_CAPACITY) * 3 * PHONE_LANDSCAPE_SCALE;
@@ -678,20 +715,14 @@ function getMeadowHeight(skillCount: number, width: number, compactLandscape = f
     return clamp(base + extra, base, width < 420 ? 720 : 780);
   }
 
-  // Wide gardens size to what's actually planted rather than sitting at a flat
-  // 560 with the top 40% empty sky (Nat 2026-07-26). Derived from the same
-  // numbers the plants are positioned with, so a deeper band can never be
-  // clipped: bottom inset + how far back the deepest occupied band sits + the
-  // tallest a bloom can draw at that depth, plus headroom.
-  const bottomInset = clamp(48, 32, 58);
-  // Same room the anchors use, scaled to the deepest band actually planted —
-  // three flowers shouldn't reserve sky for a back row that isn't there.
-  const maxLift = (getMaxUsedDepthBand(skillCount) / MAX_DEPTH_BAND) * getWideDepthLiftRange(width);
-  // A little sky over the tallest bloom so nothing is jammed against the top.
-  const needed = bottomInset + maxLift + getTallestPlantHeight(width) + 44;
-  const extra = Math.max(0, skillCount - 18) * 5;
+  // A pane that fits the screen, not a canvas that grows with the garden. It
+  // used to size itself to the tallest bloom plus the stagger, which overflowed
+  // a laptop once the flowers got big (Nat 2026-07-26). Now the pane is fixed
+  // and the FLOWERS divide it between them — see getPackedScale.
+  const chromeAllowance = 300; // page header, garden heading, seed tray, tab bar
+  const fromViewport = viewportHeight > 0 ? viewportHeight - chromeAllowance : 560;
 
-  return clamp(needed + extra, 420, 1080);
+  return clamp(fromViewport, 420, 760);
 }
 
 type BouquetPlantLayout = { centerX: number; anchorY: number; scale: number };
@@ -1648,6 +1679,8 @@ function SkillPlant({
   onEntryComplete,
   compactLandscape,
   groundHeight,
+  plantScale,
+  depthLiftRange,
   layoutOverride,
   beeWishes,
   onBeePress,
@@ -1666,6 +1699,10 @@ function SkillPlant({
   onEntryComplete: (skill: GardenSkill) => void;
   compactLandscape: boolean;
   groundHeight: number;
+  /** Base scale for every bloom, divided out by how many share the pane. */
+  plantScale?: number;
+  /** Vertical room the depth bands spread across. */
+  depthLiftRange?: number;
   layoutOverride?: BouquetPlantLayout;
   beeWishes?: MatchedWish[];
   onBeePress?: (skill: GardenSkill, slotIndex: number) => void;
@@ -1674,7 +1711,11 @@ function SkillPlant({
   const bloomStep = getBloomStep(level);
   const stage = getStage(level);
   const category = getCategoryForSkill(skill.description);
-  const rowScale = layoutOverride?.scale ?? getPlantScale(width, compactLandscape, index);
+  const depthBandForScale = layoutOverride || compactLandscape || width < 520 ? 0 : getDepthBand(index);
+  const rowScale = layoutOverride?.scale
+    ?? (plantScale !== undefined
+      ? plantScale * getDepthScaleFactor(depthBandForScale)
+      : getPlantScale(width, compactLandscape, index));
   // Which depth band this plant sits in, so size, haze and draw order all
   // agree. Overridden layouts (the read-only bouquet) are flat by design.
   const depthBand = layoutOverride || compactLandscape || width < 520 ? 0 : getDepthBand(index);
@@ -1684,7 +1725,8 @@ function SkillPlant({
   const spriteHeight = getStageCanvasHeight(stage) * rowScale * (bloomStep >= 3 ? 1.04 : 1);
   const plantHeight = spriteHeight + (showLabel ? LABEL_HEIGHT : 8);
   const centerX = layoutOverride?.centerX ?? getFrontRowCenterX(index, count, width);
-  const anchorY = layoutOverride?.anchorY ?? getFrontRowAnchorY(height, width, index, compactLandscape, groundHeight);
+  const anchorY = layoutOverride?.anchorY
+    ?? getFrontRowAnchorY(height, width, index, compactLandscape, groundHeight, depthLiftRange);
   const left = clamp(centerX - plantWidth / 2, -plantWidth * 0.28, Math.max(-plantWidth * 0.28, width - plantWidth * 0.72));
   const top = clamp(anchorY - plantHeight, 6, Math.max(6, height - plantHeight - 4));
   const labelFont = clamp(12 * rowScale - Math.max(0, skill.description.length - 22) * 0.06, 8.4, 12);
@@ -2859,18 +2901,43 @@ function SeedSurvey({
       return;
     }
 
-    const chosenSuggestions = mode === 'fill'
-      ? suggestions.slice(0, Math.max(0, openSlots))
-      : suggestions.slice(0, GARDEN_CAPACITY);
+    const plantSelected = () => {
+      const chosenSuggestions = mode === 'fill'
+        ? suggestions.slice(0, Math.max(0, openSlots))
+        : suggestions.slice(0, GARDEN_CAPACITY);
 
-    if (onPlantSkills) {
-      onPlantSkills(chosenSuggestions, { mode });
-    } else {
-      chosenSuggestions.forEach(seed => onPlantSkill?.(seed.description, { enthusiasmLevel: seed.enthusiasmLevel }));
+      if (onPlantSkills) {
+        onPlantSkills(chosenSuggestions, { mode });
+      } else {
+        chosenSuggestions.forEach(seed => onPlantSkill?.(seed.description, { enthusiasmLevel: seed.enthusiasmLevel }));
+      }
+
+      setActive(false);
+      resetSurvey(false, true);
+    };
+
+    // "Plant Fresh Garden" unplants EVERY skill you have and replants
+    // suggestions over the top. It read like "add some flowers" and had no
+    // confirm, which is very probably why members reported their skills being
+    // deleted — the rows survive, but every flower they'd placed vanishes
+    // (Nat 2026-07-26). Only ask when there's actually a garden to lose.
+    const plantedCount = plantedNames.size;
+    if (mode === 'replace' && plantedCount > 0) {
+      const message = `Start over? This clears all ${plantedCount} flower${plantedCount === 1 ? '' : 's'} in your garden and plants these suggestions instead.\n\nYour skills are kept — but where you placed them, and how grown they are, will be lost.`;
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.confirm) {
+        if (window.confirm(message)) plantSelected();
+        return;
+      }
+
+      Alert.alert('Start over?', message, [
+        { text: 'Keep my garden', style: 'cancel' },
+        { text: 'Start over', style: 'destructive', onPress: plantSelected },
+      ]);
+      return;
     }
 
-    setActive(false);
-    resetSurvey(false, true);
+    plantSelected();
   };
 
   const sunSize = compact ? 78 : narrow ? 132 : 206;
@@ -3191,7 +3258,7 @@ function SeedSurvey({
               <Pressable
                 onPress={() => plantSuggestions('replace')}
                 accessibilityRole="button"
-                accessibilityLabel="Plant a fresh garden"
+                accessibilityLabel="Clear this garden and plant these suggestions instead"
                 style={{
                   minHeight: 42,
                   borderRadius: 999,
@@ -3209,8 +3276,10 @@ function SeedSurvey({
                     : {}),
                 }}
               >
+                {/* Says what it does. "Plant Fresh Garden" sounded additive
+                    while it was quietly clearing everything. */}
                 <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 13 }}>
-                  Plant Fresh Garden
+                  {hasSkills ? 'Start over with these' : 'Plant Fresh Garden'}
                 </Text>
               </Pressable>
               {hasSkills && openSlots > 0 ? (
@@ -3424,7 +3493,11 @@ export function SkillBubbleGarden({
     [editable, visibleSkills, width]
   );
   const meadowHeight = bouquetLayout?.meadowHeight
-    ?? getMeadowHeight(visibleSkills.length, width || 680, compactLandscape);
+    ?? getMeadowHeight(visibleSkills.length, width || 680, compactLandscape, viewport.height);
+  // Worked out once for the whole meadow so every bloom, the stagger and the
+  // bee popover are all reading the same numbers.
+  const plantScale = getPackedScale(width || 680, meadowHeight, visibleSkills.length, compactLandscape);
+  const depthLiftRange = getDepthLiftRange(meadowHeight, plantScale);
   const showLandscapeHint = editable && width > 0 && width < 560;
   const seedLaneWidth = compactLandscape ? 72 : 112;
   const seedGap = compactLandscape ? 4 : 7;
@@ -3668,6 +3741,8 @@ export function SkillBubbleGarden({
             onEntryComplete={handleEntryComplete}
             compactLandscape={compactLandscape}
             groundHeight={groundHeight}
+            plantScale={plantScale}
+            depthLiftRange={depthLiftRange}
             layoutOverride={bouquetLayout?.positions.get(skill.id)}
             skills={skills}
             beeWishes={beeWishesBySkillId.get(skill.id)}
@@ -3678,10 +3753,11 @@ export function SkillBubbleGarden({
         {beePopover && width > 0 && (() => {
           const cardWidth = Math.min(272, Math.max(200, width - 24));
           const centerX = getFrontRowCenterX(beePopover.slotIndex, GARDEN_CAPACITY, width);
-          const anchorY = getFrontRowAnchorY(meadowHeight, width, beePopover.slotIndex, compactLandscape, groundHeight);
-          // Same slot index as the anchor above, so the popover keeps sitting
-          // on the flower now that depth changes how big it draws.
-          const rowScale = getPlantScale(width, compactLandscape, beePopover.slotIndex);
+          const anchorY = getFrontRowAnchorY(meadowHeight, width, beePopover.slotIndex, compactLandscape, groundHeight, depthLiftRange);
+          // Reads the meadow's own scale and lift, so the popover keeps sitting
+          // on its flower however big the garden decided that flower should be.
+          const popoverBand = compactLandscape || width < 520 ? 0 : getDepthBand(beePopover.slotIndex);
+          const rowScale = plantScale * getDepthScaleFactor(popoverBand);
           const spriteHeight = getStageCanvasHeight(getStage(getLevel(beePopover.skill))) * rowScale;
           const cardLeft = clamp(centerX - cardWidth / 2, 10, Math.max(10, width - cardWidth - 10));
           const cardBottom = clamp(
