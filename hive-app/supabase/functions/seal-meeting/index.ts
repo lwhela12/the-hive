@@ -122,6 +122,24 @@ serve(async (req) => {
     if (!communityId) return errorResponse('Missing communityId', 400);
     const date = /^\d{4}-\d{2}-\d{2}$/.test(body.date ?? '') ? body.date! : pacificToday();
 
+    // A nightly run must only seal on a REAL meeting day. Without this, any
+    // Tuesday with a new board thread would mint a meeting record for a meeting
+    // that never happened — worse than a missing summary, because it looks
+    // real. Sealing from the deck stays unconditional; a human tapping Seal
+    // knows there was a meeting.
+    if (!body.date) {
+      const { data: meetingDay } = await supabaseAdmin
+        .from('events')
+        .select('id')
+        .eq('community_id', communityId)
+        .eq('event_type', 'meeting')
+        .eq('event_date', date)
+        .limit(1);
+      if ((meetingDay ?? []).length === 0) {
+        return jsonResponse({ success: true, sealed: false, reason: 'No meeting on that date.' });
+      }
+    }
+
     // Auth: the daily cron calls with the service key; members seal from the deck.
     const authHeader = req.headers.get('Authorization') ?? '';
     let sealedBy: string | null = null;

@@ -514,7 +514,7 @@ const resolveHomeSectionOrder = (saved?: readonly string[] | null): HomeSectionK
 };
 
 // Customizable home shortcut hexes (persisted per member in profiles.home_shortcuts).
-type HomeShortcutKey = 'honey_pot' | 'boards' | 'messages' | 'members' | 'meetings' | 'profile' | 'clive' | 'admin';
+type HomeShortcutKey = 'honey_pot' | 'boards' | 'messages' | 'members' | 'meetings' | 'profile' | 'clive' | 'feedback' | 'admin';
 
 const DEFAULT_HOME_SHORTCUTS: HomeShortcutKey[] = ['honey_pot', 'boards', 'messages'];
 
@@ -526,6 +526,10 @@ const HOME_SHORTCUT_META: Record<HomeShortcutKey, { label: string; emoji: string
   meetings: { label: 'Meetings', emoji: '📅', icon: 'calendar' },
   profile: { label: 'My Profile', emoji: '👤', icon: 'person' },
   clive: { label: 'Clive', emoji: '✨', icon: 'sparkle' },
+  // Reporting a bug shouldn't require remembering it's buried in Profile — the
+  // people most likely to hit one are the least likely to go hunting for where
+  // to say so (Nat 2026-07-25).
+  feedback: { label: 'App Feedback', emoji: '💬', icon: 'question' },
   admin: { label: 'Admin', emoji: '⚙️', icon: 'gear', adminOnly: true },
 };
 
@@ -1531,6 +1535,29 @@ export default function HiveScreen() {
     wishReturnRef.current = CATCH_UP_RETURN_PATHS[origin ?? ''] ?? null;
     void openWishById(openWishId, { alertOnUnavailable: true });
   }, [openWishId, communityId, openWishById, from]);
+
+  // Same jump Profile's App Feedback makes: open the community's bug-reports
+  // wish. Kept here so the Home shortcut doesn't have to bounce through Profile.
+  const openAppFeedback = useCallback(async () => {
+    if (!communityId) return;
+    try {
+      const { data } = await (supabase as any)
+        .from('wishes')
+        .select('id')
+        .eq('community_id', communityId)
+        .eq('status', 'public')
+        .ilike('title', '%bug report%')
+        .limit(1)
+        .maybeSingle();
+      if (data?.id) {
+        void openWishById(data.id, { alertOnUnavailable: true });
+        return;
+      }
+      Alert.alert('Not set up yet', 'There is no bug reports wish on the boards to post to.');
+    } catch (error) {
+      console.warn('Could not find the bug reports wish', error);
+    }
+  }, [communityId, openWishById]);
 
   const openEventFromActivity = useCallback(async (eventId: string) => {
     if (!communityId) return;
@@ -3146,6 +3173,7 @@ export default function HiveScreen() {
                   meetings: () => router.push('/meetings' as any),
                   profile: () => router.push('/profile' as any),
                   clive: () => router.push('/' as any),
+                  feedback: () => void openAppFeedback(),
                   admin: () => router.push('/admin' as any),
                 };
                 return (
