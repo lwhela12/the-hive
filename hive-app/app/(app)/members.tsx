@@ -1975,6 +1975,24 @@ function MemberDetailModal({
               </View>
             )}
 
+            {/* Section headers carry their own pencil on your own card, so
+                editing what you're looking at doesn't mean scrolling back to
+                the top to find the one button (Nat 2026-07-26). They don't
+                make the card editable — the card stays the audience view —
+                they're shortcuts INTO backstage, landing on the right part. */}
+            {isCurrentUser ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#a09274', letterSpacing: 0.6 }}>
+                  ABOUT YOU
+                </Text>
+                <EditButton
+                  size={30}
+                  onPress={() => { onClose(); router.push({ pathname: '/profile', params: { focus: 'about' } }); }}
+                  accessibilityLabel="Edit your bio and details"
+                />
+              </View>
+            ) : null}
+
             <ProfileShowcase
               honeycombItems={memberHoneycombItems}
               knownFor={member.known_for}
@@ -2026,8 +2044,15 @@ function MemberDetailModal({
                     {member.skills.filter(s => Number(s.enthusiasm_level ?? 0) > 0).length} skill flowers blooming
                   </Text>
                 </View>
-                {/* No self buttons here — tending and skill edits live
-                    backstage; this card is the member view for everyone. */}
+                {/* Tending still happens backstage — this just takes you
+                    straight to the garden instead of the top of the page. */}
+                {isCurrentUser ? (
+                  <EditButton
+                    size={30}
+                    onPress={() => { onClose(); router.push({ pathname: '/profile', params: { focus: 'garden' } }); }}
+                    accessibilityLabel="Tend your Skills Garden"
+                  />
+                ) : null}
               </View>
 
               {member.skills.length === 0 && false ? (

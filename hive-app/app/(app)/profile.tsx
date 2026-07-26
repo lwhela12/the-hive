@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { requestMediaLibraryPermission } from '../../lib/imagePicker';
 import { supabase } from '../../lib/supabase';
@@ -160,6 +160,11 @@ export default function ProfileScreen() {
   const [userInsights, setUserInsights] = useState<UserInsights | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const scrollViewRef = useRef<ScrollView>(null);
+  // Section pencils on the member card deep-link here with ?focus=, so tapping
+  // the one next to your garden lands on your garden rather than the top of
+  // the page (Nat 2026-07-26).
+  const { focus } = useLocalSearchParams<{ focus?: string }>();
+  const handledFocusRef = useRef<string | null>(null);
   const compactProfileLandscape = screenWidth > screenHeight && screenHeight < 540;
   const immersiveSkillsGarden = compactProfileLandscape;
   const skillsGardenY = useRef(0);
@@ -435,6 +440,30 @@ export default function ProfileScreen() {
     setIsEditing(true);
     setDeepQuizVisible(false);
   };
+
+  // Acting on ?focus= waits for the profile to load, and runs once per value
+  // so a re-render doesn't yank the page back or reopen the editor.
+  useEffect(() => {
+    if (!focus || !profile || handledFocusRef.current === focus) return;
+    handledFocusRef.current = focus;
+
+    if (focus === 'about') {
+      startEditing();
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+
+    if (focus === 'garden') {
+      // The layout has to have happened for skillsGardenY to mean anything.
+      const timer = setTimeout(() => {
+        scrollViewRef.current?.scrollTo({
+          y: Math.max(0, skillsGardenY.current - 16),
+          animated: true,
+        });
+      }, 260);
+      return () => clearTimeout(timer);
+    }
+  }, [focus, profile?.id]);
 
   const cancelEditing = () => {
     setIsEditing(false);
