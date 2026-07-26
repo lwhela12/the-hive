@@ -2293,7 +2293,10 @@ export default function HiveScreen() {
       return {
         id: `action-${a.id}`,
         emoji: '📝',
-        iconName: /^HIVE Help:/i.test(jot.text) ? 'bee' : 'note',
+        // HIVE Help wears the handshake everywhere now, so the mark means the
+        // same thing on Home as it does in the tune-up (Nat 2026-07-26). It
+        // still sets these apart from ordinary jots, which stay notes.
+        iconName: /^HIVE Help:/i.test(jot.text) ? 'handshake' : 'note',
         title: jot.text,
         detail: [statusDetail, jotContext || null].filter(Boolean).join(' · ') || undefined,
         // Linked to-dos navigate on tap (like Recent Activity rows); the circle
