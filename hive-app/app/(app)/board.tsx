@@ -72,8 +72,19 @@ function isCompletableHdAsk(category: BoardCategory) {
 // boards first and everything else by display_order, which meant the grid
 // reshuffled as boards were added and nobody could predict where anything was.
 // Alphabetical is boring, and boring is findable.
+// Punctuation sorts before letters, so "{Potential} HIVE Hang Ideas!" landed
+// ahead of Announcements and looked like the sort was broken. Sort on the first
+// real letter — the eye reads P, so it files under P (Nat 2026-07-25).
+function getBoardSortName(name: string) {
+  return name.replace(/^[^\p{L}\p{N}]+/u, '') || name;
+}
+
 function sortCategoriesByBoardOrder(a: BoardCategory, b: BoardCategory) {
-  return a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
+  return getBoardSortName(a.name).localeCompare(
+    getBoardSortName(b.name),
+    'en',
+    { sensitivity: 'base' }
+  );
 }
 
 function getCategorySearchText(category: BoardCategory) {

@@ -24,6 +24,8 @@ import {
 } from '../../lib/webStorage';
 import { deleteWishById } from '../../lib/wishMutations';
 import { getCycleStart, getHalfwayDoneKey } from '../../lib/meetingCycle';
+import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { getMentionTargetHandle } from '../../lib/mentions';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { pickSpotlightWish } from '../../lib/wishDisplay';
@@ -254,6 +256,7 @@ export default function MonthlyTuneupScreen() {
   const isMidpoint = mode === 'midpoint';
   const steps = isMidpoint ? MIDPOINT_STEPS : STEPS;
   const { profile, communityId } = useAuth();
+  const { members: mentionableMembers } = useMentionableMembers(communityId);
   const { wishes, loading: wishesLoading, refresh: refreshWishes, grantWish } = useWishes();
   const {
     availableSurveys,
@@ -275,6 +278,10 @@ export default function MonthlyTuneupScreen() {
   // Halfway check-in: what you'd like in the newsletter. Answers land as
   // replies on the threads that already exist for them, so nothing here is a
   // new pile to maintain and it's visible on the boards like everything else.
+  // A compliment is always ABOUT someone, so don't make people remember to
+  // type "@". Pick the person, and the mention (and therefore the little love
+  // note) happens for you (Nat 2026-07-25).
+  const [complimentTarget, setComplimentTarget] = useState<{ id: string; name: string } | null>(null);
   const [halfwayHelpStatus, setHalfwayHelpStatus] = useState<'done' | 'not_yet' | 'other' | null>(null);
   const [halfwayHelpLog, setHalfwayHelpLog] = useState('');
   const [newsletterKind, setNewsletterKind] = useState<NewsletterKind>('shoutout');
@@ -683,8 +690,17 @@ export default function MonthlyTuneupScreen() {
   }, [communityId, findBoardTarget, profile]);
 
   const submitNewsletterItem = async () => {
-    const content = newsletterText.trim();
-    if (!content || !profile || !communityId || newsletterPosting) return;
+    const typed = newsletterText.trim();
+    if (!typed || !profile || !communityId || newsletterPosting) return;
+    // The @ is what makes the notification fire, so the app writes it — but
+    // never twice if someone typed it themselves.
+    const handle = complimentTarget
+      ? (complimentTarget.id === '__everyone__' ? 'all' : getMentionTargetHandle(complimentTarget))
+      : null;
+    const content = newsletterKind === 'compliment' && handle
+      && !new RegExp(`@${handle}\\b`, 'i').test(typed)
+      ? `@${handle} ${typed}`
+      : typed;
     setNewsletterPosting(true);
     setNewsletterError(null);
     try {
@@ -707,6 +723,7 @@ export default function MonthlyTuneupScreen() {
       }
       setNewsletterPosted((current) => [...current, { content, thread: thread.postTitle ?? 'the newsletter thread' }]);
       setNewsletterText('');
+      setComplimentTarget(null);
     } finally {
       setNewsletterPosting(false);
     }
@@ -2126,6 +2143,47 @@ export default function MonthlyTuneupScreen() {
             })}
           </View>
 
+          {/* A compliment is always about someone, and the @ is what makes their
+              love note fire. Picking beats remembering to type it. */}
+          {newsletterKind === 'compliment' ? (
+            <View style={{ gap: 8 }}>
+              <BoxHeading style={{ marginBottom: 0 }}>Who's it for?</BoxHeading>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {[...mentionableMembers.filter((member) => member.id !== profile?.id),
+                  { id: '__everyone__', name: 'Everyone' }].map((member) => {
+                  const selected = complimentTarget?.id === member.id;
+                  return (
+                    <Pressable
+                      key={member.id}
+                      onPress={() => setComplimentTarget(selected ? null : { id: member.id, name: member.name })}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Compliment ${member.name}`}
+                      style={{
+                        backgroundColor: selected ? '#fdf3dc' : '#faf8f3',
+                        borderWidth: 1,
+                        borderColor: selected ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
+                        borderRadius: 999,
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: selected ? 'Lato_700Bold' : 'Lato_400Regular',
+                          fontSize: 13,
+                          color: selected ? '#8a6b30' : '#6b7280',
+                        }}
+                      >
+                        {member.name.trim().split(/\s+/)[0]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TextInput
               value={newsletterText}
@@ -2138,16 +2196,23 @@ export default function MonthlyTuneupScreen() {
             />
             <Pressable
               onPress={() => void submitNewsletterItem()}
-              disabled={newsletterPosting || !newsletterText.trim()}
+              disabled={newsletterPosting || !newsletterText.trim()
+                || (newsletterKind === 'compliment' && !complimentTarget)}
               style={({ pressed }) => ({
-                backgroundColor: newsletterText.trim() ? '#bd9348' : '#e5e7eb',
+                backgroundColor: newsletterText.trim()
+                  && !(newsletterKind === 'compliment' && !complimentTarget) ? '#bd9348' : '#e5e7eb',
                 borderRadius: 12,
                 paddingHorizontal: 16,
                 paddingVertical: 11,
                 opacity: pressed || newsletterPosting ? 0.8 : 1,
               })}
             >
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: newsletterText.trim() ? 'white' : '#a09274' }}>
+              <Text style={{
+                fontFamily: 'Lato_700Bold',
+                fontSize: 13,
+                color: newsletterText.trim()
+                  && !(newsletterKind === 'compliment' && !complimentTarget) ? 'white' : '#a09274',
+              }}>
                 {newsletterPosting ? '…' : 'Add it'}
               </Text>
             </Pressable>
