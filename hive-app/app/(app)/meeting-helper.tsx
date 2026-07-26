@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -247,6 +247,12 @@ export default function MeetingHelperScreen() {
   const [liveNoteCursor, setLiveNoteCursor] = useState(0);
   const [liveNoteSaving, setLiveNoteSaving] = useState(false);
   const [liveNoteConfirmation, setLiveNoteConfirmation] = useState<string | null>(null);
+  // Which HD the note is about. Meetings wander: someone's card is open and the
+  // room starts talking about a thing that ISN'T their headline HD. We used to
+  // staple every jot to the spotlight wish anyway, which sent the to-do to an
+  // unrelated wish and commented there ("Sex therapy workshop" landed on
+  // Charlee's dog-door HD — Nat 2026-07-26). null = not about an HD at all.
+  const [liveNoteWishId, setLiveNoteWishId] = useState<string | null>(null);
   // Everything jotted this session stays visible on the card it was taken on,
   // with an ✕ that pulls it back off every list it landed on (oops insurance).
   const [liveNotesTaken, setLiveNotesTaken] = useState<
@@ -618,6 +624,21 @@ export default function MeetingHelperScreen() {
     return grouped;
   }, [wishes]);
 
+  // Opening someone's card preselects their spotlight HD — the common case, so
+  // the fast path stays one keystroke. Keyed on the member, not on the wish
+  // list, or a background deck refresh would throw away a pick made mid-jot.
+  const liveNoteSubjectMemberRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!expandedHummdingerId) {
+      liveNoteSubjectMemberRef.current = null;
+      return;
+    }
+    if (liveNoteSubjectMemberRef.current === expandedHummdingerId) return;
+    liveNoteSubjectMemberRef.current = expandedHummdingerId;
+    const memberWishes = wishesByUserId.get(expandedHummdingerId) ?? [];
+    setLiveNoteWishId((pickSpotlightWish(memberWishes) ?? memberWishes[0])?.id ?? null);
+  }, [expandedHummdingerId, wishesByUserId]);
+
   // Pencil in a hang straight from the Plan the Meet Ups calendar — same
   // create path as the tune-up and Home (the create-event edge function).
   const handleQuickAddEvent = async () => {
@@ -789,10 +810,15 @@ export default function MeetingHelperScreen() {
         .from('action_items')
         .insert(
           assignees.map((member) => ({
+            // "re: X's HummDinger" is a claim, so only make it when the note is
+            // actually pinned to one of X's HDs. Otherwise it's still about X —
+            // just not about a wish — and the suffix says only that.
             description:
               member.id === aboutMember.id
                 ? text
-                : `${text} (re: ${getFirstName(aboutMember.name)}'s HummDinger)`,
+                : aboutWishId
+                  ? `${text} (re: ${getFirstName(aboutMember.name)}'s HummDinger)`
+                  : `${text} (re: ${getFirstName(aboutMember.name)})`,
             assigned_to: member.id,
             community_id: communityId,
             related_user_id: aboutMember.id,
@@ -2186,6 +2212,46 @@ export default function MeetingHelperScreen() {
               ) : null}
               <View style={{ borderTopWidth: 1, borderColor: GOLD_SOFT, paddingTop: sz(14, 9), gap: sz(8, 6) }}>
                 <Text style={sectionLabel}>Live note → to-do list</Text>
+                {/* What the note is ABOUT, which is not always the card it's
+                    taken on. Picking an HD links the to-do to that wish and
+                    leaves the note as a comment there; "Not about an HD" files
+                    a plain to-do about the member and touches no wish. */}
+                {memberWishList.length > 0 ? (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: sz(6, 4) }}>
+                    <Text style={{ ...sectionContext, marginRight: sz(2, 1) }}>About:</Text>
+                    {[
+                      ...memberWishList.map((wish) => ({ id: wish.id, label: getWishQuickTitle(wish, 30) })),
+                      { id: null, label: 'Not about an HD' },
+                    ].map((option) => {
+                      const selected = liveNoteWishId === option.id;
+                      return (
+                        <Pressable
+                          key={option.id ?? 'no-hd'}
+                          onPress={() => setLiveNoteWishId(option.id)}
+                          style={({ pressed }) => ({
+                            paddingHorizontal: sz(12, 9),
+                            paddingVertical: sz(5, 4),
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            borderColor: selected ? GOLD : GOLD_SOFT,
+                            backgroundColor: selected ? 'rgba(222,193,129,0.22)' : 'transparent',
+                            opacity: pressed ? 0.7 : 1,
+                          })}
+                        >
+                          <Text
+                            style={{
+                              fontFamily: selected ? 'Lato_700Bold' : 'Lato_400Regular',
+                              fontSize: sz(14, 10),
+                              color: selected ? GOLD_DEEP : MUTED,
+                            }}
+                          >
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
                 {(() => {
                   const mentionQuery = getActiveMentionQuery(liveNoteDraft, liveNoteCursor);
                   if (mentionQuery === null) return null;
@@ -2216,7 +2282,7 @@ export default function MeetingHelperScreen() {
                   // Enter files the jot; Shift+Enter is the newline. Mid-meeting
                   // you're typing fast — reaching for the button broke the flow.
                   blurOnSubmit={false}
-                  onKeyPress={submitOnEnter(() => handleSaveLiveNote(member, topWish?.id ?? null))}
+                  onKeyPress={submitOnEnter(() => handleSaveLiveNote(member, liveNoteWishId))}
                   style={{
                     borderWidth: 1,
                     borderColor: GOLD_SOFT,
@@ -2232,7 +2298,7 @@ export default function MeetingHelperScreen() {
                 />
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
                   <Pressable
-                    onPress={() => handleSaveLiveNote(member, topWish?.id ?? null)}
+                    onPress={() => handleSaveLiveNote(member, liveNoteWishId)}
                     disabled={liveNoteSaving || !liveNoteDraft.trim()}
                     style={({ pressed }) => ({
                       paddingHorizontal: sz(22, 16),
