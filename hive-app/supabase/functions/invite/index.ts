@@ -211,18 +211,29 @@ serve(async (req) => {
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
               <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🐝</span></div>
               <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Welcome to the HIVE</h1>
-              <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${inviterName ? `${inviterName} invited you` : "You've been invited"} to join ${communityName}</p>
-              <p style="font-size: 15px;">The HIVE is a small group who help each other get things done — everyone says what they're working on and what they could use a hand with, and the rest of us go "oh, I can help with that."</p>
-              <p style="font-size: 15px;"><strong>Three things to do when you land:</strong></p>
-              <ul style="font-size: 15px; padding-left: 20px;">
-                <li>Fill out your profile so people know who you are</li>
-                <li>Add a few things you're good at — that's how wishes find you</li>
-                <li>Post one wish of your own. Start small; it doesn't have to be perfect</li>
-              </ul>
-              <div style="text-align: center; margin: 28px 0;">
+              <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 22px;">${inviterName ? `${inviterName} invited you` : "You've been invited"} to join ${communityName}</p>
+
+              <p style="font-size: 15px;">The HIVE is a small group of people who help each other get things done. Everyone shares what they're working on and what they could use a hand with — and the rest of us go "oh, I can help with that." That's the whole idea.</p>
+
+              <div style="text-align: center; margin: 26px 0;">
                 <a href="${inviteUrl}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Come on in</a>
               </div>
-              <p style="font-size: 13px; color: #9a9a9a; text-align: center;">No rush — this link works for the next 30 days. 🍯</p>
+
+              <h2 style="color: #8a6b30; font-size: 15px; margin: 26px 0 8px;">Once you're in</h2>
+              <p style="font-size: 15px; margin: 0 0 12px;">No rush, and nothing has to be perfect. Poke around — you can't break anything.</p>
+              <ol style="font-size: 15px; padding-left: 20px; margin: 0;">
+                <li style="margin-bottom: 8px;"><strong>Fill out your profile.</strong> A photo and a birthday go a long way — we like cake.</li>
+                <li style="margin-bottom: 8px;"><strong>Add a few things you're good at.</strong> Anything counts: sourdough, spreadsheets, knowing a guy. This is how someone's wish finds its way to you.</li>
+                <li style="margin-bottom: 8px;"><strong>Post one wish.</strong> Something you'd genuinely love help with. Start small — "I want someone to teach me three easy weeknight dinners" beats "I want to be healthier."</li>
+                <li style="margin-bottom: 8px;"><strong>Have a wander.</strong> The boards are where we swap recommendations, plan hangs, and argue about movies.</li>
+              </ol>
+
+              <h2 style="color: #8a6b30; font-size: 15px; margin: 26px 0 8px;">Stuck? Ask Clive</h2>
+              <p style="font-size: 15px; margin: 0 0 12px;">Clive is the HIVE's helper, and he lives in the app — tap the sparkles. He can explain how anything works, help you put a fuzzy wish into words, tell you what happened at a meeting you missed, or just chat. He's the fastest way to get unstuck, and he doesn't mind daft questions.</p>
+
+              <p style="font-size: 15px;">And if all else fails, ${inviterName || 'whoever invited you'} is a text away. 💛</p>
+
+              <p style="font-size: 13px; color: #9a9a9a; text-align: center; margin-top: 26px;">Your link works for the next 30 days. See you in there. 🍯</p>
               <p style="font-size: 12px; color: #c0c0c0; text-align: center; word-break: break-all;">${inviteUrl}</p>
             </div>
           `

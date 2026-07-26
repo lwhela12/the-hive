@@ -368,6 +368,30 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
           </View>
           {/* Action buttons — Meet and Calendar inline on one row */}
           <View className="flex-row flex-wrap gap-2 mt-3">
+            {/* Who's it for, right on the row. You can't respect a boundary you
+                can't see — and "everyone's invited" is the one that gets named
+                in a public newsletter, so it has to be obvious at a glance
+                (Nat 2026-07-25). Birthdays are nobody's business but ours. */}
+            {event.event_type !== 'birthday' && (
+              <View
+                className="py-1.5 px-3 rounded-full flex-row items-center"
+                style={{
+                  backgroundColor: (event as any).visibility === 'public' ? '#eaf3e6' : '#f5f1e8',
+                  borderWidth: 1,
+                  borderColor: (event as any).visibility === 'public' ? 'rgba(122,154,107,0.35)' : 'rgba(189,147,72,0.22)',
+                }}
+              >
+                <Text className="text-xs mr-1.5">
+                  {(event as any).visibility === 'public' ? '📣' : '🔒'}
+                </Text>
+                <Text
+                  style={{ fontFamily: 'Lato_700Bold', color: (event as any).visibility === 'public' ? '#5c7a4e' : '#9a8060' }}
+                  className="text-xs"
+                >
+                  {(event as any).visibility === 'public' ? "Everyone's invited" : 'HIVErs Only'}
+                </Text>
+              </View>
+            )}
             {event.meet_link && (
               <Pressable
                 onPress={(e) => {

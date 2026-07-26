@@ -16,6 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { fetchHoneyPotLedger } from '../../lib/honeyPot';
 import { getCycleStart } from '../../lib/meetingCycle';
@@ -306,6 +307,7 @@ export default function MeetingHelperScreen() {
   const [quickAddDate, setQuickAddDate] = useState<string | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useState('');
   const [quickAddTime, setQuickAddTime] = useState('');
+  const [quickAddAudience, setQuickAddAudience] = useState<EventAudience>('members');
   const [quickAddSaving, setQuickAddSaving] = useState(false);
   const [quickAddError, setQuickAddError] = useState<string | null>(null);
 
@@ -640,6 +642,7 @@ export default function MeetingHelperScreen() {
       };
       if (normalizedTime.time) newEvent.event_time = normalizedTime.time;
       if (normalizedTime.note) newEvent.description = `Time note: ${normalizedTime.note}`;
+      newEvent.visibility = quickAddAudience;
 
       const { error } = await supabase.functions.invoke('create-event', { body: newEvent });
       if (error) throw error;
@@ -647,6 +650,7 @@ export default function MeetingHelperScreen() {
       setQuickAddDate(null);
       setQuickAddTitle('');
       setQuickAddTime('');
+      setQuickAddAudience('members');
       // The idea has been claimed — disarm so the next day you tap starts fresh.
       setArmedHangIdea(null);
       await loadDeckData();
@@ -3057,6 +3061,7 @@ export default function MeetingHelperScreen() {
                   color: CHARCOAL,
                 }}
               />
+              <EventAudienceToggle value={quickAddAudience} onChange={setQuickAddAudience} />
               {quickAddError ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#b3261e' }}>
                   {quickAddError}

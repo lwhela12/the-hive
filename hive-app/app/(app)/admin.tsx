@@ -20,6 +20,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { queryKeys } from '../../lib/queryClient';
 import {
@@ -1032,6 +1033,7 @@ export default function AdminScreen() {
   const [editingQueenBee, setEditingQueenBee] = useState<QueenBee | null>(null);
 
   const [eventTitle, setEventTitle] = useState('');
+  const [eventAudience, setEventAudience] = useState<EventAudience>('members');
   const [eventDate, setEventDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
@@ -1751,6 +1753,7 @@ export default function AdminScreen() {
       event_type: 'custom',
       created_by: profile?.id,
       community_id: communityId,
+      visibility: eventAudience,
     });
 
     if (error) {
@@ -1760,6 +1763,7 @@ export default function AdminScreen() {
       setEventTitle('');
       setEventDate('');
       setEventDescription('');
+      setEventAudience('members');
       await fetchData();
     }
   };
@@ -3404,6 +3408,10 @@ export default function AdminScreen() {
               numberOfLines={3}
               className="border border-gray-300 rounded-lg p-3 mb-4"
             />
+
+            <View className="mb-4">
+              <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
+            </View>
 
             <View className="flex-row">
               <Pressable

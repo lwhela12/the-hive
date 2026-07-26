@@ -26,6 +26,7 @@ import { deleteWishById } from '../../lib/wishMutations';
 import { getCycleStart, getHalfwayDoneKey } from '../../lib/meetingCycle';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { Avatar } from '../../components/ui/Avatar';
+import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { getMentionTargetHandle } from '../../lib/mentions';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { HiveIcon } from '../../components/ui/HiveIcon';
@@ -468,6 +469,7 @@ export default function MonthlyTuneupScreen() {
 
   // Step 3 — calendar
   const [eventTitle, setEventTitle] = useState('');
+  const [eventAudience, setEventAudience] = useState<EventAudience>('members');
   const [eventDate, setEventDate] = useState('');
   const [eventEndDate, setEventEndDate] = useState('');
   const [eventAllDay, setEventAllDay] = useState(false);
@@ -1137,6 +1139,7 @@ export default function MonthlyTuneupScreen() {
       if (normalizedTime.note) newEvent.description = `Time note: ${normalizedTime.note}`;
       if (eventLocation.trim()) newEvent.location = eventLocation.trim();
 
+      newEvent.visibility = eventAudience;
       const { error } = await supabase.functions.invoke('create-event', {
         body: newEvent,
       });
@@ -1145,6 +1148,7 @@ export default function MonthlyTuneupScreen() {
       setEventsAdded((prev) => [...prev, `${eventTitle.trim()} — ${eventDate}${eventEndDateIso ? ` → ${eventEndDate}` : ''}`]);
       setEventTitle('');
       setEventDate('');
+      setEventAudience('members');
       setEventEndDate('');
       setEventAllDay(false);
       setEventTime('');
@@ -1771,6 +1775,7 @@ export default function MonthlyTuneupScreen() {
           placeholderTextColor="#b5ad9f"
           style={inputStyle}
         />
+        <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
         {eventError ? (
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626' }}>{eventError}</Text>
         ) : null}
