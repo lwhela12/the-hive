@@ -523,12 +523,16 @@ serve(async (req) => {
 
         for (const member of members as MemberProfile[]) {
           try {
-            // Midpoint stays email-free — the monthly newsletter carries that
-            // nudge (Lucas's call: one email, not two). Push + in-app only.
-            // Members who flipped off Email Reminders in their profile never
-            // get app emails at all.
+            // The month-end touch used to be email-free, on the reasoning that
+            // the newsletter would carry the nudge. It can't: the newsletter
+            // goes out on the 1st, AFTER the window it would be advertising —
+            // the check-in feeds the newsletter, so it has to arrive first.
+            //
+            // And push reaches 2 of 10 members (checked 2026-07-25), so
+            // push-only meant 8 people never heard about it at all. Members who
+            // flipped off Email Reminders in their profile still never get app
+            // emails.
             const hasEmail =
-              kind !== 'midpoint' &&
               member.email_reminders_enabled !== false &&
               !!(RESEND_API_KEY && member.email);
             let emailDelivered = false;
