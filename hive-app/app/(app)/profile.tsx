@@ -72,6 +72,18 @@ const DEEP_PROFILE_STEPS = ['Basics', 'Now', 'Favorites', '3MIQ'] as const;
 // One switch per email the HIVE sends. email_reminders_enabled stays the
 // master off-switch underneath these; the newsletter is sent by hand from Wix,
 // so that row records intent for Nat rather than controlling a send.
+// One switch per email the HIVE actually sends. Deliberately only two:
+//
+// The newsletter came off because it isn't ours to control — it goes out from
+// Wix, which has its own unsubscribe link at the bottom. A toggle here would
+// have been a note asking Nat to do it by hand, which is slower than the
+// button already in the email.
+//
+// "All app emails" came off because a master switch sitting above two
+// switches, each of which already does the same job for its own email, reads
+// as a puzzle rather than a setting (Nat 2026-07-26). The
+// email_reminders_enabled column stays as a back-stop an admin can flip in the
+// database; it just isn't a thing members have to reason about.
 const EMAIL_PREFERENCES: {
   column: string;
   label: string;
@@ -88,19 +100,7 @@ const EMAIL_PREFERENCES: {
     column: 'email_midpoint_checkin_enabled',
     label: 'Month-end newsletter nudge',
     onHint: 'On — a 2-minute chance to add something to the newsletter',
-    offHint: "Off — the newsletter still comes out without you",
-  },
-  {
-    column: 'email_newsletter_enabled',
-    label: 'The newsletter itself',
-    onHint: 'On — the round-up on the 1st',
-    offHint: 'Off — Nat removes you from the list by hand',
-  },
-  {
-    column: 'email_reminders_enabled',
-    label: 'All app emails',
-    onHint: 'On — the three above can still be set individually',
-    offHint: 'Off — nothing from the app, whatever the settings above say',
+    offHint: 'Off — the newsletter still comes out without you',
   },
 ];
 
@@ -2490,10 +2490,6 @@ export default function ProfileScreen() {
                 );
               })}
             </View>
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-2">
-              Turning the newsletter off here tells Nat — she takes you off the
-              Wix list by hand, so give her a day or two.
-            </Text>
           </View>
 
           {/* App Feedback moved to the Home shortcut hexes — settings is for
@@ -2509,10 +2505,13 @@ export default function ProfileScreen() {
 
         {/* Sign Out Button */}
         {!immersiveSkillsGarden && (
+        // Long and skinny, squared off to the same 1240 the two settings cards
+        // span, so the block reads as one shape rather than a centred pill
+        // floating under two boxes (Nat 2026-07-26).
         <Pressable
           onPress={handleSignOut}
-          className="bg-red-50 p-4 rounded-xl items-center active:bg-red-100 mb-6"
-          style={{ width: '100%', maxWidth: 420, alignSelf: 'center' }}
+          className="bg-red-50 py-3 rounded-xl items-center active:bg-red-100 mb-6"
+          style={{ width: '100%', maxWidth: 1240, alignSelf: 'center' }}
         >
           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-600">Sign Out</Text>
         </Pressable>
