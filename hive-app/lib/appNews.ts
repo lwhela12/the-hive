@@ -28,6 +28,20 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-07-26-section-pencils',
+    date: '2026-07-26',
+    title: 'Edit from where you are',
+    detail: 'Your own card has a pencil on each section, so you can change what you are looking at.',
+    href: { pathname: '/members' },
+    action: 'Open your card',
+  },
+  {
+    id: '2026-07-26-fresh-honey',
+    date: '2026-07-26',
+    title: 'The app tells you when it has been updated',
+    detail: 'A "fresh honey" bar appears up top when there is a newer version — tap it to refresh.',
+  },
+  {
     id: '2026-07-26-email-choices',
     date: '2026-07-26',
     title: 'Choose which emails you get',
