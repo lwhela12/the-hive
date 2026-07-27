@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
+import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.115.0';
 import { buildContext } from './context/index.ts';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { corsHeaders, handleCors, errorResponse } from '../_shared/cors.ts';
@@ -214,8 +214,32 @@ const QUICK_RIDDLE_RESPONSES = [
 ];
 
 const FAST_CHAT_MODEL = 'claude-haiku-4-5';
-const DEEP_CHAT_MODEL = 'claude-sonnet-4-5-20250929';
+const DEEP_CHAT_MODEL = 'claude-sonnet-5';
 const CHAT_MAX_TOKENS = 700;
+
+// Sonnet 5 THINKS BY DEFAULT, and max_tokens caps thinking and the reply
+// together — so the old 700 would have been eaten by reasoning and every deep
+// answer would have truncated mid-sentence. The deep path gets room; the fast
+// path is untouched (Nat 2026-07-26).
+//
+// Thinking stays ON deliberately: with it disabled Sonnet 5 reaches for tools
+// noticeably less, and Clive is 24 tools deep. `medium` effort is the balance
+// point for a chat assistant — roughly the intelligence of the previous
+// generation at `high`, without the latency of thinking hard about "hello".
+//
+// Neither parameter exists on Haiku 4.5 — `effort` errors outright there — so
+// they are only ever sent on the deep model.
+const DEEP_CHAT_MAX_TOKENS = 4000;
+
+function chatModelParams(model: string) {
+  if (model !== DEEP_CHAT_MODEL) return { max_tokens: CHAT_MAX_TOKENS };
+
+  return {
+    max_tokens: DEEP_CHAT_MAX_TOKENS,
+    thinking: { type: 'adaptive' as const },
+    output_config: { effort: 'medium' as const },
+  };
+}
 
 function selectChatModel(message: unknown, refineWish?: unknown) {
   if (typeof message !== 'string') return FAST_CHAT_MODEL;
@@ -1527,7 +1551,7 @@ serve(async (req) => {
 
     let response = await anthropic.messages.create({
       model: chatModel,
-      max_tokens: CHAT_MAX_TOKENS,
+      ...chatModelParams(chatModel),
       system: `${systemPrompt}\n\n${contextInfo}`,
       tools,
       messages
@@ -2248,7 +2272,7 @@ serve(async (req) => {
 
       response = await anthropic.messages.create({
         model: chatModel,
-        max_tokens: CHAT_MAX_TOKENS,
+        ...chatModelParams(chatModel),
         system: `${systemPrompt}\n\n${contextInfo}`,
         tools,
         messages
