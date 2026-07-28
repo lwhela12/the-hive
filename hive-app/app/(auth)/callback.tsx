@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
+import { sanitizeReturnTo } from '../../lib/authReturnTo';
 
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function AuthCallbackScreen() {
       // Try code exchange flow first
       if (params.code) {
         await supabase.auth.exchangeCodeForSession(params.code);
-        router.replace((typeof params.returnTo === 'string' ? params.returnTo : '/') as any);
+        router.replace((sanitizeReturnTo(params.returnTo) ?? '/') as any);
         return;
       }
 
@@ -41,7 +42,7 @@ export default function AuthCallbackScreen() {
               access_token: accessToken,
               refresh_token: refreshToken,
             });
-            router.replace((typeof params.returnTo === 'string' ? params.returnTo : '/') as any);
+            router.replace((sanitizeReturnTo(params.returnTo) ?? '/') as any);
             return;
           }
         }

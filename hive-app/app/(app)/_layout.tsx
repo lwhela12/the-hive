@@ -9,6 +9,7 @@ import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
 import { AppUpdateBanner } from '../../components/ui/AppUpdateBanner';
 import { getLastAppPathAsync, getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
+import { currentReturnTo } from '../../lib/authReturnTo';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
@@ -146,11 +147,18 @@ export default function AppLayout() {
   useEffect(() => {
     if (loading) return;
     if (!session) {
-      router.replace('/(auth)/login');
+      // Carry the destination through login. A texted link lands here signed
+      // out just as often as signed in, and dropping it sent people to Home.
+      const returnTo = currentReturnTo(pathname);
+      router.replace(
+        returnTo
+          ? ({ pathname: '/(auth)/login', params: { returnTo } } as never)
+          : '/(auth)/login'
+      );
     } else if (!communityId) {
       router.replace('/join');
     }
-  }, [loading, session, communityId]);
+  }, [loading, session, communityId, pathname]);
 
   // Show a spinner while auth is resolving rather than flashing empty tabs
   if (loading || !session || !communityId) {

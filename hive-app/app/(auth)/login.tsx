@@ -5,12 +5,14 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
+import { sanitizeReturnTo } from '../../lib/authReturnTo';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
+  const safeReturnTo = sanitizeReturnTo(returnTo);
 
   const handleGoogleSignIn = async (forceAccountPicker = false) => {
     try {
@@ -19,8 +21,8 @@ export default function LoginScreen() {
       if (Platform.OS === 'web') {
         // For web, use simple redirect
         // Include returnTo in the redirect URL so we can handle it after OAuth
-        const redirectUrl = returnTo
-          ? `${window.location.origin}${returnTo}`
+        const redirectUrl = safeReturnTo
+          ? `${window.location.origin}${safeReturnTo}`
           : window.location.origin;
 
         const { error } = await supabase.auth.signInWithOAuth({
@@ -84,7 +86,7 @@ export default function LoginScreen() {
               }
             }
 
-            router.replace('/');
+            router.replace((safeReturnTo ?? '/') as never);
           }
         }
       }
