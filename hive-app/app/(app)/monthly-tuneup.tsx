@@ -25,9 +25,11 @@ import {
 import { deleteWishById } from '../../lib/wishMutations';
 import { getCycleStart, getHalfwayDoneKey } from '../../lib/meetingCycle';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { Avatar } from '../../components/ui/Avatar';
+import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
-import { getMentionTargetHandle } from '../../lib/mentions';
+import { getMentionTargetHandle, type MentionTarget } from '../../lib/mentions';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { pickSpotlightWish } from '../../lib/wishDisplay';
@@ -121,6 +123,15 @@ const NEWSLETTER_KINDS = [
 type NewsletterKind = (typeof NEWSLETTER_KINDS)[number]['key'];
 
 type BoardTarget = { id: string; name: string };
+
+type NewsletterEvent = {
+  id: string;
+  title: string;
+  event_date: string;
+  end_date?: string | null;
+  event_time?: string | null;
+  location?: string | null;
+};
 
 // The HIVE Helpers board holds one thread per month (e.g. "June Pay It Forward
 // Success"); members log helps as replies on the current thread.
@@ -256,7 +267,15 @@ function BoxHeading({ children, style }: { children: ReactNode; style?: TextStyl
   );
 }
 
-function PostedConfirmation({ lines, boardName }: { lines: string[]; boardName?: string | null }) {
+function PostedConfirmation({
+  lines,
+  boardName,
+  boardNames,
+}: {
+  lines: string[];
+  boardName?: string | null;
+  boardNames?: (string | null | undefined)[];
+}) {
   if (lines.length === 0) return null;
   return (
     <View
@@ -270,11 +289,14 @@ function PostedConfirmation({ lines, boardName }: { lines: string[]; boardName?:
         gap: 4,
       }}
     >
-      {lines.map((line, index) => (
-        <Text key={`${line}-${index}`} style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#166534' }}>
-          ✓ Posted{boardName ? ` to ${boardName}` : ''}: {line}
-        </Text>
-      ))}
+      {lines.map((line, index) => {
+        const destination = boardNames?.[index] ?? boardName;
+        return (
+          <Text key={`${line}-${index}`} style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#166534' }}>
+            ✓ Posted{destination ? ` to ${destination}` : ''}: {line}
+          </Text>
+        );
+      })}
     </View>
   );
 }
@@ -295,7 +317,7 @@ export default function MonthlyTuneupScreen() {
   const [profileDirty, setProfileDirty] = useState(false);
   const [editingProfileField, setEditingProfileField] = useState<string | null>(null);
   const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
-  const { members: mentionableMembers } = useMentionableMembers(communityId);
+  const { members: mentionableMembers, loading: mentionableMembersLoading } = useMentionableMembers(communityId);
   const { wishes, loading: wishesLoading, refresh: refreshWishes, grantWish } = useWishes();
   const {
     availableSurveys,
@@ -317,10 +339,9 @@ export default function MonthlyTuneupScreen() {
   // Halfway check-in: what you'd like in the newsletter. Answers land as
   // replies on the threads that already exist for them, so nothing here is a
   // new pile to maintain and it's visible on the boards like everything else.
-  // A compliment is always ABOUT someone, so don't make people remember to
-  // type "@". Pick the person, and the mention (and therefore the little love
-  // note) happens for you (Nat 2026-07-25).
-  const [complimentTarget, setComplimentTarget] = useState<{ id: string; name: string } | null>(null);
+  // Shout-outs, reminders, and compliments can all be directed at a member or
+  // the whole HIVE. Face bubbles and typed @mentions share the same text, so a
+  // member can use either route (or both) without wondering whether it worked.
   const [halfwayHelpStatus, setHalfwayHelpStatus] = useState<'done' | 'not_yet' | 'other' | null>(null);
   const [halfwayHelpLog, setHalfwayHelpLog] = useState('');
   const [newsletterKind, setNewsletterKind] = useState<NewsletterKind>('shoutout');
@@ -328,7 +349,51 @@ export default function MonthlyTuneupScreen() {
   const [newsletterPosting, setNewsletterPosting] = useState(false);
   const [newsletterError, setNewsletterError] = useState<string | null>(null);
   const [newsletterPosted, setNewsletterPosted] = useState<{ content: string; thread: string }[]>([]);
+  const [newsletterEvents, setNewsletterEvents] = useState<NewsletterEvent[]>([]);
+  const [newsletterEventsLoading, setNewsletterEventsLoading] = useState(false);
+  const [showNewsletterEventComposer, setShowNewsletterEventComposer] = useState(false);
   const [finished, setFinished] = useState(false);
+
+  const {
+    mentionQuery: newsletterMentionQuery,
+    mentionSuggestions: newsletterMentionSuggestions,
+    mentionsEveryone: newsletterMentionsEveryone,
+    mentionedMembers: newsletterMentionedMembers,
+    resetMentionSelection: resetNewsletterMentionSelection,
+    selectMention: selectNewsletterMention,
+    textInputMentionProps: newsletterMentionInputProps,
+  } = useMentionInput({
+    value: newsletterText,
+    onChangeText: setNewsletterText,
+    members: mentionableMembers,
+    currentUserId: profile?.id,
+    suggestionLimit: 50,
+  });
+
+  const loadNewsletterEvents = useCallback(async () => {
+    if (!communityId) return;
+    setNewsletterEventsLoading(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from('events')
+        .select('id, title, event_date, end_date, event_time, location')
+        .eq('community_id', communityId)
+        .gte('event_date', today)
+        .order('event_date', { ascending: true })
+        .limit(16);
+      if (error) throw error;
+      setNewsletterEvents((data ?? []) as NewsletterEvent[]);
+    } catch (error) {
+      console.warn('Could not load upcoming newsletter events', error);
+    } finally {
+      setNewsletterEventsLoading(false);
+    }
+  }, [communityId]);
+
+  useEffect(() => {
+    void loadNewsletterEvents();
+  }, [loadNewsletterEvents]);
 
   // Hangs since the last meeting, for the check-in's went/didn't-go recap chips.
   const [hangRecapEvents, setHangRecapEvents] = useState<{ id: string; title: string }[]>([]);
@@ -730,17 +795,13 @@ export default function MonthlyTuneupScreen() {
   }, [communityId, findBoardTarget, profile]);
 
   const submitNewsletterItem = async () => {
-    const typed = newsletterText.trim();
-    if (!typed || !profile || !communityId || newsletterPosting) return;
-    // The @ is what makes the notification fire, so the app writes it — but
-    // never twice if someone typed it themselves.
-    const handle = complimentTarget
-      ? (complimentTarget.id === '__everyone__' ? 'all' : getMentionTargetHandle(complimentTarget))
-      : null;
-    const content = newsletterKind === 'compliment' && handle
-      && !new RegExp(`@${handle}\\b`, 'i').test(typed)
-      ? `@${handle} ${typed}`
-      : typed;
+    const content = newsletterText.trim();
+    if (!content || !profile || !communityId || newsletterPosting) return;
+    const hasRecipient = newsletterMentionsEveryone || newsletterMentionedMembers.length > 0;
+    if (newsletterKind === 'compliment' && !hasRecipient) {
+      setNewsletterError('Pick someone, choose Everyone, or type @ and select a name first.');
+      return;
+    }
     setNewsletterPosting(true);
     setNewsletterError(null);
     try {
@@ -763,7 +824,7 @@ export default function MonthlyTuneupScreen() {
       }
       setNewsletterPosted((current) => [...current, { content, thread: thread.postTitle ?? 'the newsletter thread' }]);
       setNewsletterText('');
-      setComplimentTarget(null);
+      resetNewsletterMentionSelection();
     } finally {
       setNewsletterPosting(false);
     }
@@ -1179,7 +1240,12 @@ export default function MonthlyTuneupScreen() {
       });
       if (error) throw error;
 
-      setEventsAdded((prev) => [...prev, `${eventTitle.trim()} — ${eventDate}${eventEndDateIso ? ` → ${eventEndDate}` : ''}`]);
+      const createdEventLabel = `${eventTitle.trim()} — ${eventDate}${eventEndDateIso ? ` → ${eventEndDate}` : ''}`;
+      setEventsAdded((prev) => [...prev, createdEventLabel]);
+      if (newsletterKind === 'plug') {
+        setNewsletterText((current) => current.trim() || createdEventLabel);
+        setShowNewsletterEventComposer(false);
+      }
       setEventTitle('');
       setEventDate('');
       setEventAudience('members');
@@ -1187,6 +1253,7 @@ export default function MonthlyTuneupScreen() {
       setEventAllDay(false);
       setEventTime('');
       setEventLocation('');
+      await loadNewsletterEvents();
     } catch (error: any) {
       setEventError(error?.message || 'Failed to create event. Please try again.');
     } finally {
@@ -2183,6 +2250,56 @@ export default function MonthlyTuneupScreen() {
   // thing you want in the newsletter and the prompt changes to match.
   const renderNewsletterStep = () => {
     const active = NEWSLETTER_KINDS.find((kind) => kind.key === newsletterKind) ?? NEWSLETTER_KINDS[0];
+    const showsRecipients = newsletterKind === 'shoutout'
+      || newsletterKind === 'compliment'
+      || newsletterKind === 'reminder';
+    const hasNewsletterRecipient = newsletterMentionsEveryone || newsletterMentionedMembers.length > 0;
+    const canPostNewsletterItem = !!newsletterText.trim()
+      && (newsletterKind !== 'compliment' || hasNewsletterRecipient);
+
+    const newsletterRecipients: (MentionTarget & { avatar_url?: string | null })[] = [
+      ...mentionableMembers.filter((member) => member.id !== profile?.id),
+      {
+        id: '__broadcast_hive__',
+        name: 'Everyone in HIVE',
+        handle: 'all',
+        isBroadcast: true,
+        avatar_url: null,
+      },
+    ];
+
+    const isRecipientSelected = (member: MentionTarget) => member.isBroadcast
+      ? newsletterMentionsEveryone
+      : newsletterMentionedMembers.some((selected) => selected.id === member.id);
+
+    const toggleNewsletterRecipient = (member: MentionTarget) => {
+      if (!isRecipientSelected(member)) {
+        selectNewsletterMention(member);
+        return;
+      }
+
+      const escapedHandle = getMentionTargetHandle(member).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const handlePattern = member.isBroadcast ? '(?:all|everyone|hive)' : escapedHandle;
+      setNewsletterText((current) => current
+        .replace(new RegExp(`(^|\\s)@${handlePattern}\\b\\s*`, 'i'), '$1')
+        .replace(/ {2,}/g, ' ')
+        .trimStart());
+      resetNewsletterMentionSelection();
+    };
+
+    const eventLabel = (event: NewsletterEvent) => {
+      const date = new Date(`${event.event_date}T12:00:00`).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+      });
+      return `${event.title} — ${date}${event.location ? ` · ${event.location}` : ''}`;
+    };
+
+    const chooseNewsletterEvent = (event: NewsletterEvent) => {
+      const label = eventLabel(event);
+      setNewsletterText((current) => current.trim() ? `${current.trim()} ${label}` : label);
+    };
+
     return (
       <View>
         <StepHeader
@@ -2230,27 +2347,26 @@ export default function MonthlyTuneupScreen() {
             })}
           </View>
 
-          {/* A compliment is always about someone, and the @ is what makes their
-              love note fire. Picking beats remembering to type it. */}
-          {newsletterKind === 'compliment' ? (
+          {/* Face bubbles and typed @mentions are two doors into the same real
+              mention. Either can be used alone, and both can be combined. */}
+          {showsRecipients ? (
             <View style={{ gap: 8 }}>
-              <BoxHeading style={{ marginBottom: 0 }}>Who's it for?</BoxHeading>
-              {/* Faces, not a list of words — you're picking a person, and every
-                  other member list in the app shows their bubble. */}
+              <BoxHeading style={{ marginBottom: 0 }}>
+                {newsletterKind === 'reminder' ? 'Who should see it?' : "Who's it for?"}
+              </BoxHeading>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
+                Tap one or more faces, choose Everyone, or type @ below. They all work.
+              </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-                {[
-                  ...mentionableMembers.filter((member) => member.id !== profile?.id),
-                  { id: '__everyone__', name: 'Everyone', avatar_url: null },
-                ].map((member) => {
-                  const selected = complimentTarget?.id === member.id;
-                  const isEveryone = member.id === '__everyone__';
+                {newsletterRecipients.map((member) => {
+                  const selected = isRecipientSelected(member);
                   return (
                     <Pressable
                       key={member.id}
-                      onPress={() => setComplimentTarget(selected ? null : { id: member.id, name: member.name })}
+                      onPress={() => toggleNewsletterRecipient(member)}
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
-                      accessibilityLabel={`Compliment ${member.name}`}
+                      accessibilityLabel={`${selected ? 'Remove' : 'Add'} ${member.name}`}
                       style={{ alignItems: 'center', width: 62, gap: 4 }}
                     >
                       <View
@@ -2266,7 +2382,7 @@ export default function MonthlyTuneupScreen() {
                           opacity: selected ? 1 : 0.85,
                         }}
                       >
-                        {isEveryone ? (
+                        {member.isBroadcast ? (
                           <Image source={hiveCrest} style={{ width: 46, height: 46 }} contentFit="contain" />
                         ) : (
                           <Avatar name={member.name} url={member.avatar_url} size={46} />
@@ -2280,7 +2396,7 @@ export default function MonthlyTuneupScreen() {
                           color: selected ? '#8a6b30' : '#6b7280',
                         }}
                       >
-                        {member.name.trim().split(/\s+/)[0]}
+                        {member.isBroadcast ? 'Everyone' : member.name.trim().split(/\s+/)[0]}
                       </Text>
                     </Pressable>
                   );
@@ -2289,10 +2405,154 @@ export default function MonthlyTuneupScreen() {
             </View>
           ) : null}
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {newsletterKind === 'plug' ? (
+            <View style={{ gap: 10 }}>
+              <BoxHeading style={{ marginBottom: 0 }}>Already on the calendar?</BoxHeading>
+              {newsletterEventsLoading ? (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060' }}>
+                  Loading upcoming events…
+                </Text>
+              ) : newsletterEvents.length > 0 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {newsletterEvents.map((event) => (
+                    <Pressable
+                      key={event.id}
+                      onPress={() => chooseNewsletterEvent(event)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Plug ${eventLabel(event)}`}
+                      style={({ pressed }) => ({
+                        borderWidth: 1,
+                        borderColor: 'rgba(222,193,129,0.55)',
+                        backgroundColor: pressed ? '#fdf3dc' : '#fffdf5',
+                        borderRadius: 12,
+                        paddingHorizontal: 11,
+                        paddingVertical: 9,
+                        maxWidth: 280,
+                      })}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#4a4a4a' }}>
+                        {event.title}
+                      </Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8a6b30', marginTop: 2 }}>
+                        {new Date(`${event.event_date}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        {event.location ? ` · ${event.location}` : ''}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060' }}>
+                  Nothing upcoming yet.
+                </Text>
+              )}
+
+              <Pressable
+                onPress={() => setShowNewsletterEventComposer((current) => !current)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showNewsletterEventComposer }}
+                style={({ pressed }) => ({
+                  alignSelf: 'flex-start',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.72)',
+                  backgroundColor: pressed ? '#fbf0d7' : '#fdf3dc',
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                })}
+              >
+                <HiveIcon name="calendar" size={15} color="#8e6f35" />
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>
+                  {showNewsletterEventComposer ? 'Close calendar' : 'Add a new event'}
+                </Text>
+              </Pressable>
+
+              {showNewsletterEventComposer ? (
+                <View style={{ gap: 9, borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.35)', paddingTop: 10 }}>
+                  <TextInput
+                    value={eventTitle}
+                    onChangeText={setEventTitle}
+                    placeholder="Event title"
+                    placeholderTextColor="#b5ad9f"
+                    style={inputStyle}
+                  />
+                  <EventDatePicker value={eventDate} onChange={setEventDate} />
+                  <EventDatePicker
+                    value={eventEndDate}
+                    onChange={setEventEndDate}
+                    label="End date (optional)"
+                    placeholder="Same day"
+                    clearable
+                  />
+                  <Pressable
+                    onPress={() => setEventAllDay((current) => !current)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                  >
+                    <View style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 4,
+                      borderWidth: 2,
+                      borderColor: eventAllDay ? '#bd9348' : '#d1d5db',
+                      backgroundColor: eventAllDay ? '#bd9348' : 'white',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      {eventAllDay ? <Text style={{ color: 'white', fontSize: 12 }}>✓</Text> : null}
+                    </View>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#4a4a4a' }}>All day</Text>
+                  </Pressable>
+                  {!eventAllDay ? (
+                    <TextInput
+                      value={eventTime}
+                      onChangeText={setEventTime}
+                      placeholder="Time (optional) — 7:30 PM"
+                      placeholderTextColor="#b5ad9f"
+                      style={inputStyle}
+                    />
+                  ) : null}
+                  <TextInput
+                    value={eventLocation}
+                    onChangeText={setEventLocation}
+                    placeholder="Location (optional)"
+                    placeholderTextColor="#b5ad9f"
+                    style={inputStyle}
+                  />
+                  <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
+                  {eventError ? (
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626' }}>{eventError}</Text>
+                  ) : null}
+                  <Pressable
+                    onPress={() => void handleCreateEvent()}
+                    disabled={savingEvent || !eventTitle.trim() || !eventDate}
+                    style={({ pressed }) => ({
+                      backgroundColor: eventTitle.trim() && eventDate ? '#bd9348' : '#e5e7eb',
+                      borderRadius: 12,
+                      paddingVertical: 11,
+                      alignItems: 'center',
+                      opacity: pressed || savingEvent ? 0.8 : 1,
+                    })}
+                  >
+                    <Text style={{
+                      fontFamily: 'Lato_700Bold',
+                      fontSize: 13,
+                      color: eventTitle.trim() && eventDate ? 'white' : '#a09274',
+                    }}>
+                      {savingEvent ? 'Adding…' : 'Add to HIVE calendar'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TextInput
               value={newsletterText}
-              onChangeText={setNewsletterText}
+              {...newsletterMentionInputProps}
               placeholder={active.prompt}
               placeholderTextColor="#b5ad9f"
               blurOnSubmit={false}
@@ -2301,11 +2561,9 @@ export default function MonthlyTuneupScreen() {
             />
             <Pressable
               onPress={() => void submitNewsletterItem()}
-              disabled={newsletterPosting || !newsletterText.trim()
-                || (newsletterKind === 'compliment' && !complimentTarget)}
+              disabled={newsletterPosting || !canPostNewsletterItem}
               style={({ pressed }) => ({
-                backgroundColor: newsletterText.trim()
-                  && !(newsletterKind === 'compliment' && !complimentTarget) ? '#bd9348' : '#e5e7eb',
+                backgroundColor: canPostNewsletterItem ? '#bd9348' : '#e5e7eb',
                 borderRadius: 12,
                 paddingHorizontal: 16,
                 paddingVertical: 11,
@@ -2315,12 +2573,19 @@ export default function MonthlyTuneupScreen() {
               <Text style={{
                 fontFamily: 'Lato_700Bold',
                 fontSize: 13,
-                color: newsletterText.trim()
-                  && !(newsletterKind === 'compliment' && !complimentTarget) ? 'white' : '#a09274',
+                color: canPostNewsletterItem ? 'white' : '#a09274',
               }}>
                 {newsletterPosting ? '…' : 'Add it'}
               </Text>
             </Pressable>
+            </View>
+            <MentionSuggestions
+              suggestions={newsletterMentionSuggestions}
+              onSelect={selectNewsletterMention}
+              active={newsletterMentionQuery !== null}
+              query={newsletterMentionQuery}
+              loading={mentionableMembersLoading}
+            />
           </View>
 
           {newsletterError ? (
@@ -2331,7 +2596,7 @@ export default function MonthlyTuneupScreen() {
         {newsletterPosted.length > 0 ? (
           <PostedConfirmation
             lines={newsletterPosted.map((item) => item.content)}
-            boardName={newsletterPosted[newsletterPosted.length - 1]?.thread}
+            boardNames={newsletterPosted.map((item) => item.thread)}
           />
         ) : null}
 

@@ -165,13 +165,12 @@ function checkInEmailHtml(name: string, month: string, day: number, kind: Remind
       <p style="font-size: 15px;">No meeting tonight — but the newsletter goes out soon, and this is the easy way in:</p>
       <ul style="font-size: 15px; padding-left: 20px;">
         <li>Want a <strong>shout-out, a plug, or a reminder</strong> in the newsletter? Say so and it lands there</li>
-        <li>Check off anything you've finished on your <strong>to-do list</strong> — wins shouldn't get forgotten</li>
+        <li>Check off anything you've finished on your <strong>to-do list</strong></li>
         <li>Life moved? Update your HD wish</li>
       </ul>
       <div style="text-align: center; margin: 28px 0;">
         <a href="${APP_URL}/monthly-tuneup?mode=midpoint" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Take the 2-minute check-in</a>
       </div>
-      <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Anything you add lands in the newsletter. 🐝</p>
     </div>
   `;
   }
@@ -233,18 +232,27 @@ serve(async (req) => {
       const previewDate = toPacificDateOnly(new Date(previewCheckIn.due_date));
       if (previewDate) ({ month, day } = formatMeetingDate(previewDate));
     }
+    const requestedTestKind = typeof body.test_kind === 'string' ? body.test_kind : 'window';
+    const testKind: ReminderKind = requestedTestKind === 'midpoint' || requestedTestKind === 'day_of'
+      ? requestedTestKind
+      : 'window';
+    const previewSubject = testKind === 'midpoint'
+      ? '[Preview] 🍯 Halfway check-in — the newsletter goes out on the 1st'
+      : testKind === 'day_of'
+        ? `[Preview] 🐝 Meeting tonight — ${month} ${day}`
+        : `[Preview] 🐝 Your HIVE check-in is open — meeting ${month} ${day}`;
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: FROM_EMAIL,
         to: testEmail,
-        subject: `[Preview] 🐝 Your HIVE check-in is open — meeting ${month} ${day}`,
-        html: checkInEmailHtml(typeof body.test_name === 'string' ? body.test_name : 'there', month, day),
+        subject: previewSubject,
+        html: checkInEmailHtml(typeof body.test_name === 'string' ? body.test_name : 'there', month, day, testKind),
       }),
     });
     if (!res.ok) return errorResponse(`Preview email failed: ${await res.text()}`, 502);
-    return jsonResponse({ preview_sent_to: testEmail, meeting: `${month} ${day}` });
+    return jsonResponse({ preview_sent_to: testEmail, kind: testKind, meeting: `${month} ${day}` });
   }
 
   // Force mode: POST { "force_send": true } sends now, ignoring the 3-days-before
