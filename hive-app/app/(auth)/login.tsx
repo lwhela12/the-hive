@@ -192,6 +192,27 @@ export default function LoginScreen() {
             </Text>
           </View>
         </View>
+
+        <View className="mt-6 px-2">
+          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-center text-charcoal/45 text-xs leading-5">
+            Created by{' '}
+            <Text
+              style={{ fontFamily: 'Lato_700Bold' }}
+              className="text-charcoal/70"
+              onPress={() => Linking.openURL('https://savedyouaseatstudios.com')}
+            >
+              Saved You a Seat Studios
+            </Text>
+            {' '}&middot; &copy; 2026. All rights reserved.
+          </Text>
+          <Text
+            style={{ fontFamily: 'Lato_400Regular' }}
+            className="text-center text-charcoal/45 text-xs mt-1 leading-5"
+            onPress={() => Linking.openURL('https://savedyouaseatstudios.com/#contact')}
+          >
+            Like what you see? Let&rsquo;s build your custom website or software.
+          </Text>
+        </View>
       </View>
     </SafeAreaView>
   );
