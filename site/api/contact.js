@@ -1,15 +1,17 @@
 // Contact form handler for the-hive.app.
 //
-// Sends through Resend. The domain is already verified for it — send.the-hive.app
-// carries the SPF and DKIM records — so this only needs RESEND_API_KEY set on the
-// hive-public Vercel project. The free tier is 3,000 emails a month, which is far
-// more than a contact form will ever use; there is no need for a paid plan.
+// Sends through Resend, using RESEND_API_KEY on the hive-public Vercel project.
+//
+// The from-address must be on the-hive.app itself. send.the-hive.app carries the
+// SPF and MX records Resend uses for the return path, but it is not a verified
+// sending domain — Resend answers "the send.the-hive.app domain is not verified"
+// to anything posted from it.
 //
 // Until the key exists this returns { sent: false }, and the page quietly falls
 // back to opening the visitor's mail app, so the form never dead-ends.
 
 const TO = 'NatWalstead@gmail.com';
-const FROM = 'HIVE <hello@send.the-hive.app>';
+const FROM = 'HIVE <hello@the-hive.app>';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
