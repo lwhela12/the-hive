@@ -87,8 +87,11 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .tag em{font-style:italic;color:var(--deepgold)}
 .opening{font-size:clamp(1.02rem,2.2vw,1.16rem);color:#5c5a54;margin:0 auto;
   max-width:58ch;text-align:center;text-wrap:pretty;line-height:1.7}
-.trio{list-style:none;margin:24px auto 0;padding:0;max-width:62ch;text-align:left}
-.trio li{padding:13px 0;border-bottom:1px solid rgba(189,147,72,.22);font-size:.99rem;color:#5c5a54}
+.trio{list-style:none;margin:26px auto 0;max-width:60ch;text-align:left}
+.trio.honeybox{background:linear-gradient(160deg,#fdf3dc,#f5e8c8);
+  border:1px solid rgba(189,147,72,.34);border-radius:18px;padding:8px 28px;
+  box-shadow:0 14px 34px rgba(138,106,47,.10)}
+.trio li{padding:15px 0;border-bottom:1px solid rgba(189,147,72,.3);font-size:.99rem;color:#54514a}
 .trio li:last-child{border-bottom:0}
 .trio b{font-family:var(--serif);color:var(--charcoal)}
 .hero h1{font-size:clamp(1.9rem,4.8vw,3rem);line-height:1.16;margin:0 auto 16px;max-width:17ch;text-wrap:balance}
@@ -151,7 +154,7 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 
 
 /* ---------- the comb: flat-top cells in a zigzag strip ---------- */
-.comb{--hw:min(178px,15.5vw);display:flex;justify-content:center;align-items:flex-start;
+.comb{--hw:min(164px,14vw);display:flex;justify-content:center;align-items:flex-start;
   margin:30px auto 0;padding-bottom:calc(var(--hw)*.44)}
 .cell{width:var(--hw);height:calc(var(--hw)*.866);flex:none;appearance:none;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
@@ -324,7 +327,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 <section class="sec wrap" id="meet" aria-labelledby="meet-h">
   <p class="eyebrow">Every month</p>
   <h2 id="meet-h">Three parts to a meeting</h2>
-  <ul class="trio">
+  <ul class="trio honeybox">
     <li><b>HIVE Hang</b> &mdash; the part where we&rsquo;re just people who like each other.</li>
     <li><b>HIVE Help</b> &mdash; we pick one help to make happen, and everyone puts something toward it.</li>
     <li><b>Humdinger</b> &mdash; we sharpen what you&rsquo;re stuck on until it&rsquo;s specific enough for somebody to grant.</li>
@@ -342,6 +345,8 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       <span class="lab">Newsletter</span><span class="sub">Once a month</span></button>
     <button class="cell" role="tab" id="t-events" aria-controls="p-events" aria-selected="false">
       <span class="lab">Events</span><span class="sub">Come to one</span></button>
+    <button class="cell" role="tab" id="t-focus" aria-controls="p-focus" aria-selected="false">
+      <span class="lab">This month</span><span class="sub">What we&rsquo;re helping with</span></button>
     <button class="cell" role="tab" id="t-origin" aria-controls="p-origin" aria-selected="false">
       <span class="lab">Backstory</span><span class="sub">Thanks, Asimov</span></button>
     <button class="cell" role="tab" id="t-swag" aria-controls="p-swag" aria-selected="false">
@@ -379,30 +384,45 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     </div>
 
     <div class="pane" id="p-events" role="tabpanel" aria-labelledby="t-events" hidden>
-      <p>Members mark events public or private in the app. The public ones turn up here and go out
-        in the newsletter &mdash; so the sign-up above is how to hear about them.</p>
+      <p>Members mark events public or private in the app, and the public ones go out in the
+        newsletter &mdash; so signing up for that is how you&rsquo;ll hear about them.</p>
       <p class="none">Nothing public on the calendar just now.</p>
     </div>
 
+    <div class="pane" id="p-focus" role="tabpanel" aria-labelledby="t-focus" hidden>
+      <p>Every month we pick one thing to make happen, and everybody puts something toward it &mdash;
+        time, a skill, or actual stuff.</p>
+      <p>If you&rsquo;d like to help with the current one, whether that&rsquo;s dropping something off or
+        lending a hand for an afternoon, tell us and we&rsquo;ll say what&rsquo;s needed. You don&rsquo;t
+        have to be a member.</p>
+      <p class="none">We&rsquo;ll list what we&rsquo;re working on here as each month comes round.</p>
+    </div>
+
     <div class="pane" id="p-origin" role="tabpanel" aria-labelledby="t-origin" hidden>
+      <p>HIVE is inspired by <strong>Isaac Asimov&rsquo;s Trap Door Spider Society</strong>, adapted
+        for a faster world. Here&rsquo;s where that comes from.</p>
       <blockquote>Once a month, a group of friends met for dinner. Every member brought a guest
         &mdash; and the whole evening was spent drawing that one person out.</blockquote>
       <p>Asimov spent years at a monthly dinner club in New York. In his autobiography
-        <em>I, Asimov</em> he wrote about it as the <strong>Trap Door Spider Society</strong>, and
-        turned it into fiction as the <strong>Black Widowers</strong>.</p>
-      <p>Natalie Walstead took that idea and built on it &mdash; same structure, faster world, and a
-        table that&rsquo;s open to everyone.</p>
+        <em>I, Asimov</em> he wrote about it as the Trap Door Spider Society, and turned it into
+        fiction as the <strong>Black Widowers</strong> &mdash; stories where a guest turns up with a
+        problem he can&rsquo;t solve, gets thoroughly questioned over dinner, and leaves with an answer
+        none of them had on their own.</p>
+      <p>Natalie Walstead took that idea and built on it: the same structure, a faster world, tools
+        that keep it going between meetings, and a table that&rsquo;s open to everyone.</p>
     </div>
 
     <div class="pane" id="p-swag" role="tabpanel" aria-labelledby="t-swag" hidden>
-      <p>Shirts and bits with the bee on them. Wearing it is its own small way of saying the thing
-        out loud &mdash; and it helps keep the Honey Pot topped up. More designs on the way.</p>
+      <p>Mugs, journals, canvas totes, shirts &mdash; we put the bee on all of it and made a batch
+        for everyone. It doesn&rsquo;t fund anything or mean anything. It&rsquo;s just cool. More designs
+        on the way.</p>
       <a class="btn solid" href="https://thenateffect.etsy.com/listing/4520881664">See the swag <i>&rarr;</i></a>
     </div>
 
     <div class="pane" id="p-donate" role="tabpanel" aria-labelledby="t-donate" hidden>
       <p>Members pay quarterly dues into the Honey Pot, which pays for the things we decide to make
-        happen. If you&rsquo;re not a member but you&rsquo;d like to add to it, you&rsquo;re very welcome.</p>
+        happen. If you&rsquo;re not a member but you&rsquo;d like to add to it, your contributions are greatly
+        appreciated.</p>
       <p class="cash">Cash App &mdash; <a href="https://cash.app/$HIVELV"><b>$HIVELV</b></a></p>
       <p>That&rsquo;s where dues go too, so it&rsquo;s the same pot either way.</p>
     </div>
