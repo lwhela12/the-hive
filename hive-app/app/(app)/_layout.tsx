@@ -8,6 +8,7 @@ import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
 import { AppUpdateBanner } from '../../components/ui/AppUpdateBanner';
+import { CelebrationOverlay } from '../../components/ui/CelebrationOverlay';
 import { getLastAppPathAsync, getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 import { currentReturnTo } from '../../lib/authReturnTo';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
@@ -415,6 +416,8 @@ export default function AppLayout() {
         />
       </Tabs>
 
+      {/* Confetti for a granted wish, over every tab. Mounted once. */}
+      <CelebrationOverlay />
     </View>
   );
 }

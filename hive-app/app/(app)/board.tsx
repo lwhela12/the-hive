@@ -13,6 +13,7 @@ import { BoardComposer } from '../../components/board/BoardComposer';
 import { BoardTopicComposer, type BoardTopicAudience, type BoardTopicMetadata } from '../../components/board/BoardTopicComposer';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
+import { celebrateWishGranted } from '../../lib/celebration';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { AppHeader } from '../../components/navigation';
 import { useBoardLinkedWishes, type LinkedWish } from '../../lib/hooks/useBoardLinkedWishes';
@@ -1088,6 +1089,7 @@ export default function BoardScreen() {
     invalidatePosts();
     invalidateLinkedWishes();
     invalidateCategories();
+    celebrateWishGranted();
     return { error: null };
   };
 
@@ -1293,6 +1295,7 @@ export default function BoardScreen() {
       await Promise.all([refetchPosts(), refetchLinkedWishes()]);
       grantThreadContext.onDone?.();
       setGrantThreadContext(null);
+      celebrateWishGranted();
       return { error: null };
     } catch (error) {
       return { error: error instanceof Error ? error : new Error('Failed to mark thread granted') };

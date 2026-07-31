@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
 import { invalidateWishQueries } from '../queryClient';
+import { celebrateWishGranted } from '../celebration';
 import type { Wish, Profile } from '../../types';
 
 export function useWishes() {
@@ -192,6 +193,7 @@ export function useWishes() {
 
     await fetchWishes();
     await invalidateWishQueries(communityId, profile.id);
+    celebrateWishGranted();
     return { error: null };
   };
 
