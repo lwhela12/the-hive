@@ -74,10 +74,24 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .lede{color:#5c5a54;font-size:1.06rem;margin:0 auto;max-width:58ch;text-wrap:pretty}
 
 /* ---------- hero ---------- */
-.hero{text-align:center;padding:54px 0 18px}
-.seal{width:min(220px,46vw);aspect-ratio:349/263;margin:0 auto 26px;
-  background:url(assets/bee.webp) center/contain no-repeat;
-  filter:drop-shadow(0 10px 24px rgba(138,106,47,.22))}
+.hero{text-align:center;padding:44px 0 6px}
+.seal{width:min(230px,48vw);aspect-ratio:1;margin:0 auto 22px;
+  background:url(assets/seal.webp) center/contain no-repeat;
+  filter:drop-shadow(0 10px 26px rgba(138,106,47,.18))}
+.acro{font-family:var(--serif);font-weight:700;font-size:clamp(2rem,5.6vw,3.3rem);
+  line-height:1;letter-spacing:.02em;margin:0 0 6px;color:var(--charcoal)}
+.hero h1{font-size:clamp(1.45rem,3.7vw,2.3rem);line-height:1.18;margin:0 auto 12px;
+  max-width:22ch;font-weight:700;text-wrap:balance}
+.hero h1 em{font-style:normal;color:var(--gold)}
+.tag{font-family:var(--serif);font-weight:700;font-size:clamp(.98rem,2.2vw,1.18rem);
+  color:var(--charcoal);margin:0 auto;max-width:44ch;line-height:1.45;text-wrap:balance}
+.tag em{font-style:italic;color:var(--deepgold)}
+.opening{font-size:clamp(1.02rem,2.2vw,1.16rem);color:#5c5a54;margin:0 auto;
+  max-width:58ch;text-align:center;text-wrap:pretty;line-height:1.7}
+.trio{list-style:none;margin:24px auto 0;padding:0;max-width:62ch;text-align:left}
+.trio li{padding:13px 0;border-bottom:1px solid rgba(189,147,72,.22);font-size:.99rem;color:#5c5a54}
+.trio li:last-child{border-bottom:0}
+.trio b{font-family:var(--serif);color:var(--charcoal)}
 .hero h1{font-size:clamp(1.9rem,4.8vw,3rem);line-height:1.16;margin:0 auto 16px;max-width:17ch;text-wrap:balance}
 .hero h1 em{font-style:italic;color:var(--deepgold)}
 .hero .sub{color:#5c5a54;font-size:1.08rem;margin:0 auto 30px;max-width:50ch;text-wrap:pretty}
@@ -97,7 +111,7 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .panel{background:linear-gradient(168deg,var(--paper),var(--parchment));
   border:1px solid rgba(189,147,72,.24);border-radius:20px;padding:clamp(28px,5vw,46px);
   box-shadow:0 16px 44px rgba(138,106,47,.09)}
-.sec{padding:46px 0 0;text-align:center}
+.sec{padding:38px 0 0;text-align:center}
 .sec h2{font-size:clamp(1.5rem,3.6vw,2.15rem);line-height:1.2;margin:0 auto 14px;max-width:20ch;text-wrap:balance}
 
 /* ---------- how it works ---------- */
@@ -113,7 +127,7 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .step p{margin:0;font-size:.94rem;color:#5c5a54;line-height:1.6}
 
 /* ---------- origin ---------- */
-.origin{padding:52px 0 0}
+.origin{padding:40px 0 0}
 .origin .panel{text-align:left}
 .origin blockquote{margin:0 0 20px;padding:0 0 0 20px;border-left:3px solid var(--goldlight);
   font-family:var(--serif);font-style:italic;font-size:clamp(1.06rem,2.4vw,1.3rem);
@@ -142,14 +156,14 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 /* ---------- H.I.V.E. spelled out ---------- */
 .sr{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;
   margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
-.letters{padding:44px 0 0}
+.letters{padding:40px 0 0}
 .lgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:26px;text-align:left}
 .lt p.big{font-family:var(--serif);font-weight:400;font-size:clamp(1.6rem,3.4vw,2.3rem);
   line-height:1;margin:0 0 12px;color:var(--gold)}
 .lt p.big b{font-weight:700;font-size:1.62em;line-height:.8;color:var(--charcoal)}
 .lt p{margin:0;font-size:.94rem;color:#5c5a54;line-height:1.6}
-.alone{font-family:var(--serif);font-style:italic;font-size:clamp(1.1rem,2.6vw,1.45rem);
-  color:var(--deepgold);text-align:center;margin:38px auto 0;max-width:26ch;line-height:1.5}
+.alone{font-family:var(--serif);font-style:italic;font-size:clamp(1.1rem,2.6vw,1.4rem);
+  color:var(--deepgold);text-align:center;margin:30px auto 0;max-width:30ch;line-height:1.5}
 
 /* ---------- three-up ---------- */
 .steps.three{grid-template-columns:repeat(3,1fr)}
@@ -192,7 +206,7 @@ footer p{margin:0 0 9px;font-size:.86rem;color:var(--label);line-height:1.55}
 footer p.who{font-family:var(--serif);font-weight:700;color:var(--charcoal);font-size:.95rem;margin-bottom:12px}
 footer a{color:var(--deepgold);text-decoration:none;border-bottom:1px solid rgba(189,147,72,.4)}
 footer a:hover{border-color:var(--deepgold)}
-footer .cross{margin:20px auto 0;max-width:74ch;padding:9px 24px;border-radius:999px;font-size:.82rem;
+footer .cross{margin:20px auto 0;max-width:none;width:fit-content;white-space:nowrap;overflow-x:auto;padding:8px 26px;border-radius:999px;font-size:.8rem;
   background:rgba(189,147,72,.08);border:1px solid rgba(189,147,72,.22);text-wrap:pretty}
 footer .cross b{font-family:var(--serif);color:var(--charcoal)}
 footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
@@ -249,7 +263,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   <button class="menubtn" id="menubtn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="drawer"><span></span><span></span><span></span></button>
   <a class="brand" href="#top"><span class="bs" role="img" aria-label="The HIVE bee"></span><b>HIVE</b></a>
   <nav class="nav" aria-label="Main">
-    <a href="#what">What it is</a>
+    <a href="#letters">What HIVE means</a>
     <a href="#meet">How we meet</a>
     <a href="#origin">Where it came from</a>
     <a href="#involved">Get involved</a>
@@ -260,7 +274,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 <div class="drawer" id="drawer" aria-hidden="true">
   <nav class="drawerpanel" aria-label="Menu">
     <p class="t">HIVE</p>
-    <a href="#what">What it is</a>
+    <a href="#letters">What HIVE means</a>
     <a href="#meet">How we meet</a>
     <a href="#origin">Where it came from</a>
     <a href="#involved">Get involved</a>
@@ -269,112 +283,61 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 </div>
 
 <header class="hero wrap" id="top">
-  <div class="seal" role="img" aria-label="The HIVE bee"></div>
-  <h1>Where brilliant minds don't just network. <em>They build.</em></h1>
-  <p class="sub">Architects of creative abundance. We meet every month, we hear from
-    everyone, and we choose a new help to make happen.</p>
-  <div class="cta">
-    <a class="btn solid" href="#what">What we do <i>&rarr;</i></a>
-    <a class="btn ghost" href="#involved">Get the newsletter <i>&rarr;</i></a>
-  </div>
+  <div class="seal" role="img" aria-label="The HIVE — human, insight, vision, execution"></div>
+  <p class="acro">H.I.V.E.</p>
+  <h1>Architects of <em>Collective Abundance</em></h1>
+  <p class="tag">Where brilliant minds don&rsquo;t just network&mdash;<em>they build.</em></p>
 </header>
+
+<section class="sec wrap" id="what" aria-labelledby="what-h">
+  <h2 id="what-h" class="sr">Who we are</h2>
+  <p class="opening">We&rsquo;re a bunch of like-minded people who like looking after each other and
+    our community, and we get together once a month. Between us we have almost everything anyone
+    needs &mdash; it just sits scattered across a lot of heads. HIVE pools it.</p>
+</section>
 
 <section class="letters wrap" id="letters" aria-labelledby="letters-h">
   <h2 id="letters-h" class="sr">What HIVE stands for</h2>
   <div class="lgrid">
-    <div class="lt"><p class="big"><b>H</b>uman</p><p>The humans behind it. Inspired by Isaac Asimov&rsquo;s Trap Door Spider Society, Natalie Walstead took the idea and modernised it for a faster world.</p></div>
-    <div class="lt"><p class="big"><b>I</b>nsight</p><p>A hurdle for you might be someone else&rsquo;s hobby. An insurmountable mountain for you might be somebody&rsquo;s Tuesday. Everyone brings a different one.</p></div>
+    <div class="lt"><p class="big"><b>H</b>uman</p><p>Inspired by Isaac Asimov&rsquo;s Trap Door Spider Society, Natalie Walstead took the idea and modernised it for a faster world.</p></div>
+    <div class="lt"><p class="big"><b>I</b>nsight</p><p>A hurdle for you might be someone else&rsquo;s hobby. An insurmountable mountain for you might be somebody&rsquo;s Tuesday.</p></div>
     <div class="lt"><p class="big"><b>V</b>ision</p><p>The first HIVE is local to Las Vegas, but the vision is wider than that, and open to anyone. We&rsquo;re stronger together.</p></div>
-    <div class="lt"><p class="big"><b>E</b>xecution</p><p>We meet monthly to brainstorm and then actually do it. Join in person or virtually, and catch up on anything you missed in the app.</p></div>
+    <div class="lt"><p class="big"><b>E</b>xecution</p><p>We meet monthly to brainstorm and then actually do it. Join in person or virtually, and catch up in the app.</p></div>
   </div>
   <p class="alone">&ldquo;Alone you&rsquo;re a bee. Together, we&rsquo;re the H.I.V.E.&rdquo;</p>
 </section>
 
-<section class="sec wrap" id="what" aria-labelledby="what-h">
-  <div class="panel">
-    <p class="eyebrow">What it is</p>
-    <h2 id="what-h">There is already enough to go around</h2>
-    <p class="lede">What stops you cold is somebody else&rsquo;s Tuesday afternoon. The mountain
-      you&rsquo;ve been staring at is a molehill to the person sitting across from you — and the thing
-      they&rsquo;re stuck on is the thing you happen to do for fun.</p>
-    <p class="lede" style="margin-top:14px">Between us we have almost everything anyone needs.
-      It just sits scattered across a dozen heads, and nobody knows what anybody else can do.
-      HIVE pools it.</p>
-    <p class="lede" style="margin-top:14px">The other half is the asking. You talk it through until the
-      wish is specific enough to be granted — not <em>&ldquo;I want to be healthier&rdquo;</em> but
-      <em>&ldquo;I want someone to teach me three twenty-minute meals I can prep on a Sunday.&rdquo;</em>
-      That version has an answer, and somebody in the room can grant it this week.</p>
-  </div>
-</section>
-
 <section class="sec wrap" id="meet" aria-labelledby="meet-h">
-  <p class="eyebrow">How we meet</p>
-  <h2 id="meet-h">Every month, three things</h2>
-  <p class="lede">We hear from everyone, every time. Nobody waits their turn.</p>
-  <div class="steps three">
-    <div class="step">
-      <div class="cell">01</div>
-      <h3>HIVE Hang</h3>
-      <p>The part where we&rsquo;re just people who like each other. Catching up, in person or on a
-        screen, before anybody talks about projects.</p>
-    </div>
-    <div class="step">
-      <div class="cell">02</div>
-      <h3>HIVE Help</h3>
-      <p>We choose a help to make happen this month, and everybody puts something toward it.
-        One thing, done properly, rather than a dozen half-offers.</p>
-    </div>
-    <div class="step">
-      <div class="cell">03</div>
-      <h3>Humdinger</h3>
-      <p>High-definition wishing. Everyone brings the thing they&rsquo;re stuck on and we sharpen it
-        together until it&rsquo;s specific enough for somebody to grant.</p>
-    </div>
-  </div>
+  <p class="eyebrow">Every month</p>
+  <h2 id="meet-h">Three parts to a meeting</h2>
+  <ul class="trio">
+    <li><b>HIVE Hang</b> &mdash; the part where we&rsquo;re just people who like each other.</li>
+    <li><b>HIVE Help</b> &mdash; we pick one help to make happen, and everyone puts something toward it.</li>
+    <li><b>Humdinger</b> &mdash; we sharpen what you&rsquo;re stuck on until it&rsquo;s specific enough for somebody to grant.</li>
+  </ul>
 </section>
 
 <section class="origin wrap" id="origin" aria-labelledby="origin-h">
   <div class="panel">
     <p class="eyebrow">Where it came from</p>
-    <h2 id="origin-h" style="margin-bottom:18px">With thanks to Isaac Asimov</h2>
-    <blockquote>Once a month, a group of friends met for dinner. Every member brought a guest —
+    <h2 id="origin-h" style="margin-bottom:16px">With thanks to Isaac Asimov</h2>
+    <blockquote>Once a month, a group of friends met for dinner. Every member brought a guest &mdash;
       and the whole evening was spent drawing that one person out.</blockquote>
     <p>Asimov spent years at a monthly dinner club in New York. In his autobiography
-      <em>I, Asimov</em> he wrote about it as the <strong>Trap Door Spider Society</strong>, and he
-      turned it into fiction as the <strong>Black Widowers</strong> — stories where a guest arrives
-      with a problem he can&rsquo;t solve, gets thoroughly questioned over dinner, and leaves with an
-      answer none of them had on their own.</p>
-    <p>That&rsquo;s the shape of this. Attention pointed at one person at a time. A problem that gets
-      solved because it was finally described properly, out loud, to people who wanted to help.</p>
-    <p><strong>Natalie Walstead took that idea and built on it</strong> — the same structure, brought
-      into a faster world, with the tools to keep it going between dinners, and a table that&rsquo;s
-      open to everyone.</p>
-  </div>
-</section>
-
-<section class="sec wrap" id="app" aria-labelledby="app-h">
-  <div class="panel">
-    <p class="eyebrow">The members&rsquo; app</p>
-    <h2 id="app-h">Nobody has to be in the room</h2>
-    <p class="lede">Life doesn&rsquo;t schedule itself around a monthly meeting. The app is how HIVE keeps
-      working when we&rsquo;re not all together — catch up on a meeting you missed, sharpen a wish
-      whenever it occurs to you, and pick up the thread on your own time.</p>
-    <div class="cta" style="margin-top:26px">
-      <a class="btn solid" href="https://app.the-hive.app/login">Member log in <i>&rarr;</i></a>
-    </div>
+      <em>I, Asimov</em> he wrote about it as the <strong>Trap Door Spider Society</strong>, and turned
+      it into fiction as the <strong>Black Widowers</strong>. Natalie Walstead took that idea and built
+      on it &mdash; same structure, faster world, and a table that&rsquo;s open to everyone.</p>
   </div>
 </section>
 
 <section class="sec wrap" id="involved" aria-labelledby="inv-h">
   <p class="eyebrow">Want to get involved?</p>
   <h2 id="inv-h">Three ways in</h2>
-  <p class="lede">You don&rsquo;t have to be a member to be around us.</p>
-
   <div class="doors">
     <div class="door">
       <h3>Get the newsletter</h3>
-      <p>Once a month: what we worked on, what got granted, and what we learned doing it.
-        We&rsquo;ll tell you about public events the same way, so this is the only sign-up you need.</p>
+      <p>Once a month: what we worked on and what got granted. Public events go out the same way,
+        so it&rsquo;s the only sign-up you need.</p>
       <form id="subscribe" novalidate>
         <label class="sr" for="email">Your email</label>
         <input id="email" name="email" type="email" placeholder="you@example.com" autocomplete="email" required>
@@ -382,26 +345,21 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
         <p class="formnote" id="subnote" role="status" aria-live="polite"></p>
       </form>
     </div>
-
     <div class="door">
       <h3>Come to something</h3>
-      <p>Members mark events public or private in the app. The public ones turn up on this page,
-        and go out in the newsletter — so if you&rsquo;re curious about us, that&rsquo;s how to find us.</p>
-      <p class="none">Nothing public on the calendar just now.</p>
+      <p>Members mark events public or private in the app. The public ones turn up here and in the
+        newsletter, so that&rsquo;s how to find us.</p>
       <a class="more" href="mailto:NatWalstead@gmail.com?subject=Honey%2C%20we%20have%20a%20message!%20%F0%9F%8D%AF">Ask what&rsquo;s next &rarr;</a>
     </div>
-
     <div class="door">
       <h3>Chip in</h3>
-      <p>Members pay quarterly dues, which go into the Honey Pot and pay for the things we
-        decide to make happen. If you&rsquo;re not a member but you&rsquo;d like to put something in,
-        you&rsquo;re very welcome to.</p>
-      <a class="more" href="mailto:NatWalstead@gmail.com?subject=I%27d%20like%20to%20chip%20in%20to%20HIVE%20%F0%9F%8D%AF">Ask how to donate &rarr;</a>
+      <p>Members pay quarterly dues into the Honey Pot, which pays for the things we decide to make
+        happen. Not a member but want to add to it? Very welcome.</p>
+      <a class="more" href="mailto:NatWalstead@gmail.com?subject=I%27d%20like%20to%20chip%20in%20to%20HIVE%20%F0%9F%8D%AF">Ask how &rarr;</a>
     </div>
   </div>
-
-  <p class="swagline">There&rsquo;s also <a href="https://thenateffect.etsy.com/listing/4520881664">HIVE swag</a>
-    &mdash; shirts and bits with the bee on them, with more coming.</p>
+  <p class="swagline">There&rsquo;s also <a href="https://thenateffect.etsy.com/listing/4520881664">HIVE swag</a>,
+    with more coming.</p>
 </section>
 
 <footer class="wrap">
