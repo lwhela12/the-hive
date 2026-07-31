@@ -200,6 +200,62 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .swagline{margin:26px auto 0;font-size:.94rem;color:#5c5a54;max-width:52ch}
 .swagline a{color:var(--deepgold);font-weight:700;text-decoration:none;border-bottom:1.5px solid rgba(189,147,72,.5)}
 
+
+/* ---------- the comb: flat-top cells in a zigzag strip ---------- */
+.comb{--hw:min(196px,18vw);display:flex;justify-content:center;align-items:flex-start;
+  margin:30px auto 0;padding-bottom:calc(var(--hw)*.44)}
+.cell{width:var(--hw);height:calc(var(--hw)*.866);flex:none;appearance:none;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  padding:0 calc(var(--hw)*.17);text-align:center;text-decoration:none;border:0;
+  clip-path:polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%);
+  background:linear-gradient(160deg,#fdf3dc,#f3e6c4);
+  color:var(--charcoal);font-family:var(--sans);
+  transition:background .18s,transform .18s,filter .18s}
+.cell+.cell{margin-left:calc(var(--hw)*-.25)}
+.cell:nth-child(even){transform:translateY(calc(var(--hw)*.433))}
+.cell:hover{background:linear-gradient(160deg,#fdf6e6,#eddaae);filter:brightness(1.03)}
+.cell:nth-child(even):hover{transform:translateY(calc(var(--hw)*.433)) scale(1.03)}
+.cell:nth-child(odd):hover{transform:scale(1.03)}
+.cell[aria-selected="true"]{background:linear-gradient(160deg,var(--gold),#a87f37);color:#fffdf5}
+.cell[aria-selected="true"] .sub{color:rgba(255,253,245,.82)}
+.cell .lab{font-family:var(--serif);font-weight:700;font-size:.98rem;line-height:1.15}
+.cell .sub{font-size:.72rem;color:var(--label);line-height:1.25;text-wrap:balance}
+.cell:focus-visible{outline:none;filter:drop-shadow(0 0 0 3px var(--gold))}
+
+/* ---------- the panel under it ---------- */
+.panels{max-width:640px;margin:6px auto 0}
+.pane{background:var(--paper);border:1px solid rgba(189,147,72,.24);border-radius:18px;
+  padding:26px 24px;text-align:left;box-shadow:0 14px 36px rgba(138,106,47,.09)}
+.pane[hidden]{display:none}
+.pane p{margin:0 0 14px;font-size:.97rem;color:#5c5a54;line-height:1.65}
+.pane p:last-child{margin-bottom:0}
+.pane p.none{color:var(--label);font-style:italic;font-size:.9rem}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.f{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.f label{font-size:.8rem;font-weight:700;color:var(--charcoal);letter-spacing:.02em}
+.pane input,.pane textarea{font-family:var(--sans);font-size:.97rem;color:var(--charcoal);background:#fff;
+  border:1px solid rgba(189,147,72,.42);border-radius:12px;padding:11px 14px;width:100%}
+.pane textarea{resize:vertical;min-height:96px;line-height:1.55}
+.pane input:focus,.pane textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(189,147,72,.16)}
+.hp{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important}
+#subscribe{display:flex;gap:10px;flex-wrap:wrap;margin:0}
+#subscribe input{flex:1 1 220px;border-radius:999px}
+#subscribe button,#contact button{border:0;cursor:pointer;font-family:var(--sans)}
+.formnote{margin:0 0 10px;font-size:.86rem;color:var(--label);min-height:1.2em}
+.formnote.good{color:#5a7d3a}
+footer p.alone{font-family:var(--serif);font-style:italic;font-size:1.02rem;color:var(--deepgold);
+  margin:0 auto 18px;max-width:34ch}
+
+@media (max-width:760px){
+  .comb{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-bottom:0;--hw:auto}
+  .cell{width:auto;height:auto;clip-path:none;border-radius:14px;padding:18px 14px!important;
+    border:1px solid rgba(189,147,72,.3)}
+  .cell+.cell{margin-left:0}
+  .cell:nth-child(even),.cell:nth-child(even):hover,.cell:nth-child(odd):hover{transform:none}
+  .cell:last-child{grid-column:1/-1}
+  .row2{grid-template-columns:1fr}
+}
+
 /* ---------- footer ---------- */
 footer{margin-top:60px;border-top:1px solid rgba(189,147,72,.24);padding:28px 0 36px;text-align:center}
 footer p{margin:0 0 9px;font-size:.86rem;color:var(--label);line-height:1.55}
@@ -304,7 +360,6 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     <div class="lt"><p class="big"><b>V</b>ision</p><p>The first HIVE is local to Las Vegas, but the vision is wider than that, and open to anyone. We&rsquo;re stronger together.</p></div>
     <div class="lt"><p class="big"><b>E</b>xecution</p><p>We meet monthly to brainstorm and then actually do it. Join in person or virtually, and catch up in the app.</p></div>
   </div>
-  <p class="alone">&ldquo;Alone you&rsquo;re a bee. Together, we&rsquo;re the H.I.V.E.&rdquo;</p>
 </section>
 
 <section class="sec wrap" id="meet" aria-labelledby="meet-h">
@@ -332,10 +387,39 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 
 <section class="sec wrap" id="involved" aria-labelledby="inv-h">
   <p class="eyebrow">Want to get involved?</p>
-  <h2 id="inv-h">Three ways in</h2>
-  <div class="doors">
-    <div class="door">
-      <h3>Get the newsletter</h3>
+  <h2 id="inv-h">Come find us</h2>
+
+  <div class="comb" role="tablist" aria-label="Ways to get in touch">
+    <button class="cell" role="tab" id="t-message" aria-controls="p-message" aria-selected="true">
+      <span class="lab">Message us</span><span class="sub">Say hello</span></button>
+    <button class="cell" role="tab" id="t-news" aria-controls="p-news" aria-selected="false">
+      <span class="lab">Newsletter</span><span class="sub">Once a month</span></button>
+    <button class="cell" role="tab" id="t-events" aria-controls="p-events" aria-selected="false">
+      <span class="lab">Events</span><span class="sub">Come to one</span></button>
+    <a class="cell" href="https://thenateffect.etsy.com/listing/4520881664">
+      <span class="lab">HIVE swag</span><span class="sub">Wear the bee</span></a>
+    <button class="cell" role="tab" id="t-donate" aria-controls="p-donate" aria-selected="false">
+      <span class="lab">Donate</span><span class="sub">The Honey Pot</span></button>
+  </div>
+
+  <div class="panels">
+    <div class="pane on" id="p-message" role="tabpanel" aria-labelledby="t-message">
+      <form id="contact" novalidate>
+        <div class="row2">
+          <div class="f"><label for="cname">Your name</label>
+            <input id="cname" name="name" type="text" autocomplete="name" required></div>
+          <div class="f"><label for="cmail">Email</label>
+            <input id="cmail" name="email" type="email" autocomplete="email" required></div>
+        </div>
+        <div class="f"><label for="cmsg">What&rsquo;s on your mind?</label>
+          <textarea id="cmsg" name="message" rows="4" required></textarea></div>
+        <input class="hp" type="text" name="company" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <p class="formnote" id="cnote" role="status" aria-live="polite"></p>
+        <button class="btn solid" type="submit">Send it <i>&rarr;</i></button>
+      </form>
+    </div>
+
+    <div class="pane" id="p-news" role="tabpanel" aria-labelledby="t-news" hidden>
       <p>Once a month: what we worked on and what got granted. Public events go out the same way,
         so it&rsquo;s the only sign-up you need.</p>
       <form id="subscribe" novalidate>
@@ -345,27 +429,26 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
         <p class="formnote" id="subnote" role="status" aria-live="polite"></p>
       </form>
     </div>
-    <div class="door">
-      <h3>Come to something</h3>
-      <p>Members mark events public or private in the app. The public ones turn up here and in the
-        newsletter, so that&rsquo;s how to find us.</p>
-      <a class="more" href="mailto:NatWalstead@gmail.com?subject=Honey%2C%20we%20have%20a%20message!%20%F0%9F%8D%AF">Ask what&rsquo;s next &rarr;</a>
+
+    <div class="pane" id="p-events" role="tabpanel" aria-labelledby="t-events" hidden>
+      <p>Members mark events public or private in the app. The public ones turn up here and go out
+        in the newsletter &mdash; so the sign-up above is how to hear about them.</p>
+      <p class="none">Nothing public on the calendar just now.</p>
     </div>
-    <div class="door">
-      <h3>Chip in</h3>
+
+    <div class="pane" id="p-donate" role="tabpanel" aria-labelledby="t-donate" hidden>
       <p>Members pay quarterly dues into the Honey Pot, which pays for the things we decide to make
-        happen. Not a member but want to add to it? Very welcome.</p>
-      <a class="more" href="mailto:NatWalstead@gmail.com?subject=I%27d%20like%20to%20chip%20in%20to%20HIVE%20%F0%9F%8D%AF">Ask how &rarr;</a>
+        happen. If you&rsquo;re not a member but you&rsquo;d like to add to it, you&rsquo;re very welcome &mdash;
+        send us a message and we&rsquo;ll tell you how.</p>
     </div>
   </div>
-  <p class="swagline">There&rsquo;s also <a href="https://thenateffect.etsy.com/listing/4520881664">HIVE swag</a>,
-    with more coming.</p>
 </section>
 
 <footer class="wrap">
+  <p class="alone">&ldquo;Alone you&rsquo;re a bee. Together, we&rsquo;re the H.I.V.E.&rdquo;</p>
   <p class="who">HIVE · Apis Mellifera</p>
   <p>Las Vegas, Nevada</p>
-  <p><a href="mailto:NatWalstead@gmail.com?subject=Honey%2C%20we%20have%20a%20message!%20%F0%9F%8D%AF">Say hello</a></p>
+  <p><a href="#involved">Say hello</a></p>
   <p class="cross"><b>Like what you see?</b> We build custom websites and software too —
     get yours at <a href="https://savedyouaseatstudios.com">Saved You a Seat Studios</a>.</p>
   <p class="copy">&copy; 2026 Saved You a Seat Studios. All rights reserved.</p>
@@ -479,6 +562,58 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   toTop.addEventListener('click', function () {
     window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
   });
+
+  /* ---------- comb tabs ---------- */
+  var cells = [].slice.call(document.querySelectorAll('.cell[role="tab"]'));
+  function showPane(id){
+    cells.forEach(function(c){
+      var on = c.getAttribute('aria-controls') === id;
+      c.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    [].forEach.call(document.querySelectorAll('.pane'), function(p){
+      p.hidden = p.id !== id;
+    });
+  }
+  cells.forEach(function(c){
+    c.addEventListener('click', function(){ showPane(c.getAttribute('aria-controls')); });
+  });
+
+  /* ---------- contact: posts to the handler, falls back to mail ---------- */
+  var cform = document.getElementById('contact'), cnote = document.getElementById('cnote');
+  cform.addEventListener('submit', function(e){
+    e.preventDefault();
+    var d = new FormData(cform);
+    var name = (d.get('name')||'').toString().trim();
+    var mail = (d.get('email')||'').toString().trim();
+    var msg  = (d.get('message')||'').toString().trim();
+    if(d.get('company')) return;                      /* bots fill the hidden field */
+    if(!name || !msg || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)){
+      cnote.className = 'formnote';
+      cnote.textContent = 'We need a name, an email we can reply to, and a line about why.';
+      return;
+    }
+    cnote.className = 'formnote';
+    cnote.textContent = 'Sending\u2026';
+    fetch('/api/contact', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name:name, email:mail, message:msg})
+    }).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){
+      return {ok:r.ok, body:j};
+    }); }).then(function(res){
+      if(res.ok && res.body.sent){
+        cform.reset();
+        cnote.className = 'formnote good';
+        cnote.textContent = 'Got it \u2014 we\u2019ll come back to you soon.';
+      } else { throw new Error('not configured'); }
+    }).catch(function(){
+      cnote.className = 'formnote';
+      cnote.textContent = 'Opening your mail app instead\u2026';
+      window.location.href = 'mailto:NatWalstead@gmail.com'
+        + '?subject=' + encodeURIComponent('Honey, we have a message! \uD83C\uDF6F')
+        + '&body=' + encodeURIComponent(name + ' <' + mail + '>\n\n' + msg);
+    });
+  });
+
   /* newsletter — composes an email until there's a real handler */
   var sub = document.getElementById('subscribe'), note = document.getElementById('subnote');
   sub.addEventListener('submit', function (e) {
