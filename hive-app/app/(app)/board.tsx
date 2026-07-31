@@ -1353,6 +1353,57 @@ export default function BoardScreen() {
     ]);
   }, [canManageThread, communityId, invalidatePosts, profile, refetchPosts, updatePostInCache]);
 
+  /**
+   * Put the month's HIVE Help focus on the public site, or take it back off.
+   *
+   * Only the focus post travels — replies stay inside the HIVE, because those
+   * are members logging their own acts of kindness. The newest public focus is
+   * the one the site shows, so marking September's replaces August's by itself.
+   */
+  const handleToggleHelpFocusPublic = useCallback((post: BoardPost, onDone?: () => void) => {
+    if (!profile || !communityId || !canManageThread(post)) return;
+
+    const goingPublic = post.visibility !== 'public';
+    const message = goingPublic
+      ? `Show "${post.title}" on the public site? Anyone visiting the-hive.app will see the title and what you wrote here — replies stay inside the HIVE.`
+      : `Take "${post.title}" off the public site? It stays here for members either way.`;
+
+    const applyVisibility = async () => {
+      try {
+        const { error } = await (supabase as any)
+          .from('board_posts')
+          .update({ visibility: goingPublic ? 'public' : 'members' })
+          .eq('id', post.id)
+          .eq('community_id', communityId);
+
+        if (error) {
+          showBoardAlert('Error', `Could not change that: ${error.message}`);
+          return;
+        }
+
+        const next: 'members' | 'public' = goingPublic ? 'public' : 'members';
+        updatePostInCache(post.id, { visibility: next });
+        setEditingPost((current) => (current?.id === post.id ? { ...current, visibility: next } : current));
+
+        invalidatePosts();
+        await refetchPosts();
+        onDone?.();
+      } catch (error: unknown) {
+        showBoardAlert('Error', `Could not change that: ${getBoardErrorMessage(error, 'Unknown error')}`);
+      }
+    };
+
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(message)) applyVisibility();
+      return;
+    }
+
+    Alert.alert(goingPublic ? 'Show on the public site' : 'Keep it inside the HIVE', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: goingPublic ? 'Show it' : 'Take it off', onPress: applyVisibility },
+    ]);
+  }, [canManageThread, communityId, invalidatePosts, profile, refetchPosts, updatePostInCache]);
+
   const handleDeleteThread = useCallback((post: BoardPost, onDone?: () => void) => {
     if (!communityId || !canManageThread(post)) return;
 
@@ -1882,6 +1933,28 @@ export default function BoardScreen() {
         mentionableMembers={topicMembers}
         managementActions={editingPost ? (
           <>
+            {selectedCategory?.topic_kind === 'helper_log' && canManageThread(editingPost) && (
+              <Pressable
+                onPress={() => handleToggleHelpFocusPublic(editingPost, handleCloseComposer)}
+                className={`flex-row items-center rounded-full px-3 py-2 border active:opacity-75 ${
+                  editingPost.visibility === 'public'
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-charcoal/5 border-charcoal/10'
+                }`}
+              >
+                <Ionicons
+                  name={editingPost.visibility === 'public' ? 'megaphone-outline' : 'lock-closed-outline'}
+                  size={16}
+                  color={editingPost.visibility === 'public' ? '#16a34a' : 'rgba(49,49,48,0.62)'}
+                />
+                <Text
+                  style={{ fontFamily: 'Lato_700Bold' }}
+                  className={`text-xs ml-1 ${editingPost.visibility === 'public' ? 'text-green-700' : 'text-charcoal/60'}`}
+                >
+                  {editingPost.visibility === 'public' ? 'On the public site' : 'HIVErs only'}
+                </Text>
+              </Pressable>
+            )}
             {canCompleteThread(editingPost) && (
               <Pressable
                 onPress={() => handlePrepareGrantThread(editingPost, handleCloseComposer)}

@@ -469,6 +469,12 @@ export interface BoardPost extends Record<string, unknown> {
   is_pinned: boolean;
   /** Standing reference threads sort to the bottom of their board. */
   is_anchored?: boolean;
+  /**
+   * 'members' keeps a thread inside the HIVE; 'public' shows it on the public
+   * site. Only the monthly HIVE Help focus is read publicly today, so that
+   * neighbours can drop off a donation without being members.
+   */
+  visibility?: 'members' | 'public';
   is_locked: boolean;
   edited_at?: string;
   reply_count: number;
