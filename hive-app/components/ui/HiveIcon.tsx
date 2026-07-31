@@ -36,7 +36,8 @@ export type HiveIconName =
   | 'home'
   | 'question'
   | 'target'
-  | 'gift';
+  | 'gift'
+  | 'swap';
 
 export function HiveIcon({
   name,
@@ -295,6 +296,15 @@ export function HiveIcon({
           <Circle cx="12" cy="12" r="8.2" {...stroke} />
           <Circle cx="12" cy="12" r="4.4" {...stroke} />
           <Circle cx="12" cy="12" r="1.5" {...drop} />
+        </G>
+      );
+      // Two lanes running opposite ways — moving between HIVEs, not a refresh.
+      case 'swap': return (
+        <G>
+          <Path d="M4.4 9.2 H17.2" {...stroke} />
+          <Path d="M14.2 6.2 L17.2 9.2 L14.2 12.2" {...stroke} />
+          <Path d="M19.6 14.8 H6.8" {...stroke} />
+          <Path d="M9.8 11.8 L6.8 14.8 L9.8 17.8" {...stroke} />
         </G>
       );
       case 'gift': return (

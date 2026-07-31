@@ -136,7 +136,7 @@ type ProfileFormDraft = {
 };
 
 export default function ProfileScreen() {
-  const { profile, communityId, communityRole, refreshProfile } = useAuth();
+  const { profile, communityId, communityRole, refreshProfile, memberships, openHivePicker } = useAuth();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { permissionStatus, requestPermissions } = useNotifications({ enableListeners: false });
   const { grantWish } = useWishes();
@@ -2501,6 +2501,24 @@ export default function ProfileScreen() {
             <LinkedLogins />
           </View>
           </View>
+        )}
+
+        {/* Swap HIVE — sits above Sign Out because leaving for the other HIVE is
+            the gentler version of leaving altogether, and this is where people
+            come looking for both. Only shown to anyone who has somewhere to go. */}
+        {!immersiveSkillsGarden && memberships.length > 1 && (
+        <Pressable
+          onPress={openHivePicker}
+          accessibilityRole="button"
+          accessibilityLabel="Swap HIVE"
+          className="flex-row items-center justify-center bg-gold/10 py-3 rounded-xl active:bg-gold/20 mb-3"
+          style={{ width: '100%', maxWidth: 1240, alignSelf: 'center' }}
+        >
+          <HiveIcon name="swap" size={18} color="#8e6f35" />
+          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold ml-2">
+            Swap HIVE
+          </Text>
+        </Pressable>
         )}
 
         {/* Sign Out Button */}

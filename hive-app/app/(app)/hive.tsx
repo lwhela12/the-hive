@@ -517,14 +517,19 @@ const resolveHomeSectionOrder = (saved?: readonly string[] | null): HomeSectionK
 };
 
 // Customizable home shortcut hexes (persisted per member in profiles.home_shortcuts).
-type HomeShortcutKey = 'honey_pot' | 'boards' | 'messages' | 'members' | 'meetings' | 'profile' | 'clive' | 'feedback' | 'admin';
+type HomeShortcutKey = 'honey_pot' | 'boards' | 'messages' | 'members' | 'meetings' | 'profile' | 'clive' | 'feedback' | 'swap_hives' | 'admin';
 
-// Messages gave up its slot: it's already in the tab bar, and a bug report you
-// can't find never gets made. Anyone who'd rather have Messages back can swap
-// it in from Customize (Nat 2026-07-25).
-const DEFAULT_HOME_SHORTCUTS: HomeShortcutKey[] = ['honey_pot', 'boards', 'feedback'];
+// The three hexes earn their place by being the things with no other way in:
+// Boards, Messages and the rest all sit in the tab bar already, while the Honey
+// Pot, swapping HIVEs and reporting a bug have no home of their own. A bug
+// report you can't find never gets made (Nat 2026-07-25 and 2026-07-31).
+const DEFAULT_HOME_SHORTCUTS: HomeShortcutKey[] = ['honey_pot', 'swap_hives', 'feedback'];
 
-const HOME_SHORTCUT_META: Record<HomeShortcutKey, { label: string; emoji: string; icon: HiveIconName; adminOnly?: boolean }> = {
+// Swapping is meaningless to anyone who belongs to one HIVE, so for them the
+// slot falls back to Boards rather than showing a button that goes nowhere.
+const SINGLE_HIVE_FALLBACK: HomeShortcutKey = 'boards';
+
+const HOME_SHORTCUT_META: Record<HomeShortcutKey, { label: string; emoji: string; icon: HiveIconName; adminOnly?: boolean; multiHiveOnly?: boolean }> = {
   honey_pot: { label: 'Honey Pot', emoji: '🍯', icon: 'honeypot' },
   boards: { label: 'Boards', emoji: '📋', icon: 'board' },
   messages: { label: 'Messages', emoji: '💬', icon: 'message' },
@@ -536,18 +541,28 @@ const HOME_SHORTCUT_META: Record<HomeShortcutKey, { label: string; emoji: string
   // people most likely to hit one are the least likely to go hunting for where
   // to say so (Nat 2026-07-25).
   feedback: { label: 'App Feedback', emoji: '💬', icon: 'question' },
+  swap_hives: { label: 'Swap HIVE', emoji: '🔀', icon: 'swap', multiHiveOnly: true },
   admin: { label: 'Admin', emoji: '⚙️', icon: 'gear', adminOnly: true },
 };
 
 // Resolve saved shortcuts against the catalog: unknown keys and duplicates are
 // dropped, admin-only shortcuts are dropped for members who can't use them, and
 // any remaining empty slots fall back to the defaults — always exactly 3 slots.
-const resolveHomeShortcuts = (saved: readonly string[] | null | undefined, allowAdmin: boolean): HomeShortcutKey[] => {
+const resolveHomeShortcuts = (
+  saved: readonly string[] | null | undefined,
+  allowAdmin: boolean,
+  allowSwap: boolean
+): HomeShortcutKey[] => {
   const isKnownShortcut = (key: string): key is HomeShortcutKey => key in HOME_SHORTCUT_META;
+  const isAllowed = (key: HomeShortcutKey) =>
+    (allowAdmin || !HOME_SHORTCUT_META[key].adminOnly) &&
+    (allowSwap || !HOME_SHORTCUT_META[key].multiHiveOnly);
+
   const picked = [...new Set((saved ?? []).filter(isKnownShortcut))]
-    .filter((key) => allowAdmin || !HOME_SHORTCUT_META[key].adminOnly)
+    .filter(isAllowed)
     .slice(0, DEFAULT_HOME_SHORTCUTS.length);
-  for (const fallback of DEFAULT_HOME_SHORTCUTS) {
+  const fallbacks = [...DEFAULT_HOME_SHORTCUTS.filter(isAllowed), SINGLE_HIVE_FALLBACK];
+  for (const fallback of fallbacks) {
     if (picked.length >= DEFAULT_HOME_SHORTCUTS.length) break;
     if (!picked.includes(fallback)) picked.push(fallback);
   }
@@ -584,7 +599,7 @@ function SectionMoveButton({ direction, disabled, onPress }: {
 }
 
 export default function HiveScreen() {
-  const { profile, communityId, communityRole, session, refreshProfile, community } = useAuth();
+  const { profile, communityId, communityRole, session, refreshProfile, community, memberships, openHivePicker } = useAuth();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
@@ -592,6 +607,7 @@ export default function HiveScreen() {
   const currentUserId = session?.user?.id ?? profile?.id ?? null;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const canManageDues = isAdmin || communityRole === 'treasurer' || profile?.role === 'treasurer';
+  const canSwapHives = memberships.length > 1;
   const activeSurveyStorageKey = profile?.id && communityId
     ? `the-hive:home-active-survey:${communityId}:${profile.id}`
     : null;
@@ -613,7 +629,7 @@ export default function HiveScreen() {
     () => resolveHomeSectionOrder(profile?.home_section_order)
   );
   const [homeShortcuts, setHomeShortcuts] = useState<HomeShortcutKey[]>(
-    () => resolveHomeShortcuts(profile?.home_shortcuts, canManageDues)
+    () => resolveHomeShortcuts(profile?.home_shortcuts, canManageDues, canSwapHives)
   );
   // Which of the 3 shortcut slots is showing its picker in customize mode.
   const [editingShortcutSlot, setEditingShortcutSlot] = useState<number | null>(null);
@@ -627,7 +643,7 @@ export default function HiveScreen() {
 
   useEffect(() => {
     if (customizeModeRef.current) return;
-    setHomeShortcuts(resolveHomeShortcuts(savedHomeShortcutsKey ? savedHomeShortcutsKey.split('|') : null, canManageDues));
+    setHomeShortcuts(resolveHomeShortcuts(savedHomeShortcutsKey ? savedHomeShortcutsKey.split('|') : null, canManageDues, canSwapHives));
   }, [savedHomeShortcutsKey, canManageDues]);
 
   const moveHomeSection = useCallback((key: HomeSectionKey, direction: -1 | 1) => {
@@ -649,7 +665,7 @@ export default function HiveScreen() {
     customizeModeRef.current = false;
     setEditingShortcutSlot(null);
     const nextOrder = resolveHomeSectionOrder(order);
-    const nextShortcuts = resolveHomeShortcuts(shortcuts, canManageDues);
+    const nextShortcuts = resolveHomeShortcuts(shortcuts, canManageDues, canSwapHives);
     setSectionOrder(nextOrder);
     setHomeShortcuts(nextShortcuts);
     if (!profile?.id) return;
@@ -3288,6 +3304,7 @@ export default function HiveScreen() {
                   profile: () => router.push('/profile' as any),
                   clive: () => router.push('/' as any),
                   feedback: () => void openAppFeedback(),
+                  swap_hives: () => openHivePicker(),
                   admin: () => router.push('/admin' as any),
                 };
                 return (
@@ -3488,6 +3505,7 @@ export default function HiveScreen() {
                           >
                             {(Object.keys(HOME_SHORTCUT_META) as HomeShortcutKey[])
                               .filter((optionKey) => canManageDues || !HOME_SHORTCUT_META[optionKey].adminOnly)
+                              .filter((optionKey) => canSwapHives || !HOME_SHORTCUT_META[optionKey].multiHiveOnly)
                               .map((optionKey, optionIndex) => {
                                 const slot = editingShortcutSlot;
                                 const isCurrent = homeShortcuts[slot] === optionKey;
