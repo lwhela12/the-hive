@@ -23,3 +23,18 @@ daylight. Three studio sites that share craft but not a look.
 to **Resend** and must never be deleted — `send` MX, `send` TXT (SPF), and
 `resend._domainkey` TXT. They are on the `send` subdomain, so a plain
 `dig MX the-hive.app` shows nothing. HIVE's email breaks without them.
+
+## Deploying
+
+**Deploy from `site/` only.** The repo root is linked to the `the-hive` Vercel
+project, which is the members' app — the CLI walks *up* looking for `.vercel`,
+so a deploy started anywhere above `site/` lands in the app's project and gets
+built with the app's settings. `site/.vercel` pins this directory to the
+separate `hive-public` project.
+
+```
+cd site
+npx vercel@latest deploy --prod --yes --token "$T" --scope lwhela12s-projects
+```
+
+Then check every domain actually serves the new build, not just one.
