@@ -87,13 +87,17 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .tag em{font-style:italic;color:var(--deepgold)}
 .opening{font-size:clamp(1.02rem,2.2vw,1.16rem);color:#5c5a54;margin:0 auto;
   max-width:58ch;text-align:center;text-wrap:pretty;line-height:1.7}
-.trio{list-style:none;margin:26px auto 0;max-width:60ch;text-align:left}
+.trio{list-style:none;margin:26px auto 0;max-width:none;text-align:left;padding:0}
 .trio.honeybox{background:linear-gradient(160deg,#fdf3dc,#f5e8c8);
-  border:1px solid rgba(189,147,72,.34);border-radius:18px;padding:8px 28px;
+  border:1px solid rgba(189,147,72,.34);border-radius:18px;
+  padding:6px clamp(24px,3.4vw,36px);
   box-shadow:0 14px 34px rgba(138,106,47,.10)}
-.trio li{padding:15px 0;border-bottom:1px solid rgba(189,147,72,.3);font-size:.99rem;color:#54514a}
+/* the name sits in its own column, so the width goes to the sentence */
+.trio li{display:grid;grid-template-columns:186px 1fr;gap:26px;align-items:start;
+  padding:20px 0;border-bottom:1px solid rgba(189,147,72,.3);font-size:.99rem;color:#54514a}
 .trio li:last-child{border-bottom:0}
-.trio b{font-family:var(--serif);color:var(--charcoal)}
+.trio b{font-family:var(--serif);color:var(--charcoal);font-size:1.08rem;line-height:1.4}
+@media (max-width:760px){.trio li{grid-template-columns:1fr;gap:5px}}
 .hero h1{font-size:clamp(1.9rem,4.8vw,3rem);line-height:1.16;margin:0 auto 16px;max-width:17ch;text-wrap:balance}
 .hero h1 em{font-style:italic;color:var(--deepgold)}
 .hero .sub{color:#5c5a54;font-size:1.08rem;margin:0 auto 30px;max-width:50ch;text-wrap:pretty}
@@ -126,7 +130,11 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .sr{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;
   margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 .letters{padding:40px 0 0}
-.lgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:26px;text-align:left}
+.lgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:26px;text-align:left;
+  background:linear-gradient(160deg,#fdf3dc,#f5e8c8);
+  border:1px solid rgba(189,147,72,.34);border-radius:18px;
+  padding:clamp(24px,3.4vw,36px);
+  box-shadow:0 14px 34px rgba(138,106,47,.10)}
 .lt p.big{font-family:var(--serif);font-weight:400;font-size:clamp(1.6rem,3.4vw,2.3rem);
   line-height:1;margin:0 0 12px;color:var(--gold)}
 .lt p.big b{font-weight:700;font-size:1.62em;line-height:.8;color:var(--charcoal)}
@@ -160,19 +168,24 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
   padding:0 calc(var(--hw)*.17);text-align:center;text-decoration:none;border:0;
   clip-path:polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%);
-  background:linear-gradient(160deg,#fdf3dc,#f3e6c4);
+  /* clip-path eats a border, so the outline is the same hexagon drawn as artwork
+     behind the fill — the clip trims its outer half, leaving a clean inner line */
+  --stroke:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpolygon points='25,0 75,0 100,50 75,100 25,100 0,50' fill='none' stroke='%238a6a2f' stroke-opacity='.85' stroke-width='2.6'/%3E%3C/svg%3E");
+  --edge:drop-shadow(0 3px 7px rgba(138,106,47,.16));
+  background:var(--stroke) center/100% 100% no-repeat,linear-gradient(160deg,#f8ebcd,#eeddb1);
   color:var(--charcoal);font-family:var(--sans);
-  transition:background .18s,transform .18s,filter .18s}
+  filter:var(--edge);
+  transition:background .18s,transform .18s}
 .cell+.cell{margin-left:calc(var(--hw)*-.25)}
 .cell:nth-child(even){transform:translateY(calc(var(--hw)*.433))}
-.cell:hover{background:linear-gradient(160deg,#fdf6e6,#eddaae);filter:brightness(1.03)}
+.cell:hover{background:var(--stroke) center/100% 100% no-repeat,linear-gradient(160deg,#fdf6e6,#e7d19c)}
 .cell:nth-child(even):hover{transform:translateY(calc(var(--hw)*.433)) scale(1.03)}
 .cell:nth-child(odd):hover{transform:scale(1.03)}
 .cell[aria-selected="true"]{background:linear-gradient(160deg,var(--gold),#a87f37);color:#fffdf5}
 .cell[aria-selected="true"] .sub{color:rgba(255,253,245,.82)}
 .cell .lab{font-family:var(--serif);font-weight:700;font-size:.98rem;line-height:1.15}
-.cell .sub{font-size:.72rem;color:var(--label);line-height:1.25;text-wrap:balance}
-.cell:focus-visible{outline:none;filter:drop-shadow(0 0 0 3px var(--gold))}
+.cell .sub{font-size:.72rem;color:#7d6a4f;line-height:1.25;text-wrap:balance}
+.cell:focus-visible{outline:none;filter:var(--edge) drop-shadow(0 0 2px var(--gold)) drop-shadow(0 0 3px var(--gold))}
 
 /* ---------- the panel under it ---------- */
 .panels{max-width:640px;margin:6px auto 0}
@@ -219,8 +232,11 @@ footer p.alone{font-family:var(--serif);font-style:italic;font-size:1.02rem;colo
 
 @media (max-width:760px){
   .comb{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-bottom:0;--hw:auto}
+  /* stacked cards on a phone: a real border does the job, so drop the hexagon artwork */
   .cell{width:auto;height:auto;clip-path:none;border-radius:14px;padding:18px 14px!important;
-    border:1px solid rgba(189,147,72,.3)}
+    --stroke:linear-gradient(transparent,transparent);
+    border:1px solid rgba(138,106,47,.42);filter:none;box-shadow:0 3px 8px rgba(138,106,47,.10)}
+  .cell:focus-visible{filter:none;box-shadow:0 0 0 3px var(--gold)}
   .cell+.cell{margin-left:0}
   .cell:nth-child(even),.cell:nth-child(even):hover,.cell:nth-child(odd):hover{transform:none}
   .cell:last-child{grid-column:1/-1}
@@ -341,16 +357,16 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   <p class="eyebrow">Every month</p>
   <h2 id="meet-h">Three parts to a month</h2>
   <ul class="trio honeybox">
-    <li><b>HIVE Meeting</b> &mdash; once a month we work on each other&rsquo;s HDs: high-definition wishes,
+    <li><b>HIVE Meeting</b><span>Once a month we work on each other&rsquo;s HDs: high-definition wishes,
       sharpened in a Humdinger session until they&rsquo;re specific enough for somebody to grant.
-      Come in person, join on Google Meet, or catch up in your own time &mdash; busy lives are welcome here.</li>
-    <li><b>HIVE Help</b> &mdash; we get a lot out of giving back, so every month we pick a focus.
+      Come in person, join on Google Meet, or catch up in your own time &mdash; busy lives are welcome here.</span></li>
+    <li><b>HIVE Help</b><span>We get a lot out of giving back, so every month we pick a focus.
       Cleaning up a parking lot, grabbing trash on your walk, paying it behind at the drive-through,
       a donation to a shelter, fifteen minutes of kindness &mdash; every act counts, however small.
-      Want the monthly spotlight on you, your project, or your business? Ask us.</li>
-    <li><b>HIVE Hang</b> &mdash; you can&rsquo;t pour from an empty cup, so at least once a month we get
+      Want the monthly spotlight on you, your project, or your business? Ask us.</span></li>
+    <li><b>HIVE Hang</b><span>You can&rsquo;t pour from an empty cup, so at least once a month we get
       together purely to enjoy each other. Sometimes it&rsquo;s our own small crew, and sometimes it&rsquo;s
-      a more-is-more night out &mdash; a show, a concert, whatever sounds good.</li>
+      a more-is-more night out &mdash; a show, a concert, whatever sounds good.</span></li>
   </ul>
 </section>
 
