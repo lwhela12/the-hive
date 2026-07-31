@@ -71,7 +71,6 @@ a{color:inherit}
 h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margin:0}
 .eyebrow{font-family:var(--sans);font-weight:700;font-size:.7rem;letter-spacing:.22em;
   text-transform:uppercase;color:var(--gold);margin:0 0 14px}
-.lede{color:#5c5a54;font-size:1.06rem;margin:0 auto;max-width:58ch;text-wrap:pretty}
 
 /* ---------- hero ---------- */
 .hero{text-align:center;padding:44px 0 6px}
@@ -95,17 +94,12 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .hero h1{font-size:clamp(1.9rem,4.8vw,3rem);line-height:1.16;margin:0 auto 16px;max-width:17ch;text-wrap:balance}
 .hero h1 em{font-style:italic;color:var(--deepgold)}
 .hero .sub{color:#5c5a54;font-size:1.08rem;margin:0 auto 30px;max-width:50ch;text-wrap:pretty}
-.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 .btn{display:inline-flex;align-items:center;gap:9px;text-decoration:none;font-weight:700;font-size:1rem;
   padding:15px 30px;border-radius:999px;transition:transform .18s,box-shadow .18s,background .18s}
 .btn i{font-style:normal;transition:transform .18s}
 .btn:hover i{transform:translateX(3px)}
 .btn.solid{background:var(--gold);color:#fffdf5;box-shadow:0 8px 22px rgba(189,147,72,.28)}
 .btn.solid:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(189,147,72,.42)}
-.btn.ghost{color:var(--deepgold);box-shadow:inset 0 0 0 1.5px rgba(189,147,72,.55)}
-.btn.ghost:hover{transform:translateY(-2px);background:rgba(189,147,72,.10)}
-.motto{font-family:var(--sans);font-weight:700;font-size:.68rem;letter-spacing:.28em;
-  text-transform:uppercase;color:var(--softink);margin:30px 0 0}
 
 /* ---------- panels ---------- */
 .panel{background:linear-gradient(168deg,var(--paper),var(--parchment));
@@ -113,18 +107,6 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
   box-shadow:0 16px 44px rgba(138,106,47,.09)}
 .sec{padding:38px 0 0;text-align:center}
 .sec h2{font-size:clamp(1.5rem,3.6vw,2.15rem);line-height:1.2;margin:0 auto 14px;max-width:20ch;text-wrap:balance}
-
-/* ---------- how it works ---------- */
-.steps{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:30px;text-align:left}
-.step{background:var(--paper);border:1px solid rgba(189,147,72,.22);border-radius:16px;
-  padding:24px 22px;transition:transform .2s,box-shadow .2s}
-.step:hover{transform:translateY(-3px);box-shadow:0 14px 32px rgba(138,106,47,.12)}
-.step .cell{width:38px;height:38px;margin-bottom:14px;display:grid;place-items:center;
-  background:var(--selected);border:1px solid rgba(189,147,72,.45);color:var(--deepgold);
-  font-family:var(--serif);font-weight:700;font-size:.9rem;
-  clip-path:polygon(25% 2%,75% 2%,100% 50%,75% 98%,25% 98%,0 50%)}
-.step h3{font-size:1.1rem;margin:0 0 7px}
-.step p{margin:0;font-size:.94rem;color:#5c5a54;line-height:1.6}
 
 /* ---------- origin ---------- */
 .origin{padding:40px 0 0}
@@ -135,22 +117,6 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .origin p{color:#5c5a54;margin:0 0 14px;font-size:1rem}
 .origin p:last-child{margin-bottom:0}
 .origin strong{color:var(--charcoal)}
-
-/* ---------- chapter ---------- */
-.chapter{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:30px;text-align:left}
-.chapter .card{background:var(--paper);border:1px solid rgba(189,147,72,.22);border-radius:16px;padding:26px 24px}
-.chapter h3{font-size:1.2rem;margin:0 0 4px}
-.chapter .where{font-family:var(--sans);font-weight:700;font-size:.68rem;letter-spacing:.18em;
-  text-transform:uppercase;color:var(--gold);margin:0 0 12px}
-.chapter p{margin:0 0 16px;font-size:.96rem;color:#5c5a54}
-.chapter a.more{font-weight:700;font-size:.92rem;color:var(--deepgold);text-decoration:none;
-  border-bottom:1.5px solid rgba(189,147,72,.5);padding-bottom:1px}
-.chapter a.more:hover{border-color:var(--deepgold)}
-
-/* ---------- join ---------- */
-.join{padding:52px 0 0;text-align:center}
-.join .panel{background:linear-gradient(165deg,var(--selected),var(--paper))}
-.join p.small{color:var(--label);font-size:.9rem;margin:18px 0 0}
 
 
 /* ---------- H.I.V.E. spelled out ---------- */
@@ -165,44 +131,27 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .alone{font-family:var(--serif);font-style:italic;font-size:clamp(1.1rem,2.6vw,1.4rem);
   color:var(--deepgold);text-align:center;margin:30px auto 0;max-width:30ch;line-height:1.5}
 
-/* ---------- three-up ---------- */
-.steps.three{grid-template-columns:repeat(3,1fr)}
-
 /* ---------- newsletter form ---------- */
-#subscribe{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+
 #subscribe input{font-family:var(--sans);font-size:1rem;color:var(--charcoal);background:#fff;
   border:1px solid rgba(189,147,72,.45);border-radius:999px;padding:14px 20px;min-width:min(300px,80vw)}
 #subscribe input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(189,147,72,.16)}
 #subscribe input::placeholder{color:#a09274}
 #subscribe button{border:0;cursor:pointer;font-family:var(--sans)}
-.formnote{flex-basis:100%;margin:4px 0 0;font-size:.88rem;color:var(--label);min-height:1.3em}
+
 .formnote.good{color:#5a7d3a}
 
-
-/* ---------- get involved ---------- */
-.doors{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:30px;text-align:left}
-.door{background:var(--paper);border:1px solid rgba(189,147,72,.22);border-radius:16px;padding:26px 24px;
-  display:flex;flex-direction:column}
-.door h3{font-size:1.16rem;margin:0 0 9px}
-.door p{margin:0 0 14px;font-size:.94rem;color:#5c5a54;line-height:1.6}
-.door p.none{color:var(--label);font-style:italic;font-size:.9rem}
-.door .more{margin-top:auto;font-weight:700;font-size:.92rem;color:var(--deepgold);text-decoration:none;
-  border-bottom:1.5px solid rgba(189,147,72,.5);padding-bottom:1px;align-self:flex-start}
-.door .more:hover{border-color:var(--deepgold)}
-#subscribe{display:flex;flex-direction:column;gap:10px;margin-top:auto}
 #subscribe input{font-family:var(--sans);font-size:.98rem;color:var(--charcoal);background:#fff;
   border:1px solid rgba(189,147,72,.45);border-radius:999px;padding:13px 18px;width:100%}
 #subscribe input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(189,147,72,.16)}
 #subscribe input::placeholder{color:#a09274}
 #subscribe button{border:0;cursor:pointer;font-family:var(--sans);justify-content:center;padding:13px 22px}
-.formnote{margin:0;font-size:.86rem;color:var(--label);min-height:1.2em}
+
 .formnote.good{color:#5a7d3a}
-.swagline{margin:26px auto 0;font-size:.94rem;color:#5c5a54;max-width:52ch}
-.swagline a{color:var(--deepgold);font-weight:700;text-decoration:none;border-bottom:1.5px solid rgba(189,147,72,.5)}
 
 
 /* ---------- the comb: flat-top cells in a zigzag strip ---------- */
-.comb{--hw:min(196px,18vw);display:flex;justify-content:center;align-items:flex-start;
+.comb{--hw:min(178px,15.5vw);display:flex;justify-content:center;align-items:flex-start;
   margin:30px auto 0;padding-bottom:calc(var(--hw)*.44)}
 .cell{width:var(--hw);height:calc(var(--hw)*.866);flex:none;appearance:none;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
@@ -228,7 +177,13 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
   padding:26px 24px;text-align:left;box-shadow:0 14px 36px rgba(138,106,47,.09)}
 .pane[hidden]{display:none}
 .pane p{margin:0 0 14px;font-size:.97rem;color:#5c5a54;line-height:1.65}
-.pane p:last-child{margin-bottom:0}
+".pane p:last-child{margin-bottom:0}
+.pane blockquote{margin:0 0 14px;padding:0 0 0 18px;border-left:3px solid var(--goldlight);
+  font-family:var(--serif);font-style:italic;font-size:1.04rem;line-height:1.5;color:var(--deepgold)}
+.pane .cash{font-family:var(--serif);font-size:1.16rem;color:var(--charcoal);margin:0 0 14px}
+.pane .cash a{color:var(--deepgold);text-decoration:none;border-bottom:2px solid rgba(189,147,72,.45)}
+.pane .cash a:hover{border-color:var(--deepgold)}
+.pane .btn{margin-top:4px}
 .pane p.none{color:var(--label);font-style:italic;font-size:.9rem}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .f{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
@@ -238,10 +193,10 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .pane textarea{resize:vertical;min-height:96px;line-height:1.55}
 .pane input:focus,.pane textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(189,147,72,.16)}
 .hp{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important}
-#subscribe{display:flex;gap:10px;flex-wrap:wrap;margin:0}
+
 #subscribe input{flex:1 1 220px;border-radius:999px}
 #subscribe button,#contact button{border:0;cursor:pointer;font-family:var(--sans)}
-.formnote{margin:0 0 10px;font-size:.86rem;color:var(--label);min-height:1.2em}
+
 .formnote.good{color:#5a7d3a}
 footer p.alone{font-family:var(--serif);font-style:italic;font-size:1.02rem;color:var(--deepgold);
   margin:0 auto 18px;max-width:34ch}
@@ -309,6 +264,12 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   .hero{padding:34px 0 12px}
   .sec,.origin,.join{padding-top:38px}
 }
+
+#subscribe{display:flex;flex-direction:row;flex-wrap:wrap;gap:10px;margin:0;align-items:center}
+#subscribe input{flex:1 1 220px;border-radius:999px}
+#subscribe button,#contact button{border:0;cursor:pointer;font-family:var(--sans)}
+.formnote{flex-basis:100%;margin:0 0 10px;font-size:.86rem;color:var(--label);min-height:1.2em}
+.formnote.good{color:#5a7d3a}
 </style>
 </head>
 <body>
@@ -321,7 +282,6 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   <nav class="nav" aria-label="Main">
     <a href="#letters">What HIVE means</a>
     <a href="#meet">How we meet</a>
-    <a href="#origin">Where it came from</a>
     <a href="#involved">Get involved</a>
   </nav>
   <a class="login" href="https://app.the-hive.app/login">Member log in</a>
@@ -332,7 +292,6 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     <p class="t">HIVE</p>
     <a href="#letters">What HIVE means</a>
     <a href="#meet">How we meet</a>
-    <a href="#origin">Where it came from</a>
     <a href="#involved">Get involved</a>
     <a href="https://app.the-hive.app/login">Member log in &rarr;</a>
   </nav>
@@ -372,19 +331,6 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   </ul>
 </section>
 
-<section class="origin wrap" id="origin" aria-labelledby="origin-h">
-  <div class="panel">
-    <p class="eyebrow">Where it came from</p>
-    <h2 id="origin-h" style="margin-bottom:16px">With thanks to Isaac Asimov</h2>
-    <blockquote>Once a month, a group of friends met for dinner. Every member brought a guest &mdash;
-      and the whole evening was spent drawing that one person out.</blockquote>
-    <p>Asimov spent years at a monthly dinner club in New York. In his autobiography
-      <em>I, Asimov</em> he wrote about it as the <strong>Trap Door Spider Society</strong>, and turned
-      it into fiction as the <strong>Black Widowers</strong>. Natalie Walstead took that idea and built
-      on it &mdash; same structure, faster world, and a table that&rsquo;s open to everyone.</p>
-  </div>
-</section>
-
 <section class="sec wrap" id="involved" aria-labelledby="inv-h">
   <p class="eyebrow">Want to get involved?</p>
   <h2 id="inv-h">Come find us</h2>
@@ -396,8 +342,10 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       <span class="lab">Newsletter</span><span class="sub">Once a month</span></button>
     <button class="cell" role="tab" id="t-events" aria-controls="p-events" aria-selected="false">
       <span class="lab">Events</span><span class="sub">Come to one</span></button>
-    <a class="cell" href="https://thenateffect.etsy.com/listing/4520881664">
-      <span class="lab">HIVE swag</span><span class="sub">Wear the bee</span></a>
+    <button class="cell" role="tab" id="t-origin" aria-controls="p-origin" aria-selected="false">
+      <span class="lab">Backstory</span><span class="sub">Thanks, Asimov</span></button>
+    <button class="cell" role="tab" id="t-swag" aria-controls="p-swag" aria-selected="false">
+      <span class="lab">HIVE swag</span><span class="sub">Wear the bee</span></button>
     <button class="cell" role="tab" id="t-donate" aria-controls="p-donate" aria-selected="false">
       <span class="lab">Donate</span><span class="sub">The Honey Pot</span></button>
   </div>
@@ -436,10 +384,27 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       <p class="none">Nothing public on the calendar just now.</p>
     </div>
 
+    <div class="pane" id="p-origin" role="tabpanel" aria-labelledby="t-origin" hidden>
+      <blockquote>Once a month, a group of friends met for dinner. Every member brought a guest
+        &mdash; and the whole evening was spent drawing that one person out.</blockquote>
+      <p>Asimov spent years at a monthly dinner club in New York. In his autobiography
+        <em>I, Asimov</em> he wrote about it as the <strong>Trap Door Spider Society</strong>, and
+        turned it into fiction as the <strong>Black Widowers</strong>.</p>
+      <p>Natalie Walstead took that idea and built on it &mdash; same structure, faster world, and a
+        table that&rsquo;s open to everyone.</p>
+    </div>
+
+    <div class="pane" id="p-swag" role="tabpanel" aria-labelledby="t-swag" hidden>
+      <p>Shirts and bits with the bee on them. Wearing it is its own small way of saying the thing
+        out loud &mdash; and it helps keep the Honey Pot topped up. More designs on the way.</p>
+      <a class="btn solid" href="https://thenateffect.etsy.com/listing/4520881664">See the swag <i>&rarr;</i></a>
+    </div>
+
     <div class="pane" id="p-donate" role="tabpanel" aria-labelledby="t-donate" hidden>
       <p>Members pay quarterly dues into the Honey Pot, which pays for the things we decide to make
-        happen. If you&rsquo;re not a member but you&rsquo;d like to add to it, you&rsquo;re very welcome &mdash;
-        send us a message and we&rsquo;ll tell you how.</p>
+        happen. If you&rsquo;re not a member but you&rsquo;d like to add to it, you&rsquo;re very welcome.</p>
+      <p class="cash">Cash App &mdash; <a href="https://cash.app/$HIVELV"><b>$HIVELV</b></a></p>
+      <p>That&rsquo;s where dues go too, so it&rsquo;s the same pot either way.</p>
     </div>
   </div>
 </section>
@@ -448,7 +413,6 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   <p class="alone">&ldquo;Alone you&rsquo;re a bee. Together, we&rsquo;re the H.I.V.E.&rdquo;</p>
   <p class="who">HIVE · Apis Mellifera</p>
   <p>Las Vegas, Nevada</p>
-  <p><a href="#involved">Say hello</a></p>
   <p class="cross"><b>Like what you see?</b> We build custom websites and software too —
     get yours at <a href="https://savedyouaseatstudios.com">Saved You a Seat Studios</a>.</p>
   <p class="copy">&copy; 2026 Saved You a Seat Studios. All rights reserved.</p>
