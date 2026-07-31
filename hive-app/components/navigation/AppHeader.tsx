@@ -19,9 +19,10 @@ interface AppHeaderProps {
 // The one page-title treatment for the whole app: gold bar, spaced serif.
 // Every tab screen should use this instead of hand-rolling a gold header.
 //
-// The bar takes its colour from the hive you're in, and people who belong to
-// more than one also get its name above the title. For everyone in a single
-// hive this looks exactly as it always has.
+// The bar takes its colour from the HIVE you're in, and its name rides above
+// every page title so you always know where you are. Home is the exception: it
+// puts the name in the title itself, big — so the name is said once there
+// rather than twice in two sizes.
 export const AppHeader = memo(function AppHeader({
   title,
   onBackPress,
@@ -30,9 +31,12 @@ export const AppHeader = memo(function AppHeader({
   onMenuPress,
   rightElement,
 }: AppHeaderProps) {
-  const { community, memberships } = useAuth();
+  const { community } = useAuth();
   const accent = hiveAccent(community);
-  const showHiveName = memberships.length > 1;
+  const hiveName = hiveDisplayName(community?.name);
+  // Any page whose title is already the HIVE's name says it big and skips the
+  // small line — that's Home, and anywhere else that chooses to do the same.
+  const showHiveName = title.trim().toUpperCase() !== hiveName.toUpperCase();
 
   return (
     <View
@@ -73,7 +77,7 @@ export const AppHeader = memo(function AppHeader({
               marginBottom: 1,
             }}
           >
-            {hiveDisplayName(community?.name).toUpperCase()}
+            {hiveName.toUpperCase()}
           </Text>
         ) : null}
         <View className="flex-row items-center">

@@ -176,7 +176,7 @@ export const NavigationDrawer = memo(function NavigationDrawer({
               openHivePicker();
             }}
             accessibilityRole="button"
-            accessibilityLabel="Switch hive"
+            accessibilityLabel="Switch HIVE"
             className="flex-row items-center px-3 py-3 rounded-xl active:bg-gray-50"
           >
             <View
@@ -196,7 +196,7 @@ export const NavigationDrawer = memo(function NavigationDrawer({
                 style={{ fontFamily: 'Lato_400Regular' }}
                 className="text-xs text-gray-400"
               >
-                Switch hive
+                Switch HIVE
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color="#9ca3af" />

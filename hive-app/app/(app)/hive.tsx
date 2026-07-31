@@ -34,6 +34,7 @@ import {
   WishSectionSkeleton,
 } from '../../components/hive/skeletons';
 import { AppHeader } from '../../components/navigation';
+import { hiveDisplayName } from '../../lib/hiveBrand';
 import { DAILY_QUESTIONS, getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateRangeShort, formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
@@ -583,7 +584,7 @@ function SectionMoveButton({ direction, disabled, onPress }: {
 }
 
 export default function HiveScreen() {
-  const { profile, communityId, communityRole, session, refreshProfile } = useAuth();
+  const { profile, communityId, communityRole, session, refreshProfile, community } = useAuth();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
@@ -2589,7 +2590,7 @@ export default function HiveScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
-      <AppHeader title="HIVE" />
+      <AppHeader title={hiveDisplayName(community?.name)} />
 
       <ScrollView
         ref={homeScrollRef}

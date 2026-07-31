@@ -44,7 +44,7 @@ export function HivePicker() {
             style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 26, lineHeight: 34 }}
             className="text-charcoal text-center mb-2"
           >
-            Which hive today?
+            Which HIVE today?
           </Text>
           <Text
             style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 22 }}
