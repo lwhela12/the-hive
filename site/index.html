@@ -164,6 +164,28 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .formnote{flex-basis:100%;margin:4px 0 0;font-size:.88rem;color:var(--label);min-height:1.3em}
 .formnote.good{color:#5a7d3a}
 
+
+/* ---------- get involved ---------- */
+.doors{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:30px;text-align:left}
+.door{background:var(--paper);border:1px solid rgba(189,147,72,.22);border-radius:16px;padding:26px 24px;
+  display:flex;flex-direction:column}
+.door h3{font-size:1.16rem;margin:0 0 9px}
+.door p{margin:0 0 14px;font-size:.94rem;color:#5c5a54;line-height:1.6}
+.door p.none{color:var(--label);font-style:italic;font-size:.9rem}
+.door .more{margin-top:auto;font-weight:700;font-size:.92rem;color:var(--deepgold);text-decoration:none;
+  border-bottom:1.5px solid rgba(189,147,72,.5);padding-bottom:1px;align-self:flex-start}
+.door .more:hover{border-color:var(--deepgold)}
+#subscribe{display:flex;flex-direction:column;gap:10px;margin-top:auto}
+#subscribe input{font-family:var(--sans);font-size:.98rem;color:var(--charcoal);background:#fff;
+  border:1px solid rgba(189,147,72,.45);border-radius:999px;padding:13px 18px;width:100%}
+#subscribe input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(189,147,72,.16)}
+#subscribe input::placeholder{color:#a09274}
+#subscribe button{border:0;cursor:pointer;font-family:var(--sans);justify-content:center;padding:13px 22px}
+.formnote{margin:0;font-size:.86rem;color:var(--label);min-height:1.2em}
+.formnote.good{color:#5a7d3a}
+.swagline{margin:26px auto 0;font-size:.94rem;color:#5c5a54;max-width:52ch}
+.swagline a{color:var(--deepgold);font-weight:700;text-decoration:none;border-bottom:1.5px solid rgba(189,147,72,.5)}
+
 /* ---------- footer ---------- */
 footer{margin-top:60px;border-top:1px solid rgba(189,147,72,.24);padding:28px 0 36px;text-align:center}
 footer p{margin:0 0 9px;font-size:.86rem;color:var(--label);line-height:1.55}
@@ -212,7 +234,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 }
 @media (max-width:620px){
   .wrap{padding-left:18px;padding-right:18px}
-  .steps,.steps.three,.chapter{grid-template-columns:1fr}
+  .steps,.steps.three,.chapter,.doors{grid-template-columns:1fr}
   .lgrid{grid-template-columns:1fr 1fr;gap:20px}
   .hero{padding:34px 0 12px}
   .sec,.origin,.join{padding-top:38px}
@@ -230,8 +252,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     <a href="#what">What it is</a>
     <a href="#meet">How we meet</a>
     <a href="#origin">Where it came from</a>
-    <a href="#newsletter">Newsletter</a>
-    <a href="#support">Support us</a>
+    <a href="#involved">Get involved</a>
   </nav>
   <a class="login" href="https://app.the-hive.app/login">Member log in</a>
 </header>
@@ -242,8 +263,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     <a href="#what">What it is</a>
     <a href="#meet">How we meet</a>
     <a href="#origin">Where it came from</a>
-    <a href="#newsletter">Newsletter</a>
-    <a href="#support">Support us</a>
+    <a href="#involved">Get involved</a>
     <a href="https://app.the-hive.app/login">Member log in &rarr;</a>
   </nav>
 </div>
@@ -255,7 +275,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     everyone, and we choose a new help to make happen.</p>
   <div class="cta">
     <a class="btn solid" href="#what">What we do <i>&rarr;</i></a>
-    <a class="btn ghost" href="#newsletter">Get the newsletter <i>&rarr;</i></a>
+    <a class="btn ghost" href="#involved">Get the newsletter <i>&rarr;</i></a>
   </div>
 </header>
 
@@ -345,50 +365,43 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   </div>
 </section>
 
-<section class="sec wrap" id="events" aria-labelledby="events-h">
-  <p class="eyebrow">What&rsquo;s coming up</p>
-  <h2 id="events-h">Upcoming events</h2>
-  <p class="lede">Members mark events public or private inside the app. The public ones show up
-    here — so if you&rsquo;re curious about us, this is where to look.</p>
-  <div class="panel" style="margin-top:26px;text-align:center">
-    <p style="margin:0;color:#5c5a54">Nothing public on the calendar just now.
-      <a href="mailto:NatWalstead@gmail.com?subject=Honey%2C%20we%20have%20a%20message!%20%F0%9F%8D%AF" style="color:var(--deepgold);font-weight:700">Ask us what&rsquo;s next &rarr;</a></p>
-  </div>
-</section>
+<section class="sec wrap" id="involved" aria-labelledby="inv-h">
+  <p class="eyebrow">Want to get involved?</p>
+  <h2 id="inv-h">Three ways in</h2>
+  <p class="lede">You don&rsquo;t have to be a member to be around us.</p>
 
-<section class="sec wrap" id="newsletter" aria-labelledby="news-h">
-  <div class="panel">
-    <p class="eyebrow">The newsletter</p>
-    <h2 id="news-h">What the HIVE got up to</h2>
-    <p class="lede">Once a month: what we worked on, what got granted, and what we learned doing it.
-      No noise, and nothing else.</p>
-    <form id="subscribe" novalidate>
-      <label class="sr" for="email">Your email</label>
-      <input id="email" name="email" type="email" placeholder="you@example.com" autocomplete="email" required>
-      <button class="btn solid" type="submit">Sign me up <i>&rarr;</i></button>
-      <p class="formnote" id="subnote" role="status" aria-live="polite"></p>
-    </form>
-  </div>
-</section>
-
-<section class="sec wrap" id="support" aria-labelledby="support-h">
-  <p class="eyebrow">Support us</p>
-  <h2 id="support-h">Two ways, if you&rsquo;d like to</h2>
-  <div class="chapter">
-    <div class="card">
-      <h3>Wear the bee</h3>
-      <p class="where">HIVE swag</p>
-      <p>Shirts and bits with the bee on them. More coming.</p>
-      <a class="more" href="https://thenateffect.etsy.com/listing/4520881664">See the swag &rarr;</a>
+  <div class="doors">
+    <div class="door">
+      <h3>Get the newsletter</h3>
+      <p>Once a month: what we worked on, what got granted, and what we learned doing it.
+        We&rsquo;ll tell you about public events the same way, so this is the only sign-up you need.</p>
+      <form id="subscribe" novalidate>
+        <label class="sr" for="email">Your email</label>
+        <input id="email" name="email" type="email" placeholder="you@example.com" autocomplete="email" required>
+        <button class="btn solid" type="submit">Sign me up <i>&rarr;</i></button>
+        <p class="formnote" id="subnote" role="status" aria-live="polite"></p>
+      </form>
     </div>
-    <div class="card">
+
+    <div class="door">
+      <h3>Come to something</h3>
+      <p>Members mark events public or private in the app. The public ones turn up on this page,
+        and go out in the newsletter — so if you&rsquo;re curious about us, that&rsquo;s how to find us.</p>
+      <p class="none">Nothing public on the calendar just now.</p>
+      <a class="more" href="mailto:NatWalstead@gmail.com?subject=Honey%2C%20we%20have%20a%20message!%20%F0%9F%8D%AF">Ask what&rsquo;s next &rarr;</a>
+    </div>
+
+    <div class="door">
       <h3>Chip in</h3>
-      <p class="where">The Honey Pot</p>
-      <p>We keep a small pot that pays for the things we decide to make happen. If you&rsquo;d like to
-        add to it, say hello and we&rsquo;ll tell you how.</p>
-      <a class="more" href="mailto:NatWalstead@gmail.com?subject=I%27d%20like%20to%20donate%20to%20HIVE%20%F0%9F%8D%AF">Talk to us about donating &rarr;</a>
+      <p>Members pay quarterly dues, which go into the Honey Pot and pay for the things we
+        decide to make happen. If you&rsquo;re not a member but you&rsquo;d like to put something in,
+        you&rsquo;re very welcome to.</p>
+      <a class="more" href="mailto:NatWalstead@gmail.com?subject=I%27d%20like%20to%20chip%20in%20to%20HIVE%20%F0%9F%8D%AF">Ask how to donate &rarr;</a>
     </div>
   </div>
+
+  <p class="swagline">There&rsquo;s also <a href="https://thenateffect.etsy.com/listing/4520881664">HIVE swag</a>
+    &mdash; shirts and bits with the bee on them, with more coming.</p>
 </section>
 
 <footer class="wrap">
