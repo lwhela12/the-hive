@@ -1,6 +1,6 @@
 import '../global.css';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Stack, usePathname } from 'expo-router';
+import { Stack, usePathname, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
@@ -10,6 +10,13 @@ import { queryClient } from '../lib/queryClient';
 import { AuthContext } from '../lib/hooks/useAuth';
 import { usePrefetchAppData } from '../lib/hooks/usePrefetchAppData';
 import { clearLastAppPath } from '../lib/navigationState';
+import {
+  clearHiveConfirmation,
+  hasConfirmedHive,
+  markHiveConfirmed,
+} from '../lib/hiveSelection';
+import { clearBoardNavigationState } from '../lib/boardNavigation';
+import { resetHomeNavigationState } from '../lib/homeNavigation';
 import type { Profile, Community, UserRole } from '../types';
 import { useFonts } from 'expo-font';
 import {
@@ -98,6 +105,8 @@ export default function RootLayout() {
   const [community, setCommunity] = useState<Community | null>(null);
   const [communityId, setCommunityId] = useState<string | null>(null);
   const [communityRole, setCommunityRole] = useState<UserRole | null>(null);
+  const [memberships, setMemberships] = useState<MembershipWithCommunity[]>([]);
+  const [hivePickerOpen, setHivePickerOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
   const [fontsLoaded] = useFonts({
@@ -197,9 +206,11 @@ export default function RootLayout() {
 
     if (memberships.length === 0) {
       if (!isCurrentLoad()) return;
+      setMemberships([]);
       setCommunity(null);
       setCommunityId(null);
       setCommunityRole(null);
+      setHivePickerOpen(false);
       setLoading(false);
       return;
     }
@@ -226,9 +237,19 @@ export default function RootLayout() {
 
     if (!isCurrentLoad()) return;
     // Set all community context at once
+    setMemberships(memberships);
     setCommunityId(activeMembership.community_id);
     setCommunityRole(activeMembership.role);
     setCommunity(activeMembership.community);
+
+    // One hive means there is nothing to ask. More than one and this person
+    // gets the picker on arrival — landing them somewhere by default is a coin
+    // flip, and the wrong hive is a confusing place to wake up.
+    if (memberships.length > 1 && !hasConfirmedHive()) {
+      setHivePickerOpen(true);
+    } else {
+      markHiveConfirmed();
+    }
     setLoading(false);
     } catch (err) {
       console.error('[Auth] initializeUserData failed:', err);
@@ -288,11 +309,15 @@ export default function RootLayout() {
         initializingRef.current = false;
         if (event === 'SIGNED_OUT') {
           clearLastAppPath();
+          // Next person in gets asked which hive, even on a shared machine.
+          clearHiveConfirmation();
         }
         setProfile(null);
         setCommunity(null);
         setCommunityId(null);
         setCommunityRole(null);
+        setMemberships([]);
+        setHivePickerOpen(false);
         setLoading(false);
       }
     });
@@ -309,15 +334,59 @@ export default function RootLayout() {
     }
   }, [session, initializeUserData]);
 
+  const openHivePicker = useCallback(() => setHivePickerOpen(true), []);
+
+  // Move into another hive. Everything the app reads is keyed by community id,
+  // so setting it here is the whole switch — the React Query keys change with
+  // it and each screen refetches on its own.
+  const switchCommunity = useCallback(async (nextCommunityId: string) => {
+    const target = memberships.find(m => m.community_id === nextCommunityId);
+    // Not a member? Then there is nothing to switch to. The picker only ever
+    // lists real memberships, so this is a guard against a stale tap.
+    if (!target) return;
+
+    markHiveConfirmed();
+    setHivePickerOpen(false);
+
+    if (target.community_id !== communityId) {
+      // Where you were in the old hive means nothing in the new one.
+      clearBoardNavigationState(communityId);
+      resetHomeNavigationState();
+
+      setCommunityId(target.community_id);
+      setCommunityRole(target.role);
+      setCommunity(target.community);
+      setProfile(prev => (prev ? { ...prev, current_community_id: target.community_id } : prev));
+
+      if (profile?.id) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ current_community_id: target.community_id })
+          .eq('id', profile.id);
+        // A failed write only costs us the memory of this choice next time.
+        if (error) console.error('[Auth] Could not remember hive choice:', error.message);
+      }
+    }
+
+    router.replace('/hive');
+  }, [memberships, communityId, profile?.id]);
+
   const authContextValue = useMemo(() => ({
     session,
     profile,
     community,
     communityId,
     communityRole,
+    memberships,
+    hivePickerOpen,
+    openHivePicker,
+    switchCommunity,
     loading,
     refreshProfile,
-  }), [session, profile, community, communityId, communityRole, loading, refreshProfile]);
+  }), [
+    session, profile, community, communityId, communityRole, memberships,
+    hivePickerOpen, openHivePicker, switchCommunity, loading, refreshProfile,
+  ]);
   const isJoinRoute = pathname === '/join' || pathname?.startsWith('/join/');
 
   // Show loading screen while fonts load

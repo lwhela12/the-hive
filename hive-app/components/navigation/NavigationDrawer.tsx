@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
@@ -32,7 +33,8 @@ export const NavigationDrawer = memo(function NavigationDrawer({
 }: NavigationDrawerProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { profile, communityRole, communityId } = useAuth();
+  const { profile, communityRole, communityId, community, memberships, openHivePicker } = useAuth();
+  const hasMoreThanOneHive = memberships.length > 1;
 
   // Navigation items for the app
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer' || profile?.role === 'admin' || profile?.role === 'treasurer';
@@ -165,14 +167,48 @@ export const NavigationDrawer = memo(function NavigationDrawer({
         })}
       </View>
 
-      {/* Footer */}
+      {/* Footer — which hive you're in, and the way out to the other one */}
       <View className="px-5 py-4 border-t border-gray-100">
-        <Text
-          style={{ fontFamily: 'Lato_400Regular' }}
-          className="text-sm text-gray-400 text-center"
-        >
-          HIVE Community
-        </Text>
+        {hasMoreThanOneHive ? (
+          <Pressable
+            onPress={() => {
+              onClose();
+              openHivePicker();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Switch hive"
+            className="flex-row items-center px-3 py-3 rounded-xl active:bg-gray-50"
+          >
+            <View
+              className="w-8 h-8 rounded-full items-center justify-center"
+              style={{ backgroundColor: hiveAccent(community) }}
+            >
+              <Ionicons name="swap-horizontal" size={17} color="#fffdf5" />
+            </View>
+            <View className="flex-1 ml-3">
+              <Text
+                style={{ fontFamily: 'Lato_700Bold' }}
+                className="text-sm text-charcoal"
+              >
+                {hiveDisplayName(community?.name)}
+              </Text>
+              <Text
+                style={{ fontFamily: 'Lato_400Regular' }}
+                className="text-xs text-gray-400"
+              >
+                Switch hive
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+          </Pressable>
+        ) : (
+          <Text
+            style={{ fontFamily: 'Lato_400Regular' }}
+            className="text-sm text-gray-400 text-center"
+          >
+            {hiveDisplayName(community?.name)} Community
+          </Text>
+        )}
       </View>
     </View>
   );

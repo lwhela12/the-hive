@@ -1,6 +1,8 @@
 import { memo } from 'react';
 import { Pressable, View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../lib/hooks/useAuth';
+import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 
 interface AppHeaderProps {
   title: string;
@@ -16,6 +18,10 @@ interface AppHeaderProps {
 
 // The one page-title treatment for the whole app: gold bar, spaced serif.
 // Every tab screen should use this instead of hand-rolling a gold header.
+//
+// The bar takes its colour from the hive you're in, and people who belong to
+// more than one also get its name above the title. For everyone in a single
+// hive this looks exactly as it always has.
 export const AppHeader = memo(function AppHeader({
   title,
   onBackPress,
@@ -24,8 +30,15 @@ export const AppHeader = memo(function AppHeader({
   onMenuPress,
   rightElement,
 }: AppHeaderProps) {
+  const { community, memberships } = useAuth();
+  const accent = hiveAccent(community);
+  const showHiveName = memberships.length > 1;
+
   return (
-    <View className="flex-row items-center justify-between px-4 py-3 bg-gold">
+    <View
+      className="flex-row items-center justify-between px-4 py-3"
+      style={{ backgroundColor: accent }}
+    >
       {onBackPress ? (
         <Pressable
           onPress={onBackPress}
@@ -50,6 +63,19 @@ export const AppHeader = memo(function AppHeader({
 
       {/* Title */}
       <View className="items-center">
+        {showHiveName ? (
+          <Text
+            style={{
+              fontFamily: 'Lato_700Bold',
+              fontSize: 9,
+              letterSpacing: 1.8,
+              color: 'rgba(255,255,255,0.72)',
+              marginBottom: 1,
+            }}
+          >
+            {hiveDisplayName(community?.name).toUpperCase()}
+          </Text>
+        ) : null}
         <View className="flex-row items-center">
           {titleIcon}
           <Text

@@ -58,6 +58,8 @@ export interface Community extends Record<string, unknown> {
     meetups?: string;
     wrapup?: string;
   } | null;
+  /** Hex colour for this hive's header bar (migration 120). Null = honey gold. */
+  accent_color?: string | null;
   created_by?: string;
   created_at: string;
 }

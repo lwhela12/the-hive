@@ -9,6 +9,7 @@ import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
 import { AppUpdateBanner } from '../../components/ui/AppUpdateBanner';
 import { CelebrationOverlay } from '../../components/ui/CelebrationOverlay';
+import { HivePicker } from '../../components/hive/HivePicker';
 import { getLastAppPathAsync, getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 import { currentReturnTo } from '../../lib/authReturnTo';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
@@ -88,7 +89,7 @@ function TabIcon({
 }
 
 export default function AppLayout() {
-  const { session, communityId, communityRole, profile, loading } = useAuth();
+  const { session, communityId, communityRole, profile, loading, hivePickerOpen } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
@@ -168,6 +169,13 @@ export default function AppLayout() {
         <ActivityIndicator size="large" color="#bd9348" />
       </View>
     );
+  }
+
+  // "Which hive?" stands in front of the whole app rather than living at its own
+  // address, because the tabs underneath belong to whichever hive you pick — and
+  // because the drawer's Clive link already owns the "/" route.
+  if (hivePickerOpen) {
+    return <HivePicker />;
   }
 
   return (

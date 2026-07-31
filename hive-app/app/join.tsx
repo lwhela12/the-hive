@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/hooks/useAuth';
+import { hiveDisplayName } from '../lib/hiveBrand';
 import type { CommunityInvite, Community, Profile } from '../types';
 
 type InviteWithDetails = CommunityInvite & {
@@ -19,15 +20,9 @@ type InviteBlock = {
 };
 
 const normalizeEmail = (email?: string | null) => (email ?? '').trim().toLowerCase();
-const normalizeHiveBrandName = (name?: string | null) => {
-  const trimmed = (name ?? '').trim();
-  if (!trimmed) return 'HIVE';
-  const normalized = trimmed.toLowerCase();
-  if (['hive', 'the hive', 'h.i.v.e.', 'the h.i.v.e.'].includes(normalized)) {
-    return 'HIVE';
-  }
-  return trimmed;
-};
+// Named hives (OG HIVE, Tech HIVE) keep their names; the legacy spellings of the
+// original one all collapse to "HIVE". Shared with the header and the picker.
+const normalizeHiveBrandName = hiveDisplayName;
 
 export default function JoinScreen() {
   const { session, profile, communityId, refreshProfile, loading: authLoading } = useAuth();
