@@ -88,15 +88,16 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .opening{font-size:clamp(1.02rem,2.2vw,1.16rem);color:#5c5a54;margin:0 auto;
   max-width:58ch;text-align:center;text-wrap:pretty;line-height:1.7}
 .trio{list-style:none;margin:26px auto 0;max-width:none;text-align:left;padding:0}
-.trio.honeybox{background:linear-gradient(160deg,#fdf3dc,#f5e8c8);
-  border:1px solid rgba(189,147,72,.34);border-radius:18px;
+/* the dark card in the middle of the page — the month is the heart of it */
+.trio.honeybox{background:linear-gradient(160deg,#4a3927,#392b1c);
+  border:1px solid rgba(222,193,129,.30);border-radius:18px;
   padding:6px clamp(24px,3.4vw,36px);
-  box-shadow:0 14px 34px rgba(138,106,47,.10)}
+  box-shadow:0 18px 44px rgba(58,43,28,.24)}
 /* the name sits in its own column, so the width goes to the sentence */
 .trio li{display:grid;grid-template-columns:186px 1fr;gap:26px;align-items:start;
-  padding:20px 0;border-bottom:1px solid rgba(189,147,72,.3);font-size:.99rem;color:#54514a}
+  padding:20px 0;border-bottom:1px solid rgba(222,193,129,.20);font-size:.99rem;color:#e7ddc8}
 .trio li:last-child{border-bottom:0}
-.trio b{font-family:var(--serif);color:var(--charcoal);font-size:1.08rem;line-height:1.4}
+.trio b{font-family:var(--serif);color:var(--goldlight);font-size:1.08rem;line-height:1.4}
 @media (max-width:760px){.trio li{grid-template-columns:1fr;gap:5px}}
 .hero h1{font-size:clamp(1.9rem,4.8vw,3rem);line-height:1.16;margin:0 auto 16px;max-width:17ch;text-wrap:balance}
 .hero h1 em{font-style:italic;color:var(--deepgold)}
