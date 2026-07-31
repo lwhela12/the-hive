@@ -188,6 +188,15 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .pane .cash a:hover{border-color:var(--deepgold)}
 .pane .btn{margin-top:4px}
 .pane p.none{color:var(--label);font-style:italic;font-size:.9rem}
+/* upcoming public events, pulled live from the members' app */
+.evlist{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+.evlist li{background:rgba(189,147,72,.07);border:1px solid rgba(189,147,72,.2);
+  border-radius:14px;padding:12px 16px}
+.evlist .evwhen{display:block;font-size:.76rem;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--deepgold);margin-bottom:3px}
+.evlist .evwhat{display:block;font-family:var(--serif);font-size:1.06rem;color:var(--charcoal)}
+.evlist .evwhere{display:block;font-size:.86rem;color:var(--label);margin-top:2px}
+.evlist .evnote{display:block;font-size:.9rem;line-height:1.5;color:var(--charcoal);margin-top:6px}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .f{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
 .f label{font-size:.8rem;font-weight:700;color:var(--charcoal);letter-spacing:.02em}
@@ -326,11 +335,18 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 
 <section class="sec wrap" id="meet" aria-labelledby="meet-h">
   <p class="eyebrow">Every month</p>
-  <h2 id="meet-h">Three parts to a meeting</h2>
+  <h2 id="meet-h">Three parts to a month</h2>
   <ul class="trio honeybox">
-    <li><b>HIVE Hang</b> &mdash; the part where we&rsquo;re just people who like each other.</li>
-    <li><b>HIVE Help</b> &mdash; we pick one help to make happen, and everyone puts something toward it.</li>
-    <li><b>Humdinger</b> &mdash; we sharpen what you&rsquo;re stuck on until it&rsquo;s specific enough for somebody to grant.</li>
+    <li><b>HIVE Meeting</b> &mdash; once a month we work on each other&rsquo;s HDs: high-definition wishes,
+      sharpened in a Humdinger session until they&rsquo;re specific enough for somebody to grant.
+      Come in person, join on Google Meet, or catch up in your own time &mdash; busy lives are welcome here.</li>
+    <li><b>HIVE Help</b> &mdash; we get a lot out of giving back, so every month we pick a focus.
+      Cleaning up a parking lot, grabbing trash on your walk, paying it behind at the drive-through,
+      a donation to a shelter, fifteen minutes of kindness &mdash; every act counts, however small.
+      Want the monthly spotlight on you, your project, or your business? Ask us.</li>
+    <li><b>HIVE Hang</b> &mdash; you can&rsquo;t pour from an empty cup, so at least once a month we get
+      together purely to enjoy each other. Sometimes it&rsquo;s our own small crew, and sometimes it&rsquo;s
+      a more-is-more night out &mdash; a show, a concert, whatever sounds good.</li>
   </ul>
 </section>
 
@@ -384,9 +400,10 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     </div>
 
     <div class="pane" id="p-events" role="tabpanel" aria-labelledby="t-events" hidden>
-      <p>Members mark events public or private in the app, and the public ones go out in the
-        newsletter &mdash; so signing up for that is how you&rsquo;ll hear about them.</p>
-      <p class="none">Nothing public on the calendar just now.</p>
+      <p>Members mark events public or private in the app, and the public ones land here and in the
+        newsletter &mdash; so signing up for that is the other way to hear about them.</p>
+      <ul class="evlist" id="evlist" hidden></ul>
+      <p class="none" id="evnone">Checking the calendar&hellip;</p>
     </div>
 
     <div class="pane" id="p-focus" role="tabpanel" aria-labelledby="t-focus" hidden>
@@ -614,6 +631,66 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       + '?subject=' + encodeURIComponent('Add me to the HIVE newsletter \uD83C\uDF6F')
       + '&body=' + encodeURIComponent('Please add ' + v + ' to the HIVE newsletter.');
   });
+
+  /* upcoming events — whatever members marked "Everyone's invited" in the app.
+     Dates arrive as plain YYYY-MM-DD, so they get split by hand; handing that
+     string to new Date() reads it as UTC midnight and shows the day before. */
+  var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var DAY = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  function asDate(s) {
+    var p = String(s || '').split('-');
+    if (p.length !== 3) return null;
+    var d = new Date(+p[0], +p[1] - 1, +p[2]);
+    return isNaN(d) ? null : d;
+  }
+  function clock(t) {
+    var p = String(t || '').split(':');
+    if (p.length < 2) return '';
+    var h = +p[0], m = p[1], ampm = h < 12 ? 'am' : 'pm';
+    h = h % 12; if (!h) h = 12;
+    return h + (m === '00' ? '' : ':' + m) + ampm;
+  }
+  function whenText(ev) {
+    var s = asDate(ev.date), e = asDate(ev.end);
+    if (!s) return '';
+    var head = MON[s.getMonth()] + ' ' + s.getDate();
+    if (e && e > s) return head + ' – ' + MON[e.getMonth()] + ' ' + e.getDate();
+    var t = clock(ev.time);
+    return DAY[s.getDay()] + ', ' + head + (t ? ' · ' + t : '');
+  }
+
+  var evList = document.getElementById('evlist'), evNone = document.getElementById('evnone');
+
+  function line(cls, text) {
+    var el = document.createElement('span');
+    el.className = cls;
+    el.textContent = text;
+    return el;
+  }
+
+  fetch('/api/events', { headers: { Accept: 'application/json' } })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      var evs = (j && j.events) || [];
+      if (!evs.length) {
+        evNone.textContent = 'Nothing public on the calendar just now.';
+        return;
+      }
+      evs.forEach(function (ev) {
+        var li = document.createElement('li');
+        li.appendChild(line('evwhen', whenText(ev)));
+        li.appendChild(line('evwhat', ev.title || 'An event'));
+        if (ev.location) li.appendChild(line('evwhere', '📍 ' + ev.location));
+        if (ev.description) li.appendChild(line('evnote', ev.description));
+        evList.appendChild(li);
+      });
+      evList.hidden = false;
+      evNone.hidden = true;
+    })
+    .catch(function () {
+      evNone.textContent = 'The calendar is having a moment — the newsletter has these too.';
+    });
 
   addEventListener('scroll', function () {
     toTop.classList.toggle('show', (window.scrollY || document.documentElement.scrollTop) > 420);
