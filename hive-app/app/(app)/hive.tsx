@@ -35,7 +35,8 @@ import {
 } from '../../components/hive/skeletons';
 import { AppHeader } from '../../components/navigation';
 import { hiveDisplayName } from '../../lib/hiveBrand';
-import { DAILY_QUESTIONS, getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
+import { DAILY_QUESTIONS, deckForCommunity, getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
+import type { DailyQuestion } from '../../lib/dailyQuestions';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateRangeShort, formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
@@ -95,12 +96,12 @@ const CATCH_UP_RETURN_PATHS: Record<string, { pathname: string; params?: Record<
   profile: { pathname: '/profile' },
 };
 
-const getRecentDailyQuestions = (days = CATCH_UP_BATCH_SIZE) => {
-  const dayCount = Math.min(Math.max(days, 1), CATCH_UP_MAX_DAYS);
+const getRecentDailyQuestions = (deck: DailyQuestion[], days = CATCH_UP_BATCH_SIZE) => {
+  const dayCount = Math.min(Math.max(days, 1), Math.min(CATCH_UP_MAX_DAYS, deck.length));
   return Array.from({ length: dayCount }, (_, offset) => {
     const date = new Date();
     date.setDate(date.getDate() - offset);
-    return getQuestionForDate(date);
+    return getQuestionForDate(date, deck);
   });
 };
 
@@ -728,9 +729,10 @@ export default function HiveScreen() {
   const [memberAnswers, setMemberAnswers] = useState<Map<string, string>>(new Map());
   const [recentAnswerMaps, setRecentAnswerMaps] = useState<Map<string, Map<string, string>>>(new Map());
 
-  const { question: todayQuestion, index: todayIndex, dateKey: todayDateKey } = getTodayQuestion();
+  const questionDeck = deckForCommunity(community?.slug);
+  const { question: todayQuestion, index: todayIndex, dateKey: todayDateKey } = getTodayQuestion(questionDeck);
   const currentAnswerPrompt = activeAnswerPrompt ?? { question: todayQuestion, index: todayIndex, dateKey: todayDateKey };
-  const recentDailyQuestions = getRecentDailyQuestions(catchUpDayCount);
+  const recentDailyQuestions = getRecentDailyQuestions(questionDeck, catchUpDayCount);
   const canShowMoreDailyQuestions = catchUpDayCount < CATCH_UP_MAX_DAYS;
   const nextCatchUpBatchSize = Math.min(CATCH_UP_BATCH_SIZE, CATCH_UP_MAX_DAYS - catchUpDayCount);
 
@@ -766,7 +768,7 @@ export default function HiveScreen() {
 
   const fetchRecentAnswers = useCallback(async () => {
     if (!communityId) return;
-    const dates = getRecentDailyQuestions(catchUpDayCount).map(item => item.dateKey);
+    const dates = getRecentDailyQuestions(questionDeck, catchUpDayCount).map(item => item.dateKey);
     const { data, error } = await supabase
       .from('daily_question_answers')
       .select('user_id, answer, question_date')
@@ -786,7 +788,7 @@ export default function HiveScreen() {
       next.set(date, answersForDate);
     });
     setRecentAnswerMaps(next);
-  }, [communityId, catchUpDayCount]);
+  }, [communityId, catchUpDayCount, questionDeck]);
 
   useEffect(() => { fetchTodayAnswers(); }, [fetchTodayAnswers]);
   useEffect(() => { fetchRecentAnswers(); }, [fetchRecentAnswers]);

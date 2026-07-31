@@ -98,6 +98,19 @@ const STARTER_PROMPTS = [
   { label: 'Surprise me', message: 'Surprise me' },
 ];
 
+// Tech HIVE opens on the work it actually does, so the first tap is useful
+// rather than decorative (Nat 2026-07-31).
+const TECH_STARTER_PROMPTS = [
+  { label: 'Rubber-duck this bug with me', message: "I'm stuck on a bug. Ask me questions one at a time until we find it — start by asking what I expected to happen versus what actually happened." },
+  { label: 'Review my approach', message: "I'm about to build something and I want the plan challenged before I write code. Ask me what I'm building, then tell me honestly where it's likely to go wrong." },
+  { label: 'Write the repo README', message: 'Help me write a README for one of my projects: what it is, how to run it, what is deployed where, and what a new person needs to know on day one.' },
+  { label: 'Scope this client request', message: 'Help me turn a vague client request into a scoped piece of work with a clear deliverable, the questions I still need answered, and an honest estimate.' },
+  { label: 'Draft the client update', message: 'Help me write a client update: what moved, what is blocked, what I need from them. Plain language, no jargon, no padding.' },
+  { label: 'Turn this into a Things We Learned post', message: 'I learned something the hard way and I want to write it up for the Things We Learned board so nobody else loses the same afternoon. Ask me what happened.' },
+  { label: 'Prep me for this meeting', message: 'Help me prepare for a meeting: what I want out of it, what I need to ask, and what I should have decided before I walk in.' },
+  { label: 'Price this piece of work', message: 'Help me think through what to charge for a piece of work — what it costs me in time, what it is worth to them, and where I usually undercharge.' },
+];
+
 const getFirstName = (name?: string | null) => {
   const firstName = name?.trim().split(/\s+/)[0];
   return firstName || 'there';
@@ -118,10 +131,12 @@ const WelcomeState = memo(function WelcomeState({
   name,
   isLoading,
   onSelectPrompt,
+  prompts = STARTER_PROMPTS,
 }: {
   name?: string | null;
   isLoading: boolean;
   onSelectPrompt: (prompt: string) => void;
+  prompts?: { label: string; message: string }[];
 }) {
   const { width } = useWindowDimensions();
   const isNarrow = width < 768;
@@ -153,7 +168,7 @@ const WelcomeState = memo(function WelcomeState({
           Ask Clive for help thinking, writing, organizing, or turning a loose idea into a HIVE action.
         </Text>
         <View className="flex-row flex-wrap justify-center gap-3">
-          {STARTER_PROMPTS.map((prompt) => (
+          {prompts.map((prompt) => (
             <Pressable
               key={prompt.label}
               onPress={() => onSelectPrompt(prompt.message)}
@@ -215,7 +230,7 @@ export function ChatInterface({
   refineWishContext,
   initialPrompt,
 }: ChatInterfaceProps) {
-  const { session, profile, communityId } = useAuth();
+  const { session, profile, communityId, community } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [skillsCount, setSkillsCount] = useState(0);
@@ -935,6 +950,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
           name={profile?.name}
           isLoading={isLoading}
           onSelectPrompt={handleSendMessage}
+          prompts={community?.slug === 'tech' ? TECH_STARTER_PROMPTS : STARTER_PROMPTS}
         />
       ) : (
         <FlatList

@@ -374,6 +374,52 @@ export const DAILY_QUESTIONS: DailyQuestion[] = [
   { text: 'What is a secret menu item for your personality?', category: 'secret menu', emoji: '📋' },
 ];
 
+// Tech HIVE's deck. Same daily habit, a working crew's version of it: the
+// questions worth knowing the answers to when you build things together and
+// only ever meet on a screen. Drawn from the shelf Nat named (2026-07-31) —
+// Culture Code, Five Dysfunctions, Never Split the Difference, Thinking Fast
+// and Slow, Code of the Extraordinary Mind, Shoe Dog, Boys in the Boat, How to
+// Win Friends, The 4-Hour Work Week.
+export const TECH_DAILY_QUESTIONS: DailyQuestion[] = [
+  { text: 'What has to be true for you to trust someone with your unfinished work?', category: 'trust', emoji: '🤝' },
+  { text: 'When you disagree with the room, do you say it straight away, sleep on it, or let it go?', category: 'conflict', emoji: '💬' },
+  { text: 'What is a strong opinion you have changed your mind about in the last year?', category: 'changing your mind', emoji: '🔄' },
+  { text: 'What does it look like when you are in flow? How would we spot it?', category: 'flow', emoji: '🌊' },
+  { text: 'What is the fastest way to lose your buy-in on a project?', category: 'commitment', emoji: '🚪' },
+  { text: 'Would you rather be told the hard thing immediately or once someone has a fix in mind?', category: 'feedback', emoji: '📣' },
+  { text: 'What is a rule everyone follows that you think is nonsense?', category: 'brules', emoji: '🧨' },
+  { text: 'What is the last thing you shipped that you were genuinely proud of?', category: 'craft', emoji: '🏗️' },
+  { text: 'What part of your work would you automate tomorrow if you could?', category: 'leverage', emoji: '⚙️' },
+  { text: 'What do you do first when something breaks in production?', category: 'under pressure', emoji: '🚨' },
+  { text: 'What is a mistake you made that you would happily make again?', category: 'good failures', emoji: '🎯' },
+  { text: 'When you are stuck, do you go quiet, go for a walk, or go ask someone?', category: 'getting unstuck', emoji: '🧗' },
+  { text: 'Whose work do you quietly study?', category: 'influences', emoji: '🔭' },
+  { text: 'What is the smallest change that made the biggest difference to how you work?', category: 'small hinges', emoji: '🔑' },
+  { text: 'What would you want us to do if you went quiet for a week?', category: 'looking out', emoji: '🫱' },
+  { text: 'What do you need from a meeting for it to have been worth your time?', category: 'meetings', emoji: '⏱️' },
+  { text: 'What is your honest tell that you are overloaded?', category: 'capacity', emoji: '🪫' },
+  { text: 'What is a problem you would work on for free?', category: 'obsession', emoji: '🔥' },
+  { text: 'Where does your gut usually beat your analysis, and where does it usually lose?', category: 'fast and slow', emoji: '🧠' },
+  { text: 'What is something you believe about AI that most people you talk to do not?', category: 'contrarian', emoji: '🤖' },
+  { text: 'What is the part of building with AI you find genuinely hard?', category: 'honest difficulty', emoji: '🪛' },
+  { text: 'What do you want to be noticeably better at six months from now?', category: 'growth', emoji: '📈' },
+  { text: 'What does a good week look like for you, hour by hour?', category: 'ideal week', emoji: '🗓️' },
+  { text: 'What kind of praise actually lands for you?', category: 'recognition', emoji: '👏' },
+  { text: 'What is a question you wish clients asked you more often?', category: 'client work', emoji: '💼' },
+  { text: 'When has quitting something been the right call?', category: 'knowing when', emoji: '🛑' },
+  { text: 'What do you want to be the person we come to for?', category: 'your lane', emoji: '🧭' },
+  { text: 'What is the most useful thing you learned the hard way?', category: 'scar tissue', emoji: '🩹' },
+  { text: 'Would you rather ship it rough on Friday or right on Wednesday next week?', category: 'shipping', emoji: '🚀' },
+  { text: 'What is one thing about how you work that people usually get wrong at first?', category: 'user manual', emoji: '📖' },
+  { text: 'What are you working on that you would love a second pair of eyes on?', category: 'open invitation', emoji: '👀' },
+  { text: 'What would make this crew worth staying in five years from now?', category: 'the long game', emoji: '🌳' },
+];
+
+/** Which deck a HIVE draws from. Keyed by slug so a new HIVE picks one deliberately. */
+export function deckForCommunity(slug?: string | null): DailyQuestion[] {
+  return slug === 'tech' ? TECH_DAILY_QUESTIONS : DAILY_QUESTIONS;
+}
+
 const LEGACY_DAILY_QUESTION_COUNT = 48;
 const DAILY_QUESTION_EXPANSION_START = new Date(2026, 6, 2); // July 2, 2026
 
@@ -384,7 +430,15 @@ export function getQuestionDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function getQuestionIndexForDate(questionDate: Date) {
+function getQuestionIndexForDate(questionDate: Date, deck: DailyQuestion[] = DAILY_QUESTIONS) {
+  // Only the original deck carries history worth preserving. A HIVE that
+  // started later just walks its own list from the day it opened.
+  if (deck !== DAILY_QUESTIONS) {
+    const epoch = new Date(2026, 6, 31); // Tech HIVE's first day
+    const days = Math.floor((questionDate.getTime() - epoch.getTime()) / 86_400_000);
+    return ((days % deck.length) + deck.length) % deck.length;
+  }
+
   const expansionStart = new Date(DAILY_QUESTION_EXPANSION_START);
   expansionStart.setHours(0, 0, 0, 0);
 
@@ -398,14 +452,19 @@ function getQuestionIndexForDate(questionDate: Date) {
   return ((daysSince % LEGACY_DAILY_QUESTION_COUNT) + LEGACY_DAILY_QUESTION_COUNT) % LEGACY_DAILY_QUESTION_COUNT;
 }
 
-export function getQuestionForDate(date: Date): { question: DailyQuestion; index: number; dateKey: string } {
+export function getQuestionForDate(
+  date: Date,
+  deck: DailyQuestion[] = DAILY_QUESTIONS
+): { question: DailyQuestion; index: number; dateKey: string } {
   const questionDate = new Date(date);
   questionDate.setHours(0, 0, 0, 0);
-  const index = getQuestionIndexForDate(questionDate);
-  return { question: DAILY_QUESTIONS[index], index, dateKey: getQuestionDateKey(questionDate) };
+  const index = getQuestionIndexForDate(questionDate, deck);
+  return { question: deck[index], index, dateKey: getQuestionDateKey(questionDate) };
 }
 
-/** Returns the same question for everyone on a given calendar day. */
-export function getTodayQuestion(): { question: DailyQuestion; index: number; dateKey: string } {
-  return getQuestionForDate(new Date());
+/** Returns the same question for everyone in a HIVE on a given calendar day. */
+export function getTodayQuestion(
+  deck: DailyQuestion[] = DAILY_QUESTIONS
+): { question: DailyQuestion; index: number; dateKey: string } {
+  return getQuestionForDate(new Date(), deck);
 }

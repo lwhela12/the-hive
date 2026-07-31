@@ -1709,26 +1709,19 @@ export default function BoardScreen() {
 
     return (
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
-        {useMobileLayout ? (
-          <AppHeader
-            title="Boards"
-            rightElement={addTopicButton}
-          />
-        ) : (
-          <View className="bg-gold px-4 py-3 flex-row items-center justify-between">
-            <View className="w-10 h-10" />
-            <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-base text-white">
-              Boards
-            </Text>
-            {canCreateCategories ? (
-              <Pressable onPress={() => setShowTopicComposer(true)} className="w-10 h-10 items-center justify-center active:opacity-70">
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">+ Board</Text>
-              </Pressable>
-            ) : (
-              <View className="w-10 h-10" />
-            )}
-          </View>
-        )}
+        {/* One header treatment on every width, so Boards wears its HIVE's
+            colour and name like every other page (Nat 2026-07-31). */}
+        <AppHeader
+          title="Boards"
+          rightElement={
+            useMobileLayout ? addTopicButton
+              : canCreateCategories ? (
+                <Pressable onPress={() => setShowTopicComposer(true)} className="w-10 h-10 items-center justify-center active:opacity-70">
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">+ Board</Text>
+                </Pressable>
+              ) : undefined
+          }
+        />
 
         {boardListToolbar}
 
@@ -1779,18 +1772,11 @@ export default function BoardScreen() {
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       {/* Posts view header with back button */}
-      <View className="bg-gold flex-row items-center px-4 py-3">
-        <Pressable onPress={handleBack} hitSlop={8} className="mr-3 active:opacity-70">
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </Pressable>
-        <Text
-          style={{ fontFamily: 'LibreBaskerville_700Bold' }}
-          className="text-base text-white flex-1"
-          numberOfLines={1}
-        >
-          {selectedCategory.name}
-        </Text>
-        {(canManageCategory(selectedCategory) || canArchiveCategory(selectedCategory)) && (
+      <AppHeader
+        title={selectedCategory.name}
+        onBackPress={handleBack}
+        rightElement={
+          (canManageCategory(selectedCategory) || canArchiveCategory(selectedCategory)) ? (
           <Pressable
             onPress={() => openEditTopic(selectedCategory)}
             className="w-9 h-9 items-center justify-center rounded-full active:opacity-70 ml-2"
@@ -1800,8 +1786,9 @@ export default function BoardScreen() {
           >
             <Ionicons name="pencil-outline" size={20} color="rgba(255,255,255,0.86)" />
           </Pressable>
-        )}
-      </View>
+          ) : undefined
+        }
+      />
 
       <FlatList
         data={visiblePosts}

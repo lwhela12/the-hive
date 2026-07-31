@@ -20,7 +20,8 @@ import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useChatRooms } from '../../lib/hooks/useChatRooms';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import { SKILL_CATEGORIES } from '../../lib/skillsList';
-import { DAILY_QUESTIONS } from '../../lib/dailyQuestions';
+import { DAILY_QUESTIONS, deckForCommunity } from '../../lib/dailyQuestions';
+import type { DailyQuestion } from '../../lib/dailyQuestions';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
 import { getStoredItem, setStoredItem } from '../../lib/webStorage';
@@ -254,8 +255,8 @@ function buildDailyMatchStats(userId: string | null, answers: DailyAnswerRow[]) 
   return stats;
 }
 
-function getDailyAnswerPrompt(questionIndex: number) {
-  return DAILY_QUESTIONS[questionIndex] ?? {
+function getDailyAnswerPrompt(questionIndex: number, deck: DailyQuestion[] = DAILY_QUESTIONS) {
+  return deck[questionIndex] ?? {
     text: `Daily question ${questionIndex + 1}`,
     category: 'daily question',
     emoji: '✨',
@@ -2103,7 +2104,7 @@ function MemberDetailModal({
 }
 
 export default function MembersScreen() {
-  const { communityId, profile, session } = useAuth();
+  const { communityId, profile, session, community } = useAuth();
   const { memberId: routeMemberId, view: routeViewParam, open: routeOpenParam } = useLocalSearchParams<{ memberId?: string | string[]; view?: string | string[]; open?: string | string[] }>();
   const memberId = Array.isArray(routeMemberId) ? routeMemberId[0] : routeMemberId;
   const routeView = Array.isArray(routeViewParam) ? routeViewParam[0] : routeViewParam;
@@ -2322,7 +2323,7 @@ export default function MembersScreen() {
       (answersRes.data ?? []).forEach((a: any) => {
         if (!a.user_id) return;
         const questionIndex = Number(a.question_index ?? 0);
-        const question = getDailyAnswerPrompt(questionIndex);
+        const question = getDailyAnswerPrompt(questionIndex, deckForCommunity(community?.slug));
         if (!answersByUser.has(a.user_id)) answersByUser.set(a.user_id, []);
         answersByUser.get(a.user_id)!.push({
           questionIndex,
@@ -2748,7 +2749,7 @@ export default function MembersScreen() {
                       value: `${bestMatch.name.split(' ')[0]} · ${bestMatch.dailyMatchPercent}%`,
                     }] : []),
                     ...(busiestAnswerDay ? [{ label: 'Busiest day', value: busiestAnswerDay }] : []),
-                    { label: 'Deck', value: `${DAILY_QUESTIONS.length} prompts` },
+                    { label: 'Deck', value: `${deckForCommunity(community?.slug).length} prompts` },
                     { label: 'HIVE answers', value: String(totalDailyAnswerCount) },
                     { label: 'Members joined', value: String(answeredMemberCount) },
                     { label: 'Your answers', value: String(currentMember?.questionAnswerCount ?? 0) },
