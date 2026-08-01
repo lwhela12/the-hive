@@ -641,21 +641,32 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     });
   });
 
-  /* newsletter — composes an email until there's a real handler */
+  /* newsletter — the list lives in the database now, rather than in an inbox */
   var sub = document.getElementById('subscribe'), note = document.getElementById('subnote');
   sub.addEventListener('submit', function (e) {
     e.preventDefault();
     var v = document.getElementById('email').value.trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) {
       note.className = 'formnote';
-      note.textContent = 'That email doesn\u2019t look quite right \u2014 mind checking it?';
+      note.textContent = 'That email doesn’t look quite right — mind checking it?';
       return;
     }
-    note.className = 'formnote good';
-    note.textContent = 'Opening your mail app to confirm\u2026';
-    window.location.href = 'mailto:NatWalstead@gmail.com'
-      + '?subject=' + encodeURIComponent('Add me to the HIVE newsletter \uD83C\uDF6F')
-      + '&body=' + encodeURIComponent('Please add ' + v + ' to the HIVE newsletter.');
+    note.className = 'formnote';
+    note.textContent = 'Signing you up…';
+    fetch('/api/subscribe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: v })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; });
+    }).then(function (j) {
+      if (!j.subscribed) throw new Error(j.reason || 'failed');
+      sub.reset();
+      note.className = 'formnote good';
+      note.textContent = 'You’re on the list — the next one goes out at the start of the month.';
+    }).catch(function () {
+      note.className = 'formnote';
+      note.textContent = 'That didn’t save. Try again in a moment, or say hello on the message form.';
+    });
   });
 
   /* upcoming events — whatever members marked "Everyone's invited" in the app.
