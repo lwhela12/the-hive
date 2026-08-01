@@ -111,6 +111,26 @@ const TECH_STARTER_PROMPTS = [
   { label: 'Price this piece of work', message: 'Help me think through what to charge for a piece of work — what it costs me in time, what it is worth to them, and where I usually undercharge.' },
 ];
 
+// Show HIVE is a business being built around a room: convince someone to buy
+// the building, then fill every hour of it until it pays for itself.
+const SHOW_STARTER_PROMPTS = [
+  { label: 'Sharpen the investor pitch', message: 'Help me sharpen the pitch to a property investor: they buy the building, we make it profitable with a family show at 4, circus at 7 and 9, open mic nights, daytime rentals, kids camps and film shoots. Push back on the weakest part of it.' },
+  { label: 'What will investors object to?', message: 'Play a sceptical property investor looking at a live-entertainment venue. Ask me the hardest questions you would actually ask, one at a time.' },
+  { label: 'Compare cities for this', message: 'Help me compare cities for a permanent show venue — Las Vegas against Reno, Mesquite, Utah, Colorado and Portland. What matters is audience supply, rent, licensing, and how tourist-dependent the seats are.' },
+  { label: 'Run the seat maths', message: 'Help me work out what this venue needs to survive: seats, ticket price, how many shows a week, and what the daytime rentals have to cover. Ask me what I already know before you assume anything.' },
+  { label: 'Plan the casting call', message: 'Help me plan a casting call for a circus and variety show: what acts I need, how to find them, what to put in the notice, and what to watch for in auditions.' },
+  { label: 'Write the cold outreach', message: 'Help me write cold outreach to a venue owner or a property investor. Short, specific, and clearly worth replying to.' },
+  { label: 'Fill the empty hours', message: 'The building only earns during shows unless we fill the rest. Help me think through what else the space could do on a weekday morning and what each option actually earns.' },
+  { label: 'Name the show', message: 'Help me brainstorm names for the show, then tell me honestly which ones would survive on a marquee, a ticket site, and a phone screen.' },
+];
+
+/** Clive opens on whatever this HIVE is actually for. */
+const promptsForHive = (slug?: string | null) => {
+  if (slug === 'tech') return TECH_STARTER_PROMPTS;
+  if (slug === 'show') return SHOW_STARTER_PROMPTS;
+  return STARTER_PROMPTS;
+};
+
 const getFirstName = (name?: string | null) => {
   const firstName = name?.trim().split(/\s+/)[0];
   return firstName || 'there';
@@ -950,7 +970,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
           name={profile?.name}
           isLoading={isLoading}
           onSelectPrompt={handleSendMessage}
-          prompts={community?.slug === 'tech' ? TECH_STARTER_PROMPTS : STARTER_PROMPTS}
+          prompts={promptsForHive(community?.slug)}
         />
       ) : (
         <FlatList
