@@ -211,10 +211,6 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .evwhat{display:block;font-family:var(--serif);font-size:1.06rem;color:var(--charcoal)}
 .evwhere{display:block;font-size:.86rem;color:var(--label);margin-top:2px}
 .evnote{display:block;font-size:.9rem;line-height:1.5;color:var(--charcoal);margin-top:6px}
-/* this month's HIVE Help focus, same card, pulled from the app */
-.focusnow{background:rgba(189,147,72,.07);border:1px solid rgba(189,147,72,.2);
-  border-radius:14px;padding:12px 16px;margin:0 0 14px}
-.focusnow .evnote{margin:6px 0 0;white-space:pre-line}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .f{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
 .f label{font-size:.8rem;font-weight:700;color:var(--charcoal);letter-spacing:.02em}
@@ -366,19 +362,18 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   <p class="eyebrow">However often we meet</p>
   <h2 id="meet-h">Three parts to a HIVE</h2>
   <ul class="trio honeybox">
-    <li><b>The Meeting</b><span>Every HIVE meets on the rhythm that suits it &mdash; some weekly,
+    <li><b>HIVE Meeting</b><span>Every HIVE meets on the rhythm that suits it &mdash; some weekly,
       some monthly. We work on each other&rsquo;s HDs: high-definition wishes, sharpened in a
       Humdinger session until they&rsquo;re specific enough for somebody to grant. Come in person,
       join on a call, or catch up in your own time &mdash; busy lives are welcome here.</span></li>
-    <li><b>HIVE Help</b><span>We get a lot out of giving back, so every month there&rsquo;s one
-      focus shared across every HIVE. Cleaning up a parking lot, grabbing trash on your walk,
-      paying it behind at the drive-through, a donation to a shelter, fifteen minutes of kindness
-      &mdash; or anything at all that leaves you, someone else, your community or the world one
-      percent better. Every act counts, however small.</span></li>
-    <li><b>The Third Thing</b><span>You can&rsquo;t pour from an empty cup, so every HIVE keeps
-      time for something beyond the work. For one it&rsquo;s a night out purely to enjoy each
-      other. For another it&rsquo;s getting in a room with people worth knowing. Each HIVE decides
-      what its own looks like.</span></li>
+    <li><b>HIVE Help</b><span>We get a lot out of giving back, so every HIVE picks a focus.
+      Cleaning up a parking lot, grabbing trash on your walk, paying it behind at the
+      drive-through, a donation to a shelter, fifteen minutes of kindness &mdash; or anything at
+      all that leaves you, someone else, your community or the world one percent better.
+      No act is too tiny.</span></li>
+    <li><b>HIVE Hang</b><span>You can&rsquo;t pour from an empty cup, so every HIVE keeps time for
+      something beyond the work. For one it&rsquo;s a night out purely to enjoy each other. For
+      another it&rsquo;s a mixer. Each HIVE decides what its own looks like.</span></li>
   </ul>
 </section>
 
@@ -393,18 +388,16 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       <span class="lab">Newsletter</span><span class="sub">Once a month</span></button>
     <button class="cell" role="tab" id="t-events" aria-controls="p-events" aria-selected="false">
       <span class="lab">Events</span><span class="sub">Come to one</span></button>
-    <button class="cell" role="tab" id="t-focus" aria-controls="p-focus" aria-selected="false">
-      <span class="lab">This month</span><span class="sub">What we&rsquo;re helping with</span></button>
     <button class="cell" role="tab" id="t-origin" aria-controls="p-origin" aria-selected="false">
       <span class="lab">Backstory</span><span class="sub">Thanks, Asimov</span></button>
     <button class="cell" role="tab" id="t-swag" aria-controls="p-swag" aria-selected="false">
       <span class="lab">HIVE swag</span><span class="sub">Wear the bee</span></button>
-    <button class="cell" role="tab" id="t-donate" aria-controls="p-donate" aria-selected="false">
-      <span class="lab">Donate</span><span class="sub">The Honey Pot</span></button>
   </div>
 
   <div class="panels">
     <div class="pane on" id="p-message" role="tabpanel" aria-labelledby="t-message">
+      <p>Want to help with a HIVE Help? Chip in to a Honey Pot? Join one of the HIVEs, start
+        your own, work on something together, or just say hello? This is the door for all of it.</p>
       <form id="contact" novalidate>
         <div class="row2">
           <div class="f"><label for="cname">Your name</label>
@@ -438,21 +431,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       <p class="none" id="evnone">Checking the calendar&hellip;</p>
     </div>
 
-    <div class="pane" id="p-focus" role="tabpanel" aria-labelledby="t-focus" hidden>
-      <p>Every month we pick one thing to make happen, and everybody puts something toward it &mdash;
-        time, a skill, or actual stuff.</p>
-      <div class="focusnow" id="focusnow" hidden>
-        <span class="evwhen" id="focuskicker">This month</span>
-        <span class="evwhat" id="focustitle"></span>
-        <p class="evnote" id="focusbody"></p>
-      </div>
-      <p>If you&rsquo;d like to help with it, whether that&rsquo;s dropping something off or
-        lending a hand for an afternoon, tell us and we&rsquo;ll say what&rsquo;s needed. You don&rsquo;t
-        have to be a member.</p>
-      <p class="none" id="focusnone">Checking what we&rsquo;re helping with&hellip;</p>
-    </div>
-
-    <div class="pane" id="p-origin" role="tabpanel" aria-labelledby="t-origin" hidden>
+        <div class="pane" id="p-origin" role="tabpanel" aria-labelledby="t-origin" hidden>
       <p>HIVE is inspired by <strong>Isaac Asimov&rsquo;s Trap Door Spider Society</strong>, adapted
         for a faster world. Here&rsquo;s where that comes from.</p>
       <blockquote><em>&ldquo;Once a month, a group of friends met for dinner. Every member brought
@@ -475,16 +454,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
         <span class="swagbee" role="img" aria-label="The HIVE bee"></span>See the swag <i>&rarr;</i></a>
     </div>
 
-    <div class="pane" id="p-donate" role="tabpanel" aria-labelledby="t-donate" hidden>
-      <p>Each HIVE keeps its own Honey Pot, and members pay quarterly dues into it. The pot pays
-        for the things that HIVE decides to make happen. If you&rsquo;re not a member but you&rsquo;d
-        like to add to one, your contributions are greatly appreciated.</p>
-      <p class="cash">The Las Vegas HIVE &mdash; Cash App <a href="https://cash.app/$HIVELV"><b>$HIVELV</b></a></p>
-      <p>That&rsquo;s where its dues go too, so it&rsquo;s the same pot either way. Giving to a
-        different HIVE? <a href="#involved" class="tolink">Message us</a> and we&rsquo;ll point you
-        at the right one.</p>
-    </div>
-  </div>
+      </div>
 </section>
 
 <footer class="wrap">
@@ -742,32 +712,6 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     })
     .catch(function () {
       evNone.textContent = 'The calendar is having a moment — the newsletter has these too.';
-    });
-
-  /* this month's HIVE Help focus — whatever a member put on the public site.
-     Posts are titled like "August HIVE Help — Shelter Donation", so the month
-     becomes the kicker and the focus itself becomes the headline. */
-  var fWrap = document.getElementById('focusnow'), fKick = document.getElementById('focuskicker'),
-      fTitle = document.getElementById('focustitle'), fBody = document.getElementById('focusbody'),
-      fNone = document.getElementById('focusnone');
-
-  fetch('/api/help-focus', { headers: { Accept: 'application/json' } })
-    .then(function (r) { return r.json(); })
-    .then(function (j) {
-      var f = j && j.focus;
-      if (!f || !f.title) {
-        fNone.textContent = 'We’ll list what we’re working on here as each month comes round.';
-        return;
-      }
-      var m = /^(.+?)\s+HIVE Help\s*[—–-]\s*(.+)$/.exec(f.title);
-      fKick.textContent = m ? m[1] : 'This month';
-      fTitle.textContent = m ? m[2] : f.title;
-      if (f.body) fBody.textContent = f.body; else fBody.hidden = true;
-      fWrap.hidden = false;
-      fNone.hidden = true;
-    })
-    .catch(function () {
-      fNone.textContent = 'Ask us what we’re helping with this month — we’ll tell you.';
     });
 
   addEventListener('scroll', function () {
