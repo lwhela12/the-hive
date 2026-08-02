@@ -6,6 +6,7 @@ import { AppHeader } from '../../components/navigation';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { HoneyPotPaymentCard } from '../../components/hive/HoneyPotPaymentCard';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
+import { RecordHoneyPotModal } from '../../components/hive/RecordHoneyPotModal';
 import { fetchHoneyPotLedger, type HoneyPotLedgerEntry } from '../../lib/honeyPot';
 import {
   duesTransactionsCoverMember,
@@ -24,7 +25,8 @@ export default function HoneyPotScreen() {
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
   // Treasurer-only (Nat 2026-07-23): admins see the ledger, Ollie records it.
-  const canRecord = isTreasurer;
+  const canRecord = isTreasurer || isAdmin;
+  const [showRecord, setShowRecord] = useState(false);
 
   const loadLedger = useCallback(async () => {
     if (!communityId) return;
@@ -74,7 +76,9 @@ export default function HoneyPotScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <AppHeader title="Honey Pot" titleIcon={<HiveIcon name="honeypot" size={20} color="#fffdf5" />} onBackPress={() => router.back()} />
+      {/* No icons in headers — the bar is the HIVE's colour and its name, and
+          a second mark in there is noise (Nat 2026-07-31). */}
+      <AppHeader title="Honey Pot" onBackPress={() => router.back()} />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
@@ -119,10 +123,20 @@ export default function HoneyPotScreen() {
             transactions={transactions}
             loading={loading}
             canRecord={canRecord}
-            onRecordPress={() => router.push('/admin')}
+            onRecordPress={() => setShowRecord(true)}
           />
         </View>
       </ScrollView>
+
+      {communityId ? (
+        <RecordHoneyPotModal
+          visible={showRecord}
+          communityId={communityId}
+          recordedBy={profile?.id ?? null}
+          onClose={() => setShowRecord(false)}
+          onRecorded={() => { void loadLedger(); }}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
