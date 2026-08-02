@@ -1211,6 +1211,58 @@ export default function MeetingsScreen() {
             </Pressable>
           </View>
 
+          {/* The rest of the meeting tools, for whoever runs the meeting.
+              These sat in Admin, which is the wrong room: they're what you
+              reach for on meeting day, not settings. Admin-only on purpose —
+              the check-in is everyone's to answer and nobody else's to read,
+              and populating the newsletter is Nat's job (Nat 2026-08-01). */}
+          {isAdmin && (
+            <View
+              style={{
+                marginTop: 16,
+                paddingTop: 14,
+                borderTopWidth: 1,
+                borderTopColor: 'rgba(255,255,255,0.12)',
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: 8,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: 'Lato_700Bold', fontSize: 10, letterSpacing: 1.4,
+                  textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)',
+                  width: '100%', marginBottom: 8,
+                }}
+              >
+                For whoever's running it
+              </Text>
+              {([
+                { label: 'Monthly Tune-up', params: {} },
+                { label: 'Halfway Check-in', params: { mode: 'midpoint' } },
+              ] as const).map((tool) => (
+                <Pressable
+                  key={tool.label}
+                  onPress={() => router.push({
+                    pathname: '/monthly-tuneup' as any,
+                    params: { from: 'meetings', ...tool.params },
+                  })}
+                  style={({ pressed }) => ({
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                    borderRadius: 999,
+                    paddingHorizontal: 14,
+                    paddingVertical: 9,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
+                    {tool.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
           {/* Arrival Board pill removed — the deck's Room slide covers it and
               the /arrival-board route still exists for direct links. */}
         </View>

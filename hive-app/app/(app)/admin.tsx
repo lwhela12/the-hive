@@ -2563,13 +2563,11 @@ export default function AdminScreen() {
                     >
                       Meeting tools
                     </Text>
+                    {/* The four meeting-day links moved to the Meetings tab,
+                        where you actually reach for them (Nat 2026-08-01).
+                        What stays here is the survey machinery behind them. */}
                     {([
-                      { label: 'Meeting Helper — run the meeting from the TV', icon: 'tv' as const, route: '/meeting-helper', params: {} },
-                      { label: 'Monthly Tune-up — the check-in members fill out, profile pass and all', icon: 'checkin' as const, route: '/monthly-tuneup', params: {} },
-                      // The month-end pair: what members are asked, and what
-                      // their answers turn into.
-                      { label: 'Newsletter Draft — the month, gathered for you', icon: 'megaphone' as const, route: '/newsletter', params: {} },
-                      { label: 'Halfway Check-in — the short month-end version', icon: 'checkin' as const, route: '/monthly-tuneup', params: { mode: 'midpoint' } },
+                      { label: 'Open the Meetings tab for the rest', icon: 'calendar' as const, route: '/meetings', params: {} },
                     ] as const).map((tool) => (
                       <Pressable
                         key={`${tool.route}-${tool.label}`}
