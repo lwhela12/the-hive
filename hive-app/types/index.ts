@@ -13,7 +13,7 @@ export type BoardCategoryType =
 export type ChatRoomType = 'community' | 'dm' | 'group_dm';
 export type WishStatus = 'private' | 'public' | 'fulfilled' | 'replaced';
 export type QueenBeeStatus = 'upcoming' | 'active' | 'completed';
-export type BoardPostStatus = 'active' | 'completed';
+export type BoardPostStatus = 'active' | 'completed' | 'archived';
 
 export interface QueenBeePreference extends Record<string, unknown> {
   preferred_month?: string;
@@ -421,7 +421,7 @@ export interface BoardCategory extends Record<string, unknown> {
   name: string;
   description?: string;
   category_type: BoardCategoryType;
-  topic_kind?: 'discussion' | 'hd_board' | 'helper_log';
+  topic_kind?: 'discussion' | 'hd_board' | 'helper_log' | 'newsletter' | 'compliments';
   goal_title?: string | null;
   owner_user_id?: string | null;
   status?: 'active' | 'completed' | 'archived';

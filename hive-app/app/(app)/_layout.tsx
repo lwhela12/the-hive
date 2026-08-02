@@ -93,7 +93,6 @@ export default function AppLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
-  const showAdminTab = isAdmin || communityRole === 'treasurer' || profile?.role === 'treasurer';
   const { width, height } = useWindowDimensions();
   // Use mobile layout for narrow screens (< 768px) regardless of platform
   const useMobileLayout = width < 768;
@@ -400,26 +399,35 @@ export default function AppLayout() {
             href: null,
           }}
         />
+        {/* The Buzz takes the slot Admin was using. Admin is two people and it
+            lives one tap away in the menu; the newsletter is everybody, every
+            month, and had no door at all (Nat 2026-08-01). */}
         <Tabs.Screen
-          name="admin"
+          name="buzz"
           options={{
-            title: 'Admin',
-            href: showAdminTab ? '/admin' : null,
-            tabBarAccessibilityLabel: 'Admin',
+            title: 'Newsletter',
+            tabBarAccessibilityLabel: 'Newsletter',
             tabBarIcon: ({ focused }) => (
               <TabIcon
                 customIcon={
                   <Ionicons
-                    name="settings-outline"
+                    name="newspaper-outline"
                     size={tabIconSize}
                     color={focused ? '#bd9348' : '#2d2d2d80'}
                   />
                 }
-                label="Admin"
+                label="Newsletter"
                 focused={focused}
                 compact={useMobileLayout}
               />
             ),
+          }}
+        />
+        <Tabs.Screen
+          name="admin"
+          options={{
+            title: 'Admin',
+            href: null,
           }}
         />
       </Tabs>

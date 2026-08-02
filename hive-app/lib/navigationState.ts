@@ -16,6 +16,7 @@ const APP_PATHS = new Set([
   '/meetings',
   '/profile',
   '/admin',
+  '/buzz',
   // Meeting tools — restoring these after a resume matters most of all:
   // losing a half-finished tune-up mid-check-in is how "my survey
   // disappeared" reports happen.
