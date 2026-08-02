@@ -90,6 +90,17 @@ export interface CommunityInvite extends Record<string, unknown> {
   inviter?: Profile;
 }
 
+/** Newsletter list for people outside the HIVEs (migration 123). */
+export interface NewsletterSubscriber extends Record<string, unknown> {
+  id: string;
+  email: string;
+  name?: string | null;
+  source: string;
+  token: string;
+  unsubscribed_at?: string | null;
+  created_at: string;
+}
+
 export interface Waitlist extends Record<string, unknown> {
   id: string;
   email: string;
@@ -883,11 +894,25 @@ export interface Database {
         Update: Partial<Omit<Waitlist, 'id' | 'created_at'>>;
         Relationships: [];
       };
+      newsletter_subscribers: {
+        Row: NewsletterSubscriber;
+        Insert: Omit<NewsletterSubscriber, 'id' | 'created_at' | 'token'>;
+        Update: Partial<Omit<NewsletterSubscriber, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
     };
     Views: {};
     Functions: {
       is_genesis_state: {
         Args: Record<string, never>;
+        Returns: boolean;
+      };
+      subscribe_to_newsletter: {
+        Args: { p_email: string; p_name?: string | null };
+        Returns: undefined;
+      };
+      unsubscribe_from_newsletter: {
+        Args: { p_token: string };
         Returns: boolean;
       };
       get_or_create_dm_room: {
