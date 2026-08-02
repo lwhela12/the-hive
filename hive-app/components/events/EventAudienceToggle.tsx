@@ -1,18 +1,27 @@
+import { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useAuth } from '../../lib/hooks/useAuth';
 
-export type EventAudience = 'members' | 'public';
+export type EventAudience = 'members' | 'all_hives' | 'public';
 
+// Three rungs, and the hint says what it means socially — whether you can bring
+// your mum. An intimate game night and a wedding on a cruise ship are both
+// events; the difference is who you'd be surprised to see turn up.
 const OPTIONS: { key: EventAudience; label: string; hint: string }[] = [
-  { key: 'members', label: 'HIVErs Only', hint: 'Stays inside the HIVE' },
-  { key: 'public', label: "Everyone's invited", hint: 'Safe to name in the newsletter' },
+  { key: 'members', label: 'This HIVE only', hint: 'Just us. Nobody outside this HIVE sees it.' },
+  { key: 'all_hives', label: 'Every HIVE', hint: 'Anyone from any HIVE is welcome.' },
+  { key: 'public', label: 'Come one, come all', hint: 'Bring whoever you like. Shows on the website.' },
 ];
+
+const RANK: Record<EventAudience, number> = { members: 0, all_hives: 1, public: 2 };
 
 /**
  * Who is this event for?
  *
- * The HIVE has a public face and a private one. Marking an event
- * "Everyone's invited" is what lets the newsletter name it — anything left as
- * HIVErs Only never leaves the members' side (Nat 2026-07-25).
+ * Never offers a rung this HIVE won't honour. Show HIVE keeps everything, so
+ * inside it there is one option and the question isn't worth asking — offering
+ * "Come one, come all" there would be a promise the database quietly refuses
+ * (Nat 2026-08-01).
  *
  * Same shape as every other pickable thing in the app: a pill with a filled
  * dot when chosen.
@@ -26,11 +35,25 @@ export function EventAudienceToggle({
   onChange: (next: EventAudience) => void;
   label?: string;
 }) {
+  const { community } = useAuth();
+  const ceiling = (community?.max_share_scope as string | undefined) ?? 'hive';
+  const ceilingRank = ceiling === 'public' ? 2 : ceiling === 'all_hives' ? 1 : 0;
+  const options = OPTIONS.filter((o) => RANK[o.key] <= ceilingRank);
+
+  // If the current value sits above what this HIVE allows, bring it down rather
+  // than leave a setting showing that isn't true.
+  useEffect(() => {
+    if (RANK[value] > ceilingRank) onChange(options[options.length - 1].key);
+  }, [value, ceilingRank]);
+
+  // One rung is not a choice.
+  if (options.length < 2) return null;
+
   return (
     <View style={{ gap: 8 }}>
       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>{label}</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {OPTIONS.map((option) => {
+        {options.map((option) => {
           const selected = value === option.key;
           return (
             <Pressable

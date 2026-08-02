@@ -947,7 +947,10 @@ export default function HiveScreen() {
     setEventTime(event.event_time || '');
     setEventDescription(event.description || '');
     setEventLocation(event.location || '');
-    setEventAudience((event as any).visibility === 'public' ? 'public' : 'members');
+    // Pass the saved rung straight through — collapsing it to two would quietly
+    // demote an "Every HIVE" event the moment somebody opened it to edit.
+    const saved = (event as any).visibility;
+    setEventAudience(saved === 'public' || saved === 'all_hives' ? saved : 'members');
     setShowEventModal(true);
   }, [formatDateForInput]);
 

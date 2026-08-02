@@ -60,6 +60,8 @@ export interface Community extends Record<string, unknown> {
   } | null;
   /** Hex colour for this hive's header bar (migration 120). Null = honey gold. */
   accent_color?: string | null;
+  /** How far anything in this HIVE may travel (migration 125). Defaults to 'hive'. */
+  max_share_scope?: 'hive' | 'all_hives' | 'public';
   created_by?: string;
   created_at: string;
 }
