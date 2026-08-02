@@ -299,6 +299,20 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 #subscribe button,#contact button{border:0;cursor:pointer;font-family:var(--sans)}
 .formnote{flex-basis:100%;margin:0 0 10px;font-size:.86rem;color:var(--label);min-height:1.2em}
 
+/* The Buzz — past newsletters, readable without signing up */
+.buzz{margin-top:22px;padding-top:18px;border-top:1px solid rgba(189,147,72,.28)}
+.buzzhead{font-family:var(--sans);font-weight:700;font-size:.7rem;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--gold);margin:0 0 12px}
+.buzzlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.buzzlist details{background:rgba(189,147,72,.07);border:1px solid rgba(189,147,72,.2);
+  border-radius:14px;padding:12px 16px}
+.buzzlist summary{cursor:pointer;font-family:var(--serif);font-size:1.02rem;color:var(--charcoal);
+  list-style:none;display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.buzzlist summary::-webkit-details-marker{display:none}
+.buzzlist summary span{font-family:var(--sans);font-size:.78rem;color:var(--label);white-space:nowrap}
+.buzzlist details[open] summary{margin-bottom:10px}
+.buzzbody{white-space:pre-line;font-size:.94rem;line-height:1.65;color:#5c5a54;margin:0}
+
 /* the bee comes along to the shop */
 .swagbtn .swagbee{width:26px;height:20px;flex:none;
   background:url(assets/bee-sm.webp) center/contain no-repeat}
@@ -422,6 +436,13 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
         <button class="btn solid" type="submit">Sign me up <i>&rarr;</i></button>
         <p class="formnote" id="subnote" role="status" aria-live="polite"></p>
       </form>
+
+      <!-- Read one before you commit to getting them. -->
+      <div class="buzz" id="buzz" hidden>
+        <p class="buzzhead">Have a read first</p>
+        <ul class="buzzlist" id="buzzlist"></ul>
+      </div>
+      <p class="none" id="buzznone" hidden></p>
     </div>
 
     <div class="pane" id="p-events" role="tabpanel" aria-labelledby="t-events" hidden>
@@ -711,6 +732,48 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     .catch(function () {
       evNone.textContent = 'The calendar is having a moment — the newsletter has these too.';
     });
+
+  /* The Buzz — past newsletters, so a stranger can read one before deciding
+     whether they want them arriving by email. */
+  var buzzWrap = document.getElementById('buzz'),
+      buzzList = document.getElementById('buzzlist'),
+      buzzNone = document.getElementById('buzznone');
+
+  function buzzDate(iso) {
+    var d = new Date(iso);
+    return isNaN(d) ? '' : MON[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  fetch('/api/newsletters', { headers: { Accept: 'application/json' } })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      var list = (j && j.newsletters) || [];
+      if (!list.length) return;
+
+      list.forEach(function (n, i) {
+        var li = document.createElement('li');
+        var det = document.createElement('details');
+        if (i === 0) det.open = true;
+
+        var sum = document.createElement('summary');
+        sum.appendChild(document.createTextNode(n.title || 'Newsletter'));
+        var when = document.createElement('span');
+        when.textContent = buzzDate(n.date);
+        sum.appendChild(when);
+
+        var body = document.createElement('p');
+        body.className = 'buzzbody';
+        body.textContent = n.content || '';
+
+        det.appendChild(sum);
+        det.appendChild(body);
+        li.appendChild(det);
+        buzzList.appendChild(li);
+      });
+
+      buzzWrap.hidden = false;
+    })
+    .catch(function () { /* the sign-up form still works on its own */ });
 
   addEventListener('scroll', function () {
     toTop.classList.toggle('show', (window.scrollY || document.documentElement.scrollTop) > 420);
