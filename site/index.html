@@ -288,6 +288,28 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 }
 @media (max-width:620px){
   .wrap{padding-left:18px;padding-right:18px}
+  /* Phones: same words, less air. Every section should land inside a screen
+     rather than asking for a scroll to finish a thought (Nat 2026-08-01). */
+  .sec{padding-top:26px}
+  .sec h2{font-size:1.5rem;margin-bottom:8px}
+  .eyebrow{margin-bottom:8px;font-size:.64rem}
+  .letters{padding-top:26px}
+  .lgrid{gap:14px;padding:18px 16px}
+  .lt p.big{font-size:1.45rem;margin-bottom:5px}
+  .lt p{font-size:.87rem;line-height:1.5}
+  .trio.honeybox{padding:2px 18px}
+  .trio li{padding:13px 0;font-size:.92rem}
+  .trio b{font-size:1rem}
+  .comb{margin-top:16px;gap:8px}
+  .cell{padding:12px 10px!important}
+  .cell .lab{font-size:.92rem}
+  .cell .sub{font-size:.68rem}
+  .panels{margin-top:12px}
+  .pane{padding:18px 16px}
+  .pane p{font-size:.92rem;line-height:1.55;margin-bottom:10px}
+  .seal{width:min(150px,34vw);margin-bottom:14px}
+  .acro{font-size:1.9rem}
+  .hero{padding-bottom:6px}
   .steps,.steps.three,.chapter,.doors{grid-template-columns:1fr}
   .lgrid{grid-template-columns:1fr 1fr;gap:20px}
   .hero{padding:34px 0 12px}
@@ -354,14 +376,6 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   <p class="tag">Where brilliant minds don&rsquo;t just network&mdash;<em>they build.</em></p>
 </header>
 
-<section class="sec wrap" id="what" aria-labelledby="what-h">
-  <h2 id="what-h" class="sr">Who we are</h2>
-  <p class="opening">A HIVE is a small group of people who look after each other and their
-    community, and who meet on a rhythm that suits them. Between any group of us there is
-    almost everything anyone needs &mdash; it just sits scattered across a lot of heads.
-    A HIVE pools it.</p>
-</section>
-
 <section class="letters wrap" id="letters" aria-labelledby="letters-h">
   <h2 id="letters-h" class="sr">What HIVE stands for</h2>
   <div class="lgrid">
@@ -373,21 +387,19 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 </section>
 
 <section class="sec wrap" id="meet" aria-labelledby="meet-h">
-  <p class="eyebrow">However often we meet</p>
+  <p class="eyebrow">How it works</p>
   <h2 id="meet-h">Three parts to a HIVE</h2>
   <ul class="trio honeybox">
-    <li><b>HIVE Meeting</b><span>Every HIVE meets on the rhythm that suits it &mdash; some weekly,
-      some monthly. We work on each other&rsquo;s HDs: high-definition wishes, sharpened in a
-      Humdinger session until they&rsquo;re specific enough for somebody to grant. Come in person,
-      join on a call, or catch up in your own time &mdash; busy lives are welcome here.</span></li>
-    <li><b>HIVE Help</b><span>We get a lot out of giving back, so every HIVE picks a focus.
-      Cleaning up a parking lot, grabbing trash on your walk, paying it behind at the
-      drive-through, a donation to a shelter, fifteen minutes of kindness &mdash; or anything at
-      all that leaves you, someone else, your community or the world one percent better.
-      No act is too tiny.</span></li>
-    <li><b>HIVE Hang</b><span>You can&rsquo;t pour from an empty cup, so every HIVE keeps time for
-      something beyond the work. For one it&rsquo;s a night out purely to enjoy each other. For
-      another it&rsquo;s a networking event. Each HIVE decides what its own looks like.</span></li>
+    <li><b>HIVE Meeting</b><span>We meet on whatever rhythm suits us &mdash; weekly for some,
+      monthly for others &mdash; and work on each other&rsquo;s HDs: high-definition wishes,
+      sharpened in a Humdinger session until somebody can grant them. In person, on a call, or
+      catch up after.</span></li>
+    <li><b>HIVE Help</b><span>Every HIVE picks something to give back to. A shelter donation,
+      trash grabbed on a walk, fifteen minutes of kindness &mdash; anything that leaves you,
+      someone else, or the world one percent better. No act is too tiny.</span></li>
+    <li><b>HIVE Hang</b><span>Time for each other beyond the work, because you can&rsquo;t pour
+      from an empty cup. A night out for one HIVE, a networking event for another. Each decides
+      its own.</span></li>
   </ul>
 </section>
 
@@ -453,16 +465,12 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     </div>
 
     <div class="pane" id="p-origin" role="tabpanel" aria-labelledby="t-origin" hidden>
-      <p>HIVE is inspired by <strong>Isaac Asimov&rsquo;s Trap Door Spider Society</strong>, adapted
-        for a faster world. Here&rsquo;s where that comes from.</p>
-      <p>The Trap Door Spiders were real: a New York dinner club that met one Friday a month,
-        about a dozen of them, in a restaurant or somebody&rsquo;s home. Two members hosted each
-        evening and each brought a guest. Asimov was elected in 1970, and turned them into fiction
-        as the <strong>Black Widowers</strong> &mdash; stories where a guest arrives with a problem
-        he can&rsquo;t solve, gets thoroughly questioned over dinner, and leaves with an answer none
-        of them had on their own.</p>
-      <p>Natalie Walstead took that idea and built on it: the same structure, a faster world, tools
-        that keep it going between meetings, and a table that&rsquo;s open to everyone.</p>
+      <p>The <strong>Trap Door Spiders</strong> were real: a New York dinner club that met one
+        Friday a month, a dozen of them, each host bringing a guest. Asimov was elected in 1970 and
+        turned them into the <strong>Black Widowers</strong> &mdash; stories where a guest arrives
+        with a problem he can&rsquo;t solve and leaves with an answer none of them had alone.</p>
+      <p>Natalie Walstead built on it: the same idea, a faster world, tools that keep it going
+        between meetings, and a table open to everyone.</p>
     </div>
 
     <div class="pane" id="p-swag" role="tabpanel" aria-labelledby="t-swag" hidden>
