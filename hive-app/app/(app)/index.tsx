@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Image, useWindowDimensions } from 'react-native';
+import { View, Image, Pressable, useWindowDimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { ChatInterface } from '../../components/chat/ChatInterface';
@@ -160,9 +161,27 @@ export default function ChatScreen() {
         <View className="flex-1">
           {/* No logos in the gold bars — all seven pages identical. Clive's
               crest greets you at full size in the chat welcome state instead. */}
+          {/* The ☰ opens the APP menu here, the same as on every other screen.
+              It used to open Clive's conversation list instead, because this
+              screen passed its own handler — and since Home is where you land,
+              the app menu was unreachable from the one place everybody starts.
+              That is why Nat could never find Admin (2026-08-03): it was in a
+              menu whose only button, on her screen, opened something else.
+              Clive's conversations moved to the right, where they have a mark
+              of their own. */}
           <AppHeader
             title="Clive"
-            onMenuPress={useMobileLayout ? () => setDrawerOpen(true) : undefined}
+            rightElement={useMobileLayout ? (
+              <Pressable
+                onPress={() => setDrawerOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Your conversations with Clive"
+                className="w-10 h-10 items-center justify-center rounded-full active:opacity-70"
+                hitSlop={8}
+              >
+                <Ionicons name="chatbubbles-outline" size={23} color="white" />
+              </Pressable>
+            ) : undefined}
           />
 
           {useMobileLayout && (

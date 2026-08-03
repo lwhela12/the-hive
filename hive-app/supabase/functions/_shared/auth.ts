@@ -117,3 +117,81 @@ export async function verifySupabaseJwt(
 export function isAuthError(result: AuthResult | AuthError): result is AuthError {
   return 'error' in result;
 }
+
+/**
+ * Being signed in is not the same as being allowed.
+ *
+ * An audit on 2026-08-03 found the same shape in five functions: verify the
+ * token, then read or write with the service-role key using an id that came out
+ * of the request body. The service-role key ignores row-level security, so
+ * "which HIVE?" was answered by whoever was asking. A Production HIVE member
+ * could hand over an OG HIVE id and be served its contents.
+ *
+ * These two are the missing half of every one of those checks. Call one
+ * immediately after verifySupabaseJwt, before touching any caller-supplied id.
+ */
+
+/** Is this person actually in the HIVE whose data they're asking about? */
+export async function isCommunityMember(
+  supabaseAdmin: { from: (t: string) => any },
+  userId: string,
+  communityId: string
+): Promise<boolean> {
+  if (!userId || !communityId) return false;
+  const { data, error } = await supabaseAdmin
+    .from('community_memberships')
+    .select('user_id')
+    .eq('user_id', userId)
+    .eq('community_id', communityId)
+    .maybeSingle();
+  if (error) {
+    // A failed lookup is a no. A check that opens the door when the database
+    // hiccups is not a check.
+    console.error('Membership lookup failed:', error);
+    return false;
+  }
+  return !!data;
+}
+
+/** Does this person run this HIVE from the inside? Owners always do. */
+export async function isCommunityAdmin(
+  supabaseAdmin: { from: (t: string) => any },
+  userId: string,
+  communityId: string
+): Promise<boolean> {
+  if (!userId || !communityId) return false;
+  if (await isOwner(supabaseAdmin, userId)) return true;
+  const { data, error } = await supabaseAdmin
+    .from('community_memberships')
+    .select('role')
+    .eq('user_id', userId)
+    .eq('community_id', communityId)
+    .maybeSingle();
+  if (error) {
+    console.error('Admin lookup failed:', error);
+    return false;
+  }
+  return data?.role === 'admin';
+}
+
+/**
+ * God level — Nat and Lucas (migration 128). Deliberately reads profiles.is_owner
+ * and NOT profiles.role: role is writable by the person it describes, which is
+ * how a member could make themselves an admin of every HIVE they were in.
+ */
+export async function isOwner(
+  supabaseAdmin: { from: (t: string) => any },
+  userId: string
+): Promise<boolean> {
+  if (!userId) return false;
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('is_owner')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) {
+    console.error('Owner lookup failed:', error);
+    return false;
+  }
+  return data?.is_owner === true;
+}

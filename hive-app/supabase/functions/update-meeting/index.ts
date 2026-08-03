@@ -2,15 +2,25 @@
  * Update Meeting Edge Function
  *
  * Updates a calendar event in Google Calendar and the database.
- * Requires user authentication.
+ * You must be signed in AND an admin of the HIVE that owns the meeting.
  *
  * POST /functions/v1/update-meeting
  * Body: { eventId, title?, description?, location?, date?, time? }
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
+import { verifySupabaseJwt, isAuthError, isCommunityAdmin } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+
+/**
+ * One answer for "there is no such meeting" and for "that meeting isn't yours
+ * to change" — on purpose, added 2026-08-03. If the two answers differed, anyone
+ * could feed this endpoint a stream of guessed ids and use the difference to map
+ * out which meetings exist in HIVEs they've never been near. A refusal shouldn't
+ * hand back a fact.
+ */
+const CANNOT_CHANGE_MEETING =
+  "We couldn't change that meeting. Either it isn't there, or it belongs to a HIVE you don't run.";
 
 interface GoogleTokenResponse {
   access_token: string;
@@ -96,7 +106,21 @@ async function updateCalendarEvent(
     requestBody.end = { dateTime: endDateTime, timeZone };
   }
 
-  const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}?sendUpdates=all`;
+  /**
+   * The id is escaped before it goes in the address, added 2026-08-03.
+   *
+   * It looks safe because it comes out of our own database, but the column it
+   * comes from — events.google_event_id — is plain text with no rules on it, and
+   * the database lets anyone edit an event they created. So the value is really
+   * whatever a person last typed there.
+   *
+   * Dropped into the address as-is, an "id" of
+   * "../../calendars/somebody-else/events/abc" climbs out of "primary" and edits
+   * a calendar that was never ours to touch, and a "?" in it lets the writer bolt
+   * their own settings onto our request. Escaped, it can only ever be one event
+   * id in one calendar, which is all it was ever meant to be.
+   */
+  const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(googleEventId)}?sendUpdates=all`;
 
   const response = await fetch(url, {
     method: 'PATCH',
@@ -131,7 +155,7 @@ Deno.serve(async (req) => {
     return errorResponse(auth.error, auth.status);
   }
 
-  const { token } = auth;
+  const { userId } = auth;
 
   try {
     // Parse request body
@@ -148,15 +172,85 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get the event to find the google_event_id and current values
+    // Get the meeting itself first. We only ask for the columns this function
+    // actually uses; community_id is the one that decides whether the caller is
+    // allowed anywhere near the rest of it.
     const { data: event, error: fetchError } = await adminSupabase
       .from('events')
-      .select('*')
+      .select('id, community_id, google_event_id, event_date, event_time')
       .eq('id', eventId)
-      .single();
+      .maybeSingle();
 
-    if (fetchError || !event) {
-      return errorResponse('Event not found', 404);
+    if (fetchError) {
+      console.error('Could not load the meeting:', fetchError);
+      return errorResponse('Failed to load the meeting', 500);
+    }
+
+    /**
+     * The permission gate, added 2026-08-03.
+     *
+     * Until today this function checked that you were signed in and then did as
+     * it was told. It reads and writes with the service-role key, which ignores
+     * row-level security, so a member of one HIVE who guessed or spotted another
+     * HIVE's meeting id could rewrite that meeting's title, description, place
+     * and time. Worse, the Google Calendar step below sends its update to every
+     * attendee, so a stranger's words would land in their inboxes over our name.
+     *
+     * The HIVE we check against comes off the meeting row we just loaded, never
+     * from the request. Letting the caller name their own community id would be
+     * the same trust-the-asker mistake wearing a different hat.
+     */
+    if (!event || !(await isCommunityAdmin(adminSupabase, userId, event.community_id))) {
+      return errorResponse(CANNOT_CHANGE_MEETING, 403);
+    }
+
+    /**
+     * The second half of the same question, added 2026-08-03.
+     *
+     * The gate above settled who owns the ROW. It did not settle who owns the
+     * CALENDAR ENTRY that row points at, and those are two different things: the
+     * pointer lives in events.google_event_id, a plain text column, and the
+     * database lets any member freely edit an event they created themselves.
+     *
+     * So there was still a way through. Make a meeting in your own HIVE, then
+     * quietly paste another HIVE's calendar id into it — you can read that id off
+     * any meeting shared past its own HIVE. Now call this function. The gate says
+     * yes, because you really do run the HIVE that owns your row. And the step
+     * below rewrites the OTHER HIVE's calendar entry and, because Google mails
+     * every guest when an event changes, sends your words to their whole guest
+     * list over our name.
+     *
+     * One calendar entry belongs to one meeting in one HIVE. If a meeting in some
+     * other HIVE is already claiming this one, we stop. We don't try to work out
+     * which of the two is the impostor — that's a person's job, and the log line
+     * below is how they find out it happened.
+     */
+    if (event.google_event_id) {
+      const { data: otherClaims, error: claimError } = await adminSupabase
+        .from('events')
+        .select('id, community_id')
+        .eq('google_event_id', event.google_event_id)
+        .neq('community_id', event.community_id)
+        .limit(1);
+
+      if (claimError) {
+        console.error('Could not check who else claims this calendar entry:', claimError);
+        return errorResponse('Failed to load the meeting', 500);
+      }
+
+      if (otherClaims && otherClaims.length > 0) {
+        console.error(
+          'Refusing to change a calendar entry that two HIVEs both claim. Meeting:',
+          event.id,
+          'calendar entry:',
+          event.google_event_id,
+          'also claimed by meeting:',
+          otherClaims[0].id
+        );
+        // Same refusal as "that isn't yours", on purpose — see the note at the
+        // top. A different answer here would confirm the paste had landed.
+        return errorResponse(CANNOT_CHANGE_MEETING, 403);
+      }
     }
 
     // Build database update
@@ -209,7 +303,10 @@ Deno.serve(async (req) => {
       const { error: updateError } = await adminSupabase
         .from('events')
         .update(dbUpdate)
-        .eq('id', eventId);
+        .eq('id', eventId)
+        // Naming the HIVE again on the write is belt and braces: the row we
+        // approved is the only row that can change, whatever happens above.
+        .eq('community_id', event.community_id);
 
       if (updateError) {
         console.error('Database update error:', updateError);

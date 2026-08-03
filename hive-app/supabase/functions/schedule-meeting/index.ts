@@ -3,17 +3,26 @@
  *
  * Creates a calendar event with Google Meet link, sends calendar invites to
  * selected attendees, and stores it in the database.
- * Requires user authentication.
+ * Only an admin of the HIVE being scheduled for may call this (owners too).
  *
  * POST /functions/v1/schedule-meeting
  * Body: { title, description?, date, time, duration?, communityId, attendeeIds? }
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
+import { verifySupabaseJwt, isAuthError, isCommunityAdmin } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const DEFAULT_MEETING_DURATION_MINUTES = 150;
+
+/**
+ * The single answer to every "no" this function gives about a HIVE, whether the
+ * caller is in a different HIVE, is in this one but doesn't run it, or made the
+ * id up entirely. Added 2026-08-03: three tailored messages would let anyone
+ * with a login map out HIVEs they aren't in just by reading which refusal came
+ * back, so all three roads end here.
+ */
+const SCHEDULING_REFUSED = 'Scheduling a meeting here is up to this HIVE’s admins.';
 
 interface GoogleTokenResponse {
   access_token: string;
@@ -194,13 +203,73 @@ Deno.serve(async (req) => {
       return errorResponse('Missing required fields: title, date, time, communityId', 400);
     }
 
+    // The date, the time and the length go straight to Google and then straight
+    // to the database, and both of those are far fussier than this function was.
+    //
+    // Checked here, added 2026-08-03, because of the order things happen in
+    // below: the invites leave before the meeting is written down. A time of
+    // "half nine" quietly became "NaN:NaN" and a length that wasn't a number did
+    // the same, and Google was the first thing to notice — but a date Postgres
+    // wouldn't accept got noticed AFTER the invites had landed, leaving a meeting
+    // in people's inboxes that the HIVE has no record of and nobody can edit.
+    // All three are pennies to check now and expensive to discover later.
+    const [startHour, startMinute] = String(time).split(':').map(Number);
+    const dateLooksRight = /^\d{4}-\d{2}-\d{2}$/.test(String(date));
+    const timeLooksRight =
+      /^\d{1,2}:\d{2}$/.test(String(time)) &&
+      startHour >= 0 && startHour <= 23 &&
+      startMinute >= 0 && startMinute <= 59;
+
+    if (!dateLooksRight || !timeLooksRight) {
+      return errorResponse('Please give the date as YYYY-MM-DD and the time as HH:MM.', 400);
+    }
+
+    // A day is the ceiling because anything longer belongs on the calendar as a
+    // multi-day event with an end date, not as a meeting that runs off the end
+    // of the clock arithmetic further down.
+    if (!Number.isFinite(duration) || duration <= 0 || duration > 24 * 60) {
+      return errorResponse(
+        'A meeting can run anywhere from a minute to a full day — please pick a length in that range.',
+        400
+      );
+    }
+
+    // Everything past this point spends the HIVE's own Google account: it drops a
+    // calendar invite into people's inboxes carrying a title, description and
+    // location the caller chose. Until 2026-08-03 the only question asked was
+    // "are you signed in?", and the HIVE was whichever id arrived in the body, so
+    // a member of any HIVE could mail the members of a HIVE they'd never joined.
+    // The service-role key below ignores row-level security, so this check is the
+    // whole of the door.
+    //
+    // Admin, not merely member, because sending mail from the HIVE's address is
+    // an act of running the place. Nat and Lucas pass on sight (isCommunityAdmin
+    // waves owners through), which is the one case where someone who isn't a
+    // member of this HIVE may schedule for it.
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    if (!(await isCommunityAdmin(supabaseAdmin, userId, communityId))) {
+      return errorResponse(SCHEDULING_REFUSED, 403);
+    }
+
     // Use the user's timezone, fallback to Eastern if not provided
     const timeZone = timezone || 'America/New_York';
-    const startDateTime = `${date}T${time}:00`;
 
-    // Calculate end time by parsing the time string and adding duration
-    const [hours, minutes] = time.split(':').map(Number);
-    const totalMinutes = hours * 60 + minutes + duration;
+    // Google wants two digits on the hour — "9:00" is a time a person would type
+    // and a time Google refuses. Padding it here means a single missing zero
+    // can't cost the meeting. (2026-08-03)
+    const startTimeStr = `${startHour.toString().padStart(2, '0')}:${startMinute
+      .toString()
+      .padStart(2, '0')}`;
+    const startDateTime = `${date}T${startTimeStr}:00`;
+
+    // Calculate end time from the start we already checked above, rather than
+    // splitting the string a second time — one reading of the clock, so the
+    // value that was vetted is the value that gets used.
+    const totalMinutes = startHour * 60 + startMinute + duration;
     const endHours = Math.floor(totalMinutes / 60) % 24;
     const endMinutes = totalMinutes % 60;
     const endTimeStr = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}:00`;
@@ -214,26 +283,71 @@ Deno.serve(async (req) => {
     }
     const endDateTime = `${endDateStr}T${endTimeStr}`;
 
-    // Fetch attendee emails if attendeeIds provided
+    // Work out who actually gets the invite.
+    //
+    // 2026-08-03: this used to hand the requested ids straight to the whole
+    // profiles table and mail back whatever emails came out, so a made-up list of
+    // ids could reach anyone in the app from the HIVE's Google account. Now the
+    // ids are matched against this HIVE's membership first, and only the people
+    // who belong here have an email address looked up at all.
+    //
+    // Someone else's id gets quietly left off rather than sinking the whole
+    // request — one stale pick shouldn't cost the meeting — but the count comes
+    // back in the response, because a person who meant to invite six and reached
+    // four deserves to see that rather than wonder.
     let attendees: Attendee[] = [];
-    if (attendeeIds && attendeeIds.length > 0) {
-      // Use service role to fetch all member emails
-      const adminSupabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    let attendeesSkipped = 0;
+    // Settle on one spelling of each id before counting anything. The ids arrive
+    // as text, and the database treats "AB-12" and "ab-12" as the same person —
+    // so without this the same person named twice in two cases counted as two
+    // people asked for and one found, and the sentence at the bottom told
+    // somebody a guest had been left off the invite when nobody had.
+    // Anything that isn't text is dropped here rather than sent to the database
+    // to fail; a stray value shouldn't cost the whole meeting. (2026-08-03)
+    const requestedAttendeeIds = Array.from(
+      new Set(
+        (Array.isArray(attendeeIds) ? attendeeIds : [])
+          .filter((id): id is string => typeof id === 'string')
+          .map((id) => id.trim().toLowerCase())
+          .filter(Boolean)
+      )
+    );
+
+    if (requestedAttendeeIds.length > 0) {
+      const { data: memberships, error: membershipError } = await supabaseAdmin
+        .from('community_memberships')
+        .select('user_id')
+        .eq('community_id', communityId)
+        .in('user_id', requestedAttendeeIds);
+
+      // A membership lookup that fell over tells us nothing about who belongs
+      // here, and guessing would mean mailing strangers. Stop instead.
+      if (membershipError) {
+        console.error('Could not confirm who belongs to this HIVE:', membershipError);
+        return errorResponse('Could not check who to invite. Please try again.', 500);
+      }
+
+      // Count each person once even if the membership table ever hands back two
+      // rows for them; the skipped number below is subtraction and must not go
+      // negative and confuse whoever reads it.
+      const memberIds = Array.from(
+        new Set((memberships ?? []).map((m: { user_id: string }) => m.user_id))
       );
+      attendeesSkipped = requestedAttendeeIds.length - memberIds.length;
 
-      const { data: profiles, error: profilesError } = await adminSupabase
-        .from('profiles')
-        .select('email')
-        .in('id', attendeeIds);
+      if (memberIds.length > 0) {
+        const { data: profiles, error: profilesError } = await supabaseAdmin
+          .from('profiles')
+          .select('email')
+          .in('id', memberIds);
 
-      if (profilesError) {
-        console.error('Failed to fetch attendee emails:', profilesError);
-      } else if (profiles) {
-        attendees = profiles
-          .filter((p) => p.email)
-          .map((p) => ({ email: p.email }));
+        if (profilesError) {
+          console.error('Failed to fetch attendee emails:', profilesError);
+        } else if (profiles) {
+          attendees = profiles
+            .filter((p) => p.email)
+            .map((p) => ({ email: p.email }));
+        }
       }
     }
 
@@ -274,7 +388,7 @@ Deno.serve(async (req) => {
         title,
         description,
         event_date: date,
-        event_time: time,
+        event_time: startTimeStr,
         event_type: 'meeting',
         google_event_id: calendarEvent.id,
         meet_link: meetLink,
@@ -287,7 +401,14 @@ Deno.serve(async (req) => {
 
     if (dbError) {
       console.error('Database error:', dbError);
-      return errorResponse('Failed to save meeting to database', 500);
+      // Say what actually happened. By the time we get here Google has already
+      // put the invite in everyone's inbox, and the old wording ("failed to save
+      // meeting") reads like nothing happened — so the natural next move was to
+      // press Schedule again and invite everybody twice. (2026-08-03)
+      return errorResponse(
+        'The calendar invite has already gone out, but we could not save the meeting to the HIVE. Check the calendar before scheduling it again.',
+        500
+      );
     }
 
     // Roll the monthly check-in forward to this meeting: due_date drives the
@@ -296,10 +417,6 @@ Deno.serve(async (req) => {
     // the same convention the check-in-reminder date math documents.
     // Only ever move it FORWARD past the previous meeting; never backwards.
     try {
-      const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
       const { data: activeSurveys } = await supabaseAdmin
         .from('surveys')
         .select('id, title, due_date')
@@ -312,7 +429,16 @@ Deno.serve(async (req) => {
         const [y, m, d] = String(date).split('-').map(Number);
         const newDue = new Date(Date.UTC(y, m - 1, d + 1)).toISOString();
         if (!checkIn.due_date || newDue > checkIn.due_date) {
-          await supabaseAdmin.from('surveys').update({ due_date: newDue }).eq('id', checkIn.id);
+          await supabaseAdmin
+            .from('surveys')
+            .update({ due_date: newDue })
+            .eq('id', checkIn.id)
+            // Name the HIVE on the write as well as on the read above. The id
+            // came out of a read already scoped to this HIVE, so this changes
+            // nothing today — it means a later edit to the read can't quietly
+            // turn this into a line that moves another HIVE's check-in.
+            // (2026-08-03)
+            .eq('community_id', communityId);
           console.log(`Check-in due_date rolled to ${newDue} for survey ${checkIn.id}`);
         }
       }
@@ -325,12 +451,28 @@ Deno.serve(async (req) => {
       event,
       meetLink,
       googleEventId: calendarEvent.id,
+      attendeesInvited: attendees.length,
+      attendeesSkipped,
+      // Plain sentence rather than a raw number, so whatever screen shows this
+      // can put it in front of a person as-is.
+      ...(attendeesSkipped > 0
+        ? {
+            notice:
+              attendeesSkipped === 1
+                ? 'One person you picked belongs to a different HIVE, so they were left off the invite.'
+                : `${attendeesSkipped} of the people you picked belong to a different HIVE, so they were left off the invite.`,
+          }
+        : {}),
     });
   } catch (error) {
+    // The detail goes to the logs and nowhere else, changed 2026-08-03. This
+    // used to hand the caller error.message, and the two errors thrown above
+    // both carry Google's reply back word for word — the token endpoint's and
+    // the calendar endpoint's. That is our Google account talking about itself,
+    // and it belongs in a log, not in a browser. Every refusal this function
+    // gives on purpose is a return rather than a throw, so none of the wording
+    // people actually read has changed.
     console.error('Error scheduling meeting:', error);
-    return errorResponse(
-      error instanceof Error ? error.message : 'Failed to schedule meeting',
-      500
-    );
+    return errorResponse('We could not schedule that meeting. Please try again.', 500);
   }
 });

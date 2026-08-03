@@ -209,8 +209,14 @@ export default function AppLayout() {
                 borderTopColor: '#dec181',
               }
             : {
-                height: 70,
-                paddingBottom: 8,
+                // The icons were sitting right under the gold line with all the
+                // slack below them, so the rule read as resting on top of them
+                // (Nat 2026-08-03). Padding on both sides now, and a little more
+                // room, so the icon-and-label block sits in the middle of the bar
+                // instead of hanging from its ceiling.
+                height: 80,
+                paddingTop: 10,
+                paddingBottom: 10,
                 backgroundColor: '#fff',
                 borderTopColor: '#dec181',
               },

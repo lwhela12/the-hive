@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
@@ -134,8 +135,24 @@ function formatMeetingDate(dueDateOnly: string): { month: string; day: number } 
   return { month: MONTH_NAMES[m - 1] ?? '', day: d };
 }
 
+// A name is a name, never markup. Found 2026-08-03: the preview dropped whatever
+// name the caller typed straight into the email, so a name could carry a link or
+// a button and arrive looking like the HIVE had sent it. Names go through here on
+// the way into any email, including real members' — nobody should be able to
+// style their way into somebody else's inbox.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // Warm honey/gold check-in email — shared by the real send and the test preview.
-function checkInEmailHtml(name: string, month: string, day: number, kind: ReminderKind = 'window'): string {
+function checkInEmailHtml(rawName: string, month: string, day: number, kind: ReminderKind = 'window'): string {
+  // Escaped once, here, so every path out of this function is safe by default.
+  const name = escapeHtml(rawName);
   if (kind === 'day_of') {
     return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
@@ -203,21 +220,65 @@ serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
-  // This function uses service_role - no user auth needed (cron/HTTP triggered)
-  const supabaseAdmin = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  );
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', serviceKey);
 
   // Preview mode: POST { "test_email": "you@example.com" } sends ONE sample email
   // to that address (ignores the date gate + dedup, writes no notifications) so an
-  // admin can see the real email before it goes to everyone. Uses the REAL active
+  // owner can see the real email before it goes to everyone. Uses the REAL active
   // monthly check-in's meeting date so the preview reads like the real send.
+  // The word `null` on its own is perfectly good JSON, so a request whose whole
+  // body is that parses happily and hands back nothing at all — and the next
+  // line reads a field off that nothing, which throws, and the function falls
+  // over with a 500 before it has even asked who is calling. Nobody gets in that
+  // way, but a stranger shouldn't be able to make it fall over either. Anything
+  // that isn't a plain object is now treated exactly like an empty body, which is
+  // what it was always meant to mean (found 2026-08-03).
   let body: Record<string, unknown> = {};
-  try { body = await req.json(); } catch { /* empty body is fine */ }
+  try {
+    const parsed = await req.json();
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      body = parsed as Record<string, unknown>;
+    }
+  } catch { /* empty body is fine */ }
   const testEmail = typeof body.test_email === 'string' ? body.test_email.trim() : '';
+
+  // This function had no door on it at all. Found 2026-08-03, unused:
+  // anyone who knew the web address could POST a test_email and have a real,
+  // HIVE-styled, HIVE-signed email land in any inbox they named — and post
+  // force_send to fire the whole member-wide email and push blast on demand.
+  // The first is a ready-made way to fish for people using our own good name;
+  // if it got used, the mail provider could shut the sending domain down and
+  // take invites, check-ins and the newsletter with it.
+  //
+  // Two ways in now, and only two. The nightly cron calls with the service key,
+  // which nothing outside the backend has. Nat and Lucas can still preview and
+  // still force a send after a meeting moves — those tools are genuinely useful,
+  // they're just theirs.
+  //
+  // ONE THING TO CHECK BEFORE THIS SHIPS (2026-08-03): migration 107 told
+  // whoever set the nightly job up that the anon key would do here, because back
+  // then there was nothing to get past. There is now. The pg_cron entry has to
+  // carry the service-role key or the nightly run gets refused along with
+  // everyone else — quietly, since a cron has nobody to complain to. If the
+  // check-in emails go silent, that is the first place to look.
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const calledByCron = !!serviceKey && authHeader === `Bearer ${serviceKey}`;
+  if (!calledByCron) {
+    // The same words whether the caller never signed in or signed in and isn't
+    // an owner — a refusal shouldn't teach you what's behind it, or hint that
+    // guessing again with a different account is worth the trouble.
+    const refusal = 'The check-in reminder runs on its own schedule.';
+    const auth = await verifySupabaseJwt(authHeader);
+    if (isAuthError(auth)) return errorResponse(refusal, 403);
+    if (!(await isOwner(supabaseAdmin, auth.userId))) return errorResponse(refusal, 403);
+  }
+
   if (testEmail) {
     if (!RESEND_API_KEY) return errorResponse('RESEND_API_KEY not configured', 500);
+    // The preview shows the real meeting date, in the email and in the reply
+    // below. That used to be readable by anybody who asked; it's only reachable
+    // by an owner now, and an owner already knows when the meeting is.
     let month = MONTH_NAMES[new Date().getMonth()];
     let day = new Date().getDate();
     const { data: previewSurveys } = await supabaseAdmin
@@ -256,9 +317,11 @@ serve(async (req) => {
   }
 
   // Force mode: POST { "force_send": true } sends now, ignoring the 3-days-before
-  // date gate — for rescheduled meetings where the window already passed. Dedup
-  // still applies, but keyed to the survey's CURRENT due date, so a reschedule
-  // gets one fresh send and repeat invocations stay safe.
+  // date gate — for rescheduled meetings where the window already passed. Owners
+  // only, like the preview above: this one puts an email and a push in front of
+  // every member of the HIVE. Dedup still applies, but keyed to the survey's
+  // CURRENT due date, so a reschedule gets one fresh send and repeat invocations
+  // stay safe.
   const forceSend = body.force_send === true;
 
   try {
