@@ -19,32 +19,12 @@ import { clearBoardNavigationState } from '../lib/boardNavigation';
 import { resetHomeNavigationState } from '../lib/homeNavigation';
 import type { Profile, Community, UserRole } from '../types';
 import { MaintenanceScreen } from '../components/ui/MaintenanceScreen';
+import { HIVE_CLOSED, isHiveKeeper, hasBypassTicket } from '../lib/maintenance';
 
 // ---------------------------------------------------------------------------
-// The door. Flip to true and push to close the app to members; the screen and
-// the ?bee=1 bypass are already wired, so that is the whole switch.
-// Closed overnight 2026-08-02; reopened the morning of 2026-08-03; closed again
-// an hour later, when an audit found eighteen ways data could cross a boundary
-// it shouldn't. Nat's call and the right one — it stays shut until we know what
-// is what, not until the list is merely shorter.
+// The door now lives in lib/maintenance.ts, so it reads the same as Jammin'
+// Sprouts' and so the list of who still has a key sits next to the switch.
 // ---------------------------------------------------------------------------
-const MAINTENANCE = true;
-
-const MAINTENANCE_BYPASS_KEY = 'hive:bee';
-
-function maintenanceHoldsUs(): boolean {
-  if (!MAINTENANCE) return false;
-  if (Platform.OS !== 'web' || typeof window === 'undefined') return MAINTENANCE;
-  try {
-    if (new URLSearchParams(window.location.search).get('bee') === '1') {
-      window.sessionStorage.setItem(MAINTENANCE_BYPASS_KEY, '1');
-      return false;
-    }
-    return window.sessionStorage.getItem(MAINTENANCE_BYPASS_KEY) !== '1';
-  } catch {
-    return true;
-  }
-}
 import { useFonts } from 'expo-font';
 import {
   LibreBaskerville_400Regular,
@@ -416,9 +396,28 @@ export default function RootLayout() {
   ]);
   const isJoinRoute = pathname === '/join' || pathname?.startsWith('/join/');
 
-  // Closed for the night, before anything else renders.
-  if (maintenanceHoldsUs() && fontsLoaded) {
-    return <MaintenanceScreen />;
+  // The door, before anything else renders.
+  //
+  // Nat and Lucas walk through it on their own accounts now, so we can work on
+  // a closed app without hunting for the ?bee=1 link every time (JJS has had
+  // this for a while; HIVE was still on the query string alone).
+  //
+  // Note the order: while auth is still settling we show the gold splash rather
+  // than the closed sign. Showing "we'll BEE right back" to Nat for a second and
+  // then swapping it for the app looks like the app is broken — and worse, the
+  // opposite order would flash the app at a member before shutting it.
+  if (HIVE_CLOSED && !hasBypassTicket()) {
+    const keeperIsHere = isHiveKeeper(session?.user?.email);
+    if (!keeperIsHere) {
+      if (loading) {
+        return (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#bd9348' }}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+          </View>
+        );
+      }
+      if (fontsLoaded) return <MaintenanceScreen />;
+    }
   }
 
   // Show loading screen while fonts load
