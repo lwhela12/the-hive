@@ -24,6 +24,26 @@ import { resetHomeNavigationState } from '../../lib/homeNavigation';
 const RAIL_COLLAPSED = 56;
 const RAIL_EXPANDED = 212;
 
+/**
+ * The rail sits in a deeper shade of the HIVE's own colour.
+ *
+ * First pass had both the rail and the header on the accent exactly, and they
+ * ran together into one L-shaped block — "they bleed together like that"
+ * (Nat 2026-08-03). Two surfaces should look like two surfaces. Deriving the
+ * shade rather than hard-coding one means a HIVE picking any accent gets a rail
+ * that still belongs to it.
+ */
+function deepen(hex: string, amount = 0.32): string {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return hex;
+  const to = (i: number) => {
+    const v = parseInt(clean.slice(i, i + 2), 16);
+    return Math.max(0, Math.round(v * (1 - amount)));
+  };
+  const pair = (n: number) => n.toString(16).padStart(2, '0');
+  return `#${pair(to(0))}${pair(to(2))}${pair(to(4))}`;
+}
+
 export const SideRail = memo(function SideRail({
   expanded,
   onToggle,
@@ -42,6 +62,7 @@ export const SideRail = memo(function SideRail({
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
   const isOwner = profile?.is_owner === true;
   const accent = hiveAccent(community);
+  const railColour = deepen(accent);
   const activeKey = activeKeyForPath(pathname);
   const items = visibleDestinations({ isAdmin, isOwner });
   const hasMoreThanOneHive = memberships.length > 1;
@@ -64,7 +85,7 @@ export const SideRail = memo(function SideRail({
     <View
       style={{
         width: width_,
-        backgroundColor: accent,
+        backgroundColor: railColour,
         paddingTop: 10,
         paddingBottom: 8,
         // On a phone the expanded rail sits over the page rather than squeezing
@@ -94,29 +115,44 @@ export const SideRail = memo(function SideRail({
         <Ionicons name={expanded ? 'chevron-back' : 'chevron-forward'} size={17} color="#fff" />
       </Pressable>
 
+      {/* The rail says what this IS; the header says where you ARE. First pass
+          had both showing "OG HIVE", one above the other — "they double up on
+          info" (Nat 2026-08-03). Swapping the HIVE is still here, because it is
+          navigation, and it names the HIVE you're leaving so it isn't a guess. */}
       {expanded ? (
-        <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
           <Text
             style={{
               fontFamily: 'LibreBaskerville_700Bold',
-              fontSize: 16,
+              fontSize: 17,
               color: '#fff',
-              letterSpacing: 0.4,
+              letterSpacing: 1.4,
             }}
             numberOfLines={1}
           >
-            {hiveDisplayName(community?.name)}
+            HIVE
+          </Text>
+          <Text
+            style={{
+              fontFamily: 'Lato_400Regular',
+              fontSize: 11.5,
+              lineHeight: 16,
+              color: 'rgba(255,255,255,0.7)',
+              marginTop: 2,
+            }}
+          >
+            Alone you&rsquo;re a bee.{'\n'}Together, we&rsquo;re the H.I.V.E.
           </Text>
           {hasMoreThanOneHive ? (
-            <Pressable onPress={openHivePicker} hitSlop={6} style={{ marginTop: 3 }}>
+            <Pressable onPress={openHivePicker} hitSlop={6} style={{ marginTop: 9 }}>
               <Text
                 style={{
-                  fontFamily: 'Lato_400Regular',
+                  fontFamily: 'Lato_700Bold',
                   fontSize: 12,
-                  color: 'rgba(255,255,255,0.75)',
+                  color: 'rgba(255,255,255,0.9)',
                 }}
               >
-                Swap HIVE
+                🔀  Leave {hiveDisplayName(community?.name)}
               </Text>
             </Pressable>
           ) : null}
