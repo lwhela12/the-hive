@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, Linking, ActivityIndicator, KeyboardAvoidingView, Modal, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,7 +8,6 @@ import { supabase } from '../../lib/supabase';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
 import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
@@ -26,7 +25,6 @@ import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
 import { ProfileShowcase } from '../../components/profile/ProfileShowcase';
 import { WishCombCard } from '../../components/profile/WishCombCard';
-import { LinkedLogins } from '../../components/profile/LinkedLogins';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
@@ -69,40 +67,9 @@ const hasProfileListItem = (value: unknown) =>
 
 const SKILLS_GARDEN_CAPACITY = 10;
 const DEEP_PROFILE_STEPS = ['Basics', 'Now', 'Favorites', '3MIQ'] as const;
-// One switch per email the HIVE sends. email_reminders_enabled stays the
-// master off-switch underneath these; the newsletter is sent by hand from Wix,
-// so that row records intent for Nat rather than controlling a send.
-// One switch per email the HIVE actually sends. Deliberately only two:
-//
-// The newsletter came off because it isn't ours to control — it goes out from
-// Wix, which has its own unsubscribe link at the bottom. A toggle here would
-// have been a note asking Nat to do it by hand, which is slower than the
-// button already in the email.
-//
-// "All app emails" came off because a master switch sitting above two
-// switches, each of which already does the same job for its own email, reads
-// as a puzzle rather than a setting (Nat 2026-07-26). The
-// email_reminders_enabled column stays as a back-stop an admin can flip in the
-// database; it just isn't a thing members have to reason about.
-const EMAIL_PREFERENCES: {
-  column: string;
-  label: string;
-  onHint: string;
-  offHint: string;
-}[] = [
-  {
-    column: 'email_meeting_checkin_enabled',
-    label: 'Before the meeting',
-    onHint: 'On — your check-in link, 3 days before we meet',
-    offHint: "Off — you'll still see it on Home",
-  },
-  {
-    column: 'email_midpoint_checkin_enabled',
-    label: 'Month-end newsletter nudge',
-    onHint: 'On — a 2-minute chance to add something to the newsletter',
-    offHint: 'Off — the newsletter still comes out without you',
-  },
-];
+// The per-email switches moved to app/(app)/settings.tsx on 2026-08-03, along
+// with the rest of the back-of-house. They grew from two to six there, so
+// keeping a copy of the list in this file would only have gone stale.
 
 const PROFILE_FORM_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -136,13 +103,10 @@ type ProfileFormDraft = {
 };
 
 export default function ProfileScreen() {
-  const { profile, communityId, communityRole, refreshProfile, memberships, openHivePicker } = useAuth();
+  const { profile, communityId, communityRole, refreshProfile } = useAuth();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const { permissionStatus, requestPermissions } = useNotifications({ enableListeners: false });
   const { grantWish } = useWishes();
   const { availableSurveys, pendingSurveys, myResponses, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
-  const isNotificationEnabled =
-    permissionStatus === 'granted' || permissionStatus === 'provisional';
   const [refreshing, setRefreshing] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [skillWishMatches, setSkillWishMatches] = useState<SkillWishMatch[]>([]);
@@ -2372,152 +2336,29 @@ export default function ProfileScreen() {
           </FadeIn>
         )}
 
-        {/* Notification Settings */}
-        {!immersiveSkillsGarden && Platform.OS !== 'web' && (
-          <View className="mb-6">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
-              Notifications
-            </Text>
-            <View className="bg-white rounded-xl shadow-sm p-4">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1">
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
-                    Push Notifications
-                  </Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
-                    {isNotificationEnabled
-                      ? 'Enabled - you will receive notifications'
-                      : permissionStatus === 'denied'
-                      ? 'Disabled - enable in Settings'
-                      : 'Not yet enabled'}
-                  </Text>
-                </View>
-                {!isNotificationEnabled && (
-                  <Pressable
-                    onPress={async () => {
-                      if (permissionStatus === 'denied') {
-                        // Open settings if permission was denied
-                        Linking.openSettings();
-                      } else {
-                        await requestPermissions();
-                      }
-                    }}
-                    className="bg-gold px-4 py-2 rounded-full active:opacity-80"
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">
-                      {permissionStatus === 'denied' ? 'Open Settings' : 'Enable'}
-                    </Text>
-                  </Pressable>
-                )}
-                {isNotificationEnabled && (
-                  <View className="bg-green-100 px-3 py-1 rounded-full">
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-green-700 text-sm">
-                      Enabled
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Settings cluster — condensed and capped on wide screens so the
-            cards don't stretch into oblongs (Email Reminders + App Feedback
-            share a row when there's room). */}
+        {/* Settings live on their own page now (Nat 2026-08-03): "your profile
+            is like, about you... & settings is all the back end stuff". Emails,
+            push, how far you travel, your logins and swapping HIVEs all moved
+            there. This is the door, kept where those cards used to be so anyone
+            who came here by muscle memory still lands on them. */}
         {!immersiveSkillsGarden && (
-          <View
-            style={{
-              width: '100%',
-              maxWidth: 1240,
-              alignSelf: 'center',
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              columnGap: 16,
-              alignItems: 'stretch',
-            }}
-          >
-          <View className="mb-6" style={{ flexGrow: 1, flexBasis: 340, minWidth: 300 }}>
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
-              Emails
-            </Text>
-            {/* One switch per email, not one for all of them. The HIVE sends
-                three a cycle plus the newsletter and Izzy said one a month is
-                plenty — so instead of cutting one for everybody, people mute
-                the ones they don't want (Nat 2026-07-26). */}
-            <View className="bg-white rounded-xl shadow-sm px-4 py-1">
-              {EMAIL_PREFERENCES.map((preference, index) => {
-                const isOn = (profile as any)?.[preference.column] !== false;
-                return (
-                  <View
-                    key={preference.column}
-                    className="flex-row items-center justify-between py-3"
-                    style={index > 0 ? { borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.3)' } : undefined}
-                  >
-                    <View className="flex-1 pr-3">
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
-                        {preference.label}
-                      </Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
-                        {isOn ? preference.onHint : preference.offHint}
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={async () => {
-                        if (!profile) return;
-                        const next = (profile as any)[preference.column] === false;
-                        const { error } = await (supabase as any)
-                          .from('profiles')
-                          .update({ [preference.column]: next })
-                          .eq('id', profile.id);
-                        if (error) {
-                          Alert.alert('Error', 'Could not update your email preference. Please try again.');
-                          return;
-                        }
-                        await refreshProfile();
-                      }}
-                      accessibilityRole="switch"
-                      accessibilityState={{ checked: isOn }}
-                      className={`px-4 py-2 rounded-full active:opacity-80 ${isOn ? 'bg-gold' : 'bg-gray-200'}`}
-                    >
-                      <Text
-                        style={{ fontFamily: 'Lato_700Bold' }}
-                        className={isOn ? 'text-white text-sm' : 'text-gray-600 text-sm'}
-                      >
-                        {isOn ? 'On' : 'Off'}
-                      </Text>
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* App Feedback moved to the Home shortcut hexes — settings is for
-              settings, and reporting a bug from three taps into Profile was
-              never going to happen (Nat 2026-07-25). */}
-
-          {/* Linked Logins — the other half of the settings row */}
-          <View className="mb-6" style={{ flexGrow: 1, flexBasis: 340, minWidth: 300 }}>
-            <LinkedLogins />
-          </View>
-          </View>
-        )}
-
-        {/* Swap HIVE — sits above Sign Out because leaving for the other HIVE is
-            the gentler version of leaving altogether, and this is where people
-            come looking for both. Only shown to anyone who has somewhere to go. */}
-        {!immersiveSkillsGarden && memberships.length > 1 && (
         <Pressable
-          onPress={openHivePicker}
+          onPress={() => router.push('/settings' as any)}
           accessibilityRole="button"
-          accessibilityLabel="Swap HIVE"
-          className="flex-row items-center justify-center bg-gold/10 py-3 rounded-xl active:bg-gold/20 mb-3"
+          accessibilityLabel="Open settings"
+          className="flex-row items-center bg-white rounded-xl shadow-sm px-4 py-4 active:opacity-80 mb-6"
           style={{ width: '100%', maxWidth: 1240, alignSelf: 'center' }}
         >
-          <HiveIcon name="swap" size={18} color="#8e6f35" />
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold ml-2">
-            Swap HIVE
-          </Text>
+          <Ionicons name="options-outline" size={22} color="#bd9348" />
+          <View className="flex-1 ml-3">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
+              Settings
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
+              Emails, notifications, how far you travel, your logins
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#c3b8a5" />
         </Pressable>
         )}
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { View, Text, FlatList, ScrollView, Image, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,29 +14,44 @@ import { AppHeader } from '../../components/navigation';
 import { RoomChatView } from '../../components/messaging/RoomChatView';
 import { MemberPicker } from '../../components/messaging/MemberPicker';
 import { Avatar } from '../../components/ui/Avatar';
+import { HiveWideRoomCard, HiveWideBubble } from '../../components/messaging/HiveWideRoomCard';
+import { HiveWideRoomView } from '../../components/messaging/HiveWideRoomView';
+import { getMessagesRoomLabel } from '../../components/messaging/hiveWideRoom';
+import { hiveDisplayName } from '../../lib/hiveBrand';
 import {
   getOtherRoomMembers,
   getRoomCustomization,
-  getRoomDisplayName,
 } from '../../lib/chatRoomDisplay';
 import type { Profile } from '../../types';
 
 const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 
+/**
+ * The message list holds your rooms and one thing that has no room: HIVE-Wide.
+ * Keeping it in the same list — rather than pinning it above in its own strip —
+ * is the whole point Nat made on 2026-08-03: your HIVE and HIVE-Wide are two
+ * doors side by side, and you pick one.
+ */
+type MessagesListEntry =
+  | { kind: 'room'; room: RoomWithData }
+  | { kind: 'hive-wide' };
+
 // Mac-Messages-style pinned bubble for the desktop split view's left rail.
 function RoomBubble({
   room,
   currentUserId,
+  hiveName,
   isActive,
   onPress,
 }: {
   room: RoomWithData;
   currentUserId?: string;
+  hiveName: string;
   isActive: boolean;
   onPress: () => void;
 }) {
   const customization = getRoomCustomization(room, currentUserId);
-  const roomName = getRoomDisplayName(room, currentUserId);
+  const roomName = getMessagesRoomLabel(room, currentUserId, hiveName);
   const otherMember = getOtherRoomMembers(room, currentUserId)[0];
   const hasUnread = (room.unread_count ?? 0) > 0;
 
@@ -115,12 +130,16 @@ function MemberBubble({
 export default function MessagesScreen() {
   const { roomId } = useLocalSearchParams<{ roomId?: string }>();
   const router = useRouter();
-  const { profile, communityId } = useAuth();
+  const { profile, communityId, community } = useAuth();
   const { width } = useWindowDimensions();
   const queryClient = useQueryClient();
   const useMobileLayout = width < 768;
+  const hiveName = hiveDisplayName(community?.name);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<RoomWithData | null>(null);
+  // HIVE-Wide has no room of its own in the database — it is a place you can
+  // stand rather than a row — so opening it is screen state (Nat 2026-08-03).
+  const [showHiveWide, setShowHiveWide] = useState(false);
   const [customizeRoomOnOpen, setCustomizeRoomOnOpen] = useState(false);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
   const [railMembers, setRailMembers] = useState<Profile[]>([]);
@@ -153,7 +172,10 @@ export default function MessagesScreen() {
     if (!roomId || roomId !== ignoredDirectRoomIdRef.current) {
       ignoredDirectRoomIdRef.current = null;
     }
-    if (selectedRoom || rooms.length === 0) return;
+    // Standing in HIVE-Wide counts as having chosen a room. Without this the
+    // last-room-you-read restore would arrive a moment later and shove you back
+    // out of it.
+    if (selectedRoom || showHiveWide || rooms.length === 0) return;
 
     const directRoomId = roomId && roomId !== ignoredDirectRoomIdRef.current ? roomId : null;
 
@@ -187,10 +209,23 @@ export default function MessagesScreen() {
     return () => {
       cancelled = true;
     };
-  }, [markRoomAsRead, roomId, rooms, selectedRoom, selectedRoomStorageKey]);
+  }, [markRoomAsRead, roomId, rooms, selectedRoom, selectedRoomStorageKey, showHiveWide]);
+
+  const openHiveWide = useCallback(() => {
+    setShowHiveWide(true);
+    setSelectedRoom(null);
+    setCustomizeRoomOnOpen(false);
+    // Forget the last room you were reading, the same as backing out of one
+    // does. Otherwise stepping back out of HIVE-Wide would drop you straight
+    // into that old room instead of the list you were expecting.
+    if (selectedRoomStorageKey) {
+      void removeStoredItemAsync(selectedRoomStorageKey);
+    }
+  }, [selectedRoomStorageKey]);
 
   const openRoom = useCallback((room: RoomWithData) => {
     markRoomAsRead(room.id);
+    setShowHiveWide(false);
     setSelectedRoom(room);
     setCustomizeRoomOnOpen(false);
 
@@ -201,6 +236,7 @@ export default function MessagesScreen() {
 
   const openRoomCustomizer = useCallback((room: RoomWithData) => {
     markRoomAsRead(room.id);
+    setShowHiveWide(false);
     setCustomizeRoomOnOpen(true);
     setSelectedRoom(room);
 
@@ -214,6 +250,18 @@ export default function MessagesScreen() {
     await refetch();
     setRefreshing(false);
   };
+
+  // Your own HIVE first, HIVE-Wide directly under it, then everyone you talk
+  // to. While the rooms are still loading the list stays empty so the skeleton
+  // has the screen to itself.
+  const listEntries = useMemo<MessagesListEntry[]>(() => {
+    if (loading && rooms.length === 0) return [];
+
+    const entries: MessagesListEntry[] = rooms.map((room) => ({ kind: 'room', room }));
+    const ownHiveRoomIndex = rooms.findIndex((room) => room.room_type === 'community');
+    entries.splice(ownHiveRoomIndex + 1, 0, { kind: 'hive-wide' });
+    return entries;
+  }, [loading, rooms]);
 
   // Everyone in the HIVE except you — the rail's cast.
   useEffect(() => {
@@ -280,6 +328,12 @@ export default function MessagesScreen() {
     }
   };
 
+  if (showHiveWide && useMobileLayout) {
+    return (
+      <HiveWideRoomView hiveName={hiveName} onBack={() => setShowHiveWide(false)} />
+    );
+  }
+
   // Mobile: a selected room takes the whole screen (the flow Lucas loves).
   // Desktop renders the split view below instead.
   if (selectedRoom && useMobileLayout) {
@@ -293,19 +347,24 @@ export default function MessagesScreen() {
   }
 
   const roomList = (
-    <FlatList
-      data={rooms}
-      keyExtractor={(item) => item.id}
+    <FlatList<MessagesListEntry>
+      data={listEntries}
+      keyExtractor={(item) => (item.kind === 'room' ? item.room.id : 'hive-wide')}
       contentContainerStyle={{ paddingVertical: 8, paddingBottom: useMobileLayout ? 96 : 24 }}
-      renderItem={({ item }) => (
-        <ChatRoomItem
-          room={item}
-          currentUserId={profile?.id}
-          onPress={() => openRoom(item)}
-          onCustomize={() => openRoomCustomizer(item)}
-          isActive={!useMobileLayout && selectedRoom?.id === item.id}
-        />
-      )}
+      renderItem={({ item }) =>
+        item.kind === 'hive-wide' ? (
+          <HiveWideRoomCard isActive={!useMobileLayout && showHiveWide} onPress={openHiveWide} />
+        ) : (
+          <ChatRoomItem
+            room={item.room}
+            currentUserId={profile?.id}
+            hiveName={hiveName}
+            onPress={() => openRoom(item.room)}
+            onCustomize={() => openRoomCustomizer(item.room)}
+            isActive={!useMobileLayout && selectedRoom?.id === item.room.id}
+          />
+        )
+      }
       refreshControl={
         <RefreshControl refreshing={refreshing || loading} onRefresh={onRefresh} tintColor="#bd9348" />
       }
@@ -322,15 +381,20 @@ export default function MessagesScreen() {
               </View>
             ))}
           </View>
-        ) : (
-          <View className="items-center py-8">
+        ) : null
+      }
+      // HIVE-Wide is always in the list, so the list is never empty and the old
+      // "no conversations yet" panel would never have shown again. The nudge to
+      // start one moved down here, where it still lands.
+      ListFooterComponent={
+        !loading && rooms.length === 0 ? (
+          <View className="items-center py-8 px-8">
             <Text className="text-4xl mb-4">💬</Text>
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
-              No conversations yet.{'\n'}
-              Tap + to start a new message.
+              Tap + to start a conversation with anyone in {hiveName}.
             </Text>
           </View>
-        )
+        ) : null
       }
     />
   );
@@ -410,11 +474,17 @@ export default function MessagesScreen() {
                     <RoomBubble
                       room={communityRoom}
                       currentUserId={profile?.id}
+                      hiveName={hiveName}
                       isActive={selectedRoom?.id === communityRoom.id}
                       onPress={() => openRoom(communityRoom)}
                     />
                   </View>
                 ) : null}
+                {/* HIVE-Wide rides second, right beside your own HIVE, so the
+                    two doors are the first two things in the rail. */}
+                <View style={{ width: '25%', alignItems: 'center' }}>
+                  <HiveWideBubble isActive={showHiveWide} onPress={openHiveWide} />
+                </View>
                 {railMembers.map((member) => (
                   <View key={member.id} style={{ width: '25%', alignItems: 'center' }}>
                     <MemberBubble
@@ -430,7 +500,13 @@ export default function MessagesScreen() {
           {roomList}
         </View>
         <View className="flex-1">
-          {selectedRoom ? (
+          {showHiveWide ? (
+            <HiveWideRoomView
+              hiveName={hiveName}
+              onBack={() => setShowHiveWide(false)}
+              hideBackButton
+            />
+          ) : selectedRoom ? (
             <RoomChatView
               key={selectedRoom.id}
               room={selectedRoom}

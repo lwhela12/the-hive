@@ -29,7 +29,9 @@ import { SelectedImage, pickSingleImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadMultipleFiles, uploadMultipleImages, uploadSingleImage } from '../../lib/attachmentUpload';
 import { submitOnEnter } from '../../lib/submitOnEnter';
-import { getMentionedMembers } from '../../lib/mentions';
+import { getMentionedMembers, type MentionTarget } from '../../lib/mentions';
+import { hiveDisplayName } from '../../lib/hiveBrand';
+import { getMessagesRoomLabel, getMessagesRoomSubtitle } from './hiveWideRoom';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
@@ -46,9 +48,6 @@ import {
   getChatRoomTheme,
   getOtherRoomMembers,
   getRoomCustomization,
-  getRoomDefaultName,
-  getRoomDisplayName,
-  getRoomSubtitle,
   normalizeChatRoomTheme,
 } from '../../lib/chatRoomDisplay';
 import type { ChatRoom, ChatRoomMember, Profile, TypingIndicator, Attachment } from '../../types';
@@ -83,7 +82,10 @@ function getFirstGrapheme(value: string): string {
 }
 
 export function RoomChatView({ room, onBack, startCustomizing = false, hideBackButton = false }: RoomChatViewProps) {
-  const { profile, communityId } = useAuth();
+  const { profile, communityId, community } = useAuth();
+  // The HIVE you are signed into, by name. It titles the room everyone shares
+  // and it names who @all is about to reach (Nat 2026-08-03).
+  const hiveName = hiveDisplayName(community?.name);
   const queryClient = useQueryClient();
   const {
     messages,
@@ -151,12 +153,12 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
     [profile?.id, roomWithCustomization]
   );
   const roomTitle = useMemo(
-    () => getRoomDisplayName(roomWithCustomization, profile?.id),
-    [profile?.id, roomWithCustomization]
+    () => getMessagesRoomLabel(roomWithCustomization, profile?.id, hiveName),
+    [hiveName, profile?.id, roomWithCustomization]
   );
   const roomSubtitle = useMemo(
-    () => getRoomSubtitle(roomWithCustomization, profile?.id),
-    [profile?.id, roomWithCustomization]
+    () => getMessagesRoomSubtitle(roomWithCustomization, profile?.id, hiveName),
+    [hiveName, profile?.id, roomWithCustomization]
   );
   const roomMentionableMembers = useMemo(
     () => (room.members || [])
@@ -168,6 +170,31 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
   const { members: activeMentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(
     room.room_type === 'community' ? communityId : null,
     roomMentionableMembers
+  );
+
+  // "Everyone" means something different in each room: in the HIVE's own room
+  // it is the whole HIVE, and in a group chat it is the handful of people in
+  // it. The picker used to say "Everyone in HIVE" for both, so nobody could
+  // tell from the list who was about to be pinged (Nat 2026-08-03).
+  const isHiveRoom = room.room_type === 'community';
+  const broadcastLabel = useMemo(
+    () => (isHiveRoom
+      ? {
+          name: `Everyone in ${hiveName}`,
+          description: `@all, @everyone and @hive all reach ${hiveName}`,
+        }
+      : {
+          name: 'Everyone in this chat',
+          description: 'Reaches the people in this conversation',
+        }),
+    [hiveName, isHiveRoom]
+  );
+  const nameTheBroadcast = useCallback(
+    (suggestions: MentionTarget[]) =>
+      suggestions.map((suggestion) =>
+        suggestion.isBroadcast ? { ...suggestion, ...broadcastLabel } : suggestion
+      ),
+    [broadcastLabel]
   );
 
   useEffect(() => {
@@ -579,7 +606,12 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
               recipient_id: member.id,
               message_preview: messagePreview,
               community_id: communityId,
-              room_name: getRoomDefaultName(roomWithCustomization, profile.id),
+              // The email and the push say where you were tagged, so they say
+              // the HIVE's name too — "General" would name a room nobody sees
+              // called that any more (Nat 2026-08-03). No user id, because the
+              // sender's private nickname for the room is theirs alone and has
+              // no business in somebody else's inbox.
+              room_name: getMessagesRoomLabel(roomWithCustomization, undefined, hiveName),
             },
           }).catch((err) => console.log('Mention notification error (non-blocking):', err));
         });
@@ -1134,7 +1166,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
               active={editMentionInput.mentionQuery !== null}
               query={editMentionInput.mentionQuery}
               loading={mentionMembersLoading}
-              suggestions={editMentionInput.mentionSuggestions}
+              suggestions={nameTheBroadcast(editMentionInput.mentionSuggestions)}
               onSelect={editMentionInput.selectMention}
               placement="above"
             />
@@ -1218,11 +1250,24 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
               active={messageMentionInput.mentionQuery !== null}
               query={messageMentionInput.mentionQuery}
               loading={mentionMembersLoading}
-              suggestions={messageMentionInput.mentionSuggestions}
+              suggestions={nameTheBroadcast(messageMentionInput.mentionSuggestions)}
               onSelect={messageMentionInput.selectMention}
               placement="above"
             />
-            {messageMentionInput.mentionedMembers.length > 0 && (
+            {/* One @all used to spell out a chip per person, which buried the
+                one fact that matters — how far this is going. Say it once, with
+                the HIVE's name on it and a head count (Nat 2026-08-03). */}
+            {messageMentionInput.mentionsEveryone && messageMentionInput.mentionedMembers.length > 0 ? (
+              <View className="flex-row flex-wrap mb-2" style={{ gap: 6 }}>
+                <View className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
+                    Tagging everyone in {isHiveRoom ? hiveName : 'this chat'} ·{' '}
+                    {messageMentionInput.mentionedMembers.length}{' '}
+                    {messageMentionInput.mentionedMembers.length === 1 ? 'person' : 'people'}
+                  </Text>
+                </View>
+              </View>
+            ) : messageMentionInput.mentionedMembers.length > 0 ? (
               <View className="flex-row flex-wrap mb-2" style={{ gap: 6 }}>
                 {messageMentionInput.mentionedMembers.map((member) => (
                   <View key={member.id} className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
@@ -1232,7 +1277,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                   </View>
                 ))}
               </View>
-            )}
+            ) : null}
 
             <View
               className="flex-row items-end rounded-2xl px-3 py-2"

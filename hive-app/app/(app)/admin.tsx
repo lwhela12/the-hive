@@ -42,9 +42,14 @@ import { Avatar } from '../../components/ui/Avatar';
 import { MemberProfileLink } from '../../components/ui/MemberProfileLink';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
-import { GodModePanels } from '../../components/admin/GodModePanels';
-import { hiveDisplayName } from '../../lib/hiveBrand';
-import { SpinningGlobe } from '../../components/ui/SpinningGlobe';
+import {
+  ADMIN_PANEL_ORDER,
+  HiveMemberPanels,
+  NewsletterPanel,
+  hivePanelSkin,
+} from '../../components/admin/GodModePanels';
+import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { GlobeHero } from '../../components/ui/GlobeHero';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
@@ -774,27 +779,40 @@ function SurveyTimePicker({
 
 // Panel tabs are text only — the gold header bar is the mark, an icon inside it
 // just crowds the word (Nat 2026-07-26). Icons belong in the panel body.
+//
+// Hand it a HIVE's accent colour and the whole folder — tab, wash, edge, glow —
+// comes up in that HIVE instead of the house cream (Nat 2026-08-03). Boxes that
+// belong to no single HIVE leave it off and stay cream and gold.
 function AdminPanel({
   title,
   action,
+  accent,
   style,
   bodyStyle,
   children,
 }: {
   title: string;
   action?: ReactNode;
+  accent?: string;
   style?: StyleProp<ViewStyle>;
   bodyStyle?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
+  const skin = accent ? hivePanelSkin(accent) : null;
+  const tabFill = skin?.tab ?? '#fdf3dc';
+  const tabText = skin?.tabText ?? '#2d2d2d';
+  const edge = skin?.border ?? 'rgba(222,193,129,0.7)';
+  const bodyFill = skin?.body ?? '#fffdf5';
+  const glow = skin?.shadow ?? '#bd9348';
+
   return (
     <View style={[{ marginBottom: 0 }, style]}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
         <View
           style={{
             flexShrink: 1,
-            backgroundColor: '#fdf3dc',
-            borderColor: 'rgba(222,193,129,0.7)',
+            backgroundColor: tabFill,
+            borderColor: edge,
             borderWidth: 1,
             borderBottomWidth: 0,
             borderTopLeftRadius: 14,
@@ -803,7 +821,7 @@ function AdminPanel({
             paddingVertical: 7,
           }}
         >
-          <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d' }}>
+          <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: tabText }}>
             {title}
           </Text>
         </View>
@@ -811,12 +829,12 @@ function AdminPanel({
       </View>
       <View
         style={[{
-          backgroundColor: '#fffdf5',
+          backgroundColor: bodyFill,
           borderRadius: 20,
           borderTopLeftRadius: 0,
           borderWidth: 1,
-          borderColor: 'rgba(222,193,129,0.7)',
-          shadowColor: '#bd9348',
+          borderColor: edge,
+          shadowColor: glow,
           shadowOpacity: 0.14,
           shadowRadius: 18,
           shadowOffset: { width: 0, height: 5 },
@@ -869,8 +887,7 @@ function LockedAdminScreen({
 }) {
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <AppHeader title="Admin" tone="god" />
-      <SpinningGlobe colour="#4A5568" />
+      <GlobeHero title="Admin" subtitle="Every HIVE, from above." hue="slate" height={220} />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
@@ -1990,6 +2007,10 @@ export default function AdminScreen() {
   const dashboardPanelBodyStyle = { flex: 1 };
   const panelScrollStyle = { flex: 1 };
   const panelOrderStyle = (order: number) => ({ order } as unknown as ViewStyle);
+  // The HIVE you're signed into, in its own colour, so the invite form inside
+  // its box belongs to the box (Nat 2026-08-03).
+  const currentHiveAccent = hiveAccent(community);
+  const currentHiveSkin = hivePanelSkin(currentHiveAccent);
   // Mirrors Home's grid air: 36px gutters, centered 1380 cap.
   const dashboardWrapStyle: ViewStyle = {
     flexDirection: useMobileLayout ? 'column' : 'row',
@@ -2016,8 +2037,7 @@ export default function AdminScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <AppHeader title="Admin" tone="god" />
-      <SpinningGlobe colour="#4A5568" />
+      <GlobeHero title="Admin" subtitle="Every HIVE, from above." hue="slate" height={220} />
 
       <ScrollView
         className="flex-1"
@@ -2031,242 +2051,9 @@ export default function AdminScreen() {
           {/* Honey Pot moved out. Recording lives on the Honey Pot page now,
               where the pot is, and the ledger was always public anyway
               (Nat 2026-08-01). This room is for people. */}
-          {/* Everyone in every HIVE you're in, plus the newsletter list. */}
-          {isAdmin && (
-            <GodModePanels
-              cellStyle={dashboardCellStyle}
-              panelStyle={dashboardPanelStyle}
-              bodyStyle={dashboardPanelBodyStyle}
-              scrollStyle={panelScrollStyle}
-              Panel={AdminPanel}
-            />
-          )}
-          {isAdmin && (
-            <View style={[dashboardCellStyle, panelOrderStyle(1)]}>
-              <AdminPanel
-                // Named for the HIVE it belongs to, because Admin is now the
-                // whole operation's rather than one HIVE's — a box called
-                // "Members" next to boxes called "Tech HIVE" and "Production
-                // HIVE" reads as a different KIND of thing (Nat 2026-08-03).
-                title={`${hiveDisplayName(community?.name)} (${members.length})`}
-                style={dashboardPanelStyle}
-                bodyStyle={dashboardPanelBodyStyle}
-                action={(
-                  <AdminHeaderAction
-                    label={showInviteMember ? 'Close Invite' : '+ New Member'}
-                    onPress={() => setShowInviteMember((current) => !current)}
-                  />
-                )}
-              >
-                <ScrollView
-                  style={panelScrollStyle}
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator={true}
-                >
-                  {showInviteMember && (
-                    <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3e6c8', backgroundColor: '#fffaf0' }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', marginBottom: 10 }}>
-                        Invite Member
-                      </Text>
-                      <TextInput
-                        placeholder="Email address"
-                        value={inviteEmail}
-                        onChangeText={setInviteEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        editable={!sendingInvite}
-                        className="border border-gray-300 rounded-lg p-3 mb-3 bg-white"
-                        style={sendingInvite ? { opacity: 0.65 } : undefined}
-                      />
-                      <View className="flex-row flex-wrap mb-4">
-                        {ROLE_OPTIONS.map((role) => (
-                          <Pressable
-                            key={role}
-                            onPress={() => setInviteRole(role)}
-                            disabled={sendingInvite}
-                            className={`px-3 py-2 rounded mr-2 mb-2 ${
-                              inviteRole === role ? 'bg-honey-500' : 'bg-gray-100'
-                            }`}
-                            style={sendingInvite ? { opacity: 0.7 } : undefined}
-                          >
-                            <Text className={`${inviteRole === role ? 'text-white' : 'text-gray-600'} capitalize`}>
-                              {ROLE_LABELS[role]}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                      {sendingInvite && (
-                        <View
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: '#fff7e1',
-                            borderColor: '#efd28b',
-                            borderWidth: 1,
-                            borderRadius: 12,
-                            paddingHorizontal: 12,
-                            paddingVertical: 10,
-                            marginBottom: 12,
-                          }}
-                        >
-                          <ActivityIndicator size="small" color="#bd9348" />
-                          <View style={{ flex: 1, marginLeft: 10 }}>
-                            <Text style={{ color: '#5f451b', fontWeight: '700', fontSize: 13 }}>
-                              Adding a little magic...
-                            </Text>
-                            <Text style={{ color: '#7c5d22', fontSize: 12, marginTop: 2 }}>
-                              Getting the invite ready to send and refreshing the list.
-                            </Text>
-                          </View>
-                          <Text style={{ color: '#bd9348', fontSize: 18, marginLeft: 8 }}>🐝</Text>
-                        </View>
-                      )}
-                      <Pressable
-                        onPress={sendInvite}
-                        disabled={sendingInvite}
-                        className="py-3 rounded-lg active:bg-honey-600"
-                        style={{
-                          backgroundColor: sendingInvite ? '#d6b56b' : '#bd9348',
-                          opacity: sendingInvite ? 0.85 : 1,
-                        }}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                          {sendingInvite && (
-                            <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
-                          )}
-                          <Text className="text-center font-semibold text-white">
-                            {sendingInvite ? 'Sending Invite' : 'Send Invite'}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    </View>
-                  )}
-
-                {members.map((member) => {
-                  const roleButtons = (
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        flexWrap: 'wrap',
-                        justifyContent: useMobileLayout ? 'flex-start' : 'flex-end',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {ROLE_OPTIONS.map((role) => (
-                        <Pressable
-                          key={role}
-                          onPress={() => updateMemberRole(member.id, role)}
-                          style={({ pressed }) => ({
-                            backgroundColor: member.role === role ? '#bd9348' : pressed ? '#eceff3' : '#f3f4f6',
-                            borderRadius: 8,
-                            paddingHorizontal: 12,
-                            paddingVertical: 7,
-                            marginRight: 6,
-                            marginBottom: useMobileLayout ? 6 : 0,
-                          })}
-                        >
-                          <Text
-                            style={{
-                              color: member.role === role ? 'white' : '#4b5563',
-                              fontSize: 12,
-                              fontWeight: '600',
-                            }}
-                          >
-                            {ROLE_LABELS[role]}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  );
-
-                  return (
-                    <View
-                      key={member.id}
-                      style={{
-                        padding: 16,
-                        borderBottomWidth: 1,
-                        borderBottomColor: '#f3f4f6',
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <MemberProfileLink
-                          memberId={member.profiles.id}
-                          memberName={member.profiles.name}
-                          hitSlop={8}
-                        >
-                          <Avatar name={member.profiles.name} url={member.profiles.avatar_url} size={40} />
-                        </MemberProfileLink>
-                        <View style={{ flex: 1, minWidth: 0, marginLeft: 12, marginRight: 12 }}>
-                          <Text className="font-medium text-gray-800" numberOfLines={2}>
-                            {member.profiles.name}
-                          </Text>
-                          <Text className="text-sm text-gray-500" numberOfLines={1}>
-                            {member.profiles.email}
-                          </Text>
-                        </View>
-
-                        {!useMobileLayout && roleButtons}
-                        {member.profiles.id !== profile?.id && (
-                          <Pressable
-                            onPress={() => removeMember(member.id, member.profiles.name, member.profiles.id)}
-                            className="px-2 py-1 bg-red-100 rounded active:bg-red-200"
-                            style={{ marginLeft: useMobileLayout ? 0 : 8 }}
-                          >
-                            <Text className="text-red-600 text-xs">✕</Text>
-                          </Pressable>
-                        )}
-                      </View>
-
-                      {useMobileLayout && (
-                        <View style={{ marginTop: 12, marginLeft: 52 }}>
-                          {roleButtons}
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
-
-                {pendingInvites.length > 0 && (
-                  <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', paddingHorizontal: 16, paddingTop: 16 }}>
-                      Pending Invites ({pendingInvites.length})
-                    </Text>
-                    {pendingInvites.map((invite) => {
-                      const isExpired = invite.expires_at && new Date(invite.expires_at) < new Date();
-                      return (
-                        <View
-                          key={invite.id}
-                          className="flex-row items-center p-4 border-b border-gray-100 last:border-b-0"
-                        >
-                          <View className="flex-1">
-                            <Text className="font-medium text-gray-800">
-                              {invite.email}
-                            </Text>
-                            <Text className="text-sm text-gray-500">
-                              Role: {ROLE_LABELS[invite.role] || invite.role} • Invited by {invite.inviter?.name || 'Unknown'}
-                            </Text>
-                            {isExpired && (
-                              <Text className="text-sm text-red-500">Expired</Text>
-                            )}
-                          </View>
-                          <Pressable
-                            onPress={() => revokeInvite(invite.id, invite.email)}
-                            className="px-3 py-2 bg-red-100 rounded-lg active:bg-red-200"
-                          >
-                            <Text className="text-red-600 text-sm font-medium">Revoke</Text>
-                          </Pressable>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-                </ScrollView>
-              </AdminPanel>
-            </View>
-          )}
 
           {isAdmin && (
-            <View style={[dashboardCellStyle, panelOrderStyle(2)]}>
+            <View style={[dashboardCellStyle, panelOrderStyle(ADMIN_PANEL_ORDER.meetingTools)]}>
               <AdminPanel
                 title="Meeting Tools"
                 style={dashboardPanelStyle}
@@ -2408,6 +2195,265 @@ export default function AdminScreen() {
                 </ScrollView>
               </AdminPanel>
             </View>
+          )}
+
+          {/* The newsletter goes out past every HIVE, so its box wears the house
+              cream rather than any one HIVE's colour. Nat's draft opens from
+              inside it. */}
+          {isAdmin && (
+            <NewsletterPanel
+              cellStyle={dashboardCellStyle}
+              panelStyle={dashboardPanelStyle}
+              bodyStyle={dashboardPanelBodyStyle}
+              scrollStyle={panelScrollStyle}
+              Panel={AdminPanel}
+            />
+          )}
+
+          {/* The HIVE you're signed into, with the full set of controls. */}
+          {isAdmin && (
+            <View style={[dashboardCellStyle, panelOrderStyle(ADMIN_PANEL_ORDER.currentHive)]}>
+              <AdminPanel
+                // Named for the HIVE it belongs to, because Admin is now the
+                // whole operation's rather than one HIVE's — a box called
+                // "Members" next to boxes called "Tech HIVE" and "Production
+                // HIVE" reads as a different KIND of thing (Nat 2026-08-03).
+                title={`${hiveDisplayName(community?.name)} (${members.length})`}
+                // Coloured like every other HIVE box, so this one keeps saying
+                // which HIVE it is even after you switch to Tech or Production.
+                accent={hiveAccent(community)}
+                style={dashboardPanelStyle}
+                bodyStyle={dashboardPanelBodyStyle}
+                action={(
+                  <AdminHeaderAction
+                    label={showInviteMember ? 'Close Invite' : '+ New Member'}
+                    onPress={() => setShowInviteMember((current) => !current)}
+                  />
+                )}
+              >
+                <ScrollView
+                  style={panelScrollStyle}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={true}
+                >
+                  {showInviteMember && (
+                    <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: currentHiveSkin.hairline, backgroundColor: currentHiveSkin.inset }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#313130', marginBottom: 10 }}>
+                        Invite Member
+                      </Text>
+                      <TextInput
+                        placeholder="Email address"
+                        value={inviteEmail}
+                        onChangeText={setInviteEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        editable={!sendingInvite}
+                        className="border border-gray-300 rounded-lg p-3 mb-3 bg-white"
+                        style={sendingInvite ? { opacity: 0.65 } : undefined}
+                      />
+                      <View className="flex-row flex-wrap mb-4">
+                        {ROLE_OPTIONS.map((role) => (
+                          <Pressable
+                            key={role}
+                            onPress={() => setInviteRole(role)}
+                            disabled={sendingInvite}
+                            className="px-3 py-2 rounded mr-2 mb-2"
+                            style={{
+                              backgroundColor: inviteRole === role ? currentHiveAccent : 'rgba(49,49,48,0.06)',
+                              opacity: sendingInvite ? 0.7 : 1,
+                            }}
+                          >
+                            <Text
+                              className="capitalize"
+                              style={{ color: inviteRole === role ? '#fffdf5' : 'rgba(49,49,48,0.7)' }}
+                            >
+                              {ROLE_LABELS[role]}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                      {sendingInvite && (
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: currentHiveSkin.inset,
+                            borderColor: currentHiveSkin.border,
+                            borderWidth: 1,
+                            borderRadius: 12,
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                            marginBottom: 12,
+                          }}
+                        >
+                          <ActivityIndicator size="small" color={currentHiveAccent} />
+                          <View style={{ flex: 1, marginLeft: 10 }}>
+                            <Text style={{ color: '#313130', fontWeight: '700', fontSize: 13 }}>
+                              Adding a little magic...
+                            </Text>
+                            <Text style={{ color: 'rgba(49,49,48,0.65)', fontSize: 12, marginTop: 2 }}>
+                              Getting the invite ready to send and refreshing the list.
+                            </Text>
+                          </View>
+                          <Text style={{ color: '#bd9348', fontSize: 18, marginLeft: 8 }}>🐝</Text>
+                        </View>
+                      )}
+                      <Pressable
+                        onPress={sendInvite}
+                        disabled={sendingInvite}
+                        className="py-3 rounded-lg"
+                        style={{
+                          backgroundColor: currentHiveAccent,
+                          opacity: sendingInvite ? 0.75 : 1,
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                          {sendingInvite && (
+                            <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
+                          )}
+                          <Text className="text-center font-semibold text-white">
+                            {sendingInvite ? 'Sending Invite' : 'Send Invite'}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    </View>
+                  )}
+
+                {members.map((member) => {
+                  const roleButtons = (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        flexWrap: 'wrap',
+                        justifyContent: useMobileLayout ? 'flex-start' : 'flex-end',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {ROLE_OPTIONS.map((role) => (
+                        <Pressable
+                          key={role}
+                          onPress={() => updateMemberRole(member.id, role)}
+                          style={({ pressed }) => ({
+                            backgroundColor: member.role === role
+                              ? currentHiveAccent
+                              : pressed ? 'rgba(49,49,48,0.11)' : 'rgba(49,49,48,0.06)',
+                            borderRadius: 8,
+                            paddingHorizontal: 12,
+                            paddingVertical: 7,
+                            marginRight: 6,
+                            marginBottom: useMobileLayout ? 6 : 0,
+                          })}
+                        >
+                          <Text
+                            style={{
+                              color: member.role === role ? '#fffdf5' : 'rgba(49,49,48,0.7)',
+                              fontSize: 12,
+                              fontWeight: '600',
+                            }}
+                          >
+                            {ROLE_LABELS[role]}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  );
+
+                  return (
+                    <View
+                      key={member.id}
+                      style={{
+                        padding: 16,
+                        borderBottomWidth: 1,
+                        borderBottomColor: '#f3f4f6',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <MemberProfileLink
+                          memberId={member.profiles.id}
+                          memberName={member.profiles.name}
+                          hitSlop={8}
+                        >
+                          <Avatar name={member.profiles.name} url={member.profiles.avatar_url} size={40} />
+                        </MemberProfileLink>
+                        <View style={{ flex: 1, minWidth: 0, marginLeft: 12, marginRight: 12 }}>
+                          <Text className="font-medium text-gray-800" numberOfLines={2}>
+                            {member.profiles.name}
+                          </Text>
+                          <Text className="text-sm text-gray-500" numberOfLines={1}>
+                            {member.profiles.email}
+                          </Text>
+                        </View>
+
+                        {!useMobileLayout && roleButtons}
+                        {member.profiles.id !== profile?.id && (
+                          <Pressable
+                            onPress={() => removeMember(member.id, member.profiles.name, member.profiles.id)}
+                            className="px-2 py-1 bg-red-100 rounded active:bg-red-200"
+                            style={{ marginLeft: useMobileLayout ? 0 : 8 }}
+                          >
+                            <Text className="text-red-600 text-xs">✕</Text>
+                          </Pressable>
+                        )}
+                      </View>
+
+                      {useMobileLayout && (
+                        <View style={{ marginTop: 12, marginLeft: 52 }}>
+                          {roleButtons}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+
+                {pendingInvites.length > 0 && (
+                  <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d', paddingHorizontal: 16, paddingTop: 16 }}>
+                      Pending Invites ({pendingInvites.length})
+                    </Text>
+                    {pendingInvites.map((invite) => {
+                      const isExpired = invite.expires_at && new Date(invite.expires_at) < new Date();
+                      return (
+                        <View
+                          key={invite.id}
+                          className="flex-row items-center p-4 border-b border-gray-100 last:border-b-0"
+                        >
+                          <View className="flex-1">
+                            <Text className="font-medium text-gray-800">
+                              {invite.email}
+                            </Text>
+                            <Text className="text-sm text-gray-500">
+                              Role: {ROLE_LABELS[invite.role] || invite.role} • Invited by {invite.inviter?.name || 'Unknown'}
+                            </Text>
+                            {isExpired && (
+                              <Text className="text-sm text-red-500">Expired</Text>
+                            )}
+                          </View>
+                          <Pressable
+                            onPress={() => revokeInvite(invite.id, invite.email)}
+                            className="px-3 py-2 bg-red-100 rounded-lg active:bg-red-200"
+                          >
+                            <Text className="text-red-600 text-sm font-medium">Revoke</Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+                </ScrollView>
+              </AdminPanel>
+            </View>
+          )}
+
+          {/* Every other HIVE you're in, each one in its own colour. */}
+          {isAdmin && (
+            <HiveMemberPanels
+              cellStyle={dashboardCellStyle}
+              panelStyle={dashboardPanelStyle}
+              bodyStyle={dashboardPanelBodyStyle}
+              scrollStyle={panelScrollStyle}
+              Panel={AdminPanel}
+              HeaderAction={AdminHeaderAction}
+            />
           )}
         </View>
       </ScrollView>

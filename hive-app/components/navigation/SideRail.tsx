@@ -237,7 +237,9 @@ export const SideRail = memo(function SideRail({
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 14 }}>
-        {/* Zoom levels. Furthest out first. */}
+        {/* HIVE-Wide and its own pages sit above the line; your HIVE and its
+            pages sit below. The same shape twice, at two zoom levels, so the
+            app reads the same however far out you're standing. */}
         <Row
           emoji="🌍"
           label="HIVE-Wide"
@@ -245,14 +247,17 @@ export const SideRail = memo(function SideRail({
           tint={WIDE_GREEN}
           onPress={() => go(HIVE_WIDE_ROUTE)}
         />
+
+        {divider}
+
+        {/* "My HIVEs" is Home. There used to be both, which was the same place
+            listed twice at two different heights (Nat 2026-08-03). */}
         <Row
           emoji="🏠"
           label={hasMoreThanOneHive ? 'My HIVEs' : hiveDisplayName(community?.name)}
           active={!onHiveWide && activeKey === 'home'}
           onPress={() => go('/hive')}
         />
-        {/* Your HIVEs, indented under it, each wearing its own colour — so the
-            one you're in is obvious and the others are one tap away. */}
         {hasMoreThanOneHive
           ? memberships.map((m) => (
               <Row
@@ -269,8 +274,6 @@ export const SideRail = memo(function SideRail({
               />
             ))
           : null}
-
-        {divider}
 
         {NAV_DESTINATIONS.map((item) => (
           <Row

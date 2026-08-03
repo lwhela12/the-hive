@@ -8,8 +8,8 @@ import {
   getChatRoomTheme,
   getOtherRoomMembers,
   getRoomCustomization,
-  getRoomDisplayName,
 } from '../../lib/chatRoomDisplay';
+import { getMessagesRoomLabel } from './hiveWideRoom';
 
 const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 import type { ChatRoom, Profile, RoomMessage } from '../../types';
@@ -24,6 +24,12 @@ interface ChatRoomItemProps {
   onCustomize?: () => void;
   /** Highlighted state for the desktop split view's open conversation. */
   isActive?: boolean;
+  /**
+   * What this HIVE is called — the room everyone shares wears it instead of
+   * "General", so it sits next to HIVE-Wide and reads as a place (Nat
+   * 2026-08-03).
+   */
+  hiveName?: string;
 }
 
 export const ChatRoomItem = memo(function ChatRoomItem({
@@ -32,12 +38,13 @@ export const ChatRoomItem = memo(function ChatRoomItem({
   onPress,
   onCustomize,
   isActive = false,
+  hiveName = 'HIVE',
 }: ChatRoomItemProps) {
   const otherMembers = getOtherRoomMembers(room, currentUserId);
   const otherMember = otherMembers[0];
   const customization = getRoomCustomization(room, currentUserId);
   const theme = getChatRoomTheme(room, currentUserId);
-  const roomName = getRoomDisplayName(room, currentUserId);
+  const roomName = getMessagesRoomLabel(room, currentUserId, hiveName);
 
   const getTimeAgo = (date: Date): string => {
     const now = new Date();

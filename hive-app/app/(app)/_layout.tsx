@@ -371,6 +371,7 @@ export default function AppLayout() {
             ),
           }}
         />
+        <Tabs.Screen name="settings" options={{ title: 'Settings', href: null }} />
         <Tabs.Screen
           name="honey-pot"
           options={{

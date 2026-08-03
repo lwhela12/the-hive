@@ -57,8 +57,10 @@ export type NavDestination = {
  * Newsletter draft moved inside Admin at her request — it's a tool for running
  * the place, not a page you visit.
  */
+// Home is NOT in this list. "My HIVEs" IS home — tapping it goes to /hive, and
+// your HIVEs hang under it. Having both was the same place twice, one above the
+// line and one below (Nat 2026-08-03).
 export const NAV_DESTINATIONS: NavDestination[] = [
-  { key: 'home', label: 'Home', emoji: '🏠', route: '/hive', gate: 'everyone' },
   { key: 'clive', label: 'Clive', emoji: '✨', route: '/', gate: 'everyone' },
   { key: 'members', label: 'Members', emoji: '👥', route: '/members', gate: 'everyone' },
   { key: 'boards', label: 'Boards', emoji: '📋', route: '/board', gate: 'everyone' },
@@ -67,6 +69,9 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   { key: 'buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone' },
   { key: 'honey-pot', label: 'Honey Pot', emoji: '🍯', route: '/honey-pot', gate: 'everyone' },
   { key: 'profile', label: 'Profile', emoji: '🐝', route: '/profile', gate: 'everyone' },
+  // Profile is about you; Settings is the plumbing behind you (2026-08-03).
+  // Admin already wears the cog, so Settings takes the sliders.
+  { key: 'settings', label: 'Settings', emoji: '🎛️', route: '/settings', gate: 'everyone' },
   // Everyone's, and important — it used to be a comb on Home, which meant it
   // vanished the moment somebody rearranged their combs (Nat 2026-08-03).
   { key: 'feedback', label: 'App Feedback', emoji: '💬', route: '/hive?feedback=1', gate: 'everyone' },
