@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import { Text, View, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
@@ -10,6 +10,8 @@ import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
 import { AppUpdateBanner } from '../../components/ui/AppUpdateBanner';
 import { CelebrationOverlay } from '../../components/ui/CelebrationOverlay';
 import { HivePicker } from '../../components/hive/HivePicker';
+import { NavigationDrawer } from '../../components/navigation';
+import { AppDrawerContext } from '../../lib/hooks/useAppDrawer';
 import { getLastAppPathAsync, getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 import { currentReturnTo } from '../../lib/authReturnTo';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
@@ -106,6 +108,16 @@ export default function AppLayout() {
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const restoredNativePathRef = useRef(false);
 
+  // The one menu. Mounted here so every screen's header can open it — nothing
+  // rendered NavigationDrawer before, which is why Admin vanished when it moved
+  // there (Nat 2026-08-02).
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerValue = useMemo(() => ({
+    isOpen: drawerOpen,
+    open: () => setDrawerOpen(true),
+    close: () => setDrawerOpen(false),
+  }), [drawerOpen]);
+
   // Initialize push notification listeners and state (no permission prompt on load)
   useNotifications({ autoRequestPermission: false });
 
@@ -178,6 +190,7 @@ export default function AppLayout() {
   }
 
   return (
+    <AppDrawerContext.Provider value={drawerValue}>
     <View style={{ flex: 1 }}>
       {/* "Fresh honey" bar — web only, shows on every tab when a new build ships */}
       <AppUpdateBanner />
@@ -434,6 +447,14 @@ export default function AppLayout() {
 
       {/* Confetti for a granted wish, over every tab. Mounted once. */}
       <CelebrationOverlay />
+
+      {/* The menu, over every tab, mounted once. */}
+      <NavigationDrawer
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        unreadDMCount={totalUnreadDMs}
+      />
     </View>
+    </AppDrawerContext.Provider>
   );
 }
