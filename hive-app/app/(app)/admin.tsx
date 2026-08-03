@@ -43,6 +43,7 @@ import { MemberProfileLink } from '../../components/ui/MemberProfileLink';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { GodModePanels } from '../../components/admin/GodModePanels';
+import { hiveDisplayName } from '../../lib/hiveBrand';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
@@ -867,7 +868,7 @@ function LockedAdminScreen({
 }) {
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <AppHeader title="Admin" />
+      <AppHeader title="Admin" tone="god" />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
@@ -976,7 +977,7 @@ function LockedAdminScreen({
 }
 
 export default function AdminScreen() {
-  const { profile, communityId, communityRole } = useAuth();
+  const { profile, community, communityId, communityRole } = useAuth();
   const { width, height } = useWindowDimensions();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -2013,7 +2014,7 @@ export default function AdminScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <AppHeader title="Admin" />
+      <AppHeader title="Admin" tone="god" />
 
       <ScrollView
         className="flex-1"
@@ -2040,7 +2041,11 @@ export default function AdminScreen() {
           {isAdmin && (
             <View style={[dashboardCellStyle, panelOrderStyle(1)]}>
               <AdminPanel
-                title={`Members (${members.length})`}
+                // Named for the HIVE it belongs to, because Admin is now the
+                // whole operation's rather than one HIVE's — a box called
+                // "Members" next to boxes called "Tech HIVE" and "Production
+                // HIVE" reads as a different KIND of thing (Nat 2026-08-03).
+                title={`${hiveDisplayName(community?.name)} (${members.length})`}
                 style={dashboardPanelStyle}
                 bodyStyle={dashboardPanelBodyStyle}
                 action={(

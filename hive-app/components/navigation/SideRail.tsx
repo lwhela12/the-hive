@@ -3,35 +3,43 @@ import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-na
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { supabase } from '../../lib/supabase';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
-import { visibleDestinations, activeKeyForPath } from '../../lib/navigation';
+import { NAV_DESTINATIONS, ADMIN_DESTINATION, HIVE_WIDE_ROUTE, activeKeyForPath } from '../../lib/navigation';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
 /**
- * The side rail — HIVE's navigation, borrowed from Jammin' Sprouts at Nat's
- * request on 2026-08-03.
+ * The side rail, borrowed from Jammin' Sprouts at Nat's request 2026-08-03.
  *
- * It replaces seven tabs across the bottom, which had run out of room: seven
- * tabs on a phone is about 55px each, and every new feature made that worse.
- * A rail scrolls, so there is always space for the next thing.
+ * It reads top to bottom as zoom levels, then pages, then the god view — her
+ * ordering, arrived at out loud after three false starts:
  *
- * Collapsed it is icons only and stays out of the way; expanded it shows labels.
- * The same component on phone and desktop, which is the other half of why Nat
- * chose it — one shape to keep right instead of two that drift.
+ *   HIVE, and the line about a bee     what this is
+ *   HIVE-Wide                          the most zoomed-out view
+ *   My HIVE (+ each of yours, in its   the view you live in
+ *            own colour, indented)
+ *   ───────────────
+ *   Home · Clive · Members · …         the pages of whichever view you're in
+ *   Swap HIVEs · Log out
+ *   ───────────────
+ *   Admin                              god view; the newsletter tools are inside
+ *
+ * Green is HIVE-Wide's colour everywhere in the app, so it is green here too,
+ * against the HIVE's own deepened accent.
  */
 
 const RAIL_COLLAPSED = 56;
 const RAIL_EXPANDED = 212;
 
+/** HIVE-Wide's green — the one colour that never belongs to a single HIVE. */
+const WIDE_GREEN = '#3F7D5C';
+
 /**
- * The rail sits in a deeper shade of the HIVE's own colour.
- *
- * First pass had both the rail and the header on the accent exactly, and they
- * ran together into one L-shaped block — "they bleed together like that"
- * (Nat 2026-08-03). Two surfaces should look like two surfaces. Deriving the
- * shade rather than hard-coding one means a HIVE picking any accent gets a rail
- * that still belongs to it.
+ * The rail sits in a deeper shade of the HIVE's own colour, because a rail and
+ * a header on the exact same accent ran together into one L-shaped block
+ * ("they bleed together like that", Nat 2026-08-03). Derived rather than
+ * hard-coded, so a HIVE picking any accent still gets a rail that belongs to it.
  */
 function deepen(hex: string, amount = 0.32): string {
   const clean = hex.replace('#', '');
@@ -55,20 +63,19 @@ export const SideRail = memo(function SideRail({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { profile, community, communityRole, memberships, openHivePicker } = useAuth();
+  const { profile, community, communityId, communityRole, memberships, openHivePicker, switchCommunity } = useAuth();
   const { width } = useWindowDimensions();
 
   const isPhone = width < 768;
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
   const isOwner = profile?.is_owner === true;
+  const canSeeAdmin = isAdmin || isOwner;
   const accent = hiveAccent(community);
   const railColour = deepen(accent);
   const activeKey = activeKeyForPath(pathname);
-  const items = visibleDestinations({ isAdmin, isOwner });
+  const onHiveWide = activeKey === 'hive-wide';
   const hasMoreThanOneHive = memberships.length > 1;
 
-  // On a phone an expanded rail covers most of the screen, so going somewhere
-  // should close it behind you. On a desktop it lives alongside and stays put.
   const go = useCallback(
     (route: string) => {
       if (route === '/board') clearBoardNavigationState();
@@ -79,162 +86,215 @@ export const SideRail = memo(function SideRail({
     [router, isPhone, expanded, onToggle]
   );
 
-  const width_ = expanded ? RAIL_EXPANDED : RAIL_COLLAPSED;
+  const railWidth = expanded ? RAIL_EXPANDED : RAIL_COLLAPSED;
+  const divider = (
+    <View
+      style={{
+        height: 1,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        marginVertical: 8,
+        marginHorizontal: expanded ? 14 : 12,
+      }}
+    />
+  );
+
+  const Row = ({
+    emoji,
+    label,
+    active,
+    onPress,
+    badge = 0,
+    tint,
+    indented,
+  }: {
+    emoji: string;
+    label: string;
+    active?: boolean;
+    onPress: () => void;
+    badge?: number;
+    /** A colour of its own — HIVE-Wide's green, or a HIVE's accent. */
+    tint?: string;
+    indented?: boolean;
+  }) => (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: !!active }}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 11,
+        marginHorizontal: expanded ? 8 : 6,
+        marginLeft: expanded && indented ? 20 : undefined,
+        paddingVertical: 9,
+        paddingHorizontal: expanded ? 8 : 0,
+        justifyContent: expanded ? 'flex-start' : 'center',
+        borderRadius: 10,
+        backgroundColor: active
+          ? (tint ?? 'rgba(255,255,255,0.2)')
+          : 'transparent',
+        borderWidth: tint && !active ? 1 : 0,
+        borderColor: tint ?? 'transparent',
+      }}
+    >
+      <View>
+        <Text style={{ fontSize: indented ? 15 : 19, lineHeight: indented ? 20 : 25 }}>{emoji}</Text>
+        {badge > 0 ? (
+          <View
+            style={{
+              position: 'absolute', top: -3, right: -9, minWidth: 16, height: 16,
+              paddingHorizontal: 4, borderRadius: 8, backgroundColor: '#fff',
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: railColour }}>
+              {badge > 99 ? '99+' : badge}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+      {expanded ? (
+        <Text
+          numberOfLines={1}
+          style={{
+            flex: 1,
+            fontFamily: active ? 'Lato_700Bold' : 'Lato_400Regular',
+            fontSize: indented ? 13.5 : 14.5,
+            color: '#fff',
+          }}
+        >
+          {label}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
 
   return (
     <View
       style={{
-        width: width_,
+        width: railWidth,
         backgroundColor: railColour,
-        paddingTop: 10,
+        paddingTop: 12,
         paddingBottom: 8,
-        // On a phone the expanded rail sits over the page rather than squeezing
-        // it into a column nobody can read.
         ...(isPhone && expanded
           ? { position: 'absolute', top: 0, bottom: 0, left: 0, zIndex: 40 }
           : null),
       }}
     >
-      <Pressable
-        onPress={onToggle}
-        accessibilityRole="button"
-        accessibilityLabel={expanded ? 'Collapse the menu' : 'Expand the menu'}
-        hitSlop={6}
+      {/* The name sits at the very top with the toggle beside it, rather than
+          underneath a button that pushed it down the page (Nat 2026-08-03). */}
+      <View
         style={{
-          alignSelf: expanded ? 'flex-end' : 'center',
-          marginRight: expanded ? 10 : 0,
-          marginBottom: 8,
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'rgba(255,255,255,0.16)',
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          paddingHorizontal: expanded ? 14 : 0,
+          justifyContent: expanded ? 'space-between' : 'center',
+          marginBottom: expanded ? 14 : 10,
         }}
       >
-        <Ionicons name={expanded ? 'chevron-back' : 'chevron-forward'} size={17} color="#fff" />
-      </Pressable>
+        {expanded ? (
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text
+              style={{
+                fontFamily: 'LibreBaskerville_700Bold', fontSize: 17,
+                color: '#fff', letterSpacing: 1.4,
+              }}
+              numberOfLines={1}
+            >
+              HIVE
+            </Text>
+            <Text
+              style={{
+                fontFamily: 'Lato_400Regular', fontSize: 11.5, lineHeight: 16,
+                color: 'rgba(255,255,255,0.7)', marginTop: 2,
+              }}
+            >
+              Alone you&rsquo;re a bee.{'\n'}Together, we&rsquo;re the H.I.V.E.
+            </Text>
+          </View>
+        ) : null}
+        <Pressable
+          onPress={onToggle}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? 'Collapse the menu' : 'Expand the menu'}
+          hitSlop={6}
+          style={{
+            width: 30, height: 30, borderRadius: 15,
+            alignItems: 'center', justifyContent: 'center',
+            backgroundColor: 'rgba(255,255,255,0.16)',
+          }}
+        >
+          <Ionicons name={expanded ? 'chevron-back' : 'chevron-forward'} size={16} color="#fff" />
+        </Pressable>
+      </View>
 
-      {/* The rail says what this IS; the header says where you ARE. First pass
-          had both showing "OG HIVE", one above the other — "they double up on
-          info" (Nat 2026-08-03). Swapping the HIVE is still here, because it is
-          navigation, and it names the HIVE you're leaving so it isn't a guess. */}
-      {expanded ? (
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          <Text
-            style={{
-              fontFamily: 'LibreBaskerville_700Bold',
-              fontSize: 17,
-              color: '#fff',
-              letterSpacing: 1.4,
-            }}
-            numberOfLines={1}
-          >
-            HIVE
-          </Text>
-          <Text
-            style={{
-              fontFamily: 'Lato_400Regular',
-              fontSize: 11.5,
-              lineHeight: 16,
-              color: 'rgba(255,255,255,0.7)',
-              marginTop: 2,
-            }}
-          >
-            Alone you&rsquo;re a bee.{'\n'}Together, we&rsquo;re the H.I.V.E.
-          </Text>
-          {hasMoreThanOneHive ? (
-            <Pressable onPress={openHivePicker} hitSlop={6} style={{ marginTop: 9 }}>
-              <Text
-                style={{
-                  fontFamily: 'Lato_700Bold',
-                  fontSize: 12,
-                  color: 'rgba(255,255,255,0.9)',
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 14 }}>
+        {/* Zoom levels. Furthest out first. */}
+        <Row
+          emoji="🌍"
+          label="HIVE-Wide"
+          active={onHiveWide}
+          tint={WIDE_GREEN}
+          onPress={() => go(HIVE_WIDE_ROUTE)}
+        />
+        <Row
+          emoji="🏠"
+          label={hasMoreThanOneHive ? 'My HIVEs' : hiveDisplayName(community?.name)}
+          active={!onHiveWide && activeKey === 'home'}
+          onPress={() => go('/hive')}
+        />
+        {/* Your HIVEs, indented under it, each wearing its own colour — so the
+            one you're in is obvious and the others are one tap away. */}
+        {hasMoreThanOneHive
+          ? memberships.map((m) => (
+              <Row
+                key={m.community_id}
+                emoji="⬢"
+                label={hiveDisplayName(m.community?.name)}
+                indented
+                active={m.community_id === communityId && !onHiveWide}
+                tint={hiveAccent(m.community)}
+                onPress={() => {
+                  void switchCommunity(m.community_id);
+                  if (isPhone && expanded) onToggle();
                 }}
-              >
-                🔀  Leave {hiveDisplayName(community?.name)}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
+              />
+            ))
+          : null}
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 14 }}
-      >
-        {items.map((item) => {
-          const active = activeKey === item.key;
-          const badge = item.badge === 'dms' ? unreadDMCount : 0;
-          return (
-            <View key={item.key}>
-              {item.dividerBefore ? (
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: 'rgba(255,255,255,0.2)',
-                    marginVertical: 7,
-                    marginHorizontal: expanded ? 14 : 12,
-                  }}
-                />
-              ) : null}
-              <Pressable
-                onPress={() => go(item.route)}
-                accessibilityRole="button"
-                accessibilityLabel={item.label}
-                accessibilityState={{ selected: active }}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 11,
-                  marginHorizontal: expanded ? 8 : 6,
-                  paddingVertical: 9,
-                  paddingHorizontal: expanded ? 8 : 0,
-                  justifyContent: expanded ? 'flex-start' : 'center',
-                  borderRadius: 10,
-                  backgroundColor: active ? 'rgba(255,255,255,0.2)' : 'transparent',
-                }}
-              >
-                <View>
-                  <Text style={{ fontSize: 19, lineHeight: 25 }}>{item.emoji}</Text>
-                  {badge > 0 ? (
-                    <View
-                      style={{
-                        position: 'absolute',
-                        top: -3,
-                        right: -9,
-                        minWidth: 16,
-                        height: 16,
-                        paddingHorizontal: 4,
-                        borderRadius: 8,
-                        backgroundColor: '#fff',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: accent }}>
-                        {badge > 99 ? '99+' : badge}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-                {expanded ? (
-                  <Text
-                    numberOfLines={1}
-                    style={{
-                      flex: 1,
-                      fontFamily: active ? 'Lato_700Bold' : 'Lato_400Regular',
-                      fontSize: 14.5,
-                      color: '#fff',
-                    }}
-                  >
-                    {item.label}
-                  </Text>
-                ) : null}
-              </Pressable>
-            </View>
-          );
-        })}
+        {divider}
+
+        {NAV_DESTINATIONS.map((item) => (
+          <Row
+            key={item.key}
+            emoji={item.emoji}
+            label={item.label}
+            active={!onHiveWide && activeKey === item.key}
+            badge={item.badge === 'dms' ? unreadDMCount : 0}
+            onPress={() => go(item.route)}
+          />
+        ))}
+        {hasMoreThanOneHive ? (
+          <Row emoji="🔀" label="Swap HIVEs" onPress={openHivePicker} />
+        ) : null}
+        <Row
+          emoji="👋"
+          label="Log out"
+          onPress={() => { void supabase.auth.signOut({ scope: 'local' }); }}
+        />
+
+        {canSeeAdmin ? (
+          <>
+            {divider}
+            <Row
+              emoji={ADMIN_DESTINATION.emoji}
+              label={ADMIN_DESTINATION.label}
+              active={activeKey === 'admin'}
+              onPress={() => go(ADMIN_DESTINATION.route)}
+            />
+          </>
+        ) : null}
       </ScrollView>
     </View>
   );

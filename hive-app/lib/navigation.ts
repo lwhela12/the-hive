@@ -41,24 +41,41 @@ export type NavDestination = {
   dividerBefore?: boolean;
 };
 
+/**
+ * The rail reads top to bottom as zoom levels, then pages, then the god view —
+ * Nat's ordering, arrived at out loud on 2026-08-03 after three false starts:
+ *
+ *   HIVE, and the line about a bee        what this is
+ *   ────────────────────────────────
+ *   HIVE-Wide                             the most zoomed-out view
+ *   My HIVE  (+ each of yours, in colour) the view you live in
+ *   ────────────────────────────────
+ *   Home · Clive · Members · Boards …     the pages of whichever view you're in
+ *   ────────────────────────────────
+ *   Admin                                 god view, and the newsletter is in it
+ *
+ * Newsletter draft moved inside Admin at her request — it's a tool for running
+ * the place, not a page you visit.
+ */
 export const NAV_DESTINATIONS: NavDestination[] = [
-  // The shared high street comes first, because it's where you land.
-  { key: 'hive-wide', label: 'HIVE-Wide', emoji: '🌍', route: '/hive-wide', gate: 'everyone' },
-
-  { key: 'clive', label: 'Clive', emoji: '✨', route: '/', gate: 'everyone', dividerBefore: true },
   { key: 'home', label: 'Home', emoji: '🏠', route: '/hive', gate: 'everyone' },
+  { key: 'clive', label: 'Clive', emoji: '✨', route: '/', gate: 'everyone' },
   { key: 'members', label: 'Members', emoji: '👥', route: '/members', gate: 'everyone' },
   { key: 'boards', label: 'Boards', emoji: '📋', route: '/board', gate: 'everyone' },
   { key: 'messages', label: 'Messages', emoji: '💌', route: '/messages', gate: 'everyone', badge: 'dms' },
   { key: 'meetings', label: 'Meetings', emoji: '🗓️', route: '/meetings', gate: 'everyone' },
   { key: 'buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone' },
   { key: 'honey-pot', label: 'Honey Pot', emoji: '🍯', route: '/honey-pot', gate: 'everyone' },
-
-  // You, and the levers.
-  { key: 'profile', label: 'Profile', emoji: '🐝', route: '/profile', gate: 'everyone', dividerBefore: true },
-  { key: 'admin', label: 'Admin', emoji: '⚙️', route: '/admin', gate: 'admin' },
-  { key: 'newsletter', label: 'Newsletter draft', emoji: '✍️', route: '/newsletter', gate: 'owner' },
+  { key: 'profile', label: 'Profile', emoji: '🐝', route: '/profile', gate: 'everyone' },
 ];
+
+/** The two zoom levels, above the line. HIVE-Wide is always first. */
+export const HIVE_WIDE_ROUTE = '/hive-wide';
+
+/** Below the last line. Owners see the newsletter tools once they're inside. */
+export const ADMIN_DESTINATION: NavDestination = {
+  key: 'admin', label: 'Admin', emoji: '⚙️', route: '/admin', gate: 'admin',
+};
 
 /** What this person is actually allowed to see. */
 export function visibleDestinations(opts: {
@@ -80,8 +97,9 @@ export function visibleDestinations(opts: {
  */
 export function activeKeyForPath(pathname: string | null | undefined): string | null {
   if (!pathname) return null;
+  if (pathname.startsWith(HIVE_WIDE_ROUTE)) return 'hive-wide';
   let best: NavDestination | null = null;
-  for (const d of NAV_DESTINATIONS) {
+  for (const d of [...NAV_DESTINATIONS, ADMIN_DESTINATION]) {
     const hit = d.route === '/' ? pathname === '/' : pathname.startsWith(d.route);
     if (hit && (!best || d.route.length > best.route.length)) best = d;
   }

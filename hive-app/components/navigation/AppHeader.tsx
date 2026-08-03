@@ -13,7 +13,21 @@ interface AppHeaderProps {
   /** Muted one-liner under the title (e.g. Members' count + search hint). */
   subtitle?: string;
   rightElement?: React.ReactNode;
+  /**
+   * Which world this page belongs to.
+   *
+   * 'hive'  the HIVE you're in — its colour, its name above the title.
+   * 'wide'  HIVE-Wide — green, and NO HIVE name, because the page isn't in a
+   *         HIVE. The first pass said "OG HIVE / HIVE-Wide" stacked, which is
+   *         two contradictory answers to "where am I" (Nat 2026-08-03).
+   * 'god'   Admin. Not OG HIVE's admin — the whole operation's, so it wears
+   *         neither a HIVE's colour nor a HIVE's name.
+   */
+  tone?: 'hive' | 'wide' | 'god';
 }
+
+/** HIVE-Wide's green, and the god view's slate. Neither belongs to a HIVE. */
+const TONE_COLOURS = { wide: '#3F7D5C', god: '#40403C' } as const;
 
 // The one page-title treatment for the whole app: gold bar, spaced serif.
 // Every tab screen should use this instead of hand-rolling a gold header.
@@ -28,13 +42,17 @@ export const AppHeader = memo(function AppHeader({
   titleIcon,
   subtitle,
   rightElement,
+  tone = 'hive',
 }: AppHeaderProps) {
   const { community } = useAuth();
-  const accent = hiveAccent(community);
+  const accent = tone === 'hive' ? hiveAccent(community) : TONE_COLOURS[tone];
   const hiveName = hiveDisplayName(community?.name);
   // Any page whose title is already the HIVE's name says it big and skips the
   // small line — that's Home, and anywhere else that chooses to do the same.
-  const showHiveName = title.trim().toUpperCase() !== hiveName.toUpperCase();
+  // Only a page that lives INSIDE a HIVE says which one. HIVE-Wide and Admin sit
+  // above the HIVEs, so naming one there answers "where am I" twice, differently.
+  const showHiveName =
+    tone === 'hive' && title.trim().toUpperCase() !== hiveName.toUpperCase();
 
   return (
     <View

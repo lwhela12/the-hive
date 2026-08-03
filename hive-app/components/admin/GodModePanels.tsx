@@ -110,7 +110,10 @@ export function GodModePanels({
 
   return (
     <>
-      {memberships.map((m, index) => {
+      {/* The HIVE you're currently in already has a full panel above, with role
+          buttons and invitations. Rendering it here too showed OG HIVE twice
+          under two different names (Nat 2026-08-03). */}
+      {memberships.filter((m) => m.community_id !== communityId).map((m, index) => {
         const rows = byHive[m.community_id] ?? [];
         const accent = hiveAccent(m.community);
         const name = hiveDisplayName(m.community?.name);

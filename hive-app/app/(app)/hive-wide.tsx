@@ -4,10 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Polygon } from 'react-native-svg';
 import { AppHeader } from '../../components/navigation';
-import { HiveWideWelcome, HIVE_WIDE_GREEN } from '../../components/ui/HiveWideWelcome';
+import { HIVE_WIDE_GREEN } from '../../components/ui/HiveWideWelcome';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { loadHiveWideWelcomeSeen, persistHiveWideWelcomeSeen } from '../../lib/readState';
 import { STANDING_INVITATION } from '../../lib/hiveFocus';
 import { formatDateLong } from '../../lib/dateUtils';
 
@@ -85,7 +84,7 @@ function HiveDot({ colour }: { colour: string }) {
 
 export default function HiveWideScreen() {
   const router = useRouter();
-  const { profile, communityId, refreshProfile } = useAuth();
+  const { communityId } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [focus, setFocus] = useState<Focus | null>(null);
@@ -146,24 +145,13 @@ export default function HiveWideScreen() {
     setRefreshing(false);
   };
 
-  const dismissWelcome = async (version: string) => {
-    await persistHiveWideWelcomeSeen(profile, version);
-    void refreshProfile();
-  };
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fffdf5' }} edges={['top']}>
-      <AppHeader title="HIVE-Wide" />
+      <AppHeader title="HIVE-Wide" tone="wide" />
       <ScrollView
         contentContainerStyle={{ padding: 16, gap: 18, paddingBottom: 44 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <HiveWideWelcome
-          community={null}
-          seenVersion={loadHiveWideWelcomeSeen(profile)}
-          onDismiss={dismissWelcome}
-        />
-
         {loading ? (
           <ActivityIndicator color={HIVE_WIDE_GREEN} style={{ marginTop: 28 }} />
         ) : (
