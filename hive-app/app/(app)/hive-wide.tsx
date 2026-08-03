@@ -58,7 +58,23 @@ type HiveEvent = {
   event_type: string;
   community_id: string;
   end_date: string | null;
+  /**
+   * How far this event was allowed to travel. HIVE-Wide shows the WHAT of every
+   * HIVE's plans — that there is a pool day — and the when and where only when
+   * the person who made it said so.
+   *
+   * "The 'what' shows up, very generically, but all other info (who what when
+   * where why) is only available inside that hive. UNLESS it was specifically
+   * marked hive wide" (Nat 2026-08-03). It was showing the date and time on
+   * everything, which is more than anybody agreed to.
+   */
+  visibility: string | null;
 };
+
+/** Did whoever made this say it could leave their HIVE? */
+function travelsOutward(event: HiveEvent) {
+  return event.visibility === 'all_hives' || event.visibility === 'public';
+}
 
 /**
  * A hang is somewhere you can turn up. A date range on the calendar is almost
@@ -142,16 +158,28 @@ function HiveLine({ hive, event }: { hive: Community; event: HiveEvent | null })
             >
               {event.title}
             </Text>
-            {/* Same words, same order, same dot as the meeting helper — a date
-                should read the same everywhere in the app (Nat 2026-08-03). */}
-            <Text
-              style={{
-                fontFamily: 'Lato_400Regular', fontSize: 11.5,
-                color: INK_FAINT, marginTop: 1,
-              }}
-            >
-              {formatMeetingDate(event)}
-            </Text>
+            {/* The when, only if it was cleared to leave its HIVE. Same words
+                and same order as the meeting helper when it does show, so a date
+                reads the same everywhere in the app. */}
+            {travelsOutward(event) ? (
+              <Text
+                style={{
+                  fontFamily: 'Lato_400Regular', fontSize: 11.5,
+                  color: INK_FAINT, marginTop: 1,
+                }}
+              >
+                {formatMeetingDate(event)}
+              </Text>
+            ) : (
+              <Text
+                style={{
+                  fontFamily: 'Lato_400Regular', fontSize: 11,
+                  color: 'rgba(255,248,233,0.3)', marginTop: 2,
+                }}
+              >
+                details inside {hiveDisplayName(hive.name)}
+              </Text>
+            )}
           </>
         ) : (
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: colour, marginTop: 1 }}>
@@ -172,7 +200,8 @@ export default function HiveWideScreen() {
   const wide = width >= 900;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [focus, setFocus] = useState<Focus | null>(null);
+  const [sharedFocus, setSharedFocus] = useState<Focus | null>(null);
+  const [focusByHive, setFocusByHive] = useState<Map<string, Focus>>(new Map());
   const [hives, setHives] = useState<Community[]>([]);
   const [upcoming, setUpcoming] = useState<HiveEvent[]>([]);
   const [shared, setShared] = useState<SharedPost[]>([]);
@@ -194,10 +223,9 @@ export default function HiveWideScreen() {
         .eq('month', month);
 
       const rows = (focusRows ?? []) as Focus[];
-      setFocus(
-        rows.find((r) => r.community_id === communityId)
-          ?? rows.find((r) => r.community_id === null)
-          ?? null
+      setSharedFocus(rows.find((r) => r.community_id === null) ?? null);
+      setFocusByHive(
+        new Map(rows.filter((r) => r.community_id).map((r) => [r.community_id as string, r]))
       );
 
       // Every HIVE this person can see, oldest first — which puts OG HIVE at
@@ -213,7 +241,7 @@ export default function HiveWideScreen() {
         const today = getLocalIsoDate(new Date());
         const { data: eventRows } = await supabase
           .from('events')
-          .select('id, title, event_date, event_time, event_type, community_id, end_date')
+          .select('id, title, event_date, event_time, event_type, community_id, end_date, visibility')
           .in('community_id', hiveList.map((hive) => hive.id))
           .gte('event_date', today)
           .or('status.is.null,status.eq.scheduled')
@@ -299,6 +327,34 @@ export default function HiveWideScreen() {
       {/* You are standing above the HIVEs. It should look like it before you've
           read a word (Nat 2026-08-03). */}
       <SpaceGlobe />
+      {/* Room at the top, above the world, said the way the HIVE home pages say
+          it — small line, big name, small line (Nat 2026-08-03). */}
+      <View style={{ paddingTop: 26, paddingBottom: 4, paddingHorizontal: 20 }}>
+        <Text
+          style={{
+            fontFamily: 'Lato_400Regular', fontSize: 12, letterSpacing: 2.4,
+            textTransform: 'uppercase', color: 'rgba(255,248,233,0.55)', textAlign: 'center',
+          }}
+        >
+          See what&rsquo;s happening
+        </Text>
+        <Text
+          style={{
+            fontFamily: 'LibreBaskerville_700Bold', fontSize: 34, letterSpacing: 1.5,
+            color: INK, textAlign: 'center', marginTop: 4,
+          }}
+        >
+          HIVE-Wide
+        </Text>
+        <Text
+          style={{
+            fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 13.5,
+            color: 'rgba(255,248,233,0.6)', textAlign: 'center', marginTop: 6,
+          }}
+        >
+          Have a look around and see what&rsquo;s happening across all the HIVEs.
+        </Text>
+      </View>
       {/* The title lives in the sky rather than in a bar. There is no header on
           HIVE-Wide on purpose — "it's just part of outer space" (Nat 2026-08-03),
           and a gold bar across the top would put you back inside a HIVE. */}
@@ -333,44 +389,14 @@ export default function HiveWideScreen() {
                 )}
               </TopBox>
               <TopBox label="HIVE Help" wide={wide}>
-                {focus ? (
-                  <>
-                    <Text
-                      style={{
-                        fontFamily: 'LibreBaskerville_700Bold', fontSize: 18,
-                        color: INK, lineHeight: 26, marginBottom: 7,
-                      }}
-                    >
-                      {focus.title}
-                    </Text>
-                    {focus.body ? (
-                      <Text
-                        style={{
-                          fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21,
-                          color: INK_SOFT,
-                        }}
-                      >
-                        {focus.body}
-                      </Text>
-                    ) : null}
-                  </>
-                ) : (
-                  <Text
-                    style={{
-                      fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 14,
-                      lineHeight: 21, color: 'rgba(49,49,48,0.55)',
-                    }}
-                  >
-                    This month's focus lands here as soon as it's chosen.
-                  </Text>
-                )}
-                {/* The line that never changes, kept under whatever the month
-                    happens to be. Nobody is ever outside the focus. */}
+                {/* The standing invitation goes FIRST now. It is the thing that
+                    is always true, and nobody is ever outside it — so it opens
+                    the box rather than sitting underneath a focus that might not
+                    be yours (Nat 2026-08-03). */}
                 <Text
                   style={{
-                    fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19.5,
-                    color: INK_SOFT, marginTop: 12, paddingTop: 12,
-                    borderTopWidth: 1, borderTopColor: CARD_EDGE,
+                    fontFamily: 'Lato_400Regular', fontSize: 13.5, lineHeight: 20,
+                    color: INK_SOFT, marginBottom: 14,
                   }}
                 >
                   <Text style={{ fontFamily: 'Lato_700Bold', color: INK }}>
@@ -378,6 +404,34 @@ export default function HiveWideScreen() {
                   </Text>
                   {STANDING_INVITATION}
                 </Text>
+
+                {/* Then what each HIVE has picked, wearing its own comb. A HIVE
+                    that hasn't chosen is doing the standing one, which is a real
+                    answer rather than a blank. */}
+                <View style={{ gap: 11, paddingTop: 12, borderTopWidth: 1, borderTopColor: CARD_EDGE }}>
+                  {hives.map((hive) => {
+                    const own = focusByHive.get(hive.id) ?? sharedFocus;
+                    const colour = hiveAccent(hive);
+                    return (
+                      <View key={hive.id} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                        <View style={{ paddingTop: 4 }}><HiveDot colour={colour} /></View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: colour }}>
+                            {hiveDisplayName(hive.name)}
+                          </Text>
+                          <Text
+                            style={{
+                              fontFamily: 'Lato_400Regular', fontSize: 13.5, lineHeight: 19,
+                              color: INK_SOFT, marginTop: 1,
+                            }}
+                          >
+                            {own ? own.title : 'a small act of kindness'}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
               </TopBox>
               <TopBox label="HIVE Hangs" wide={wide}>
                 {hives.length > 0 ? (

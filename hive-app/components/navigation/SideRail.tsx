@@ -167,7 +167,7 @@ export const SideRail = memo(function SideRail({
           style={{
             flex: 1,
             fontFamily: active ? 'Lato_700Bold' : 'Lato_400Regular',
-            fontSize: indented ? 13.5 : 14.5,
+            fontSize: indented ? 12.5 : 14.5,
             color: '#fff',
           }}
         >
