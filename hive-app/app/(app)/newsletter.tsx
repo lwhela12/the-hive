@@ -7,7 +7,16 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { APP_NEWS } from '../../lib/appNews';
 import { SummarySections, type SummarySection } from '../../components/meetings/SummarySections';
+
+/** The month a recap covers: the one before the month it goes out in. */
+function lastMonth(): string {
+  const now = new Date();
+  const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const month = now.getMonth() === 0 ? 12 : now.getMonth();
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
 
 // The plain bee mark, not the crest — the crest's sunburst ring turns to mush
 // at header size (see monthly-tuneup for the full note).
@@ -31,6 +40,7 @@ export default function NewsletterScreen() {
   const [error, setError] = useState<string | null>(null);
   const [sections, setSections] = useState<SummarySection[]>([]);
   const [cycleStart, setCycleStart] = useState<string | null>(null);
+  const [recapTitle, setRecapTitle] = useState<string | null>(null);
   const [prose, setProse] = useState<string | null>(null);
   // The letter is what she pastes into Wix; the outline is for checking the
   // facts behind it. Same data, two readings.
@@ -58,23 +68,39 @@ export default function NewsletterScreen() {
     setError(null);
     setProse(null);
 
+    // What's new in the app, straight from the list every member already sees on
+    // Home. This used to come off the meeting deck's frozen copy, so a recap
+    // written after the meeting missed everything shipped since it.
+    const month = lastMonth();
+    const appNews = APP_NEWS
+      .filter((entry) => entry.date.startsWith(month))
+      .map((entry) => (entry.detail ? `${entry.title} — ${entry.detail}` : entry.title));
+
+    const draftBody = { communityId, month, appNews };
+
     const { data, error: invokeError } = await supabase.functions.invoke('draft-newsletter', {
-      body: { communityId, includeProse: false },
+      body: { ...draftBody, includeProse: false },
     });
     if (invokeError || !data?.success) {
       setError('Could not gather the draft just now. Try again in a moment.');
       setLoading(false);
       return;
     }
+    if (data.blocked) {
+      setError(data.reason ?? 'This HIVE keeps its contents inside the HIVE.');
+      setLoading(false);
+      return;
+    }
     setSections((data.sections ?? []) as SummarySection[]);
     setCycleStart(data.cycle_start ?? null);
+    setRecapTitle(typeof data.recap_title === 'string' ? data.recap_title : null);
     setLoading(false);
 
     if ((data.sections ?? []).length === 0) return;
 
     setWriting(true);
     const { data: written } = await supabase.functions.invoke('draft-newsletter', {
-      body: { communityId, includeProse: true },
+      body: { ...draftBody, includeProse: true },
     });
     if (written?.success) {
       if ((written.sections ?? []).length > 0) setSections(written.sections as SummarySection[]);
@@ -132,7 +158,10 @@ export default function NewsletterScreen() {
             15,
           )).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })
         : new Date().toLocaleString('en-US', { month: 'long' });
-      const title = `${month} Newsletter 📰`;
+      // Named for the month it recaps, not the month it goes out — "The Buzz —
+      // July 2026 HIVE Recap", published in August. Nat renamed these on Wix so
+      // a letter about July stops feeling a month late (2026-08-03).
+      const title = recapTitle ?? `The Buzz — ${month} HIVE Recap`;
 
       // Match on the month, not the exact title — this is the same thread that
       // opened at month-end to collect shout-outs, and publishing turns it into
@@ -187,6 +216,38 @@ export default function NewsletterScreen() {
         });
       })()
     : null;
+
+  // The draft is an internal thing. It quotes members before Nat has chosen what
+  // stays in, and a half-written letter about people is not something they
+  // should meet by wandering into a URL. The function refuses non-owners too —
+  // this is so nobody has to be refused in the first place.
+  if (profile && !profile.is_owner) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#fffdf5' }} edges={['top']}>
+        <View className="flex-1 items-center justify-center px-8">
+          <Image source={hiveBee} style={{ width: 44, height: 44, marginBottom: 18 }} contentFit="contain" />
+          <Text
+            style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, color: '#313130', textAlign: 'center' }}
+          >
+            The Buzz is written upstairs
+          </Text>
+          <Text
+            style={{
+              fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 23,
+              color: 'rgba(49,49,48,0.6)', textAlign: 'center', marginTop: 12,
+            }}
+          >
+            Nat puts each month&rsquo;s letter together. You&rsquo;ll find every
+            published one on the Newsletter tab — and anything you add to the
+            check-in can go straight into the next one.
+          </Text>
+          <Pressable onPress={close} className="mt-7 px-5 py-3 rounded-full" style={{ backgroundColor: '#bd9348' }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>Back</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fffdf5' }} edges={['top']}>

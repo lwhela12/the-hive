@@ -18,6 +18,21 @@ interface DraftRequest {
   /** Local date the draft is "as of". Defaults to today in Pacific time. */
   date?: string;
   /**
+   * Which month to recap, as YYYY-MM. The recap of a month goes out in the
+   * month after it (Nat 2026-08-03), so this defaults to last month — but it
+   * defaults rather than guesses. It used to be inferred from the day of the
+   * month, which meant drafting on the 7th recapped July and drafting on the
+   * 8th silently recapped August-so-far instead.
+   */
+  month?: string;
+  /**
+   * This month's entries from lib/appNews.ts — the living what's-new list the
+   * app already shows every member. Sent by the caller because the edge
+   * function can't import from the app, and safe to trust because only the
+   * owner can reach this and the list is public-facing by design.
+   */
+  appNews?: string[];
+  /**
    * Writing the letter takes the better part of a minute; gathering takes about
    * a second. The screen asks for the facts first so there's something to read,
    * then asks again for the letter. Defaults true so any other caller still
@@ -71,11 +86,26 @@ async function writeNewsletter(month: string, factsText: string): Promise<string
     'community. She pastes your draft into Wix, tweaks it, and sends it. Write',
     'the letter she would write — not a summary of data.',
     '',
-    'THIS IS PUBLIC. Anyone can read it — friends, family, people following',
-    'along. Members share a private space too, and none of that belongs here:',
-    'no HD wishes, no what-someone-needs-help-with, no meeting internals. Talk',
-    'about the HIVE as a group. If a fact would embarrass someone to see',
-    'forwarded, leave it out.',
+    'WHO READS IT (Nat, 2026-08-03, and this is the thing the draft kept getting',
+    'wrong). Two people:',
+    '',
+    '  1. Someone who liked the sound of the HIVE but for whom January was the',
+    '     wrong time. They know nobody. Nat names her dad and her sister\'s',
+    '     husband. They want to know what kind of people we are, how the thing is',
+    '     structured, and what sort of projects it takes on.',
+    '  2. A member, halfway through the month, who reads it and thinks "oh yeah,',
+    '     I said I was going to do that and I haven\'t yet."',
+    '',
+    'Neither of them wants a list of who did what. A roster of first names means',
+    'nothing to the first reader and nothing new to the second. Write about what',
+    'the HIVE is doing and becoming; use the specifics as evidence of that, not',
+    'as the point.',
+    '',
+    'THIS IS PUBLIC. Anyone can read it. Everything you have been given has been',
+    'opted in by the person it belongs to — so use it warmly, and never reach',
+    'past it. Do not describe someone you cannot name, do not hint, do not write',
+    '"one member" or "somebody in the HIVE". If the facts are thin, write a',
+    'shorter, warmer letter. Short and generous beats padded and cagey.',
     '',
     'HER VOICE: warm, chatty, a little goofy. Short paragraphs. Exclamation',
     'points and em-dashes. Emoji sprinkled, never wall-to-wall. She says',
@@ -144,32 +174,82 @@ serve(async (req) => {
     if (!communityId) return errorResponse('Missing communityId', 400);
     const date = /^\d{4}-\d{2}-\d{2}$/.test(body.date ?? '') ? body.date! : pacificToday();
 
+    // Being signed in used to be the whole test, and the id of the HIVE to read
+    // came from whoever was asking. Any member could therefore have asked this
+    // for a HIVE they had never been in and received its wishes, shout-outs and
+    // meeting summary — because everything below reads with the service key,
+    // which walks straight past row-level security. Found 2026-08-03, unused.
+    //
+    // The newsletter speaks FOR the HIVE to the outside world, so drafting it is
+    // an owner's job, not an admin's. Nic runs OG HIVE with Nat and shouldn't be
+    // able to publish under its name; nor should any admin of any HIVE we add.
     const authHeader = req.headers.get('Authorization') ?? '';
     if (authHeader !== `Bearer ${serviceKey}`) {
       const auth = await verifySupabaseJwt(authHeader);
       if (isAuthError(auth)) return errorResponse(auth.error, auth.status);
+
+      const { data: caller } = await supabaseAdmin
+        .from('profiles')
+        .select('is_owner')
+        .eq('id', auth.userId)
+        .maybeSingle();
+
+      if (!caller?.is_owner) {
+        // Deliberately the same words whether they're not an owner or the HIVE
+        // doesn't exist — a refusal shouldn't teach you what is behind it.
+        return errorResponse('The newsletter is drafted by the HIVE owner.', 403);
+      }
     }
 
-    // The newsletter is a CALENDAR thing, not a meeting thing: it goes out on
-    // the 1st and covers the month that just ended. Meetings wander (usually
-    // 2nd Wednesday, but availability moves them), so anchoring the draft to
-    // the last meeting would leave the first week or two of a month out of the
-    // newsletter entirely (Nat 2026-07-25).
+    // A HIVE that cannot publish outward has no public newsletter, whatever any
+    // single item inside it says. The ceiling is the backstop for a mis-tapped
+    // setting (migration 125), and it has to hold here too — this function is
+    // the one place that assembles a HIVE's contents into something that leaves.
+    const { data: hive } = await supabaseAdmin
+      .from('communities')
+      .select('name, max_share_scope')
+      .eq('id', communityId)
+      .maybeSingle();
+
+    if (!hive) return errorResponse('The newsletter is drafted by the HIVE owner.', 403);
+
+    if (hive.max_share_scope !== 'public') {
+      return jsonResponse({
+        success: true,
+        blocked: true,
+        month: null,
+        prose: null,
+        sections: [],
+        reason: `${hive.name} keeps its contents inside the HIVE, so there's nothing to publish outward yet. `
+          + `Raise what it's allowed to share and this will fill in.`,
+      });
+    }
+
+    // The newsletter is a CALENDAR thing, not a meeting thing: a month's recap
+    // goes out in the month after it. Meetings wander (usually 2nd Wednesday,
+    // but availability moves them), so anchoring to the last meeting would leave
+    // the first week or two of a month out of the letter (Nat 2026-07-25).
     //
-    // Run it in the first week of a month and it covers the previous month;
-    // run it mid-month and it covers this month so far.
-    const [year, month, day] = date.split('-').map(Number);
-    const coversPreviousMonth = day <= 7;
-    const startYear = coversPreviousMonth && month === 1 ? year - 1 : year;
-    const startMonth = coversPreviousMonth ? (month === 1 ? 12 : month - 1) : month;
+    // It used to work this out from the day of the month — the 7th or earlier
+    // meant "last month", the 8th onwards meant "this month so far". So the same
+    // button produced the July recap on Friday and an August fragment on
+    // Saturday, without saying so. The month is now stated, and only defaults.
+    const [thisYear, thisMonth] = date.split('-').map(Number);
+    const requested = /^\d{4}-\d{2}$/.test(body.month ?? '') ? body.month! : null;
+    const startYear = requested
+      ? Number(requested.slice(0, 4))
+      : (thisMonth === 1 ? thisYear - 1 : thisYear);
+    const startMonth = requested
+      ? Number(requested.slice(5, 7))
+      : (thisMonth === 1 ? 12 : thisMonth - 1);
     const cycleStart = `${startYear}-${String(startMonth).padStart(2, '0')}-01`;
-    const cycleEnd = coversPreviousMonth
-      ? `${year}-${String(month).padStart(2, '0')}-01`
-      : null;
+    const endYear = startMonth === 12 ? startYear + 1 : startYear;
+    const endMonth = startMonth === 12 ? 1 : startMonth + 1;
+    const cycleEnd = `${endYear}-${String(endMonth).padStart(2, '0')}-01`;
     const startIso = `${cycleStart}T00:00:00Z`;
-    // Only bound the top end when we're reporting a finished month — a
-    // mid-month draft should include everything up to right now.
-    const endIso = cycleEnd ? `${cycleEnd}T00:00:00Z` : null;
+    // A whole month, always — a recap of a finished month has a end as well as
+    // a beginning, and half of one was never what anybody wanted.
+    const endIso = `${cycleEnd}T00:00:00Z`;
     const withinWindow = (timestamp?: string | null) => (
       !!timestamp && timestamp >= startIso && (!endIso || timestamp < endIso)
     );
@@ -181,10 +261,10 @@ serve(async (req) => {
       memberRows,
       wishRows,
       grantedRows,
+      grantedCountRows,
       todoRows,
       checkInRows,
       pastEventRows,
-      meetingRows,
     ] = await Promise.all([
       // Meetings are members-only by nature, so the public newsletter never
       // names one. Kept as a query only so the shape below stays readable.
@@ -201,7 +281,7 @@ serve(async (req) => {
         .eq('visibility', 'public')
         .gte('event_date', date).order('event_date', { ascending: true }).limit(30),
       supabaseAdmin.from('board_posts')
-        .select('id, title, content, created_at, author_id, category:board_categories!category_id(name)')
+        .select('id, title, content, created_at, author_id, visibility, category:board_categories!category_id(name)')
         .eq('community_id', communityId)
         .is('archived_at', null)
         .order('created_at', { ascending: false }).limit(60),
@@ -211,12 +291,24 @@ serve(async (req) => {
       supabaseAdmin.from('wishes')
         .select('user_id, title, description, is_spotlight, status')
         .eq('community_id', communityId).neq('status', 'fulfilled'),
+      // Granted wishes carry a name and what that person needed, so they only
+      // travel as far as the wisher chose. All 49 wishes are 'hive' today, which
+      // is why July's letter counts them rather than lists them: momentum is
+      // Nat's to celebrate, the details are each member's to offer.
       supabaseAdmin.from('wishes')
-        .select('title, description, fulfilled_at, user:profiles!user_id(name)')
+        .select('title, description, fulfilled_at, share_scope, user:profiles!user_id(name)')
         .eq('community_id', communityId)
         .eq('status', 'fulfilled')
+        .eq('share_scope', 'public')
         .gte('fulfilled_at', startIso)
         .order('fulfilled_at', { ascending: false }).limit(20),
+      // Counted, never named — how many wishes came true is a fact about the
+      // HIVE, not about anybody in it.
+      supabaseAdmin.from('wishes')
+        .select('id', { count: 'exact', head: true })
+        .eq('community_id', communityId)
+        .eq('status', 'fulfilled')
+        .gte('fulfilled_at', startIso),
       supabaseAdmin.from('action_items')
         .select('description, completed, completed_at, assignee:profiles!assigned_to(name)')
         .eq('community_id', communityId)
@@ -233,15 +325,8 @@ serve(async (req) => {
         .select('title, event_date, event_type, description, location')
         .eq('community_id', communityId)
         .eq('visibility', 'public')
-        .gte('event_date', cycleStart).lt('event_date', date)
+        .gte('event_date', cycleStart).lt('event_date', cycleEnd)
         .order('event_date', { ascending: true }).limit(30),
-      // The meeting deck's News and App updates — "Around the HIVE" is written
-      // from these, and they're already typed once on the helper.
-      supabaseAdmin.from('meetings')
-        .select('date, summary')
-        .eq('community_id', communityId)
-        .gte('date', cycleStart)
-        .order('date', { ascending: false }).limit(3),
     ]);
 
     const nextMeeting = ((nextMeetingRows.data ?? []) as any[])[0] ?? null;
@@ -269,13 +354,17 @@ serve(async (req) => {
     // Replies members left this cycle on the threads the midway check-in posts
     // into. This is the whole point: they answered a friendly prompt, and it
     // shows up here without anyone re-typing it.
+    // share_scope = 'public' is the whole gate (migration 129). A reply written
+    // for the HIVE stays in the HIVE, however good it is — the newsletter is an
+    // offer, not a levy on everything anyone typed this month.
     const harvest = async (match: RegExp, limit = 30) => {
       const thread = posts.find((row) => match.test(row.title ?? ''));
       if (!thread) return [] as { name: string; content: string }[];
       const { data } = await supabaseAdmin
         .from('board_replies')
-        .select('content, created_at, author_id')
+        .select('content, created_at, author_id, share_scope')
         .eq('post_id', thread.id)
+        .eq('share_scope', 'public')
         .gte('created_at', startIso)
         .order('created_at', { ascending: true })
         .limit(limit);
@@ -298,8 +387,9 @@ serve(async (req) => {
         if (!focusThread) return [] as { name: string; content: string }[];
         const { data } = await supabaseAdmin
           .from('board_replies')
-          .select('content, created_at, author_id')
+          .select('content, created_at, author_id, share_scope')
           .eq('post_id', focusThread.id)
+          .eq('share_scope', 'public')
           .gte('created_at', startIso)
           .order('created_at', { ascending: true })
           .limit(30);
@@ -366,23 +456,27 @@ serve(async (req) => {
       });
     }
 
-    // Pull News from Nat / App updates straight off the meeting summary — the
-    // deck already carries them, so nobody types them twice.
-    const deckLines: { news: string[]; app: string[] } = { news: [], app: [] };
-    ((meetingRows.data ?? []) as any[]).forEach((meeting) => {
-      if (!meeting.summary) return;
-      try {
-        const parsed = JSON.parse(meeting.summary) as { sections?: { title: string; lines: string[] }[] };
-        (parsed.sections ?? []).forEach((section) => {
-          if (/^news from/i.test(section.title)) deckLines.news.push(...section.lines);
-          if (/^app updates/i.test(section.title)) deckLines.app.push(...section.lines);
-        });
-      } catch {
-        // A legacy or plain-text summary — nothing to harvest.
-      }
-    });
-    if (deckLines.news.length > 0) sections.push({ title: 'News from the meeting', lines: deckLines.news });
-    if (deckLines.app.length > 0) sections.push({ title: 'Around the HIVE (app updates)', lines: deckLines.app });
+    // The meeting summary used to feed two sections here, and both were wrong.
+    //
+    // "News from the meeting" was a members-only artifact — it carried a line
+    // about Nat and Lucas not having a hard out, which means nothing to a
+    // stranger, and it had already harvested the month's new board threads, so
+    // every thread printed twice: once here and once under New on the boards.
+    //
+    // "Around the HIVE" was frozen at whatever the deck happened to say on the
+    // night of the meeting. July's meeting was the 25th, so the July recap would
+    // have boasted about things that shipped in June and missed The Buzz, the
+    // menu, multi-HIVE and confetti entirely.
+    //
+    // App news now comes from lib/appNews.ts, the living list the app already
+    // shows every member on Home — sent by the caller, who is the owner, and
+    // already public-facing by design.
+    const appNews = Array.isArray(body.appNews)
+      ? body.appNews.map((line) => String(line).trim()).filter(Boolean).slice(0, 12)
+      : [];
+    if (appNews.length > 0) {
+      sections.push({ title: 'Around the HIVE (app updates)', lines: appNews });
+    }
 
     if (shoutOuts.length > 0) {
       sections.push({
@@ -413,10 +507,26 @@ serve(async (req) => {
       });
     if (grantedLines.length > 0) sections.push({ title: 'Wishes granted 🌟', lines: grantedLines });
 
+    // Nobody has opted a wish into the letter yet, but six of them came true and
+    // that IS the story — "the OG HIVErs are starting to reach critical mass"
+    // (Nat 2026-08-03). So the total goes in even when no detail can.
+    const grantedTotal = (grantedCountRows as { count?: number | null }).count ?? 0;
+    if (grantedLines.length === 0 && grantedTotal > 0) {
+      sections.push({
+        title: 'Wishes granted 🌟',
+        lines: [
+          `${grantedTotal} ${grantedTotal === 1 ? 'wish' : 'wishes'} came true this month.`,
+          'NOTE TO THE WRITER: say the number warmly and move on. No names, no'
+          + ' hints, no "one member" descriptions — nobody chose to be in here yet.',
+        ],
+      });
+    }
+
     // New threads worth telling people about — the boards move faster than
     // anyone checks them.
     const newThreads = posts
       .filter((row) => withinWindow(row.created_at))
+      .filter((row) => row.visibility === 'public')
       .filter((row) => !/newsletter|compliment/i.test(row.title ?? ''))
       .slice(0, 8)
       .map((row) => (row.category?.name ? `${row.category.name} → ${row.title}` : String(row.title)));
@@ -433,6 +543,11 @@ serve(async (req) => {
       Number(cycleStart.slice(5, 7)) - 1,
       15,
     )).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+    // "The Buzz — July 2026 HIVE Recap", named for the month it recaps rather
+    // than the month it goes out in. Nat renamed these on Wix for exactly this
+    // reason: a letter titled for August that is all about July makes you feel
+    // a month behind. The recap of July goes out in August, and says so.
+    const recapTitle = `The Buzz — ${monthLabel} ${startYear} HIVE Recap`;
     const factsText = sections
       .map((section) => `${section.title}\n${section.lines.map((line) => `- ${line.trim()}`).join('\n')}`)
       .join('\n\n');
@@ -442,6 +557,8 @@ serve(async (req) => {
       success: true,
       date,
       month: monthLabel,
+      year: startYear,
+      recap_title: recapTitle,
       prose,
       cycle_start: cycleStart,
       cycle_end: cycleEnd,

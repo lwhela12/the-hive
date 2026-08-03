@@ -121,6 +121,12 @@ export interface Profile extends Record<string, unknown> {
   occupation?: string;
   profile_title?: string | null;
   role: UserRole;
+  /**
+   * God level — Nat and Lucas. Distinct from being a community admin, who runs
+   * one HIVE from the inside. Anything that speaks for a HIVE to the outside
+   * world, or reads across HIVEs, asks this (migration 128).
+   */
+  is_owner?: boolean | null;
   queen_bee_month?: string;
   queen_bee_preference?: QueenBeePreference;
   google_calendar_id?: string;

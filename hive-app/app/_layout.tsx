@@ -23,9 +23,12 @@ import { MaintenanceScreen } from '../components/ui/MaintenanceScreen';
 // ---------------------------------------------------------------------------
 // The door. Flip to true and push to close the app to members; the screen and
 // the ?bee=1 bypass are already wired, so that is the whole switch.
-// Closed overnight 2026-08-02; reopened the morning of 2026-08-03.
+// Closed overnight 2026-08-02; reopened the morning of 2026-08-03; closed again
+// an hour later, when an audit found eighteen ways data could cross a boundary
+// it shouldn't. Nat's call and the right one — it stays shut until we know what
+// is what, not until the list is merely shorter.
 // ---------------------------------------------------------------------------
-const MAINTENANCE = false;
+const MAINTENANCE = true;
 
 const MAINTENANCE_BYPASS_KEY = 'hive:bee';
 
