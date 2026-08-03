@@ -2,7 +2,7 @@ import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { HIVE_WIDE_GREEN } from '../ui/HiveWideWelcome';
-import { SpinningGlobe } from '../ui/SpinningGlobe';
+import { SpaceGlobe } from '../ui/SpaceGlobe';
 import {
   HIVE_WIDE_EDGE,
   HIVE_WIDE_ROOM_NAME,
@@ -74,7 +74,7 @@ export function HiveWideRoomView({
       </View>
 
       <View className="flex-1">
-        <SpinningGlobe colour={HIVE_WIDE_GREEN} />
+        <SpaceGlobe />
         <View className="flex-1 items-center justify-center px-8">
           <Text
             style={{

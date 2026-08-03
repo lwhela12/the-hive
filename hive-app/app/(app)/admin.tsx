@@ -49,7 +49,7 @@ import {
   hivePanelSkin,
 } from '../../components/admin/GodModePanels';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
-import { GlobeHero } from '../../components/ui/GlobeHero';
+import { SpaceGlobe } from '../../components/ui/SpaceGlobe';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
@@ -887,7 +887,7 @@ function LockedAdminScreen({
 }) {
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <GlobeHero title="Admin" subtitle="Every HIVE, from above." hue="slate" height={220} />
+      <SpaceGlobe hue="slate" />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
@@ -2037,7 +2037,7 @@ export default function AdminScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <GlobeHero title="Admin" subtitle="Every HIVE, from above." hue="slate" height={220} />
+      <SpaceGlobe hue="slate" />
 
       <ScrollView
         className="flex-1"

@@ -6,7 +6,7 @@ import Svg, { Polygon } from 'react-native-svg';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
-import { NAV_DESTINATIONS, ADMIN_DESTINATION, HIVE_WIDE_ROUTE, activeKeyForPath } from '../../lib/navigation';
+import { NAV_DESTINATIONS, ADMIN_DESTINATION, HIVE_WIDE_ROUTE, HIVE_WIDE_CHILDREN, activeKeyForPath } from '../../lib/navigation';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
@@ -34,7 +34,7 @@ const RAIL_COLLAPSED = 56;
 const RAIL_EXPANDED = 212;
 
 /** HIVE-Wide's green — the one colour that never belongs to a single HIVE. */
-const WIDE_GREEN = '#3F7D5C';
+const WIDE_BLACK = '#0B0B12';
 
 /**
  * The rail sits in a deeper shade of the HIVE's own colour, because a rail and
@@ -244,9 +244,18 @@ export const SideRail = memo(function SideRail({
           emoji="🌍"
           label="HIVE-Wide"
           active={onHiveWide}
-          tint={WIDE_GREEN}
+          tint={WIDE_BLACK}
           onPress={() => go(HIVE_WIDE_ROUTE)}
         />
+        {HIVE_WIDE_CHILDREN.map((c) => (
+          <Row
+            key={c.key}
+            emoji={c.emoji}
+            label={c.label}
+            indented
+            onPress={() => go(c.route)}
+          />
+        ))}
 
         {divider}
 

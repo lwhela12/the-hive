@@ -80,6 +80,21 @@ export const NAV_DESTINATIONS: NavDestination[] = [
 /** The two zoom levels, above the line. HIVE-Wide is always first. */
 export const HIVE_WIDE_ROUTE = '/hive-wide';
 
+/**
+ * What sits under HIVE-Wide in the rail.
+ *
+ * These were four honeycombs on the HIVE-Wide page until 2026-08-03. They are
+ * destinations, and destinations belong in the rail — the same call that emptied
+ * Home's comb row on the same day. It also means the page can be about the month
+ * rather than about navigation.
+ */
+export const HIVE_WIDE_CHILDREN: NavDestination[] = [
+  { key: 'hw-approved', label: 'HIVE Approved', emoji: '✅', route: '/board', gate: 'everyone' },
+  { key: 'hw-announcements', label: 'Announcements', emoji: '📣', route: '/board', gate: 'everyone' },
+  { key: 'hw-buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone' },
+  { key: 'hw-calendar', label: 'Calendar', emoji: '🗓️', route: '/meetings', gate: 'everyone' },
+];
+
 /** Below the last line. Owners see the newsletter tools once they're inside. */
 export const ADMIN_DESTINATION: NavDestination = {
   key: 'admin', label: 'Admin', emoji: '⚙️', route: '/admin', gate: 'admin',
