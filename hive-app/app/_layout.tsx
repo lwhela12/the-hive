@@ -18,6 +18,30 @@ import {
 import { clearBoardNavigationState } from '../lib/boardNavigation';
 import { resetHomeNavigationState } from '../lib/homeNavigation';
 import type { Profile, Community, UserRole } from '../types';
+import { MaintenanceScreen } from '../components/ui/MaintenanceScreen';
+
+// ---------------------------------------------------------------------------
+// TEMPORARY: the app is closed to members overnight 2026-08-02.
+// Set this to false and push to open it again. That is the whole switch.
+// Nat gets in with app.the-hive.app/?bee=1 — it sticks for the tab.
+// ---------------------------------------------------------------------------
+const MAINTENANCE = true;
+
+const MAINTENANCE_BYPASS_KEY = 'hive:bee';
+
+function maintenanceHoldsUs(): boolean {
+  if (!MAINTENANCE) return false;
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return MAINTENANCE;
+  try {
+    if (new URLSearchParams(window.location.search).get('bee') === '1') {
+      window.sessionStorage.setItem(MAINTENANCE_BYPASS_KEY, '1');
+      return false;
+    }
+    return window.sessionStorage.getItem(MAINTENANCE_BYPASS_KEY) !== '1';
+  } catch {
+    return true;
+  }
+}
 import { useFonts } from 'expo-font';
 import {
   LibreBaskerville_400Regular,
@@ -388,6 +412,11 @@ export default function RootLayout() {
     hivePickerOpen, openHivePicker, switchCommunity, loading, refreshProfile,
   ]);
   const isJoinRoute = pathname === '/join' || pathname?.startsWith('/join/');
+
+  // Closed for the night, before anything else renders.
+  if (maintenanceHoldsUs() && fontsLoaded) {
+    return <MaintenanceScreen />;
+  }
 
   // Show loading screen while fonts load
   if (!fontsLoaded) {
