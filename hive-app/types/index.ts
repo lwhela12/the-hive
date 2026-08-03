@@ -111,6 +111,27 @@ export interface Waitlist extends Record<string, unknown> {
   created_at: string;
 }
 
+/**
+ * The month's HIVE Focus (migration 135). One row with no community_id is THE
+ * focus, chosen in OG HIVE and seen everywhere; a row naming a HIVE is that
+ * HIVE's own and replaces it for them. No row means you follow everyone's.
+ *
+ * The standing invitation underneath it lives in lib/hiveFocus.ts, not here —
+ * it never changes, and a line retyped monthly gets reworded monthly.
+ */
+export interface MonthlyFocus extends Record<string, unknown> {
+  id: string;
+  /** YYYY-MM. */
+  month: string;
+  /** null means every HIVE. */
+  community_id: string | null;
+  title: string;
+  body: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Profile extends Record<string, unknown> {
   id: string;
   name: string;
@@ -919,6 +940,12 @@ export interface Database {
         Row: NewsletterSubscriber;
         Insert: Omit<NewsletterSubscriber, 'id' | 'created_at' | 'token'>;
         Update: Partial<Omit<NewsletterSubscriber, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      monthly_focus: {
+        Row: MonthlyFocus;
+        Insert: Omit<MonthlyFocus, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<MonthlyFocus, 'id' | 'created_at'>>;
         Relationships: [];
       };
     };

@@ -10,7 +10,7 @@ import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
 import { AppUpdateBanner } from '../../components/ui/AppUpdateBanner';
 import { CelebrationOverlay } from '../../components/ui/CelebrationOverlay';
 import { HivePicker } from '../../components/hive/HivePicker';
-import { NavigationDrawer } from '../../components/navigation';
+import { NavigationDrawer, SideRail } from '../../components/navigation';
 import { AppDrawerContext } from '../../lib/hooks/useAppDrawer';
 import { getLastAppPathAsync, getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 import { currentReturnTo } from '../../lib/authReturnTo';
@@ -100,10 +100,11 @@ export default function AppLayout() {
   const useMobileLayout = width < 768;
   const useImmersiveProfileGarden = pathname === '/profile' && width > height && height < 540;
   const { isBrowserMode } = useWebAppDisplayMode();
+  // The bottom bar is gone (2026-08-03) — the rail carries navigation now. The
+  // per-screen tabBarIcon definitions below are left in place deliberately:
+  // Tabs still owns routing, and they cost nothing while the bar is hidden.
+  // Ripping them out is a separate tidy, not part of changing the furniture.
   const useBrowserCompactTabs = Platform.OS === 'web' && useMobileLayout && isBrowserMode;
-  const mobileTabHeight = useBrowserCompactTabs ? 62 : 78;
-  const mobileTabPaddingBottom = useBrowserCompactTabs ? 6 : Platform.OS === 'ios' ? 14 : 8;
-  const mobileTabPaddingTop = useBrowserCompactTabs ? 2 : 4;
   const tabIconSize = useMobileLayout ? (useBrowserCompactTabs ? 20 : 22) : 26;
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const restoredNativePathRef = useRef(false);
@@ -112,6 +113,10 @@ export default function AppLayout() {
   // rendered NavigationDrawer before, which is why Admin vanished when it moved
   // there (Nat 2026-08-02).
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The rail starts collapsed — icons only, out of the way. On a wide screen
+  // there's room to open it and leave it open; on a phone it closes itself
+  // behind you when you go somewhere.
+  const [railExpanded, setRailExpanded] = useState(false);
   const drawerValue = useMemo(() => ({
     isOpen: drawerOpen,
     open: () => setDrawerOpen(true),
@@ -194,32 +199,26 @@ export default function AppLayout() {
     <View style={{ flex: 1 }}>
       {/* "Fresh honey" bar — web only, shows on every tab when a new build ships */}
       <AppUpdateBanner />
+      {/* The rail and the pages, side by side. The tab bar is hidden rather than
+          removed: Tabs still owns the routing and the per-screen state, and
+          fighting that would mean rebuilding navigation instead of re-dressing
+          it (Nat 2026-08-03). */}
+      <View style={{ flex: 1, flexDirection: 'row' }}>
+      {!useImmersiveProfileGarden ? (
+        <SideRail
+          expanded={railExpanded}
+          onToggle={() => setRailExpanded((v) => !v)}
+          unreadDMCount={totalUnreadDMs}
+        />
+      ) : null}
+      <View style={{ flex: 1 }}>
       <Tabs
         initialRouteName={getLastAppTabName()}
         screenOptions={{
           headerShown: false,
-          tabBarStyle: useImmersiveProfileGarden
-            ? { display: 'none' }
-            : useMobileLayout
-            ? {
-                height: mobileTabHeight,
-                paddingTop: mobileTabPaddingTop,
-                paddingBottom: mobileTabPaddingBottom,
-                backgroundColor: '#fff',
-                borderTopColor: '#dec181',
-              }
-            : {
-                // The icons were sitting right under the gold line with all the
-                // slack below them, so the rule read as resting on top of them
-                // (Nat 2026-08-03). Padding on both sides now, and a little more
-                // room, so the icon-and-label block sits in the middle of the bar
-                // instead of hanging from its ceiling.
-                height: 80,
-                paddingTop: 10,
-                paddingBottom: 10,
-                backgroundColor: '#fff',
-                borderTopColor: '#dec181',
-              },
+          // Seven tabs at about 55px each had run out of room, and every new
+          // feature made it worse. The rail scrolls, so it never does.
+          tabBarStyle: { display: 'none' },
           tabBarItemStyle: useMobileLayout
             ? { minWidth: 0, paddingHorizontal: 0, paddingVertical: 0 }
             : undefined,
@@ -391,6 +390,13 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
+          name="hive-wide"
+          options={{
+            title: 'HIVE-Wide',
+            href: null,
+          }}
+        />
+        <Tabs.Screen
           name="arrival-board"
           options={{
             title: 'Arrival Board',
@@ -450,6 +456,8 @@ export default function AppLayout() {
           }}
         />
       </Tabs>
+      </View>
+      </View>
 
       {/* Confetti for a granted wish, over every tab. Mounted once. */}
       <CelebrationOverlay />
