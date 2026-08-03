@@ -6,7 +6,7 @@ import Svg, { Polygon } from 'react-native-svg';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
-import { NAV_DESTINATIONS, ADMIN_DESTINATION, HIVE_WIDE_ROUTE, HIVE_WIDE_CHILDREN, activeKeyForPath } from '../../lib/navigation';
+import { ADMIN_DESTINATION, destinationsForPlace, activeKeyForPath } from '../../lib/navigation';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
@@ -64,7 +64,7 @@ export const SideRail = memo(function SideRail({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { profile, community, communityId, communityRole, memberships, switchCommunity } = useAuth();
+  const { profile, community, communityId, communityRole, memberships, switchCommunity, wholeHive, enterWholeHive } = useAuth();
   const { width } = useWindowDimensions();
 
   const isPhone = width < 768;
@@ -72,10 +72,14 @@ export const SideRail = memo(function SideRail({
   const isOwner = profile?.is_owner === true;
   const canSeeAdmin = isAdmin || isOwner;
   const accent = hiveAccent(community);
-  const railColour = deepen(accent);
   const activeKey = activeKeyForPath(pathname);
-  const onHiveWide = activeKey === 'hive-wide';
+  const onHiveWide = wholeHive || activeKey === 'hive-wide';
   const hasMoreThanOneHive = memberships.length > 1;
+  // Standing above the HIVEs, the rail goes to space rather than wearing one
+  // HIVE's colour — "it should be dark, like outer space" (Nat 2026-08-03).
+  // It is the same black the globe hangs in, so the rail and the page agree.
+  const railColour = onHiveWide ? WIDE_BLACK : deepen(accent);
+  const destinations = destinationsForPlace({ isAdmin, isOwner, wholeHive: onHiveWide });
 
   const go = useCallback(
     (route: string) => {
@@ -237,38 +241,44 @@ export const SideRail = memo(function SideRail({
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 14 }}>
-        {/* HIVE-Wide and its own pages sit above the line; your HIVE and its
-            pages sit below. The same shape twice, at two zoom levels, so the
-            app reads the same however far out you're standing. */}
-        <Row
-          emoji="🌍"
-          label="HIVE-Wide"
-          active={onHiveWide}
-          tint={WIDE_BLACK}
-          onPress={() => go(HIVE_WIDE_ROUTE)}
-        />
-        {HIVE_WIDE_CHILDREN.map((c) => (
-          <Row
-            key={c.key}
-            emoji={c.emoji}
-            label={c.label}
-            indented
-            onPress={() => go(c.route)}
-          />
-        ))}
+        {/* "My HIVEs" is Home, and HIVE-Wide is the first thing under it —
+            not a second section with its own children.
 
-        {divider}
-
-        {/* "My HIVEs" is Home. There used to be both, which was the same place
-            listed twice at two different heights (Nat 2026-08-03). */}
+            Nat's call, 2026-08-03: "we just move HIVE-Wide under My HIVEs, then
+            we aren't trying to reinvent the wheel, it's just the same format as
+            all the other ones." Which is right. HIVE-Wide is not a different
+            KIND of place, it is one more place of the same kind, and the one
+            page list below serves whichever of them you're standing in. */}
         <Row
           emoji="🏠"
           label={hasMoreThanOneHive ? 'My HIVEs' : hiveDisplayName(community?.name)}
           active={!onHiveWide && activeKey === 'home'}
-          onPress={() => go('/hive')}
+          onPress={() => {
+            // Home means your HIVE's home. Tapping it from HIVE-Wide has to
+            // bring you back down as well as move you, or you'd land on OG's
+            // page with the rail still black and Clive still missing.
+            if (onHiveWide && communityId) {
+              void switchCommunity(communityId);
+              if (isPhone && expanded) onToggle();
+            } else {
+              go('/hive');
+            }
+          }}
         />
-        {hasMoreThanOneHive
-          ? memberships.map((m) => (
+        {hasMoreThanOneHive ? (
+          <>
+            <Row
+              emoji="🌍"
+              label="HIVE-Wide"
+              indented
+              active={onHiveWide}
+              tint={WIDE_BLACK}
+              onPress={() => {
+                enterWholeHive();
+                if (isPhone && expanded) onToggle();
+              }}
+            />
+            {memberships.map((m) => (
               <Row
                 key={m.community_id}
                 emoji="⬢"
@@ -281,15 +291,19 @@ export const SideRail = memo(function SideRail({
                   if (isPhone && expanded) onToggle();
                 }}
               />
-            ))
-          : null}
+            ))}
+          </>
+        ) : null}
 
-        {NAV_DESTINATIONS.map((item) => (
+        {/* One list, whichever place you picked. Pages that only mean something
+            inside a single HIVE step out at HIVE-Wide rather than showing you
+            one HIVE's answer while you're standing above all of them. */}
+        {destinations.map((item) => (
           <Row
             key={item.key}
             emoji={item.emoji}
             label={item.label}
-            active={!onHiveWide && activeKey === item.key}
+            active={activeKey === item.key}
             badge={item.badge === 'dms' ? unreadDMCount : 0}
             onPress={() => go(item.route)}
           />

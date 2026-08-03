@@ -2104,7 +2104,9 @@ function MemberDetailModal({
 }
 
 export default function MembersScreen() {
-  const { communityId, profile, session, community } = useAuth();
+  const { communityId, profile, session, community, wholeHive, memberships: myHives } = useAuth();
+  // Every HIVE this person is in, for the HIVE-Wide view of who is around.
+  const myHiveIds = useMemo(() => myHives.map((m) => m.community_id), [myHives]);
   const { memberId: routeMemberId, view: routeViewParam, open: routeOpenParam } = useLocalSearchParams<{ memberId?: string | string[]; view?: string | string[]; open?: string | string[] }>();
   const memberId = Array.isArray(routeMemberId) ? routeMemberId[0] : routeMemberId;
   const routeView = Array.isArray(routeViewParam) ? routeViewParam[0] : routeViewParam;
@@ -2145,10 +2147,13 @@ export default function MembersScreen() {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     setError(null);
 
+      // At HIVE-Wide this is everybody you share any HIVE with, once each —
+      // somebody in two of your HIVEs is still one person (Nat 2026-08-03).
+      const scopeIds = wholeHive && myHiveIds.length > 0 ? myHiveIds : [communityId];
       const { data: memberships, error: membErr } = await supabase
         .from('community_memberships')
         .select('user_id, role')
-        .eq('community_id', communityId);
+        .in('community_id', scopeIds);
 
       if (membErr || !memberships) {
         console.warn('[Members] memberships load failed', membErr);
@@ -2157,7 +2162,19 @@ export default function MembersScreen() {
         return;
       }
 
-      const userIds = memberships.map((m: any) => m.user_id).filter(Boolean);
+      // One row per person. Across several HIVEs the same member comes back
+      // once per HIVE they're in, and listing Lucas three times would be a bug
+      // that looks like a design decision. Highest role they hold anywhere wins.
+      const rank: Record<string, number> = { member: 0, treasurer: 1, admin: 2 };
+      const byUser = new Map<string, any>();
+      for (const m of (memberships as any[])) {
+        if (!m.user_id) continue;
+        const prev = byUser.get(m.user_id);
+        if (!prev || (rank[m.role] ?? 0) > (rank[prev.role] ?? 0)) byUser.set(m.user_id, m);
+      }
+      const roster = Array.from(byUser.values());
+
+      const userIds = roster.map((m: any) => m.user_id).filter(Boolean);
       if (userIds.length === 0) {
         setMembers([]);
         if (isRefresh) setRefreshing(false); else setLoading(false);
@@ -2179,7 +2196,7 @@ export default function MembersScreen() {
       const profilesById = new Map<string, any>();
       profilesData.forEach((p: any) => profilesById.set(p.id, p));
 
-      const memberList: MemberData[] = memberships.map((m: any) => {
+      const memberList: MemberData[] = roster.map((m: any) => {
         const memberProfile = profilesById.get(m.user_id);
         return {
           id: m.user_id,
@@ -2366,7 +2383,7 @@ export default function MembersScreen() {
 
       setMembers(memberList);
       if (isRefresh) setRefreshing(false); else setLoading(false);
-  }, [communityId, currentUserId]);
+  }, [communityId, currentUserId, wholeHive, myHiveIds]);
 
   useEffect(() => {
     loadMembers();
@@ -2566,7 +2583,9 @@ export default function MembersScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f6f4e5' }} edges={['top']}>
       {/* Header — just the name; the search bar below carries the detail */}
-      <AppHeader title="Members" />
+      {/* Green and nameless at HIVE-Wide — wearing OG's gold over a list that
+          includes Tech and Production would name the wrong place. */}
+      <AppHeader title="Members" tone={wholeHive ? 'wide' : 'hive'} />
 
       {/* Search bar */}
       {!loading && members.length > 0 && (

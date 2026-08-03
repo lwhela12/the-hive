@@ -39,6 +39,21 @@ export type NavDestination = {
   badge?: 'dms';
   /** A rule above this item in the rail, to group things loosely. */
   dividerBefore?: boolean;
+  /**
+   * What this page does when you are standing at Whole HIVE rather than inside
+   * one HIVE (Nat 2026-08-03).
+   *
+   * 'same'   — means the same thing wherever you stand. Profile, Settings,
+   *            App Feedback, Log out: they are about you, not about a HIVE.
+   * 'wide'   — has a real all-HIVEs version, at `wideRoute` if it needs a
+   *            different door.
+   * 'hidden' — only means something inside one HIVE, so it steps out of the
+   *            list rather than showing you one HIVE's answer while you are
+   *            standing above all of them.
+   */
+  atWholeHive?: 'same' | 'wide' | 'hidden';
+  /** Where 'wide' items go when you are at Whole HIVE, if not `route`. */
+  wideRoute?: string;
 };
 
 /**
@@ -61,38 +76,61 @@ export type NavDestination = {
 // your HIVEs hang under it. Having both was the same place twice, one above the
 // line and one below (Nat 2026-08-03).
 export const NAV_DESTINATIONS: NavDestination[] = [
-  { key: 'clive', label: 'Clive', emoji: '✨', route: '/', gate: 'everyone' },
-  { key: 'members', label: 'Members', emoji: '👥', route: '/members', gate: 'everyone' },
-  { key: 'boards', label: 'Boards', emoji: '📋', route: '/board', gate: 'everyone' },
-  { key: 'messages', label: 'Messages', emoji: '💌', route: '/messages', gate: 'everyone', badge: 'dms' },
-  { key: 'meetings', label: 'Meetings', emoji: '🗓️', route: '/meetings', gate: 'everyone' },
-  { key: 'honey-pot', label: 'Honey Pot', emoji: '🍯', route: '/honey-pot', gate: 'everyone' },
-  { key: 'profile', label: 'Profile', emoji: '🐝', route: '/profile', gate: 'everyone' },
+  // Clive knows one HIVE's people, wishes and history. There is no version of
+  // him that speaks for all three at once, so he steps out at Whole HIVE.
+  { key: 'clive', label: 'Clive', emoji: '✨', route: '/', gate: 'everyone', atWholeHive: 'hidden' },
+  { key: 'members', label: 'Members', emoji: '👥', route: '/members', gate: 'everyone', atWholeHive: 'wide' },
+  { key: 'boards', label: 'Boards', emoji: '📋', route: '/board', gate: 'everyone', atWholeHive: 'wide', wideRoute: '/hive-wide-boards' },
+  { key: 'messages', label: 'Messages', emoji: '💌', route: '/messages', gate: 'everyone', badge: 'dms', atWholeHive: 'wide' },
+  // Every HIVE's next meeting is already on the Whole HIVE page itself, and the
+  // meetings screen is where you CREATE one — which has no all-HIVEs meaning.
+  { key: 'meetings', label: 'Meetings', emoji: '🗓️', route: '/meetings', gate: 'everyone', atWholeHive: 'hidden' },
+  // Real money, belonging to one HIVE. It is already switched off for Tech.
+  { key: 'honey-pot', label: 'Honey Pot', emoji: '🍯', route: '/honey-pot', gate: 'everyone', atWholeHive: 'hidden' },
+  // The Buzz was only ever one newsletter across all the HIVEs, so it reads the
+  // same standing anywhere — it does not need a wide twin.
+  { key: 'buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone', atWholeHive: 'same' },
+  { key: 'profile', label: 'Profile', emoji: '🐝', route: '/profile', gate: 'everyone', atWholeHive: 'same' },
   // Profile is about you; Settings is the plumbing behind you (2026-08-03).
   // Admin already wears the cog, so Settings takes the sliders.
-  { key: 'settings', label: 'Settings', emoji: '🎛️', route: '/settings', gate: 'everyone' },
+  { key: 'settings', label: 'Settings', emoji: '🎛️', route: '/settings', gate: 'everyone', atWholeHive: 'same' },
+  // Feedback on the app is feedback on all of it, wherever you happen to be.
+  { key: 'feedback', label: 'App Feedback', emoji: '💬', route: '/hive?feedback=1', gate: 'everyone', atWholeHive: 'same' },
 ];
 
 /** The two zoom levels, above the line. HIVE-Wide is always first. */
 export const HIVE_WIDE_ROUTE = '/hive-wide';
 
 /**
- * What sits under HIVE-Wide in the rail.
+ * HIVE-Wide had its own section of the rail with its own children for about an
+ * hour, and Nat killed it the same afternoon she asked for it — correctly.
  *
- * These were four honeycombs on the HIVE-Wide page until 2026-08-03. They are
- * destinations, and destinations belong in the rail — the same call that emptied
- * Home's comb row on the same day. It also means the page can be about the month
- * rather than about navigation.
+ * "We just move HIVE-Wide under My HIVEs. Then we aren't trying to reinvent the
+ * wheel, it's just the same format as all the other ones." Two shapes to learn
+ * became one: HIVE-Wide is the first entry under My HIVEs, next to OG, Tech and
+ * Production, and the single page list below serves whichever one you picked.
+ * Anything added later gets added once instead of twice.
+ *
+ * The name survived a wobble too ("All HIVEs?"), and stayed HIVE-Wide: it reads
+ * like "the whole wide world", and the hyphenated shape can't be mistaken for
+ * the name of an individual HIVE.
  */
-export const HIVE_WIDE_CHILDREN: NavDestination[] = [
-  { key: 'hw-boards', label: 'Boards', emoji: '📋', route: '/hive-wide-boards', gate: 'everyone' },
-  { key: 'hw-buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone' },
-  // Feedback on the app is feedback on all of it, not on the HIVE you happen to
-  // be standing in — so it sits up here rather than in each HIVE's page list
-  // (Nat 2026-08-03).
-  { key: 'hw-feedback', label: 'App Feedback', emoji: '💬', route: '/hive?feedback=1', gate: 'everyone' },
-  { key: 'hw-calendar', label: 'Calendar', emoji: '🗓️', route: '/meetings', gate: 'everyone' },
-];
+export const WHOLE_HIVE_KEY = 'hive-wide';
+
+/** The page list, as it should read from where this person is standing. */
+export function destinationsForPlace(opts: {
+  isAdmin: boolean;
+  isOwner: boolean;
+  wholeHive: boolean;
+}): NavDestination[] {
+  return visibleDestinations(opts)
+    .filter((d) => !(opts.wholeHive && d.atWholeHive === 'hidden'))
+    .map((d) => (
+      opts.wholeHive && d.atWholeHive === 'wide' && d.wideRoute
+        ? { ...d, route: d.wideRoute }
+        : d
+    ));
+}
 
 /** Below the last line. Owners see the newsletter tools once they're inside. */
 export const ADMIN_DESTINATION: NavDestination = {
@@ -119,6 +157,10 @@ export function visibleDestinations(opts: {
  */
 export function activeKeyForPath(pathname: string | null | undefined): string | null {
   if (!pathname) return null;
+  // The shared boards are Boards — they just happen to live at a wide door, so
+  // the rail should light up Boards there rather than the HIVE you came from.
+  // Checked before the HIVE-Wide prefix, which would otherwise swallow it.
+  if (pathname.startsWith('/hive-wide-boards')) return 'boards';
   if (pathname.startsWith(HIVE_WIDE_ROUTE)) return 'hive-wide';
   let best: NavDestination | null = null;
   for (const d of [...NAV_DESTINATIONS, ADMIN_DESTINATION]) {

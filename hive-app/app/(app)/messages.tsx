@@ -130,7 +130,7 @@ function MemberBubble({
 export default function MessagesScreen() {
   const { roomId } = useLocalSearchParams<{ roomId?: string }>();
   const router = useRouter();
-  const { profile, communityId, community } = useAuth();
+  const { profile, communityId, community, wholeHive } = useAuth();
   const { width } = useWindowDimensions();
   const queryClient = useQueryClient();
   const useMobileLayout = width < 768;
@@ -177,6 +177,14 @@ export default function MessagesScreen() {
     // out of it.
     if (selectedRoom || showHiveWide || rooms.length === 0) return;
 
+    // Arriving here from the rail while standing at HIVE-Wide: the HIVE-Wide
+    // room is the one you meant. Restoring one HIVE's last conversation would
+    // quietly drop you back into that HIVE (Nat 2026-08-03).
+    if (wholeHive && !roomId) {
+      setShowHiveWide(true);
+      return;
+    }
+
     const directRoomId = roomId && roomId !== ignoredDirectRoomIdRef.current ? roomId : null;
 
     if (directRoomId) {
@@ -209,7 +217,7 @@ export default function MessagesScreen() {
     return () => {
       cancelled = true;
     };
-  }, [markRoomAsRead, roomId, rooms, selectedRoom, selectedRoomStorageKey, showHiveWide]);
+  }, [markRoomAsRead, roomId, rooms, selectedRoom, selectedRoomStorageKey, showHiveWide, wholeHive]);
 
   const openHiveWide = useCallback(() => {
     setShowHiveWide(true);
@@ -441,6 +449,7 @@ export default function MessagesScreen() {
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       <AppHeader
         title="Messages"
+        tone={wholeHive ? 'wide' : 'hive'}
         rightElement={
           <Pressable
             onPress={() => setShowMemberPicker(true)}

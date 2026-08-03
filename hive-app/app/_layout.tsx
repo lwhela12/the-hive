@@ -16,6 +16,7 @@ import {
   markHiveConfirmed,
 } from '../lib/hiveSelection';
 import { clearBoardNavigationState } from '../lib/boardNavigation';
+import { HIVE_WIDE_ROUTE } from '../lib/navigation';
 import { resetHomeNavigationState } from '../lib/homeNavigation';
 import type { Profile, Community, UserRole } from '../types';
 import { MaintenanceScreen } from '../components/ui/MaintenanceScreen';
@@ -111,6 +112,9 @@ export default function RootLayout() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [community, setCommunity] = useState<Community | null>(null);
   const [communityId, setCommunityId] = useState<string | null>(null);
+  // Whole HIVE is a place you can stand, not a HIVE you belong to — see the
+  // note on `wholeHive` in lib/hooks/useAuth.ts for why it is not an id.
+  const [wholeHive, setWholeHive] = useState(false);
   const [communityRole, setCommunityRole] = useState<UserRole | null>(null);
   const [memberships, setMemberships] = useState<MembershipWithCommunity[]>([]);
   const [hivePickerOpen, setHivePickerOpen] = useState<boolean>(false);
@@ -343,6 +347,16 @@ export default function RootLayout() {
 
   const openHivePicker = useCallback(() => setHivePickerOpen(true), []);
 
+  // Standing above the HIVEs rather than in one. Your real HIVE stays selected
+  // underneath, so coming back down lands you where you were rather than at
+  // whichever HIVE happens to be first in the list.
+  const enterWholeHive = useCallback(() => {
+    markHiveConfirmed();
+    setHivePickerOpen(false);
+    setWholeHive(true);
+    router.replace(HIVE_WIDE_ROUTE as never);
+  }, []);
+
   // Move into another hive. Everything the app reads is keyed by community id,
   // so setting it here is the whole switch — the React Query keys change with
   // it and each screen refetches on its own.
@@ -354,6 +368,8 @@ export default function RootLayout() {
 
     markHiveConfirmed();
     setHivePickerOpen(false);
+    // Picking a HIVE by name is how you come down out of Whole HIVE.
+    setWholeHive(false);
 
     if (target.community_id !== communityId) {
       // Where you were in the old hive means nothing in the new one.
@@ -388,11 +404,14 @@ export default function RootLayout() {
     hivePickerOpen,
     openHivePicker,
     switchCommunity,
+    wholeHive,
+    enterWholeHive,
     loading,
     refreshProfile,
   }), [
     session, profile, community, communityId, communityRole, memberships,
-    hivePickerOpen, openHivePicker, switchCommunity, loading, refreshProfile,
+    hivePickerOpen, openHivePicker, switchCommunity, wholeHive, enterWholeHive,
+    loading, refreshProfile,
   ]);
   const isJoinRoute = pathname === '/join' || pathname?.startsWith('/join/');
 
