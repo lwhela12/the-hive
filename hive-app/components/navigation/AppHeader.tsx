@@ -2,7 +2,6 @@ import { memo } from 'react';
 import { Pressable, View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { useAppDrawer } from '../../lib/hooks/useAppDrawer';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 
 interface AppHeaderProps {
@@ -13,7 +12,6 @@ interface AppHeaderProps {
   titleIcon?: React.ReactNode;
   /** Muted one-liner under the title (e.g. Members' count + search hint). */
   subtitle?: string;
-  onMenuPress?: () => void;
   rightElement?: React.ReactNode;
 }
 
@@ -29,15 +27,10 @@ export const AppHeader = memo(function AppHeader({
   onBackPress,
   titleIcon,
   subtitle,
-  onMenuPress,
   rightElement,
 }: AppHeaderProps) {
   const { community } = useAuth();
-  const drawer = useAppDrawer();
   const accent = hiveAccent(community);
-  // Back arrow wins, then a screen's own menu handler (Clive's conversations
-  // drawer), then the app menu — so every screen has a way into it.
-  const menuPress = onMenuPress ?? drawer.open;
   const hiveName = hiveDisplayName(community?.name);
   // Any page whose title is already the HIVE's name says it big and skips the
   // small line — that's Home, and anywhere else that chooses to do the same.
@@ -48,6 +41,11 @@ export const AppHeader = memo(function AppHeader({
       className="flex-row items-center justify-between px-4 py-3"
       style={{ backgroundColor: accent }}
     >
+      {/* The hamburger is gone (2026-08-03). Navigation lives in the rail down
+          the left, always visible, so a button that opened a second copy of the
+          same list was one more thing to keep in step and one more thing to find.
+          A screen that pushed on top of another still gets its back arrow; the
+          left slot is otherwise an empty spacer, so the title stays centred. */}
       {onBackPress ? (
         <Pressable
           onPress={onBackPress}
@@ -59,13 +57,7 @@ export const AppHeader = memo(function AppHeader({
           <Ionicons name="chevron-back" size={24} color="white" />
         </Pressable>
       ) : (
-        <Pressable
-          onPress={menuPress}
-          className="w-10 h-10 items-center justify-center rounded-full active:opacity-70"
-          hitSlop={8}
-        >
-          <Ionicons name="menu" size={26} color="white" />
-        </Pressable>
+        <View className="w-10 h-10" />
       )}
 
       {/* Title */}

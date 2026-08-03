@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import { Text, View, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
@@ -10,8 +10,7 @@ import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
 import { AppUpdateBanner } from '../../components/ui/AppUpdateBanner';
 import { CelebrationOverlay } from '../../components/ui/CelebrationOverlay';
 import { HivePicker } from '../../components/hive/HivePicker';
-import { NavigationDrawer, SideRail } from '../../components/navigation';
-import { AppDrawerContext } from '../../lib/hooks/useAppDrawer';
+import { SideRail } from '../../components/navigation';
 import { getLastAppPathAsync, getLastAppTabName, saveLastAppPath } from '../../lib/navigationState';
 import { currentReturnTo } from '../../lib/authReturnTo';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
@@ -109,19 +108,10 @@ export default function AppLayout() {
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const restoredNativePathRef = useRef(false);
 
-  // The one menu. Mounted here so every screen's header can open it — nothing
-  // rendered NavigationDrawer before, which is why Admin vanished when it moved
-  // there (Nat 2026-08-02).
-  const [drawerOpen, setDrawerOpen] = useState(false);
   // The rail starts collapsed — icons only, out of the way. On a wide screen
   // there's room to open it and leave it open; on a phone it closes itself
   // behind you when you go somewhere.
   const [railExpanded, setRailExpanded] = useState(false);
-  const drawerValue = useMemo(() => ({
-    isOpen: drawerOpen,
-    open: () => setDrawerOpen(true),
-    close: () => setDrawerOpen(false),
-  }), [drawerOpen]);
 
   // Initialize push notification listeners and state (no permission prompt on load)
   useNotifications({ autoRequestPermission: false });
@@ -195,7 +185,6 @@ export default function AppLayout() {
   }
 
   return (
-    <AppDrawerContext.Provider value={drawerValue}>
     <View style={{ flex: 1 }}>
       {/* "Fresh honey" bar — web only, shows on every tab when a new build ships */}
       <AppUpdateBanner />
@@ -462,13 +451,10 @@ export default function AppLayout() {
       {/* Confetti for a granted wish, over every tab. Mounted once. */}
       <CelebrationOverlay />
 
-      {/* The menu, over every tab, mounted once. */}
-      <NavigationDrawer
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        unreadDMCount={totalUnreadDMs}
-      />
+      {/* The sliding menu is gone (2026-08-03). It held the same list the rail
+          holds, so keeping it meant two ways to the same eleven places and two
+          lists to keep in step — which is exactly how Admin went missing from
+          one of them last week. The rail is always there; nothing needs opening. */}
     </View>
-    </AppDrawerContext.Provider>
   );
 }
