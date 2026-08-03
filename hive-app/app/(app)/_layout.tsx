@@ -386,6 +386,15 @@ export default function AppLayout() {
             href: null,
           }}
         />
+        {/* The shared boards. Reached from the rail under HIVE-Wide, not from
+            the tab bar — there is already a Boards tab and it means yours. */}
+        <Tabs.Screen
+          name="hive-wide-boards"
+          options={{
+            title: 'HIVE-Wide Boards',
+            href: null,
+          }}
+        />
         <Tabs.Screen
           name="arrival-board"
           options={{

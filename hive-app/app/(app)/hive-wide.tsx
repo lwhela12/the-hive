@@ -332,7 +332,7 @@ export default function HiveWideScreen() {
       <View style={{ paddingTop: 26, paddingBottom: 4, paddingHorizontal: 20 }}>
         <Text
           style={{
-            fontFamily: 'Lato_400Regular', fontSize: 12, letterSpacing: 2.4,
+            fontFamily: 'Lato_400Regular', fontSize: 13, letterSpacing: 3,
             textTransform: 'uppercase', color: 'rgba(255,248,233,0.55)', textAlign: 'center',
           }}
         >
@@ -340,7 +340,7 @@ export default function HiveWideScreen() {
         </Text>
         <Text
           style={{
-            fontFamily: 'LibreBaskerville_700Bold', fontSize: 34, letterSpacing: 1.5,
+            fontFamily: 'LibreBaskerville_700Bold', fontSize: 46, letterSpacing: 1.5,
             color: INK, textAlign: 'center', marginTop: 4,
           }}
         >
@@ -348,7 +348,7 @@ export default function HiveWideScreen() {
         </Text>
         <Text
           style={{
-            fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 13.5,
+            fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 14.5,
             color: 'rgba(255,248,233,0.6)', textAlign: 'center', marginTop: 6,
           }}
         >

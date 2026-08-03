@@ -66,15 +66,11 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   { key: 'boards', label: 'Boards', emoji: '📋', route: '/board', gate: 'everyone' },
   { key: 'messages', label: 'Messages', emoji: '💌', route: '/messages', gate: 'everyone', badge: 'dms' },
   { key: 'meetings', label: 'Meetings', emoji: '🗓️', route: '/meetings', gate: 'everyone' },
-  { key: 'buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone' },
   { key: 'honey-pot', label: 'Honey Pot', emoji: '🍯', route: '/honey-pot', gate: 'everyone' },
   { key: 'profile', label: 'Profile', emoji: '🐝', route: '/profile', gate: 'everyone' },
   // Profile is about you; Settings is the plumbing behind you (2026-08-03).
   // Admin already wears the cog, so Settings takes the sliders.
   { key: 'settings', label: 'Settings', emoji: '🎛️', route: '/settings', gate: 'everyone' },
-  // Everyone's, and important — it used to be a comb on Home, which meant it
-  // vanished the moment somebody rearranged their combs (Nat 2026-08-03).
-  { key: 'feedback', label: 'App Feedback', emoji: '💬', route: '/hive?feedback=1', gate: 'everyone' },
 ];
 
 /** The two zoom levels, above the line. HIVE-Wide is always first. */
@@ -89,9 +85,12 @@ export const HIVE_WIDE_ROUTE = '/hive-wide';
  * rather than about navigation.
  */
 export const HIVE_WIDE_CHILDREN: NavDestination[] = [
-  { key: 'hw-approved', label: 'HIVE Approved', emoji: '✅', route: '/board', gate: 'everyone' },
-  { key: 'hw-announcements', label: 'Announcements', emoji: '📣', route: '/board', gate: 'everyone' },
+  { key: 'hw-boards', label: 'Boards', emoji: '📋', route: '/hive-wide-boards', gate: 'everyone' },
   { key: 'hw-buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone' },
+  // Feedback on the app is feedback on all of it, not on the HIVE you happen to
+  // be standing in — so it sits up here rather than in each HIVE's page list
+  // (Nat 2026-08-03).
+  { key: 'hw-feedback', label: 'App Feedback', emoji: '💬', route: '/hive?feedback=1', gate: 'everyone' },
   { key: 'hw-calendar', label: 'Calendar', emoji: '🗓️', route: '/meetings', gate: 'everyone' },
 ];
 

@@ -19,11 +19,39 @@ export type BoardSearchThreadMatch = Pick<
 export type BoardSearchIndex = Record<string, BoardSearchThreadMatch[]>;
 type BoardSearchPostRow = Omit<BoardSearchThreadMatch, 'replies'>;
 
-async function fetchCategories(communityId: string): Promise<BoardCategory[]> {
-  const { data, error } = await supabase
+/**
+ * Which set of boards a screen is asking for.
+ *
+ * 'hive'      — the ones belonging to the HIVE you are standing in.
+ * 'all_hives' — the shared ones on HIVE-Wide, whichever HIVE happens to own
+ *               the row. They all live under OG because that is where their
+ *               posts were written, so this deliberately does NOT filter by
+ *               community; row-level security decides who may read them.
+ */
+export type BoardReach = 'hive' | 'all_hives';
+
+async function fetchCategories(communityId: string | undefined, reach: BoardReach): Promise<BoardCategory[]> {
+  let q = supabase
     .from('board_categories')
-    .select('*, member_tags:board_category_member_tags(*, member:profiles!board_category_member_tags_tagged_user_id_fkey(id, name, avatar_url))')
-    .eq('community_id', communityId)
+    .select('*, member_tags:board_category_member_tags(*, member:profiles!board_category_member_tags_tagged_user_id_fkey(id, name, avatar_url))');
+
+  if (reach === 'all_hives') {
+    // The shared boards — HIVE Approved, Announcements, the Favorites, HIVE
+    // Helpers, Compliment Corner. Scoped by reach rather than by community, so
+    // that a Tech member sees them even though OG owns the rows (Nat 2026-08-03).
+    q = q.eq('reach', 'all_hives');
+  } else {
+    // Only this HIVE's OWN boards. "What's ours" and "what's everybody's" are
+    // two different screens now, rather than one long list you have to know how
+    // to read (Nat 2026-08-03).
+    q = q.eq('community_id', communityId ?? '').eq('reach', 'hive');
+  }
+
+  const { data, error } = await q
+    // The newsletter board keeps every issue of The Buzz, so it stays in the
+    // database — it just stops being a board you browse. The Buzz has its own
+    // door under HIVE-Wide and that is the only one.
+    .neq('topic_kind', 'newsletter')
     .or('requires_approval.eq.false,approved_at.not.is.null')
     .order('display_order', { ascending: true });
 
@@ -250,13 +278,17 @@ export function useBoardSearchIndexQuery(communityId?: string) {
   });
 }
 
-export function useBoardCategoriesQuery(communityId?: string) {
+export function useBoardCategoriesQuery(communityId?: string, reach: BoardReach = 'hive') {
   const queryClient = useQueryClient();
+  // The shared boards are the same set for everybody, so they get one cache
+  // entry rather than one per HIVE you happen to be standing in.
+  const cacheKey = reach === 'all_hives' ? 'all_hives' : (communityId || '');
 
   const query = useQuery({
-    queryKey: queryKeys.boardCategories(communityId || ''),
-    queryFn: () => fetchCategories(communityId!),
-    enabled: !!communityId,
+    queryKey: queryKeys.boardCategories(cacheKey),
+    queryFn: () => fetchCategories(communityId, reach),
+    // HIVE-Wide does not need a community to ask about — that is the point of it.
+    enabled: reach === 'all_hives' || !!communityId,
     // Categories rarely change, cache for 10 minutes
     staleTime: 10 * 60 * 1000,
   });
@@ -264,9 +296,9 @@ export function useBoardCategoriesQuery(communityId?: string) {
   // Invalidate categories cache (e.g., after creating a new category)
   const invalidateCategories = useCallback(() => {
     queryClient.invalidateQueries({
-      queryKey: queryKeys.boardCategories(communityId || ''),
+      queryKey: queryKeys.boardCategories(cacheKey),
     });
-  }, [communityId, queryClient]);
+  }, [cacheKey, queryClient]);
 
   return {
     ...query,

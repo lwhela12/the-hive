@@ -64,7 +64,7 @@ export const SideRail = memo(function SideRail({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { profile, community, communityId, communityRole, memberships, openHivePicker, switchCommunity } = useAuth();
+  const { profile, community, communityId, communityRole, memberships, switchCommunity } = useAuth();
   const { width } = useWindowDimensions();
 
   const isPhone = width < 768;
@@ -294,9 +294,9 @@ export const SideRail = memo(function SideRail({
             onPress={() => go(item.route)}
           />
         ))}
-        {hasMoreThanOneHive ? (
-          <Row emoji="🔀" label="Swap HIVEs" onPress={openHivePicker} />
-        ) : null}
+        {/* "Swap HIVEs" is gone (Nat 2026-08-03). Your HIVEs are already listed
+            by name under My HIVEs, and tapping one swaps to it — so this was a
+            button that opened a picker for a choice already on the screen. */}
         <Row
           emoji="👋"
           label="Log out"

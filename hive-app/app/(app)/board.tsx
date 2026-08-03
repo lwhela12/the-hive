@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { useBoardCategoriesQuery, useBoardPostsQuery, useBoardPostCountsQuery, useBoardSearchIndexQuery, type BoardSearchThreadMatch } from '../../lib/hooks/useBoardQuery';
+import { useBoardCategoriesQuery, useBoardPostsQuery, useBoardPostCountsQuery, useBoardSearchIndexQuery, type BoardSearchThreadMatch, type BoardReach } from '../../lib/hooks/useBoardQuery';
 import { BoardCategoryList, type BoardCategorySearchMatchSummary } from '../../components/board/BoardCategoryList';
 import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
@@ -128,8 +128,8 @@ function getRouteParam(value: string | string[] | undefined) {
   return value ?? null;
 }
 
-export default function BoardScreen() {
-  const { profile, communityId, communityRole } = useAuth();
+export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } = {}) {
+  const { profile, communityId: myCommunityId, communityRole } = useAuth();
   const router = useRouter();
   const routeParams = useLocalSearchParams<{
     categoryId?: string | string[];
@@ -139,6 +139,29 @@ export default function BoardScreen() {
   }>();
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
+
+  // ── Which HIVE this screen is really talking to ────────────────────────────
+  //
+  // This same component serves two screens. At /board it shows the boards of
+  // the HIVE you are standing in. At /hive-wide-boards it shows the shared ones
+  // — and those rows belong to whichever HIVE first created them (OG, as it
+  // happens), not to yours. Everything downstream of here (posts, counts,
+  // search, composing, moderating) keys off `communityId`, in about seventy
+  // places, so the honest fix is to make that one name mean "the HIVE these
+  // boards live in" rather than "the HIVE I am in". Your own membership is
+  // still available as `myCommunityId` where it is genuinely about you.
+  //
+  // The wide list has no community to ask for — that is the whole point of it —
+  // so it is fetched first and tells us who the owner is (Nat 2026-08-03).
+  const isWide = reach === 'all_hives';
+  const {
+    data: categories = [],
+    isLoading: categoriesLoading,
+    refetch: refetchCategories,
+    invalidateCategories,
+  } = useBoardCategoriesQuery(isWide ? undefined : (myCommunityId ?? undefined), reach);
+  const communityId = isWide ? (categories[0]?.community_id ?? null) : myCommunityId;
+
   const routeCategoryId = getRouteParam(routeParams.categoryId);
   const routePostId = getRouteParam(routeParams.postId);
   const routeOpenKey = getRouteParam(routeParams.open);
@@ -178,13 +201,6 @@ export default function BoardScreen() {
     if (!category) return false;
     return isAdmin || (!category.is_system && category.created_by === profile?.id);
   }, [isAdmin, profile?.id]);
-  const {
-    data: categories = [],
-    isLoading: categoriesLoading,
-    refetch: refetchCategories,
-    invalidateCategories,
-  } = useBoardCategoriesQuery(communityId ?? undefined);
-
   const selectedCategory = selectedCategoryId
     ? categories.find((c) => c.id === selectedCategoryId) || null
     : null;
@@ -731,6 +747,10 @@ export default function BoardScreen() {
         category_type: 'custom',
         icon,
         audience,
+        // A board made from the HIVE-Wide screen is a shared board. Made from
+        // your own HIVE's screen, it belongs to that HIVE. You should not have
+        // to think about it — where you made it is the answer (2026-08-03).
+        reach: isWide ? 'all_hives' : 'hive',
         display_order: maxOrder + 1,
         is_system: false,
         requires_admin: false,
@@ -1713,6 +1733,9 @@ export default function BoardScreen() {
             colour and name like every other page (Nat 2026-07-31). */}
         <AppHeader
           title="Boards"
+          // Green and nameless on HIVE-Wide. Wearing OG's gold there would say
+          // you are in OG, which is the opposite of what this screen is.
+          tone={isWide ? 'wide' : 'hive'}
           rightElement={
             useMobileLayout ? addTopicButton
               : canCreateCategories ? (
@@ -1775,6 +1798,7 @@ export default function BoardScreen() {
       <AppHeader
         title={selectedCategory.name}
         onBackPress={handleBack}
+        tone={isWide ? 'wide' : 'hive'}
         rightElement={
           (canManageCategory(selectedCategory) || canArchiveCategory(selectedCategory)) ? (
           <Pressable
