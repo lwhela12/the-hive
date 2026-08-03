@@ -44,6 +44,7 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import { GodModePanels } from '../../components/admin/GodModePanels';
 import { hiveDisplayName } from '../../lib/hiveBrand';
+import { SpinningGlobe } from '../../components/ui/SpinningGlobe';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
@@ -869,6 +870,7 @@ function LockedAdminScreen({
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <AppHeader title="Admin" tone="god" />
+      <SpinningGlobe colour="#4A5568" />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
@@ -2015,6 +2017,7 @@ export default function AdminScreen() {
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <AppHeader title="Admin" tone="god" />
+      <SpinningGlobe colour="#4A5568" />
 
       <ScrollView
         className="flex-1"

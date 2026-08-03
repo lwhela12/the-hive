@@ -67,6 +67,9 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   { key: 'buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone' },
   { key: 'honey-pot', label: 'Honey Pot', emoji: '🍯', route: '/honey-pot', gate: 'everyone' },
   { key: 'profile', label: 'Profile', emoji: '🐝', route: '/profile', gate: 'everyone' },
+  // Everyone's, and important — it used to be a comb on Home, which meant it
+  // vanished the moment somebody rearranged their combs (Nat 2026-08-03).
+  { key: 'feedback', label: 'App Feedback', emoji: '💬', route: '/hive?feedback=1', gate: 'everyone' },
 ];
 
 /** The two zoom levels, above the line. HIVE-Wide is always first. */

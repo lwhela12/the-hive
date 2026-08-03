@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import Svg, { Polygon } from 'react-native-svg';
 import { AppHeader } from '../../components/navigation';
 import { HIVE_WIDE_GREEN } from '../../components/ui/HiveWideWelcome';
+import { SpinningGlobe } from '../../components/ui/SpinningGlobe';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { STANDING_INVITATION } from '../../lib/hiveFocus';
@@ -148,6 +149,9 @@ export default function HiveWideScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fffdf5' }} edges={['top']}>
       <AppHeader title="HIVE-Wide" tone="wide" />
+      {/* You are standing above the HIVEs. It should look like it before you've
+          read a word (Nat 2026-08-03). */}
+      <SpinningGlobe colour={HIVE_WIDE_GREEN} />
       <ScrollView
         contentContainerStyle={{ padding: 16, gap: 18, paddingBottom: 44 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

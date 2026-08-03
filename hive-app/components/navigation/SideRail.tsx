@@ -2,6 +2,7 @@ import { memo, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Polygon } from 'react-native-svg';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
@@ -131,15 +132,21 @@ export const SideRail = memo(function SideRail({
         paddingHorizontal: expanded ? 8 : 0,
         justifyContent: expanded ? 'flex-start' : 'center',
         borderRadius: 10,
-        backgroundColor: active
-          ? (tint ?? 'rgba(255,255,255,0.2)')
-          : 'transparent',
-        borderWidth: tint && !active ? 1 : 0,
+        backgroundColor: active ? 'rgba(255,255,255,0.22)' : 'transparent',
+        borderWidth: tint && !indented ? 1 : 0,
         borderColor: tint ?? 'transparent',
       }}
     >
       <View>
-        <Text style={{ fontSize: indented ? 15 : 19, lineHeight: indented ? 20 : 25 }}>{emoji}</Text>
+        {/* A HIVE shows as its OWN colour, as a comb — the black ⬢ was invisible
+            against the rail and told you nothing once collapsed (Nat 2026-08-03). */}
+        {indented && tint ? (
+          <Svg width={15} height={17} viewBox="0 0 15 17">
+            <Polygon points="7.5,0 15,4.25 15,12.75 7.5,17 0,12.75 0,4.25" fill={tint} />
+          </Svg>
+        ) : (
+          <Text style={{ fontSize: 19, lineHeight: 25 }}>{emoji}</Text>
+        )}
         {badge > 0 ? (
           <View
             style={{

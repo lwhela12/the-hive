@@ -509,7 +509,11 @@ type HomeShortcutKey = 'honey_pot' | 'boards' | 'messages' | 'members' | 'meetin
 // Boards, Messages and the rest all sit in the tab bar already, while the Honey
 // Pot, swapping HIVEs and reporting a bug have no home of their own. A bug
 // report you can't find never gets made (Nat 2026-07-25 and 2026-07-31).
-const DEFAULT_HOME_SHORTCUTS: HomeShortcutKey[] = ['honey_pot', 'swap_hives', 'feedback'];
+// Home's three combs are gone (Nat 2026-08-03) — Honey Pot, Swap HIVEs and App
+// Feedback are all in the rail now, permanently, which is better than a shortcut
+// row that only existed because there was nowhere else to put them. Anyone with
+// a saved arrangement keeps it; this is only what a new member starts with.
+const DEFAULT_HOME_SHORTCUTS: HomeShortcutKey[] = [];
 
 // Swapping is meaningless to anyone who belongs to one HIVE, so for them the
 // slot falls back to Boards rather than showing a button that goes nowhere.
@@ -1532,7 +1536,7 @@ export default function HiveScreen() {
 
   // Deep link: /hive?openWishId=... opens that wish's detail sheet (used by the
   // profile App Feedback shortcut; works for any screen that wants to point at a wish).
-  const { openWishId, catchup, from } = useLocalSearchParams<{ openWishId?: string; catchup?: string; from?: string }>();
+  const { openWishId, catchup, from, feedback } = useLocalSearchParams<{ openWishId?: string; catchup?: string; from?: string; feedback?: string }>();
 
   // Swarm Report theme pills (and anything else) can deep-link straight into
   // the daily-question Catch-up modal. `from` says where to put you back when
@@ -1578,6 +1582,16 @@ export default function HiveScreen() {
       console.warn('Could not find the bug reports wish', error);
     }
   }, [communityId, openWishById]);
+
+  // The rail's App Feedback lands here with ?feedback=1 — the sheet belongs to
+  // Home, so the rail points at Home and asks it to open (Nat 2026-08-03).
+  useEffect(() => {
+    if (feedback === '1') {
+      void openAppFeedback();
+      router.setParams({ feedback: undefined } as never);
+    }
+  }, [feedback]);
+
 
   const openEventFromActivity = useCallback(async (eventId: string) => {
     if (!communityId) return;
