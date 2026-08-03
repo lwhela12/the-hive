@@ -21,11 +21,11 @@ import type { Profile, Community, UserRole } from '../types';
 import { MaintenanceScreen } from '../components/ui/MaintenanceScreen';
 
 // ---------------------------------------------------------------------------
-// TEMPORARY: the app is closed to members overnight 2026-08-02.
-// Set this to false and push to open it again. That is the whole switch.
-// Nat gets in with app.the-hive.app/?bee=1 — it sticks for the tab.
+// The door. Flip to true and push to close the app to members; the screen and
+// the ?bee=1 bypass are already wired, so that is the whole switch.
+// Closed overnight 2026-08-02; reopened the morning of 2026-08-03.
 // ---------------------------------------------------------------------------
-const MAINTENANCE = true;
+const MAINTENANCE = false;
 
 const MAINTENANCE_BYPASS_KEY = 'hive:bee';
 
