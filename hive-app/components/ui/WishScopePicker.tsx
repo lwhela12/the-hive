@@ -23,9 +23,12 @@ export function WishScopePicker({
   onChange: (next: WishScope) => void;
   label?: string;
 }) {
-  const { community } = useAuth();
+  const { community, memberships } = useAuth();
   const ceiling = (community?.max_share_scope as WishScope | undefined) ?? 'hive';
-  const options = OPTIONS.filter((o) => RANK[o.key] <= RANK[ceiling]);
+  // Somebody in one HIVE has no use for "Every HIVE" — and being asked about it
+  // would tell them other HIVEs exist, which is nobody's business (Nat 2026-08-02).
+  const inSeveral = memberships.length > 1;
+  const options = OPTIONS.filter((o) => RANK[o.key] <= RANK[ceiling] && (inSeveral || o.key !== 'all_hives'));
 
   // Never leave a setting showing that this HIVE won't honour.
   useEffect(() => {

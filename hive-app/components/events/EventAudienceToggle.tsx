@@ -35,10 +35,13 @@ export function EventAudienceToggle({
   onChange: (next: EventAudience) => void;
   label?: string;
 }) {
-  const { community } = useAuth();
+  const { community, memberships } = useAuth();
   const ceiling = (community?.max_share_scope as string | undefined) ?? 'hive';
   const ceilingRank = ceiling === 'public' ? 2 : ceiling === 'all_hives' ? 1 : 0;
-  const options = OPTIONS.filter((o) => RANK[o.key] <= ceilingRank);
+  // Somebody in one HIVE has no use for "Every HIVE" — and being asked about it
+  // would tell them other HIVEs exist, which is nobody's business (Nat 2026-08-02).
+  const inSeveral = memberships.length > 1;
+  const options = OPTIONS.filter((o) => RANK[o.key] <= ceilingRank && (inSeveral || o.key !== 'all_hives'));
 
   // If the current value sits above what this HIVE allows, bring it down rather
   // than leave a setting showing that isn't true.
