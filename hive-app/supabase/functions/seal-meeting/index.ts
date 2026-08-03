@@ -218,7 +218,7 @@ serve(async (req) => {
     // working on, stuck on, and focused on. They're what makes a recap readable
     // to someone who wasn't there, rather than a list of clicks.
     const [notesRow, ledgerRows, memberRows, wishRows] = await Promise.all([
-      supabaseAdmin.from('communities').select('meeting_helper_notes').eq('id', communityId).maybeSingle(),
+      supabaseAdmin.from('communities').select('meeting_helper_notes, name').eq('id', communityId).maybeSingle(),
       supabaseAdmin.from('honey_pot_transactions').select('amount').eq('community_id', communityId),
       supabaseAdmin.from('community_memberships').select('user:profiles!user_id(id, name)').eq('community_id', communityId),
       supabaseAdmin.from('wishes')
@@ -227,6 +227,12 @@ serve(async (req) => {
         .order('created_at', { ascending: false }),
     ]);
     const deckNotes = ((notesRow.data as any)?.meeting_helper_notes ?? {}) as Record<string, string>;
+    // With three HIVEs, a recap has to say whose meeting it was. Legacy spellings
+    // of the original all collapse to "HIVE" (Nat 2026-08-02).
+    const rawHiveName = ((notesRow.data as any)?.name ?? '').trim();
+    const hiveName = ['', 'hive', 'the hive', 'h.i.v.e.', 'the h.i.v.e.'].includes(rawHiveName.toLowerCase())
+      ? 'HIVE'
+      : rawHiveName;
     const potBalance = ((ledgerRows.data ?? []) as { amount: number | string }[])
       .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
     const memberNames = new Map<string, string>();
@@ -466,7 +472,7 @@ serve(async (req) => {
     const summaryPayload = {
       ...previous,
       source: 'live_meeting',
-      title: `${month} HIVE Meeting`,
+      title: `${month} ${hiveName} Meeting`,
       // Live notes supersede the apply nag; an already-applied import keeps its badge.
       import_status: previous.import_status === 'applied' ? 'applied' : 'live',
       summary: narrative,

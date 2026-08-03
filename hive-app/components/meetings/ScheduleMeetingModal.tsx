@@ -13,6 +13,8 @@ import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import type { Profile } from '../../types';
+import { useAuth } from '../../lib/hooks/useAuth';
+import { hiveDisplayName } from '../../lib/hiveBrand';
 
 const DEFAULT_MEETING_DURATION_MINUTES = '150';
 const normalizeHiveBrandText = (text: string) => text.replace(/\bHive\b/g, 'HIVE');
@@ -42,6 +44,13 @@ interface ScheduleMeetingModalProps {
   }) => Promise<void>;
 }
 
+// "Aug OG HIVE Meeting" rather than "Aug HIVE Meeting" — with three of them,
+// a meeting has to say whose it is (Nat 2026-08-02). Still editable; this is
+// only what the field starts as.
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const defaultMeetingTitle = (hiveName: string, when: Date = new Date()) =>
+  `${MONTH_SHORT[when.getMonth()]} ${hiveName} Meeting`;
+
 export function ScheduleMeetingModal({
   visible,
   onClose,
@@ -49,7 +58,9 @@ export function ScheduleMeetingModal({
   initialDate,
   onSchedule,
 }: ScheduleMeetingModalProps) {
-  const [title, setTitle] = useState('HIVE Meeting');
+  const { community } = useAuth();
+  const hiveName = hiveDisplayName(community?.name);
+  const [title, setTitle] = useState(() => defaultMeetingTitle(hiveName));
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [date, setDate] = useState(new Date());
@@ -160,7 +171,7 @@ export function ScheduleMeetingModal({
       });
 
       // Reset form
-      setTitle('HIVE Meeting');
+      setTitle(defaultMeetingTitle(hiveName, date));
       setDescription('');
       setLocation('');
       setDate(new Date());
