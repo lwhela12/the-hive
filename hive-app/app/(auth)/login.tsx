@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, Image, ActivityIndicator, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
+import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -99,64 +100,49 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-cream">
+    // Behind the door it's dark. The public site is cream and says what HIVE is;
+    // this page is the other side of the invitation and shouldn't read as more
+    // of the same marketing (Nat 2026-08-02). Same seal, opposite world.
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#33271a' }}>
+      <StatusBar style="light" />
       <View className="flex-1 justify-center px-6 py-10">
-        <View className="w-full max-w-md mx-auto">
-          <View className="items-center mb-10">
-            <Image
-              source={require('../../assets/HIVE Logo Transparent  BG.png')}
-              style={{ width: 190, height: 190, marginBottom: 10 }}
-              resizeMode="contain"
-            />
-            {/* HIVE */}
-            <Text
-              style={{ fontFamily: 'LibreBaskerville_700Bold' }}
-              className="text-5xl text-charcoal text-center"
-            >
-              HIVE
-            </Text>
-            {/* "Architects of Collective" dark, "Abundance" gold — matching website layout */}
-            <Text
-              style={{ fontFamily: 'LibreBaskerville_700Bold', lineHeight: 38 }}
-              className="text-3xl text-charcoal text-center mt-2"
-            >
-              {'Architects '}
-              <Text style={{ fontFamily: 'LibreBaskerville_400Regular', fontStyle: 'italic' }}>of</Text>
-              {' Collective'}
-            </Text>
-            <Text
-              style={{ fontFamily: 'LibreBaskerville_700Bold', lineHeight: 38 }}
-              className="text-3xl text-gold text-center"
-            >
-              Abundance
-            </Text>
-            {/* Tagline */}
-            <Text
-              style={{ fontFamily: 'Lato_700Bold', lineHeight: 22 }}
-              className="text-sm text-charcoal text-center mt-3 px-2"
-            >
-              {'Where brilliant minds don\'t just network—'}
-              <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic' }}>they </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', color: '#bd9348' }}>build.</Text>
-            </Text>
-          </View>
+        <View className="w-full max-w-md mx-auto items-center">
+          <Image
+            source={require('../../assets/HIVE Logo Transparent  BG.png')}
+            style={{ width: 128, height: 128, marginBottom: 22 }}
+            resizeMode="contain"
+          />
 
-          <View className="mb-9">
-            <Text
-              style={{ fontFamily: 'Lato_400Regular' }}
-              className="text-center text-charcoal/60 text-sm leading-6"
-            >
-              A private circle for high-definition wishing, thoughtful support,
-              and matching what members need with what members know.
-            </Text>
-          </View>
+          <Text
+            style={{
+              fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 3,
+              color: '#dec181', marginBottom: 10,
+            }}
+          >
+            MEMBERS ONLY
+          </Text>
+
+          <Text
+            style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 30, color: '#f6f4e5' }}
+          >
+            Welcome back
+          </Text>
+
+          <Text
+            style={{
+              fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21,
+              color: 'rgba(246,244,229,0.62)', textAlign: 'center',
+              marginTop: 10, marginBottom: 30, maxWidth: 300,
+            }}
+          >
+            HIVE is invitation only. Sign in with the email address that received your invite.
+          </Text>
 
           <Pressable
             onPress={() => handleGoogleSignIn()}
             disabled={loading}
-            className={`flex-row items-center justify-center bg-white border border-gold/30 rounded-xl py-4 px-6 shadow-sm ${
-              loading ? 'opacity-50' : 'active:bg-gray-50'
-            }`}
+            style={{ width: '100%', opacity: loading ? 0.5 : 1 }}
+            className="flex-row items-center justify-center bg-white rounded-xl py-4 px-6 active:opacity-80"
           >
             {loading ? (
               <ActivityIndicator size="small" color="#bd9348" />
@@ -176,29 +162,29 @@ export default function LoginScreen() {
           <Pressable
             onPress={() => handleGoogleSignIn(true)}
             disabled={loading}
-            className="mt-3 py-2 active:opacity-60"
+            className="mt-4 py-2 active:opacity-60"
           >
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-center text-charcoal/50 text-sm">
-              Use a different account →
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.5)' }}>
+              Use a different account &rarr;
             </Text>
           </Pressable>
 
-          <View className="mt-5 border-t border-gold/20 pt-5">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-center text-charcoal text-sm">
-              Invitation only
+          <Pressable
+            onPress={() => Linking.openURL('https://the-hive.app')}
+            className="mt-7 pt-6 active:opacity-70"
+            style={{ borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.22)', width: '100%' }}
+          >
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.55)', textAlign: 'center' }}>
+              Not a member yet? <Text style={{ fontFamily: 'Lato_700Bold', color: '#dec181' }}>Come find us &rarr;</Text>
             </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-center text-charcoal/60 text-sm mt-1 leading-5">
-              Sign in with the email address that received your invite.
-            </Text>
-          </View>
+          </Pressable>
         </View>
 
-        <View className="mt-6 px-2">
-          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-center text-charcoal/45 text-xs leading-5">
+        <View className="mt-8 px-2">
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, lineHeight: 18, color: 'rgba(246,244,229,0.34)', textAlign: 'center' }}>
             Created by{' '}
             <Text
-              style={{ fontFamily: 'Lato_700Bold' }}
-              className="text-charcoal/70"
+              style={{ fontFamily: 'Lato_700Bold', color: 'rgba(246,244,229,0.55)' }}
               onPress={() => Linking.openURL('https://savedyouaseatstudios.com')}
             >
               Saved You a Seat Studios
@@ -206,8 +192,7 @@ export default function LoginScreen() {
             {' '}&middot; &copy; 2026. All rights reserved.
           </Text>
           <Text
-            style={{ fontFamily: 'Lato_400Regular' }}
-            className="text-center text-charcoal/45 text-xs mt-1 leading-5"
+            style={{ fontFamily: 'Lato_400Regular', fontSize: 11, lineHeight: 18, color: 'rgba(246,244,229,0.34)', textAlign: 'center', marginTop: 3 }}
             onPress={() => Linking.openURL('https://savedyouaseatstudios.com/#contact')}
           >
             Like what you see? Let&rsquo;s build your custom website or software.
