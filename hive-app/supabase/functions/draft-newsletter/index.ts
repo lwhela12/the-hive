@@ -33,6 +33,12 @@ interface DraftRequest {
    */
   appNews?: string[];
   /**
+   * "Pardon our dust, we're expanding — here's what that means for you." The
+   * same paragraphs the app shows on the HIVE-Wide page and at sign-in, sent
+   * from lib/hiveWide.ts so one edit changes all three.
+   */
+  expansionNote?: string[];
+  /**
    * Writing the letter takes the better part of a minute; gathering takes about
    * a second. The screen asks for the facts first so there's something to read,
    * then asks again for the letter. Defaults true so any other caller still
@@ -476,6 +482,18 @@ serve(async (req) => {
       : [];
     if (appNews.length > 0) {
       sections.push({ title: 'Around the HIVE (app updates)', lines: appNews });
+    }
+
+    // The expansion note — the same words the app shows on HIVE-Wide and at
+    // sign-in, sent from lib/hiveWide.ts so the three can never drift apart.
+    const expansionNote = Array.isArray(body.expansionNote)
+      ? body.expansionNote.map((line) => String(line).trim()).filter(Boolean).slice(0, 8)
+      : [];
+    if (expansionNote.length > 0) {
+      sections.push({
+        title: 'Pardon our dust — we are expanding',
+        lines: expansionNote,
+      });
     }
 
     if (shoutOuts.length > 0) {

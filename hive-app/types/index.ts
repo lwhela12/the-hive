@@ -152,6 +152,14 @@ export interface Profile extends Record<string, unknown> {
   home_shortcuts?: string[] | null;
   /** Read state that follows the person rather than the browser (migration 127). */
   app_news_seen_id?: string | null;
+  /** Which version of the HIVE-Wide welcome this person has dismissed. */
+  hive_wide_welcome_seen?: string | null;
+  /**
+   * How far this person travels, as opposed to what they write (migration 135).
+   * 'hive': only people who share a HIVE with them can open their card.
+   * 'all_hives': anyone in any HIVE can. Theirs to change, nobody else's.
+   */
+  profile_scope?: 'hive' | 'all_hives' | null;
   activity_read_ids?: Record<string, { at?: string; ids?: string[] }> | null;
   created_at: string;
   updated_at: string;

@@ -75,3 +75,28 @@ export async function persistAppNewsSeen(profile: Profile | null | undefined, id
 
   if (error) console.error('[readState] could not save what\'s-new marker:', error.message);
 }
+
+/**
+ * The HIVE-Wide welcome. Same shape as the what's-new marker above, and on the
+ * profile for the same reason: dismiss it on your phone and it stays dismissed
+ * on your laptop. Stores the version, so a rewritten welcome can be shown again
+ * without hunting down everybody's flag.
+ */
+export function loadHiveWideWelcomeSeen(profile: Profile | null | undefined): string | null {
+  return (profile?.hive_wide_welcome_seen as string | undefined) ?? null;
+}
+
+export async function persistHiveWideWelcomeSeen(
+  profile: Profile | null | undefined,
+  version: string
+) {
+  if (!profile?.id || loadHiveWideWelcomeSeen(profile) === version) return;
+  (profile as any).hive_wide_welcome_seen = version;
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ hive_wide_welcome_seen: version } as never)
+    .eq('id', profile.id);
+
+  if (error) console.error('[readState] could not save the welcome marker:', error.message);
+}

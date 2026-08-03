@@ -8,6 +8,7 @@ import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { APP_NEWS } from '../../lib/appNews';
+import { PARDON_OUR_DUST } from '../../lib/hiveWide';
 import { SummarySections, type SummarySection } from '../../components/meetings/SummarySections';
 
 /** The month a recap covers: the one before the month it goes out in. */
@@ -76,7 +77,15 @@ export default function NewsletterScreen() {
       .filter((entry) => entry.date.startsWith(month))
       .map((entry) => (entry.detail ? `${entry.title} — ${entry.detail}` : entry.title));
 
-    const draftBody = { communityId, month, appNews };
+    // "Pardon our dust, we're in the process of expanding — what does that mean
+    // for you?" Nat wanted the same explanation on the landing page, in the
+    // newsletter and on the sign-in banner, so all three read from lib/hiveWide.ts
+    // and can never drift into describing three different apps.
+    //
+    // It goes in as facts rather than finished prose, so the letter writer puts
+    // it in her voice along with everything else instead of it landing as a
+    // notice bolted onto the bottom.
+    const draftBody = { communityId, month, appNews, expansionNote: PARDON_OUR_DUST };
 
     const { data, error: invokeError } = await supabase.functions.invoke('draft-newsletter', {
       body: { ...draftBody, includeProse: false },
