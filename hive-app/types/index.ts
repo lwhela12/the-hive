@@ -62,6 +62,8 @@ export interface Community extends Record<string, unknown> {
   accent_color?: string | null;
   /** How far anything in this HIVE may travel (migration 125). Defaults to 'hive'. */
   max_share_scope?: 'hive' | 'all_hives' | 'public';
+  /** How often this HIVE meets — weekly HIVEs date their meetings rather than month them. */
+  meeting_cadence?: 'monthly' | 'weekly';
   created_by?: string;
   created_at: string;
 }
@@ -142,6 +144,9 @@ export interface Profile extends Record<string, unknown> {
   love_languages?: string[] | null;
   home_section_order?: string[] | null;
   home_shortcuts?: string[] | null;
+  /** Read state that follows the person rather than the browser (migration 127). */
+  app_news_seen_id?: string | null;
+  activity_read_ids?: Record<string, { at?: string; ids?: string[] }> | null;
   created_at: string;
   updated_at: string;
 }

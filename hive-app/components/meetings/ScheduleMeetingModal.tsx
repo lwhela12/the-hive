@@ -44,12 +44,21 @@ interface ScheduleMeetingModalProps {
   }) => Promise<void>;
 }
 
-// "Aug OG HIVE Meeting" rather than "Aug HIVE Meeting" — with three of them,
-// a meeting has to say whose it is (Nat 2026-08-02). Still editable; this is
-// only what the field starts as.
+// "Aug OG HIVE Meeting" rather than "Aug HIVE Meeting" — with three of them, a
+// meeting has to say whose it is (Nat 2026-08-02). Still editable; this is only
+// what the field starts as.
+//
+// A HIVE that meets weekly gets the date instead of the month, because four
+// "Aug Tech HIVE Meeting"s in a row tell you nothing about which one you're
+// looking at.
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-export const defaultMeetingTitle = (hiveName: string, when: Date = new Date()) =>
-  `${MONTH_SHORT[when.getMonth()]} ${hiveName} Meeting`;
+export const defaultMeetingTitle = (
+  hiveName: string,
+  when: Date = new Date(),
+  cadence: 'monthly' | 'weekly' = 'monthly'
+) => cadence === 'weekly'
+  ? `${MONTH_SHORT[when.getMonth()]} ${when.getDate()} ${hiveName} Meeting`
+  : `${MONTH_SHORT[when.getMonth()]} ${hiveName} Meeting`;
 
 export function ScheduleMeetingModal({
   visible,
@@ -60,7 +69,8 @@ export function ScheduleMeetingModal({
 }: ScheduleMeetingModalProps) {
   const { community } = useAuth();
   const hiveName = hiveDisplayName(community?.name);
-  const [title, setTitle] = useState(() => defaultMeetingTitle(hiveName));
+  const cadence = (community?.meeting_cadence as 'monthly' | 'weekly' | undefined) ?? 'monthly';
+  const [title, setTitle] = useState(() => defaultMeetingTitle(hiveName, new Date(), cadence));
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [date, setDate] = useState(new Date());
@@ -171,7 +181,7 @@ export function ScheduleMeetingModal({
       });
 
       // Reset form
-      setTitle(defaultMeetingTitle(hiveName, date));
+      setTitle(defaultMeetingTitle(hiveName, date, cadence));
       setDescription('');
       setLocation('');
       setDate(new Date());

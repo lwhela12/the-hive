@@ -44,6 +44,7 @@ import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem, setStoredItemAsync } from '../../lib/webStorage';
 import { getAppNewsSeenKey, getUnseenAppNews, type AppNewsEntry } from '../../lib/appNews';
+import { loadActivityRead, persistActivityRead, loadAppNewsSeen, persistAppNewsSeen } from '../../lib/readState';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { addHomeResetListener } from '../../lib/homeNavigation';
@@ -1399,14 +1400,21 @@ export default function HiveScreen() {
       return;
     }
 
-    setSessionReadAt(getStoredItem(activityReadKey) ?? activityDefaultReadAt);
-    try {
-      const stored = getStoredItem(activityReadIdsKey);
-      setReadItemIds(stored ? new Set(JSON.parse(stored)) : new Set());
-    } catch {
-      setReadItemIds(new Set());
+    // Read state lives on the profile so it follows you between devices; the
+    // old per-browser keys are only a fallback for anyone mid-migration.
+    const fromProfile = loadActivityRead(profile, communityId);
+    setSessionReadAt(fromProfile.at ?? getStoredItem(activityReadKey) ?? activityDefaultReadAt);
+    if (fromProfile.ids.size > 0) {
+      setReadItemIds(fromProfile.ids);
+    } else {
+      try {
+        const stored = getStoredItem(activityReadIdsKey);
+        setReadItemIds(stored ? new Set(JSON.parse(stored)) : new Set());
+      } catch {
+        setReadItemIds(new Set());
+      }
     }
-  }, [activityDefaultReadAt, activityReadIdsKey, activityReadKey]);
+  }, [activityDefaultReadAt, activityReadIdsKey, activityReadKey, profile?.id, communityId]);
 
   // "Mentions me" filter — persisted per member/device
   const [activityMentionsOnly, setActivityMentionsOnly] = useState<boolean>(() => (
@@ -1446,9 +1454,10 @@ export default function HiveScreen() {
       if (activityReadIdsKey) {
         setStoredItem(activityReadIdsKey, JSON.stringify([...next]));
       }
+      void persistActivityRead(profile, communityId, { ids: next });
       return next;
     });
-  }, [activityReadIdsKey]);
+  }, [activityReadIdsKey, profile, communityId]);
 
   const unreadActivityCount = activityItems.reduce(
     (count, item) => count + (item.timestamp > sessionReadAt && !readItemIds.has(item.id) ? 1 : 0),
@@ -2219,9 +2228,16 @@ export default function HiveScreen() {
   useEffect(() => {
     if (!profile) return;
     let cancelled = false;
-    void getStoredItemAsync(getAppNewsSeenKey(profile.id)).then((lastSeenId) => {
-      if (!cancelled) setUnseenNews(getUnseenAppNews(lastSeenId));
-    });
+    // The profile is the truth; the old per-device key is only a fallback for
+    // anyone who dismissed this before it moved (Nat 2026-08-02).
+    const fromProfile = loadAppNewsSeen(profile);
+    if (fromProfile) {
+      setUnseenNews(getUnseenAppNews(fromProfile));
+    } else {
+      void getStoredItemAsync(getAppNewsSeenKey(profile.id)).then((lastSeenId) => {
+        if (!cancelled) setUnseenNews(getUnseenAppNews(lastSeenId));
+      });
+    }
     return () => { cancelled = true; };
   }, [profile?.id]);
 
@@ -2230,8 +2246,11 @@ export default function HiveScreen() {
     setNewsExpanded(false);
     if (!profile) return;
     const newest = getUnseenAppNews(null)[0];
-    if (newest) void setStoredItemAsync(getAppNewsSeenKey(profile.id), newest.id);
-  }, [profile?.id]);
+    if (newest) {
+      void setStoredItemAsync(getAppNewsSeenKey(profile.id), newest.id);
+      void persistAppNewsSeen(profile, newest.id);
+    }
+  }, [profile]);
 
   const [halfwayDone, setHalfwayDone] = useState(false);
   useEffect(() => {
