@@ -74,7 +74,6 @@ export const SideRail = memo(function SideRail({
   const accent = hiveAccent(community);
   const activeKey = activeKeyForPath(pathname);
   const onHiveWide = wholeHive || activeKey === 'hive-wide';
-  const hasMoreThanOneHive = memberships.length > 1;
   // Standing above the HIVEs, the rail goes to space rather than wearing one
   // HIVE's colour — "it should be dark, like outer space" (Nat 2026-08-03).
   // It is the same black the globe hangs in, so the rail and the page agree.
@@ -251,7 +250,9 @@ export const SideRail = memo(function SideRail({
             page list below serves whichever of them you're standing in. */}
         <Row
           emoji="🏠"
-          label={hasMoreThanOneHive ? 'My HIVEs' : hiveDisplayName(community?.name)}
+          // Always plural now: HIVE-Wide hangs under here too, so even someone
+          // in a single HIVE has two places listed beneath this line.
+          label="My HIVEs"
           active={!onHiveWide && activeKey === 'home'}
           onPress={() => {
             // Home means your HIVE's home. Tapping it from HIVE-Wide has to
@@ -265,35 +266,37 @@ export const SideRail = memo(function SideRail({
             }
           }}
         />
-        {hasMoreThanOneHive ? (
-          <>
-            <Row
-              emoji="🌍"
-              label="HIVE-Wide"
-              indented
-              active={onHiveWide}
-              tint={WIDE_BLACK}
-              onPress={() => {
-                enterWholeHive();
-                if (isPhone && expanded) onToggle();
-              }}
-            />
-            {memberships.map((m) => (
-              <Row
-                key={m.community_id}
-                emoji="⬢"
-                label={hiveDisplayName(m.community?.name)}
-                indented
-                active={m.community_id === communityId && !onHiveWide}
-                tint={hiveAccent(m.community)}
-                onPress={() => {
-                  void switchCommunity(m.community_id);
-                  if (isPhone && expanded) onToggle();
-                }}
-              />
-            ))}
-          </>
-        ) : null}
+        {/* HIVE-Wide shows for EVERYONE, not only people in more than one HIVE.
+            Nearly every member is in exactly one, and the shared boards — HIVE
+            Approved, Announcements, the Favourites — are where their own
+            content now lives. Hiding this from them would have quietly deleted
+            most of OG's boards from OG's view (caught before shipping,
+            2026-08-03). */}
+        <Row
+          emoji="🌍"
+          label="HIVE-Wide"
+          indented
+          active={onHiveWide}
+          tint={WIDE_BLACK}
+          onPress={() => {
+            enterWholeHive();
+            if (isPhone && expanded) onToggle();
+          }}
+        />
+        {memberships.map((m) => (
+          <Row
+            key={m.community_id}
+            emoji="⬢"
+            label={hiveDisplayName(m.community?.name)}
+            indented
+            active={m.community_id === communityId && !onHiveWide}
+            tint={hiveAccent(m.community)}
+            onPress={() => {
+              void switchCommunity(m.community_id);
+              if (isPhone && expanded) onToggle();
+            }}
+          />
+        ))}
 
         {/* One list, whichever place you picked. Pages that only mean something
             inside a single HIVE step out at HIVE-Wide rather than showing you
