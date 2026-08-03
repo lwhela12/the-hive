@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { EditButton } from '../ui/EditButton';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
+import { ScopeBadge } from '../ui/ScopeBadge';
 import { formatDateShort } from '../../lib/dateUtils';
 import { getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
 import type { Wish, Profile, WishGranter } from '../../types';
@@ -161,6 +162,15 @@ export function WishCard({
                 ? `Granted · ${formatDateShort(wish.fulfilled_at)}`
                 : formatDateShort(wish.created_at)}
             </Text>
+
+            {/* How far this wish travels. Only worth saying when it leaves its
+                own HIVE — "This HIVE only" on every card is wallpaper, and the
+                whole point is that the other two stand out (Nat 2026-08-02). */}
+            {wish.share_scope && wish.share_scope !== 'hive' ? (
+              <View className="ml-2">
+                <ScopeBadge scope={wish.share_scope as string} compact />
+              </View>
+            ) : null}
 
             {/* Granter avatars for granted wishes */}
             {isGranted && displayGranters.length > 0 && (

@@ -20,6 +20,7 @@ import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { syncWishEditToLinkedBoard } from '../../lib/wishBoardLinking';
 import { MentionSuggestions } from '../ui/MentionSuggestions';
+import { WishScopePicker, type WishScope } from '../ui/WishScopePicker';
 import type { BoardCategory, Wish } from '../../types';
 
 const WISH_DRAFT_KEY = 'add-wish-draft';
@@ -51,6 +52,7 @@ export function AddWishModal({
   wishOwnerName,
 }: AddWishModalProps) {
   const [wishText, setWishText] = useState('');
+  const [wishScope, setWishScope] = useState<WishScope>('hive');
   const [wishTitle, setWishTitle] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -154,6 +156,7 @@ export function AddWishModal({
           description: wishText.trim(),
           raw_input: wishText.trim(),
           status: 'public',
+          share_scope: wishScope,
           is_active: true,
           extracted_from: 'manual',
         };
@@ -317,6 +320,13 @@ export function AddWishModal({
                     textAlignVertical: 'top',
                   }}
                 />
+                {/* Who can see this wish. More eyes is sometimes exactly what
+                    an ask needs — "anyone know a teacher?" travels further than
+                    one HIVE (Nat 2026-08-02). */}
+                <View className="mt-4">
+                  <WishScopePicker value={wishScope} onChange={setWishScope} />
+                </View>
+
                 <MentionSuggestions
                   active={wishMentionInput.mentionQuery !== null}
                   query={wishMentionInput.mentionQuery}
