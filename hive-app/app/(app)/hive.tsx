@@ -377,15 +377,12 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
           className={`p-4 active:bg-gray-50 ${index < events.length - 1 ? 'border-b border-cream' : ''}`}
         >
           <View className="flex-row items-start">
-            {getEventHiveIcon(event) ? (
-              <View className="mr-3" style={{ marginTop: 2 }}>
-                <HiveIcon name={getEventHiveIcon(event)!} size={22} color="#8e6f35" />
-              </View>
-            ) : (
-              <Text className="text-2xl mr-3">
-                {getEventEmoji(event)}
-              </Text>
-            )}
+            {/* Plain emoji everywhere now (Nat 2026-08-04). The drawn icon
+                branch that used to sit here was shadowing an emoji that was
+                already chosen and already correct. */}
+            <Text className="text-2xl mr-3">
+              {getEventEmoji(event)}
+            </Text>
             <View className="flex-1">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{event.title}</Text>
               <View className="flex-row flex-wrap items-center mt-1">
@@ -492,11 +489,7 @@ function HexShortcut({ emoji, icon, label, sublabel, onPress }: {
             strokeWidth={1.5}
           />
         </Svg>
-        {icon ? (
-          <View style={{ zIndex: 1 }}><HiveIcon name={icon} size={32} color="#8e6f35" /></View>
-        ) : (
-          <Text style={{ fontSize: 28, lineHeight: 32 }}>{emoji}</Text>
-        )}
+        <Text style={{ fontSize: 28, lineHeight: 32 }}>{emoji}</Text>
       </View>
       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#2d2d2d', marginTop: 4, textAlign: 'center' }}>{label}</Text>
       {sublabel ? (
@@ -2344,7 +2337,6 @@ export default function HiveScreen() {
         id: `survey-${s.id}`,
         emoji: '📋',
         // One mark for the check-in everywhere: the gold outlined clipboard.
-        iconName: 'checkin',
         title: isMonthlyTuneUp ? `${tuneUpMonthName} tune-up + check-in` : s.title,
         detail: isDone
           ? `Submitted ${formatDateShort(submittedAt)} · Tap to edit`
@@ -2379,11 +2371,11 @@ export default function HiveScreen() {
         .join(' · ');
       return {
         id: `action-${a.id}`,
-        emoji: '📝',
-        // HIVE Help wears the handshake everywhere now, so the mark means the
-        // same thing on Home as it does in the tune-up (Nat 2026-07-26). It
-        // still sets these apart from ordinary jots, which stay notes.
-        iconName: /^HIVE Help:/i.test(jot.text) ? 'handshake' : 'note',
+        // HIVE Help wears the handshake everywhere, so the mark means the same
+        // thing on Home as it does in the tune-up (Nat 2026-07-26). That
+        // distinction used to be carried by a drawn icon; it is an emoji now,
+        // and it had to move here or it would have been lost with the drawing.
+        emoji: /^HIVE Help:/i.test(jot.text) ? '🤝' : '📝',
         title: jot.text,
         detail: [statusDetail, jotContext || null].filter(Boolean).join(' · ') || undefined,
         // Linked to-dos navigate on tap (like Recent Activity rows); the circle
@@ -2416,7 +2408,6 @@ export default function HiveScreen() {
       return [{
         id: `quarterly-dues-${year}-q${quarter}`,
         emoji: '🍯',
-        iconName: 'honeypot',
         title: isDueToday ? 'Quarterly dues are due today!' : 'Quarterly dues are still due',
         detail: duesStatusLoading
           ? 'Checking payment status...'
@@ -2533,11 +2524,7 @@ export default function HiveScreen() {
         ) : (
           <View style={circleStyle(false)} />
         )}
-        {todo.iconName ? (
-          <View style={{ flexShrink: 0 }}><HiveIcon name={todo.iconName as HiveIconName} size={19} color="#bd9348" /></View>
-        ) : (
-          <Text style={{ fontSize: 18, flexShrink: 0 }}>{todo.emoji}</Text>
-        )}
+        <Text style={{ fontSize: 18, flexShrink: 0 }}>{todo.emoji}</Text>
         <View style={{ flex: 1 }}>
           <Text style={{
             fontFamily: isDone ? 'Lato_400Regular' : 'Lato_700Bold',
@@ -3111,11 +3098,7 @@ export default function HiveScreen() {
                                   marginRight: 12,
                                   flexShrink: 0,
                                 }}>
-                                  {ACTIVITY_HIVE_ICON[item.emoji] ? (
-                                    <HiveIcon name={ACTIVITY_HIVE_ICON[item.emoji]} size={17} color="#8e6f35" />
-                                  ) : (
-                                    <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
-                                  )}
+                                  <Text style={{ fontSize: 16 }}>{item.emoji}</Text>
                                 </View>
                                 {isUnread && (
                                   <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#bd9348', marginRight: 10, shadowColor: '#bd9348', shadowOpacity: 0.18, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } }} />
@@ -3298,15 +3281,9 @@ export default function HiveScreen() {
                                         key={event.id}
                                         style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.22)' }}
                                       >
-                                        {getEventHiveIcon(event) ? (
-                                          <View style={{ marginRight: 8, marginTop: 1 }}>
-                                            <HiveIcon name={getEventHiveIcon(event)!} size={16} color="#8e6f35" />
-                                          </View>
-                                        ) : (
-                                          <Text style={{ fontSize: 15, marginRight: 8 }}>
-                                            {getEventEmoji(event)}
-                                          </Text>
-                                        )}
+                                        <Text style={{ fontSize: 15, marginRight: 8 }}>
+                                          {getEventEmoji(event)}
+                                        </Text>
                                         <View style={{ flex: 1 }}>
                                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#5b5b5b' }}>{event.title}</Text>
                                           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060', marginTop: 1 }}>

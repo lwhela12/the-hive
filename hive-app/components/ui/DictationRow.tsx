@@ -44,6 +44,16 @@ export function DictationRow({
   const skin = usePageSkin();
   const dictation = useDictation(setValue);
 
+  // Tucked onto the bottom of the box it belongs to, rather than floating in
+  // the gap below it (Nat 2026-08-04: "this talk instead of typing button
+  // should go in a text box").
+  //
+  // In her screenshot it sat between the description field and the next
+  // question, touching neither, so it read as a control for the whole form
+  // instead of for the one box above it. It cannot go literally inside the
+  // field — a React Native TextInput has no children — so it does the next
+  // best thing: it overlaps upward into the field's bottom edge and wears the
+  // same hairline, which is enough for the eye to file it as part of the box.
   return (
     <View
       style={[
@@ -51,8 +61,20 @@ export function DictationRow({
           flexDirection: 'row',
           alignItems: 'center',
           gap: 8,
-          marginTop: 8,
+          alignSelf: align === 'right' ? 'flex-end' : 'flex-start',
           justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+          // Pulls up over the field's border so the two touch.
+          marginTop: -1,
+          marginLeft: align === 'right' ? 0 : 10,
+          marginRight: align === 'right' ? 10 : 0,
+          paddingHorizontal: 8,
+          paddingVertical: 4,
+          borderWidth: 1,
+          borderTopWidth: 0,
+          borderColor: skin.border,
+          borderBottomLeftRadius: 12,
+          borderBottomRightRadius: 12,
+          backgroundColor: skin.field,
         },
         style,
       ]}
