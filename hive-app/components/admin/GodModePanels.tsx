@@ -380,10 +380,19 @@ export function NewsletterPanel({
  * reached from HIVE-Wide and Meetings is hidden at HIVE-Wide. Naming the HIVE
  * first, as a tab, is what makes them linkable again.
  */
+// The newsletter is NOT in here (Nat 2026-08-04: "we only want it in one spot,
+// the newsletter box").
+//
+// It was duplicated — once here and once in the Newsletter panel — and the copy
+// here was the wrong one on the merits as well. There is ONE Buzz across all the
+// HIVEs; that is why The Buzz lives at HIVE-Wide and nowhere else. Hanging a
+// "Newsletter draft" inside OG's folder said OG has a newsletter of its own,
+// beside Tech's and Production's, which is the opposite of what it is.
+//
+// Everything left in this list genuinely belongs to exactly one HIVE.
 const HIVE_TOOLS: { route: string; emoji: string; label: string; hint: string }[] = [
   { route: '/meeting-helper', emoji: '🗓️', label: 'Meeting Helper', hint: 'Run the meeting, live' },
   { route: '/monthly-tuneup', emoji: '🔧', label: 'Monthly Tune-up', hint: 'The check-in everyone fills in' },
-  { route: '/newsletter', emoji: '📰', label: 'Newsletter draft', hint: 'The Buzz, written from real facts' },
   { route: '/meetings', emoji: '📚', label: 'Meetings & summaries', hint: 'Past meetings and what was said' },
 ];
 
