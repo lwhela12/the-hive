@@ -439,18 +439,27 @@ export const SideRail = memo(function SideRail({
           onPress={() => setConfirmingLogOut(true)}
         />
 
-        {/* Admin only exists from HIVE-Wide (Nat 2026-08-03). It runs the whole
-            operation rather than any one HIVE, so offering it from inside OG
-            implied there was such a thing as OG's admin. God mode is reached
-            from the god view. */}
-        {canSeeAdmin && onHiveWide ? (
+        {/* Admin is in the rail from EVERYWHERE now (Nat 2026-08-04): "i said
+            i only wanted admin from the HIVE-Wide, but i changed my mind, i
+            actually want my admin permanently in the toolbar."
+
+            The 08-03 reasoning still holds — Admin runs the whole operation
+            rather than any one HIVE, so it should never look like OG's admin —
+            and that is now handled by where it GOES rather than whether it
+            shows. Pressing it steps up to HIVE-Wide first, so you always land
+            on the one god view against the planet, whichever HIVE you set off
+            from. */}
+        {canSeeAdmin ? (
           <>
             {divider}
             <Row
               emoji={ADMIN_DESTINATION.emoji}
               label={ADMIN_DESTINATION.label}
               active={activeKey === 'admin'}
-              onPress={() => go(ADMIN_DESTINATION.route)}
+              onPress={() => {
+                if (!onHiveWide) enterWholeHive();
+                go(ADMIN_DESTINATION.route);
+              }}
             />
           </>
         ) : null}
