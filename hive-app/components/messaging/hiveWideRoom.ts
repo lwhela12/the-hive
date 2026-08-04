@@ -45,6 +45,13 @@ export function getMessagesRoomLabel(
   currentUserId: string | undefined,
   hiveName: string
 ): string {
+  // The shared room is checked FIRST, before the community-room rule below it.
+  // It is a `community` room by type — that is how it gets its everyone-in-it
+  // membership — so without this it fell through to `return hiveName` and wore
+  // the name of whichever HIVE you happened to be signed into. Nat opened it at
+  // HIVE-Wide and the header said "Production HIVE · Everyone in this HIVE"
+  // (2026-08-03), which is the opposite of what the room is.
+  if ((room as { reach?: string }).reach === 'all_hives') return HIVE_WIDE_ROOM_NAME;
   const ownTitle = getRoomCustomization(room, currentUserId).title;
   if (ownTitle) return ownTitle;
   if (room.room_type === 'community') return hiveName;
@@ -62,6 +69,9 @@ export function getMessagesRoomSubtitle(
   currentUserId: string | undefined,
   hiveName: string
 ): string | null {
+  // Same first-check as the label: "Everyone in this HIVE" is wrong for the one
+  // room that is not in a HIVE.
+  if ((room as { reach?: string }).reach === 'all_hives') return HIVE_WIDE_ROOM_SUBTITLE;
   if (room.room_type === 'community') {
     const ownTitle = getRoomCustomization(room, currentUserId).title;
     // If somebody renamed their copy to the HIVE's own name, showing it twice

@@ -84,7 +84,14 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   { key: 'clive', label: 'Clive', emoji: '✨', route: '/', gate: 'everyone', atWholeHive: 'hidden' },
   { key: 'members', label: 'Members', emoji: '👥', route: '/members', gate: 'everyone', atWholeHive: 'wide' },
   { key: 'boards', label: 'Boards', emoji: '📋', route: '/board', gate: 'everyone', atWholeHive: 'wide', wideRoute: '/hive-wide-boards' },
-  { key: 'messages', label: 'Messages', emoji: '💌', route: '/messages', gate: 'everyone', badge: 'dms', atWholeHive: 'wide' },
+  // Out of HIVE-Wide for now, at Nat's call (2026-08-03): "if you want to
+  // message HIVE-Wide, you can just do so from your regular message spot for
+  // now." Standing above the HIVEs, the list could only ever hold one entry —
+  // every other room and DM belongs to a single HIVE — so the page was a room
+  // list with one room in it, wrapped in a split view built for many. The
+  // shared room itself is untouched: it still sits in each HIVE's Messages
+  // list, one tap from where you already read your messages.
+  { key: 'messages', label: 'Messages', emoji: '💌', route: '/messages', gate: 'everyone', badge: 'dms', atWholeHive: 'hidden' },
   // Every HIVE's next meeting is already on the Whole HIVE page itself, and the
   // meetings screen is where you CREATE one — which has no all-HIVEs meaning.
   { key: 'meetings', label: 'Meetings', emoji: '🗓️', route: '/meetings', gate: 'everyone', atWholeHive: 'hidden' },
