@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 
 interface NotifyDMPayload {
   room_id: string;
@@ -46,15 +47,33 @@ serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
-  // This function uses service_role - no user auth needed
   const supabaseAdmin = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
   try {
+    // Verify the caller, the way the three notify-*-mention siblings always
+    // have. This function ran with the service role and NEVER read the
+    // Authorization header — the comment above said "no user auth needed",
+    // which was true of the DATABASE client and not of the caller.
+    //
+    // An audit POSTed here with no Authorization header at all and reached the
+    // database. Anyone could forge an in-app notification and an Expo push to
+    // any member, titled with an impersonated member's real name — looked up
+    // from the spoofed id, so it reads as genuine — carrying any text they
+    // liked, stamped with any community.
+    const auth = await verifySupabaseJwt(req.headers.get('Authorization'));
+    if (isAuthError(auth)) {
+      return errorResponse(auth.error, auth.status);
+    }
+
     const payload: NotifyDMPayload = await req.json();
     const { room_id, sender_id, recipient_id, message_preview, community_id } = payload;
+
+    if (auth.userId !== sender_id) {
+      return errorResponse('Authenticated user does not match sender', 403);
+    }
 
     // Get sender profile for the notification title
     const { data: sender, error: senderError } = await supabaseAdmin

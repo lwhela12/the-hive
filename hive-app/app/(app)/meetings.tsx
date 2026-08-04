@@ -18,6 +18,7 @@ import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import type { Meeting, Event } from '../../types';
 
+import { DictationRow } from '../../components/ui/DictationRow';
 interface MeetingSummaryPreview {
   title?: string;
   source?: string;
@@ -1469,6 +1470,7 @@ export default function MeetingsScreen() {
                 onKeyPress={submitOnEnter(handleSaveEdit)}
                 numberOfLines={3}
               />
+              <DictationRow setValue={(u) => setEditForm((f) => ({ ...f, description: u(f.description ?? '') }))} />
             </View>
 
             <View className="mb-4">

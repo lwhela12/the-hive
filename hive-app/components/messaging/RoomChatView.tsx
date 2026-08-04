@@ -52,6 +52,7 @@ import {
 } from '../../lib/chatRoomDisplay';
 import type { ChatRoom, ChatRoomMember, Profile, TypingIndicator, Attachment } from '../../types';
 
+import { confirmAction, showAlert } from '../../lib/showAlert';
 interface RoomChatViewProps {
   room: ChatRoom & { members?: Array<ChatRoomMember & { user?: Profile }> };
   onBack: () => void;
@@ -731,12 +732,15 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
   });
 
   const handleDelete = useCallback(async (messageId: string) => {
-    Alert.alert('Delete Message', 'Are you sure you want to delete this message?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
+    // Was Alert.alert-only, which is a no-op on web — so Delete Message did
+    // nothing at all in a browser. Delete chat, 50 lines below, always had the
+    // web branch.
+    confirmAction({
+      title: 'Delete message',
+      message: 'Are you sure you want to delete this message?',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
           try {
             await supabase
               .from('room_messages')
@@ -745,11 +749,10 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
             await refetchMessages();
           } catch (error) {
             console.error('Error deleting message:', error);
-            Alert.alert('Error', 'Failed to delete message.');
+            showAlert('Not deleted', 'That message could not be deleted. Try again in a moment.');
           }
         },
-      },
-    ]);
+    });
   }, [refetchMessages]);
 
   const renderMessageItem = useCallback(({ item }: { item: any }) => (

@@ -329,6 +329,10 @@ serve(async (req) => {
         .gte('completed_at', startIso).limit(60),
       supabaseAdmin.from('survey_responses')
         .select('answers, submitted_at, user_id, user:profiles!user_id(name), survey:surveys!survey_id(title)')
+        // Same missing filter as seal-meeting had. This result is unused today,
+        // so it leaked nothing — but the newsletter is PUBLIC, and one edit away
+        // from publishing another HIVE's private check-ins to the website.
+        .eq('community_id', communityId)
         .gte('submitted_at', new Date(Date.parse(startIso) - 45 * 24 * 3600_000).toISOString())
         .order('submitted_at', { ascending: false }).limit(40),
       // Hangs that already HAPPENED. Nat's newsletter reports on the month as

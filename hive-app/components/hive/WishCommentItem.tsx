@@ -7,6 +7,8 @@ import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
+import { VoiceMicButton } from '../ui/VoiceMicButton';
+import { useDictation } from '../../lib/hooks/useDictation';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 
 export type WishCommentNode = WishComment & {
@@ -41,6 +43,7 @@ export function WishCommentItem({
 }: WishCommentItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
+  const editDictation = useDictation(setEditContent);
 
   const isAuthor = currentUserId === comment.user_id;
   const timeAgo = getTimeAgo(new Date(comment.created_at));
@@ -106,6 +109,13 @@ export function WishCommentItem({
                 style={{ fontFamily: 'Lato_400Regular' }}
                 autoFocus
               />
+              <View className="flex-row items-center gap-2 mb-2">
+                <VoiceMicButton
+                  size={18}
+                  onTranscript={editDictation.onTranscript}
+                  onInterimTranscript={editDictation.onInterimTranscript}
+                />
+              </View>
               <View className="flex-row gap-2">
                 <Pressable onPress={handleSaveEdit} className="bg-gold px-3 py-1 rounded-lg">
                   <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">

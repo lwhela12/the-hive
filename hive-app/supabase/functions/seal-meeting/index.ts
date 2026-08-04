@@ -290,6 +290,14 @@ serve(async (req) => {
     const { data: checkInRows } = await supabaseAdmin
       .from('survey_responses')
       .select('answers, submitted_at, user_id, user:profiles!user_id(name), survey:surveys!survey_id(title)')
+      // Scoped, at last. Every other query in this function filters on the
+      // community and this one never did — so sealing a Tech HIVE meeting swept
+      // in OG members' private check-ins (what they are stuck on, what they
+      // want help with, by first name), wrote them into the HummDingers section
+      // of Tech's summary and fed them to Clive. The nightly cron did it
+      // unattended. The only filter was on the survey TITLE, and every HIVE's
+      // monthly check-in matches /check-in/i.
+      .eq('community_id', communityId)
       .gte('submitted_at', new Date(Date.parse(startIso) - 45 * 24 * 3600_000).toISOString())
       .order('submitted_at', { ascending: false })
       .limit(40);

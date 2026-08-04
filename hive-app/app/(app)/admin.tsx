@@ -65,6 +65,7 @@ import { parseAmericanDate } from '../../lib/dateUtils';
 import { getWishQuickTitle } from '../../lib/wishDisplay';
 import type { Profile, QueenBee, UserRole, CommunityInvite, Event, Wish } from '../../types';
 
+import { DictationRow } from '../../components/ui/DictationRow';
 type MemberRow = {
   id: string;
   role: UserRole;
@@ -2265,6 +2266,7 @@ export default function AdminScreen() {
               style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3', minHeight: 72, textAlignVertical: 'top' }}
               placeholderTextColor="#b5ad9f"
             />
+            <DictationRow setValue={setSurveyDescription} />
             <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 16 }}>
               <View style={{ flex: 2, minWidth: 180 }}>
                 <EventDatePicker
@@ -2339,6 +2341,7 @@ export default function AdminScreen() {
                 style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3', minHeight: 72, textAlignVertical: 'top' }}
                 placeholderTextColor="#b5ad9f"
               />
+              <DictationRow setValue={setSurveyEditorDescription} />
               <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 8 }}>
                 <View style={{ flex: 2, minWidth: 180 }}>
                   <EventDatePicker
@@ -2755,6 +2758,7 @@ export default function AdminScreen() {
                       style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 10, padding: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', backgroundColor: 'white', minHeight: 58, textAlignVertical: 'top', marginBottom: 10 }}
                       placeholderTextColor="#b5ad9f"
                     />
+                    <DictationRow setValue={(u) => updateSurveyQuestion(index, (current) => ({ ...current, text: u(current.text ?? '') }))} />
 
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: question.type === 'choice' ? 10 : 0 }}>
                       {SURVEY_QUESTION_TYPES.map((type) => {
@@ -2914,6 +2918,7 @@ export default function AdminScreen() {
               numberOfLines={3}
               className="border border-gray-200 rounded-lg p-3 mb-3 bg-gray-50"
             />
+            <DictationRow setValue={setQbDescription} />
 
             <Text className="text-gray-600 mb-2">Status</Text>
             <View className="flex-row mb-4">
@@ -2985,6 +2990,7 @@ export default function AdminScreen() {
               numberOfLines={3}
               className="border border-gray-300 rounded-lg p-3 mb-4"
             />
+            <DictationRow setValue={setEventDescription} />
 
             <View className="mb-4">
               <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />

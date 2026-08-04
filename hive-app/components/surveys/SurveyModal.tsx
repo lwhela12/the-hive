@@ -17,6 +17,7 @@ import {
 import type { Survey, SurveyAnswers, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { SurveyQuestionField } from './SurveyQuestionField';
 
+import { DictationRow } from '../ui/DictationRow';
 interface SurveyModalProps {
   survey: Survey;
   initialAnswers?: SurveyAnswers;
@@ -309,6 +310,7 @@ export function SurveyModal({
                     textAlignVertical: 'top',
                   }}
                 />
+                <DictationRow setValue={(u) => updateCarryForwardItem(item, { note: u(response?.note ?? '') })} />
               </View>
             );
           })}

@@ -31,6 +31,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
 import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
+import { DictationRow } from '../../components/ui/DictationRow';
 import {
   getActiveMentionQuery,
   getMentionedMembers,
@@ -2316,6 +2317,7 @@ export default function MeetingHelperScreen() {
                     minHeight: sz(64, 48),
                   }}
                 />
+                <DictationRow setValue={setLiveNoteDraft} />
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
                   <Pressable
                     onPress={() => handleSaveLiveNote(member, liveNoteWishId)}
@@ -3046,6 +3048,7 @@ export default function MeetingHelperScreen() {
                   textAlignVertical: 'top',
                 }}
               />
+              <DictationRow setValue={setEditDraft} />
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
                 <Pressable
                   onPress={() => setEditKey(null)}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { DictationRow } from '../ui/DictationRow';
 import {
   HONEY_POT_PAYMENT_METHOD_OPTIONS,
   getHoneyPotErrorMessage,
@@ -177,6 +178,7 @@ export function RecordHoneyPotModal({
                   borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, textAlignVertical: 'top',
                 }}
               />
+              <DictationRow setValue={setNote} />
             </View>
 
             {error ? (

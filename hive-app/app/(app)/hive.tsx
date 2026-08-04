@@ -60,6 +60,7 @@ import {
 import { HONEY_POT_CASH_APP_HANDLE } from '../../lib/honeyPotPayment';
 import type { Profile, Wish, WishGranter, Event, ActionItem } from '../../types';
 
+import { DictationRow } from '../../components/ui/DictationRow';
 type WishWithGranters = Wish & {
   user?: Profile | null;
   granters?: (WishGranter & { granter?: Profile })[];
@@ -3718,6 +3719,7 @@ export default function HiveScreen() {
                         className="border border-gray-300 rounded-lg px-4 py-3 text-base mb-4"
                         style={{ textAlignVertical: 'top', minHeight: 80 }}
                       />
+                      <DictationRow setValue={setEventDescription} />
                       <View className="mb-4">
                         <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
                       </View>
@@ -3842,6 +3844,7 @@ export default function HiveScreen() {
                 marginBottom: 16,
               }}
             />
+            <DictationRow setValue={setNewTaskText} />
             {taskError ? (
               <View style={{ backgroundColor: '#fef2f2', borderColor: '#fecaca', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 }}>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626', textAlign: 'center' }}>
@@ -4231,6 +4234,7 @@ export default function HiveScreen() {
                     shadowOffset: { width: 0, height: 0 },
                   }}
                 />
+                <DictationRow setValue={setMyAnswer} />
                 {/* Listening indicator strip inside the box */}
                 {isVoiceListening && (
                   <View style={{

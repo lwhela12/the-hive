@@ -38,6 +38,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import type { Skill, Wish, UserInsights, Profile } from '../../types';
 
+import { DictationRow } from '../../components/ui/DictationRow';
+import { confirmAction } from '../../lib/showAlert';
 const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
 
 // Format phone number as (XXX) XXX-XXXX
@@ -746,14 +748,15 @@ export default function ProfileScreen() {
       setManagingWish(null);
     };
 
-    Alert.alert(
-      'Archive HD Wish',
-      `Archive this HD wish from Wishes?\n\n"${wish.description}"`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Archive', onPress: archiveWish },
-      ]
-    );
+    // The same WishManageModal is hosted by five screens; Archive worked on
+    // three of them and was inert on these two, because only these two lacked
+    // the web branch.
+    confirmAction({
+      title: 'Archive HD wish',
+      message: `Archive this HD wish from Wishes?\n\n"${wish.description}"`,
+      confirmLabel: 'Archive',
+      onConfirm: archiveWish,
+    });
   };
 
   const handleGrantWish = async (data: {
@@ -1292,6 +1295,7 @@ export default function ProfileScreen() {
           color: '#2d2d2d',
         }}
       />
+      <DictationRow setValue={(u: (prev: string) => string) => onChangeText(u(value))} label={multiline ? 'Talk instead of typing' : null} size={18} />
     </View>
   );
 
@@ -1881,6 +1885,7 @@ export default function ProfileScreen() {
             <View className="p-4 border-b border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">About me</Text>
               {isEditing ? (
+                <>
                 <TextInput
                   value={editBio}
                   onChangeText={setEditBio}
@@ -1891,6 +1896,8 @@ export default function ProfileScreen() {
                   multiline
                   numberOfLines={3}
                 />
+                <DictationRow setValue={setEditBio} />
+                </>
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
                   {(profile as any).bio || 'Not set'}
@@ -1975,6 +1982,7 @@ export default function ProfileScreen() {
                     placeholderTextColor="#a09274"
                     multiline
                   />
+                  <DictationRow setValue={setEditMiqExperiences} />
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">Ways I want to grow</Text>
                   <TextInput
                     value={editMiqGrowth}
@@ -1985,6 +1993,7 @@ export default function ProfileScreen() {
                     placeholderTextColor="#a09274"
                     multiline
                   />
+                  <DictationRow setValue={setEditMiqGrowth} />
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">How I want to contribute</Text>
                   <TextInput
                     value={editMiqContribution}
@@ -1995,6 +2004,7 @@ export default function ProfileScreen() {
                     placeholderTextColor="#a09274"
                     multiline
                   />
+                  <DictationRow setValue={setEditMiqContribution} />
                 </View>
               ) : (
                 <View className="gap-3">

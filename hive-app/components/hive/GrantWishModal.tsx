@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
 import { supabase } from '../../lib/supabase';
+import { VoiceMicButton } from '../ui/VoiceMicButton';
+import { useDictation } from '../../lib/hooks/useDictation';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import type { Wish, Profile } from '../../types';
 
@@ -36,6 +38,7 @@ export function GrantWishModal({
   onGrant,
 }: GrantWishModalProps) {
   const [thankYouMessage, setThankYouMessage] = useState('');
+  const thanksDictation = useDictation(setThankYouMessage);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -305,12 +308,19 @@ export function GrantWishModal({
                     textAlignVertical: 'top',
                   }}
                 />
-                <Text
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal/40 text-xs mt-1 text-right"
-                >
-                  {thankYouMessage.length}/500
-                </Text>
+                <View className="flex-row items-center justify-between mt-1">
+                  <VoiceMicButton
+                    size={20}
+                    onTranscript={thanksDictation.onTranscript}
+                    onInterimTranscript={thanksDictation.onInterimTranscript}
+                  />
+                  <Text
+                    style={{ fontFamily: 'Lato_400Regular' }}
+                    className="text-charcoal/40 text-xs"
+                  >
+                    {thankYouMessage.length}/500
+                  </Text>
+                </View>
               </View>
 
               {/* Celebration Note */}

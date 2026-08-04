@@ -7,6 +7,8 @@ import { useAuth } from '../lib/hooks/useAuth';
 import { hiveDisplayName } from '../lib/hiveBrand';
 import type { CommunityInvite, Community, Profile } from '../types';
 
+import { DictationRow } from '../components/ui/DictationRow';
+import { confirmAction } from '../lib/showAlert';
 type InviteWithDetails = CommunityInvite & {
   community: Community;
   inviter: Profile | null;
@@ -445,21 +447,16 @@ export default function JoinScreen() {
   };
 
   const handleDeclineInvite = () => {
-    Alert.alert(
-      'Decline Invite',
-      `Are you sure you want to decline the invitation to join ${normalizeHiveBrandName(invite?.community?.name)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Decline',
-          style: 'destructive',
-          onPress: async () => {
-            // Just show waitlist instead
-            setInvite(null);
-          },
-        },
-      ]
-    );
+    confirmAction({
+      title: 'Decline invite',
+      message: `Are you sure you want to decline the invitation to join ${normalizeHiveBrandName(invite?.community?.name)}?`,
+      confirmLabel: 'Decline',
+      destructive: true,
+      onConfirm: () => {
+        // Just show waitlist instead
+        setInvite(null);
+      },
+    });
   };
 
   const handleJoinWaitlist = async () => {
@@ -694,6 +691,7 @@ export default function JoinScreen() {
                 className="bg-cream rounded-xl px-4 py-3 text-charcoal min-h-[80px]"
                 style={{ fontFamily: 'Lato_400Regular' }}
               />
+              <DictationRow setValue={setWaitlistMessage} />
             </View>
 
             <Pressable

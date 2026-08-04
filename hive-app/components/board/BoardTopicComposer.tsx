@@ -8,6 +8,7 @@ import { getMemberBoardDisplayName, getMemberHdBoardName } from '../../lib/board
 import { HiveIcon, type HiveIconName } from '../ui/HiveIcon';
 import type { BoardCategory, Profile } from '../../types';
 
+import { DictationRow } from '../ui/DictationRow';
 const BOARD_DRAFT_KEY = 'board-topic-draft';
 export type BoardTopicAudience = 'community' | 'members';
 export type BoardTopicKind = 'discussion' | 'hd_board' | 'helper_log';
@@ -538,6 +539,7 @@ export function BoardTopicComposer({
                 className="bg-white rounded-xl px-4 py-3 text-charcoal min-h-[100px]"
                 style={{ fontFamily: 'Lato_400Regular' }}
               />
+              <DictationRow setValue={setDescription} />
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40 text-xs mt-1 text-right">
                 {description.length}/200
               </Text>

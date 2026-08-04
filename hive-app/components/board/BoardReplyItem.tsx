@@ -9,6 +9,7 @@ import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 
+import { DictationRow } from '../ui/DictationRow';
 interface BoardReplyItemProps {
   reply: BoardReply & { author?: Profile };
   currentUserId?: string;
@@ -89,6 +90,7 @@ export function BoardReplyItem({
                 className="bg-cream rounded-lg p-3 text-charcoal mb-2"
                 style={{ fontFamily: 'Lato_400Regular' }}
               />
+              <DictationRow setValue={setEditContent} />
               <View className="flex-row gap-2">
                 <Pressable
                   onPress={handleSaveEdit}

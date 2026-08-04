@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { Alert, Pressable, StyleProp, View, ViewStyle } from 'react-native';
+import { Pressable, StyleProp, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useVoiceInput } from '../../lib/hooks/useVoiceInput';
 import { usePageSkin } from '../../lib/pageSkin';
+import { showAlert } from '../../lib/showAlert';
 
 interface Props {
   /** Called with the recognized transcript; append to your state as needed */
@@ -31,8 +32,13 @@ interface Props {
  */
 export function VoiceMicButton({ onTranscript, onInterimTranscript, onListeningChange, size = 22, style }: Props) {
   const skin = usePageSkin();
+  // Every one of these messages was unreachable. The handler used `Alert.alert`,
+  // which does nothing on web — and this button ONLY renders on web, because
+  // speech recognition exists nowhere else. So "microphone access is blocked"
+  // has never once been shown to anybody: you denied the permission, tapped the
+  // mic, and it sat there silently forever.
   const { isListening, toggle, isSupported } = useVoiceInput(onTranscript, (message) => {
-    Alert.alert('Voice input', message);
+    showAlert('Voice input', message);
   }, onInterimTranscript);
 
   useEffect(() => {

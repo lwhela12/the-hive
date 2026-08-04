@@ -144,13 +144,29 @@ export function useVoiceInput(
       }
 
       const interimTranscript = interimSegments.join(' ').trim();
-      onInterimTranscriptRef.current?.(interimTranscript);
-
       const finalTranscript = finalSegments.join(' ').trim();
-      if (finalTranscript) {
-        onTranscriptRef.current(finalTranscript);
-        onInterimTranscriptRef.current?.('');
+
+      // ORDER MATTERS, and getting it wrong said everything twice.
+      //
+      // When Chrome closes a phrase it sends an `onresult` carrying only the
+      // final, so `interimSegments` is empty. This used to fire
+      // `onInterimTranscript('')` FIRST — which every consumer treats as "the
+      // phrase ended, forget the base text" — and only then `onTranscript`. By
+      // that point the box already held the last interim, the base was gone, so
+      // the final appended to text that was already the same words:
+      //
+      //   interim "is broken"  ->  "The boards page is broken"
+      //   final   "is broken"  ->  "The boards page is broken is broken"
+      //
+      // So the clear is skipped when this event also carries a final; the final
+      // handler does it afterwards, once the text is settled.
+      if (!finalTranscript) {
+        onInterimTranscriptRef.current?.(interimTranscript);
+        return;
       }
+
+      onTranscriptRef.current(finalTranscript);
+      onInterimTranscriptRef.current?.('');
     };
     recognitionRef.current = rec;
 

@@ -18,6 +18,8 @@ import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { formatDateShort } from '../../lib/dateUtils';
 import { GrantWishModal } from './GrantWishModal';
+import { VoiceMicButton } from '../ui/VoiceMicButton';
+import { useDictation } from '../../lib/hooks/useDictation';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getWishDetailText, getWishQuickTitle, shouldShowWishDescription } from '../../lib/wishDisplay';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
@@ -62,6 +64,7 @@ export function WishDetail({
   const [comments, setComments] = useState<WishCommentWithUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
+  const commentDictation = useDictation(setNewComment);
   const [submitting, setSubmitting] = useState(false);
   const [showGrantModal, setShowGrantModal] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
@@ -544,6 +547,12 @@ export function WishDetail({
             blurOnSubmit={false}
             onKeyPress={submitOnEnter(handleSubmitComment)}
             editable={!submitting}
+          />
+          <VoiceMicButton
+            size={20}
+            style={{ marginRight: 8, marginBottom: 2 }}
+            onTranscript={commentDictation.onTranscript}
+            onInterimTranscript={commentDictation.onInterimTranscript}
           />
           <Pressable
             onPress={handleSubmitComment}

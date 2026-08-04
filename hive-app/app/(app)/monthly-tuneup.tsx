@@ -54,6 +54,8 @@ import { parseAmericanDate } from '../../lib/dateUtils';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import type { Profile, Wish } from '../../types';
 
+import { DictationRow } from '../../components/ui/DictationRow';
+import { confirmAction } from '../../lib/showAlert';
 const hiveBee = require('../../assets/HIVE Bee.png');
 // The crest (bee inside a 30-ray sunburst ring) needs room to read — its
 // content is only 47% of the asset box, so at header size it collapses into a
@@ -1289,14 +1291,15 @@ export default function MonthlyTuneupScreen() {
       setManagingWish(null);
     };
 
-    Alert.alert(
-      'Archive HD Wish',
-      `Archive this HD wish from Wishes?\n\n"${wish.description}"`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Archive', onPress: archiveWish },
-      ]
-    );
+    // The same WishManageModal is hosted by five screens; Archive worked on
+    // three of them and was inert on these two, because only these two lacked
+    // the web branch.
+    confirmAction({
+      title: 'Archive HD wish',
+      message: `Archive this HD wish from Wishes?\n\n"${wish.description}"`,
+      confirmLabel: 'Archive',
+      onConfirm: archiveWish,
+    });
   };
 
   const handleDeleteWish = (wish: Wish) => {
@@ -2677,6 +2680,7 @@ export default function MonthlyTuneupScreen() {
                 {field.label}
               </Text>
               {isEditing ? (
+                <>
                 <TextInput
                   value={profileDrafts[field.column] ?? ''}
                   onChangeText={(value) => {
@@ -2700,6 +2704,8 @@ export default function MonthlyTuneupScreen() {
                     minHeight: field.multiline ? 74 : undefined,
                   }}
                 />
+                <DictationRow setValue={(u) => setProfileDrafts((drafts) => ({ ...drafts, [field.column]: u(drafts[field.column] ?? '') }))} />
+                </>
               ) : (
                 <Text
                   style={{

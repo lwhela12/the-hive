@@ -40,6 +40,7 @@ import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { getHdWishTabLabel, pickSpotlightWish, type HdWishTabKey } from '../../lib/wishDisplay';
 import { useWishes } from '../../lib/hooks/useWishes';
 
+import { DictationRow } from '../../components/ui/DictationRow';
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish> & {
   granters?: (WishGranter & { granter?: Profile })[];
@@ -408,6 +409,7 @@ function ProfilePromptInput({
           paddingVertical: multiline ? 10 : 8,
         }}
       />
+      <DictationRow setValue={(u: (prev: string) => string) => onChangeText(u(value))} label={multiline ? 'Talk instead of typing' : null} size={18} />
     </View>
   );
 }

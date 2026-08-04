@@ -23,6 +23,7 @@ import { SelectedFile } from '../../lib/filePicker';
 import { uploadMultipleImages, uploadMultipleFiles } from '../../lib/attachmentUpload';
 import type { Attachment } from '../../types';
 
+import { DictationRow } from '../../components/ui/DictationRow';
 /**
  * App Feedback — its own place, at last.
  *
@@ -114,6 +115,14 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/**
+ * Matches MAX_ATTACHMENTS in the app-feedback edge function. The picker used to
+ * allow 5 images AND 5 files while the function silently kept the first 6 of
+ * whatever arrived — so attaching five screenshots and three logs filed six of
+ * them, dropped the logs, and said "Sent."
+ */
+const MAX_FEEDBACK_ATTACHMENTS = 6;
+
 /** Everything the list needs, in one place, so the two tabs cannot drift apart. */
 const FEEDBACK_COLUMNS =
   'id, kind, message, created_at, status, attachments, reply, replied_at, replied_by_name, author_name, where_in_app, platform';
@@ -128,6 +137,7 @@ export default function AppFeedbackScreen() {
   const [message, setMessage] = useState('');
   const [whereInApp, setWhereInApp] = useState('');
   const [sending, setSending] = useState(false);
+  const inFlightRef = useRef(false);
   const [result, setResult] = useState<{ ok: boolean; emailed: boolean; text: string } | null>(null);
 
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
@@ -162,7 +172,10 @@ export default function AppFeedbackScreen() {
   // Owners only — and the database agrees, so this is a convenience, not the
   // guard. A member running this query gets their own rows back and nothing else.
   const loadAll = useCallback(async () => {
-    if (!isOwner) return;
+    if (!isOwner) {
+      setAll([]);
+      return;
+    }
     const { data, error } = await supabase
       .from('app_feedback')
       .select(FEEDBACK_COLUMNS)
@@ -188,7 +201,8 @@ export default function AppFeedbackScreen() {
   const canSend = (message.trim().length > 0 || hasAttachments) && !sending;
 
   const send = useCallback(async () => {
-    if (!canSend || !profile?.id) return;
+    if (!canSend || !profile?.id || inFlightRef.current) return;
+    inFlightRef.current = true;
     setSending(true);
     setResult(null);
     try {
@@ -196,13 +210,16 @@ export default function AppFeedbackScreen() {
       // path boards and messages use. The function checks the URLs come back
       // from that folder before it believes them.
       const uploaded: Attachment[] = [];
+      let failedUploads = 0;
       if (selectedImages.length > 0) {
         const images = await uploadMultipleImages(profile.id, selectedImages);
         uploaded.push(...images.attachments);
+        failedUploads += selectedImages.length - images.attachments.length;
       }
       if (selectedFiles.length > 0) {
         const files = await uploadMultipleFiles(profile.id, selectedFiles);
         uploaded.push(...files.attachments);
+        failedUploads += selectedFiles.length - files.attachments.length;
       }
 
       if (hasAttachments && uploaded.length === 0) {
@@ -232,12 +249,17 @@ export default function AppFeedbackScreen() {
       // Told the truth about which half worked. The note is safe either way —
       // the function stores before it emails — so a failed email is a smaller
       // sentence, not an error.
+      const missing =
+        failedUploads > 0
+          ? ` ${failedUploads} attachment${failedUploads === 1 ? '' : 's'} did not upload — worth sending again.`
+          : '';
       setResult({
-        ok: true,
+        ok: failedUploads === 0,
         emailed: !!data?.emailed,
-        text: data?.emailed
-          ? 'Sent. It landed in Nat’s inbox as well as here.'
-          : 'Saved. The email did not go out, but your note is safely filed and Nat will see it.',
+        text:
+          (data?.emailed
+            ? 'Sent. It landed in Nat’s inbox as well as here.'
+            : 'Saved. The email did not go out, but your note is safely filed and Nat will see it.') + missing,
       });
       void loadSent();
     } catch (error: any) {
@@ -248,6 +270,7 @@ export default function AppFeedbackScreen() {
         text: 'That did not send. Your words are still here — try again in a moment.',
       });
     } finally {
+      inFlightRef.current = false;
       setSending(false);
     }
   }, [canSend, kind, message, whereInApp, communityId, loadSent, profile?.id, selectedImages, selectedFiles, hasAttachments]);
@@ -259,7 +282,7 @@ export default function AppFeedbackScreen() {
       setReplyingTo(id);
       try {
         const { error } = await supabase.functions.invoke('app-feedback', {
-          body: { action: 'reply', feedback_id: id, reply },
+          body: { action: 'reply', feedback_id: id, reply, status: 'read' },
         });
         if (error) throw error;
         setReplyDrafts((prev) => ({ ...prev, [id]: '' }));
@@ -433,6 +456,7 @@ export default function AppFeedbackScreen() {
                   placeholderTextColor={skin.inkFaint}
                   style={[styles.field, { minHeight: 64, textAlignVertical: 'top' }]}
                 />
+                <DictationRow setValue={(u) => setReplyDrafts((prev) => ({ ...prev, [item.id]: u(prev[item.id] ?? '') }))} />
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                   <Pressable
                     onPress={() => void sendReply(item.id)}
@@ -622,6 +646,8 @@ export default function AppFeedbackScreen() {
                 onImagesChange={setSelectedImages}
                 selectedFiles={selectedFiles}
                 onFilesChange={setSelectedFiles}
+                maxImages={MAX_FEEDBACK_ATTACHMENTS}
+                maxFiles={MAX_FEEDBACK_ATTACHMENTS}
               />
               <VoiceMicButton
                 size={20}

@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { VoiceMicButton } from '../ui/VoiceMicButton';
+import { useDictation } from '../../lib/hooks/useDictation';
 import {
   View,
   Text,
@@ -56,6 +58,17 @@ export function AddWishModal({
   const [wishTitle, setWishTitle] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Routed so a spoken wish is drafted like a typed one. Going straight to
+  // setWishText would skip handleWishTextChange, and the draft this modal
+  // carefully keeps in AsyncStorage would only ever hold what you had typed —
+  // so talking your wish and then closing the sheet would lose it.
+  const wishDictation = useDictation((updater) =>
+    setWishText((prev) => {
+      const next = updater(prev);
+      if (!existingWish) AsyncStorage.setItem(WISH_DRAFT_KEY, next).catch(() => {});
+      return next;
+    })
+  );
   const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
   const isEditMode = !!existingWish;
   const isLinkedWish = !!linkedBoardCategory && !existingWish;
@@ -320,6 +333,18 @@ export function AddWishModal({
                     textAlignVertical: 'top',
                   }}
                 />
+                {/* A wish said out loud is usually a better wish than a wish
+                    typed — people hedge less when they talk. */}
+                <View className="flex-row items-center mt-2">
+                  <VoiceMicButton
+                    size={20}
+                    onTranscript={wishDictation.onTranscript}
+                    onInterimTranscript={wishDictation.onInterimTranscript}
+                  />
+                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40 text-xs ml-2">
+                    Talk instead of typing
+                  </Text>
+                </View>
                 {/* Who can see this wish. More eyes is sometimes exactly what
                     an ask needs — "anyone know a teacher?" travels further than
                     one HIVE (Nat 2026-08-02). */}

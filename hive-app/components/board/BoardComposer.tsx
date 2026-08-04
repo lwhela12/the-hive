@@ -11,6 +11,8 @@ import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZo
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
+import { VoiceMicButton } from '../ui/VoiceMicButton';
+import { useDictation } from '../../lib/hooks/useDictation';
 import { MentionSuggestions } from './MentionSuggestions';
 
 interface BoardComposerProps {
@@ -44,6 +46,11 @@ export function BoardComposer({
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  // Dictation goes straight to setContent rather than through
+  // handleContentChange: mention tracking is about somebody typing "@", and
+  // speech recognition does not produce one.
+  const contentDictation = useDictation(setContent);
+  const titleDictation = useDictation(setTitle);
   const submittingRef = useRef(false);
   const { members: activeMentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(
     category?.community_id,
@@ -273,9 +280,17 @@ export function BoardComposer({
                 className="bg-white rounded-xl px-4 py-3 text-charcoal"
                 style={{ fontFamily: 'Lato_400Regular' }}
               />
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40 text-xs mt-1 text-right">
-                {title.length}/150
-              </Text>
+              <View className="flex-row items-center justify-between mt-1">
+                {/* Mic, no clip. You cannot attach a photograph to a title. */}
+                <VoiceMicButton
+                  size={18}
+                  onTranscript={titleDictation.onTranscript}
+                  onInterimTranscript={titleDictation.onInterimTranscript}
+                />
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40 text-xs">
+                  {title.length}/150
+                </Text>
+              </View>
             </View>
 
             {/* Content input */}
@@ -302,6 +317,18 @@ export function BoardComposer({
                   className="bg-white rounded-xl px-4 py-3 text-charcoal min-h-[200px]"
                   style={{ fontFamily: 'Lato_400Regular' }}
                 />
+              </View>
+              {/* Talk instead of typing. Board replies have had this for ages;
+                  the box you write the actual POST in never did. */}
+              <View className="flex-row items-center mt-2">
+                <VoiceMicButton
+                  size={20}
+                  onTranscript={contentDictation.onTranscript}
+                  onInterimTranscript={contentDictation.onInterimTranscript}
+                />
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40 text-xs ml-2">
+                  Talk instead of typing
+                </Text>
               </View>
               <MentionSuggestions
                 active={mentionQuery !== null}
