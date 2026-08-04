@@ -6,13 +6,15 @@
  *
  *  Closed 2026-08-02 overnight, opened the morning of 08-03, and closed again an
  *  hour later when an audit found eighteen ways data could cross a boundary it
- *  shouldn't. It stays shut until Nat says otherwise.
+ *  shouldn't. All eighteen were fixed and re-attacked as an ordinary member the
+ *  same day (`50b0f94`), so the door opened again the evening of 08-03 — Nat
+ *  needs to walk the whole app and show Lucas, and a closed sign was in the way.
  *
  *  This mirrors sprouts-app/lib/maintenance.ts on purpose. The two apps keep
  *  borrowing structure from each other, so where they solve the same problem
  *  they should look the same — it is how a fix in one gets noticed by the other.
  */
-export const HIVE_CLOSED = true;
+export const HIVE_CLOSED = false;
 
 /** The accounts that can still get in while the HIVE is closed.
  *
