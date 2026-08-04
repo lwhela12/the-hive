@@ -106,14 +106,20 @@ function HiveDot({ colour }: { colour: string }) {
   );
 }
 
-/** One of the three boxes. Same shell for all three so they read as a set. */
+/** One of the four boxes. Same shell for all of them so they read as a set. */
 function TopBox({ label, wide, children }: { label: string; wide: boolean; children: React.ReactNode }) {
   return (
     <View
       style={{
-        // flex only when they're side by side — on a phone they're stacked and
-        // a flex child inside a column would fight the scroll view for height.
-        flex: wide ? 1 : undefined,
+        // Two to a row on a wide screen, one per row on a phone.
+        //
+        // flexBasis rather than flex:1 — with four boxes in a wrapping row,
+        // flex:1 would squeeze all four onto one line and never wrap. 48% plus
+        // grow leaves room for the gap and still lets a lonely last box fill
+        // its row. On a phone they stack, and a flex child inside a column
+        // would fight the scroll view for height.
+        flexGrow: wide ? 1 : 0,
+        flexBasis: wide ? '48%' : 'auto',
         borderRadius: 16,
         borderWidth: 1,
         borderColor: CARD_EDGE,
@@ -366,10 +372,22 @@ export default function HiveWideScreen() {
           <ActivityIndicator color={INK_SOFT} style={{ marginTop: 28 }} />
         ) : (
           <>
-            {/* The three boxes. Everything that matters this month, in the order
-                Nat named them: what we're all doing, where we're all going, and
-                when we're all sitting down. */}
-            <View style={{ flexDirection: wide ? 'row' : 'column', gap: 12 }}>
+            {/* Four boxes, two by two — the same shape as a HIVE's own home
+                page, so HIVE-Wide stops being a layout of its own (Nat
+                2026-08-03: "I love the colours and the look, but I want it to
+                have the same layout as other HIVEs").
+
+                A wrapping row of half-width cells rather than two hand-built
+                columns: it collapses to a single stack on a phone without a
+                second set of rules, and a fifth box later just lands in the
+                next slot. */}
+            <View
+              style={{
+                flexDirection: wide ? 'row' : 'column',
+                flexWrap: wide ? 'wrap' : 'nowrap',
+                gap: 12,
+              }}
+            >
               <TopBox label="Meetings" wide={wide}>
                 {hives.length > 0 ? (
                   <View style={{ gap: 11 }}>
@@ -381,7 +399,7 @@ export default function HiveWideScreen() {
                   <Text
                     style={{
                       fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 14,
-                      lineHeight: 21, color: 'rgba(49,49,48,0.55)',
+                      lineHeight: 21, color: INK_SOFT,
                     }}
                   >
                     Each HIVE's next sit-down shows up here once it's on the books.
@@ -444,32 +462,25 @@ export default function HiveWideScreen() {
                   <Text
                     style={{
                       fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 14,
-                      lineHeight: 21, color: 'rgba(49,49,48,0.55)',
+                      lineHeight: 21, color: INK_SOFT,
                     }}
                   >
                     The HIVEs will show up here with whatever they've got planned.
                   </Text>
                 )}
               </TopBox>
-            </View>
 
-            <Text
-              style={{
-                fontFamily: 'Lato_700Bold', fontSize: 10.5, letterSpacing: 1.3,
-                textTransform: 'uppercase', color: INK_FAINT,
-                marginBottom: -6,
-              }}
-            >
-              What is happening HIVE-Wide
-            </Text>
+              {/* The fourth box. This was a bare list running full-width under
+                  the other three, which is what made the page a different shape
+                  from every HIVE's home. It is a box like its neighbours now.
 
-            {/* HIVE Approved, Announcements, The Buzz and the Calendar used to be
-                four combs here. They're destinations, so they live in the rail
-                under HIVE-Wide now — same call as emptying Home's comb row. */}
-
-            {/* A glance, not an archive. Four, then a way to the rest. */}
-            {shared.length > 0 ? (
-              <View style={{ gap: 9 }}>
+                  HIVE Approved, Announcements, The Buzz and the Calendar used
+                  to be four combs here. They're destinations, so they live in
+                  the rail under HIVE-Wide — same call as emptying Home's comb
+                  row. */}
+              <TopBox label="What's happening" wide={wide}>
+                {shared.length > 0 ? (
+                  <View style={{ gap: 9 }}>
                 {shared.map((post) => (
                   <Pressable
                     key={post.id}
@@ -502,8 +513,19 @@ export default function HiveWideScreen() {
                     </View>
                   </Pressable>
                 ))}
-              </View>
-            ) : null}
+                  </View>
+                ) : (
+                  <Text
+                    style={{
+                      fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 14,
+                      lineHeight: 21, color: INK_SOFT,
+                    }}
+                  >
+                    Whatever the HIVEs share with each other turns up here.
+                  </Text>
+                )}
+              </TopBox>
+            </View>
           </>
         )}
       </ScrollView>

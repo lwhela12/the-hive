@@ -85,9 +85,10 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
     const SUN_WARM = slate ? '210,214,224' : '255,178,64';
     const SUN_DEEP = slate ? '120,126,138' : '214,116,26';
 
-    // Where the sun sits on the limb. Left of centre and just below the edge,
+    // Where the sun sits on the limb. RIGHT of centre and just below the edge,
     // so it reads as rising rather than as a lamp hung over the planet.
-    const SUN_A = -0.34;
+    // (It was on the left for an afternoon; Nat wanted it the other way.)
+    const SUN_A = 0.34;
 
     let W = 0, H = 0, raf = 0, t = 0;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -147,12 +148,12 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       // Placed in sphere coordinates like the lights, so they flatten toward
       // the limb instead of sitting on the glass.
       lands = [];
-      for (let i = 0; i < 14; i++) {
+      for (let i = 0; i < 26; i++) {
         const a = (Math.random() - 0.5) * 1.5;
         const d = Math.random() * 0.9;
         lands.push({
           a, d,
-          r: 0.06 + Math.random() * 0.13,
+          r: 0.035 + Math.random() * 0.075,
           warm: Math.random(),
         });
       }
@@ -266,8 +267,8 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
           ? '58,60,66'
           : (l.warm > 0.55 ? '74,58,34' : '44,58,40');   // dry ground / green
         const blob = ctx.createRadialGradient(x, y, 0, x, y, size);
-        blob.addColorStop(0, `rgba(${earth},0.55)`);
-        blob.addColorStop(0.55, `rgba(${earth},0.30)`);
+        blob.addColorStop(0, `rgba(${earth},0.34)`);
+        blob.addColorStop(0.5, `rgba(${earth},0.17)`);
         blob.addColorStop(1, `rgba(${earth},0)`);
         ctx.fillStyle = blob;
         ctx.beginPath();
@@ -280,11 +281,15 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       // a planet that hasn't noticed it (Nat's reference photograph, 2026-08-03).
       {
         const sun = sunPoint();
-        const reach = R * 0.55;
+        // Wide and weak. An earlier pass had this at half the size and twice
+        // the strength, which put a visible brown disc on the planet — you
+        // could see where the gradient ended (Nat spotted it, 2026-08-03).
+        const reach = R * 1.05;
         ctx.globalCompositeOperation = 'lighter';
         const dawn = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, reach);
-        dawn.addColorStop(0, `rgba(${SUN_WARM},0.30)`);
-        dawn.addColorStop(0.35, `rgba(${SUN_DEEP},0.13)`);
+        dawn.addColorStop(0, `rgba(${SUN_WARM},0.17)`);
+        dawn.addColorStop(0.22, `rgba(${SUN_DEEP},0.075)`);
+        dawn.addColorStop(0.6, `rgba(${SUN_DEEP},0.02)`);
         dawn.addColorStop(1, `rgba(${SUN_DEEP},0)`);
         ctx.fillStyle = dawn;
         ctx.beginPath();
@@ -331,12 +336,12 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       ctx.globalCompositeOperation = 'lighter';
 
       const inner = R * 0.985;
-      const outer = R * 1.055;
+      const outer = R * 1.075;
       const air = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
       air.addColorStop(0, `rgba(${AIR_CORE},0.92)`);
       air.addColorStop(0.06, `rgba(${AIR_CORE},0.55)`);
-      air.addColorStop(0.22, `rgba(${AIR_MID},0.30)`);
-      air.addColorStop(0.55, `rgba(${AIR_FAR},0.12)`);
+      air.addColorStop(0.22, `rgba(${AIR_MID},0.38)`);
+      air.addColorStop(0.55, `rgba(${AIR_FAR},0.16)`);
       air.addColorStop(1, `rgba(${AIR_FAR},0)`);
       ctx.fillStyle = air;
       // A RING, not a disc. Filling the whole circle painted the planet's
