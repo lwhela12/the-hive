@@ -437,7 +437,14 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
         </div>
         <div class="f"><label for="cmsg">What&rsquo;s on your mind?</label>
           <textarea id="cmsg" name="message" rows="4" required></textarea></div>
-        <input class="hp" type="text" name="company" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <!-- The bot trap. It used to be name="company", which was a mistake:
+             the field is hidden by being parked off-screen rather than removed,
+             so browsers still treat it as real — and "company" is one of the
+             names Chrome fills from a saved address profile. Anyone with
+             autofill on tripped their own trap and the form went silent on
+             them (Nat, 2026-08-03, first thing she tested). The name now means
+             nothing to any autofill heuristic. -->
+        <input class="hp" type="text" name="hive-jar" tabindex="-1" autocomplete="off" aria-hidden="true">
         <p class="formnote" id="cnote" role="status" aria-live="polite"></p>
         <button class="btn solid" type="submit">Send it <i>&rarr;</i></button>
       </form>
@@ -629,7 +636,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     var name = (d.get('name')||'').toString().trim();
     var mail = (d.get('email')||'').toString().trim();
     var msg  = (d.get('message')||'').toString().trim();
-    if(d.get('company')) return;                      /* bots fill the hidden field */
+    if(d.get('hive-jar')) return;                     /* bots fill the hidden field */
     if(!name || !msg || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)){
       cnote.className = 'formnote';
       cnote.textContent = 'We need a name, an email we can reply to, and a line about why.';
@@ -639,7 +646,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     cnote.textContent = 'Sending\u2026';
     fetch('/api/contact', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({name:name, email:mail, message:msg})
+      body: JSON.stringify({name:name, email:mail, message:msg, company:(d.get('hive-jar')||'').toString()})
     }).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){
       return {ok:r.ok, body:j};
     }); }).then(function(res){
