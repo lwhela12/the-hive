@@ -16,6 +16,7 @@ import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { celebrateWishGranted } from '../../lib/celebration';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { AppHeader } from '../../components/navigation';
+import { usePageSkin } from '../../lib/pageSkin';
 import { useBoardLinkedWishes, type LinkedWish } from '../../lib/hooks/useBoardLinkedWishes';
 import { getMentionedMembers } from '../../lib/mentions';
 import { fetchCommunityMentionableMembers } from '../../lib/mentionableMembers';
@@ -154,6 +155,10 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   // The wide list has no community to ask for — that is the whole point of it —
   // so it is fetched first and tells us who the owner is (Nat 2026-08-03).
   const isWide = reach === 'all_hives';
+  // Cream inside a HIVE, the world in space at HIVE-Wide. Nat asked for this
+  // twice, and she was right both times: the shared boards were wearing OG's
+  // cream while the rail beside them was black (2026-08-03).
+  const skin = usePageSkin();
   const {
     data: categories = [],
     isLoading: categoriesLoading,
@@ -1519,7 +1524,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         <Pressable
           onPress={(event) => event.stopPropagation()}
           style={{
-            backgroundColor: '#fffdf5',
+            backgroundColor: skin.card,
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             padding: 22,
@@ -1697,30 +1702,30 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       </Pressable>
     ) : undefined;
     const boardListToolbar = (
-      <View className="bg-white border-b border-cream">
+      <View style={{ backgroundColor: skin.card, borderBottomWidth: 1, borderBottomColor: skin.border }}>
         <View className="flex-row items-center px-4 py-3">
-          <View className="flex-1 flex-row items-center bg-cream rounded-full px-3 py-2 border border-gold/20">
-            <Ionicons name="search" size={17} color="rgba(49,49,48,0.38)" />
+          <View className="flex-1 flex-row items-center rounded-full px-3 py-2" style={{ backgroundColor: skin.field, borderWidth: 1, borderColor: skin.border }}>
+            <Ionicons name="search" size={17} color={skin.inkFaint} />
             <TextInput
               value={boardSearch}
               onChangeText={setBoardSearch}
               placeholder="Search boards or threads"
-              placeholderTextColor="rgba(49,49,48,0.38)"
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="search"
-              className="flex-1 ml-2 text-charcoal"
-              style={{ fontFamily: 'Lato_400Regular', fontSize: 14, outlineStyle: 'none' } as any}
+              className="flex-1 ml-2"
+              placeholderTextColor={skin.inkFaint}
+              style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: skin.ink, outlineStyle: 'none' } as any}
             />
             {boardSearch.length > 0 && (
               <Pressable onPress={() => setBoardSearch('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={17} color="rgba(49,49,48,0.34)" />
+                <Ionicons name="close-circle" size={17} color={skin.inkFaint} />
               </Pressable>
             )}
           </View>
         </View>
         <View className="flex-row items-center justify-between px-4 pb-2">
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/50 text-xs uppercase tracking-wide">
+          <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkSoft }} className="text-xs uppercase tracking-wide">
             {boardSearchQuery ? `Results (${visibleCategories.length})` : 'Boards'}
           </Text>
         </View>
@@ -1728,7 +1733,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     );
 
     return (
-      <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+      <SafeAreaView className="flex-1" style={{ backgroundColor: skin.page }} edges={['top']}>
         {/* One header treatment on every width, so Boards wears its HIVE's
             colour and name like every other page (Nat 2026-07-31). */}
         <AppHeader
@@ -1793,7 +1798,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
   // Posts view
   return (
-    <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: skin.page }} edges={['top']}>
       {/* Posts view header with back button */}
       <AppHeader
         title={selectedCategory.name}
@@ -1868,7 +1873,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
               </View>
             )}
             <View className="flex-row items-center justify-between mb-3">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/50 text-xs uppercase tracking-wide">
+              <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkSoft }} className="text-xs uppercase tracking-wide">
                 {threadListView === 'archive'
                   ? `Archived Threads (${threadSearch.trim() ? `${visiblePosts.length}/` : ''}${archivedPosts.length})`
                   : `Threads (${threadSearch.trim() ? `${visiblePosts.length}/` : ''}${activePosts.length})`}

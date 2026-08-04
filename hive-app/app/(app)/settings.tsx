@@ -246,6 +246,31 @@ function Toggle({
 
 export default function SettingsScreen() {
   const { profile, community, memberships, refreshProfile, openHivePicker } = useAuth();
+  const [visibleHiveWide, setVisibleHiveWide] = useState<boolean>(!!(profile as any)?.visible_hive_wide);
+  const [savingVisibility, setSavingVisibility] = useState(false);
+
+  // Kept in step with the profile, so arriving here fresh shows the truth
+  // rather than whatever this screen last remembered.
+  useEffect(() => {
+    setVisibleHiveWide(!!(profile as any)?.visible_hive_wide);
+  }, [profile]);
+
+  const toggleHiveWideVisibility = useCallback(async () => {
+    if (!profile?.id || savingVisibility) return;
+    const next = !visibleHiveWide;
+    setSavingVisibility(true);
+    setVisibleHiveWide(next);            // answer the tap immediately
+    const { error } = await (supabase.from('profiles') as any)
+      .update({ visible_hive_wide: next })
+      .eq('id', profile.id);
+    if (error) {
+      setVisibleHiveWide(!next);         // put it back; nothing was saved
+      Alert.alert('Could not save that', error.message);
+    } else {
+      await refreshProfile();
+    }
+    setSavingVisibility(false);
+  }, [profile?.id, savingVisibility, visibleHiveWide, refreshProfile]);
   const { permissionStatus, requestPermissions } = useNotifications({ enableListeners: false });
   const isNotificationEnabled =
     permissionStatus === 'granted' || permissionStatus === 'provisional';
@@ -605,6 +630,57 @@ export default function SettingsScreen() {
             </Panel>
           </Section>
         )}
+
+        {/* Who can see you, and where.
+
+            The HIVE-Wide members list is opt-in and starts off for everybody
+            (Nat 2026-08-03): "everyone's preferences default to a visibility of
+            this HIVE only, they'd have to go in and toggle on HIVE-Wide
+            visibility in order to populate here." Being in one HIVE was never
+            consent to be listed to the others. */}
+        <Section
+          title="Who can see you"
+          blurb="Your HIVEs always see you. HIVE-Wide is your call."
+        >
+          <Panel>
+            <Pressable
+              onPress={() => void toggleHiveWideVisibility()}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: visibleHiveWide }}
+              disabled={savingVisibility}
+              style={{
+                flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+                paddingVertical: 4, opacity: savingVisibility ? 0.6 : 1,
+              }}
+            >
+              <View
+                style={{
+                  width: 44, height: 26, borderRadius: 13, padding: 3, marginTop: 2,
+                  backgroundColor: visibleHiveWide ? '#bd9348' : 'rgba(49,49,48,0.18)',
+                  justifyContent: 'center',
+                  alignItems: visibleHiveWide ? 'flex-end' : 'flex-start',
+                }}
+              >
+                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fffdf5' }} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14.5, color: '#313130' }}>
+                  Show me in HIVE-Wide
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19,
+                    color: 'rgba(49,49,48,0.62)', marginTop: 2,
+                  }}
+                >
+                  {visibleHiveWide
+                    ? 'Members of every HIVE you share can find you in the HIVE-Wide directory.'
+                    : 'You only appear to people inside your own HIVEs. Turn this on to be listed HIVE-Wide as well.'}
+                </Text>
+              </View>
+            </Pressable>
+          </Panel>
+        </Section>
 
         <View style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}>
           <LinkedLogins />

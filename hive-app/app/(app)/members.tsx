@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { usePageSkin } from '../../lib/pageSkin';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { AppHeader } from '../../components/navigation';
 import { EditButton } from '../../components/ui/EditButton';
@@ -2105,6 +2106,10 @@ function MemberDetailModal({
 
 export default function MembersScreen() {
   const { communityId, profile, session, community, wholeHive, memberships: myHives } = useAuth();
+  // Cream inside a HIVE, space at HIVE-Wide — "instead of cream it should
+  // always be the world in space look, because we want to make sure you know
+  // which one you're in" (Nat 2026-08-03).
+  const skin = usePageSkin();
   // Every HIVE this person is in, for the HIVE-Wide view of who is around.
   const myHiveIds = useMemo(() => myHives.map((m) => m.community_id), [myHives]);
   const { memberId: routeMemberId, view: routeViewParam, open: routeOpenParam } = useLocalSearchParams<{ memberId?: string | string[]; view?: string | string[]; open?: string | string[] }>();
@@ -2181,10 +2186,21 @@ export default function MembersScreen() {
         return;
       }
 
-      const { data: profilesData, error: profilesErr } = await supabase
+      let profilesQuery = supabase
         .from('profiles')
         .select('*')
         .in('id', userIds);
+
+      // At HIVE-Wide, only the people who said yes to it.
+      //
+      // Nat 2026-08-03: "everyone's preferences default to a visibility of this
+      // HIVE only, they'd have to go in and toggle on HIVE-Wide visibility in
+      // order to populate here." Being in OG HIVE was never consent to be
+      // listed to Tech and Production, so it starts off for everybody and this
+      // list starts empty. That is correct, not broken.
+      if (wholeHive) profilesQuery = profilesQuery.eq('visible_hive_wide', true);
+
+      const { data: profilesData, error: profilesErr } = await profilesQuery;
 
       if (profilesErr || !profilesData) {
         console.warn('[Members] profiles load failed', profilesErr);
@@ -2196,7 +2212,12 @@ export default function MembersScreen() {
       const profilesById = new Map<string, any>();
       profilesData.forEach((p: any) => profilesById.set(p.id, p));
 
-      const memberList: MemberData[] = roster.map((m: any) => {
+      // Somebody who has not opted in has no profile row here, and a membership
+      // without one would render as "Unknown member" — which would leak the very
+      // fact they chose to keep quiet.
+      const listed = wholeHive ? roster.filter((m: any) => profilesById.has(m.user_id)) : roster;
+
+      const memberList: MemberData[] = listed.map((m: any) => {
         const memberProfile = profilesById.get(m.user_id);
         return {
           id: m.user_id,
@@ -2581,23 +2602,49 @@ export default function MembersScreen() {
   const honeycombTextMaxWidth = Math.max(96, honeycombCellWidth - (isCompactHoneycomb ? 64 : 96));
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f6f4e5' }} edges={['top']}>
-      {/* Header — just the name; the search bar below carries the detail */}
-      {/* Green and nameless at HIVE-Wide — wearing OG's gold over a list that
-          includes Tech and Production would name the wrong place. */}
-      <AppHeader title="Members" tone={wholeHive ? 'wide' : 'hive'} />
+    <SafeAreaView style={{ flex: 1, backgroundColor: skin.page }} edges={['top']}>
+      {/* Header — just the name; the search bar below carries the detail.
+          The tone follows the reader on its own now, so nothing is passed. */}
+      <AppHeader title="Members" />
+
+      {/* Nobody has opted in yet, and that is the honest answer rather than a
+          failure. Says what would put a face here instead of leaving the page
+          blank and letting it read as broken (Nat 2026-08-03). */}
+      {!loading && wholeHive && members.length === 0 && (
+        <View style={{ alignItems: 'center', paddingHorizontal: 32, paddingVertical: 64 }}>
+          <Text style={{ fontSize: 34, marginBottom: 14 }}>🐝</Text>
+          <Text
+            style={{
+              fontFamily: 'LibreBaskerville_700Bold', fontSize: 17,
+              color: skin.ink, marginBottom: 8, textAlign: 'center',
+            }}
+          >
+            Nobody is listed HIVE-Wide yet
+          </Text>
+          <Text
+            style={{
+              fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21,
+              color: skin.inkSoft, textAlign: 'center', maxWidth: 380,
+            }}
+          >
+            Everyone starts visible only inside their own HIVE. Turn on HIVE-Wide
+            visibility in Settings, from inside one of your HIVEs, and you will
+            show up here.
+          </Text>
+        </View>
+      )}
 
       {/* Search bar */}
       {!loading && members.length > 0 && (
-        <View style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#f6f4e5', borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.3)' }}>
-          <View style={{ backgroundColor: '#fffdf5', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8 }}>
-            <Text style={{ color: '#a09274', marginRight: 8, fontSize: 15 }}>🔍</Text>
+        <View style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: skin.page, borderBottomWidth: 1, borderBottomColor: skin.border }}>
+          <View style={{ backgroundColor: skin.field, borderRadius: 12, borderWidth: 1, borderColor: skin.borderStrong, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8 }}>
+            <Text style={{ color: skin.inkSoft, marginRight: 8, fontSize: 15 }}>🔍</Text>
             <TextInput
               value={search}
               onChangeText={setSearch}
               placeholder="Search members, skills, wishes..."
-              placeholderTextColor="#a09274"
-              style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', flex: 1 }}
+              placeholderTextColor={skin.inkSoft}
+              style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: skin.ink, flex: 1 }}
             />
             {search.length > 0 && (
               <Pressable onPress={() => setSearch('')}>
@@ -2609,10 +2656,10 @@ export default function MembersScreen() {
             style={{
               flexDirection: 'row',
               alignSelf: 'center',
-              backgroundColor: '#fffdf5',
+              backgroundColor: skin.card,
               borderRadius: 999,
               borderWidth: 1,
-              borderColor: 'rgba(222,193,129,0.45)',
+              borderColor: skin.borderStrong,
               padding: 3,
               marginTop: 10,
               gap: 3,

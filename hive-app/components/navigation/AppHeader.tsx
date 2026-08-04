@@ -76,8 +76,19 @@ export const AppHeader = memo(function AppHeader({
   // small line — that's Home, and anywhere else that chooses to do the same.
   // Only a page that lives INSIDE a HIVE says which one. HIVE-Wide and Admin sit
   // above the HIVEs, so naming one there answers "where am I" twice, differently.
-  const showHiveName =
-    resolvedTone === 'hive' && title.trim().toUpperCase() !== hiveName.toUpperCase();
+  // The line above the title, saying where you are.
+  //
+  // HIVE-Wide used to say nothing here, on the reasoning that it sits above the
+  // HIVEs and so has no HIVE to name. That was wrong in practice: it left the
+  // most easily-confused place as the only one that never said its own name.
+  // Nat 2026-08-03: "when you're in HIVE-Wide it needs to say that on all the
+  // headers... we want to make sure you know which one you're in."
+  const eyebrow =
+    resolvedTone === 'wide' ? 'HIVE-WIDE'
+      : resolvedTone === 'hive' && title.trim().toUpperCase() !== hiveName.toUpperCase()
+        ? hiveName
+        : null;
+  const showHiveName = !!eyebrow;
 
   return (
     <View
@@ -115,7 +126,7 @@ export const AppHeader = memo(function AppHeader({
               marginBottom: 1,
             }}
           >
-            {hiveName.toUpperCase()}
+            {eyebrow!.toUpperCase()}
           </Text>
         ) : null}
         <View className="flex-row items-center">
