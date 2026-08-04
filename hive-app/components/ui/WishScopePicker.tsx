@@ -8,8 +8,8 @@ export type WishScope = 'hive' | 'all_hives' | 'public';
 // the kind of ask that travels further than one HIVE (Nat 2026-08-02).
 const OPTIONS: { key: WishScope; label: string; hint: string }[] = [
   { key: 'hive', label: 'This HIVE only', hint: 'Just the people here.' },
-  { key: 'all_hives', label: 'Every HIVE', hint: 'More eyes on it — anyone in any HIVE.' },
-  { key: 'public', label: 'Anyone at all', hint: 'Can be shared beyond the HIVEs.' },
+  { key: 'all_hives', label: 'All HIVEs', hint: 'More eyes on it — anyone in any HIVE.' },
+  { key: 'public', label: 'Public', hint: 'Can be shared beyond the HIVEs.' },
 ];
 
 const RANK: Record<WishScope, number> = { hive: 0, all_hives: 1, public: 2 };
@@ -17,7 +17,7 @@ const RANK: Record<WishScope, number> = { hive: 0, all_hives: 1, public: 2 };
 export function WishScopePicker({
   value,
   onChange,
-  label = 'Who can see this?',
+  label = 'Who can see it?',
 }: {
   value: WishScope;
   onChange: (next: WishScope) => void;
@@ -25,7 +25,7 @@ export function WishScopePicker({
 }) {
   const { community, memberships } = useAuth();
   const ceiling = (community?.max_share_scope as WishScope | undefined) ?? 'hive';
-  // Somebody in one HIVE has no use for "Every HIVE" — and being asked about it
+  // Somebody in one HIVE has no use for "All HIVEs" — and being asked about it
   // would tell them other HIVEs exist, which is nobody's business (Nat 2026-08-02).
   const inSeveral = memberships.length > 1;
   const options = OPTIONS.filter((o) => RANK[o.key] <= RANK[ceiling] && (inSeveral || o.key !== 'all_hives'));

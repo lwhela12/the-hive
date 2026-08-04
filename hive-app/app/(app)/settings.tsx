@@ -484,10 +484,10 @@ export default function SettingsScreen() {
           ) : hasDefaultShareColumn && canDefaultWide ? (
             <ChoiceRow
               options={[
-                { key: 'hive', label: 'My HIVE', hint: 'New wishes and threads start here.' },
+                { key: 'hive', label: 'This HIVE only', hint: 'New wishes and threads start here.' },
                 {
                   key: 'all_hives',
-                  label: 'Every HIVE',
+                  label: 'All HIVEs',
                   hint: 'More eyes on it — anyone in any HIVE.',
                 },
               ]}

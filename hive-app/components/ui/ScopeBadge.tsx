@@ -3,7 +3,7 @@ import { View, Text } from 'react-native';
 /**
  * How far this thing travels, said plainly on the thing itself.
  *
- * Three scopes were showing as two badges: "This HIVE only" and "Every HIVE"
+ * Three scopes were showing as two badges: "This HIVE only" and "All HIVEs"
  * both read as "HIVErs Only", so the middle rung was invisible from the outside
  * (Nat 2026-08-02). You can't respect a boundary you can't see, and with three
  * HIVEs the difference between "just us" and "anyone in any HIVE" is the whole
@@ -22,11 +22,11 @@ const LOOKS: Record<'hive' | 'all_hives' | 'public', {
     bg: '#f5f1e8', border: 'rgba(189,147,72,0.22)', ink: '#9a8060',
   },
   all_hives: {
-    emoji: '🐝', label: 'Every HIVE',
+    emoji: '🐝', label: 'All HIVEs',
     bg: '#f7e9cb', border: 'rgba(189,147,72,0.55)', ink: '#8a6b30',
   },
   public: {
-    emoji: '📣', label: 'Come one, come all',
+    emoji: '📣', label: 'Public',
     bg: '#eaf3e6', border: 'rgba(122,154,107,0.35)', ink: '#5c7a4e',
   },
 };

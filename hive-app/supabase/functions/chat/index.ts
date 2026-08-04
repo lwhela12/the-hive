@@ -9,7 +9,11 @@ import {
   SSEWriter,
 } from '../_shared/streaming.ts';
 
-const SYSTEM_PROMPT = `You are Clive, HIVE's assistant, an AI helper for H.I.V.E. (Human Insight Vision Execution), a close-knit community of 12 people practicing "high-definition wishing."
+const SYSTEM_PROMPT = `You are Clive, HIVE's assistant, an AI helper for H.I.V.E. (Human Insight Vision Execution), a close-knit community practicing "high-definition wishing."
+
+**There are now SEVERAL HIVEs, not one.** OG HIVE is the original; Tech HIVE and Production HIVE are their own communities with their own members, meetings and rhythms. You are always speaking inside exactly ONE of them — the one in your context — and you know only that HIVE's people, wishes and history. Never quote a number of members: it changes, and it is different in each HIVE. Never imply the HIVE the person is in is the only one, and never mention another HIVE's members or content.
+
+**HIVE-Wide** is the view above all of them, where somebody can see what every HIVE is up to. You do not operate there — if somebody asks you about HIVE-Wide, say it is the view above the HIVEs and point them at it.
 
 **IMPORTANT: Use "H.I.V.E." for the formal brand name and "HIVE" in product copy. Avoid article-prefixed, mixed-case, or lowercase brand variants.**
 **Identity: Your name is Clive. The signed-in user's name appears in context; that is the human you are helping, not you. If the user addresses "Clive," they are talking to you. Never claim to be the signed-in user.**
@@ -98,7 +102,7 @@ Examples:
 
 7b. **You can steward the app, but use a two-step safety flow.** For requests that would change shared app state (create boards/posts/events/action items, mark todos complete, fulfill wishes, or complete/archive HD boards), first inspect anything you need with read tools, then call propose_app_actions with the exact changes. Tell the user what will happen and ask them to say "apply it" or "yes, do it." Only call apply_pending_actions when the user's latest message clearly approves a pending proposal from a previous assistant response. Never propose and apply in the same response. Never apply destructive or broad changes from vague approval.
 
-8. **The Queen Bee is special.** The current Queen Bee's project takes priority. Look for ways to help their project.
+8. **There is no Queen Bee.** The Queen Bee / Queen Bee Month idea — one member a month getting the community's focus — was retired. Do not mention it, do not ask who the Queen Bee is, and do not offer to help with it. If a member brings it up, say plainly that it is not how the HIVE works any more. What replaced it: every member's HD wish is live at once, the monthly check-in gathers what everyone is working on, and HIVE Help is the shared act of kindness each month.
 
 9. **Consolidation over accumulation.** Help users refine and combine wishes rather than accumulating a long list.
 
@@ -113,7 +117,9 @@ When a user says "I am ready" or indicates they want to begin setting up their g
 
 3. If they have time-sensitive objectives:
    - Ask: "What's the timeframe you're working with?"
-   - Use the update_profile tool with queen_bee_preference to save this information
+   - Note it in the conversation and carry it into the wish you help them shape.
+     (This used to be saved to a Queen Bee preference field. Queen Bee is
+     retired; do not write that field.)
 
 4. Then transition to goals/skills:
    "Thanks! Now, which would you like to talk about first—your goals or your skills?"
@@ -444,11 +450,6 @@ const tools: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {} }
   },
   {
-    name: "get_current_queen_bee",
-    description: "Get information about the current Queen Bee and their project",
-    input_schema: { type: "object" as const, properties: {} }
-  },
-  {
     name: "get_hive_members",
     description: "Get list of all HIVE members with basic info",
     input_schema: { type: "object" as const, properties: {} }
@@ -467,7 +468,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "update_profile",
-    description: "Update user profile information collected during conversation (birthday, phone, name correction, preferred contact method, Queen Bee month preference)",
+    description: "Update user profile information collected during conversation (birthday, phone, name correction, preferred contact method)",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -475,15 +476,6 @@ const tools: Anthropic.Tool[] = [
         birthday: { type: "string", description: "User's birthday in YYYY-MM-DD format" },
         phone: { type: "string", description: "User's phone number" },
         preferred_contact: { type: "string", description: "Preferred contact method: 'email' or 'phone'" },
-        queen_bee_preference: {
-          type: "object",
-          description: "User's Queen Bee month preference with reason and timeframe for time-sensitive objectives",
-          properties: {
-            preferred_month: { type: "string", description: "Preferred month in YYYY-MM format (e.g., '2025-03')" },
-            reason: { type: "string", description: "The time-sensitive objective or reason for this preference" },
-            timeframe: { type: "string", description: "The timeframe they're working with (e.g., 'Q1 2025', 'by March')" }
-          }
-        }
       }
     }
   },
@@ -1655,18 +1647,6 @@ serve(async (req) => {
             break;
           }
 
-          case 'get_current_queen_bee': {
-            const currentMonth = new Date().toISOString().slice(0, 7);
-            const { data: qbData } = await supabaseClient
-              .from('queen_bees')
-              .select('*, user:profiles(name)')
-              .eq('month', currentMonth)
-              .eq('community_id', communityId)
-              .single();
-            result = JSON.stringify(qbData || null);
-            break;
-          }
-
           case 'get_hive_members': {
             const { data: memberRows } = await supabaseClient
               .from('community_memberships')
@@ -1733,23 +1713,17 @@ serve(async (req) => {
           }
 
           case 'update_profile': {
-            const { name, birthday, phone, preferred_contact, queen_bee_preference } = toolUse.input as {
+            const { name, birthday, phone, preferred_contact } = toolUse.input as {
               name?: string;
               birthday?: string;
               phone?: string;
               preferred_contact?: string;
-              queen_bee_preference?: {
-                preferred_month?: string;
-                reason?: string;
-                timeframe?: string;
-              };
             };
             const updates: Record<string, unknown> = {};
             if (name) updates.name = name;
             if (birthday) updates.birthday = birthday;
             if (phone) updates.phone = phone;
             if (preferred_contact) updates.preferred_contact = preferred_contact;
-            if (queen_bee_preference) updates.queen_bee_preference = queen_bee_preference;
 
             if (Object.keys(updates).length > 0) {
               const { error } = await supabaseClient

@@ -33,7 +33,7 @@ export type ScopeRung = {
 export const SCOPE_LADDER: ScopeRung[] = [
   {
     key: 'hive',
-    label: 'Your HIVE',
+    label: 'This HIVE only',
     meaning: 'The people you joined with. Where everything starts.',
     treatment: 'hive-colour',
   },

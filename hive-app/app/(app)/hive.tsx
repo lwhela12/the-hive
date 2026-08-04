@@ -152,6 +152,24 @@ const normalizeEventTimeInput = (value: string) => {
   const raw = value.trim();
   if (!raw) return { time: null, note: '' };
 
+  // Postgres hands a `time` column back as "17:30:00", and the edit form used
+  // to put that straight into this box — where the old exact-match pattern
+  // rejected it (it ends in an extra ":00"), fell through to the loose match,
+  // and returned the WHOLE string as a "note". That note then got written into
+  // the description as "Time note: 17:30:00", and because editing re-ran all of
+  // this every save, a second identical line appeared each time. That is the
+  // doubled "Time note: 17:30:00" with no description Nat photographed
+  // (2026-08-04): both lines were generated, and they had pushed her actual
+  // description out of view.
+  const secondsMatch = raw.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (secondsMatch) {
+    const h = Number(secondsMatch[1]);
+    const m = Number(secondsMatch[2]);
+    if (h <= 23 && m <= 59) {
+      return { time: `${String(h).padStart(2, '0')}:${secondsMatch[2]}`, note: '' };
+    }
+  }
+
   const exactMatch = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
   const looseMatches = [...raw.matchAll(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/gi)];
   const looseMatch = looseMatches[0];
@@ -175,6 +193,30 @@ const normalizeEventTimeInput = (value: string) => {
     note: exactMatch ? '' : raw,
   };
 };
+
+/** "17:30:00" -> "5:30 PM", for putting a saved time back in the box. */
+const timeForEditing = (value?: string | null) => {
+  if (!value) return '';
+  const m = value.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return value;
+  const h24 = Number(m[1]);
+  const meridiem = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h12}:${m[2]} ${meridiem}`;
+};
+
+/**
+ * Strip the generated "Time note: …" lines back off a description.
+ *
+ * Without this, editing an event prepends a fresh one on top of the one already
+ * there, every single time. Three edits, three lines.
+ */
+const withoutTimeNotes = (description?: string | null) =>
+  (description ?? '')
+    .split(/\n{2,}/)
+    .filter((block) => !/^Time note:/i.test(block.trim()))
+    .join('\n\n')
+    .trim();
 
 const escapeIcsText = (value = '') => value
   .replace(/\\/g, '\\\\')
@@ -934,8 +976,11 @@ export default function HiveScreen() {
     setEventDate(formatDateForInput(event.event_date));
     setEventEndDate(event.end_date ? formatDateForInput(event.end_date) : '');
     setEventAllDay(!event.event_time);
-    setEventTime(event.event_time || '');
-    setEventDescription(event.description || '');
+    setEventTime(timeForEditing(event.event_time));
+    // Without the strip, the box you edit opens already containing the line
+    // the app generated last time — which is how it came to hold two of them
+    // and none of Nat's own words.
+    setEventDescription(withoutTimeNotes(event.description));
     setEventLocation(event.location || '');
     // Pass the saved rung straight through — collapsing it to two would quietly
     // demote an "Every HIVE" event the moment somebody opened it to edit.
@@ -1984,7 +2029,9 @@ export default function HiveScreen() {
     }
     const descriptionWithTimeNote = [
       normalizedTime.note ? `Time note: ${normalizedTime.note}` : null,
-      eventDescription.trim() || null,
+      // Any note already in there is stripped first — otherwise every save
+      // prepends another copy of the same line.
+      withoutTimeNotes(eventDescription) || null,
     ].filter(Boolean).join('\n\n');
 
     setSavingEvent(true);
