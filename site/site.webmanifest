@@ -1,0 +1,24 @@
+{
+  "name": "HIVE",
+  "short_name": "HIVE",
+  "description": "A small community that grants each other's wishes.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "browser",
+  "background_color": "#f6f4e5",
+  "theme_color": "#f6f4e5",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "48x48",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
