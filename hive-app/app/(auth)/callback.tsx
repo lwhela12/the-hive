@@ -4,10 +4,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
 import { sanitizeReturnTo } from '../../lib/authReturnTo';
-// A sign-in with no particular destination lands above the HIVEs, not in
-// one of them. A texted link still wins — that is the whole point of
-// returnTo (Nat 2026-08-03).
-import { HIVE_WIDE_ROUTE } from '../../lib/navigation';
+// A sign-in with no particular destination goes to "/", which is the waiting
+// room: it holds until auth has actually resolved and only then forwards you
+// to HIVE-Wide. Sending people straight to /hive-wide put them behind the
+// app's auth guard a beat before the session existed, and the guard bounced
+// them back to login — which is what "how come I can't log in" was
+// (2026-08-03). A texted link still wins over both.
 
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -28,7 +30,7 @@ export default function AuthCallbackScreen() {
       // Try code exchange flow first
       if (params.code) {
         await supabase.auth.exchangeCodeForSession(params.code);
-        router.replace((sanitizeReturnTo(params.returnTo) ?? HIVE_WIDE_ROUTE) as any);
+        router.replace((sanitizeReturnTo(params.returnTo) ?? '/') as any);
         return;
       }
 
@@ -46,7 +48,7 @@ export default function AuthCallbackScreen() {
               access_token: accessToken,
               refresh_token: refreshToken,
             });
-            router.replace((sanitizeReturnTo(params.returnTo) ?? HIVE_WIDE_ROUTE) as any);
+            router.replace((sanitizeReturnTo(params.returnTo) ?? '/') as any);
             return;
           }
         }
