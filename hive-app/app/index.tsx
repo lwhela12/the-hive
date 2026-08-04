@@ -23,7 +23,10 @@ export default function Index() {
     return <Redirect href="/join" />;
   }
 
-  // Fresh app entry after login starts on HIVE Home.
+  // Fresh app entry starts above the HIVEs rather than inside one — the same
+  // call that retired the "Which HIVE today?" question (Nat 2026-08-03). From
+  // up there every HIVE is one tap away in the rail, and nobody has to answer
+  // anything to get through the door.
   // In-session navigation is still preserved by the app tabs while the user switches apps.
-  return <Redirect href="/hive" />;
+  return <Redirect href={'/hive-wide' as never} />;
 }

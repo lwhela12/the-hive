@@ -4,6 +4,10 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
 import { sanitizeReturnTo } from '../../lib/authReturnTo';
+// A sign-in with no particular destination lands above the HIVEs, not in
+// one of them. A texted link still wins — that is the whole point of
+// returnTo (Nat 2026-08-03).
+import { HIVE_WIDE_ROUTE } from '../../lib/navigation';
 
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -24,7 +28,7 @@ export default function AuthCallbackScreen() {
       // Try code exchange flow first
       if (params.code) {
         await supabase.auth.exchangeCodeForSession(params.code);
-        router.replace((sanitizeReturnTo(params.returnTo) ?? '/') as any);
+        router.replace((sanitizeReturnTo(params.returnTo) ?? HIVE_WIDE_ROUTE) as any);
         return;
       }
 
@@ -42,7 +46,7 @@ export default function AuthCallbackScreen() {
               access_token: accessToken,
               refresh_token: refreshToken,
             });
-            router.replace((sanitizeReturnTo(params.returnTo) ?? '/') as any);
+            router.replace((sanitizeReturnTo(params.returnTo) ?? HIVE_WIDE_ROUTE) as any);
             return;
           }
         }

@@ -14,6 +14,8 @@ import {
   clearHiveConfirmation,
   hasConfirmedHive,
   markHiveConfirmed,
+  isWholeHiveSelected,
+  setWholeHiveSelected,
 } from '../lib/hiveSelection';
 import { clearBoardNavigationState } from '../lib/boardNavigation';
 import { HIVE_WIDE_ROUTE } from '../lib/navigation';
@@ -114,7 +116,12 @@ export default function RootLayout() {
   const [communityId, setCommunityId] = useState<string | null>(null);
   // Whole HIVE is a place you can stand, not a HIVE you belong to — see the
   // note on `wholeHive` in lib/hooks/useAuth.ts for why it is not an id.
-  const [wholeHive, setWholeHive] = useState(false);
+  // Seeded from the tab's own memory so a reload doesn't quietly move you.
+  const [wholeHive, setWholeHiveState] = useState<boolean>(() => isWholeHiveSelected());
+  const setWholeHive = useCallback((next: boolean) => {
+    setWholeHiveSelected(next);
+    setWholeHiveState(next);
+  }, []);
   const [communityRole, setCommunityRole] = useState<UserRole | null>(null);
   const [memberships, setMemberships] = useState<MembershipWithCommunity[]>([]);
   const [hivePickerOpen, setHivePickerOpen] = useState<boolean>(false);
@@ -253,13 +260,20 @@ export default function RootLayout() {
     setCommunityRole(activeMembership.role);
     setCommunity(activeMembership.community);
 
-    // One hive means there is nothing to ask. More than one and this person
-    // gets the picker on arrival — landing them somewhere by default is a coin
-    // flip, and the wrong hive is a confusing place to wake up.
-    if (memberships.length > 1 && !hasConfirmedHive()) {
-      setHivePickerOpen(true);
-    } else {
+    // Nobody is asked "which HIVE today?" any more (Nat 2026-08-03).
+    //
+    // It was a reasonable question when landing you in one HIVE by default was
+    // a coin flip. It stopped being one the moment HIVE-Wide moved under My
+    // HIVEs: everybody is now in at least two places — HIVE-Wide and their own
+    // HIVE — so arriving above all of them, and stepping down into one when you
+    // want to, answers the question without asking it.
+    //
+    // A fresh arrival starts at HIVE-Wide. A reload inside the same tab keeps
+    // wherever you already were, because being bounced out of what you were
+    // reading is the thing the "fresh honey" bar already got wrong once.
+    if (!hasConfirmedHive()) {
       markHiveConfirmed();
+      setWholeHive(true);
     }
     setLoading(false);
     } catch (err) {
