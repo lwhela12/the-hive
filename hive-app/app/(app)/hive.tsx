@@ -61,6 +61,7 @@ import { HONEY_POT_CASH_APP_HANDLE } from '../../lib/honeyPotPayment';
 import type { Profile, Wish, WishGranter, Event, ActionItem } from '../../types';
 
 import { DictationRow } from '../../components/ui/DictationRow';
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 type WishWithGranters = Wish & {
   user?: Profile | null;
   granters?: (WishGranter & { granter?: Profile })[];
@@ -2948,7 +2949,7 @@ export default function HiveScreen() {
               elevation: 2,
             }}
           >
-            <ActivityIndicator size="small" color="#bd9348" />
+            <ThinkingBee />
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
                 Clive is gathering the latest HIVE buzz...
@@ -3042,7 +3043,7 @@ export default function HiveScreen() {
                       <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10, marginTop: 0 }} />
                       {activityLoading && activityItems.length === 0 ? (
                         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                          <ActivityIndicator size="small" color="#bd9348" />
+                          <ThinkingBee />
                         </View>
                       ) : visibleActivityItems.length === 0 ? (
                         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: '#fdf3dc' }}>
@@ -3167,7 +3168,7 @@ export default function HiveScreen() {
                       <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.75)', marginHorizontal: 10 }} />
                       {homeActionLoading ? (
                         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 32 }}>
-                          <ActivityIndicator size="small" color="#bd9348" />
+                          <ThinkingBee />
                         </View>
                       ) : visibleTodos.length === 0 ? (
                         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, paddingVertical: 28 }}>

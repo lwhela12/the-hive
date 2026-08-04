@@ -56,6 +56,7 @@ import type { Profile, Wish } from '../../types';
 
 import { DictationRow } from '../../components/ui/DictationRow';
 import { confirmAction } from '../../lib/showAlert';
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 const hiveBee = require('../../assets/HIVE Bee.png');
 // The crest (bee inside a 30-ray sunburst ring) needs room to read — its
 // content is only 47% of the asset box, so at header size it collapses into a
@@ -1714,7 +1715,7 @@ export default function MonthlyTuneupScreen() {
       />
       {wishesLoading ? (
         <View style={{ paddingVertical: 32, alignItems: 'center' }}>
-          <ActivityIndicator color="#bd9348" />
+          <ThinkingBee />
         </View>
       ) : liveWishes.length === 0 ? (
         <View style={[cardStyle, { alignItems: 'center', paddingVertical: 28 }]}>
@@ -2906,7 +2907,7 @@ export default function MonthlyTuneupScreen() {
           focus in gold (Nat 2026-07-25). */}
       {surveysLoading ? (
         <View style={{ paddingVertical: 32, alignItems: 'center' }}>
-          <ActivityIndicator color="#bd9348" />
+          <ThinkingBee />
         </View>
       ) : !monthlyCheckInSurvey ? (
         <View style={[cardStyle, { alignItems: 'center', paddingVertical: 28 }]}>
@@ -3088,7 +3089,7 @@ export default function MonthlyTuneupScreen() {
           style={({ pressed }) => ({ opacity: pressed ? 0.9 : 0.4, paddingHorizontal: 6 })}
         >
           {tuneupRefreshing ? (
-            <ActivityIndicator size="small" color="#8a6b30" />
+            <ThinkingBee />
           ) : (
             <Ionicons name="refresh" size={20} color="#8a6b30" />
           )}

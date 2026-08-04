@@ -12,6 +12,7 @@ import { PARDON_OUR_DUST } from '../../lib/hiveWide';
 import { SummarySections, type SummarySection } from '../../components/meetings/SummarySections';
 import { NEWSLETTER_MASTHEAD } from '../../lib/newsletterHeaders';
 
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 /** The month a recap covers: the one before the month it goes out in. */
 function lastMonth(): string {
   const now = new Date();
@@ -309,7 +310,7 @@ export default function NewsletterScreen() {
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
         {loading ? (
           <View style={{ paddingVertical: 60, alignItems: 'center', gap: 12 }}>
-            <ActivityIndicator color="#bd9348" />
+            <ActivityIndicator size="small" color="#fffdf5" />
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a7c42' }}>
               Gathering the cycle…
             </Text>
@@ -350,7 +351,7 @@ export default function NewsletterScreen() {
                   backgroundColor: '#fdf3dc',
                 }}
               >
-                <ActivityIndicator size="small" color="#bd9348" />
+                <ThinkingBee />
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#8a6b30' }}>
                   Writing the letter — here are the facts meanwhile
                 </Text>

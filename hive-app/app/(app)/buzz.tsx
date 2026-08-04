@@ -11,6 +11,7 @@ import { formatDateLong } from '../../lib/dateUtils';
 import { SPACE_SKIN } from '../../lib/pageSkin';
 import type { Community } from '../../types';
 
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 /**
  * The Buzz — every newsletter you're entitled to read, in one place.
  *
@@ -89,7 +90,7 @@ export default function BuzzScreen() {
         <View style={{ maxWidth: 820, width: '100%', alignSelf: 'center' }}>
           {loading ? (
             <View style={{ paddingVertical: 48 }}>
-              <ActivityIndicator size="large" color={skin.gold} />
+              <ThinkingBee />
             </View>
           ) : items.length === 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: 56 }}>

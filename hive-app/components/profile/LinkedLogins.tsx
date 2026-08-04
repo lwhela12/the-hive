@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { UserIdentity } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 
+import { ThinkingBee } from '../ui/ThinkingBee';
 // Cross-platform alert (Alert.alert is a no-op on web)
 const showAlert = (title: string, message: string) => {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
@@ -163,7 +164,7 @@ export function LinkedLogins() {
       <View className="bg-white rounded-xl shadow-sm p-4">
         {loading ? (
           <View className="py-2 items-center">
-            <ActivityIndicator size="small" color="#bd9348" />
+            <ThinkingBee />
           </View>
         ) : (
           <>
@@ -193,7 +194,7 @@ export function LinkedLogins() {
                       className={`px-3 py-1 rounded-full ${isUnlinking ? 'opacity-50' : 'active:opacity-60'}`}
                     >
                       {isUnlinking ? (
-                        <ActivityIndicator size="small" color="#dc2626" />
+                        <ActivityIndicator size="small" color="#fffdf5" />
                       ) : (
                         <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-600 text-sm">
                           Unlink
@@ -219,7 +220,7 @@ export function LinkedLogins() {
               }`}
             >
               {linking ? (
-                <ActivityIndicator size="small" color="#bd9348" />
+                <ActivityIndicator size="small" color="#fffdf5" />
               ) : (
                 <>
                   <Ionicons name="add-circle-outline" size={18} color="#bd9348" style={{ marginRight: 8 }} />

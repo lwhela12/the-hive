@@ -19,6 +19,7 @@ import { AppHeader } from '../../components/navigation';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { LinkedLogins } from '../../components/profile/LinkedLogins';
 
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 /**
  * Settings — the back of the house.
  *
@@ -343,7 +344,7 @@ export default function SettingsScreen() {
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
         <AppHeader title="Settings" onBackPress={closeSettings} />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="small" color={GOLD} />
+          <ThinkingBee />
         </View>
       </SafeAreaView>
     );
@@ -478,7 +479,7 @@ export default function SettingsScreen() {
           {!checkedColumn ? (
             <Panel>
               <View style={{ paddingVertical: 18, alignItems: 'center' }}>
-                <ActivityIndicator size="small" color={GOLD} />
+                <ThinkingBee />
               </View>
             </Panel>
           ) : hasDefaultShareColumn && canDefaultWide ? (

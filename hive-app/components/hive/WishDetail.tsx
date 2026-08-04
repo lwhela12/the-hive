@@ -35,6 +35,7 @@ import type { Wish, Profile, WishComment, WishGranter } from '../../types';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
 import type { SelectedImage } from '../../lib/imagePicker';
 import type { SelectedFile } from '../../lib/filePicker';
+import { ThinkingBee } from '../ui/ThinkingBee';
 type WishWithGranters = Wish & {
   user?: Profile | null;
   granters?: (WishGranter & { granter?: Profile })[];
@@ -469,7 +470,7 @@ export function WishDetail({
         </Text>
 
         {loading ? (
-          <ActivityIndicator color="#bd9348" className="py-8" />
+          <ThinkingBee />
         ) : commentTree.length === 0 ? (
           <View className="py-8 items-center">
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
@@ -592,7 +593,7 @@ export function WishDetail({
             }`}
           >
             {submitting ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator size="small" color="#fffdf5" />
             ) : (
               <Text className="text-sm text-white" style={{ marginTop: -1 }}>↑</Text>
             )}

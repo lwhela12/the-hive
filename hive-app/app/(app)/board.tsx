@@ -30,6 +30,7 @@ import { deleteWishById } from '../../lib/wishMutations';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 // Archived boards are no longer browsable (Nat 2026-07-24) — the boards-home
 // "Archive" pill is gone, so the list always shows active topics. Threads keep
 // an archive view only as a landing spot when search finds archived matches.
@@ -1910,7 +1911,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         ListEmptyComponent={
           postsLoading ? (
             <View className="items-center py-16">
-              <ActivityIndicator size="large" color="#bd9348" />
+              <ThinkingBee />
             </View>
           ) : (
             <View className="bg-white rounded-xl p-8 shadow-sm items-center">

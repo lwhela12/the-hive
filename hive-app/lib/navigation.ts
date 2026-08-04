@@ -137,7 +137,11 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   // which is the one route that CANNOT mean the same thing wherever you stand.
   // Nat found it by clicking App Feedback at HIVE-Wide and landing in Production
   // HIVE (2026-08-03). Its own screen now, with no community id in the path.
-  { key: 'feedback', label: 'App Feedback', emoji: '💬', route: '/app-feedback', gate: 'everyone', atWholeHive: 'same' },
+  // 📣 rather than 💬 (Nat 2026-08-04). The speech balloon rendered as a pale
+  // blob against the dark rail, and it sat four rows under 💌 Messages saying
+  // the same thing — two "somebody is talking" icons for two different places.
+  // A megaphone is speaking UP, which is what this screen is for.
+  { key: 'feedback', label: 'App Feedback', emoji: '📣', route: '/app-feedback', gate: 'everyone', atWholeHive: 'same' },
 ];
 
 /** The two zoom levels, above the line. HIVE-Wide is always first. */

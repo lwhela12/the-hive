@@ -25,6 +25,7 @@ import type { Attachment } from '../../types';
 
 import { DictationRow } from '../../components/ui/DictationRow';
 import { SignedImage } from '../../components/ui/SignedImage';
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 /**
  * App Feedback — its own place, at last.
  *
@@ -841,7 +842,7 @@ export default function AppFeedbackScreen() {
               })}
             >
               {sending ? (
-                <ActivityIndicator color={skin.dark ? '#07080F' : '#fffdf5'} />
+                <ThinkingBee />
               ) : (
                 <Text
                   style={{
@@ -873,7 +874,7 @@ export default function AppFeedbackScreen() {
         ) : tab === 'sent' ? (
           <View style={styles.panel}>
             {sent === null ? (
-              <ActivityIndicator color={skin.gold} />
+              <ThinkingBee />
             ) : sent.length === 0 ? (
               emptyLine('Nothing yet. Anything you send will be listed here, along with what we said back.')
             ) : (
@@ -883,7 +884,7 @@ export default function AppFeedbackScreen() {
         ) : (
           <View style={styles.panel}>
             {all === null ? (
-              <ActivityIndicator color={skin.gold} />
+              <ThinkingBee />
             ) : all.length === 0 ? (
               emptyLine('Nobody has said anything yet.')
             ) : (

@@ -42,6 +42,7 @@ import type { Skill, Wish, UserInsights, Profile } from '../../types';
 
 import { DictationRow } from '../../components/ui/DictationRow';
 import { confirmAction } from '../../lib/showAlert';
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
 
 // Format phone number as (XXX) XXX-XXXX
@@ -1639,7 +1640,7 @@ export default function ProfileScreen() {
                     <Avatar name={profile.name} url={profile.avatar_url} size={80} />
                     {isUploadingPhoto ? (
                       <View className="absolute inset-0 bg-black/40 rounded-full items-center justify-center">
-                        <ActivityIndicator color="#fff" size="small" />
+                        <ActivityIndicator size="small" color="#fffdf5" />
                       </View>
                     ) : (
                       <View className="absolute bottom-0 right-0 bg-gold w-6 h-6 rounded-full items-center justify-center border-2 border-cream">

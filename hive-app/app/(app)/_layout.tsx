@@ -16,6 +16,7 @@ import { currentReturnTo } from '../../lib/authReturnTo';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 function TabIcon({
   icon,
   imageSource,
@@ -178,7 +179,7 @@ export default function AppLayout() {
   if (loading || !session || !communityId) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#faf8f3' }}>
-        <ActivityIndicator size="large" color="#bd9348" />
+        <ThinkingBee />
       </View>
     );
   }

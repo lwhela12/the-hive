@@ -32,6 +32,7 @@ import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
 import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
 import { DictationRow } from '../../components/ui/DictationRow';
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import {
   getActiveMentionQuery,
   getMentionedMembers,
@@ -1092,7 +1093,7 @@ export default function MeetingHelperScreen() {
       </View>
       {arrivalLoading ? (
         <View style={{ paddingVertical: 60, alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={GOLD} />
+          <ThinkingBee />
         </View>
       ) : !survey ? (
         <EmptyNote>
@@ -2884,7 +2885,7 @@ export default function MeetingHelperScreen() {
           })}
         >
           {deckRefreshing ? (
-            <ActivityIndicator size="small" color={GOLD_DEEP} />
+            <ThinkingBee />
           ) : (
             <Ionicons name="refresh" size={sz(28, 20)} color={GOLD_DEEP} />
           )}

@@ -4,6 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
 import { sanitizeReturnTo } from '../../lib/authReturnTo';
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 // A sign-in with no particular destination goes to "/", which is the waiting
 // room: it holds until auth has actually resolved and only then forwards you
 // to HIVE-Wide. Sending people straight to /hive-wide put them behind the
@@ -79,7 +80,7 @@ export default function AuthCallbackScreen() {
 
   return (
     <View className="flex-1 bg-cream justify-center items-center">
-      <ActivityIndicator size="large" color="#bd9348" />
+      <ThinkingBee />
       <Text className="text-charcoal mt-4 text-base">Signing you in...</Text>
     </View>
   );

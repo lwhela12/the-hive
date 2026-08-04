@@ -9,6 +9,7 @@ import type { CommunityInvite, Community, Profile } from '../types';
 
 import { DictationRow } from '../components/ui/DictationRow';
 import { confirmAction } from '../lib/showAlert';
+import { ThinkingBee } from '../components/ui/ThinkingBee';
 type InviteWithDetails = CommunityInvite & {
   community: Community;
   inviter: Profile | null;
@@ -501,7 +502,7 @@ export default function JoinScreen() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-cream justify-center items-center">
-        <ActivityIndicator size="large" color="#bd9348" />
+        <ThinkingBee />
         <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal mt-4">
           Checking for invites...
         </Text>

@@ -21,6 +21,7 @@ import { formatDateLong } from '../../lib/dateUtils';
 import { formatMeetingDate, getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
 import type { Community } from '../../types';
 
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 /**
  * HIVE-Wide — the shared high street.
  *
@@ -391,7 +392,7 @@ export default function HiveWideScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {loading ? (
-          <ActivityIndicator color={INK_SOFT} style={{ marginTop: 28 }} />
+          <ThinkingBee />
         ) : (
           <>
             {/* Four boxes, two by two — the same shape as a HIVE's own home

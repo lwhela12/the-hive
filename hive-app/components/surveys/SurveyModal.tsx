@@ -18,6 +18,7 @@ import type { Survey, SurveyAnswers, SurveyQuestion } from '../../lib/hooks/useS
 import { SurveyQuestionField } from './SurveyQuestionField';
 
 import { DictationRow } from '../ui/DictationRow';
+import { ThinkingBee } from '../ui/ThinkingBee';
 interface SurveyModalProps {
   survey: Survey;
   initialAnswers?: SurveyAnswers;
@@ -202,7 +203,7 @@ export function SurveyModal({
     if (carryForwardLoading) {
       return (
         <View style={{ backgroundColor: '#fffdf5', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 16, padding: 16, marginBottom: 24, alignItems: 'center' }}>
-          <ActivityIndicator color="#bd9348" />
+          <ThinkingBee />
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#7f715f', marginTop: 8 }}>
             Gathering your open HIVE things...
           </Text>

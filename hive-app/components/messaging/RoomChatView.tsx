@@ -54,6 +54,7 @@ import type { ChatRoom, ChatRoomMember, Profile, TypingIndicator, Attachment } f
 
 import { confirmAction, showAlert } from '../../lib/showAlert';
 import { SignedImage } from '../ui/SignedImage';
+import { ThinkingBee } from '../ui/ThinkingBee';
 interface RoomChatViewProps {
   room: ChatRoom & { members?: Array<ChatRoomMember & { user?: Profile }> };
   onBack: () => void;
@@ -951,7 +952,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                     style={{ backgroundColor: draftTheme.accentSoft }}
                   >
                     {uploadingCustomizationImage ? (
-                      <ActivityIndicator size="small" color={draftTheme.accent} />
+                      <ActivityIndicator size="small" color="#fffdf5" />
                     ) : (
                       <Ionicons name="image-outline" size={19} color={draftTheme.accent} />
                     )}
@@ -1066,7 +1067,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                   }}
                 >
                   {savingCustomization ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
+                    <ThinkingBee />
                   ) : (
                     <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white">
                       Save
@@ -1117,7 +1118,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
             ListFooterComponent={
               loadingOlder ? (
                 <View className="items-center py-3">
-                  <ActivityIndicator size="small" color={roomTheme.accent} />
+                  <ThinkingBee />
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs mt-1">
                     Loading older messages...
                   </Text>
@@ -1127,7 +1128,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
             ListEmptyComponent={
               messagesLoading ? (
                 <View className="items-center py-8">
-                  <ActivityIndicator size="large" color={roomTheme.accent} />
+                  <ThinkingBee />
                 </View>
               ) : (
                 <View className="items-center py-8">

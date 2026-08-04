@@ -30,6 +30,7 @@ import { HIVE_CLOSED, isHiveKeeper, hasBypassTicket } from '../lib/maintenance';
 // Sprouts' and so the list of who still has a key sits next to the switch.
 // ---------------------------------------------------------------------------
 import { useFonts } from 'expo-font';
+import { ThinkingBee } from '../components/ui/ThinkingBee';
 import {
   LibreBaskerville_400Regular,
   LibreBaskerville_700Bold,
@@ -461,7 +462,7 @@ export default function RootLayout() {
       if (loading) {
         return (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#bd9348' }}>
-            <ActivityIndicator size="large" color="#FFFFFF" />
+            <ThinkingBee />
           </View>
         );
       }
@@ -473,7 +474,7 @@ export default function RootLayout() {
   if (!fontsLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#bd9348' }}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
+        <ThinkingBee />
       </View>
     );
   }

@@ -66,6 +66,7 @@ import { getWishQuickTitle } from '../../lib/wishDisplay';
 import type { Profile, QueenBee, UserRole, CommunityInvite, Event, Wish } from '../../types';
 
 import { DictationRow } from '../../components/ui/DictationRow';
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 type MemberRow = {
   id: string;
   role: UserRole;
@@ -2514,7 +2515,7 @@ export default function AdminScreen() {
 
                 {surveyResponsesLoading ? (
                   <View style={{ paddingVertical: 18, alignItems: 'center' }}>
-                    <ActivityIndicator color="#bd9348" />
+                    <ThinkingBee />
                   </View>
                 ) : surveyResponsesError ? (
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#ef4444' }}>

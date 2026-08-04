@@ -3,6 +3,7 @@ import { Modal, View, Text, TextInput, Pressable, ScrollView, ActivityIndicator 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { DictationRow } from '../ui/DictationRow';
+import { ThinkingBee } from '../ui/ThinkingBee';
 import {
   HONEY_POT_PAYMENT_METHOD_OPTIONS,
   getHoneyPotErrorMessage,
@@ -194,7 +195,7 @@ export function RecordHoneyPotModal({
               }}
             >
               {saving
-                ? <ActivityIndicator color="#fffdf5" />
+                ? <ThinkingBee />
                 : <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#fffdf5' }}>Write it down</Text>}
             </Pressable>
           </ScrollView>

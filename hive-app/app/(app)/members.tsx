@@ -41,6 +41,7 @@ import { getHdWishTabLabel, pickSpotlightWish, type HdWishTabKey } from '../../l
 import { useWishes } from '../../lib/hooks/useWishes';
 
 import { DictationRow } from '../../components/ui/DictationRow';
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish> & {
   granters?: (WishGranter & { granter?: Profile })[];
@@ -1274,7 +1275,7 @@ function MemberDetailModal({
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}>
-                    <ActivityIndicator size="small" color="#bd9348" />
+                    <ThinkingBee />
                   </View>
                 ) : (
                   <>
@@ -1897,7 +1898,7 @@ function MemberDetailModal({
                 }}>
                   {wishesLoading ? (
                     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                      <ActivityIndicator size="small" color="#bd9348" />
+                      <ThinkingBee />
                     </View>
                   ) : (
                     <ScrollView
@@ -2776,7 +2777,7 @@ export default function MembersScreen() {
       >
         {loading ? (
           <View style={{ alignItems: 'center', paddingTop: 80 }}>
-            <ActivityIndicator size="large" color="#bd9348" />
+            <ThinkingBee />
           </View>
         ) : error ? (
           <View style={{ alignItems: 'center', paddingTop: 60 }}>

@@ -8,6 +8,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { sanitizeReturnTo } from '../../lib/authReturnTo';
 
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
@@ -149,7 +150,7 @@ export default function LoginScreen() {
             className="flex-row items-center justify-center bg-white rounded-xl py-4 px-6 active:opacity-80"
           >
             {loading ? (
-              <ActivityIndicator size="small" color="#bd9348" />
+              <ActivityIndicator size="small" color="#fffdf5" />
             ) : (
               <>
                 <Image

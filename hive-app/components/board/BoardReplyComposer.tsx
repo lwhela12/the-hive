@@ -21,6 +21,7 @@ import { VoiceMicButton } from '../ui/VoiceMicButton';
 import { MentionSuggestions } from './MentionSuggestions';
 import { SelectedFilePreview } from '../ui/SelectedFilePreview';
 
+import { ThinkingBee } from '../ui/ThinkingBee';
 interface BoardReplyComposerProps {
   postId: string;
   postAuthorId?: string;
@@ -332,7 +333,7 @@ export function BoardReplyComposer({
           }`}
         >
           {submitting ? (
-            <ActivityIndicator size="small" color="white" />
+            <ActivityIndicator size="small" color="#fffdf5" />
           ) : (
             <Text className="text-sm text-white" style={{ marginTop: -1 }}>↑</Text>
           )}

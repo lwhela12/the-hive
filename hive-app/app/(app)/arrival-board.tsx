@@ -19,6 +19,7 @@ import {
 } from '../../lib/hooks/useArrivalBoard';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 // The plain bee mark, not the crest — the crest's sunburst ring turns to mush
 // at header size (see monthly-tuneup for the full note).
 const hiveBee = require('../../assets/BEE ONLY IN GOLD BG.png');
@@ -139,7 +140,7 @@ export default function ArrivalBoardScreen() {
 
         {loading ? (
           <View style={{ paddingVertical: 80, alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#bd9348" />
+            <ThinkingBee />
           </View>
         ) : !survey ? (
           <View

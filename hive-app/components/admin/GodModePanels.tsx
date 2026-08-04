@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { HIVE_GOLD, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import type { UserRole } from '../../types';
 
+import { ThinkingBee } from '../ui/ThinkingBee';
 /**
  * Everyone, everywhere, in one room.
  *
@@ -681,7 +682,7 @@ export function HiveMemberPanels({
                       }}
                     >
                       {sending ? (
-                        <ActivityIndicator size="small" color="#fffdf5" style={{ marginRight: 8 }} />
+                        <ThinkingBee />
                       ) : null}
                       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#fffdf5' }}>
                         {sending ? 'Sending Invite' : 'Send Invite'}
@@ -691,7 +692,7 @@ export function HiveMemberPanels({
                 ) : null}
 
                 {loading && rows.length === 0 ? (
-                  <View style={{ padding: 20 }}><ActivityIndicator color={accent} /></View>
+                  <ActivityIndicator size="small" color="#fffdf5" />
                 ) : rows.length === 0 ? (
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.55)', padding: 16 }}>
                     Nobody here yet.
