@@ -54,6 +54,7 @@ function makeNoise(seed: number) {
 type Star = { x: number; y: number; r: number; a: number; tw: number };
 type Light = { a: number; d: number; s: number; b: number };
 type Land = { a: number; d: number; r: number; warm: number };
+type Cloud = { a: number; d: number; r: number; squash: number; turn: number; b: number };
 type Shooter = { x: number; y: number; vx: number; vy: number; life: number; len: number };
 
 export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
@@ -88,15 +89,46 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
     // Where the sun sits on the limb. RIGHT of centre and just below the edge,
     // so it reads as rising rather than as a lamp hung over the planet.
     // (It was on the left for an afternoon; Nat wanted it the other way.)
-    const SUN_A = 0.34;
+    //
+    // 0.34 put him OFF THE SCREEN, at every window size — and it was not obvious,
+    // because his bloom is enormous and the glow spilling in from the right edge
+    // looks like a sunrise you can nearly see. The geometry says it plainly:
+    // R is 1.55 × the width, so x = W/2 + sin(a)·1.55W, and sin(0.34)·1.55 =
+    // 0.516 — always 1.6% of the width past the right edge, forever. Nat asked
+    // "can I see him a little more?" on 2026-08-03 and got him pushed radially
+    // outward, which made him clear the limb but did nothing about the fact that
+    // he was sideways off the page. 0.25 lands him at 88% of the width, sitting
+    // on the curve, in frame.
+    const SUN_A = 0.25;
 
     let W = 0, H = 0, raf = 0, t = 0;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     let stars: Star[] = [];
     let lights: Light[] = [];
     let lands: Land[] = [];
+    let clouds: Cloud[] = [];
     let shooters: Shooter[] = [];
     let nextShooter = 2.5;
+
+    // Real blur, where the browser has it. Every edge in a photograph of the
+    // Earth is soft — the air, the coastlines, the cloud tops — and drawing them
+    // with gradients alone is what made this read as vector art rather than a
+    // picture (Nat 2026-08-04: "make it look more 'real'... or blur it out a
+    // little"). Safari only shipped canvas filters in 17, so it is a feature
+    // test: without it everything still draws, just crisper.
+    const canBlur = typeof ctx.filter === 'string';
+    const blur = (px: number) => {
+      if (canBlur) ctx.filter = `blur(${px}px)`;
+    };
+    const unblur = () => {
+      if (canBlur) ctx.filter = 'none';
+    };
+
+    // The planet's surface — land and cloud — is painted once into its own
+    // canvas and stamped down each frame, rather than redrawn sixty times a
+    // second. It never changes, and a dozen heavily blurred blobs per frame on
+    // every space page in the app is a real cost on a phone.
+    let surface: HTMLCanvasElement | null = null;
 
     // Geometry of the limb. The sphere's centre sits far below the bottom edge,
     // so only the very top of a very large circle crosses the screen — that is
@@ -158,11 +190,42 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
         });
       }
 
+      // Weather. The one thing the photograph has that the drawing did not.
+      //
+      // In Nat's reference the planet is not a dark ball with a bright rim — it
+      // is covered in cloud, and the cloud is what the sunrise actually lands
+      // on. Without it there is nothing between the wire of atmosphere and the
+      // black, so the eye reads the edge as a stroke somebody drew.
+      //
+      // Placed in sphere coordinates like the land and the lights, squashed
+      // toward the limb by the same rule, and rotated a little each so the
+      // banding reads as systems rather than as a row of ovals.
+      clouds = [];
+      for (let i = 0; i < 34; i++) {
+        const a = (Math.random() - 0.5) * 1.9;
+        const d = Math.pow(Math.random(), 1.6) * 0.85;
+        clouds.push({
+          a,
+          d,
+          r: 0.05 + Math.random() * 0.12,
+          squash: 0.16 + Math.random() * 0.22,
+          turn: (Math.random() - 0.5) * 0.8,
+          b: 0.35 + Math.random() * 0.65,
+        });
+      }
+
       lights = [];
-      const want = Math.round(W * 0.9);
+      // Fewer as well as dimmer. At 0.9 per pixel of width there were enough of
+      // them to form a visible field, and a visible field of dots on a dark
+      // sphere is glitter no matter how faint each one is.
+      const want = Math.round(W * 0.38);
       for (let i = 0; i < want; i++) {
         const a = (Math.random() - 0.5) * 1.25;
-        const d = Math.random();
+        // Never right on the edge. A light at depth 0 lands exactly on the
+        // bright wire of atmosphere, where it reads as a sparkle stuck to the
+        // rim rather than a town under it — you cannot see a city THROUGH the
+        // limb, only inside it.
+        const d = 0.16 + Math.random() * 0.84;
         // Clumps, so it reads as cities and coastlines instead of static.
         const n = noise(a * 9 + 4, d * 5 + 2);
         if (n < 0.42) continue;
@@ -173,6 +236,92 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
           b: 0.28 + Math.random() * 0.72,
         });
       }
+
+      surface = null;
+    }
+
+    /**
+     * Land and weather, painted once.
+     *
+     * Everything in here is blurred hard and kept dim. The temptation with
+     * clouds is to make them white and legible, which turns the planet into a
+     * cartoon globe; in the photograph they are barely there except where the
+     * sun catches them, so brightness is a function of how close each one sits
+     * to the sunrise.
+     */
+    function buildSurface() {
+      const off = document.createElement('canvas');
+      off.width = Math.max(1, Math.floor(W * dpr));
+      off.height = Math.max(1, Math.floor(H * dpr));
+      const c = off.getContext('2d');
+      if (!c) return null;
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const softly = (px: number) => {
+        if (typeof c.filter === 'string') c.filter = `blur(${px}px)`;
+      };
+
+      c.save();
+      c.beginPath();
+      c.arc(cx, cy, R, 0, Math.PI * 2);
+      c.clip();
+
+      // Land, under the weather.
+      softly(22);
+      for (const l of lands) {
+        const rr = R - l.d * l.d * R * 0.30;
+        const x = cx + Math.sin(l.a) * rr;
+        const y = cy - Math.cos(l.a) * rr;
+        const size = R * l.r * (1 - l.d * 0.4);
+        if (y - size > H || y + size < horizon - 20) continue;
+        const earth = slate
+          ? '58,60,66'
+          : (l.warm > 0.55 ? '74,58,34' : '44,58,40');   // dry ground / green
+        const blob = c.createRadialGradient(x, y, 0, x, y, size);
+        blob.addColorStop(0, `rgba(${earth},0.34)`);
+        blob.addColorStop(0.5, `rgba(${earth},0.17)`);
+        blob.addColorStop(1, `rgba(${earth},0)`);
+        c.fillStyle = blob;
+        c.beginPath();
+        c.ellipse(x, y, size, size * (0.42 + 0.3 * (1 - l.d)), 0, 0, Math.PI * 2);
+        c.fill();
+      }
+
+      // Cloud. Brightest near the sunrise, almost nothing on the far side —
+      // which is what tells you where the light is coming from.
+      const sun = sunPoint();
+      softly(16);
+      c.globalCompositeOperation = 'lighter';
+      for (const cl of clouds) {
+        const rr = R - cl.d * cl.d * R * 0.30;
+        const x = cx + Math.sin(cl.a) * rr;
+        const y = cy - Math.cos(cl.a) * rr;
+        const size = R * cl.r * (1 - cl.d * 0.35);
+        if (y - size > H || y + size < horizon - 40) continue;
+
+        // How lit this one is: 1 at the sunrise, falling away around the curve.
+        const lit = Math.max(0, 1 - Math.abs(cl.a - SUN_A) / 1.9);
+        const warmth = Math.pow(lit, 1.5);
+        const alpha = cl.b * (0.10 + warmth * 0.58) * (1 - cl.d * 0.45);
+        // Cloud tops near the sun pick up the gold; the rest stay cold white.
+        const tint = warmth > 0.45 ? SUN_CORE : AIR_CORE;
+
+        const puff = c.createRadialGradient(x, y, 0, x, y, size);
+        puff.addColorStop(0, `rgba(${tint},${alpha})`);
+        puff.addColorStop(0.45, `rgba(${tint},${alpha * 0.42})`);
+        puff.addColorStop(1, `rgba(${tint},0)`);
+        c.fillStyle = puff;
+        c.save();
+        c.translate(x, y);
+        c.rotate(cl.turn);
+        c.beginPath();
+        c.ellipse(0, 0, size, size * cl.squash, 0, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+
+      c.restore();
+      return off;
     }
 
     function drawSky() {
@@ -255,26 +404,12 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       ctx.fillStyle = g;
       ctx.fillRect(0, horizon - 2, W, H - horizon + 4);
 
-      // Land over the water. Soft-edged and low-contrast on purpose — this is
-      // meant to read as continents glimpsed at night, not as a map.
-      for (const l of lands) {
-        const rr = R - l.d * l.d * R * 0.30;
-        const x = cx + Math.sin(l.a) * rr;
-        const y = cy - Math.cos(l.a) * rr;
-        const size = R * l.r * (1 - l.d * 0.4);
-        if (y - size > H || y + size < horizon - 20) continue;
-        const earth = slate
-          ? '58,60,66'
-          : (l.warm > 0.55 ? '74,58,34' : '44,58,40');   // dry ground / green
-        const blob = ctx.createRadialGradient(x, y, 0, x, y, size);
-        blob.addColorStop(0, `rgba(${earth},0.34)`);
-        blob.addColorStop(0.5, `rgba(${earth},0.17)`);
-        blob.addColorStop(1, `rgba(${earth},0)`);
-        ctx.fillStyle = blob;
-        ctx.beginPath();
-        ctx.ellipse(x, y, size, size * (0.42 + 0.3 * (1 - l.d)), 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      // Land and cloud, stamped from the layer built at resize. Destination
+      // size is given in CSS pixels so it lands exactly where it was painted,
+      // whatever the device pixel ratio — the same discipline that keeps
+      // `putImageData` out of this file.
+      if (!surface) surface = buildSurface();
+      if (surface) ctx.drawImage(surface, 0, 0, W, H);
 
       // Daybreak creeping across the surface. The world is dark on the far side
       // and warm where the sun has reached it — without this the sun hangs over
@@ -311,7 +446,11 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
         // Distant lights are dimmer and smaller: haze, and less of them per pixel.
         const fade = 1 - l.d * 0.55;
         const size = (0.6 + l.s * 1.5) * fade;
-        const alpha = l.b * fade * 0.85 * tw;
+        // Halved on 2026-08-04. At full strength they were the brightest thing
+        // on the planet and read as glitter scattered over the top of it —
+        // "confetti", in Nat's screenshot — instead of towns seen from orbit.
+        // In the photograph the ground at night is very nearly nothing.
+        const alpha = l.b * fade * 0.30 * tw;
 
         const glow = ctx.createRadialGradient(x, y, 0, x, y, size * 4.2);
         glow.addColorStop(0, `rgba(${CITY},${alpha})`);
@@ -358,22 +497,54 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       ctx.restore();
 
       // ── the edge itself ────────────────────────────────────────────────────
-      // Drawn as a line so it stays crisp at any size. Brightest near the sun
-      // and fading away around the curve, which is what stops the limb reading
-      // as a drawn circle.
+      //
+      // Three passes over the same arc: a wide soft halo, a mid band, and a
+      // thin bright filament in the middle. That is what a lit atmosphere looks
+      // like from orbit and it is emphatically NOT what a single 1.4px stroke
+      // looked like — Nat's screenshot showed a drawn circle with a hairline on
+      // it, because a hairline is exactly what it was (2026-08-04).
+      //
+      // Blurring the wide passes is what sells it. The filament stays sharp so
+      // the edge still has somewhere definite to be; softness everywhere would
+      // read as fog rather than air.
       const sun = sunPoint();
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
+
       const wire = ctx.createLinearGradient(sun.x - R * 0.5, 0, sun.x + R * 0.9, 0);
       wire.addColorStop(0, `rgba(${AIR_CORE},0.30)`);
       wire.addColorStop(0.28, `rgba(${SUN_CORE},0.85)`);
       wire.addColorStop(0.55, `rgba(${AIR_CORE},0.55)`);
       wire.addColorStop(1, `rgba(${AIR_MID},0.16)`);
+
+      const halo = ctx.createLinearGradient(sun.x - R * 0.5, 0, sun.x + R * 0.9, 0);
+      halo.addColorStop(0, `rgba(${AIR_MID},0.16)`);
+      halo.addColorStop(0.28, `rgba(${SUN_WARM},0.40)`);
+      halo.addColorStop(0.55, `rgba(${AIR_MID},0.28)`);
+      halo.addColorStop(1, `rgba(${AIR_FAR},0.08)`);
+
+      ctx.lineCap = 'round';
+      const arc = () => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, R, -Math.PI / 2 - 1.0, -Math.PI / 2 + 1.0);
+        ctx.stroke();
+      };
+
+      blur(14);
+      ctx.strokeStyle = halo;
+      ctx.lineWidth = 16;
+      arc();
+
+      blur(5);
       ctx.strokeStyle = wire;
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, -Math.PI / 2 - 1.0, -Math.PI / 2 + 1.0);
-      ctx.stroke();
+      ctx.lineWidth = 5;
+      arc();
+
+      unblur();
+      ctx.strokeStyle = wire;
+      ctx.lineWidth = 1.2;
+      arc();
+
       ctx.restore();
 
       drawSunrise(sun);
@@ -412,7 +583,29 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       ctx.arc(sun.x, sun.y, bloom, 0, Math.PI * 2);
       ctx.fill();
 
+      // The flare along the edge. When the sun clears a planet's limb the light
+      // smears sideways ALONG it, and that streak is most of why the reference
+      // photograph reads as a photograph. Squashed hard against the curve and
+      // blurred, so it never resolves into a shape you could name.
+      blur(canBlur ? 18 : 0);
+      const flareW = R * 0.30;
+      const flare = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, flareW);
+      flare.addColorStop(0, `rgba(${SUN_CORE},0.55)`);
+      flare.addColorStop(0.35, `rgba(${SUN_WARM},0.22)`);
+      flare.addColorStop(1, `rgba(${SUN_WARM},0)`);
+      ctx.fillStyle = flare;
+      ctx.save();
+      ctx.translate(sun.x, sun.y);
+      // Tangent to the limb at the sun's angle — the streak lies along the
+      // horizon rather than across it.
+      ctx.rotate(SUN_A);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, flareW, flareW * 0.20, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
       const glow = R * 0.115;
+      blur(canBlur ? 6 : 0);
       const g2 = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, glow);
       g2.addColorStop(0, `rgba(${SUN_CORE},0.95)`);
       g2.addColorStop(0.18, `rgba(${SUN_WARM},0.72)`);
@@ -423,10 +616,17 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       ctx.arc(sun.x, sun.y, glow, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = `rgba(${SUN_CORE},0.95)`;
+      // The hot centre. Small and slightly soft — at 0.22 of the glow radius
+      // and perfectly sharp it was a white circle sitting on the picture like a
+      // sticker, which is the single most drawn-looking thing a sun can do. In
+      // a photograph the blown-out core has no edge at all; the sensor just
+      // gives up somewhere in the middle of the bloom.
+      blur(canBlur ? 3 : 0);
+      ctx.fillStyle = `rgba(${SUN_CORE},0.98)`;
       ctx.beginPath();
-      ctx.arc(sun.x, sun.y, glow * 0.22, 0, Math.PI * 2);
+      ctx.arc(sun.x, sun.y, glow * 0.13, 0, Math.PI * 2);
       ctx.fill();
+      unblur();
 
       ctx.restore();
     }

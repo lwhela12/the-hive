@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { Image } from 'expo-image';
@@ -10,6 +10,7 @@ import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { ADMIN_DESTINATION, destinationsForPlace, activeKeyForPath } from '../../lib/navigation';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 /**
  * The side rail, borrowed from Jammin' Sprouts at Nat's request 2026-08-03.
@@ -67,6 +68,8 @@ export const SideRail = memo(function SideRail({
   const pathname = usePathname();
   const { profile, community, communityId, communityRole, memberships, switchCommunity, wholeHive, enterWholeHive } = useAuth();
   const { width } = useWindowDimensions();
+
+  const [confirmingLogOut, setConfirmingLogOut] = useState(false);
 
   const isPhone = width < 768;
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
@@ -333,10 +336,14 @@ export const SideRail = memo(function SideRail({
         {/* "Swap HIVEs" is gone (Nat 2026-08-03). Your HIVEs are already listed
             by name under My HIVEs, and tapping one swaps to it — so this was a
             button that opened a picker for a choice already on the screen. */}
+        {/* It asks first (Nat 2026-08-04). Log out sits directly under the page
+            list, so it is one slip away from every other row in the rail — and
+            on a phone, where the rail is a full-height overlay, it is a slip
+            away with a thumb rather than a cursor. */}
         <Row
           emoji="👋"
           label="Log out"
-          onPress={() => { void supabase.auth.signOut({ scope: 'local' }); }}
+          onPress={() => setConfirmingLogOut(true)}
         />
 
         {/* Admin only exists from HIVE-Wide (Nat 2026-08-03). It runs the whole
@@ -355,6 +362,19 @@ export const SideRail = memo(function SideRail({
           </>
         ) : null}
       </ScrollView>
+
+      <ConfirmDialog
+        visible={confirmingLogOut}
+        title="Log out of the HIVE?"
+        body="You’ll need to sign in again with Google to get back in."
+        confirmLabel="Log out"
+        cancelLabel="Stay"
+        onConfirm={() => {
+          setConfirmingLogOut(false);
+          void supabase.auth.signOut({ scope: 'local' });
+        }}
+        onCancel={() => setConfirmingLogOut(false)}
+      />
     </View>
   );
 });

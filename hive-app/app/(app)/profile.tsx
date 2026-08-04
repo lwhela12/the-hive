@@ -28,6 +28,7 @@ import { WishCombCard } from '../../components/profile/WishCombCard';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { PREDEFINED_SKILLS } from '../../components/skills/constants';
@@ -113,6 +114,7 @@ export default function ProfileScreen() {
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [selectedWish, setSelectedWish] = useState<(Wish & { user: Profile }) | null>(null);
   const [wishToGrant, setWishToGrant] = useState<(Wish & { user: Profile }) | null>(null);
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
   const [replantingGarden, setReplantingGarden] = useState(false);
   const [replantNotice, setReplantNotice] = useState<string | null>(null);
@@ -710,21 +712,13 @@ export default function ProfileScreen() {
     router.replace('/(auth)/login');
   };
 
-  const handleSignOut = async () => {
-    if (Platform.OS === 'web') {
-      await performSignOut();
-      return;
-    }
-
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: performSignOut,
-      },
-    ]);
-  };
+  // One dialog, both platforms (Nat 2026-08-04). This used to ask on a phone via
+  // `Alert.alert` and, on web, skip straight past the question — because
+  // `Alert.alert` does nothing at all in a browser, so the code took the
+  // shortcut rather than showing a prompt that would never appear. Since the
+  // HIVE is mostly used in a browser, the confirmation existed everywhere
+  // except where it was needed.
+  const handleSignOut = () => setConfirmingSignOut(true);
 
   const handleArchiveWish = (wish: Wish) => {
     if (!profile || !communityId || !canArchiveWish(wish)) return;
@@ -2600,6 +2594,19 @@ export default function ProfileScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ConfirmDialog
+        visible={confirmingSignOut}
+        title="Sign out of the HIVE?"
+        body="You’ll need to sign in again with Google to get back in."
+        confirmLabel="Sign out"
+        cancelLabel="Stay"
+        onConfirm={() => {
+          setConfirmingSignOut(false);
+          void performSignOut();
+        }}
+        onCancel={() => setConfirmingSignOut(false)}
+      />
     </SafeAreaView>
   );
 }

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -15,6 +16,12 @@ import { usePageSkin } from '../../lib/pageSkin';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
+import { AttachmentPicker } from '../../components/ui/AttachmentPicker';
+import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
+import { SelectedImage } from '../../lib/imagePicker';
+import { SelectedFile } from '../../lib/filePicker';
+import { uploadMultipleImages, uploadMultipleFiles } from '../../lib/attachmentUpload';
+import type { Attachment } from '../../types';
 
 /**
  * App Feedback — its own place, at last.
@@ -33,9 +40,19 @@ import { HeaderTabs } from '../../components/ui/HeaderTabs';
  * context for a bug — but as a fact about the report, not a requirement for
  * filing one.
  *
- * The words go to a table and to Nat's inbox, not onto a board. "This screen
- * confuses me" is a note to the people who build the app, not a wish for your
- * friends to grant.
+ * 2026-08-04, three changes, all Nat's:
+ *
+ *   The words are hers now. The old ones described the plumbing ("not to a
+ *   board, not to your HIVE"); hers say who is listening and why, which is the
+ *   only part a member cares about.
+ *
+ *   A clip and a mic, because the fastest bug report is a marked-up screenshot
+ *   and the second fastest is talking. "any and every time we have a text box we
+ *   always want both of those."
+ *
+ *   And it answers back. "does it show the turn around and the fix as well? or
+ *   just a list of grievances?" — it was a list of grievances. Owners get a
+ *   third tab and can reply; the reply lands here and in the member's inbox.
  */
 
 type Kind = 'bug' | 'idea' | 'confusing' | 'love';
@@ -78,6 +95,13 @@ type SentItem = {
   message: string;
   created_at: string;
   status: string;
+  attachments: Attachment[] | null;
+  reply: string | null;
+  replied_at: string | null;
+  replied_by_name: string | null;
+  author_name?: string | null;
+  where_in_app?: string | null;
+  platform?: string | null;
 };
 
 function timeAgo(iso: string): string {
@@ -90,24 +114,40 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/** Everything the list needs, in one place, so the two tabs cannot drift apart. */
+const FEEDBACK_COLUMNS =
+  'id, kind, message, created_at, status, attachments, reply, replied_at, replied_by_name, author_name, where_in_app, platform';
+
 export default function AppFeedbackScreen() {
   const { profile, communityId } = useAuth();
   const skin = usePageSkin();
+  const isOwner = profile?.is_owner === true;
 
-  const [tab, setTab] = useState<'say' | 'sent'>('say');
+  const [tab, setTab] = useState<'say' | 'sent' | 'all'>('say');
   const [kind, setKind] = useState<Kind>('bug');
   const [message, setMessage] = useState('');
   const [whereInApp, setWhereInApp] = useState('');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; emailed: boolean; text: string } | null>(null);
 
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
+
+  // Dictation writes into the same box you are typing in, so it has to remember
+  // what was there before the mic opened — otherwise each interim guess appends
+  // to the last one and you get the sentence four times.
+  const voiceBaseRef = useRef<string | null>(null);
+
   const [sent, setSent] = useState<SentItem[] | null>(null);
+  const [all, setAll] = useState<SentItem[] | null>(null);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
 
   const loadSent = useCallback(async () => {
     if (!profile?.id) return;
     const { data, error } = await supabase
       .from('app_feedback')
-      .select('id, kind, message, created_at, status')
+      .select(FEEDBACK_COLUMNS)
       .eq('author_id', profile.id)
       .order('created_at', { ascending: false })
       .limit(25);
@@ -119,22 +159,62 @@ export default function AppFeedbackScreen() {
     setSent((data ?? []) as SentItem[]);
   }, [profile?.id]);
 
+  // Owners only — and the database agrees, so this is a convenience, not the
+  // guard. A member running this query gets their own rows back and nothing else.
+  const loadAll = useCallback(async () => {
+    if (!isOwner) return;
+    const { data, error } = await supabase
+      .from('app_feedback')
+      .select(FEEDBACK_COLUMNS)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) {
+      console.warn('Could not load all feedback', error);
+      setAll([]);
+      return;
+    }
+    setAll((data ?? []) as SentItem[]);
+  }, [isOwner]);
+
   useEffect(() => {
     void loadSent();
   }, [loadSent]);
 
-  const canSend = message.trim().length > 0 && !sending;
+  useEffect(() => {
+    if (tab === 'all') void loadAll();
+  }, [tab, loadAll]);
+
+  const hasAttachments = selectedImages.length > 0 || selectedFiles.length > 0;
+  const canSend = (message.trim().length > 0 || hasAttachments) && !sending;
 
   const send = useCallback(async () => {
-    if (!canSend) return;
+    if (!canSend || !profile?.id) return;
     setSending(true);
     setResult(null);
     try {
+      // Uploaded from here, straight into this member's own folder — the same
+      // path boards and messages use. The function checks the URLs come back
+      // from that folder before it believes them.
+      const uploaded: Attachment[] = [];
+      if (selectedImages.length > 0) {
+        const images = await uploadMultipleImages(profile.id, selectedImages);
+        uploaded.push(...images.attachments);
+      }
+      if (selectedFiles.length > 0) {
+        const files = await uploadMultipleFiles(profile.id, selectedFiles);
+        uploaded.push(...files.attachments);
+      }
+
+      if (hasAttachments && uploaded.length === 0) {
+        throw new Error('None of the attachments uploaded');
+      }
+
       const { data, error } = await supabase.functions.invoke('app-feedback', {
         body: {
           kind,
           message: message.trim(),
           where_in_app: whereInApp.trim() || null,
+          attachments: uploaded,
           // Context, not a requirement. NULL is a real answer: it means the
           // person was standing at HIVE-Wide when they said it.
           community_id: communityId ?? null,
@@ -146,6 +226,9 @@ export default function AppFeedbackScreen() {
 
       setMessage('');
       setWhereInApp('');
+      setSelectedImages([]);
+      setSelectedFiles([]);
+      voiceBaseRef.current = null;
       // Told the truth about which half worked. The note is safe either way —
       // the function stores before it emails — so a failed email is a smaller
       // sentence, not an error.
@@ -167,7 +250,43 @@ export default function AppFeedbackScreen() {
     } finally {
       setSending(false);
     }
-  }, [canSend, kind, message, whereInApp, communityId, loadSent]);
+  }, [canSend, kind, message, whereInApp, communityId, loadSent, profile?.id, selectedImages, selectedFiles, hasAttachments]);
+
+  const sendReply = useCallback(
+    async (id: string) => {
+      const reply = (replyDrafts[id] ?? '').trim();
+      if (!reply) return;
+      setReplyingTo(id);
+      try {
+        const { error } = await supabase.functions.invoke('app-feedback', {
+          body: { action: 'reply', feedback_id: id, reply },
+        });
+        if (error) throw error;
+        setReplyDrafts((prev) => ({ ...prev, [id]: '' }));
+        void loadAll();
+      } catch (error) {
+        console.warn('Could not send the reply', error);
+      } finally {
+        setReplyingTo(null);
+      }
+    },
+    [replyDrafts, loadAll]
+  );
+
+  const markStatus = useCallback(
+    async (id: string, status: 'new' | 'read' | 'done') => {
+      try {
+        const { error } = await supabase.functions.invoke('app-feedback', {
+          body: { action: 'reply', feedback_id: id, status },
+        });
+        if (error) throw error;
+        void loadAll();
+      } catch (error) {
+        console.warn('Could not change that status', error);
+      }
+    },
+    [loadAll]
+  );
 
   const active = KIND_BY_KEY[kind];
 
@@ -191,8 +310,195 @@ export default function AppFeedbackScreen() {
         fontFamily: 'Lato_400Regular',
         fontSize: 15,
       } as const,
+      caption: {
+        fontFamily: 'Lato_700Bold',
+        fontSize: 13,
+        letterSpacing: 0.4,
+        textTransform: 'uppercase',
+        color: skin.inkSoft,
+      } as const,
     }),
     [skin]
+  );
+
+  /** One report, drawn the same way in both lists. */
+  const renderItem = (item: SentItem, index: number, mine: boolean) => {
+    const images = (item.attachments ?? []).filter((a) => a.mime_type?.startsWith('image/'));
+    const others = (item.attachments ?? []).filter((a) => !a.mime_type?.startsWith('image/'));
+
+    return (
+      <View
+        key={item.id}
+        style={{
+          paddingVertical: 14,
+          borderTopWidth: index === 0 ? 0 : 1,
+          borderTopColor: skin.border,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+          <Text style={{ fontSize: 15 }}>{KIND_BY_KEY[item.kind]?.emoji ?? '💬'}</Text>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: skin.ink }}>
+            {mine ? KIND_BY_KEY[item.kind]?.label ?? 'Feedback' : item.author_name ?? 'Someone'}
+          </Text>
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: skin.inkSoft }}>
+            · {timeAgo(item.created_at)}
+            {!mine && item.where_in_app ? ` · ${item.where_in_app}` : ''}
+            {!mine && item.platform ? ` · ${item.platform}` : ''}
+          </Text>
+          {item.status !== 'new' ? (
+            <Text
+              style={{
+                fontFamily: 'Lato_700Bold',
+                fontSize: 11,
+                letterSpacing: 0.6,
+                textTransform: 'uppercase',
+                color: skin.gold,
+              }}
+            >
+              {item.status === 'done' ? 'Done' : 'Read'}
+            </Text>
+          ) : null}
+        </View>
+
+        {item.message ? (
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 22, color: skin.inkBody }}>
+            {item.message}
+          </Text>
+        ) : null}
+
+        {images.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }} contentContainerStyle={{ gap: 8 }}>
+            {images.map((a) => (
+              <Image
+                key={a.id || a.url}
+                source={{ uri: a.url }}
+                style={{
+                  width: 132,
+                  height: 132,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: skin.border,
+                  backgroundColor: skin.field,
+                }}
+                resizeMode="cover"
+              />
+            ))}
+          </ScrollView>
+        ) : null}
+
+        {others.map((a) => (
+          <Text
+            key={a.id || a.url}
+            style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.gold, marginTop: 6 }}
+          >
+            📎 {a.filename}
+          </Text>
+        ))}
+
+        {/* The answer. This is the half that makes it worth writing the next one. */}
+        {item.reply ? (
+          <View
+            style={{
+              marginTop: 12,
+              borderLeftWidth: 3,
+              borderLeftColor: skin.gold,
+              paddingLeft: 12,
+            }}
+          >
+            <Text style={{ ...styles.caption, fontSize: 11, marginBottom: 4 }}>
+              {item.replied_by_name ?? 'The HIVE'} said
+              {item.replied_at ? ` · ${timeAgo(item.replied_at)}` : ''}
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 22, color: skin.inkBody }}>
+              {item.reply}
+            </Text>
+          </View>
+        ) : mine ? (
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.inkFaint, marginTop: 8 }}>
+            {item.status === 'new' ? 'Not looked at yet.' : 'Seen. No answer written yet.'}
+          </Text>
+        ) : null}
+
+        {/* Owner controls. Only on the third tab, only for owners. */}
+        {!mine ? (
+          <View style={{ marginTop: 12 }}>
+            {!item.reply ? (
+              <>
+                <TextInput
+                  value={replyDrafts[item.id] ?? ''}
+                  onChangeText={(text) => setReplyDrafts((prev) => ({ ...prev, [item.id]: text }))}
+                  multiline
+                  maxLength={4000}
+                  placeholder="What happened about it?"
+                  placeholderTextColor={skin.inkFaint}
+                  style={[styles.field, { minHeight: 64, textAlignVertical: 'top' }]}
+                />
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                  <Pressable
+                    onPress={() => void sendReply(item.id)}
+                    disabled={!(replyDrafts[item.id] ?? '').trim() || replyingTo === item.id}
+                    style={{
+                      borderRadius: 999,
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                      backgroundColor: (replyDrafts[item.id] ?? '').trim() ? skin.gold : skin.border,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_700Bold',
+                        fontSize: 13,
+                        color: (replyDrafts[item.id] ?? '').trim() ? (skin.dark ? '#07080F' : '#fffdf5') : skin.inkFaint,
+                      }}
+                    >
+                      {replyingTo === item.id ? 'Sending…' : 'Answer & tell them'}
+                    </Text>
+                  </Pressable>
+                  {item.status === 'new' ? (
+                    <Pressable
+                      onPress={() => void markStatus(item.id, 'read')}
+                      style={{
+                        borderRadius: 999,
+                        paddingHorizontal: 16,
+                        paddingVertical: 8,
+                        borderWidth: 1,
+                        borderColor: skin.border,
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: skin.inkSoft }}>Mark read</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </>
+            ) : (
+              <Pressable
+                onPress={() => void markStatus(item.id, item.status === 'done' ? 'read' : 'done')}
+                style={{ alignSelf: 'flex-start' }}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: skin.gold }}>
+                  {item.status === 'done' ? 'Reopen' : 'Mark done'}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
+  const emptyLine = (text: string) => (
+    <Text
+      style={{
+        fontFamily: 'Lato_400Regular',
+        fontSize: 15,
+        lineHeight: 22,
+        color: skin.inkSoft,
+        textAlign: 'center',
+        paddingVertical: 22,
+      }}
+    >
+      {text}
+    </Text>
   );
 
   return (
@@ -209,36 +515,37 @@ export default function AppFeedbackScreen() {
             fontSize: 15,
             lineHeight: 22,
             color: skin.inkBody,
+            marginBottom: 6,
+          }}
+        >
+          This feedback goes straight to Nat, so she can build you the best, most useful and
+          intuitive app possible! All thoughts and feedback welcome!
+        </Text>
+        <Text
+          style={{
+            fontFamily: 'Lato_400Regular',
+            fontSize: 15,
+            lineHeight: 22,
+            color: skin.inkBody,
             marginBottom: 18,
           }}
         >
-          This goes straight to the people who build the HIVE. Not to a board, not to your
-          HIVE — it is about the app itself, so it works the same wherever you are standing.
+          The easiest way of all: take a screenshot, mark it up, and drop it in here. 📸
         </Text>
 
         <HeaderTabs
           tabs={[
             { key: 'say', label: 'Say something' },
             { key: 'sent', label: 'What you’ve sent', count: sent?.length },
+            ...(isOwner ? [{ key: 'all', label: 'Everyone', count: all?.length }] : []),
           ]}
           activeTab={tab}
-          onChange={(next) => setTab(next as 'say' | 'sent')}
+          onChange={(next) => setTab(next as 'say' | 'sent' | 'all')}
         />
 
         {tab === 'say' ? (
           <View style={styles.panel}>
-            <Text
-              style={{
-                fontFamily: 'Lato_700Bold',
-                fontSize: 13,
-                letterSpacing: 0.4,
-                textTransform: 'uppercase',
-                color: skin.inkSoft,
-                marginBottom: 10,
-              }}
-            >
-              What kind of thing is it?
-            </Text>
+            <Text style={{ ...styles.caption, marginBottom: 10 }}>What kind of thing is it?</Text>
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
               {KINDS.map((option) => {
@@ -305,17 +612,97 @@ export default function AppFeedbackScreen() {
               style={[styles.field, { minHeight: 150, textAlignVertical: 'top' }]}
             />
 
-            <Text
-              style={{
-                fontFamily: 'Lato_700Bold',
-                fontSize: 13,
-                letterSpacing: 0.4,
-                textTransform: 'uppercase',
-                color: skin.inkSoft,
-                marginTop: 18,
-                marginBottom: 8,
-              }}
-            >
+            {/* The clip and the mic, under the box they belong to. Attach a
+                screenshot, or talk instead of typing — both land in the same
+                report. */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 4 }}>
+              <AttachmentPicker
+                compact
+                selectedImages={selectedImages}
+                onImagesChange={setSelectedImages}
+                selectedFiles={selectedFiles}
+                onFilesChange={setSelectedFiles}
+              />
+              <VoiceMicButton
+                size={20}
+                onTranscript={(text) => {
+                  setMessage((prev) => {
+                    const base = (voiceBaseRef.current ?? prev).trimEnd();
+                    const spoken = text.trim();
+                    return base ? `${base} ${spoken}` : spoken;
+                  });
+                  voiceBaseRef.current = null;
+                }}
+                onInterimTranscript={(text) => {
+                  if (!text) {
+                    voiceBaseRef.current = null;
+                    return;
+                  }
+                  setMessage((prev) => {
+                    if (voiceBaseRef.current === null) voiceBaseRef.current = prev;
+                    const base = voiceBaseRef.current.trimEnd();
+                    const spoken = text.trim();
+                    return base ? `${base} ${spoken}` : spoken;
+                  });
+                }}
+              />
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.inkFaint, marginLeft: 4 }}>
+                Add a screenshot, or talk instead of typing
+              </Text>
+            </View>
+
+            {/* Previews, so nobody sends a picture they cannot see. */}
+            {hasAttachments ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }} contentContainerStyle={{ gap: 8 }}>
+                {selectedImages.map((image, index) => (
+                  <View key={image.uri} style={{ position: 'relative' }}>
+                    <Image
+                      source={{ uri: image.uri }}
+                      style={{ width: 84, height: 84, borderRadius: 10, backgroundColor: skin.field }}
+                      resizeMode="cover"
+                    />
+                    <Pressable
+                      onPress={() => setSelectedImages((prev) => prev.filter((_, i) => i !== index))}
+                      style={{
+                        position: 'absolute',
+                        top: -6,
+                        right: -6,
+                        width: 22,
+                        height: 22,
+                        borderRadius: 11,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: '#313130',
+                      }}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 13, lineHeight: 15 }}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+                {selectedFiles.map((file, index) => (
+                  <Pressable
+                    key={`${file.uri}-${index}`}
+                    onPress={() => setSelectedFiles((prev) => prev.filter((_, i) => i !== index))}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: skin.border,
+                      backgroundColor: skin.field,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text numberOfLines={1} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.inkBody, maxWidth: 160 }}>
+                      📎 {file.name}
+                    </Text>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: skin.inkFaint }}>tap to remove</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+
+            <Text style={{ ...styles.caption, marginTop: 18, marginBottom: 8 }}>
               Where in the app? <Text style={{ textTransform: 'none', letterSpacing: 0 }}>(optional)</Text>
             </Text>
             <TextInput
@@ -371,73 +758,24 @@ export default function AppFeedbackScreen() {
               </Text>
             ) : null}
           </View>
-        ) : (
+        ) : tab === 'sent' ? (
           <View style={styles.panel}>
             {sent === null ? (
               <ActivityIndicator color={skin.gold} />
             ) : sent.length === 0 ? (
-              <Text
-                style={{
-                  fontFamily: 'Lato_400Regular',
-                  fontSize: 15,
-                  lineHeight: 22,
-                  color: skin.inkSoft,
-                  textAlign: 'center',
-                  paddingVertical: 22,
-                }}
-              >
-                Nothing yet. Anything you send will be listed here so you can see it was kept.
-              </Text>
+              emptyLine('Nothing yet. Anything you send will be listed here, along with what we said back.')
             ) : (
-              sent.map((item, index) => (
-                <View
-                  key={item.id}
-                  style={{
-                    paddingVertical: 14,
-                    borderTopWidth: index === 0 ? 0 : 1,
-                    borderTopColor: skin.border,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <Text style={{ fontSize: 15 }}>{KIND_BY_KEY[item.kind]?.emoji ?? '💬'}</Text>
-                    <Text
-                      style={{
-                        fontFamily: 'Lato_700Bold',
-                        fontSize: 13,
-                        color: skin.ink,
-                      }}
-                    >
-                      {KIND_BY_KEY[item.kind]?.label ?? 'Feedback'}
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: skin.inkSoft }}>
-                      · {timeAgo(item.created_at)}
-                    </Text>
-                    {item.status !== 'new' ? (
-                      <Text
-                        style={{
-                          fontFamily: 'Lato_700Bold',
-                          fontSize: 11,
-                          letterSpacing: 0.6,
-                          textTransform: 'uppercase',
-                          color: skin.gold,
-                        }}
-                      >
-                        {item.status === 'done' ? 'Done' : 'Read'}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Text
-                    style={{
-                      fontFamily: 'Lato_400Regular',
-                      fontSize: 15,
-                      lineHeight: 22,
-                      color: skin.inkBody,
-                    }}
-                  >
-                    {item.message}
-                  </Text>
-                </View>
-              ))
+              sent.map((item, index) => renderItem(item, index, true))
+            )}
+          </View>
+        ) : (
+          <View style={styles.panel}>
+            {all === null ? (
+              <ActivityIndicator color={skin.gold} />
+            ) : all.length === 0 ? (
+              emptyLine('Nobody has said anything yet.')
+            ) : (
+              all.map((item, index) => renderItem(item, index, false))
             )}
           </View>
         )}
