@@ -22,6 +22,7 @@ import { HIVE_WIDE_ROUTE } from '../lib/navigation';
 import { resetHomeNavigationState } from '../lib/homeNavigation';
 import type { Profile, Community, UserRole } from '../types';
 import { MaintenanceScreen } from '../components/ui/MaintenanceScreen';
+import { routeAfterHiveSwitch } from '../lib/hiveSwitchRoute';
 import { HIVE_CLOSED, isHiveKeeper, hasBypassTicket } from '../lib/maintenance';
 
 // ---------------------------------------------------------------------------
@@ -110,6 +111,13 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in
 
 export default function RootLayout() {
   const pathname = usePathname();
+  // switchCommunity and enterWholeHive are memoised without `pathname` in their
+  // deps on purpose — rebuilding them on every navigation would churn the whole
+  // auth context. A ref gives them today's path without that cost.
+  const pathnameRef = useRef(pathname);
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [community, setCommunity] = useState<Community | null>(null);
@@ -368,7 +376,11 @@ export default function RootLayout() {
     markHiveConfirmed();
     setHivePickerOpen(false);
     setWholeHive(true);
-    router.replace(HIVE_WIDE_ROUTE as never);
+    // Stay on the page you're reading if it has an all-HIVEs version; only go
+    // to the HIVE-Wide landing when it doesn't (Nat 2026-08-03). See
+    // lib/hiveSwitchRoute.ts for why that is the rule.
+    const next = routeAfterHiveSwitch(pathnameRef.current, 'wide');
+    if (next) router.replace(next as never);
   }, []);
 
   // Move into another hive. Everything the app reads is keyed by community id,
@@ -405,7 +417,11 @@ export default function RootLayout() {
       }
     }
 
-    router.replace('/hive');
+    // Changing HIVEs is not navigation — it is changing which HIVE the page you
+    // already have open is ABOUT. So stay put wherever the page means something
+    // here, and only fall back to home when it doesn't.
+    const next = routeAfterHiveSwitch(pathnameRef.current, 'hive');
+    if (next) router.replace(next as never);
   }, [memberships, communityId, profile?.id]);
 
   const authContextValue = useMemo(() => ({

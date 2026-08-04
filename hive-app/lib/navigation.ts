@@ -83,7 +83,15 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   // him that speaks for all three at once, so he steps out at Whole HIVE.
   { key: 'clive', label: 'Clive', emoji: '✨', route: '/', gate: 'everyone', atWholeHive: 'hidden' },
   { key: 'members', label: 'Members', emoji: '👥', route: '/members', gate: 'everyone', atWholeHive: 'wide' },
-  { key: 'boards', label: 'Boards', emoji: '📋', route: '/board', gate: 'everyone', atWholeHive: 'wide', wideRoute: '/hive-wide-boards' },
+  // Out of HIVE-Wide (Nat 2026-08-03). Shared boards answered a real problem
+  // yesterday — Announcements, HIVE Approved and the helper log existed three
+  // times over and only OG's copies had content — but "a board every HIVE sees"
+  // immediately raises "can I share ONE board with ONE other HIVE?", which is a
+  // permissions model rather than an afternoon. Every board is back in OG
+  // (migration 142), so there is nothing up here to point at. `wideRoute` stays
+  // written down: the screen still exists and works, and this is the boards
+  // changing their minds rather than the idea leaving the app.
+  { key: 'boards', label: 'Boards', emoji: '📋', route: '/board', gate: 'everyone', atWholeHive: 'hidden', wideRoute: '/hive-wide-boards' },
   // Out of HIVE-Wide for now, at Nat's call (2026-08-03): "if you want to
   // message HIVE-Wide, you can just do so from your regular message spot for
   // now." Standing above the HIVEs, the list could only ever hold one entry —
