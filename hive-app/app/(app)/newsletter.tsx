@@ -34,6 +34,73 @@ const hiveBee = require('../../assets/BEE ONLY IN GOLD BG.png');
  * keep rather than remembering what happened. Hence Copy: the draft is raw
  * material, not a publication.
  */
+/**
+ * The letter, with its headings looking like headings.
+ *
+ * Nat, 2026-08-04: "these headers like 'HIVE Help' and 'Around the HIVE' need
+ * more distinguishable headers." They were rendered as one `<Text>` holding the
+ * whole draft, so a section title was the same 15px Lato as the paragraph under
+ * it and the letter read as an unbroken wall.
+ *
+ * A heading is detected rather than marked up, because the draft is PROSE — it
+ * goes into the clipboard and out to Wix as plain text, so it cannot carry
+ * markdown without that markdown landing in the email. The test is the one a
+ * reader uses: a short line, on its own, with no sentence punctuation at the
+ * end. That catches "HIVE Help" and "Around the HIVE" and leaves real sentences
+ * alone.
+ *
+ * Copying is untouched — `asPlainText()` still hands over the original string,
+ * so what she pastes is exactly what the model wrote.
+ */
+function LetterProse({ text }: { text: string }) {
+  const blocks = text.split(/\n/);
+  return (
+    <View>
+      {blocks.map((line, i) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <View key={i} style={{ height: 10 }} />;
+
+        const looksLikeHeading =
+          trimmed.length <= 42 &&
+          !/[.!?,:;]$/.test(trimmed) &&
+          // A heading has a blank line under it; a one-line paragraph does not.
+          (blocks[i + 1] ?? '').trim() === '' &&
+          // ...and something above it, so the greeting stays a greeting.
+          i > 0;
+
+        if (looksLikeHeading) {
+          return (
+            <Text
+              key={i}
+              selectable
+              style={{
+                fontFamily: 'LibreBaskerville_700Bold',
+                fontSize: 19,
+                lineHeight: 27,
+                color: '#8a6b30',
+                marginTop: i === 0 ? 0 : 18,
+                marginBottom: 2,
+              }}
+            >
+              {trimmed}
+            </Text>
+          );
+        }
+
+        return (
+          <Text
+            key={i}
+            selectable
+            style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 24, color: '#3f3a33' }}
+          >
+            {line}
+          </Text>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function NewsletterScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -411,12 +478,7 @@ export default function NewsletterScreen() {
 
             {view === 'letter' && prose ? (
               <View className="mb-4 bg-paper rounded-2xl border border-gold/20 px-5 py-5">
-                <Text
-                  selectable
-                  style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 24, color: '#3f3a33' }}
-                >
-                  {prose}
-                </Text>
+                <LetterProse text={prose} />
               </View>
             ) : (
               // `art` turns on Nat's drawn section headers. The meeting summary

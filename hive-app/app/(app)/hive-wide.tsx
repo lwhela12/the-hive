@@ -16,6 +16,7 @@ import { SpaceGlobe, SPACE_BLACK } from '../../components/ui/SpaceGlobe';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { STANDING_INVITATION } from '../../lib/hiveFocus';
+import { getAppNews } from '../../lib/appNews';
 import { accentOnDark, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
 import { formatMeetingDate, getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
@@ -521,98 +522,55 @@ export default function HiveWideScreen() {
                 )}
               </TopBox>
 
-              {/* Coming soon, and dressed as such. HOUSE RULE: gold serif
-                  italic is ONLY for things that do not exist yet — so it is the
-                  right treatment here and nowhere else on this page. */}
-              <TopBox label="HIVE-Wide Chat" wide={wide}>
-                <Text
-                  style={{
-                    fontFamily: 'LibreBaskerville_400Regular', fontStyle: 'italic',
-                    fontSize: 15, lineHeight: 23, color: '#E0BE76',
-                  }}
-                >
-                  Coming soon
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: 'Lato_400Regular', fontSize: 13.5, lineHeight: 20,
-                    color: INK_SOFT, marginTop: 8,
-                  }}
-                >
-                  One room every HIVE shares. It already exists inside your own Messages —
-                  this is where it will live up here.
-                </Text>
-              </TopBox>
+              {/* HIVE-Wide Chat came out (Nat 2026-08-04): "when we're ready
+                  for the chat, we'll just add that into the vertical nav bar."
+                  Which is right — a room is a destination, and destinations
+                  live in the rail. A box that only says "not yet" is a box
+                  taking up a slot that something real could use. */}
+              {/* What's new in the app.
+                  Nat remembered what this slot was always for (2026-08-04):
+                  "one of them is supposed to be for what's new tech-wise in the
+                  app! So all my little updates go right there!"
 
-              {/* The fourth box. This was a bare list running full-width under
-                  the other three, which is what made the page a different shape
-                  from every HIVE's home. It is a box like its neighbours now.
-
-                  HIVE Approved, Announcements, The Buzz and the Calendar used
-                  to be four combs here. They're destinations, so they live in
-                  the rail under HIVE-Wide — same call as emptying Home's comb
-                  row. */}
-              <TopBox label="What's happening" wide={wide}>
-                {shared.length > 0 ? (
-                  <View style={{ gap: 9 }}>
-                {shared.map((post) => (
-                  <Pressable
-                    key={post.id}
-                    onPress={() => router.push('/board' as never)}
-                    style={{
-                      flexDirection: 'row', alignItems: 'center', gap: 10,
-                      paddingVertical: 11, paddingHorizontal: 13,
-                      borderRadius: 12, borderWidth: 1,
-                      borderColor: CARD_EDGE, backgroundColor: CARD_FILL,
-                    }}
-                  >
-                    <HiveDot colour={accentOnDark(post.community?.accent_color || '#bd9348')} />
-                    <View style={{ flex: 1 }}>
+                  It reads `lib/appNews.ts` — the same list the Home strip and
+                  the newsletter draft already read, so shipping a feature
+                  updates all three at once and there is no fourth place to
+                  remember. This replaced "What's happening", which could never
+                  fill up: the shared boards went home to OG in migration 142,
+                  so nothing was coming. */}
+              <TopBox label="What's New" wide={wide}>
+                <View style={{ gap: 9 }}>
+                  {getAppNews(4).map((entry) => (
+                    <Pressable
+                      key={entry.id}
+                      disabled={!entry.href}
+                      onPress={() => entry.href && router.push(entry.href as never)}
+                      style={{
+                        paddingVertical: 10, paddingHorizontal: 12,
+                        borderRadius: 12, borderWidth: 1,
+                        borderColor: CARD_EDGE, backgroundColor: CARD_FILL,
+                      }}
+                    >
                       <Text
-                        style={{ fontFamily: 'Lato_700Bold', fontSize: 14.5, color: INK, lineHeight: 20 }}
+                        style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: INK, lineHeight: 19 }}
                         numberOfLines={2}
                       >
-                        {post.title}
+                        {entry.title}
                       </Text>
-                      <Text
-                        style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: INK_FAINT, marginTop: 2 }}
-                      >
-                        {/* A post from a HIVE you're not in comes back with no
-                            HIVE attached, and printing that left a stray dot
-                            floating in front of the date (2026-08-03). */}
-                        {post.community?.name
-                          ? `${hiveDisplayName(post.community.name)} · ${formatDateLong(post.created_at)}`
-                          : formatDateLong(post.created_at)}
-                      </Text>
-                    </View>
-                  </Pressable>
-                ))}
-                  </View>
-                ) : (
-                  <>
-                    {/* Genuinely not-yet, so it wears the not-yet treatment.
-                        The shared boards all went home to OG in migration 142,
-                        so nothing can land here until a board is shared across
-                        HIVEs again — and a warm sentence promising content that
-                        cannot arrive is worse than saying so. */}
-                    <Text
-                      style={{
-                        fontFamily: 'LibreBaskerville_400Regular', fontStyle: 'italic',
-                        fontSize: 15, lineHeight: 23, color: '#E0BE76',
-                      }}
-                    >
-                      Coming soon
-                    </Text>
-                    <Text
-                      style={{
-                        fontFamily: 'Lato_400Regular', fontSize: 13.5, lineHeight: 20,
-                        color: INK_SOFT, marginTop: 8,
-                      }}
-                    >
-                      Whatever the HIVEs choose to share with each other will turn up here.
-                    </Text>
-                  </>
-                )}
+                      {entry.detail ? (
+                        <Text
+                          style={{
+                            fontFamily: 'Lato_400Regular', fontSize: 12.5,
+                            color: INK_SOFT, lineHeight: 18, marginTop: 2,
+                          }}
+                          numberOfLines={2}
+                        >
+                          {entry.detail}
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  ))}
+                </View>
               </TopBox>
             </View>
           </>
