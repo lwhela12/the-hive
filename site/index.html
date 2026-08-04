@@ -562,6 +562,74 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     }
   }
 
+  /* ---------- and a few bees, wandering through the pollen ----------
+     Nat asked for these because she loves the flurries, so they live in the
+     same canvas and obey the same reduced-motion switch. Deliberately few and
+     slightly transparent: a bee crossing a sentence should be something you
+     notice a second time, not something you have to read around. */
+  var bees = [];
+
+  function seedBees() {
+    bees = [];
+    var n = W < 700 ? 2 : 4;
+    for (var i = 0; i < n; i++) {
+      bees.push({
+        x: Math.random() * W,
+        y: 60 + Math.random() * Math.max(60, H - 120),
+        sp: 0.20 + Math.random() * 0.26,              /* how fast it means it */
+        dir: Math.random() * Math.PI * 2,
+        turn: (Math.random() - 0.5) * 0.012,
+        wob: Math.random() * Math.PI * 2,             /* the bob of real flight */
+        wobV: 0.020 + Math.random() * 0.022,
+        s: 7.5 + Math.random() * 4.5,
+        wing: Math.random() * Math.PI * 2,
+        a: 0.46 + Math.random() * 0.26
+      });
+    }
+  }
+
+  function drawBee(c, b) {
+    var s = b.s;
+    c.save();
+    c.translate(b.x, b.y);
+    /* Lean into the direction of travel, but only a little — a bee banking at
+       the true angle looks like it is falling. And never fly upside down. */
+    c.rotate(Math.atan2(Math.sin(b.dir) * 0.45, Math.abs(Math.cos(b.dir))));
+    if (Math.cos(b.dir) < 0) c.scale(-1, 1);
+    c.globalAlpha = b.a;
+
+    /* wings first, so the body sits over them */
+    var wf = 0.45 + 0.55 * Math.abs(Math.sin(b.wing));
+    c.fillStyle = 'rgba(255,255,255,0.62)';
+    c.beginPath();
+    c.ellipse(-s * 0.04, -s * 0.40 * wf, s * 0.54, s * 0.27 * wf, -0.34, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.44)';
+    c.beginPath();
+    c.ellipse(-s * 0.32, -s * 0.30 * wf, s * 0.42, s * 0.21 * wf, -0.55, 0, Math.PI * 2);
+    c.fill();
+
+    /* body, then the stripes clipped inside it so they follow the curve */
+    c.beginPath();
+    c.ellipse(0, 0, s * 0.74, s * 0.45, 0, 0, Math.PI * 2);
+    c.fillStyle = '#e0b45a';
+    c.fill();
+    c.save();
+    c.clip();
+    c.fillStyle = 'rgba(52,40,20,0.88)';
+    c.fillRect(-s * 0.52, -s * 0.5, s * 0.20, s);
+    c.fillRect(-s * 0.10, -s * 0.5, s * 0.20, s);
+    c.restore();
+
+    /* head */
+    c.fillStyle = 'rgba(52,40,20,0.92)';
+    c.beginPath();
+    c.arc(s * 0.66, 0, s * 0.27, 0, Math.PI * 2);
+    c.fill();
+
+    c.restore();
+  }
+
   function size() {
     var r = combC.parentNode.getBoundingClientRect();
     W = r.width; H = r.height;
@@ -571,7 +639,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       c.height = Math.max(1, Math.round(H * dpr));
     });
     pol.setTransform(dpr, 0, 0, dpr, 0, 0);
-    paintComb(); seed();
+    paintComb(); seed(); seedBees();
   }
 
   function frame() {
@@ -593,6 +661,29 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       pol.fillStyle = g;
       pol.beginPath(); pol.arc(p.x, p.y, rr * 5, 0, Math.PI * 2); pol.fill();
     }
+
+    /* the bees, over the pollen rather than under it */
+    for (var b = 0; b < bees.length; b++) {
+      var e = bees[b];
+      if (!reduce) {
+        /* A slow random walk on the heading, clamped, so they meander instead
+           of either flying straight or spinning on the spot. */
+        e.turn += (Math.random() - 0.5) * 0.007;
+        if (e.turn > 0.026) e.turn = 0.026;
+        if (e.turn < -0.026) e.turn = -0.026;
+        e.dir += e.turn;
+        e.wob += e.wobV;
+        e.wing += 0.85;
+        e.x += Math.cos(e.dir) * e.sp;
+        e.y += Math.sin(e.dir) * e.sp * 0.55 + Math.sin(e.wob) * 0.28;
+        var m = e.s * 3;
+        if (e.x < -m) e.x = W + m; else if (e.x > W + m) e.x = -m;
+        if (e.y < -m) e.y = H + m; else if (e.y > H + m) e.y = -m;
+      }
+      drawBee(pol, e);
+    }
+    pol.globalAlpha = 1;
+
     requestAnimationFrame(frame);
   }
 
