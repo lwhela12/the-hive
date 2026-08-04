@@ -16,9 +16,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { Attachment } from '../../types';
 import { formatFileSize, isVideoAttachment } from '../../lib/mediaAttachments';
 
+import { SignedImage, openSignedUrl } from './SignedImage';
+import { useSignedUrl } from '../../lib/signedAttachment';
 interface AttachmentGalleryProps {
   attachments: Attachment[];
   maxWidth?: number;
+}
+
+/** expo-av's Video, with the link signed first. */
+function SignedVideo({ url, ...rest }: { url: string } & Record<string, unknown>) {
+  const signed = useSignedUrl(url);
+  if (!signed) return null;
+  return <Video source={{ uri: signed }} {...(rest as any)} />;
 }
 
 export function AttachmentGallery({
@@ -126,8 +135,8 @@ export function AttachmentGallery({
         style={{ width, height }}
         className="overflow-hidden rounded-lg bg-gray-200"
       >
-        <Image
-          source={{ uri: attachment.url }}
+        <SignedImage
+          uri={attachment.url}
           style={{ width, height, borderRadius: 8 }}
           contentFit="cover"
           cachePolicy="memory-disk"
@@ -206,7 +215,7 @@ export function AttachmentGallery({
         {fileAttachments.map((attachment) => (
           <Pressable
             key={attachment.id}
-            onPress={() => Linking.openURL(attachment.url)}
+            onPress={() => void openSignedUrl(attachment.url)}
             className="flex-row items-center bg-cream border border-gold/20 rounded-lg px-3 py-2 active:opacity-70"
           >
             <Ionicons name="document-attach-outline" size={18} color="#bd9348" />
@@ -244,15 +253,15 @@ export function AttachmentGallery({
               className="overflow-hidden rounded-lg bg-black border border-gold/20"
               style={{ width: galleryMaxWidth }}
             >
-              <Video
-                source={{ uri: attachment.url }}
+              <SignedVideo
+                url={attachment.url}
                 style={{ width: galleryMaxWidth, height: videoHeight }}
                 resizeMode={ResizeMode.CONTAIN}
                 useNativeControls
                 shouldPlay={false}
               />
               <Pressable
-                onPress={() => Linking.openURL(attachment.url)}
+                onPress={() => void openSignedUrl(attachment.url)}
                 className="flex-row items-center bg-cream px-3 py-2 active:opacity-70"
               >
                 <Ionicons name="videocam-outline" size={18} color="#bd9348" />
@@ -328,8 +337,8 @@ export function AttachmentGallery({
                     justifyContent: 'center',
                   }}
                 >
-                  <Image
-                    source={{ uri: attachment.url }}
+                  <SignedImage
+                    uri={attachment.url}
                     style={{ width: screenWidth, height: screenHeight * 0.8 }}
                     contentFit="contain"
                     cachePolicy="memory-disk"

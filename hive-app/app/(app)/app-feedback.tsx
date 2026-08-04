@@ -24,6 +24,7 @@ import { uploadMultipleImages, uploadMultipleFiles } from '../../lib/attachmentU
 import type { Attachment } from '../../types';
 
 import { DictationRow } from '../../components/ui/DictationRow';
+import { SignedImage } from '../../components/ui/SignedImage';
 /**
  * App Feedback — its own place, at last.
  *
@@ -407,9 +408,9 @@ export default function AppFeedbackScreen() {
         {images.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }} contentContainerStyle={{ gap: 8 }}>
             {images.map((a) => (
-              <Image
+              <SignedImage
                 key={a.id || a.url}
-                source={{ uri: a.url }}
+                uri={a.url}
                 style={{
                   width: 132,
                   height: 132,

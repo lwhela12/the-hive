@@ -27,6 +27,7 @@ import {
 } from '../../lib/chatRoomDisplay';
 import type { Profile } from '../../types';
 
+import { SignedImage } from '../../components/ui/SignedImage';
 const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 
 /**
@@ -59,7 +60,7 @@ function RoomBubble({
   const hasUnread = (room.unread_count ?? 0) > 0;
 
   const face = customization.imageUrl ? (
-    <Image source={{ uri: customization.imageUrl }} style={{ width: 54, height: 54, borderRadius: 27 }} resizeMode="cover" />
+    <SignedImage uri={customization.imageUrl} style={{ width: 54, height: 54, borderRadius: 27 }} resizeMode="cover" />
   ) : customization.emoji ? (
     <View className="w-[54px] h-[54px] rounded-full bg-[#fffdf5] border border-gold/30 items-center justify-center">
       <Text style={{ fontSize: 26, lineHeight: 32 }}>{customization.emoji}</Text>

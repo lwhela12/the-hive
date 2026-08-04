@@ -10,6 +10,7 @@ import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import type { BoardPost, BoardReaction, Profile } from '../../types';
 
+import { SignedImage } from '../ui/SignedImage';
 interface BoardPostCardProps {
   post: BoardPost & { author?: Profile; reactions?: BoardReaction[] };
   onPress: () => void;
@@ -92,8 +93,8 @@ export function BoardPostCard({
                   </Text>
                 </View>
               ) : (
-                <Image
-                  source={{ uri: firstAttachment.url }}
+                <SignedImage
+                  uri={firstAttachment.url}
                   style={imageStyle}
                   contentFit="cover"
                   cachePolicy="memory-disk"

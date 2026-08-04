@@ -14,6 +14,7 @@ import { getMessagesRoomLabel } from './hiveWideRoom';
 const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 import type { ChatRoom, Profile, RoomMessage } from '../../types';
 
+import { SignedImage } from '../ui/SignedImage';
 interface ChatRoomItemProps {
   room: ChatRoom & {
     members?: Array<{ user?: Profile }>;
@@ -71,7 +72,7 @@ export const ChatRoomItem = memo(function ChatRoomItem({
           className="w-12 h-12 rounded-full mr-3 overflow-hidden"
           style={{ backgroundColor: theme.surface }}
         >
-          <Image source={{ uri: customization.imageUrl }} style={{ width: 48, height: 48 }} resizeMode="cover" />
+          <SignedImage uri={customization.imageUrl} style={{ width: 48, height: 48 }} resizeMode="cover" />
         </View>
       );
     }

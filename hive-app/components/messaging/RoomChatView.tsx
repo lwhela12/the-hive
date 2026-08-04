@@ -53,6 +53,7 @@ import {
 import type { ChatRoom, ChatRoomMember, Profile, TypingIndicator, Attachment } from '../../types';
 
 import { confirmAction, showAlert } from '../../lib/showAlert';
+import { SignedImage } from '../ui/SignedImage';
 interface RoomChatViewProps {
   room: ChatRoom & { members?: Array<ChatRoomMember & { user?: Profile }> };
   onBack: () => void;
@@ -311,8 +312,8 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
   const renderRoomIcon = (size = 40) => {
     if (currentCustomImageUrl) {
       return (
-        <Image
-          source={{ uri: currentCustomImageUrl }}
+        <SignedImage
+          uri={currentCustomImageUrl}
           style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: roomTheme.surface }}
           resizeMode="cover"
         />
@@ -879,7 +880,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                   style={{ backgroundColor: draftTheme.surface, borderWidth: 1, borderColor: draftTheme.border }}
                 >
                   {draftImageUrl ? (
-                    <Image source={{ uri: draftImageUrl }} style={{ width: 56, height: 56 }} resizeMode="cover" />
+                    <SignedImage uri={draftImageUrl} style={{ width: 56, height: 56 }} resizeMode="cover" />
                   ) : (
                     <Text style={{ fontSize: 28, lineHeight: 34 }}>{draftEmoji || '💬'}</Text>
                   )}
@@ -1098,8 +1099,8 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
         {/* Messages */}
         <View className="flex-1" style={{ backgroundColor: roomTheme.messageBackground }}>
           {currentBackgroundImageUrl ? (
-            <Image
-              source={{ uri: currentBackgroundImageUrl }}
+            <SignedImage
+              uri={currentBackgroundImageUrl}
               style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: 0.14 }}
               resizeMode="cover"
             />
