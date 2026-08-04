@@ -129,6 +129,12 @@ export const SideRail = memo(function SideRail({
       style={{
         flexDirection: 'row',
         alignItems: 'center',
+        // An indented row's highlight hugs its own name instead of running the
+        // full width of the rail (Nat 2026-08-03: "let's make the HIVE-Wide bar
+        // very short"). A child sitting under My HIVEs is a smaller thing than
+        // a page, and a full-width bar behind it claimed otherwise.
+        alignSelf: expanded && indented ? 'flex-start' : 'auto',
+        paddingRight: expanded && indented ? 16 : undefined,
         gap: 11,
         marginHorizontal: expanded ? 8 : 6,
         marginLeft: expanded && indented ? 20 : undefined,
@@ -208,13 +214,33 @@ export const SideRail = memo(function SideRail({
           // Just the bee (Nat 2026-08-03). The wordmark and the line about being
           // a bee were saying the name and the motto to somebody already inside
           // the app, on every screen, forever. The mark alone says it once.
+          //
+          // Two false starts worth recording. The first used bee_favicon.png,
+          // which is the SEAL — a gold sunburst ring with the bee inside it —
+          // and at this size the whole thing collapsed into a dark smudge
+          // ("hahaha what happened here"). The second would have been the plain
+          // bee on its own, which Nat asked for and then talked herself out of
+          // in the same breath: it is black, and so is this rail.
+          //
+          // So it sits on a cream coin. The bee is the brand's black and gold,
+          // the coin is the brand's cream, and a light disc on a dark rail is
+          // legible at any size — which the bee alone would not have been.
           <View style={{ flex: 1, paddingRight: 8, justifyContent: 'center' }}>
-            <Image
-              source={require('../../assets/bee_favicon.png')}
-              style={{ width: 34, height: 34 }}
-              contentFit="contain"
-              accessibilityLabel="HIVE"
-            />
+            <View
+              style={{
+                width: 34, height: 34, borderRadius: 17,
+                backgroundColor: '#FFF8E9',
+                alignItems: 'center', justifyContent: 'center',
+                overflow: 'hidden',
+              }}
+            >
+              <Image
+                source={require('../../assets/BEE ONLY IN GOLD BG.png')}
+                style={{ width: 30, height: 30 }}
+                contentFit="contain"
+                accessibilityLabel="HIVE"
+              />
+            </View>
           </View>
         ) : null}
         <Pressable

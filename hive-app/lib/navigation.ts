@@ -102,7 +102,11 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   // the sliders only because Admin had the cog first, which is backwards — the
   // page everybody uses should get the obvious icon, and the one two people
   // use can be the one you have to learn. Admin took the keys instead.
-  { key: 'settings', label: 'Settings', emoji: '⚙️', route: '/settings', gate: 'everyone', atWholeHive: 'same' },
+  // Settings steps out at HIVE-Wide (Nat 2026-08-03): "you have to be inside of
+  // your smaller HIVE to change that." Which is true of most of what is in
+  // there — notifications, your name in a HIVE, leaving one — so offering it
+  // from above them all was offering to change something without saying what.
+  { key: 'settings', label: 'Settings', emoji: '⚙️', route: '/settings', gate: 'everyone', atWholeHive: 'hidden' },
   // Feedback on the app is feedback on all of it, wherever you happen to be.
   { key: 'feedback', label: 'App Feedback', emoji: '💬', route: '/hive?feedback=1', gate: 'everyone', atWholeHive: 'same' },
 ];
