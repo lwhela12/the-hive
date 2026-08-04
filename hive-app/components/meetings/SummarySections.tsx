@@ -1,4 +1,5 @@
-import { View, Text } from 'react-native';
+import { Image, View, Text, useWindowDimensions } from 'react-native';
+import { headerForSection } from '../../lib/newsletterHeaders';
 
 export interface SummarySection {
   title: string;
@@ -16,29 +17,75 @@ export interface SummarySection {
  * A line indented with four spaces hangs under the line above it — that's how
  * POP labels and hang dates stay attached to the person or heading they belong
  * to without needing a nested data shape.
+ *
+ * `art` turns on Nat's hand-made section headers (lib/newsletterHeaders.ts).
+ * It is off by default because this component also draws the meeting summary,
+ * which is a working document — "Community Wins" in gold over a set of action
+ * items would be dressing up a to-do list. The newsletter passes it.
  */
-export function SummarySections({ sections }: { sections: SummarySection[] }) {
+export function SummarySections({
+  sections,
+  art = false,
+}: {
+  sections: SummarySection[];
+  /** Use the drawn headers. Newsletter yes, meeting summary no. */
+  art?: boolean;
+}) {
+  const { width } = useWindowDimensions();
   if (!sections || sections.length === 0) return null;
+
+  // The art is a wide band; it has to know how much room it actually has or it
+  // either overflows the card or floats in a box three times its height.
+  const artWidth = Math.min(width - 72, 560);
 
   return (
     <View>
-      {sections.map((section) => (
+      {sections.map((section) => {
+        const header = art ? headerForSection(section.title) : null;
+        return (
         <View
           key={section.title}
           className="mb-4 bg-paper rounded-2xl border border-gold/20 px-5 pt-4 pb-3"
         >
-          <Text
+          {header ? (
+            <View style={{ alignItems: 'center', marginTop: 2, marginBottom: 10 }}>
+              <Image
+                source={header.source}
+                accessibilityLabel={header.alt}
+                style={{ width: artWidth, height: artWidth / header.ratio }}
+                resizeMode="contain"
+              />
+            </View>
+          ) : (
+            <>
+              {/* No art for this one — draw a heading out of the same parts the
+                  art is made of (gold serif, a sparkle, a hairline) so a new
+                  section reads as part of the same publication rather than as
+                  the one that didn't get a picture. */}
+              <View style={{ alignItems: 'center', marginTop: 4 }}>
+                <Text style={{ fontSize: 13, color: '#dcbf7e', marginBottom: 2 }}>✦</Text>
+                <Text
+                  style={{
+                    fontFamily: 'LibreBaskerville_400Regular',
+                    fontSize: 17,
+                    lineHeight: 25,
+                    color: '#c2952f',
+                    textAlign: 'center',
+                  }}
+                >
+                  {section.title}
+                </Text>
+              </View>
+            </>
+          )}
+          <View
             style={{
-              fontFamily: 'LibreBaskerville_400Regular',
-              fontSize: 12,
-              letterSpacing: 1.4,
-              color: '#9a7c42',
-              textTransform: 'uppercase',
+              height: 1,
+              backgroundColor: '#bd934826',
+              marginTop: header ? 0 : 8,
+              marginBottom: 12,
             }}
-          >
-            {section.title}
-          </Text>
-          <View style={{ height: 1, backgroundColor: '#bd934826', marginTop: 8, marginBottom: 12 }} />
+          />
           {section.lines.map((line, index) => {
             const indented = line.startsWith('    ');
             const text = line.trim();
@@ -83,7 +130,8 @@ export function SummarySections({ sections }: { sections: SummarySection[] }) {
             );
           })}
         </View>
-      ))}
+        );
+      })}
     </View>
   );
 }

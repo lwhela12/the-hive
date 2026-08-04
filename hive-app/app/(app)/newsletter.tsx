@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { APP_NEWS } from '../../lib/appNews';
 import { PARDON_OUR_DUST } from '../../lib/hiveWide';
 import { SummarySections, type SummarySection } from '../../components/meetings/SummarySections';
+import { NEWSLETTER_MASTHEAD } from '../../lib/newsletterHeaders';
 
 /** The month a recap covers: the one before the month it goes out in. */
 function lastMonth(): string {
@@ -34,6 +35,7 @@ const hiveBee = require('../../assets/BEE ONLY IN GOLD BG.png');
  */
 export default function NewsletterScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const { from } = useLocalSearchParams<{ from?: string }>();
   const { communityId, profile } = useAuth();
 
@@ -389,6 +391,23 @@ export default function NewsletterScreen() {
               </View>
             ) : null}
 
+            {/* The cover. Nat's own masthead, so the draft opens looking like the
+                newsletter people used to get rather than like a preview pane. */}
+            <View
+              className="mb-4 bg-paper rounded-2xl border border-gold/20"
+              style={{ alignItems: 'center', overflow: 'hidden', paddingVertical: 10 }}
+            >
+              <Image
+                source={NEWSLETTER_MASTHEAD.source}
+                accessibilityLabel={NEWSLETTER_MASTHEAD.alt}
+                style={{
+                  width: Math.min(width - 88, 420),
+                  height: Math.min(width - 88, 420) / NEWSLETTER_MASTHEAD.ratio,
+                }}
+                resizeMode="contain"
+              />
+            </View>
+
             {view === 'letter' && prose ? (
               <View className="mb-4 bg-paper rounded-2xl border border-gold/20 px-5 py-5">
                 <Text
@@ -399,7 +418,9 @@ export default function NewsletterScreen() {
                 </Text>
               </View>
             ) : (
-              <SummarySections sections={sections} />
+              // `art` turns on Nat's drawn section headers. The meeting summary
+              // renders the same component without it — see SummarySections.
+              <SummarySections sections={sections} art />
             )}
             <Pressable
               onPress={() => void postToBoard()}
