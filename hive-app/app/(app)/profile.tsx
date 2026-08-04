@@ -30,6 +30,7 @@ import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { EditButton } from '../../components/ui/EditButton';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { showAlert } from '../../lib/showAlert';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
 import { PREDEFINED_SKILLS } from '../../components/skills/constants';
@@ -118,6 +119,31 @@ export default function ProfileScreen() {
   const [selectedWish, setSelectedWish] = useState<(Wish & { user: Profile }) | null>(null);
   const [wishToGrant, setWishToGrant] = useState<(Wish & { user: Profile }) | null>(null);
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const [visibleHiveWide, setVisibleHiveWide] = useState<boolean>(!!(profile as any)?.visible_hive_wide);
+  const [savingHiveWideVisibility, setSavingHiveWideVisibility] = useState(false);
+
+  useEffect(() => {
+    setVisibleHiveWide(!!(profile as any)?.visible_hive_wide);
+  }, [profile]);
+
+  // Same column, same shape as the copy on Settings — they read and write
+  // `profiles.visible_hive_wide`, so whichever one you touch, both are right.
+  const toggleHiveWideVisibility = useCallback(async () => {
+    if (!profile?.id || savingHiveWideVisibility) return;
+    const next = !visibleHiveWide;
+    setSavingHiveWideVisibility(true);
+    setVisibleHiveWide(next);            // answer the tap straight away
+    const { error } = await (supabase.from('profiles') as any)
+      .update({ visible_hive_wide: next })
+      .eq('id', profile.id);
+    if (error) {
+      setVisibleHiveWide(!next);         // put it back; nothing was saved
+      showAlert('Could not save that', error.message);
+    } else {
+      await refreshProfile();
+    }
+    setSavingHiveWideVisibility(false);
+  }, [profile?.id, savingHiveWideVisibility, visibleHiveWide, refreshProfile]);
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
   const [replantingGarden, setReplantingGarden] = useState(false);
   const [replantNotice, setReplantNotice] = useState<string | null>(null);
@@ -1739,6 +1765,48 @@ export default function ProfileScreen() {
             </View>
           );
         })()}
+        </FadeIn>
+
+        {/* Whether the rest of the HIVEs can see you.
+            Nat, 2026-08-04: "I want to make my profile visible HIVE-Wide, but i
+            dont see that option anywhere in here."
+
+            It existed — on the Settings page. Which is a defensible place for
+            it and the wrong one, because it is a fact about THIS page: it
+            decides whether this profile shows up when somebody stands at
+            HIVE-Wide and looks at who is around. So it lives here, where you
+            are when you think of it. Settings keeps its copy; they read the
+            same column, so they can't disagree. */}
+        <FadeIn delay={90}>
+        <Pressable
+          onPress={() => void toggleHiveWideVisibility()}
+          disabled={savingHiveWideVisibility}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: visibleHiveWide }}
+          className="flex-row items-center bg-white rounded-xl px-4 py-3 mb-6 active:opacity-80"
+          style={{ width: '100%', maxWidth: 1240, alignSelf: 'center', opacity: savingHiveWideVisibility ? 0.6 : 1 }}
+        >
+          <Text style={{ fontSize: 18 }}>{visibleHiveWide ? '🌍' : '🔒'}</Text>
+          <View className="flex-1 ml-3">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
+              {visibleHiveWide ? 'Visible HIVE-Wide' : 'Only your own HIVEs see you'}
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
+              {visibleHiveWide
+                ? 'Members of every HIVE can find you in the HIVE-Wide member list.'
+                : 'Turn this on to appear in the HIVE-Wide member list.'}
+            </Text>
+          </View>
+          <View
+            style={{
+              width: 46, height: 27, borderRadius: 14, padding: 3,
+              backgroundColor: visibleHiveWide ? '#bd9348' : '#ded6c6',
+              alignItems: visibleHiveWide ? 'flex-end' : 'flex-start',
+            }}
+          >
+            <View style={{ width: 21, height: 21, borderRadius: 11, backgroundColor: '#fff' }} />
+          </View>
+        </Pressable>
         </FadeIn>
 
         {/* Profile Information */}

@@ -283,11 +283,28 @@ export default function MessagesScreen() {
 
     if (loading && rooms.length === 0) return [];
 
-    const entries: MessagesListEntry[] = rooms.map((room) => ({ kind: 'room', room }));
-    const ownHiveRoomIndex = rooms.findIndex((room) => room.room_type === 'community');
+    // The shared room is dropped from the plain list, because it already has
+    // its own entry directly below your HIVE's room.
+    //
+    // Nat, 2026-08-04: "we already have an OG HIVE chat with history, so keep
+    // that one and delete the other one." There was nothing to delete — the
+    // database has exactly one OG room, with all 24 of its messages. It was
+    // being drawn TWICE, and the second copy was wearing OG's name.
+    //
+    // Why: `get_chat_rooms_with_data` does not return the `reach` column. The
+    // label rule checks `reach === 'all_hives'` FIRST precisely so the shared
+    // room never wears a HIVE's name — but with `reach` undefined that test
+    // silently failed, the room fell through to the community-room rule, and
+    // came back as "OG HIVE" with no messages in it. Filtering by id needs no
+    // migration and cannot go wrong the way a missing column did.
+    const sharedRoomId = hiveWideRoom?.id;
+    const listedRooms = sharedRoomId ? rooms.filter((room) => room.id !== sharedRoomId) : rooms;
+
+    const entries: MessagesListEntry[] = listedRooms.map((room) => ({ kind: 'room', room }));
+    const ownHiveRoomIndex = listedRooms.findIndex((room) => room.room_type === 'community');
     entries.splice(ownHiveRoomIndex + 1, 0, { kind: 'hive-wide' });
     return entries;
-  }, [loading, rooms, wholeHive]);
+  }, [loading, rooms, wholeHive, hiveWideRoom?.id]);
 
   // Everyone in the HIVE except you — the rail's cast.
   useEffect(() => {

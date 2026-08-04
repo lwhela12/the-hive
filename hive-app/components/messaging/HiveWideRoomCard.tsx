@@ -9,6 +9,7 @@ import {
 } from './hiveWideRoom';
 import { usePageSkin } from '../../lib/pageSkin';
 
+import { WorldMark } from '../ui/WorldMark';
 /**
  * HIVE-Wide in the message list, and again in the desktop rail.
  *
@@ -65,7 +66,7 @@ export function HiveWideRoomCard({
           borderColor: skin.dark ? skin.border : HIVE_WIDE_EDGE,
         }}
       >
-        <Ionicons name="globe-outline" size={26} color={mark} />
+        <WorldMark size={44} />
       </View>
 
       <View className="flex-1">
@@ -125,7 +126,7 @@ export function HiveWideBubble({
             justifyContent: 'center',
           }}
         >
-          <Ionicons name="globe-outline" size={28} color={mark} />
+          <WorldMark size={48} />
         </View>
       </View>
       <Text

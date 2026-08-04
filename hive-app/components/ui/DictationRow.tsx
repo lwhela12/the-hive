@@ -29,13 +29,25 @@ import { useDictation } from '../../lib/hooks/useDictation';
  */
 export function DictationRow({
   setValue,
-  label = 'Talk instead of typing',
+  label = null,
   size = 20,
-  align = 'left',
+  align = 'right',
   style,
 }: {
   setValue: (updater: (prev: string) => string) => void;
-  /** Pass null to show the mic with no words beside it. */
+  /**
+   * Off by default. Nat, 2026-08-04: "we need a continuity pass, so that
+   * attachments, microphone & send are always in the same spot, no matter which
+   * screen — see how it is in Clive, that should be the gold standard."
+   *
+   * In Clive and in Messages the bar reads clip · text · send · MIC, with the
+   * mic hard against the right edge and no words on it. A form box had the mic
+   * on the LEFT with "Talk instead of typing" beside it, so the one control the
+   * app has for talking sat in two different places depending which screen you
+   * were on. Right, and wordless, is the one that already exists in the two
+   * places people use most. Pass a label only where a box genuinely needs the
+   * hint.
+   */
   label?: string | null;
   size?: number;
   align?: 'left' | 'right';

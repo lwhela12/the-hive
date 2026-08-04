@@ -92,7 +92,7 @@ export function getMessagesRoomSubtitle(
  */
 export function getHiveWideEmptyCopy(hiveName: string) {
   return {
-    heading: 'The room every HIVE shares',
+    heading: 'The HIVE-Wide room',
     body:
       'This one belongs to all the HIVEs at once, and it is not answering just '
       + 'now. Nothing has been lost — try again in a moment.',

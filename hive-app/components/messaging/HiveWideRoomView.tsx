@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SpaceGlobe } from '../ui/SpaceGlobe';
 import { SPACE_SKIN } from '../../lib/pageSkin';
+import { WorldMark } from '../ui/WorldMark';
 import {
   HIVE_WIDE_ROOM_NAME,
   HIVE_WIDE_ROOM_SUBTITLE,
@@ -61,7 +62,7 @@ export function HiveWideRoomView({
             borderColor: SPACE_SKIN.border,
           }}
         >
-          <Ionicons name="globe-outline" size={23} color={SPACE_SKIN.gold} />
+          <WorldMark size={39} />
         </View>
         <View className="flex-1">
           <Text

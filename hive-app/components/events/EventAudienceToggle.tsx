@@ -11,7 +11,7 @@ export type EventAudience = 'members' | 'all_hives' | 'public';
 // what makes it obvious which things reach the website and the newsletter.
 const OPTIONS: { key: EventAudience; label: string; hint: string }[] = [
   { key: 'members', label: 'This HIVE only', hint: 'Just us.' },
-  { key: 'all_hives', label: 'All HIVEs', hint: 'Anyone from any HIVE is welcome.' },
+  { key: 'all_hives', label: 'HIVE-Wide', hint: 'Anyone from any HIVE is welcome.' },
   { key: 'public', label: 'Public', hint: 'Bring whoever you like. Shows on the website and can go in the newsletter.' },
 ];
 

@@ -94,6 +94,11 @@ export function AddWishModal({
     if (visible && existingWish) {
       setWishTitle(existingWish.title ?? '');
       setWishText(existingWish.description);
+      // ...and load the scope it actually has. Without this the picker opened
+      // on "This HIVE only" every time regardless of the truth, so even after
+      // the save above is fixed, re-editing a HIVE-Wide wish would quietly
+      // demote it back.
+      setWishScope(((existingWish as { share_scope?: string }).share_scope as WishScope) ?? 'hive');
       setError('');
     } else if (visible && !existingWish) {
       // Restore new-wish draft
@@ -127,10 +132,16 @@ export function AddWishModal({
     try {
       let savedWishId = existingWish?.id;
       if (existingWish) {
+        // share_scope was missing here, and only here. It was set on INSERT and
+        // silently dropped on every UPDATE — so a new wish remembered how far it
+        // travelled and an edited one never did. Nat, 2026-08-04: "i've marked
+        // this wish HIVE-wide a bunch of times & it never saves." The picker was
+        // working perfectly and writing to nowhere.
         const updatePayload = {
           title: wishTitle.trim() || null,
           description: wishText.trim(),
           raw_input: wishText.trim(),
+          share_scope: wishScope,
         };
         let { error: updateError } = await supabase
           .from('wishes')

@@ -487,7 +487,7 @@ export default function SettingsScreen() {
                 { key: 'hive', label: 'This HIVE only', hint: 'New wishes and threads start here.' },
                 {
                   key: 'all_hives',
-                  label: 'All HIVEs',
+                  label: 'HIVE-Wide',
                   hint: 'More eyes on it — anyone in any HIVE.',
                 },
               ]}

@@ -8,7 +8,7 @@ export type WishScope = 'hive' | 'all_hives' | 'public';
 // the kind of ask that travels further than one HIVE (Nat 2026-08-02).
 const OPTIONS: { key: WishScope; label: string; hint: string }[] = [
   { key: 'hive', label: 'This HIVE only', hint: 'Just the people here.' },
-  { key: 'all_hives', label: 'All HIVEs', hint: 'More eyes on it — anyone in any HIVE.' },
+  { key: 'all_hives', label: 'HIVE-Wide', hint: 'More eyes on it — anyone in any HIVE.' },
   { key: 'public', label: 'Public', hint: 'Can be shared beyond the HIVEs.' },
 ];
 

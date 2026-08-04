@@ -39,7 +39,7 @@ export const SCOPE_LADDER: ScopeRung[] = [
   },
   {
     key: 'all_hives',
-    label: 'All HIVEs',
+    label: 'HIVE-Wide',
     meaning: 'Everyone in every HIVE, wherever they are.',
     treatment: 'green-outline',
   },

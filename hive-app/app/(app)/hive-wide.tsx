@@ -378,7 +378,12 @@ export default function HiveWideScreen() {
           padding: 16,
           gap: 18,
           paddingBottom: 44,
-          paddingTop: 30,
+          // More air under the title (Nat 2026-08-04: "these boxes can shift
+          // down a little, so they aren't so close to the header"). The page
+          // has no header bar — the title floats in the sky — so the only thing
+          // separating a 46pt serif headline from the first card is this
+          // number, and 30 was reading as a collision rather than a gap.
+          paddingTop: 64,
           width: '100%',
           maxWidth: 1240,
           alignSelf: 'center',

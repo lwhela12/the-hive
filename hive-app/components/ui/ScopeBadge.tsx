@@ -22,7 +22,7 @@ const LOOKS: Record<'hive' | 'all_hives' | 'public', {
     bg: '#f5f1e8', border: 'rgba(189,147,72,0.22)', ink: '#9a8060',
   },
   all_hives: {
-    emoji: '🐝', label: 'All HIVEs',
+    emoji: '🐝', label: 'HIVE-Wide',
     bg: '#f7e9cb', border: 'rgba(189,147,72,0.55)', ink: '#8a6b30',
   },
   public: {

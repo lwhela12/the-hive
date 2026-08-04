@@ -291,13 +291,21 @@ export const SideRail = memo(function SideRail({
             gap: 10,
             paddingHorizontal: expanded ? 14 : 0,
             justifyContent: expanded ? 'flex-start' : 'center',
+            // Fixed height, both states. Nat, 2026-08-04: the icons "shift up
+            // and down, and i'd like them to just slide horizontally." Every
+            // row below here was moving because the blocks ABOVE changed height
+            // when the words disappeared — a 30px avatar became 26px, and the
+            // two lines of name went from two lines to nothing. Reserving the
+            // same height in both states is what turns the collapse into a
+            // purely horizontal move.
+            height: 46,
             paddingBottom: 12,
             marginBottom: 4,
             borderBottomWidth: 1,
             borderBottomColor: 'rgba(255,255,255,0.10)',
           }}
         >
-          <Avatar name={profile.name ?? 'You'} url={profile.avatar_url} size={expanded ? 30 : 26} />
+          <Avatar name={profile.name ?? 'You'} url={profile.avatar_url} size={30} />
           {expanded ? (
             <View style={{ flex: 1 }}>
               <Text
@@ -338,6 +346,11 @@ export const SideRail = memo(function SideRail({
             reads as a section title, and nobody presses a section title to go
             home. Home is now the first entry in the page list below, and this
             just says what the indented rows are. */}
+        {/* The heading holds its line when collapsed rather than disappearing,
+            so the HIVEs beneath it stay on the same rows in both states. No
+            emoji: it names the list under it, and a heading with a picture on it
+            reads as another button (Nat 2026-08-04, and there is no beehive in
+            Unicode anyway). */}
         {expanded ? (
           <Text
             style={{
@@ -349,11 +362,14 @@ export const SideRail = memo(function SideRail({
               paddingHorizontal: 14,
               paddingTop: 10,
               paddingBottom: 6,
+              height: 27,
             }}
           >
             My HIVEs
           </Text>
-        ) : null}
+        ) : (
+          <View style={{ height: 27 }} />
+        )}
         {/* HIVE-Wide shows for EVERYONE, not only people in more than one HIVE.
             Nearly every member is in exactly one, and the shared boards — HIVE
             Approved, Announcements, the Favourites — are where their own
