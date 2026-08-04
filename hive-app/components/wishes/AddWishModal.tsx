@@ -328,33 +328,37 @@ export function AddWishModal({
                 >
                   {isLinkedWish ? 'Make this one clear, claimable ask from the linked thread.' : 'Describe what you need help with'}
                 </Text>
-                <TextInput
-                  value={wishText}
-                  onChangeText={wishMentionInput.textInputMentionProps.onChangeText}
-                  onSelectionChange={wishMentionInput.textInputMentionProps.onSelectionChange}
-                  selection={wishMentionInput.textInputMentionProps.selection}
-                  placeholder="I want help learning to cook healthier meals..."
-                  placeholderTextColor="#a09274"
-                  multiline
-                  numberOfLines={6}
-                  maxLength={500}
-                  className="bg-white rounded-xl px-4 py-3 text-charcoal min-h-[150px]"
-                  style={{
-                    fontFamily: 'Lato_400Regular',
-                    textAlignVertical: 'top',
-                  }}
-                />
-                {/* A wish said out loud is usually a better wish than a wish
-                    typed — people hedge less when they talk. */}
-                <View className="flex-row items-center mt-2">
+                {/* The mic sits INSIDE the box, hard right, wordless — Clive's
+                    geometry (Nat 2026-08-04). It was parked underneath on the
+                    left wearing the words "Talk instead of typing", which is a
+                    third position for the one control the app has for talking.
+                    A wish said out loud is usually a better wish than a wish
+                    typed, so this is the box where it most wants finding. */}
+                <View className="flex-row items-end bg-white rounded-2xl px-3 py-2 min-h-[150px]">
+                  <TextInput
+                    value={wishText}
+                    onChangeText={wishMentionInput.textInputMentionProps.onChangeText}
+                    onSelectionChange={wishMentionInput.textInputMentionProps.onSelectionChange}
+                    selection={wishMentionInput.textInputMentionProps.selection}
+                    placeholder="I want help learning to cook healthier meals..."
+                    placeholderTextColor="#a09274"
+                    multiline
+                    numberOfLines={6}
+                    maxLength={500}
+                    className="flex-1 text-base text-charcoal py-1 px-1"
+                    style={{
+                      fontFamily: 'Lato_400Regular',
+                      textAlignVertical: 'top',
+                      outlineStyle: 'none',
+                      caretColor: '#313130',
+                    } as any}
+                  />
                   <VoiceMicButton
                     size={20}
+                    style={{ marginLeft: 6 }}
                     onTranscript={wishDictation.onTranscript}
                     onInterimTranscript={wishDictation.onInterimTranscript}
                   />
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40 text-xs ml-2">
-                    Talk instead of typing
-                  </Text>
                 </View>
                 {/* Who can see this wish. More eyes is sometimes exactly what
                     an ask needs — "anyone know a teacher?" travels further than

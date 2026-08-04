@@ -44,6 +44,24 @@ import { ThinkingBee } from '../../components/ui/ThinkingBee';
  */
 
 type Focus = { title: string; body: string | null; community_id: string | null };
+/**
+ * A wish somebody marked HIVE-Wide.
+ *
+ * Nat's own diagnosis, 2026-08-04: "we haven't figured out the quick action
+ * toggle to make profiles & wishes HIVE-Wide. I just realised that part of the
+ * problem might be that we don't actually have a place for all that in the
+ * HIVE-Wide." Exactly right — marking a wish HIVE-Wide worked and then it went
+ * nowhere visible, so the setting looked broken because its RESULT was missing.
+ * This box is where those wishes now land.
+ */
+type WideWish = {
+  id: string;
+  title: string | null;
+  description: string;
+  user: { name: string | null; avatar_url: string | null } | null;
+  community: { name: string; accent_color: string | null } | null;
+};
+
 type SharedPost = {
   id: string;
   title: string;
@@ -121,6 +139,13 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
         // would fight the scroll view for height.
         flexGrow: wide ? 1 : 0,
         flexBasis: wide ? '48%' : 'auto',
+        // All four the same height (Nat 2026-08-04: "why are these bottom boxes
+        // shorter than the top ones? they should all be equal"). A wrapping row
+        // sizes each ROW to its own tallest child, so a short second row sat
+        // shorter than a full first one. `alignItems: stretch` cannot fix that
+        // across a wrap — it only equalises within a row — so the boxes are
+        // given a floor instead, and the tallest content still grows past it.
+        minHeight: wide ? 270 : undefined,
         borderRadius: 16,
         borderWidth: 1,
         borderColor: CARD_EDGE,
@@ -214,6 +239,7 @@ export default function HiveWideScreen() {
   const [hives, setHives] = useState<Community[]>([]);
   const [upcoming, setUpcoming] = useState<HiveEvent[]>([]);
   const [shared, setShared] = useState<SharedPost[]>([]);
+  const [wideWishes, setWideWishes] = useState<WideWish[]>([]);
   const [counts, setCounts] = useState<{ approved: number; announcements: number }>({
     approved: 0,
     announcements: 0,
@@ -265,6 +291,19 @@ export default function HiveWideScreen() {
         .from('board_categories')
         .select('id, name')
         .eq('reach', 'all_hives');
+
+      // Every wish that was marked to travel. The RLS policy already decides
+      // which of these this person may see, so no community filter here — that
+      // is the whole point of the scope.
+      const { data: wishRows } = await supabase
+        .from('wishes')
+        .select('id, title, description, user:profiles!user_id(name, avatar_url), community:communities(name, accent_color)')
+        .in('share_scope', ['all_hives', 'public'])
+        .eq('status', 'public')
+        .or('is_active.is.true,is_active.is.null')
+        .order('created_at', { ascending: false })
+        .limit(6);
+      setWideWishes((wishRows ?? []) as unknown as WideWish[]);
 
       const boardRows = (boards ?? []) as { id: string; name: string }[];
       if (boardRows.length > 0) {
@@ -384,7 +423,7 @@ export default function HiveWideScreen() {
           // has no header bar — the title floats in the sky — so the only thing
           // separating a 46pt serif headline from the first card is this
           // number, and 30 was reading as a collision rather than a gap.
-          paddingTop: 64,
+          paddingTop: 84,
           width: '100%',
           maxWidth: 1240,
           alignSelf: 'center',
@@ -429,58 +468,45 @@ export default function HiveWideScreen() {
                   </Text>
                 )}
               </TopBox>
-              <TopBox label="HIVE Help" wide={wide}>
-                {/* The standing invitation goes FIRST now. It is the thing that
-                    is always true, and nobody is ever outside it — so it opens
-                    the box rather than sitting underneath a focus that might not
-                    be yours (Nat 2026-08-03). */}
-                <Text
-                  style={{
-                    fontFamily: 'Lato_400Regular', fontSize: 13.5, lineHeight: 20,
-                    color: INK_SOFT, marginBottom: 14,
-                  }}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', color: INK }}>
-                    Always on the table:{' '}
-                  </Text>
-                  {STANDING_INVITATION}
-                </Text>
-
-                {/* Then what each HIVE has picked, wearing its own comb. A HIVE
-                    that hasn't chosen is doing the standing one, which is a real
-                    answer rather than a blank. */}
-                <View style={{ gap: 11, paddingTop: 12, borderTopWidth: 1, borderTopColor: CARD_EDGE }}>
-                  {hives.map((hive) => {
-                    const own = focusByHive.get(hive.id) ?? sharedFocus;
-                    // Lifted for space: Tech's #2f4a63 on this page is about 1.9:1, i.e. a HIVE
-  // name nobody can read. accentOnDark keeps the hue and raises it (2026-08-03).
-  const colour = accentOnDark(hiveAccent(hive));
-                    return (
-                      <View key={hive.id} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-                        <View style={{ paddingTop: 4 }}><HiveDot colour={colour} /></View>
+              {/* The wishes that travel — the home they never had.
+                  Marking a wish HIVE-Wide worked all along and then it went
+                  nowhere visible, so the setting read as broken because its
+                  RESULT was missing. HIVE Help and HIVE Hangs came out to make
+                  room: both were three lines of "tbd" repeated per HIVE, and
+                  neither is a thing you can act on from up here. */}
+              <TopBox label="HIVE-Wide Wishes" wide={wide}>
+                {wideWishes.length > 0 ? (
+                  <View style={{ gap: 9 }}>
+                    {wideWishes.slice(0, 4).map((wish) => (
+                      <Pressable
+                        key={wish.id}
+                        onPress={() => router.push('/members' as never)}
+                        style={{
+                          flexDirection: 'row', alignItems: 'flex-start', gap: 9,
+                          paddingVertical: 10, paddingHorizontal: 12,
+                          borderRadius: 12, borderWidth: 1,
+                          borderColor: CARD_EDGE, backgroundColor: CARD_FILL,
+                        }}
+                      >
+                        <View style={{ paddingTop: 3 }}>
+                          <HiveDot colour={accentOnDark(wish.community?.accent_color || '#bd9348')} />
+                        </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: colour }}>
-                            {hiveDisplayName(hive.name)}
+                          <Text
+                            style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: INK, lineHeight: 19 }}
+                            numberOfLines={2}
+                          >
+                            {wish.title?.trim() || wish.description}
                           </Text>
                           <Text
-                            style={{
-                              fontFamily: 'Lato_400Regular', fontSize: 13.5, lineHeight: 19,
-                              color: INK_SOFT, marginTop: 1,
-                            }}
+                            style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: INK_FAINT, marginTop: 2 }}
                           >
-                            {own ? own.title : 'a small act of kindness'}
+                            {[wish.user?.name?.split(/\s+/)[0], wish.community?.name ? hiveDisplayName(wish.community.name) : null]
+                              .filter(Boolean)
+                              .join(' · ')}
                           </Text>
                         </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </TopBox>
-              <TopBox label="HIVE Hangs" wide={wide}>
-                {hives.length > 0 ? (
-                  <View style={{ gap: 11 }}>
-                    {hives.map((hive) => (
-                      <HiveLine key={hive.id} hive={hive} event={nextHangByHive.get(hive.id) ?? null} />
+                      </Pressable>
                     ))}
                   </View>
                 ) : (
@@ -490,9 +516,32 @@ export default function HiveWideScreen() {
                       lineHeight: 21, color: INK_SOFT,
                     }}
                   >
-                    The HIVEs will show up here with whatever they've got planned.
+                    Mark a wish HIVE-Wide and it turns up here, where every HIVE can see it.
                   </Text>
                 )}
+              </TopBox>
+
+              {/* Coming soon, and dressed as such. HOUSE RULE: gold serif
+                  italic is ONLY for things that do not exist yet — so it is the
+                  right treatment here and nowhere else on this page. */}
+              <TopBox label="HIVE-Wide Chat" wide={wide}>
+                <Text
+                  style={{
+                    fontFamily: 'LibreBaskerville_400Regular', fontStyle: 'italic',
+                    fontSize: 15, lineHeight: 23, color: '#E0BE76',
+                  }}
+                >
+                  Coming soon
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: 'Lato_400Regular', fontSize: 13.5, lineHeight: 20,
+                    color: INK_SOFT, marginTop: 8,
+                  }}
+                >
+                  One room every HIVE shares. It already exists inside your own Messages —
+                  this is where it will live up here.
+                </Text>
               </TopBox>
 
               {/* The fourth box. This was a bare list running full-width under
@@ -540,14 +589,29 @@ export default function HiveWideScreen() {
                 ))}
                   </View>
                 ) : (
-                  <Text
-                    style={{
-                      fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 14,
-                      lineHeight: 21, color: INK_SOFT,
-                    }}
-                  >
-                    Whatever the HIVEs share with each other turns up here.
-                  </Text>
+                  <>
+                    {/* Genuinely not-yet, so it wears the not-yet treatment.
+                        The shared boards all went home to OG in migration 142,
+                        so nothing can land here until a board is shared across
+                        HIVEs again — and a warm sentence promising content that
+                        cannot arrive is worse than saying so. */}
+                    <Text
+                      style={{
+                        fontFamily: 'LibreBaskerville_400Regular', fontStyle: 'italic',
+                        fontSize: 15, lineHeight: 23, color: '#E0BE76',
+                      }}
+                    >
+                      Coming soon
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_400Regular', fontSize: 13.5, lineHeight: 20,
+                        color: INK_SOFT, marginTop: 8,
+                      }}
+                    >
+                      Whatever the HIVEs choose to share with each other will turn up here.
+                    </Text>
+                  </>
                 )}
               </TopBox>
             </View>
