@@ -132,6 +132,25 @@ export interface MonthlyFocus extends Record<string, unknown> {
   updated_at: string;
 }
 
+/**
+ * A note about the app itself — not a wish, and not attached to a HIVE.
+ * Written only by the app-feedback edge function (migration 138).
+ */
+export interface AppFeedback extends Record<string, unknown> {
+  id: string;
+  /** null once somebody deletes their profile; the report outlives them. */
+  author_id: string | null;
+  author_name: string | null;
+  /** Where they were standing. null means HIVE-Wide, which is a real answer. */
+  community_id: string | null;
+  kind: 'bug' | 'idea' | 'confusing' | 'love';
+  message: string;
+  where_in_app: string | null;
+  platform: string | null;
+  status: 'new' | 'read' | 'done';
+  created_at: string;
+}
+
 export interface Profile extends Record<string, unknown> {
   id: string;
   name: string;
@@ -946,6 +965,16 @@ export interface Database {
         Row: MonthlyFocus;
         Insert: Omit<MonthlyFocus, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<MonthlyFocus, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      // Insert is deliberately `never`: the app cannot write here at all. The
+      // table has no insert policy, and rows are made only by the app-feedback
+      // edge function with the service key, so the author's name is always the
+      // name on the JWT (migration 138).
+      app_feedback: {
+        Row: AppFeedback;
+        Insert: never;
+        Update: Partial<Pick<AppFeedback, 'status'>>;
         Relationships: [];
       };
     };

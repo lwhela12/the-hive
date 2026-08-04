@@ -139,3 +139,10 @@ verify_jwt = false
 # Auth (member JWT or service key) is handled in function code.
 [functions.draft-newsletter]
 verify_jwt = false
+
+# App Feedback: files a member's note about the app itself, then emails whoever
+# runs the HIVE. The only writer to public.app_feedback (that table has no
+# insert policy on purpose), so JWT verification in function code is what makes
+# the author's name trustworthy.
+[functions.app-feedback]
+verify_jwt = false

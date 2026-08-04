@@ -108,7 +108,11 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   // from above them all was offering to change something without saying what.
   { key: 'settings', label: 'Settings', emoji: '⚙️', route: '/settings', gate: 'everyone', atWholeHive: 'hidden' },
   // Feedback on the app is feedback on all of it, wherever you happen to be.
-  { key: 'feedback', label: 'App Feedback', emoji: '💬', route: '/hive?feedback=1', gate: 'everyone', atWholeHive: 'same' },
+  // It said 'same' from the day the rail was written, and pointed at /hive —
+  // which is the one route that CANNOT mean the same thing wherever you stand.
+  // Nat found it by clicking App Feedback at HIVE-Wide and landing in Production
+  // HIVE (2026-08-03). Its own screen now, with no community id in the path.
+  { key: 'feedback', label: 'App Feedback', emoji: '💬', route: '/app-feedback', gate: 'everyone', atWholeHive: 'same' },
 ];
 
 /** The two zoom levels, above the line. HIVE-Wide is always first. */

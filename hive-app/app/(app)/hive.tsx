@@ -1536,7 +1536,7 @@ export default function HiveScreen() {
 
   // Deep link: /hive?openWishId=... opens that wish's detail sheet (used by the
   // profile App Feedback shortcut; works for any screen that wants to point at a wish).
-  const { openWishId, catchup, from, feedback } = useLocalSearchParams<{ openWishId?: string; catchup?: string; from?: string; feedback?: string }>();
+  const { openWishId, catchup, from } = useLocalSearchParams<{ openWishId?: string; catchup?: string; from?: string }>();
 
   // Swarm Report theme pills (and anything else) can deep-link straight into
   // the daily-question Catch-up modal. `from` says where to put you back when
@@ -1560,37 +1560,14 @@ export default function HiveScreen() {
     void openWishById(openWishId, { alertOnUnavailable: true });
   }, [openWishId, communityId, openWishById, from]);
 
-  // Same jump Profile's App Feedback makes: open the community's bug-reports
-  // wish. Kept here so the Home shortcut doesn't have to bounce through Profile.
-  const openAppFeedback = useCallback(async () => {
-    if (!communityId) return;
-    try {
-      const { data } = await (supabase as any)
-        .from('wishes')
-        .select('id')
-        .eq('community_id', communityId)
-        .eq('status', 'public')
-        .ilike('title', '%bug report%')
-        .limit(1)
-        .maybeSingle();
-      if (data?.id) {
-        void openWishById(data.id, { alertOnUnavailable: true });
-        return;
-      }
-      Alert.alert('Not set up yet', 'There is no bug reports wish on the boards to post to.');
-    } catch (error) {
-      console.warn('Could not find the bug reports wish', error);
-    }
-  }, [communityId, openWishById]);
-
-  // The rail's App Feedback lands here with ?feedback=1 — the sheet belongs to
-  // Home, so the rail points at Home and asks it to open (Nat 2026-08-03).
-  useEffect(() => {
-    if (feedback === '1') {
-      void openAppFeedback();
-      router.setParams({ feedback: undefined } as never);
-    }
-  }, [feedback]);
+  // App Feedback used to live here: a search through this HIVE's public wishes
+  // for a title containing "bug report", opened as a wish sheet. It is a screen
+  // of its own now (`/app-feedback`, migration 138), because a wish needs a HIVE
+  // and feedback about the app does not — which is exactly how Nat found it,
+  // by pressing App Feedback at HIVE-Wide and arriving in Production HIVE.
+  //
+  // The ?feedback=1 parameter is gone with it. Nothing points here any more:
+  // the rail and the Home honeycomb both go straight to the screen.
 
 
   const openEventFromActivity = useCallback(async (eventId: string) => {
@@ -3325,7 +3302,7 @@ export default function HiveScreen() {
                   meetings: () => router.push('/meetings' as any),
                   profile: () => router.push('/profile' as any),
                   clive: () => router.push('/' as any),
-                  feedback: () => void openAppFeedback(),
+                  feedback: () => router.push('/app-feedback' as any),
                   swap_hives: () => openHivePicker(),
                   admin: () => router.push('/admin' as any),
                 };
