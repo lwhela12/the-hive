@@ -393,7 +393,6 @@ export function NewsletterPanel({
 const HIVE_TOOLS: { route: string; emoji: string; label: string; hint: string }[] = [
   { route: '/meeting-helper', emoji: '🗓️', label: 'Meeting Helper', hint: 'Run the meeting, live' },
   { route: '/monthly-tuneup', emoji: '🔧', label: 'Monthly Tune-up', hint: 'The check-in everyone fills in' },
-  { route: '/meetings', emoji: '📚', label: 'Meetings & summaries', hint: 'Past meetings and what was said' },
 ];
 
 export function HiveMemberPanels({
@@ -404,9 +403,12 @@ export function HiveMemberPanels({
   Panel,
   HeaderAction,
   orderFrom = ADMIN_PANEL_ORDER.hives,
+  onOpenCheckIns,
 }: PanelChrome & {
   HeaderAction: React.ComponentType<{ label: string; onPress: () => void }>;
   orderFrom?: number;
+  /** Opens the check-in editor on the Admin screen, for whichever HIVE is current. */
+  onOpenCheckIns?: () => void;
 }) {
   const { memberships, communityId, switchCommunity } = useAuth();
   const router = useRouter();
@@ -419,6 +421,17 @@ export function HiveMemberPanels({
     if (targetId !== communityId) await switchCommunity(targetId);
     router.push({ pathname: route as any, params: { from: 'admin' } });
   }, [communityId, switchCommunity, router]);
+
+  // Check-in questions live in a modal on this very screen, so there is nowhere
+  // to navigate TO — routing to /admin from /admin is why both of these rows did
+  // nothing at all when Nat pressed them (2026-08-04). The editor also only ever
+  // holds one HIVE's surveys, which is the real reason the old panel told you to
+  // "pick a HIVE in the rail first". So: switch into the HIVE, then hand Admin a
+  // flag it acts on once that HIVE's surveys have loaded.
+  const openCheckInsForHive = useCallback(async (targetId: string) => {
+    if (targetId !== communityId) await switchCommunity(targetId);
+    onOpenCheckIns?.();
+  }, [communityId, switchCommunity, onOpenCheckIns]);
   const [byHive, setByHive] = useState<Record<string, Row[]>>({});
   const [loading, setLoading] = useState(true);
   const [inviteFor, setInviteFor] = useState<string | null>(null);
@@ -521,7 +534,11 @@ export function HiveMemberPanels({
               accent={accent}
               style={panelStyle}
               bodyStyle={bodyStyle}
-              action={tab === 'members' && m.role === 'admin' ? (
+              // On every tab, not just Members (Nat 2026-08-04: "we want to make
+              // sure each one of these has the 'add new member' button"). It is
+              // an action on the HIVE, and hiding it behind a tab made it look
+              // as though only some HIVEs could take new people.
+              action={m.role === 'admin' ? (
                 <HeaderAction
                   label={inviting ? 'Close Invite' : '+ New Member'}
                   onPress={() => {
@@ -567,7 +584,7 @@ export function HiveMemberPanels({
                 ) : tab === 'checkins' ? (
                   <View style={{ paddingVertical: 6 }}>
                     <Pressable
-                      onPress={() => void openToolInHive(m.community_id, '/admin')}
+                      onPress={() => void openCheckInsForHive(m.community_id)}
                       style={({ pressed }) => ({
                         flexDirection: 'row', alignItems: 'center', gap: 10,
                         paddingHorizontal: 14, paddingVertical: 11,

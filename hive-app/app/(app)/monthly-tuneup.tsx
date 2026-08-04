@@ -1664,7 +1664,7 @@ export default function MonthlyTuneupScreen() {
               opacity: pressed ? 0.6 : 1,
             })}
           >
-            <HiveIcon name="star" size={14} color={isSpotlight ? '#bd9348' : '#c9bda6'} />
+            <Text style={{ fontSize: 14 }}>{isSpotlight ? '⭐' : '☆'}</Text>
             <Text
               style={{
                 fontFamily: 'Lato_700Bold',
@@ -1709,7 +1709,7 @@ export default function MonthlyTuneupScreen() {
     <View style={{ gap: 12 }}>
       <StepHeader
         title="Your HD wishes"
-        icon={<HiveIcon name="star" size={20} color="#8e6f35" />}
+        icon={<Text style={{ fontSize: 20 }}>⭐</Text>}
         subtitle="Let's check in on your HDs — still true? Anything new? What's changed since last meeting? Did anyone help you? Mark it granted and give them credit."
       />
       {wishesLoading ? (
@@ -1759,7 +1759,7 @@ export default function MonthlyTuneupScreen() {
           the same thing three ways (Nat 2026-07-25: "it's too much"). */}
       <StepHeader
         title="HIVE hangs"
-        icon={<HiveIcon name="cake" size={20} color="#8e6f35" />}
+        icon={<Text style={{ fontSize: 20 }}>🎉</Text>}
         subtitle={`Rate the ones you made it to, then pick what's next — ideas post straight to ${hangBoardName ?? 'the HIVE Hangs board'} so planning can start.`}
       />
       {(() => {
@@ -1891,7 +1891,7 @@ export default function MonthlyTuneupScreen() {
     <View>
       <StepHeader
         title="Calendar"
-        icon={<HiveIcon name="calendar" size={20} color="#8e6f35" />}
+        icon={<Text style={{ fontSize: 20 }}>🗓️</Text>}
         subtitle="Upcoming events to add? Out of town at all? Anything you add shows up in Upcoming Events for everyone."
       />
       <View style={[cardStyle, { gap: 10 }]}>
@@ -2031,7 +2031,7 @@ export default function MonthlyTuneupScreen() {
       <View>
         <StepHeader
           title="Your HIVE Help"
-          icon={<HiveIcon name="handshake" size={20} color="#8e6f35" />}
+          icon={<Text style={{ fontSize: 20 }}>🤝</Text>}
           subtitle="A nudge, not a test — there's no wrong answer here."
         />
         {/* Name the focus AND say what it means. "Shelter Donation" is a label;
@@ -2171,7 +2171,7 @@ export default function MonthlyTuneupScreen() {
           plainly than a bee does. */}
       <StepHeader
         title="HIVE helps"
-        icon={<HiveIcon name="handshake" size={20} color="#8e6f35" />}
+        icon={<Text style={{ fontSize: 20 }}>🤝</Text>}
         subtitle="Little kindnesses since last meeting — no act too tiny, totally optional."
       />
       {helperThread?.postTitle ? (
@@ -2350,7 +2350,7 @@ export default function MonthlyTuneupScreen() {
         <StepHeader
           title="Want anything in the newsletter?"
           subtitle="It goes out soon. Shout-outs, plugs, reminders, compliments — this is the easiest way in."
-          icon={<HiveIcon name="megaphone" size={20} color="#8e6f35" />}
+          icon={<Text style={{ fontSize: 20 }}>📰</Text>}
         />
 
         <View style={[cardStyle, { gap: 12 }]}>
@@ -2508,7 +2508,7 @@ export default function MonthlyTuneupScreen() {
                   paddingVertical: 8,
                 })}
               >
-                <HiveIcon name="calendar" size={15} color="#8e6f35" />
+                <Text style={{ fontSize: 15 }}>📅</Text>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>
                   {showNewsletterEventComposer ? 'Close calendar' : 'Add a new event'}
                 </Text>
@@ -2656,7 +2656,7 @@ export default function MonthlyTuneupScreen() {
     <View>
       <StepHeader
         title="What are you reading?"
-        icon={<HiveIcon name="book" size={20} color="#8e6f35" />}
+        icon={<Text style={{ fontSize: 20 }}>📚</Text>}
         subtitle="Mingle fodder for before we start — so it doesn't have to eat floor time."
       />
       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#9a8060', marginBottom: 10 }}>
@@ -2699,7 +2699,7 @@ export default function MonthlyTuneupScreen() {
     <View>
       <StepHeader
         title="A quick look at your profile"
-        icon={<HiveIcon name="person" size={20} color="#8e6f35" />}
+        icon={<Text style={{ fontSize: 20 }}>🐝</Text>}
         subtitle="Everything below is what people see now — change what's stale, skip the rest."
       />
       <View style={{ gap: 10 }}>
@@ -2796,7 +2796,7 @@ export default function MonthlyTuneupScreen() {
     <View>
       <StepHeader
         title="Your to-do list"
-        icon={<HiveIcon name="checkin" size={20} color="#8e6f35" />}
+        icon={<Text style={{ fontSize: 20 }}>📋</Text>}
         subtitle="Anything from the meetings lands here. Check off what's done — it becomes your Progress memory-jogger at the next meeting, so wins don't get forgotten."
       />
       <View style={[cardStyle, { gap: 10 }]}>
@@ -2897,7 +2897,7 @@ export default function MonthlyTuneupScreen() {
     <View>
       <StepHeader
         title="Check-in"
-        icon={<HiveIcon name="checkin" size={20} color="#8e6f35" />}
+        icon={<Text style={{ fontSize: 20 }}>✅</Text>}
         subtitle="Last stop — a few quick questions so HIVE and Clive arrive prepared. Answers save when you tap Finish."
       />
       {/* The HIVE Help reminder banner used to sit here too, stacking a third

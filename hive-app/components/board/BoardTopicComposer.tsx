@@ -332,11 +332,7 @@ export function BoardTopicComposer({
             {/* Preview */}
             <View className="items-center mb-6">
               <View className="flex-row items-center px-4 py-2 bg-gold rounded-full" style={{ gap: 6 }}>
-                {selectedEmoji.startsWith(HIVE_ICON_PREFIX) ? (
-                  <HiveIcon name={selectedEmoji.slice(HIVE_ICON_PREFIX.length) as HiveIconName} size={18} color="#ffffff" />
-                ) : (
-                  <Text className="text-lg">{selectedEmoji}</Text>
-                )}
+                <Text className="text-lg">{selectedEmoji}</Text>
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white">
                   {name || 'Board Name'}
                 </Text>

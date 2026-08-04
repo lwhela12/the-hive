@@ -1065,6 +1065,7 @@ export default function AdminScreen() {
 
   // Modal states
   const [showQueenBeeModal, setShowQueenBeeModal] = useState(false);
+  const [pendingCheckInOpen, setPendingCheckInOpen] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
 
@@ -1393,6 +1394,16 @@ export default function AdminScreen() {
     setSurveyDueTime(getTimeInputValue(defaultDueAt));
     setShowSurveyModal(true);
   };
+
+  // Waits for the switched-to HIVE's surveys to load, then opens its check-in.
+  // The tap happens before the fetch, so this cannot be a direct call.
+  useEffect(() => {
+    if (!pendingCheckInOpen) return;
+    const checkIn = allSurveys.find((s) => /monthly\s+check-?in/i.test(s.title));
+    if (!checkIn) return;
+    setPendingCheckInOpen(false);
+    openSurveyEditor(checkIn);
+  }, [pendingCheckInOpen, allSurveys]);
 
   const openSurveyEditor = (survey: Survey) => {
     const defaultDueAt = getDefaultSurveyDue();
@@ -2285,6 +2296,7 @@ export default function AdminScreen() {
           {/* Every HIVE you're in, each one in its own colour. */}
           {isAdmin && (
             <HiveMemberPanels
+              onOpenCheckIns={() => setPendingCheckInOpen(true)}
               cellStyle={dashboardCellStyle}
               panelStyle={dashboardPanelStyle}
               bodyStyle={dashboardPanelBodyStyle}

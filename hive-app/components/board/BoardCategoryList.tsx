@@ -181,13 +181,12 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                 elevation: 2,
               }}
             >
-              {hiveIconName ? (
-                <View style={{ height: iconSize + 4, justifyContent: 'center' }}>
-                  <HiveIcon name={hiveIconName} size={iconSize} color="#bd9348" />
-                </View>
-              ) : (
-                <Text style={{ fontSize: iconSize, lineHeight: iconSize + 4 }}>{emoji}</Text>
-              )}
+              {/* Emoji only (Nat 2026-08-04). Checked before deleting: ZERO
+                  boards store the old `hive:<name>` form, so nothing falls
+                  through to render the literal text "hive:board". The picker
+                  stopped offering the drawn marks some time ago; this was the
+                  last way one could still appear. */}
+              <Text style={{ fontSize: iconSize, lineHeight: iconSize + 4 }}>{emoji}</Text>
               <Text
                 style={{ fontFamily: 'Lato_700Bold', fontSize: titleSize, lineHeight: titleSize + 5, marginTop: 8 }}
                 className={isCompleted ? 'text-charcoal/60' : 'text-charcoal'}
