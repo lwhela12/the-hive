@@ -799,10 +799,16 @@ function AdminPanel({
   children: ReactNode;
 }) {
   const skin = accent ? hivePanelSkin(accent) : null;
-  const tabFill = skin?.tab ?? '#fdf3dc';
+  const tabFill = skin?.tab ?? 'rgba(253,243,220,0.93)';
   const tabText = skin?.tabText ?? '#2d2d2d';
   const edge = skin?.border ?? 'rgba(222,193,129,0.7)';
-  const bodyFill = skin?.body ?? '#fffdf5';
+  // The un-accented panels (Meeting Tools, Newsletter) sat at solid cream while
+  // the HIVE panels floated on the stars, and the two read as different
+  // materials in one frame — Nat, 2026-08-03: "these are a little bit too stark
+  // different... the cream ones should be a little more transparent." Letting a
+  // little sky through is enough to make them the same kind of object; any more
+  // and the text stops being comfortable to read on a starfield.
+  const bodyFill = skin?.body ?? 'rgba(255,253,245,0.9)';
   const glow = skin?.shadow ?? '#bd9348';
 
   return (
@@ -2092,11 +2098,20 @@ export default function AdminScreen() {
                     >
                       Meeting tools
                     </Text>
-                    {/* The four meeting-day links moved to the Meetings tab,
-                        where you actually reach for them (Nat 2026-08-01).
-                        What stays here is the survey machinery behind them. */}
+                    {/* The four meeting-day links (Meeting Helper, Monthly
+                        Tune-up, Newsletter Draft, Halfway Check-in) moved to the
+                        Meetings tab on 2026-08-01, at Nat's call — they are what
+                        you reach for on meeting day, not settings you configure
+                        once. What stays here is the survey machinery.
+
+                        Nat, 2026-08-03: "where did all my meeting helpers go?!?!"
+                        The move was right; the signpost was not. Admin is only
+                        reachable FROM HIVE-Wide, and Meetings is hidden AT
+                        HIVE-Wide — so from this page the old one-line link
+                        pointed at a tab the rail won't take you to, and the
+                        tools read as deleted rather than moved. */}
                     {([
-                      { label: 'Open the Meetings tab for the rest', icon: 'calendar' as const, route: '/meetings', params: {} },
+                      { label: 'Meeting Helper, Tune-up, Newsletter & Halfway Check-in are on the Meetings tab — pick a HIVE in the rail first, they belong to one', icon: 'calendar' as const, route: '/meetings', params: {} },
                     ] as const).map((tool) => (
                       <Pressable
                         key={`${tool.route}-${tool.label}`}

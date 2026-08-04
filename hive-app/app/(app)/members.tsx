@@ -12,6 +12,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { usePageSkin } from '../../lib/pageSkin';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { AppHeader } from '../../components/navigation';
+import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { EditButton } from '../../components/ui/EditButton';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 
@@ -2603,6 +2604,7 @@ export default function MembersScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: skin.page }} edges={['top']}>
+      <SpaceBackdrop />
       {/* Header — just the name; the search bar below carries the detail.
           The tone follows the reader on its own now, so nothing is passed. */}
       <AppHeader title="Members" />

@@ -11,6 +11,7 @@ import { prefetchRoomMessages } from '../../lib/hooks/useRoomMessagesQuery';
 import { getStoredItemAsync, removeStoredItemAsync, setStoredItemAsync } from '../../lib/webStorage';
 import { ChatRoomItem } from '../../components/messaging/ChatRoomItem';
 import { AppHeader } from '../../components/navigation';
+import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { RoomChatView } from '../../components/messaging/RoomChatView';
 import { MemberPicker } from '../../components/messaging/MemberPicker';
 import { Avatar } from '../../components/ui/Avatar';
@@ -445,6 +446,7 @@ export default function MessagesScreen() {
   if (useMobileLayout) {
     return (
       <SafeAreaView className="flex-1" edges={['top']} style={{ backgroundColor: skin.page }}>
+        <SpaceBackdrop />
         <View
           className="flex-row items-center justify-between px-5 pt-2 pb-3"
           style={{ backgroundColor: skin.page }}
@@ -479,6 +481,7 @@ export default function MessagesScreen() {
 
   return (
     <SafeAreaView className="flex-1" edges={['top']} style={{ backgroundColor: skin.page }}>
+      <SpaceBackdrop />
       <AppHeader
         title="Messages"
         tone={wholeHive ? 'wide' : 'hive'}

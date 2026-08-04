@@ -195,8 +195,17 @@ serve(async (req) => {
         : { data: [] as { id: string; name: string }[] };
 
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        // Was claude-sonnet-4-20250514, which is DEPRECATED and retires
+        // 2026-06-15 — after that date this function would have started
+        // returning 404 and meeting transcripts would have silently stopped
+        // being cleaned up. Moved while we were in here (2026-08-03).
+        //
+        // Thinking is off on purpose: this is mechanical clean-up of a
+        // transcript, there are no tools to reach for, and Sonnet 5's default
+        // adaptive thinking would eat the 2048-token cap.
+        model: 'claude-sonnet-5',
         max_tokens: 2048,
+        thinking: { type: 'disabled' as const },
         system: `You are summarizing a HIVE community meeting. H.I.V.E. (Human Insight Vision Execution) is a group of 12 people who practice "high-definition wishing" - helping each other articulate specific needs and matching them with skills.
 
 Available members: ${members?.map(m => m.name).join(', ')}

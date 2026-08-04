@@ -381,7 +381,12 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
 
     /** Where on the limb the sun is, in screen coordinates. */
     function sunPoint() {
-      const r = R * 0.998;
+      // A hair PROUD of the limb rather than tucked just inside it. At 0.998 the
+      // planet's edge cut through the middle of the disc and most of the sun was
+      // behind the world; at 1.0015 he clears it and reads as a sun rather than
+      // a glow leaking over the horizon. Nat, 2026-08-03: "I love the sun
+      // peeking over here — can I see him a little more?"
+      const r = R * 1.0015;
       return { x: cx + Math.sin(SUN_A) * r, y: cy - Math.cos(SUN_A) * r };
     }
 
@@ -396,18 +401,18 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
 
-      const bloom = Math.max(W, H) * 0.42;
+      const bloom = Math.max(W, H) * 0.5;
       const g1 = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, bloom);
-      g1.addColorStop(0, `rgba(${SUN_WARM},0.34)`);
-      g1.addColorStop(0.14, `rgba(${SUN_DEEP},0.20)`);
-      g1.addColorStop(0.45, `rgba(${SUN_DEEP},0.07)`);
+      g1.addColorStop(0, `rgba(${SUN_WARM},0.46)`);
+      g1.addColorStop(0.14, `rgba(${SUN_DEEP},0.27)`);
+      g1.addColorStop(0.45, `rgba(${SUN_DEEP},0.10)`);
       g1.addColorStop(1, `rgba(${SUN_DEEP},0)`);
       ctx.fillStyle = g1;
       ctx.beginPath();
       ctx.arc(sun.x, sun.y, bloom, 0, Math.PI * 2);
       ctx.fill();
 
-      const glow = R * 0.085;
+      const glow = R * 0.115;
       const g2 = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, glow);
       g2.addColorStop(0, `rgba(${SUN_CORE},0.95)`);
       g2.addColorStop(0.18, `rgba(${SUN_WARM},0.72)`);
@@ -420,7 +425,7 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
 
       ctx.fillStyle = `rgba(${SUN_CORE},0.95)`;
       ctx.beginPath();
-      ctx.arc(sun.x, sun.y, glow * 0.17, 0, Math.PI * 2);
+      ctx.arc(sun.x, sun.y, glow * 0.22, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();

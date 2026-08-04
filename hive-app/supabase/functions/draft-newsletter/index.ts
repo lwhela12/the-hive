@@ -146,8 +146,15 @@ async function writeNewsletter(month: string, factsText: string): Promise<string
   try {
     const anthropic = new Anthropic({ apiKey });
     const response = await anthropic.messages.create({
-      model: 'claude-opus-5',
-      max_tokens: 4000,
+      // Sonnet 5, not Opus (Nat 2026-08-03). Writing a warm monthly recap from
+      // a list of facts is mid-range work, and this runs every cycle.
+      //
+      // max_tokens went 4000 → 12000: Sonnet 5 thinks by default and the cap
+      // covers thinking and the newsletter together. A truncated newsletter is
+      // worse than a slow one.
+      model: 'claude-sonnet-5',
+      max_tokens: 12000,
+      output_config: { effort: 'medium' as const },
       system,
       messages: [{
         role: 'user',

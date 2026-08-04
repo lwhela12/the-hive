@@ -79,8 +79,19 @@ async function condenseHummdingers(
   try {
     const anthropic = new Anthropic({ apiKey });
     const response = await anthropic.messages.create({
-      model: 'claude-opus-5',
-      max_tokens: 2000,
+      // Sonnet 5, not Opus (Nat 2026-08-03: "we're hosting all of those costs").
+      // $3/$15 per million against Opus's $5/$25 — and this job reads a day of
+      // meeting activity and writes one line per person, which is squarely
+      // mid-range work. Clive's own chat has been Haiku + Sonnet 5 all along;
+      // this and the newsletter drafter were the two places still on Opus.
+      //
+      // max_tokens went 2000 → 8000 because Sonnet 5 THINKS BY DEFAULT and the
+      // cap covers thinking AND the reply. Left at 2000 the reasoning would eat
+      // the budget and the JSON would truncate mid-array — a silent failure
+      // that looks like "the meeting had nothing in it".
+      model: 'claude-sonnet-5',
+      max_tokens: 8000,
+      output_config: { effort: 'medium' as const },
       system,
       messages: [{ role: 'user', content: brief }],
     });

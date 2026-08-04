@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, RefreshControl, ActivityIndicator } 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '../../components/navigation';
+import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
@@ -78,6 +79,7 @@ export default function BuzzScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: skin.page }} edges={['top']}>
+      <SpaceBackdrop />
       <AppHeader title="The Buzz" tone="wide" />
       <ScrollView
         className="flex-1"

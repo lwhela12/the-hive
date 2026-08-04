@@ -151,11 +151,16 @@ export function hivePanelSkin(accent: string): HivePanelSkin {
   //
   // The `light` / `washed` work above still matters, because a HIVE picking a
   // pale accent needs its tab lifted or the name on it disappears.
+  //
+  // The body veil went 0.11 → 0.19 on 2026-08-03 ("the translucent ones should
+  // have a tiny bit more color"). It is the other half of the same fix as the
+  // cream panels going slightly transparent: both were true to their own idea
+  // and wrong beside each other.
   return {
-    tab: veil(rgb, 0.55),
+    tab: veil(rgb, 0.6),
     tabText: '#fffdf5',
-    body: veil(rgb, 0.11),
-    border: veil(rgb, 0.42),
+    body: veil(rgb, 0.19),
+    border: veil(rgb, 0.48),
     hairline: 'rgba(255,255,255,0.11)',
     inset: 'rgba(255,255,255,0.07)',
     shadow: HEX.test(accent) ? accent : HIVE_GOLD,

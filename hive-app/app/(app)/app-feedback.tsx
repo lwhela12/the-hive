@@ -13,6 +13,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { usePageSkin } from '../../lib/pageSkin';
 import { AppHeader } from '../../components/navigation';
+import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 
 /**
@@ -196,6 +197,7 @@ export default function AppFeedbackScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: skin.page }} edges={['bottom']}>
+      <SpaceBackdrop />
       <AppHeader title="App Feedback" />
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 48, maxWidth: 760, width: '100%', alignSelf: 'center' }}

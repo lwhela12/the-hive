@@ -16,6 +16,7 @@ import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { celebrateWishGranted } from '../../lib/celebration';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { AppHeader } from '../../components/navigation';
+import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { usePageSkin } from '../../lib/pageSkin';
 import { useBoardLinkedWishes, type LinkedWish } from '../../lib/hooks/useBoardLinkedWishes';
 import { getMentionedMembers } from '../../lib/mentions';
@@ -1734,6 +1735,8 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: skin.page }} edges={['top']}>
+      <SpaceBackdrop />
+        <SpaceBackdrop />
         {/* One header treatment on every width, so Boards wears its HIVE's
             colour and name like every other page (Nat 2026-07-31). */}
         <AppHeader

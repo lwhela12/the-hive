@@ -745,8 +745,12 @@ ${meeting.transcript_attributed || meeting.transcript_raw || ''}`,
   }
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    // Was claude-sonnet-4-20250514 — deprecated, retires 2026-06-15 (2026-08-03).
+    // Thinking off: structured extraction from notes, no tools involved, and
+    // the 3500-token cap covers thinking and output together on Sonnet 5.
+    model: 'claude-sonnet-5',
     max_tokens: 3500,
+    thinking: { type: 'disabled' as const },
     messages: [{ role: 'user', content }],
   } as any);
 
