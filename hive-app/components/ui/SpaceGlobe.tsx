@@ -179,13 +179,17 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       // dark ball is that the dark is not all the same dark (Nat 2026-08-03).
       // Placed in sphere coordinates like the lights, so they flatten toward
       // the limb instead of sitting on the glass.
+      // More of them, and reaching further round the curve. "Make it more
+      // earthy" (Nat 2026-08-04) — at 26 blobs over a narrow arc the surface was
+      // a flat wash with a couple of smudges in it, and what makes a planet look
+      // like a planet is that the dark is not all the same dark.
       lands = [];
-      for (let i = 0; i < 26; i++) {
-        const a = (Math.random() - 0.5) * 1.5;
+      for (let i = 0; i < 46; i++) {
+        const a = (Math.random() - 0.5) * 2.1;
         const d = Math.random() * 0.9;
         lands.push({
           a, d,
-          r: 0.035 + Math.random() * 0.075,
+          r: 0.03 + Math.random() * 0.09,
           warm: Math.random(),
         });
       }
@@ -201,14 +205,14 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       // toward the limb by the same rule, and rotated a little each so the
       // banding reads as systems rather than as a row of ovals.
       clouds = [];
-      for (let i = 0; i < 34; i++) {
-        const a = (Math.random() - 0.5) * 1.9;
+      for (let i = 0; i < 58; i++) {
+        const a = (Math.random() - 0.5) * 2.3;
         const d = Math.pow(Math.random(), 1.6) * 0.85;
         clouds.push({
           a,
           d,
-          r: 0.05 + Math.random() * 0.12,
-          squash: 0.16 + Math.random() * 0.22,
+          r: 0.04 + Math.random() * 0.13,
+          squash: 0.14 + Math.random() * 0.24,
           turn: (Math.random() - 0.5) * 0.8,
           b: 0.35 + Math.random() * 0.65,
         });
@@ -274,12 +278,18 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
         const y = cy - Math.cos(l.a) * rr;
         const size = R * l.r * (1 - l.d * 0.4);
         if (y - size > H || y + size < horizon - 20) continue;
+        // Three grounds rather than two, and stronger. Ochre, green and a rusty
+        // red read as different places; one brown reads as a stain.
         const earth = slate
           ? '58,60,66'
-          : (l.warm > 0.55 ? '74,58,34' : '44,58,40');   // dry ground / green
+          : l.warm > 0.72
+            ? '92,66,34'                                  // desert / dry ground
+            : l.warm > 0.4
+              ? '46,62,42'                                // vegetation
+              : '78,48,32';                               // iron-red earth
         const blob = c.createRadialGradient(x, y, 0, x, y, size);
-        blob.addColorStop(0, `rgba(${earth},0.34)`);
-        blob.addColorStop(0.5, `rgba(${earth},0.17)`);
+        blob.addColorStop(0, `rgba(${earth},0.52)`);
+        blob.addColorStop(0.5, `rgba(${earth},0.26)`);
         blob.addColorStop(1, `rgba(${earth},0)`);
         c.fillStyle = blob;
         c.beginPath();
@@ -326,12 +336,22 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
 
     function drawSky() {
       // Not flat black — space photographs have a faint lift near the planet.
-      const g = ctx.createLinearGradient(0, 0, 0, horizon);
+      //
+      // Painted over the WHOLE height, which is the fix for Nat's "staunch
+      // lines" (2026-08-04). It used to fill only down to `horizon + 2` and
+      // leave everything below as raw SPACE_BLACK — but `horizon` is the top of
+      // the curve, at the centre of the screen, so away from centre the planet's
+      // edge sits well below it. That left a band of sky under the cut-off, and
+      // #070C18 meeting #05060B along a perfectly straight line drew a hard rule
+      // right across the picture. Nothing in a photograph is that straight.
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      const edge = Math.max(0.001, Math.min(0.999, horizon / Math.max(H, 1)));
       g.addColorStop(0, '#04050A');
-      g.addColorStop(0.62, '#05070E');
+      g.addColorStop(edge * 0.62, '#05070E');
+      g.addColorStop(edge, slate ? '#0B0E14' : '#070C18');
       g.addColorStop(1, slate ? '#0B0E14' : '#070C18');
       ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, horizon + 2);
+      ctx.fillRect(0, 0, W, H);
     }
 
     function drawStars() {
@@ -474,13 +494,22 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
 
-      const inner = R * 0.985;
+      // The ring starts well INSIDE the planet and ramps up to the edge, rather
+      // than switching on at full strength exactly at R*0.985. That switch was
+      // the second of Nat's "staunch lines": a near-white at 92% alpha beginning
+      // on a perfect circle drew a hard bright arc a few pixels inside the limb,
+      // so the bright band had a defined bottom that no real atmosphere has.
+      // Air glows on the planet's side of the edge too — it just fades in.
+      const inner = R * 0.94;
       const outer = R * 1.075;
       const air = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
-      air.addColorStop(0, `rgba(${AIR_CORE},0.92)`);
-      air.addColorStop(0.06, `rgba(${AIR_CORE},0.55)`);
-      air.addColorStop(0.22, `rgba(${AIR_MID},0.38)`);
-      air.addColorStop(0.55, `rgba(${AIR_FAR},0.16)`);
+      air.addColorStop(0, `rgba(${AIR_FAR},0)`);
+      air.addColorStop(0.30, `rgba(${AIR_MID},0.10)`);
+      // 0.444 is where R itself falls between inner and outer — the true edge.
+      air.addColorStop(0.444, `rgba(${AIR_CORE},0.88)`);
+      air.addColorStop(0.52, `rgba(${AIR_CORE},0.52)`);
+      air.addColorStop(0.66, `rgba(${AIR_MID},0.34)`);
+      air.addColorStop(0.84, `rgba(${AIR_FAR},0.14)`);
       air.addColorStop(1, `rgba(${AIR_FAR},0)`);
       ctx.fillStyle = air;
       // A RING, not a disc. Filling the whole circle painted the planet's

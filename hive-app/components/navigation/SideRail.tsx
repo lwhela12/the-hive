@@ -11,6 +11,7 @@ import { ADMIN_DESTINATION, destinationsForPlace, activeKeyForPath } from '../..
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { Avatar } from '../ui/Avatar';
 
 /**
  * The side rail, borrowed from Jammin' Sprouts at Nat's request 2026-08-03.
@@ -260,6 +261,62 @@ export const SideRail = memo(function SideRail({
           <Ionicons name={expanded ? 'chevron-back' : 'chevron-forward'} size={16} color="#fff" />
         </Pressable>
       </View>
+
+      {/* Who you are signed in as.
+          Nat, 2026-08-04: "what if right here, on this side bar, we had a
+          'welcome, User' … and maybe a profile bubble, so you could see which
+          account you're signed in as?"
+
+          It earns its space for a reason particular to this app: the two people
+          who build it share screens constantly, and both have owner accounts, so
+          "which of us is this?" is a real question asked several times a week —
+          and the answer changes what you are allowed to see. Every other surface
+          that could have told you is one tap away instead of in front of you.
+
+          Deliberately NOT a link. Profile is hidden at HIVE-Wide (it needs a
+          HIVE), so a tap here would either dead-end or silently move you to a
+          different place than the one you're standing in. This is a label, and
+          the action you actually want when it says the wrong name — Log out —
+          is a few rows below it. */}
+      {profile ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            paddingHorizontal: expanded ? 14 : 0,
+            justifyContent: expanded ? 'flex-start' : 'center',
+            paddingBottom: 12,
+            marginBottom: 4,
+            borderBottomWidth: 1,
+            borderBottomColor: 'rgba(255,255,255,0.10)',
+          }}
+        >
+          <Avatar name={profile.name ?? 'You'} url={profile.avatar_url} size={expanded ? 30 : 26} />
+          {expanded ? (
+            <View style={{ flex: 1 }}>
+              <Text
+                numberOfLines={1}
+                style={{
+                  fontFamily: 'Lato_400Regular',
+                  fontSize: 11,
+                  letterSpacing: 0.5,
+                  textTransform: 'uppercase',
+                  color: 'rgba(255,255,255,0.52)',
+                }}
+              >
+                Welcome
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#fff' }}
+              >
+                {(profile.name ?? 'You').split(/\s+/)[0]}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 14 }}>
         {/* "My HIVEs" is Home, and HIVE-Wide is the first thing under it —
