@@ -229,7 +229,12 @@ export const SideRail = memo(function SideRail({
           // So it sits on a cream coin. The bee is the brand's black and gold,
           // the coin is the brand's cream, and a light disc on a dark rail is
           // legible at any size — which the bee alone would not have been.
-          <View style={{ flex: 1, paddingRight: 8, justifyContent: 'center' }}>
+          // CENTRED now (Nat 2026-08-04): "maybe we center the bee? so it's not
+          // confusing with the profile bubble." Both are light discs of nearly
+          // the same size, and stacked hard against the left edge they read as
+          // a pair — as if the bee were an account too. Moving the mark to the
+          // middle of the rail breaks the column, and the two stop rhyming.
+          <View style={{ flex: 1, paddingRight: 8, alignItems: 'center', justifyContent: 'center' }}>
             <View
               style={{
                 width: 34, height: 34, borderRadius: 17,
@@ -327,24 +332,28 @@ export const SideRail = memo(function SideRail({
             all the other ones." Which is right. HIVE-Wide is not a different
             KIND of place, it is one more place of the same kind, and the one
             page list below serves whichever of them you're standing in. */}
-        <Row
-          emoji="🏠"
-          // Always plural now: HIVE-Wide hangs under here too, so even someone
-          // in a single HIVE has two places listed beneath this line.
-          label="My HIVEs"
-          active={!onHiveWide && activeKey === 'home'}
-          onPress={() => {
-            // Home means your HIVE's home. Tapping it from HIVE-Wide has to
-            // bring you back down as well as move you, or you'd land on OG's
-            // page with the rail still black and Clive still missing.
-            if (onHiveWide && communityId) {
-              void switchCommunity(communityId);
-              if (isPhone && expanded) onToggle();
-            } else {
-              go('/hive');
-            }
-          }}
-        />
+        {/* A heading, not a door (Nat 2026-08-04). It used to navigate to
+            /hive as well as label the list beneath it, which is why Home
+            appeared to be missing: a row with three indented children under it
+            reads as a section title, and nobody presses a section title to go
+            home. Home is now the first entry in the page list below, and this
+            just says what the indented rows are. */}
+        {expanded ? (
+          <Text
+            style={{
+              fontFamily: 'Lato_700Bold',
+              fontSize: 11,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+              color: 'rgba(255,255,255,0.45)',
+              paddingHorizontal: 14,
+              paddingTop: 10,
+              paddingBottom: 6,
+            }}
+          >
+            My HIVEs
+          </Text>
+        ) : null}
         {/* HIVE-Wide shows for EVERYONE, not only people in more than one HIVE.
             Nearly every member is in exactly one, and the shared boards — HIVE
             Approved, Announcements, the Favourites — are where their own

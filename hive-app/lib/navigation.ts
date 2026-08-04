@@ -75,10 +75,20 @@ export type NavDestination = {
  * Newsletter draft moved inside Admin at her request — it's a tool for running
  * the place, not a page you visit.
  */
-// Home is NOT in this list. "My HIVEs" IS home — tapping it goes to /hive, and
-// your HIVEs hang under it. Having both was the same place twice, one above the
-// line and one below (Nat 2026-08-03).
+// Home IS in this list again (Nat 2026-08-04): "silly oversight here, we need a
+// Home button sitting right above Clive for all of them."
+//
+// On 08-03 it was taken out because "My HIVEs" already went to /hive, and having
+// both looked like the same place twice. That reasoning was sound and the result
+// was still wrong, for a reason the screenshot makes obvious: "My HIVEs" has the
+// three HIVEs indented underneath it, so it reads as a SECTION HEADING, not as a
+// door. Nobody looks at a heading and thinks "that is the button home". So the
+// heading is a heading now (it no longer navigates — see SideRail) and Home is
+// the first thing in the page list, where you would look for it.
 export const NAV_DESTINATIONS: NavDestination[] = [
+  // Home means the home of wherever you are standing: your HIVE's page inside a
+  // HIVE, and the HIVE-Wide landing above them.
+  { key: 'home', label: 'Home', emoji: '🏠', route: '/hive', gate: 'everyone', atWholeHive: 'wide', wideRoute: '/hive-wide' },
   // Clive knows one HIVE's people, wishes and history. There is no version of
   // him that speaks for all three at once, so he steps out at Whole HIVE.
   { key: 'clive', label: 'Clive', emoji: '✨', route: '/', gate: 'everyone', atWholeHive: 'hidden' },

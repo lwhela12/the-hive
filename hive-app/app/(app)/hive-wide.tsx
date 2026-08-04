@@ -367,7 +367,22 @@ export default function HiveWideScreen() {
           HIVE-Wide on purpose — "it's just part of outer space" (Nat 2026-08-03),
           and a gold bar across the top would put you back inside a HIVE. */}
       <ScrollView
-        contentContainerStyle={{ padding: 16, gap: 18, paddingBottom: 44, paddingTop: 30 }}
+        // Held to a column in the middle of the page rather than run edge to
+        // edge (Nat 2026-08-04: "this feels a little too squishy to me, the
+        // boxes should sit in the middle of the page please"). On a wide
+        // monitor two half-width boxes stretched to nearly a metre each, so
+        // three words of content sat in an acre of card and the eye had to
+        // travel the whole screen to read a line. 1240 is the same width the
+        // profile and settings pages already hold themselves to.
+        contentContainerStyle={{
+          padding: 16,
+          gap: 18,
+          paddingBottom: 44,
+          paddingTop: 30,
+          width: '100%',
+          maxWidth: 1240,
+          alignSelf: 'center',
+        }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {loading ? (

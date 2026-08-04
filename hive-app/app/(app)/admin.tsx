@@ -786,6 +786,9 @@ function SurveyTimePicker({
 // belong to no single HIVE leave it off and stay cream and gold.
 function AdminPanel({
   title,
+  tabs,
+  activeTab,
+  onTabChange,
   action,
   accent,
   style,
@@ -793,6 +796,22 @@ function AdminPanel({
   children,
 }: {
   title: string;
+  /**
+   * Extra folder tabs beside the title. Nat's idea, 2026-08-04:
+   *
+   *   "So you have 'pick a hive in the rail first', but what if we just added
+   *   extra tabs to these ones... this text box could say 'OG HIVE' and then
+   *   the tabs are 'members', 'meeting tools' and 'check in responses'? Then
+   *   you can see which hive is using which tools, no confusion!!"
+   *
+   * It dissolves the problem rather than solving it. The tools panel could
+   * never name a HIVE — it sat beside all three — so it had to send you away to
+   * pick one, from a screen the picker cannot reach. Hang the tools off the
+   * HIVE's own folder and the HIVE is already chosen by the time you see them.
+   */
+  tabs?: { key: string; label: string }[];
+  activeTab?: string;
+  onTabChange?: (key: string) => void;
   action?: ReactNode;
   accent?: string;
   style?: StyleProp<ViewStyle>;
@@ -815,6 +834,7 @@ function AdminPanel({
   return (
     <View style={[{ marginBottom: 0 }, style]}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', flexShrink: 1, gap: 3 }}>
         <View
           style={{
             flexShrink: 1,
@@ -831,6 +851,32 @@ function AdminPanel({
           <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: tabText }}>
             {title}
           </Text>
+        </View>
+        {(tabs ?? []).map((t) => {
+          const on = t.key === activeTab;
+          return (
+            <Pressable
+              key={t.key}
+              onPress={() => onTabChange?.(t.key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: on }}
+              style={{
+                backgroundColor: on ? tabFill : 'transparent',
+                borderColor: edge, borderWidth: 1, borderBottomWidth: 0,
+                borderTopLeftRadius: 12, borderTopRightRadius: 12,
+                paddingHorizontal: 11,
+                // An inactive tab sits lower, so the active one reads as the
+                // sheet in front rather than one of a row.
+                paddingVertical: on ? 7 : 5,
+                opacity: on ? 1 : 0.72,
+              }}
+            >
+              <Text numberOfLines={1} style={{ fontFamily: on ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 12.5, color: tabText }}>
+                {t.label}
+              </Text>
+            </Pressable>
+          );
+        })}
         </View>
         {action ? <View style={{ paddingBottom: 4, marginLeft: 8 }}>{action}</View> : null}
       </View>
@@ -2062,7 +2108,11 @@ export default function AdminScreen() {
           {isAdmin && (
             <View style={[dashboardCellStyle, panelOrderStyle(ADMIN_PANEL_ORDER.meetingTools)]}>
               <AdminPanel
-                title="Meeting Tools"
+                // Renamed (Nat 2026-08-04). The meeting-day tools moved INTO
+                // each HIVE's own folder as a tab above, which is where they
+                // belong — every one of them runs for exactly one HIVE. What is
+                // left in this box is the survey machinery, so it says so.
+                title="Surveys"
                 style={dashboardPanelStyle}
                 bodyStyle={dashboardPanelBodyStyle}
                 action={(
@@ -2112,7 +2162,7 @@ export default function AdminScreen() {
                         pointed at a tab the rail won't take you to, and the
                         tools read as deleted rather than moved. */}
                     {([
-                      { label: 'Meeting Helper, Tune-up, Newsletter & Halfway Check-in are on the Meetings tab — pick a HIVE in the rail first, they belong to one', icon: 'calendar' as const, route: '/meetings', params: {} },
+                      { label: 'Every meeting tool now sits inside its own HIVE, in the boxes above', icon: 'calendar' as const, route: '/meetings', params: {} },
                     ] as const).map((tool) => (
                       <Pressable
                         key={`${tool.route}-${tool.label}`}
@@ -2267,6 +2317,7 @@ export default function AdminScreen() {
               placeholderTextColor="#b5ad9f"
             />
             <DictationRow setValue={setSurveyDescription} />
+            <DictationRow setValue={setSurveyDescription} />
             <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 16 }}>
               <View style={{ flex: 2, minWidth: 180 }}>
                 <EventDatePicker
@@ -2341,6 +2392,7 @@ export default function AdminScreen() {
                 style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3', minHeight: 72, textAlignVertical: 'top' }}
                 placeholderTextColor="#b5ad9f"
               />
+              <DictationRow setValue={setSurveyEditorDescription} />
               <DictationRow setValue={setSurveyEditorDescription} />
               <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 8 }}>
                 <View style={{ flex: 2, minWidth: 180 }}>
@@ -2759,6 +2811,7 @@ export default function AdminScreen() {
                       placeholderTextColor="#b5ad9f"
                     />
                     <DictationRow setValue={(u) => updateSurveyQuestion(index, (current) => ({ ...current, text: u(current.text ?? '') }))} />
+                    <DictationRow setValue={(u) => updateSurveyQuestion(index, (current) => ({ ...current, text: u(current.text ?? '') }))} />
 
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: question.type === 'choice' ? 10 : 0 }}>
                       {SURVEY_QUESTION_TYPES.map((type) => {
@@ -2919,6 +2972,7 @@ export default function AdminScreen() {
               className="border border-gray-200 rounded-lg p-3 mb-3 bg-gray-50"
             />
             <DictationRow setValue={setQbDescription} />
+            <DictationRow setValue={setQbDescription} />
 
             <Text className="text-gray-600 mb-2">Status</Text>
             <View className="flex-row mb-4">
@@ -2990,6 +3044,7 @@ export default function AdminScreen() {
               numberOfLines={3}
               className="border border-gray-300 rounded-lg p-3 mb-4"
             />
+            <DictationRow setValue={setEventDescription} />
             <DictationRow setValue={setEventDescription} />
 
             <View className="mb-4">

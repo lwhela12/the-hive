@@ -123,6 +123,17 @@ function timeAgo(iso: string): string {
  */
 const MAX_FEEDBACK_ATTACHMENTS = 6;
 
+/**
+ * The places a member can be. Named the way the rail names them, so a report
+ * says "Boards" and not "the threads bit" — which matters once there are enough
+ * reports to sort.
+ */
+const WHERE_OPTIONS = [
+  'Home', 'Clive', 'Members', 'Boards', 'Messages', 'Meetings',
+  'Honey Pot', 'The Buzz', 'Profile', 'Settings', 'HIVE-Wide',
+  'Signing in', 'The whole app', 'Somewhere else',
+];
+
 /** Everything the list needs, in one place, so the two tabs cannot drift apart. */
 const FEEDBACK_COLUMNS =
   'id, kind, message, created_at, status, attachments, reply, replied_at, replied_by_name, author_name, where_in_app, platform';
@@ -136,6 +147,8 @@ export default function AppFeedbackScreen() {
   const [kind, setKind] = useState<Kind>('bug');
   const [message, setMessage] = useState('');
   const [whereInApp, setWhereInApp] = useState('');
+  const [whereOpen, setWhereOpen] = useState(false);
+  const [whereOther, setWhereOther] = useState(false);
   const [sending, setSending] = useState(false);
   const inFlightRef = useRef(false);
   const [result, setResult] = useState<{ ok: boolean; emailed: boolean; text: string } | null>(null);
@@ -243,6 +256,8 @@ export default function AppFeedbackScreen() {
 
       setMessage('');
       setWhereInApp('');
+      setWhereOther(false);
+      setWhereOpen(false);
       setSelectedImages([]);
       setSelectedFiles([]);
       voiceBaseRef.current = null;
@@ -731,14 +746,84 @@ export default function AppFeedbackScreen() {
             <Text style={{ ...styles.caption, marginTop: 18, marginBottom: 8 }}>
               Where in the app? <Text style={{ textTransform: 'none', letterSpacing: 0 }}>(optional)</Text>
             </Text>
-            <TextInput
-              value={whereInApp}
-              onChangeText={setWhereInApp}
-              maxLength={300}
-              placeholder="e.g. the Boards page, the meeting form, the side menu"
-              placeholderTextColor={skin.inkFaint}
-              style={styles.field}
-            />
+            {/* A list rather than a blank box (Nat 2026-08-04: "i think this
+                should be a drop down").
+
+                Free text was a deliberate choice on 08-03 — "asking somebody to
+                pick their route out of a menu is asking them to do our filing" —
+                and it was wrong for a reason the empty field makes obvious: the
+                page names are OURS. Somebody who calls Boards "the threads bit"
+                writes that, and now two reports about one screen do not look
+                alike. A list of the actual page names asks for recognition
+                instead of recall, which is the easier half of remembering.
+
+                "Somewhere else" keeps the escape hatch, because the bug is
+                often in the gap between two pages. */}
+            <Pressable
+              onPress={() => setWhereOpen((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel="Choose where in the app"
+              style={[styles.field, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+            >
+              <Text
+                style={{
+                  fontFamily: 'Lato_400Regular',
+                  fontSize: 15,
+                  color: whereInApp ? skin.ink : skin.inkFaint,
+                  flex: 1,
+                }}
+                numberOfLines={1}
+              >
+                {whereInApp || 'Pick a place…'}
+              </Text>
+              <Text style={{ color: skin.inkSoft, fontSize: 12, marginLeft: 8 }}>{whereOpen ? '▲' : '▼'}</Text>
+            </Pressable>
+
+            {whereOpen ? (
+              <View
+                style={{
+                  marginTop: 6,
+                  borderWidth: 1,
+                  borderColor: skin.border,
+                  borderRadius: 12,
+                  backgroundColor: skin.card,
+                  overflow: 'hidden',
+                }}
+              >
+                {WHERE_OPTIONS.map((place, index) => (
+                  <Pressable
+                    key={place}
+                    onPress={() => {
+                      setWhereInApp(place === 'Somewhere else' ? '' : place);
+                      setWhereOpen(false);
+                      setWhereOther(place === 'Somewhere else');
+                    }}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: 14,
+                      paddingVertical: 11,
+                      borderTopWidth: index === 0 ? 0 : 1,
+                      borderTopColor: skin.border,
+                      backgroundColor: pressed ? skin.cardPressed : 'transparent',
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, color: skin.inkBody }}>
+                      {place}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+
+            {whereOther ? (
+              <TextInput
+                value={whereInApp}
+                onChangeText={setWhereInApp}
+                maxLength={300}
+                placeholder="Where were you?"
+                placeholderTextColor={skin.inkFaint}
+                style={[styles.field, { marginTop: 8 }]}
+              />
+            ) : null}
 
             <Pressable
               onPress={send}

@@ -317,11 +317,23 @@ export function WishDetail({
         className="flex-1"
         contentContainerStyle={{ padding: 16, maxWidth: 840, width: '100%', alignSelf: 'center' }}
       >
-        {/* Wish Card */}
-        <View
+        {/* Wish Card.
+            The whole card opens the editor, not just the pencil up in the
+            corner (Nat 2026-08-04: "i'd like to be able to click the wish to
+            edit it, not just have to click the pencil"). The pencil stays —
+            it is what tells you the card is editable at all — but reaching for
+            a 34px target in the far corner to change your own words was the
+            long way round. Only for people who can actually manage it; for
+            everybody else this is still just text. */}
+        <Pressable
+          disabled={!canManage || !onManage}
+          onPress={() => onManage?.()}
+          accessibilityRole={canManage && onManage ? 'button' : undefined}
+          accessibilityLabel={canManage && onManage ? 'Edit this wish' : undefined}
           className={`rounded-2xl p-4 mb-6 border ${
             isGranted ? 'bg-gold/10 border-gold/25' : 'bg-[#fdf8ec] border-gold/20'
           }`}
+          style={({ pressed }) => ({ opacity: pressed && canManage ? 0.86 : 1 })}
         >
           <View className="flex-row items-start">
             <MemberProfileLink
@@ -379,7 +391,7 @@ export function WishDetail({
               </Text>
             </View>
           </View>
-        </View>
+        </Pressable>
 
         {/* Granted Info Section */}
         {isGranted && (

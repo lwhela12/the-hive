@@ -461,11 +461,19 @@ export default function AppLayout() {
           }}
         />
       </Tabs>
-      </View>
-      </View>
 
-      {/* Confetti for a granted wish, over every tab. Mounted once. */}
+      {/* Confetti for a granted wish, over every tab. Mounted once, and mounted
+          INSIDE the content column rather than beside it (Nat 2026-08-04: "he's
+          crooked, we should make him more centered").
+
+          He was centred — on the WINDOW. Sitting outside this row, the overlay
+          spanned the rail as well as the page, so its middle was half the rail's
+          width to the left of the middle of what you are actually reading. The
+          particle burst had the same lean, for the same reason. In here it fills
+          the page and nothing else, so it centres on the page. */}
       <CelebrationOverlay />
+      </View>
+      </View>
 
       {/* The sliding menu is gone (2026-08-03). It held the same list the rail
           holds, so keeping it meant two ways to the same eleven places and two

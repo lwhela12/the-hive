@@ -18,6 +18,18 @@ import { useDictation } from '../../lib/hooks/useDictation';
 import { submitOnEnter } from '../../lib/submitOnEnter';
 import type { Wish, Profile } from '../../types';
 
+
+/**
+ * How long a thank-you can be.
+ *
+ * It was 500, and Nat hit the ceiling mid-sentence writing a real one
+ * (2026-08-04: "why is my character cap so low here"). 500 is a tweet — but a
+ * thank-you for a granted wish is the warmest thing anybody writes in this app,
+ * often the story of how the thing actually happened, and it is the one place
+ * where running out of room changes what somebody says. The board post it turns
+ * into has no such limit.
+ */
+const THANK_YOU_LIMIT = 4000;
 interface GrantWishModalProps {
   visible: boolean;
   onClose: () => void;
@@ -301,7 +313,7 @@ export function GrantWishModal({
                   blurOnSubmit={false}
                   onKeyPress={submitOnEnter(handleGrant)}
                   numberOfLines={4}
-                  maxLength={500}
+                  maxLength={THANK_YOU_LIMIT}
                   className="bg-white rounded-xl px-4 py-3 text-charcoal min-h-[100px]"
                   style={{
                     fontFamily: 'Lato_400Regular',
@@ -318,7 +330,7 @@ export function GrantWishModal({
                     style={{ fontFamily: 'Lato_400Regular' }}
                     className="text-charcoal/40 text-xs"
                   >
-                    {thankYouMessage.length}/500
+                    {thankYouMessage.length}/{THANK_YOU_LIMIT}
                   </Text>
                 </View>
               </View>

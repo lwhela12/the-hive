@@ -270,7 +270,38 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       c.arc(cx, cy, R, 0, Math.PI * 2);
       c.clip();
 
-      // Land, under the weather.
+      // SEA, before anything sits on it.
+      //
+      // Nat asked whether land and sea texture was in my wheelhouse
+      // (2026-08-04). It is, and the sea is the half that was missing: the
+      // ocean was one vertical gradient, so every bit of water at the same
+      // height was the same colour, which is the one thing an ocean never is.
+      // Broad cool patches at very low strength give it depth and current
+      // without ever resolving into shapes you could mistake for a map.
+      softly(34);
+      for (const l of lands) {
+        // Reuse the land field, offset, so the water varies where the land
+        // does not — one set of numbers, two layers.
+        const a = l.a + 0.55;
+        const rr = R - l.d * l.d * R * 0.30;
+        const x = cx + Math.sin(a) * rr;
+        const y = cy - Math.cos(a) * rr;
+        const size = R * (l.r + 0.06) * (1 - l.d * 0.3);
+        if (y - size > H || y + size < horizon - 30) continue;
+        const water = slate
+          ? '40,44,52'
+          : l.warm > 0.5 ? '18,42,70' : '10,30,54';   // shelf / deep
+        const patch = c.createRadialGradient(x, y, 0, x, y, size);
+        patch.addColorStop(0, `rgba(${water},0.30)`);
+        patch.addColorStop(0.6, `rgba(${water},0.13)`);
+        patch.addColorStop(1, `rgba(${water},0)`);
+        c.fillStyle = patch;
+        c.beginPath();
+        c.ellipse(x, y, size, size * 0.5, 0, 0, Math.PI * 2);
+        c.fill();
+      }
+
+      // Land, over the water and under the weather.
       softly(22);
       for (const l of lands) {
         const rr = R - l.d * l.d * R * 0.30;
@@ -294,6 +325,21 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
         c.fillStyle = blob;
         c.beginPath();
         c.ellipse(x, y, size, size * (0.42 + 0.3 * (1 - l.d)), 0, 0, Math.PI * 2);
+        c.fill();
+
+        // A brighter core inside each mass, offset from its centre. A single
+        // radial falloff makes every landmass an identical soft lozenge; two
+        // circles that do not share a centre make an edge that bulges one way,
+        // and that asymmetry is most of what reads as "coast".
+        const inner = c.createRadialGradient(
+          x - size * 0.22, y - size * 0.1, 0,
+          x - size * 0.22, y - size * 0.1, size * 0.62,
+        );
+        inner.addColorStop(0, `rgba(${earth},0.34)`);
+        inner.addColorStop(1, `rgba(${earth},0)`);
+        c.fillStyle = inner;
+        c.beginPath();
+        c.ellipse(x - size * 0.22, y - size * 0.1, size * 0.62, size * 0.34, 0.4, 0, Math.PI * 2);
         c.fill();
       }
 

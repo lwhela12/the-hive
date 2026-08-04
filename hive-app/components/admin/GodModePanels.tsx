@@ -371,6 +371,22 @@ export function NewsletterPanel({
  * itself — rendering it here too showed OG HIVE twice under two different
  * names (Nat 2026-08-03).
  */
+/**
+ * The meeting-day surfaces, which all belong to exactly one HIVE.
+ *
+ * They were moved off Admin onto the Meetings tab on 2026-08-01 because they
+ * are what you reach for on meeting day rather than settings you configure —
+ * and then Admin could only point at them with a sentence, because Admin is
+ * reached from HIVE-Wide and Meetings is hidden at HIVE-Wide. Naming the HIVE
+ * first, as a tab, is what makes them linkable again.
+ */
+const HIVE_TOOLS: { route: string; emoji: string; label: string; hint: string }[] = [
+  { route: '/meeting-helper', emoji: '🗓️', label: 'Meeting Helper', hint: 'Run the meeting, live' },
+  { route: '/monthly-tuneup', emoji: '🔧', label: 'Monthly Tune-up', hint: 'The check-in everyone fills in' },
+  { route: '/newsletter', emoji: '📰', label: 'Newsletter draft', hint: 'The Buzz, written from real facts' },
+  { route: '/meetings', emoji: '📚', label: 'Meetings & summaries', hint: 'Past meetings and what was said' },
+];
+
 export function HiveMemberPanels({
   cellStyle,
   panelStyle,
@@ -383,10 +399,23 @@ export function HiveMemberPanels({
   HeaderAction: React.ComponentType<{ label: string; onPress: () => void }>;
   orderFrom?: number;
 }) {
-  const { memberships, communityId } = useAuth();
+  const { memberships, communityId, switchCommunity } = useAuth();
+  const router = useRouter();
+
+  // Every tool link switches into the HIVE first, then opens the page. Without
+  // the switch you would land on whichever HIVE you were last in and see its
+  // numbers under another HIVE's name — the exact confusion the tabs exist to
+  // remove.
+  const openToolInHive = useCallback(async (targetId: string, route: string) => {
+    if (targetId !== communityId) await switchCommunity(targetId);
+    router.push({ pathname: route as any, params: { from: 'admin' } });
+  }, [communityId, switchCommunity, router]);
   const [byHive, setByHive] = useState<Record<string, Row[]>>({});
   const [loading, setLoading] = useState(true);
   const [inviteFor, setInviteFor] = useState<string | null>(null);
+  // Which view each HIVE's folder is showing. Per HIVE, so opening Tech's
+  // check-ins does not also flip OG's box to check-ins.
+  const [tabFor, setTabFor] = useState<Record<string, string>>({});
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('member');
   const [sending, setSending] = useState(false);
@@ -467,15 +496,23 @@ export function HiveMemberPanels({
         const skin = hivePanelSkin(accent);
         const name = hiveDisplayName(m.community?.name);
         const inviting = inviteFor === m.community_id;
+        const tab = tabFor[m.community_id] ?? 'members';
 
         return (
           <View key={m.community_id} style={[cellStyle, { order: orderFrom + index * 2 } as any]}>
             <Panel
-              title={`${name} (${rows.length})`}
+              title={name}
+              tabs={[
+                { key: 'members', label: `Members (${rows.length})` },
+                { key: 'tools', label: 'Meeting tools' },
+                { key: 'checkins', label: 'Check-ins' },
+              ]}
+              activeTab={tab}
+              onTabChange={(key: string) => setTabFor((prev) => ({ ...prev, [m.community_id]: key }))}
               accent={accent}
               style={panelStyle}
               bodyStyle={bodyStyle}
-              action={m.role === 'admin' ? (
+              action={tab === 'members' && m.role === 'admin' ? (
                 <HeaderAction
                   label={inviting ? 'Close Invite' : '+ New Member'}
                   onPress={() => {
@@ -487,6 +524,71 @@ export function HiveMemberPanels({
               ) : undefined}
             >
               <ScrollView style={scrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
+                {/* MEETING TOOLS, for this HIVE.
+                    They used to live in a panel of their own that could not name
+                    a HIVE — so it said "pick a HIVE in the rail first", from a
+                    page the rail cannot reach a HIVE from. Here the HIVE is
+                    already chosen: every link switches into it on the way. */}
+                {tab === 'tools' ? (
+                  <View style={{ paddingVertical: 6 }}>
+                    {HIVE_TOOLS.map((tool) => (
+                      <Pressable
+                        key={tool.route}
+                        onPress={() => void openToolInHive(m.community_id, tool.route)}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row', alignItems: 'center', gap: 10,
+                          paddingHorizontal: 14, paddingVertical: 11,
+                          backgroundColor: pressed ? skin.inset : 'transparent',
+                          borderBottomWidth: 1, borderBottomColor: skin.hairline,
+                        })}
+                      >
+                        <Text style={{ fontSize: 15 }}>{tool.emoji}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#F6F4E5' }}>
+                            {tool.label}
+                          </Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
+                            {tool.hint}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={15} color="rgba(246,244,229,0.5)" />
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : tab === 'checkins' ? (
+                  <View style={{ paddingVertical: 6 }}>
+                    <Pressable
+                      onPress={() => void openToolInHive(m.community_id, '/admin')}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row', alignItems: 'center', gap: 10,
+                        paddingHorizontal: 14, paddingVertical: 11,
+                        backgroundColor: pressed ? skin.inset : 'transparent',
+                        borderBottomWidth: 1, borderBottomColor: skin.hairline,
+                      })}
+                    >
+                      <Text style={{ fontSize: 15 }}>📊</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#F6F4E5' }}>
+                          Check-in questions &amp; responses
+                        </Text>
+                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
+                          What {name} is asked each month, and what they said
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={15} color="rgba(246,244,229,0.5)" />
+                    </Pressable>
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_400Regular', fontSize: 12,
+                        color: 'rgba(246,244,229,0.5)', padding: 14, lineHeight: 18,
+                      }}
+                    >
+                      Each HIVE gets its own questions, so {name} can be asked something
+                      the others are not.
+                    </Text>
+                  </View>
+                ) : (
+                <>
                 {inviting ? (
                   <View
                     style={{
@@ -508,7 +610,10 @@ export function HiveMemberPanels({
                       keyboardType="email-address"
                       editable={!sending}
                       style={{
-                        fontFamily: 'Lato_400Regular', fontSize: 13, color: '#F6F4E5',
+                        // Cream ink on a white field is invisible. It read as
+                        // an empty box you could type into and never see, on
+                        // the one form that sends somebody an email.
+                        fontFamily: 'Lato_400Regular', fontSize: 13, color: '#2d2d2d',
                         backgroundColor: '#fff', borderWidth: 1, borderColor: skin.border,
                         borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
                         opacity: sending ? 0.65 : 1,
@@ -604,6 +709,8 @@ export function HiveMemberPanels({
                     </View>
                   </View>
                 ))}
+                </>
+                )}
               </ScrollView>
             </Panel>
           </View>

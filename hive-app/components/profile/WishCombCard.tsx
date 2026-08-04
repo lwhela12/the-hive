@@ -5,6 +5,7 @@ import { formatDateShort } from '../../lib/dateUtils';
 import { getHdWishStatusLabel, getWishBodyPreview, getWishQuickTitle, hasSeparateWishTitle } from '../../lib/wishDisplay';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
+import { ScopeBadge } from '../ui/ScopeBadge';
 import type { Profile, Wish, WishGranter } from '../../types';
 
 const publicBeeIcon = require('../../assets/BEE ONLY IN GOLD BG.png');
@@ -193,11 +194,21 @@ export function WishCombCard({
           </Text>
         )}
 
+        {/* How far this wish travels, on the wish (Nat 2026-08-04: "we need a
+            little icon here on the wishes so you can see which ones are just
+            for your HIVE & which ones are HIVE-wide").
+
+            Shown for EVERY rung, including "This HIVE only". Elsewhere the
+            badge is hidden when the scope is the default, which sounds tidy and
+            is the reason you cannot tell the two apart: a wish showing nothing
+            could equally be a private one or one that has not been looked at.
+            You can only compare two things if both of them are on screen. */}
         {dateLabel && (
           <View style={styles.footerRow}>
             <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
               {dateLabel}
             </Text>
+            <ScopeBadge scope={(wish.share_scope as string) ?? 'hive'} compact />
             {showGranters && (
               <View style={styles.granterRow}>
                 <Text style={styles.granterLabel}>by</Text>

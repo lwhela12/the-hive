@@ -64,7 +64,11 @@ interface RoomChatViewProps {
 const CHAT_EMOJI_OPTIONS = ['💬', '✨', '🎯', '🍯', '📌', '💡', '🎉', '🧭', '🫶', '📅', '🏠', '📝'];
 // Midnight is HIVE-Wide's, not a taste — it belongs to the one room that
 // reaches every HIVE and is never offered as a colour somebody can pick.
-const THEME_OPTIONS = Object.values(CHAT_ROOM_THEMES).filter((t) => t.key !== 'midnight');
+// Midnight is choosable again. It was hidden because the HIVE-Wide room was
+// forced into it and picking it by hand would have been picking the one theme
+// that meant something; nothing is forced into it now, so it is just a dark
+// room for anybody who wants one.
+const THEME_OPTIONS = Object.values(CHAT_ROOM_THEMES);
 
 function getFirstGrapheme(value: string): string {
   const trimmed = value.trim();

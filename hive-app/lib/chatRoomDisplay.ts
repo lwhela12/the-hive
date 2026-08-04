@@ -203,13 +203,20 @@ export function getRoomCustomization(room: RoomWithMembers, currentUserId?: stri
 }
 
 export function getChatRoomTheme(room: RoomWithMembers, currentUserId?: string): ChatRoomTheme {
-  // The room every HIVE shares is space, and that is not a preference — it is
-  // the same rule the rail, the header and the HIVE-Wide pages follow. It wins
-  // over a saved theme rather than merging with one, because half a space room
-  // is the cream-header-on-a-starfield frame Nat photographed (2026-08-03).
-  if (room.reach === 'all_hives') {
-    return CHAT_ROOM_THEMES.midnight;
-  }
+  // The forced space theme is GONE (Nat 2026-08-04: "HIVE wide messaging is
+  // still janky. It should look like this [the OG HIVE room] but just go to
+  // 'hive wide'").
+  //
+  // It was right for one day and then the ground moved. On 08-03 the shared
+  // room was reached from HIVE-Wide, where everything is black, so a cream room
+  // would have been the odd one out. That same evening Messages stepped OUT of
+  // the HIVE-Wide rail — the shared room now sits in each HIVE's own message
+  // list, and you open it from a cream page, inside a gold HIVE, with a gold
+  // header above it. So the rule that stopped it looking like half a space room
+  // started making it look like half a cream one: a black panel dropped into a
+  // warm page, which is exactly the seam it was written to prevent.
+  //
+  // It is a room like any other room now, and wears whatever theme it is given.
   const { themeKey } = getRoomCustomization(room, currentUserId);
   return CHAT_ROOM_THEMES[themeKey];
 }

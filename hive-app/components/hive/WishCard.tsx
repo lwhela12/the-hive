@@ -166,9 +166,10 @@ export function WishCard({
             {/* How far this wish travels. Only worth saying when it leaves its
                 own HIVE — "This HIVE only" on every card is wallpaper, and the
                 whole point is that the other two stand out (Nat 2026-08-02). */}
-            {wish.share_scope && wish.share_scope !== 'hive' ? (
+            {/* Every rung, not just the unusual ones — see WishCombCard. */}
+            {true ? (
               <View className="ml-2">
-                <ScopeBadge scope={wish.share_scope as string} compact />
+                <ScopeBadge scope={(wish.share_scope as string) ?? 'hive'} compact />
               </View>
             ) : null}
 

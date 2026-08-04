@@ -28,6 +28,7 @@ import { WishCombCard } from '../../components/profile/WishCombCard';
 import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
+import { EditButton } from '../../components/ui/EditButton';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { SkillsManageModal } from '../../components/skills/SkillsManageModal';
@@ -1745,9 +1746,11 @@ export default function ProfileScreen() {
         <View className="mb-6">
           <View className="flex-row items-center justify-end mb-2">
             {!isEditing ? (
-              <Pressable onPress={startEditing} className="px-3 py-1 active:opacity-70">
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold">Edit</Text>
-              </Pressable>
+              // The pencil, like everywhere else (Nat 2026-08-04: "all edit
+              // buttons should be the same pencil"). This one said "Edit" in
+              // gold text while the block directly above it used the honey
+              // pencil, so one page had two vocabularies for one verb.
+              <EditButton onPress={startEditing} accessibilityLabel="Edit your profile" />
             ) : (
               <View className="flex-row">
                 <Pressable onPress={cancelEditing} className="px-3 py-1 mr-2 active:opacity-70">
@@ -2267,6 +2270,17 @@ export default function ProfileScreen() {
                         : 'Seed your Skills Garden'}
                     </Text>
                   </View>
+                  {/* Its own pencil (Nat 2026-08-04): "what's missing is an edit
+                      button for the skills garden — if you want to edit the
+                      garden, you have to scroll all the way up to the top."
+                      Which was true: the only way in was the profile Edit
+                      control a full page above, so the one block on this page
+                      you actually fiddle with was the one block with no way to
+                      open it from where you were standing. */}
+                  <EditButton
+                    onPress={() => setSkillsModalVisible(true)}
+                    accessibilityLabel="Edit your Skills Garden"
+                  />
                 </View>
               )}
               {/* Replant helper — only rendered here on the user's own garden
@@ -2340,45 +2354,17 @@ export default function ProfileScreen() {
           </FadeIn>
         )}
 
-        {/* Settings live on their own page now (Nat 2026-08-03): "your profile
-            is like, about you... & settings is all the back end stuff". Emails,
-            push, how far you travel, your logins and swapping HIVEs all moved
-            there. This is the door, kept where those cards used to be so anyone
-            who came here by muscle memory still lands on them. */}
-        {!immersiveSkillsGarden && (
-        <Pressable
-          onPress={() => router.push('/settings' as any)}
-          accessibilityRole="button"
-          accessibilityLabel="Open settings"
-          className="flex-row items-center bg-white rounded-xl shadow-sm px-4 py-4 active:opacity-80 mb-6"
-          style={{ width: '100%', maxWidth: 1240, alignSelf: 'center' }}
-        >
-          <Ionicons name="options-outline" size={22} color="#bd9348" />
-          <View className="flex-1 ml-3">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
-              Settings
-            </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
-              Emails, notifications, how far you travel, your logins
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#c3b8a5" />
-        </Pressable>
-        )}
+        {/* Settings and Sign out USED to live here and are now gone (Nat
+            2026-08-04): "we dont need 'settings' or 'sign out' inside of
+            profile any more, since we moved them to the side nav bar."
 
-        {/* Sign Out Button */}
-        {!immersiveSkillsGarden && (
-        // Long and skinny, squared off to the same 1240 the two settings cards
-        // span, so the block reads as one shape rather than a centred pill
-        // floating under two boxes (Nat 2026-07-26).
-        <Pressable
-          onPress={handleSignOut}
-          className="bg-red-50 py-3 rounded-xl items-center active:bg-red-100 mb-6"
-          style={{ width: '100%', maxWidth: 1240, alignSelf: 'center' }}
-        >
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-600">Sign Out</Text>
-        </Pressable>
-        )}
+            Which is right, and is the second half of a change she started on
+            08-03. Settings moved to its own page then, and this card was left
+            behind as a door for muscle memory — but the rail now lists Settings
+            and Log out on every screen, so the door leads somewhere you can
+            already see, and Sign out was a second way to do a thing the rail
+            does with a confirmation. Two of everything is how a page stops
+            feeling like it is about you. */}
       </ScrollView>
       </KeyboardAvoidingView>
 
