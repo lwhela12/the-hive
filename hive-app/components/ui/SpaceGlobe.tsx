@@ -77,7 +77,17 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
     const AIR_MID = slate ? '150,160,175' : '96,170,255';
     const AIR_FAR = slate ? '90,100,115' : '48,104,205';
     const CITY = slate ? '225,228,234' : '255,206,138';
-    const SUN = slate ? '255,255,255' : '255,238,206';
+    // The sunrise, in HIVE's own colours. Nat brought a photograph of the sun
+    // cresting Earth's limb — hot gold against black, blue wire of atmosphere
+    // along the edge — and said it looks like the logo, which it does. So the
+    // light is gold rather than white (2026-08-03).
+    const SUN_CORE = slate ? '255,255,255' : '255,246,214';
+    const SUN_WARM = slate ? '210,214,224' : '255,178,64';
+    const SUN_DEEP = slate ? '120,126,138' : '214,116,26';
+
+    // Where the sun sits on the limb. Left of centre and just below the edge,
+    // so it reads as rising rather than as a lamp hung over the planet.
+    const SUN_A = -0.34;
 
     let W = 0, H = 0, raf = 0, t = 0;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -265,6 +275,24 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
         ctx.fill();
       }
 
+      // Daybreak creeping across the surface. The world is dark on the far side
+      // and warm where the sun has reached it — without this the sun hangs over
+      // a planet that hasn't noticed it (Nat's reference photograph, 2026-08-03).
+      {
+        const sun = sunPoint();
+        const reach = R * 0.55;
+        ctx.globalCompositeOperation = 'lighter';
+        const dawn = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, reach);
+        dawn.addColorStop(0, `rgba(${SUN_WARM},0.30)`);
+        dawn.addColorStop(0.35, `rgba(${SUN_DEEP},0.13)`);
+        dawn.addColorStop(1, `rgba(${SUN_DEEP},0)`);
+        ctx.fillStyle = dawn;
+        ctx.beginPath();
+        ctx.arc(sun.x, sun.y, reach, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
       // City lights. Each sits at (angle, depth) on the sphere and gets flattened
       // toward the limb, which is the whole reason they look like they are on a
       // curved surface rather than scattered on glass.
@@ -322,30 +350,74 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       ctx.arc(cx, cy, inner, 0, Math.PI * 2, true);
       ctx.fill();
 
-      // A sun just out of frame, low and to one side. Without it the limb is
-      // evenly lit all the way across, which never happens and reads as fake.
-      const sx = cx - W * 0.30;
-      const sy = horizon - H * 0.015;
-      const sunR = Math.max(W, H) * 0.34;
-      const sun = ctx.createRadialGradient(sx, sy, 0, sx, sy, sunR);
-      sun.addColorStop(0, `rgba(${SUN},0.17)`);
-      sun.addColorStop(0.25, `rgba(${SUN},0.06)`);
-      sun.addColorStop(1, `rgba(${SUN},0)`);
-      ctx.fillStyle = sun;
-      ctx.beginPath();
-      ctx.arc(sx, sy, sunR, 0, Math.PI * 2);
-      ctx.fill();
-
       ctx.restore();
 
-      // And the edge itself, drawn as a line so it stays crisp at any size.
+      // ── the edge itself ────────────────────────────────────────────────────
+      // Drawn as a line so it stays crisp at any size. Brightest near the sun
+      // and fading away around the curve, which is what stops the limb reading
+      // as a drawn circle.
+      const sun = sunPoint();
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.strokeStyle = `rgba(${AIR_CORE},0.5)`;
-      ctx.lineWidth = 1.1;
+      const wire = ctx.createLinearGradient(sun.x - R * 0.5, 0, sun.x + R * 0.9, 0);
+      wire.addColorStop(0, `rgba(${AIR_CORE},0.30)`);
+      wire.addColorStop(0.28, `rgba(${SUN_CORE},0.85)`);
+      wire.addColorStop(0.55, `rgba(${AIR_CORE},0.55)`);
+      wire.addColorStop(1, `rgba(${AIR_MID},0.16)`);
+      ctx.strokeStyle = wire;
+      ctx.lineWidth = 1.4;
       ctx.beginPath();
-      ctx.arc(cx, cy, R, -Math.PI / 2 - 0.9, -Math.PI / 2 + 0.9);
+      ctx.arc(cx, cy, R, -Math.PI / 2 - 1.0, -Math.PI / 2 + 1.0);
       ctx.stroke();
+      ctx.restore();
+
+      drawSunrise(sun);
+    }
+
+    /** Where on the limb the sun is, in screen coordinates. */
+    function sunPoint() {
+      const r = R * 0.998;
+      return { x: cx + Math.sin(SUN_A) * r, y: cy - Math.cos(SUN_A) * r };
+    }
+
+    /**
+     * The sun coming up over the edge.
+     *
+     * Three layers, because one radial gradient reads as a torch rather than a
+     * star: a wide warm bloom that spills into the black, a tighter gold core,
+     * and a hot white centre small enough to look like it hurts to look at.
+     */
+    function drawSunrise(sun: { x: number; y: number }) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+
+      const bloom = Math.max(W, H) * 0.42;
+      const g1 = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, bloom);
+      g1.addColorStop(0, `rgba(${SUN_WARM},0.34)`);
+      g1.addColorStop(0.14, `rgba(${SUN_DEEP},0.20)`);
+      g1.addColorStop(0.45, `rgba(${SUN_DEEP},0.07)`);
+      g1.addColorStop(1, `rgba(${SUN_DEEP},0)`);
+      ctx.fillStyle = g1;
+      ctx.beginPath();
+      ctx.arc(sun.x, sun.y, bloom, 0, Math.PI * 2);
+      ctx.fill();
+
+      const glow = R * 0.085;
+      const g2 = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, glow);
+      g2.addColorStop(0, `rgba(${SUN_CORE},0.95)`);
+      g2.addColorStop(0.18, `rgba(${SUN_WARM},0.72)`);
+      g2.addColorStop(0.55, `rgba(${SUN_WARM},0.22)`);
+      g2.addColorStop(1, `rgba(${SUN_WARM},0)`);
+      ctx.fillStyle = g2;
+      ctx.beginPath();
+      ctx.arc(sun.x, sun.y, glow, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = `rgba(${SUN_CORE},0.95)`;
+      ctx.beginPath();
+      ctx.arc(sun.x, sun.y, glow * 0.17, 0, Math.PI * 2);
+      ctx.fill();
+
       ctx.restore();
     }
 

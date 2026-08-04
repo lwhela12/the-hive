@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
+import { SPACE_SKIN } from '../../lib/pageSkin';
 import type { Community } from '../../types';
 
 /**
@@ -30,6 +31,9 @@ type Buzz = {
 
 export default function BuzzScreen() {
   const { communityId, memberships } = useAuth();
+  // The Buzz lives at HIVE-Wide and nowhere else (Nat 2026-08-03), so it is
+  // always dressed for space rather than following whoever opened it.
+  const skin = SPACE_SKIN;
   const [items, setItems] = useState<Buzz[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -73,8 +77,8 @@ export default function BuzzScreen() {
   const showWhichHive = memberships.length > 1;
 
   return (
-    <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
-      <AppHeader title="The Buzz" />
+    <SafeAreaView className="flex-1" style={{ backgroundColor: skin.page }} edges={['top']}>
+      <AppHeader title="The Buzz" tone="wide" />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
@@ -83,15 +87,15 @@ export default function BuzzScreen() {
         <View style={{ maxWidth: 820, width: '100%', alignSelf: 'center' }}>
           {loading ? (
             <View style={{ paddingVertical: 48 }}>
-              <ActivityIndicator size="large" color="#bd9348" />
+              <ActivityIndicator size="large" color={skin.gold} />
             </View>
           ) : items.length === 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: 56 }}>
               <Text style={{ fontSize: 34, marginBottom: 12 }}>📰</Text>
-              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: '#313130', marginBottom: 6 }}>
+              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: skin.ink, marginBottom: 6 }}>
                 Nothing to catch up on yet
               </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#8e7a5e', textAlign: 'center', maxWidth: 320 }}>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: skin.inkSoft, textAlign: 'center', maxWidth: 320 }}>
                 The first newsletter will land here, and so will anything another HIVE shares.
               </Text>
             </View>
@@ -104,9 +108,9 @@ export default function BuzzScreen() {
               <View
                 key={item.id}
                 style={{
-                  backgroundColor: '#fffdf5',
+                  backgroundColor: skin.card,
                   borderWidth: 1,
-                  borderColor: 'rgba(189,147,72,0.24)',
+                  borderColor: skin.border,
                   borderRadius: 18,
                   marginBottom: 12,
                   overflow: 'hidden',
@@ -119,14 +123,14 @@ export default function BuzzScreen() {
                   accessibilityState={{ expanded: open }}
                   style={({ pressed }) => ({
                     flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-                    padding: 16, backgroundColor: pressed ? '#fdf8ec' : 'transparent',
+                    padding: 16, backgroundColor: pressed ? skin.cardPressed : 'transparent',
                   })}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: '#313130' }}>
+                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: skin.ink }}>
                       {item.title}
                     </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 3 }}>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: skin.inkSoft, marginTop: 3 }}>
                       {formatDateLong(item.created_at)}
                       {showWhichHive && fromElsewhere
                         ? ` · from ${hiveDisplayName(item.community?.name)}`
@@ -137,7 +141,7 @@ export default function BuzzScreen() {
                   <Ionicons
                     name={open ? 'chevron-up' : 'chevron-down'}
                     size={19}
-                    color="#bd9348"
+                    color={skin.gold}
                   />
                 </Pressable>
 
@@ -146,7 +150,7 @@ export default function BuzzScreen() {
                     <Text
                       style={{
                         fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 24,
-                        color: '#4b4740',
+                        color: skin.inkBody,
                       }}
                     >
                       {item.content}

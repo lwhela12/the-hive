@@ -50,8 +50,11 @@ export type NavDestination = {
    * 'hidden' — only means something inside one HIVE, so it steps out of the
    *            list rather than showing you one HIVE's answer while you are
    *            standing above all of them.
+   * 'only'   — the reverse: it lives at HIVE-Wide and nowhere else, so it is
+   *            absent from every HIVE's page list. The Buzz is the one, and it
+   *            always was one newsletter across all of them.
    */
-  atWholeHive?: 'same' | 'wide' | 'hidden';
+  atWholeHive?: 'same' | 'wide' | 'hidden' | 'only';
   /** Where 'wide' items go when you are at Whole HIVE, if not `route`. */
   wideRoute?: string;
 };
@@ -87,16 +90,19 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   { key: 'meetings', label: 'Meetings', emoji: '🗓️', route: '/meetings', gate: 'everyone', atWholeHive: 'hidden' },
   // Real money, belonging to one HIVE. It is already switched off for Tech.
   { key: 'honey-pot', label: 'Honey Pot', emoji: '🍯', route: '/honey-pot', gate: 'everyone', atWholeHive: 'hidden' },
-  // The Buzz was only ever one newsletter across all the HIVEs, so it reads the
-  // same standing anywhere — it does not need a wide twin.
-  { key: 'buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone', atWholeHive: 'same' },
+  // The Buzz lives at HIVE-Wide and nowhere else now (Nat 2026-08-03). It was
+  // always one newsletter across all the HIVEs, so a copy of it inside OG was
+  // OG appearing to own the thing everybody shares.
+  { key: 'buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone', atWholeHive: 'only' },
   // Out of HIVE-Wide for now, at Nat's call (2026-08-03). Your profile is the
   // same page wherever you stand, so having it up there too was a second door
   // to one room while the HIVE-Wide idea is still settling.
   { key: 'profile', label: 'Profile', emoji: '🐝', route: '/profile', gate: 'everyone', atWholeHive: 'hidden' },
-  // Profile is about you; Settings is the plumbing behind you (2026-08-03).
-  // Admin already wears the cog, so Settings takes the sliders.
-  { key: 'settings', label: 'Settings', emoji: '🎛️', route: '/settings', gate: 'everyone', atWholeHive: 'same' },
+  // Settings is a gear, because settings are a gear (Nat 2026-08-03). It wore
+  // the sliders only because Admin had the cog first, which is backwards — the
+  // page everybody uses should get the obvious icon, and the one two people
+  // use can be the one you have to learn. Admin took the keys instead.
+  { key: 'settings', label: 'Settings', emoji: '⚙️', route: '/settings', gate: 'everyone', atWholeHive: 'same' },
   // Feedback on the app is feedback on all of it, wherever you happen to be.
   { key: 'feedback', label: 'App Feedback', emoji: '💬', route: '/hive?feedback=1', gate: 'everyone', atWholeHive: 'same' },
 ];
@@ -127,7 +133,9 @@ export function destinationsForPlace(opts: {
   wholeHive: boolean;
 }): NavDestination[] {
   return visibleDestinations(opts)
-    .filter((d) => !(opts.wholeHive && d.atWholeHive === 'hidden'))
+    .filter((d) => (
+      opts.wholeHive ? d.atWholeHive !== 'hidden' : d.atWholeHive !== 'only'
+    ))
     .map((d) => (
       opts.wholeHive && d.atWholeHive === 'wide' && d.wideRoute
         ? { ...d, route: d.wideRoute }
@@ -137,7 +145,8 @@ export function destinationsForPlace(opts: {
 
 /** Below the last line. Owners see the newsletter tools once they're inside. */
 export const ADMIN_DESTINATION: NavDestination = {
-  key: 'admin', label: 'Admin', emoji: '⚙️', route: '/admin', gate: 'admin',
+  // The keys to the place, now that Settings has the gear.
+  key: 'admin', label: 'Admin', emoji: '🔑', route: '/admin', gate: 'admin',
 };
 
 /** What this person is actually allowed to see. */
