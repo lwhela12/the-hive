@@ -80,6 +80,8 @@ export function BoardReplyItem({
               <TextInput
                 value={editContent}
                 onChangeText={setEditContent}
+                placeholder="Edit your reply..."
+                placeholderTextColor="#a09274"
                 multiline
                 blurOnSubmit={Platform.OS === 'web'}
                 submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}

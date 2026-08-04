@@ -315,7 +315,7 @@ export function AddWishModal({
                   value={wishTitle}
                   onChangeText={handleWishTitleChange}
                   placeholder="Rose bushes, tap shoes, HIVE app suggestions..."
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor="#a09274"
                   maxLength={80}
                   className="bg-white rounded-xl px-4 py-3 text-charcoal mb-4"
                   style={{
@@ -334,7 +334,7 @@ export function AddWishModal({
                   onSelectionChange={wishMentionInput.textInputMentionProps.onSelectionChange}
                   selection={wishMentionInput.textInputMentionProps.selection}
                   placeholder="I want help learning to cook healthier meals..."
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor="#a09274"
                   multiline
                   numberOfLines={6}
                   maxLength={500}

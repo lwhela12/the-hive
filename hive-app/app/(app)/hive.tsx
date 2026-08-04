@@ -4258,7 +4258,7 @@ export default function HiveScreen() {
                     shadowOffset: { width: 0, height: 0 },
                   }}
                 />
-                <DictationRow setValue={setMyAnswer} />
+            {/* One mic only. There were two: this strip and a floating button a few lines down. Only the floating one drives the listening glow on the field, so the strip changed the words while the box sat there looking idle. */}
                 {/* Listening indicator strip inside the box */}
                 {isVoiceListening && (
                   <View style={{

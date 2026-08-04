@@ -32,6 +32,9 @@ import { WishCommentItem, type WishCommentNode } from './WishCommentItem';
 import { getFirstName } from '../../lib/hooks/useArrivalBoard';
 import type { Wish, Profile, WishComment, WishGranter } from '../../types';
 
+import { AttachmentPicker } from '../ui/AttachmentPicker';
+import type { SelectedImage } from '../../lib/imagePicker';
+import type { SelectedFile } from '../../lib/filePicker';
 type WishWithGranters = Wish & {
   user?: Profile | null;
   granters?: (WishGranter & { granter?: Profile })[];
@@ -65,6 +68,8 @@ export function WishDetail({
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const commentDictation = useDictation(setNewComment);
+  const [commentImages, setCommentImages] = useState<SelectedImage[]>([]);
+  const [commentFiles, setCommentFiles] = useState<SelectedFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [showGrantModal, setShowGrantModal] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
@@ -545,10 +550,29 @@ export function WishDetail({
             ))}
           </View>
         )}
-        <View className="flex-row items-end pb-3">
+        {/* Rebuilt to match Clive exactly (Nat 2026-08-04): "here's your gold
+            standard — see how the paper clip is on the left, the send button is
+            on the right & then there's a microphone?"
+
+            This bar got three things wrong at once. The mic and the send were
+            swapped. The send was a ~44px paper-plane where every other bar in
+            the app uses a 28px ↑. And there was no paperclip at all, so a photo
+            could not go on a wish comment even though the gallery below has
+            always been able to show one. Now it is one cream pill with the four
+            controls in the one order the app uses: 📎 · text · ↑ · 🎤. */}
+        <View
+          className="flex-row items-end rounded-2xl px-3 py-2 border bg-cream border-transparent mb-3"
+        >
+          <AttachmentPicker
+            compact
+            selectedImages={commentImages}
+            onImagesChange={setCommentImages}
+            selectedFiles={commentFiles}
+            onFilesChange={setCommentFiles}
+          />
           <TextInput
-            className="flex-1 bg-cream rounded-xl px-4 py-3 mr-2 max-h-24"
-            style={{ fontFamily: 'Lato_400Regular' }}
+            className="flex-1 max-h-32 text-base text-charcoal py-1 px-1"
+            style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none', caretColor: '#313130' } as any}
             placeholder={replyingTo ? 'Write your reply...' : 'Write a comment...'}
             placeholderTextColor="#a09274"
             value={newComment}
@@ -560,29 +584,25 @@ export function WishDetail({
             onKeyPress={submitOnEnter(handleSubmitComment)}
             editable={!submitting}
           />
-          <VoiceMicButton
-            size={20}
-            style={{ marginRight: 8, marginBottom: 2 }}
-            onTranscript={commentDictation.onTranscript}
-            onInterimTranscript={commentDictation.onInterimTranscript}
-          />
           <Pressable
             onPress={handleSubmitComment}
             disabled={!newComment.trim() || submitting}
-            className={`p-3 rounded-full ${
-              newComment.trim() && !submitting ? 'bg-gold' : 'bg-[#ddd3b6]'
+            className={`w-7 h-7 rounded-full items-center justify-center ml-2 ${
+              newComment.trim() && !submitting ? 'bg-gold active:opacity-80' : 'bg-[#ddd3b6]'
             }`}
           >
             {submitting ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Ionicons
-                name="send"
-                size={20}
-                color="#fff"
-              />
+              <Text className="text-sm text-white" style={{ marginTop: -1 }}>↑</Text>
             )}
           </Pressable>
+          <VoiceMicButton
+            size={20}
+            style={{ marginLeft: 6 }}
+            onTranscript={commentDictation.onTranscript}
+            onInterimTranscript={commentDictation.onInterimTranscript}
+          />
         </View>
         </View>
       </View>
