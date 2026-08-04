@@ -23,6 +23,16 @@ interface RoomMessageItemProps {
   ownBubbleColor?: string;
   ownBubbleTextColor?: string;
   reactionAccentColor?: string;
+  /**
+   * Somebody else's bubble and the ink in it. These used to be written into the
+   * JSX as '#FFFFFF' and '#313130', which quietly made every chat theme a light
+   * one — the room every HIVE shares is space, and charcoal on a starfield is
+   * not a style problem, it is text nobody can read (Nat 2026-08-03).
+   */
+  otherBubbleColor?: string;
+  otherBubbleTextColor?: string;
+  /** Timestamps and the "edited" note. */
+  metaTextColor?: string;
 }
 
 export const RoomMessageItem = memo(function RoomMessageItem({
@@ -35,6 +45,9 @@ export const RoomMessageItem = memo(function RoomMessageItem({
   ownBubbleColor = '#bd9348',
   ownBubbleTextColor = '#FFFFFF',
   reactionAccentColor = '#bd9348',
+  otherBubbleColor = '#FFFFFF',
+  otherBubbleTextColor = '#313130',
+  metaTextColor = 'rgba(49,49,48,0.4)',
 }: RoomMessageItemProps) {
   const [showActions, setShowActions] = useState(false);
   const [customEmoji, setCustomEmoji] = useState('');
@@ -135,7 +148,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
           {(hasContent || isDeleted) && (
             <View
               className={`px-4 py-3 rounded-2xl ${isOwnMessage ? 'rounded-br-md' : 'rounded-bl-md'}`}
-              style={{ backgroundColor: isOwnMessage ? ownBubbleColor : '#FFFFFF' }}
+              style={{ backgroundColor: isOwnMessage ? ownBubbleColor : otherBubbleColor }}
             >
               {/* Message content */}
               {(!isDeleted && hasContent) && (
@@ -144,7 +157,7 @@ export const RoomMessageItem = memo(function RoomMessageItem({
                     fontFamily: 'Lato_400Regular',
                     fontSize: 16,
                     lineHeight: 24,
-                    color: isOwnMessage ? ownBubbleTextColor : '#313130',
+                    color: isOwnMessage ? ownBubbleTextColor : otherBubbleTextColor,
                   }}
                   linkStyle={{ color: isOwnMessage ? 'rgba(255,255,255,0.86)' : reactionAccentColor }}
                 >
@@ -153,8 +166,12 @@ export const RoomMessageItem = memo(function RoomMessageItem({
               )}
               {isDeleted && (
                 <Text
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className={`text-base leading-6 italic ${isOwnMessage ? 'text-white/70' : 'text-charcoal/70'}`}
+                  style={{
+                    fontFamily: 'Lato_400Regular',
+                    color: isOwnMessage ? 'rgba(255,255,255,0.7)' : otherBubbleTextColor,
+                    opacity: isOwnMessage ? 1 : 0.7,
+                  }}
+                  className="text-base leading-6 italic"
                 >
                   This message was deleted
                 </Text>
@@ -181,8 +198,8 @@ export const RoomMessageItem = memo(function RoomMessageItem({
       {/* Time, edited indicator, and quick reaction affordance - outside bubble */}
       <View className={`flex-row items-center mt-1 ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
         <Text
-          style={{ fontFamily: 'Lato_400Regular' }}
-          className={`text-xs text-charcoal/40 ${isOwnMessage ? 'text-right' : 'text-left'}`}
+          style={{ fontFamily: 'Lato_400Regular', color: metaTextColor }}
+          className={`text-xs ${isOwnMessage ? 'text-right' : 'text-left'}`}
         >
           {message.edited_at && !isDeleted && 'edited · '}
           {new Date(message.created_at).toLocaleTimeString('en-US', {

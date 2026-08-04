@@ -14,10 +14,11 @@ import {
   QUARTERLY_DUES_AMOUNT,
 } from '../../lib/dues';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { HoneyPotNotSetUp } from '../../components/hive/HoneyPotNotSetUp';
 
 export default function HoneyPotScreen() {
   const router = useRouter();
-  const { communityId, communityRole, profile } = useAuth();
+  const { communityId, communityRole, profile, community } = useAuth();
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<HoneyPotLedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +74,19 @@ export default function HoneyPotScreen() {
     await loadLedger();
     setRefreshing(false);
   };
+
+  // A HIVE that never chose to run one gets the explainer instead of somebody
+  // else's empty ledger (migration 140). Checked before the ledger renders so
+  // nobody sees a $0 balance flash past on the way to being told there isn't a
+  // Honey Pot here.
+  if (community && community.honey_pot_enabled === false) {
+    return (
+      <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
+        <AppHeader title="Honey Pot" onBackPress={() => router.back()} />
+        <HoneyPotNotSetUp community={community} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>

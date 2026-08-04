@@ -17,13 +17,23 @@ import {
 
 type DisplayRoom = Parameters<typeof getRoomDisplayName>[0];
 
-/** The room above all the HIVEs. It has no row of its own yet. */
+/** The room above all the HIVEs. It has a row of its own now (migration 139). */
 export const HIVE_WIDE_ROOM_NAME = 'HIVE-Wide';
 export const HIVE_WIDE_ROOM_SUBTITLE = 'Every HIVE, in one room';
 
-/** HIVE-Wide's green, softened for a panel and for an edge. */
-export const HIVE_WIDE_SOFT = 'rgba(63,125,92,0.10)';
-export const HIVE_WIDE_EDGE = 'rgba(63,125,92,0.4)';
+/**
+ * HIVE-Wide's mark, and its soft/edge shades.
+ *
+ * These were green — #3F7D5C — and green was retired everywhere else on
+ * 2026-08-03 when HIVE-Wide became space. The rail and the header have said
+ * #0B0B12 since; messaging never got the memo, so the HIVE-Wide row in Messages
+ * was green while the HIVE-Wide row in the rail two inches away was black.
+ * One colour now, and it lives here rather than in HiveWideWelcome, which is no
+ * longer rendered anywhere.
+ */
+export const HIVE_WIDE_MARK = '#0B0B12';
+export const HIVE_WIDE_SOFT = 'rgba(11,11,18,0.08)';
+export const HIVE_WIDE_EDGE = 'rgba(11,11,18,0.34)';
 
 /**
  * The name a room wears on screen. Your HIVE's own room takes the HIVE's name,
@@ -62,23 +72,20 @@ export function getMessagesRoomSubtitle(
 }
 
 /**
- * What HIVE-Wide says while it is empty.
+ * What the fallback panel says when the shared room cannot be found.
  *
- * There is no cross-HIVE chat room in the data yet, so the honest thing is to
- * show the room, say so, and invent nothing. Written without naming the other
- * HIVEs by name because a fourth one arriving shouldn't make this line wrong.
- *
- * 2026-08-03, second pass: the first draft said the room "fills as the other
- * HIVEs settle in", which would leave a member waiting on messages that have
- * nowhere to come from — nothing writes to this room, because there is no row
- * behind it. It now says where it actually stands.
+ * It used to say the room was "still being built", which was true for a day.
+ * The room is real now (migration 139), so this copy only shows if the row is
+ * missing — an unexpected state, not a planned one — and it should not promise
+ * a future that already arrived. It says the room could not be reached and
+ * points at the thing that definitely works.
  */
 export function getHiveWideEmptyCopy(hiveName: string) {
   return {
     heading: 'The room every HIVE shares',
     body:
-      'This one belongs to all the HIVEs at once. It is still being built — '
-      + 'when it opens, whatever is said here reaches every HIVE.',
+      'This one belongs to all the HIVEs at once, and it is not answering just '
+      + 'now. Nothing has been lost — try again in a moment.',
     footer: `${hiveName} is a tap away, and what you say there stays inside ${hiveName}.`,
   };
 }

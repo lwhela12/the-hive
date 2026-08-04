@@ -16,7 +16,7 @@ import { SpaceGlobe, SPACE_BLACK } from '../../components/ui/SpaceGlobe';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { STANDING_INVITATION } from '../../lib/hiveFocus';
-import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { accentOnDark, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
 import { formatMeetingDate, getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
 import type { Community } from '../../types';
@@ -143,7 +143,9 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
 /** A HIVE and the one thing it has coming up. The hexagon carries the colour,
  *  which is how you know whose line you're reading before you read the name. */
 function HiveLine({ hive, event }: { hive: Community; event: HiveEvent | null }) {
-  const colour = hiveAccent(hive);
+  // Lifted for space: Tech's #2f4a63 on this page is about 1.9:1, i.e. a HIVE
+  // name nobody can read. accentOnDark keeps the hue and raises it (2026-08-03).
+  const colour = accentOnDark(hiveAccent(hive));
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
       <View style={{ paddingTop: 4 }}>
@@ -429,7 +431,9 @@ export default function HiveWideScreen() {
                 <View style={{ gap: 11, paddingTop: 12, borderTopWidth: 1, borderTopColor: CARD_EDGE }}>
                   {hives.map((hive) => {
                     const own = focusByHive.get(hive.id) ?? sharedFocus;
-                    const colour = hiveAccent(hive);
+                    // Lifted for space: Tech's #2f4a63 on this page is about 1.9:1, i.e. a HIVE
+  // name nobody can read. accentOnDark keeps the hue and raises it (2026-08-03).
+  const colour = accentOnDark(hiveAccent(hive));
                     return (
                       <View key={hive.id} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
                         <View style={{ paddingTop: 4 }}><HiveDot colour={colour} /></View>
@@ -492,7 +496,7 @@ export default function HiveWideScreen() {
                       borderColor: CARD_EDGE, backgroundColor: CARD_FILL,
                     }}
                   >
-                    <HiveDot colour={post.community?.accent_color || '#bd9348'} />
+                    <HiveDot colour={accentOnDark(post.community?.accent_color || '#bd9348')} />
                     <View style={{ flex: 1 }}>
                       <Text
                         style={{ fontFamily: 'Lato_700Bold', fontSize: 14.5, color: INK, lineHeight: 20 }}

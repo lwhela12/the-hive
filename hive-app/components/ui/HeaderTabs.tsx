@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAuth } from '../../lib/hooks/useAuth';
+import { usePageSkin } from '../../lib/pageSkin';
+import { accentWash, hiveAccent } from '../../lib/hiveBrand';
 
 export type HeaderTabItem<T extends string = string> = {
   key: T;
@@ -18,12 +21,23 @@ type HeaderTabsProps<T extends string> = {
   compact?: boolean;
   compactAction?: boolean;
   stretchTabs?: boolean;
+  /** Override the HIVE's colour. Almost nothing should need this. */
+  accent?: string;
 };
 
 /**
  * Shared section-header grammar: folder tab(s) on the left, action pills on
  * the right. One style for single- and multi-tab headers (tab label 15,
  * padding 12/8; pill label 12, padding 10/6).
+ *
+ * It reads the HIVE and the page skin ITSELF, the way AppHeader does, rather
+ * than taking them as props. Nat, 2026-08-03: "all OG HIVE have creams & all
+ * Tech tabs are blue and all Production tabs are purple". Every tab in the app
+ * was gold regardless of which HIVE you were standing in, because the accent
+ * lived only in the header bar and the rail — and threading it through the
+ * dozen screens that use these tabs is a dozen chances to miss one. Per-screen
+ * opt-in is exactly what caused the "colours don't stay with me" bug earlier
+ * the same day; the fix there was the same as the fix here.
  */
 export function HeaderTabs<T extends string>({
   tabs,
@@ -35,8 +49,27 @@ export function HeaderTabs<T extends string>({
   compact = false,
   compactAction = compact,
   stretchTabs = compact,
+  accent,
 }: HeaderTabsProps<T>) {
   const hasActions = Boolean((actionLabel && onAction) || actions);
+  const { community, wholeHive } = useAuth();
+  const skin = usePageSkin();
+  // At HIVE-Wide there is no HIVE to be the colour of, so it wears the gold
+  // that reads on space — same call the rail and the header already make.
+  const tone = accent ?? (wholeHive ? skin.gold : hiveAccent(community));
+
+  const tabStyles = {
+    active: {
+      backgroundColor: skin.dark ? accentWash(tone, 0.18) : accentWash(tone, 0.16),
+      borderColor: accentWash(tone, skin.dark ? 0.5 : 0.62),
+    },
+    inactive: {
+      backgroundColor: skin.card,
+      borderColor: accentWash(tone, skin.dark ? 0.3 : 0.44),
+    },
+    activeLabel: { color: skin.ink },
+    inactiveLabel: { color: skin.inkSoft },
+  };
 
   return (
     <View style={[styles.container, compact ? styles.compactContainer : null]}>
@@ -48,7 +81,7 @@ export function HeaderTabs<T extends string>({
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.74}
-            style={[styles.tabLabel, isActive ? styles.activeLabel : styles.inactiveLabel]}
+            style={[styles.tabLabel, isActive ? tabStyles.activeLabel : tabStyles.inactiveLabel]}
           >
             {label}
           </Text>
@@ -64,7 +97,7 @@ export function HeaderTabs<T extends string>({
                 styles.tab,
                 compact && stretchTabs ? styles.stretchItem : null,
                 styles.shrinkTab,
-                isActive ? styles.activeTab : styles.inactiveTab,
+                isActive ? tabStyles.active : tabStyles.inactive,
               ]}
             >
               {labelNode}
@@ -81,7 +114,7 @@ export function HeaderTabs<T extends string>({
             style={({ pressed }) => [
               styles.tab,
               compact && stretchTabs ? styles.stretchItem : null,
-              isActive ? styles.activeTab : styles.inactiveTab,
+              isActive ? tabStyles.active : tabStyles.inactive,
               pressed ? styles.pressed : null,
             ]}
           >
@@ -95,10 +128,10 @@ export function HeaderTabs<T extends string>({
       {actionLabel && onAction ? (
         compact && compactAction ? (
           <View style={styles.stretchItem}>
-            <HeaderActionPill label={actionLabel} onPress={onAction} />
+            <HeaderActionPill label={actionLabel} onPress={onAction} accent={tone} />
           </View>
         ) : (
-          <HeaderActionPill label={actionLabel} onPress={onAction} />
+          <HeaderActionPill label={actionLabel} onPress={onAction} accent={tone} />
         )
       ) : null}
 
@@ -116,6 +149,8 @@ type HeaderActionPillProps = {
   /** Slightly larger variant for standalone rows (e.g. Refresh / Customize). */
   large?: boolean;
   accessibilityLabel?: string;
+  /** Override the HIVE's colour. Defaults to whichever HIVE you're standing in. */
+  accent?: string;
 };
 
 export function HeaderActionPill({
@@ -125,7 +160,11 @@ export function HeaderActionPill({
   disabled = false,
   large = false,
   accessibilityLabel,
+  accent,
 }: HeaderActionPillProps) {
+  const { community, wholeHive } = useAuth();
+  const skin = usePageSkin();
+  const tone = accent ?? (wholeHive ? skin.gold : hiveAccent(community));
   return (
     <Pressable
       onPress={onPress}
@@ -137,8 +176,12 @@ export function HeaderActionPill({
         styles.pill,
         large ? styles.pillLarge : null,
         {
-          borderColor: selected ? '#bd9348' : 'rgba(222,193,129,0.72)',
-          backgroundColor: selected ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
+          borderColor: selected ? tone : accentWash(tone, skin.dark ? 0.46 : 0.72),
+          backgroundColor: selected
+            ? tone
+            : pressed
+              ? accentWash(tone, skin.dark ? 0.22 : 0.16)
+              : skin.card,
         },
         disabled ? styles.disabled : null,
       ]}
@@ -147,8 +190,8 @@ export function HeaderActionPill({
         numberOfLines={1}
         style={[
           styles.pillText,
+          { color: selected ? '#fffdf5' : skin.dark ? skin.ink : tone },
           large ? styles.pillTextLarge : null,
-          selected ? styles.pillTextSelected : null,
         ]}
       >
         {label}
@@ -192,14 +235,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  activeTab: {
-    backgroundColor: '#fdf3dc',
-    borderColor: 'rgba(222,193,129,0.7)',
-  },
-  inactiveTab: {
-    backgroundColor: '#fffdf5',
-    borderColor: 'rgba(222,193,129,0.58)',
-  },
   pressed: {
     opacity: 0.8,
   },
@@ -212,12 +247,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Lato_700Bold',
     fontSize: 15,
     letterSpacing: 0,
-  },
-  activeLabel: {
-    color: '#2d2d2d',
-  },
-  inactiveLabel: {
-    color: '#8e7a5e',
   },
   pill: {
     flexShrink: 0,
@@ -237,12 +266,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Lato_700Bold',
     fontSize: 12,
     letterSpacing: 0,
-    color: '#bd9348',
   },
   pillTextLarge: {
     fontSize: 13,
-  },
-  pillTextSelected: {
-    color: '#fffdf5',
   },
 });

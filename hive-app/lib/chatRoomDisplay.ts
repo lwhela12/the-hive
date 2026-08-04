@@ -1,6 +1,6 @@
 import type { ChatRoom, ChatRoomMember, Profile } from '../types';
 
-export type ChatRoomThemeKey = 'honey' | 'sky' | 'rose' | 'sage' | 'lilac' | 'slate';
+export type ChatRoomThemeKey = 'honey' | 'sky' | 'rose' | 'sage' | 'lilac' | 'slate' | 'midnight';
 
 export interface ChatRoomTheme {
   key: ChatRoomThemeKey;
@@ -16,6 +16,17 @@ export interface ChatRoomTheme {
   messageBackground: string;
   ownBubble: string;
   ownBubbleText: string;
+  /**
+   * Somebody else's bubble, and the ink in it. Optional because the six
+   * daylight themes all agreed on white-with-charcoal and had it hard-coded
+   * inside RoomMessageItem — which is exactly what made a dark theme
+   * impossible: the transcript would have been charcoal on near-black. A theme
+   * that says nothing here still gets the old values.
+   */
+  otherBubble?: string;
+  otherBubbleText?: string;
+  /** Timestamps and "edited" — the quietest text on the screen. */
+  metaText?: string;
 }
 
 export const CHAT_ROOM_THEMES: Record<ChatRoomThemeKey, ChatRoomTheme> = {
@@ -109,6 +120,31 @@ export const CHAT_ROOM_THEMES: Record<ChatRoomThemeKey, ChatRoomTheme> = {
     ownBubble: '#4d5962',
     ownBubbleText: '#ffffff',
   },
+  /**
+   * Space, for the one room that belongs to every HIVE.
+   *
+   * Not offered in the theme picker — it is what HIVE-Wide wears, not a taste.
+   * The values are lifted from lib/pageSkin.ts's DARK so the room matches the
+   * HIVE-Wide pages exactly rather than being a second, nearly-identical black.
+   */
+  midnight: {
+    key: 'midnight',
+    label: 'Midnight',
+    accent: '#e0be76',
+    accentSoft: 'rgba(224,190,118,0.18)',
+    border: 'rgba(255,255,255,0.14)',
+    listBackground: 'rgba(255,255,255,0.05)',
+    unreadBackground: 'rgba(224,190,118,0.12)',
+    surface: 'rgba(255,255,255,0.07)',
+    header: '#07080F',
+    input: 'rgba(255,255,255,0.07)',
+    messageBackground: '#05060B',
+    ownBubble: '#b08d43',
+    ownBubbleText: '#FFFFFF',
+    otherBubble: 'rgba(255,255,255,0.09)',
+    otherBubbleText: '#F6F4E5',
+    metaText: 'rgba(246,244,229,0.5)',
+  },
 };
 
 export const DEFAULT_CHAT_ROOM_THEME: ChatRoomThemeKey = 'honey';
@@ -167,6 +203,13 @@ export function getRoomCustomization(room: RoomWithMembers, currentUserId?: stri
 }
 
 export function getChatRoomTheme(room: RoomWithMembers, currentUserId?: string): ChatRoomTheme {
+  // The room every HIVE shares is space, and that is not a preference — it is
+  // the same rule the rail, the header and the HIVE-Wide pages follow. It wins
+  // over a saved theme rather than merging with one, because half a space room
+  // is the cream-header-on-a-starfield frame Nat photographed (2026-08-03).
+  if (room.reach === 'all_hives') {
+    return CHAT_ROOM_THEMES.midnight;
+  }
   const { themeKey } = getRoomCustomization(room, currentUserId);
   return CHAT_ROOM_THEMES[themeKey];
 }

@@ -51,6 +51,12 @@ export interface Community extends Record<string, unknown> {
   id: string;
   name: string;
   slug: string;
+  /**
+   * Whether this HIVE runs a shared pot of money (migration 140). False shows
+   * the explainer instead of an empty ledger — a fund that looks abandoned
+   * reads as neglect, and Tech and Production never chose to have one.
+   */
+  honey_pot_enabled?: boolean;
   slide_deck_url?: string;
   /** Admin-editable Meeting Helper slide notes (migration 106). */
   meeting_helper_notes?: {
@@ -602,6 +608,13 @@ export interface ChatRoom extends Record<string, unknown> {
   id: string;
   community_id: string;
   room_type: ChatRoomType;
+  /**
+   * How far the room reaches (migration 139). 'hive' is every room until now:
+   * that HIVE's members only. 'all_hives' is the one room everybody shares —
+   * hosted under OG because a row has to live somewhere, but open to any member
+   * of any HIVE. Mirrors board_categories.reach deliberately.
+   */
+  reach?: 'hive' | 'all_hives';
   name?: string;
   description?: string;
   created_by?: string;

@@ -337,15 +337,34 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 .buzz{margin-top:22px;padding-top:18px;border-top:1px solid rgba(189,147,72,.28)}
 .buzzhead{font-family:var(--sans);font-weight:700;font-size:.7rem;letter-spacing:.2em;
   text-transform:uppercase;color:var(--gold);margin:0 0 12px}
-.buzzlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.buzzlist details{background:rgba(189,147,72,.07);border:1px solid rgba(189,147,72,.2);
-  border-radius:14px;padding:12px 16px}
-.buzzlist summary{cursor:pointer;font-family:var(--serif);font-size:1.02rem;color:var(--charcoal);
-  list-style:none;display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+/* Same shape as The Buzz inside the app — gold cap, serif title, a quiet meta
+   line, a chevron that turns. Nat, 2026-08-03: "can we make it look more like
+   this... not in color, but in style?" So the structure is borrowed and the
+   palette stays cream; the app's version of this list is on space-black.
+
+   Everything starts CLOSED. It used to open the newest one on load, and the
+   newest one is the longest — "starting that one really long one is really
+   overwhelming". A wall of text is a worse first impression than a tidy list. */
+.buzzlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.buzzlist details{background:var(--paper);border:1px solid rgba(189,147,72,.22);
+  border-top:3px solid var(--goldlight);border-radius:14px;padding:14px 18px;
+  transition:border-color .18s ease,box-shadow .18s ease}
+.buzzlist details:hover{border-color:rgba(189,147,72,.42)}
+.buzzlist details[open]{box-shadow:0 2px 14px rgba(189,147,72,.1)}
+.buzzlist summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;
+  gap:14px;align-items:flex-start}
 .buzzlist summary::-webkit-details-marker{display:none}
-.buzzlist summary span{font-family:var(--sans);font-size:.78rem;color:var(--label);white-space:nowrap}
-.buzzlist details[open] summary{margin-bottom:10px}
-.buzzbody{white-space:pre-line;font-size:.94rem;line-height:1.65;color:#5c5a54;margin:0}
+.buzztitle{font-family:var(--serif);font-size:1.04rem;line-height:1.4;color:var(--charcoal);
+  display:block}
+.buzzmeta{font-family:var(--sans);font-size:.78rem;color:var(--label);display:block;margin-top:3px}
+/* The chevron points down when closed and up when open, like the app's. */
+.buzzchev{flex:none;width:15px;height:15px;margin-top:5px;border-right:2px solid var(--gold);
+  border-bottom:2px solid var(--gold);transform:rotate(45deg);transform-origin:center;
+  transition:transform .2s ease}
+.buzzlist details[open] .buzzchev{transform:rotate(-135deg)}
+.buzzlist details[open] summary{margin-bottom:12px}
+.buzzbody{white-space:pre-line;font-size:.94rem;line-height:1.68;color:#5c5a54;margin:0;
+  padding-top:12px;border-top:1px solid rgba(189,147,72,.18)}
 
 /* the bee comes along to the shop */
 .swagbtn .swagbee{width:26px;height:20px;flex:none;
@@ -477,8 +496,9 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     </div>
 
     <div class="pane" id="p-events" role="tabpanel" aria-labelledby="t-events" hidden>
-      <p>Members mark events public or private in the app, and the public ones land here and in the
-        newsletter &mdash; so signing up for that is the other way to hear about them.</p>
+      <p>When a member puts something on the calendar, they choose who it&rsquo;s for: just their
+        HIVE, every HIVE, or everyone. The everyone ones land right here, and go out in the
+        newsletter too.</p>
       <ul class="evlist" id="evlist" hidden></ul>
       <p class="none" id="evnone">Checking the calendar&hellip;</p>
     </div>
@@ -833,7 +853,12 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     .then(function (j) {
       var evs = (j && j.events) || [];
       if (!evs.length) {
-        evNone.textContent = 'Nothing public on the calendar just now.';
+        // An empty calendar is the most likely thing a stranger sees, so it is
+        // the line doing the most work on this panel. It used to just report
+        // the absence; now it invites (Nat 2026-08-03: "not a member of the
+        // HIVE but still want to jive with us?").
+        evNone.textContent = 'Not in a HIVE but still want to jive with us? Public HIVE outings '
+          + 'land here — check back later for fresh honey.';
         return;
       }
       evs.forEach(function (ev) {
@@ -868,16 +893,39 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       var list = (j && j.newsletters) || [];
       if (!list.length) return;
 
-      list.forEach(function (n, i) {
+      list.forEach(function (n) {
         var li = document.createElement('li');
         var det = document.createElement('details');
-        if (i === 0) det.open = true;
+        // Deliberately no `open`. Every one starts shut so the section reads as
+        // a short list you choose from, not one enormous newsletter with some
+        // headings underneath it (Nat 2026-08-03).
 
         var sum = document.createElement('summary');
-        sum.appendChild(document.createTextNode(n.title || 'Newsletter'));
-        var when = document.createElement('span');
-        when.textContent = buzzDate(n.date);
-        sum.appendChild(when);
+
+        var head = document.createElement('span');
+
+        var title = document.createElement('span');
+        title.className = 'buzztitle';
+        title.textContent = n.title || 'Newsletter';
+
+        // Date, and how big a thing they are opening. The length is the useful
+        // half: it is the difference between "I'll read that now" and being
+        // ambushed by two thousand words.
+        var meta = document.createElement('span');
+        meta.className = 'buzzmeta';
+        var words = (n.content || '').trim().split(/\s+/).filter(Boolean).length;
+        var minutes = Math.max(1, Math.round(words / 220));
+        meta.textContent = buzzDate(n.date) + (words ? ' · ' + minutes + ' min read' : '');
+
+        head.appendChild(title);
+        head.appendChild(meta);
+
+        var chev = document.createElement('span');
+        chev.className = 'buzzchev';
+        chev.setAttribute('aria-hidden', 'true');
+
+        sum.appendChild(head);
+        sum.appendChild(chev);
 
         var body = document.createElement('p');
         body.className = 'buzzbody';

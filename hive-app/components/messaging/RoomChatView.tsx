@@ -61,7 +61,9 @@ interface RoomChatViewProps {
 }
 
 const CHAT_EMOJI_OPTIONS = ['💬', '✨', '🎯', '🍯', '📌', '💡', '🎉', '🧭', '🫶', '📅', '🏠', '📝'];
-const THEME_OPTIONS = Object.values(CHAT_ROOM_THEMES);
+// Midnight is HIVE-Wide's, not a taste — it belongs to the one room that
+// reaches every HIVE and is never offered as a colour somebody can pick.
+const THEME_OPTIONS = Object.values(CHAT_ROOM_THEMES).filter((t) => t.key !== 'midnight');
 
 function getFirstGrapheme(value: string): string {
   const trimmed = value.trim();
@@ -761,6 +763,9 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
       ownBubbleColor={roomTheme.ownBubble}
       ownBubbleTextColor={roomTheme.ownBubbleText}
       reactionAccentColor={roomTheme.accent}
+      otherBubbleColor={roomTheme.otherBubble}
+      otherBubbleTextColor={roomTheme.otherBubbleText}
+      metaTextColor={roomTheme.metaText}
     />
   ), [profile?.id, handleReact, handleRemoveReaction, handleEdit, handleDelete, roomTheme]);
 

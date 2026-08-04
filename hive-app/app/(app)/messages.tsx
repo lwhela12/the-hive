@@ -16,6 +16,8 @@ import { MemberPicker } from '../../components/messaging/MemberPicker';
 import { Avatar } from '../../components/ui/Avatar';
 import { HiveWideRoomCard, HiveWideBubble } from '../../components/messaging/HiveWideRoomCard';
 import { HiveWideRoomView } from '../../components/messaging/HiveWideRoomView';
+import { useHiveWideRoom } from '../../lib/hooks/useHiveWideRoom';
+import { usePageSkin } from '../../lib/pageSkin';
 import { getMessagesRoomLabel } from '../../components/messaging/hiveWideRoom';
 import { hiveDisplayName } from '../../lib/hiveBrand';
 import {
@@ -134,11 +136,16 @@ export default function MessagesScreen() {
   const { width } = useWindowDimensions();
   const queryClient = useQueryClient();
   const useMobileLayout = width < 768;
+  const skin = usePageSkin();
   const hiveName = hiveDisplayName(community?.name);
+  // The room every HIVE shares. It has a row of its own now (migration 139), so
+  // opening it opens the real chat view — composer, replies, reactions and all —
+  // instead of the sign that used to stand in for it.
+  const { data: hiveWideRoom } = useHiveWideRoom();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<RoomWithData | null>(null);
-  // HIVE-Wide has no room of its own in the database — it is a place you can
-  // stand rather than a row — so opening it is screen state (Nat 2026-08-03).
+  // Which pane is showing. Still screen state rather than a route, because the
+  // room list and the open room share one screen on desktop.
   const [showHiveWide, setShowHiveWide] = useState(false);
   const [customizeRoomOnOpen, setCustomizeRoomOnOpen] = useState(false);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
@@ -269,9 +276,8 @@ export default function MessagesScreen() {
     // would be the app quietly showing one HIVE's private talk from a place
     // that is meant to be above all of them (Nat 2026-08-03).
     //
-    // Right now that means the list has exactly one entry and the room itself
-    // is empty. That is the honest state of it, and better than a full list
-    // that means the wrong thing.
+    // So the list has exactly one entry up here — and since migration 139 that
+    // entry opens a room you can actually talk in, rather than a sign.
     if (wholeHive) return [{ kind: 'hive-wide' }];
 
     if (loading && rooms.length === 0) return [];
@@ -348,7 +354,15 @@ export default function MessagesScreen() {
   };
 
   if (showHiveWide && useMobileLayout) {
-    return (
+    // The real room when there is one; the honest empty sign only if the row is
+    // missing, which would mean something is wrong rather than unbuilt.
+    return hiveWideRoom ? (
+      <RoomChatView
+        key={hiveWideRoom.id}
+        room={hiveWideRoom as unknown as RoomWithData}
+        onBack={() => setShowHiveWide(false)}
+      />
+    ) : (
       <HiveWideRoomView hiveName={hiveName} onBack={() => setShowHiveWide(false)} />
     );
   }
@@ -430,14 +444,21 @@ export default function MessagesScreen() {
 
   if (useMobileLayout) {
     return (
-      <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
-        <View className="flex-row items-center justify-between bg-cream px-5 pt-2 pb-3">
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-charcoal text-3xl">
+      <SafeAreaView className="flex-1" edges={['top']} style={{ backgroundColor: skin.page }}>
+        <View
+          className="flex-row items-center justify-between px-5 pt-2 pb-3"
+          style={{ backgroundColor: skin.page }}
+        >
+          <Text
+            style={{ fontFamily: 'LibreBaskerville_700Bold', color: skin.ink }}
+            className="text-3xl"
+          >
             Messages
           </Text>
           <Pressable
             onPress={() => setShowMemberPicker(true)}
-            className="w-10 h-10 bg-gold rounded-full items-center justify-center active:opacity-80"
+            className="w-10 h-10 rounded-full items-center justify-center active:opacity-80"
+            style={{ backgroundColor: skin.gold }}
             hitSlop={8}
           >
             <Ionicons name="add" size={25} color="white" />
@@ -457,7 +478,7 @@ export default function MessagesScreen() {
     : null;
 
   return (
-    <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+    <SafeAreaView className="flex-1" edges={['top']} style={{ backgroundColor: skin.page }}>
       <AppHeader
         title="Messages"
         tone={wholeHive ? 'wide' : 'hive'}
@@ -473,12 +494,12 @@ export default function MessagesScreen() {
       />
       <View className="flex-1 flex-row">
         <View
-          style={{ width: 360, borderRightWidth: 1, borderRightColor: 'rgba(222,193,129,0.5)' }}
+          style={{ width: 360, borderRightWidth: 1, borderRightColor: skin.borderStrong }}
         >
           {/* The face row starts a DM, and a DM started from here would be an
               OG conversation. It stays inside OG (Nat 2026-08-03). */}
           {!wholeHive && (communityRoom || railMembers.length > 0) && (
-            <View style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.28)' }}>
+            <View style={{ borderBottomWidth: 1, borderBottomColor: skin.border }}>
               {/* Wrapped rows, four across — one row ran the bubbles off the
                   edge ("Infiniti E…") and wasted the column's width. */}
               <View
@@ -523,11 +544,20 @@ export default function MessagesScreen() {
         </View>
         <View className="flex-1">
           {showHiveWide ? (
-            <HiveWideRoomView
-              hiveName={hiveName}
-              onBack={() => setShowHiveWide(false)}
-              hideBackButton
-            />
+            hiveWideRoom ? (
+              <RoomChatView
+                key={hiveWideRoom.id}
+                room={hiveWideRoom as unknown as RoomWithData}
+                onBack={() => setShowHiveWide(false)}
+                hideBackButton
+              />
+            ) : (
+              <HiveWideRoomView
+                hiveName={hiveName}
+                onBack={() => setShowHiveWide(false)}
+                hideBackButton
+              />
+            )
           ) : selectedRoom ? (
             <RoomChatView
               key={selectedRoom.id}
@@ -537,11 +567,11 @@ export default function MessagesScreen() {
               hideBackButton
             />
           ) : (
-            <View className="flex-1 items-center justify-center bg-[#fffdf5]">
+            <View className="flex-1 items-center justify-center" style={{ backgroundColor: skin.card }}>
               <Text style={{ fontSize: 44 }}>🍯</Text>
               <Text
-                style={{ fontFamily: 'Lato_400Regular' }}
-                className="text-[#8e7a5e] text-base mt-3"
+                style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }}
+                className="text-base mt-3"
               >
                 Pick a chat to dig in
               </Text>
