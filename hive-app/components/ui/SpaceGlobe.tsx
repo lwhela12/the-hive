@@ -53,6 +53,7 @@ function makeNoise(seed: number) {
 
 type Star = { x: number; y: number; r: number; a: number; tw: number };
 type Light = { a: number; d: number; s: number; b: number };
+type Land = { a: number; d: number; r: number; warm: number };
 type Shooter = { x: number; y: number; vx: number; vy: number; life: number; len: number };
 
 export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
@@ -82,6 +83,7 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     let stars: Star[] = [];
     let lights: Light[] = [];
+    let lands: Land[] = [];
     let shooters: Shooter[] = [];
     let nextShooter = 2.5;
 
@@ -95,8 +97,11 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
     function layout() {
       // A wide screen wants a flatter curve; a phone wants the horizon a little
       // lower so there is still room for a title above it.
-      R = Math.max(W, 520) * 1.45;
-      horizon = H * (W < 520 ? 0.76 : 0.70);
+      //
+      // Sat lower again on 2026-08-03 — Nat wanted more sky and less planet,
+      // and the cards down the page were landing on the curve.
+      R = Math.max(W, 520) * 1.55;
+      horizon = H * (W < 520 ? 0.88 : 0.83);
       cx = W * 0.5;
       cy = horizon + R;
     }
@@ -127,6 +132,21 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       // City lights, placed on the sphere rather than on the screen: an angle
       // around the limb and a depth away from it. Depth is squared so they
       // crowd toward the horizon the way they do in the photographs.
+      // Landmasses. Broad, soft, warm — the difference between a planet and a
+      // dark ball is that the dark is not all the same dark (Nat 2026-08-03).
+      // Placed in sphere coordinates like the lights, so they flatten toward
+      // the limb instead of sitting on the glass.
+      lands = [];
+      for (let i = 0; i < 14; i++) {
+        const a = (Math.random() - 0.5) * 1.5;
+        const d = Math.random() * 0.9;
+        lands.push({
+          a, d,
+          r: 0.06 + Math.random() * 0.13,
+          warm: Math.random(),
+        });
+      }
+
       lights = [];
       const want = Math.round(W * 0.9);
       for (let i = 0; i < want; i++) {
@@ -216,12 +236,34 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       ctx.arc(cx, cy, R, 0, Math.PI * 2);
       ctx.clip();
 
+      // Ocean at night: deep, and warmer at the lit edge than in the depths.
       const g = ctx.createLinearGradient(0, horizon, 0, H);
-      g.addColorStop(0, slate ? '#131820' : '#0A1424');
-      g.addColorStop(0.5, slate ? '#0B0E13' : '#050B16');
+      g.addColorStop(0, slate ? '#161B23' : '#0C1A2C');
+      g.addColorStop(0.45, slate ? '#0B0E13' : '#06101E');
       g.addColorStop(1, '#03050A');
       ctx.fillStyle = g;
       ctx.fillRect(0, horizon - 2, W, H - horizon + 4);
+
+      // Land over the water. Soft-edged and low-contrast on purpose — this is
+      // meant to read as continents glimpsed at night, not as a map.
+      for (const l of lands) {
+        const rr = R - l.d * l.d * R * 0.30;
+        const x = cx + Math.sin(l.a) * rr;
+        const y = cy - Math.cos(l.a) * rr;
+        const size = R * l.r * (1 - l.d * 0.4);
+        if (y - size > H || y + size < horizon - 20) continue;
+        const earth = slate
+          ? '58,60,66'
+          : (l.warm > 0.55 ? '74,58,34' : '44,58,40');   // dry ground / green
+        const blob = ctx.createRadialGradient(x, y, 0, x, y, size);
+        blob.addColorStop(0, `rgba(${earth},0.55)`);
+        blob.addColorStop(0.55, `rgba(${earth},0.30)`);
+        blob.addColorStop(1, `rgba(${earth},0)`);
+        ctx.fillStyle = blob;
+        ctx.beginPath();
+        ctx.ellipse(x, y, size, size * (0.42 + 0.3 * (1 - l.d)), 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // City lights. Each sits at (angle, depth) on the sphere and gets flattened
       // toward the limb, which is the whole reason they look like they are on a
@@ -260,16 +302,24 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
 
+      const inner = R * 0.985;
       const outer = R * 1.055;
-      const air = ctx.createRadialGradient(cx, cy, R * 0.995, cx, cy, outer);
+      const air = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
       air.addColorStop(0, `rgba(${AIR_CORE},0.92)`);
       air.addColorStop(0.06, `rgba(${AIR_CORE},0.55)`);
       air.addColorStop(0.22, `rgba(${AIR_MID},0.30)`);
       air.addColorStop(0.55, `rgba(${AIR_FAR},0.12)`);
       air.addColorStop(1, `rgba(${AIR_FAR},0)`);
       ctx.fillStyle = air;
+      // A RING, not a disc. Filling the whole circle painted the planet's
+      // entire face with the gradient's first stop — a radial gradient hands
+      // everything inside its inner radius that colour — so a near-white at 92%
+      // in "lighter" mode was being laid over the world every frame. That is
+      // why it read as a glowing ice dome rather than a planet at night
+      // (Nat: "look a little more earthy", 2026-08-03).
       ctx.beginPath();
       ctx.arc(cx, cy, outer, 0, Math.PI * 2);
+      ctx.arc(cx, cy, inner, 0, Math.PI * 2, true);
       ctx.fill();
 
       // A sun just out of frame, low and to one side. Without it the limb is
@@ -278,8 +328,8 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       const sy = horizon - H * 0.015;
       const sunR = Math.max(W, H) * 0.34;
       const sun = ctx.createRadialGradient(sx, sy, 0, sx, sy, sunR);
-      sun.addColorStop(0, `rgba(${SUN},0.30)`);
-      sun.addColorStop(0.25, `rgba(${SUN},0.10)`);
+      sun.addColorStop(0, `rgba(${SUN},0.17)`);
+      sun.addColorStop(0.25, `rgba(${SUN},0.06)`);
       sun.addColorStop(1, `rgba(${SUN},0)`);
       ctx.fillStyle = sun;
       ctx.beginPath();

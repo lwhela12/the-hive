@@ -90,7 +90,10 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   // The Buzz was only ever one newsletter across all the HIVEs, so it reads the
   // same standing anywhere — it does not need a wide twin.
   { key: 'buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone', atWholeHive: 'same' },
-  { key: 'profile', label: 'Profile', emoji: '🐝', route: '/profile', gate: 'everyone', atWholeHive: 'same' },
+  // Out of HIVE-Wide for now, at Nat's call (2026-08-03). Your profile is the
+  // same page wherever you stand, so having it up there too was a second door
+  // to one room while the HIVE-Wide idea is still settling.
+  { key: 'profile', label: 'Profile', emoji: '🐝', route: '/profile', gate: 'everyone', atWholeHive: 'hidden' },
   // Profile is about you; Settings is the plumbing behind you (2026-08-03).
   // Admin already wears the cog, so Settings takes the sliders.
   { key: 'settings', label: 'Settings', emoji: '🎛️', route: '/settings', gate: 'everyone', atWholeHive: 'same' },

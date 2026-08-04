@@ -135,7 +135,11 @@ export default function LoginScreen() {
               marginTop: 10, marginBottom: 30, maxWidth: 300,
             }}
           >
-            HIVE is invitation only. Sign in with the email address that received your invite.
+            {/* Two sentences, two lines. The first says what this place is; the
+                second tells you what to do. Run together they read as one long
+                apology (Nat 2026-08-03). */}
+            HIVE is invitation only.{'\n'}
+            Sign in with the email address that received your invite.
           </Text>
 
           <Pressable
@@ -175,7 +179,10 @@ export default function LoginScreen() {
             style={{ borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.22)', width: '100%' }}
           >
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.55)', textAlign: 'center' }}>
-              Not a member yet? <Text style={{ fontFamily: 'Lato_700Bold', color: '#dec181' }}>Come find us &rarr;</Text>
+              {/* The explicit space matters: JSX eats the trailing one before a
+                  line break, which is why this read "yet?Come find us". */}
+              Not a member yet?{' '}
+              <Text style={{ fontFamily: 'Lato_700Bold', color: '#dec181' }}>Come find us &rarr;</Text>
             </Text>
           </Pressable>
         </View>

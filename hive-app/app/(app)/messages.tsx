@@ -263,13 +263,24 @@ export default function MessagesScreen() {
   // to. While the rooms are still loading the list stays empty so the skeleton
   // has the screen to itself.
   const listEntries = useMemo<MessagesListEntry[]>(() => {
+    // Standing at HIVE-Wide, the only conversation that belongs here is the
+    // HIVE-Wide one. Every other room and DM in this list is OG's — they were
+    // said inside OG, to OG, and letting them ride along under a black header
+    // would be the app quietly showing one HIVE's private talk from a place
+    // that is meant to be above all of them (Nat 2026-08-03).
+    //
+    // Right now that means the list has exactly one entry and the room itself
+    // is empty. That is the honest state of it, and better than a full list
+    // that means the wrong thing.
+    if (wholeHive) return [{ kind: 'hive-wide' }];
+
     if (loading && rooms.length === 0) return [];
 
     const entries: MessagesListEntry[] = rooms.map((room) => ({ kind: 'room', room }));
     const ownHiveRoomIndex = rooms.findIndex((room) => room.room_type === 'community');
     entries.splice(ownHiveRoomIndex + 1, 0, { kind: 'hive-wide' });
     return entries;
-  }, [loading, rooms]);
+  }, [loading, rooms, wholeHive]);
 
   // Everyone in the HIVE except you — the rail's cast.
   useEffect(() => {
@@ -464,7 +475,9 @@ export default function MessagesScreen() {
         <View
           style={{ width: 360, borderRightWidth: 1, borderRightColor: 'rgba(222,193,129,0.5)' }}
         >
-          {(communityRoom || railMembers.length > 0) && (
+          {/* The face row starts a DM, and a DM started from here would be an
+              OG conversation. It stays inside OG (Nat 2026-08-03). */}
+          {!wholeHive && (communityRoom || railMembers.length > 0) && (
             <View style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.28)' }}>
               {/* Wrapped rows, four across — one row ran the bubbles off the
                   edge ("Infiniti E…") and wasted the column's width. */}

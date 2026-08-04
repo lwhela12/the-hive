@@ -17,17 +17,27 @@ interface AppHeaderProps {
    * Which world this page belongs to.
    *
    * 'hive'  the HIVE you're in — its colour, its name above the title.
-   * 'wide'  HIVE-Wide — green, and NO HIVE name, because the page isn't in a
-   *         HIVE. The first pass said "OG HIVE / HIVE-Wide" stacked, which is
-   *         two contradictory answers to "where am I" (Nat 2026-08-03).
+   * 'wide'  HIVE-Wide — space black, and NO HIVE name, because the page isn't
+   *         in a HIVE. The first pass said "OG HIVE / HIVE-Wide" stacked, which
+   *         is two contradictory answers to "where am I" (Nat 2026-08-03).
    * 'god'   Admin. Not OG HIVE's admin — the whole operation's, so it wears
    *         neither a HIVE's colour nor a HIVE's name.
+   *
+   * You rarely need to pass this. A page left on the default follows wherever
+   * the reader is standing, which is the behaviour you almost always want —
+   * see the note on the tone resolution below.
    */
   tone?: 'hive' | 'wide' | 'god';
 }
 
-/** HIVE-Wide's green, and the god view's slate. Neither belongs to a HIVE. */
-const TONE_COLOURS = { wide: '#3F7D5C', god: '#40403C' } as const;
+/**
+ * HIVE-Wide's black, and the god view's slate. Neither belongs to a HIVE.
+ *
+ * Wide was green for about a day. It is the black the globe hangs in now, so
+ * that the header, the rail and the page are all obviously the same place —
+ * "we'd have the black space header, not green" (Nat 2026-08-03).
+ */
+const TONE_COLOURS = { wide: '#0B0B12', god: '#40403C' } as const;
 
 // The one page-title treatment for the whole app: gold bar, spaced serif.
 // Every tab screen should use this instead of hand-rolling a gold header.
@@ -44,15 +54,30 @@ export const AppHeader = memo(function AppHeader({
   rightElement,
   tone = 'hive',
 }: AppHeaderProps) {
-  const { community } = useAuth();
-  const accent = tone === 'hive' ? hiveAccent(community) : TONE_COLOURS[tone];
+  const { community, wholeHive } = useAuth();
+
+  // The header follows the reader, rather than each page having to remember to
+  // say where it is.
+  //
+  // Nat found this the hard way (2026-08-03): she went to Profile from
+  // HIVE-Wide, looked at a few HIVEs, came back, "and the colors didn't stay
+  // with me." They hadn't, because tone was opt-in per screen — so the three
+  // pages that had been taught about HIVE-Wide went black and every other one
+  // kept wearing OG's gold over a black rail. Opt-in was the bug. A page that
+  // says nothing now inherits the truth instead of a default.
+  //
+  // 'god' and an explicit 'wide' still win: Admin is above all of this, and a
+  // screen that is ALWAYS wide (the shared boards) should not depend on how the
+  // reader happened to arrive.
+  const resolvedTone = tone === 'hive' && wholeHive ? 'wide' : tone;
+  const accent = resolvedTone === 'hive' ? hiveAccent(community) : TONE_COLOURS[resolvedTone];
   const hiveName = hiveDisplayName(community?.name);
   // Any page whose title is already the HIVE's name says it big and skips the
   // small line — that's Home, and anywhere else that chooses to do the same.
   // Only a page that lives INSIDE a HIVE says which one. HIVE-Wide and Admin sit
   // above the HIVEs, so naming one there answers "where am I" twice, differently.
   const showHiveName =
-    tone === 'hive' && title.trim().toUpperCase() !== hiveName.toUpperCase();
+    resolvedTone === 'hive' && title.trim().toUpperCase() !== hiveName.toUpperCase();
 
   return (
     <View

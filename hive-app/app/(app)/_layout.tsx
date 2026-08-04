@@ -108,10 +108,16 @@ export default function AppLayout() {
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const restoredNativePathRef = useRef(false);
 
-  // The rail starts collapsed — icons only, out of the way. On a wide screen
-  // there's room to open it and leave it open; on a phone it closes itself
-  // behind you when you go somewhere.
-  const [railExpanded, setRailExpanded] = useState(false);
+  // The rail starts OPEN on anything with room for it, and people collapse it
+  // if they want to (Nat 2026-08-03). Icons alone are a quiz — the whole point
+  // of the rail is that you can see where everything is without hunting.
+  //
+  // A phone still starts collapsed, because there the expanded rail covers the
+  // page rather than sitting beside it, and opening onto a menu instead of the
+  // app would be a worse first second.
+  const [railExpanded, setRailExpanded] = useState(() => (
+    Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerWidth >= 768 : false
+  ));
 
   // Initialize push notification listeners and state (no permission prompt on load)
   useNotifications({ autoRequestPermission: false });
