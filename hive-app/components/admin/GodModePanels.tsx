@@ -39,10 +39,17 @@ const ROLES: { value: UserRole; label: string }[] = [
  * screen writes them in the same sequence so a phone build reads the same way.
  */
 export const ADMIN_PANEL_ORDER = {
-  meetingTools: 1,
-  newsletter: 2,
-  currentHive: 3,
-  otherHives: 10,
+  // Nat 2026-08-03: "left hand side, top to bottom should go OG HIVE, Tech
+  // HIVE, Production HIVE, and on the right it should be Meeting tools and
+  // newsletter."
+  //
+  // The dashboard is a wrapping row of half-width cells, so odd positions land
+  // in the left column and even ones in the right. The HIVEs take 1, 3, 5 and
+  // the two tools take 2 and 4, which reads down each column the way she asked
+  // and still stacks in a sensible order on a phone.
+  hives: 1,
+  meetingTools: 2,
+  newsletter: 4,
 } as const;
 
 /* ------------------------------------------------------------------ colour */
@@ -106,6 +113,10 @@ export type HivePanelSkin = {
   hairline: string;
   inset: string;
   shadow: string;
+  /** True when the accent itself is pale enough to need dark text on it. */
+  isLight: boolean;
+  /** The opaque tab colour, for anywhere a translucent one would not read. */
+  washedTab: string;
 };
 
 /**
@@ -133,14 +144,25 @@ export function hivePanelSkin(accent: string): HivePanelSkin {
   // back — otherwise "light blue" arrives as grey.
   const washed = Math.min(1, s * 1.6);
 
+  // Admin is god mode, and god mode is seen from the cosmos — Nat's words, and
+  // the right instinct (2026-08-03). The panels float on the star field rather
+  // than covering it: the HIVE's own colour, thinned almost to nothing, so you
+  // can still tell whose box you are looking at while the sky shows through.
+  //
+  // The `light` / `washed` work above still matters, because a HIVE picking a
+  // pale accent needs its tab lifted or the name on it disappears.
   return {
-    tab: light ? fromHsl(h, washed, 0.9) : deepen(rgb, 0.12),
-    tabText: light ? '#313130' : '#fffdf5',
-    body: fromHsl(h, washed, light ? 0.975 : 0.955),
-    border: veil(rgb, light ? 0.45 : 0.5),
-    hairline: veil(rgb, 0.18),
-    inset: veil(rgb, 0.1),
+    tab: veil(rgb, 0.55),
+    tabText: '#fffdf5',
+    body: veil(rgb, 0.11),
+    border: veil(rgb, 0.42),
+    hairline: 'rgba(255,255,255,0.11)',
+    inset: 'rgba(255,255,255,0.07)',
     shadow: HEX.test(accent) ? accent : HIVE_GOLD,
+    // Kept so a pale accent can still be checked against, rather than silently
+    // dropping the two values this function spent its time working out.
+    isLight: light,
+    washedTab: fromHsl(h, washed, 0.9),
   };
 }
 
@@ -283,7 +305,7 @@ export function NewsletterPanel({
               autoCapitalize="none"
               keyboardType="email-address"
               style={{
-                flex: 1, fontFamily: 'Lato_400Regular', fontSize: 13, color: '#313130',
+                flex: 1, fontFamily: 'Lato_400Regular', fontSize: 13, color: '#F6F4E5',
                 backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(189,147,72,0.4)',
                 borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
               }}
@@ -351,7 +373,7 @@ export function HiveMemberPanels({
   scrollStyle,
   Panel,
   HeaderAction,
-  orderFrom = ADMIN_PANEL_ORDER.otherHives,
+  orderFrom = ADMIN_PANEL_ORDER.hives,
 }: PanelChrome & {
   HeaderAction: React.ComponentType<{ label: string; onPress: () => void }>;
   orderFrom?: number;
@@ -424,7 +446,17 @@ export function HiveMemberPanels({
 
   return (
     <>
-      {memberships.filter((m) => m.community_id !== communityId).map((m, index) => {
+      {/* EVERY HIVE, including the one you happen to be standing in.
+          It used to skip the current one, because admin.tsx drew that one
+          itself — which is exactly why they didn't match: two bits of code
+          drawing the same idea, one with role buttons and a purple wash, the
+          other with cream and a tiny word. Nat spotted it side by side
+          ("see how these don't"). One list now, drawn once.
+
+          Nat's order, left column top to bottom: OG, Tech, Production. The grid
+          wraps left-right, so the hives take the odd positions and Meeting
+          Tools / Newsletter take the even ones. */}
+      {memberships.map((m, index) => {
         const rows = byHive[m.community_id] ?? [];
         const accent = hiveAccent(m.community);
         const skin = hivePanelSkin(accent);
@@ -432,7 +464,7 @@ export function HiveMemberPanels({
         const inviting = inviteFor === m.community_id;
 
         return (
-          <View key={m.community_id} style={[cellStyle, { order: orderFrom + index } as any]}>
+          <View key={m.community_id} style={[cellStyle, { order: orderFrom + index * 2 } as any]}>
             <Panel
               title={`${name} (${rows.length})`}
               accent={accent}
@@ -459,19 +491,19 @@ export function HiveMemberPanels({
                       borderBottomColor: skin.hairline,
                     }}
                   >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#313130', marginBottom: 10 }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#F6F4E5', marginBottom: 10 }}>
                       Invite somebody to {name}
                     </Text>
                     <TextInput
                       value={inviteEmail}
                       onChangeText={setInviteEmail}
                       placeholder="their@email.com"
-                      placeholderTextColor="rgba(49,49,48,0.35)"
+                      placeholderTextColor="rgba(246,244,229,0.38)"
                       autoCapitalize="none"
                       keyboardType="email-address"
                       editable={!sending}
                       style={{
-                        fontFamily: 'Lato_400Regular', fontSize: 13, color: '#313130',
+                        fontFamily: 'Lato_400Regular', fontSize: 13, color: '#F6F4E5',
                         backgroundColor: '#fff', borderWidth: 1, borderColor: skin.border,
                         borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
                         opacity: sending ? 0.65 : 1,
@@ -486,7 +518,7 @@ export function HiveMemberPanels({
                             onPress={() => setInviteRole(role.value)}
                             disabled={sending}
                             style={{
-                              backgroundColor: chosen ? accent : 'rgba(49,49,48,0.06)',
+                              backgroundColor: chosen ? accent : 'rgba(255,255,255,0.09)',
                               borderRadius: 8,
                               paddingHorizontal: 12,
                               paddingVertical: 7,
@@ -495,7 +527,7 @@ export function HiveMemberPanels({
                           >
                             <Text style={{
                               fontFamily: 'Lato_700Bold', fontSize: 12,
-                              color: chosen ? '#fffdf5' : 'rgba(49,49,48,0.7)',
+                              color: chosen ? '#fffdf5' : 'rgba(246,244,229,0.72)',
                             }}>
                               {role.label}
                             </Text>
@@ -525,7 +557,7 @@ export function HiveMemberPanels({
                 {loading && rows.length === 0 ? (
                   <View style={{ padding: 20 }}><ActivityIndicator color={accent} /></View>
                 ) : rows.length === 0 ? (
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(49,49,48,0.5)', padding: 16 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.55)', padding: 16 }}>
                     Nobody here yet.
                   </Text>
                 ) : rows.map((r) => (
@@ -538,21 +570,33 @@ export function HiveMemberPanels({
                     }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#313130' }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#F6F4E5' }}>
                         {r.name}
                       </Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(49,49,48,0.55)' }}>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
                         {r.email}
                       </Text>
                     </View>
-                    {r.role !== 'member' ? (
+                    {/* Everyone says what they are, including plain members —
+                        "each one should show what they are" (Nat 2026-08-03).
+                        Only marking the exceptions meant a blank row could be
+                        read either as a member or as something still loading. */}
+                    <View
+                      style={{
+                        paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+                        backgroundColor: r.role === 'member'
+                          ? 'rgba(255,255,255,0.09)'
+                          : 'rgba(255,255,255,0.17)',
+                      }}
+                    >
                       <Text style={{
-                        fontFamily: 'Lato_700Bold', fontSize: 10, letterSpacing: 0.6,
-                        textTransform: 'uppercase', color: accent,
+                        fontFamily: 'Lato_700Bold', fontSize: 9.5, letterSpacing: 0.7,
+                        textTransform: 'uppercase',
+                        color: r.role === 'member' ? 'rgba(246,244,229,0.6)' : '#F6F4E5',
                       }}>
                         {r.role}
                       </Text>
-                    ) : null}
+                    </View>
                   </View>
                 ))}
               </ScrollView>

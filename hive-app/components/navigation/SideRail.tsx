@@ -1,6 +1,7 @@
 import { memo, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polygon } from 'react-native-svg';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -204,24 +205,16 @@ export const SideRail = memo(function SideRail({
         }}
       >
         {expanded ? (
-          <View style={{ flex: 1, paddingRight: 8 }}>
-            <Text
-              style={{
-                fontFamily: 'LibreBaskerville_700Bold', fontSize: 17,
-                color: '#fff', letterSpacing: 1.4,
-              }}
-              numberOfLines={1}
-            >
-              HIVE
-            </Text>
-            <Text
-              style={{
-                fontFamily: 'Lato_400Regular', fontSize: 11.5, lineHeight: 16,
-                color: 'rgba(255,255,255,0.7)', marginTop: 2,
-              }}
-            >
-              Alone you&rsquo;re a bee.{'\n'}Together, we&rsquo;re the H.I.V.E.
-            </Text>
+          // Just the bee (Nat 2026-08-03). The wordmark and the line about being
+          // a bee were saying the name and the motto to somebody already inside
+          // the app, on every screen, forever. The mark alone says it once.
+          <View style={{ flex: 1, paddingRight: 8, justifyContent: 'center' }}>
+            <Image
+              source={require('../../assets/bee_favicon.png')}
+              style={{ width: 34, height: 34 }}
+              contentFit="contain"
+              accessibilityLabel="HIVE"
+            />
           </View>
         ) : null}
         <Pressable
@@ -320,7 +313,11 @@ export const SideRail = memo(function SideRail({
           onPress={() => { void supabase.auth.signOut({ scope: 'local' }); }}
         />
 
-        {canSeeAdmin ? (
+        {/* Admin only exists from HIVE-Wide (Nat 2026-08-03). It runs the whole
+            operation rather than any one HIVE, so offering it from inside OG
+            implied there was such a thing as OG's admin. God mode is reached
+            from the god view. */}
+        {canSeeAdmin && onHiveWide ? (
           <>
             {divider}
             <Row
