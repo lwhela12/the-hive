@@ -85,14 +85,25 @@ export const SideRail = memo(function SideRail({
   const railColour = onHiveWide ? WIDE_BLACK : deepen(accent);
   const destinations = destinationsForPlace({ isAdmin, isOwner, wholeHive: onHiveWide });
 
+  // Pressing the page you are already on scrolls it back to the top and
+  // reloads it, rather than doing nothing.
+  //
+  // Nat, 2026-08-04: "when you're already in HIVE-Wide and home & you click home
+  // again, nothing happens, so you think the button is broken." Which is exactly
+  // right — `router.push` to the route you are already on is a no-op, and a
+  // button that does nothing is indistinguishable from a broken one. Expo
+  // Router's `replace` re-runs the screen, so the page visibly refreshes and the
+  // press is answered.
   const go = useCallback(
     (route: string) => {
       if (route === '/board') clearBoardNavigationState();
       if (route === '/hive') resetHomeNavigationState();
-      router.push(route as never);
+      const here = activeKeyForPath(pathname) === activeKeyForPath(route);
+      if (here) router.replace(route as never);
+      else router.push(route as never);
       if (isPhone && expanded) onToggle();
     },
-    [router, isPhone, expanded, onToggle]
+    [router, pathname, isPhone, expanded, onToggle]
   );
 
   const railWidth = expanded ? RAIL_EXPANDED : RAIL_COLLAPSED;

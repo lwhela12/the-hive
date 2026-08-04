@@ -545,7 +545,7 @@ export function WishDetail({
             ))}
           </View>
         )}
-        <View className="flex-row items-end">
+        <View className="flex-row items-end pb-3">
           <TextInput
             className="flex-1 bg-cream rounded-xl px-4 py-3 mr-2 max-h-24"
             style={{ fontFamily: 'Lato_400Regular' }}

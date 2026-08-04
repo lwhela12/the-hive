@@ -819,7 +819,7 @@ function AdminPanel({
   children: ReactNode;
 }) {
   const skin = accent ? hivePanelSkin(accent) : null;
-  const tabFill = skin?.tab ?? 'rgba(253,243,220,0.93)';
+  const tabFill = skin?.tab ?? 'rgba(253,243,220,0.8)';
   const tabText = skin?.tabText ?? '#2d2d2d';
   const edge = skin?.border ?? 'rgba(222,193,129,0.7)';
   // The un-accented panels (Meeting Tools, Newsletter) sat at solid cream while
@@ -828,7 +828,15 @@ function AdminPanel({
   // different... the cream ones should be a little more transparent." Letting a
   // little sky through is enough to make them the same kind of object; any more
   // and the text stops being comfortable to read on a starfield.
-  const bodyFill = skin?.body ?? 'rgba(255,253,245,0.9)';
+  // Nat wants these as see-through as HIVE-Wide's cards (2026-08-04), and
+  // opacity alone cannot get there. HIVE-Wide's boxes sit at 0.055 because
+  // everything inside them is LIGHT ink; these hold charcoal text, so dropping
+  // the cream to anything near that turns the words into grey-on-black. The
+  // real change is to make these dark panels with light ink like the accented
+  // ones — the same page-skin pass the board components still need — rather
+  // than a number. Eased to 0.74 in the meantime, which lets the sky show at
+  // the edges without taking the text with it.
+  const bodyFill = skin?.body ?? 'rgba(255,253,245,0.74)';
   const glow = skin?.shadow ?? '#bd9348';
 
   return (
