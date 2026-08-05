@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -10,7 +10,8 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { APP_NEWS } from '../../lib/appNews';
 import { PARDON_OUR_DUST } from '../../lib/hiveWide';
 import { SummarySections, type SummarySection } from '../../components/meetings/SummarySections';
-import { NEWSLETTER_MASTHEAD } from '../../lib/newsletterHeaders';
+import { NEWSLETTER_MASTHEAD, readLetter } from '../../lib/newsletterHeaders';
+import { LinkifiedText } from '../../components/ui/LinkifiedText';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 /** The month a recap covers: the one before the month it goes out in. */
@@ -34,68 +35,205 @@ const hiveBee = require('../../assets/BEE ONLY IN GOLD BG.png');
  * keep rather than remembering what happened. Hence Copy: the draft is raw
  * material, not a publication.
  */
+/** The colours a letter is set in. Paper by default; The Buzz reads in space. */
+export type LetterPalette = {
+  heading: string;
+  label: string;
+  body: string;
+  quiet: string;
+  rule: string;
+  link: string;
+};
+
+export const PAPER_LETTER: LetterPalette = {
+  heading: '#8a6b30',
+  label: '#9a7c42',
+  body: '#3f3a33',
+  quiet: '#6f6559',
+  rule: 'rgba(189,147,72,0.45)',
+  link: '#bd9348',
+};
+
 /**
- * The letter, with its headings looking like headings.
+ * A letter, set the way Nat writes them.
  *
  * Nat, 2026-08-04: "these headers like 'HIVE Help' and 'Around the HIVE' need
- * more distinguishable headers." They were rendered as one `<Text>` holding the
- * whole draft, so a section title was the same 15px Lato as the paragraph under
- * it and the letter read as an unbroken wall.
+ * more distinguishable headers." — and again on the archive, which was still
+ * arriving as one slab. Both letters are plain text (see `readLetter` for why
+ * they have to be), so this reads the shape back out and gives each piece its
+ * own weight: gold serif for a section, a quieter gold line for a label, a date
+ * that sits beside its event, bullets that hang, air between paragraphs.
  *
- * A heading is detected rather than marked up, because the draft is PROSE — it
- * goes into the clipboard and out to Wix as plain text, so it cannot carry
- * markdown without that markdown landing in the email. The test is the one a
- * reader uses: a short line, on its own, with no sentence punctuation at the
- * end. That catches "HIVE Help" and "Around the HIVE" and leaves real sentences
- * alone.
+ * Every run of body text goes through `LinkifiedText`, so the web addresses Nat
+ * pasted into the old Wix letters are tappable instead of decorative.
  *
- * Copying is untouched — `asPlainText()` still hands over the original string,
- * so what she pastes is exactly what the model wrote.
+ * Copying is untouched — `asPlainText()` and `prose` still hand over the
+ * original string, so what she pastes is exactly what was written.
+ *
+ * Exported because the archive needs the same treatment: The Buzz (app/(app)/
+ * buzz.tsx) still prints a whole letter into one `<Text>`. Swapping that for
+ * `<LetterProse text={item.content} palette={...} />` with the space skin's
+ * colours is the whole fix there.
  */
-function LetterProse({ text }: { text: string }) {
-  const blocks = text.split(/\n/);
+export function LetterProse({
+  text,
+  palette = PAPER_LETTER,
+}: {
+  text: string;
+  palette?: LetterPalette;
+}) {
+  const blocks = useMemo(() => readLetter(text), [text]);
+  const body = {
+    fontFamily: 'Lato_400Regular',
+    fontSize: 15,
+    lineHeight: 24,
+    color: palette.body,
+  } as const;
+  const linkStyle = { color: palette.link, textDecorationLine: 'underline' } as const;
+
   return (
     <View>
-      {blocks.map((line, i) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <View key={i} style={{ height: 10 }} />;
+      {blocks.map((block, i) => {
+        const first = i === 0;
 
-        const looksLikeHeading =
-          trimmed.length <= 42 &&
-          !/[.!?,:;]$/.test(trimmed) &&
-          // A heading has a blank line under it; a one-line paragraph does not.
-          (blocks[i + 1] ?? '').trim() === '' &&
-          // ...and something above it, so the greeting stays a greeting.
-          i > 0;
+        switch (block.kind) {
+          case 'heading':
+            return (
+              <Text
+                key={i}
+                selectable
+                style={{
+                  fontFamily: 'LibreBaskerville_700Bold',
+                  fontSize: 19,
+                  lineHeight: 28,
+                  color: palette.heading,
+                  marginTop: first ? 0 : 24,
+                  marginBottom: 8,
+                }}
+              >
+                {block.text}
+              </Text>
+            );
 
-        if (looksLikeHeading) {
-          return (
-            <Text
-              key={i}
-              selectable
-              style={{
-                fontFamily: 'LibreBaskerville_700Bold',
-                fontSize: 19,
-                lineHeight: 27,
-                color: '#8a6b30',
-                marginTop: i === 0 ? 0 : 18,
-                marginBottom: 2,
-              }}
-            >
-              {trimmed}
-            </Text>
-          );
+          case 'label':
+            return (
+              <Text
+                key={i}
+                selectable
+                style={{
+                  fontFamily: 'Lato_700Bold',
+                  fontSize: 15,
+                  lineHeight: 22,
+                  color: palette.label,
+                  marginTop: first ? 0 : 16,
+                  marginBottom: 6,
+                }}
+              >
+                {block.text}
+              </Text>
+            );
+
+          case 'dated':
+            return (
+              <View key={i} style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
+                <Text
+                  selectable
+                  style={{
+                    fontFamily: 'Lato_700Bold',
+                    fontSize: 15,
+                    lineHeight: 24,
+                    color: palette.label,
+                    flexShrink: 0,
+                  }}
+                >
+                  {block.when}
+                </Text>
+                <LinkifiedText selectable style={[body, { flex: 1 }]} linkStyle={linkStyle}>
+                  {block.text}
+                </LinkifiedText>
+              </View>
+            );
+
+          case 'bullet':
+            return (
+              <View key={i} style={{ flexDirection: 'row', gap: 10, marginBottom: 7, paddingLeft: 4 }}>
+                <Text style={{ ...body, color: palette.label }}>•</Text>
+                <LinkifiedText selectable style={[body, { flex: 1 }]} linkStyle={linkStyle}>
+                  {block.text}
+                </LinkifiedText>
+              </View>
+            );
+
+          case 'numbered':
+            return (
+              <View key={i} style={{ flexDirection: 'row', gap: 8, marginBottom: 7, paddingLeft: 4 }}>
+                <Text
+                  style={{
+                    fontFamily: 'Lato_700Bold',
+                    fontSize: 15,
+                    lineHeight: 24,
+                    color: palette.label,
+                    minWidth: 18,
+                  }}
+                >
+                  {block.marker}.
+                </Text>
+                <LinkifiedText selectable style={[body, { flex: 1 }]} linkStyle={linkStyle}>
+                  {block.text}
+                </LinkifiedText>
+              </View>
+            );
+
+          case 'quote':
+            return (
+              <View
+                key={i}
+                style={{
+                  borderLeftWidth: 3,
+                  borderLeftColor: palette.rule,
+                  paddingLeft: 14,
+                  marginTop: 18,
+                  marginBottom: 4,
+                }}
+              >
+                <Text
+                  selectable
+                  style={{
+                    fontFamily: 'LibreBaskerville_400Regular',
+                    fontSize: 15,
+                    lineHeight: 26,
+                    color: palette.quiet,
+                  }}
+                >
+                  {block.text}
+                </Text>
+              </View>
+            );
+
+          case 'attribution':
+            return (
+              <Text
+                key={i}
+                selectable
+                style={{
+                  fontFamily: 'Lato_400Regular',
+                  fontSize: 13,
+                  color: palette.label,
+                  paddingLeft: 17,
+                  marginBottom: 12,
+                }}
+              >
+                — {block.text}
+              </Text>
+            );
+
+          default:
+            return (
+              <LinkifiedText key={i} selectable style={[body, { marginBottom: 12 }]} linkStyle={linkStyle}>
+                {block.text}
+              </LinkifiedText>
+            );
         }
-
-        return (
-          <Text
-            key={i}
-            selectable
-            style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 24, color: '#3f3a33' }}
-          >
-            {line}
-          </Text>
-        );
       })}
     </View>
   );

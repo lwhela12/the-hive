@@ -118,3 +118,193 @@ export function headerForSection(title: string): NewsletterHeader | null {
   }
   return null;
 }
+
+/* ------------------------------------------------------------------------- *
+ * Reading a letter back
+ * ------------------------------------------------------------------------- */
+
+/**
+ * One piece of a newsletter, so a screen can give it the right typography.
+ *
+ * Every letter in the app is stored as PLAIN TEXT — the ones Nat imported from
+ * the old Wix site and the ones the app drafts today. That is on purpose: a
+ * newsletter gets copied into an email, and markdown syntax would land in the
+ * email as literal asterisks and hashes. The cost is that nothing in the stored
+ * text says "this line is a heading", so we work it out when we read it back.
+ *
+ * The imported Wix letters DO still have their paragraph breaks (checked against
+ * production, 2026-08-05) — what they never had is any mark of what each line
+ * was FOR. Rendered as one long `<Text>` they came out as an unbroken slab: a
+ * section title, a date, a bullet and a sentence all in the same 15px Lato.
+ */
+export type LetterBlock =
+  | { kind: 'heading'; text: string }
+  /** A short line ending in a colon — Nat writes a lot of these. */
+  | { kind: 'label'; text: string }
+  /** "March 14: Nat's family in town" — the date and the thing, together. */
+  | { kind: 'dated'; when: string; text: string }
+  | { kind: 'bullet'; text: string }
+  | { kind: 'numbered'; marker: string; text: string }
+  | { kind: 'quote'; text: string }
+  | { kind: 'attribution'; text: string }
+  | { kind: 'paragraph'; text: string };
+
+type Draft = {
+  kind: LetterBlock['kind'];
+  text: string;
+  when?: string;
+  marker?: string;
+  isLink?: boolean;
+  isDate?: boolean;
+};
+
+const BULLET_LINE = /^([-*•→▸])[ \t]+(.*)$/;
+const NUMBERED_LINE = /^(\d{1,2})[.)][ \t]+(.*)$/;
+const LINK_ONLY = /^(https?:\/\/\S+|www\.\S+|\S+@\S+\.\S+)$/i;
+const MONTH = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?';
+const DAY = '\\d{1,2}(?:st|nd|rd|th)?';
+// "May 2nd:", "February 25th - March 4th:" — a date, then what happened.
+const DATE_LINE = new RegExp(`^(${MONTH} ${DAY}(?:\\s*[-–—]\\s*(?:${MONTH} )?${DAY})?):\\s*(.*)$`);
+const OPENS_QUOTE = /^[“"]/;
+const CLOSES_QUOTE = /[”"][\s—–-]*$/;
+// Trailing emoji, brackets and dashes hide the punctuation that ends a sentence.
+const DECORATION = /[^\p{Letter}\p{Number}:;,.!?]+$/u;
+const TITLE_MAX = 52;
+const LABEL_MAX = 60;
+
+/**
+ * Turn a letter into blocks a screen can style.
+ *
+ * The tests are the ones a reader's eye uses, in plain terms:
+ *
+ * - A line that opens with a dash, an arrow or a number is a list item.
+ * - A line that is nothing but a web address is a link, and never a heading.
+ * - A SHORT line that doesn't finish a sentence is a title. Two extra guards
+ *   keep that honest, because Wix broke every bold or linked phrase out onto
+ *   its own line when Nat exported these: a title can't start mid-sentence (a
+ *   lowercase first letter, a leading dash or arrow), and the line under it has
+ *   to be something a title would introduce — a real paragraph, a list, or
+ *   another title. That is what stops "Sort" and "Replant all" from becoming
+ *   headings while "Around the HIVE" and "HIVE Help" still do.
+ * - A short line ending in a colon is a label rather than a heading, so
+ *   "Queen Bee for April:" sits quietly over the name it announces.
+ * - Two or more short lines in a row under a label are that label's list, not a
+ *   stack of headings ("General meeting reminders:" / "Bring a snack…").
+ */
+export function readLetter(text: string): LetterBlock[] {
+  // Blank lines are the paragraph breaks; we redraw the air ourselves, so they
+  // do not need to survive as empty blocks.
+  const lines = (text ?? '')
+    .split('\n')
+    .map((line) => line.replace(/ /g, ' ').trim())
+    .filter(Boolean);
+
+  const blocks: Draft[] = lines.map((line) => {
+    const numbered = NUMBERED_LINE.exec(line);
+    if (numbered) return { kind: 'numbered', marker: numbered[1], text: numbered[2] };
+
+    const bullet = BULLET_LINE.exec(line);
+    if (bullet) return { kind: 'bullet', text: bullet[2] };
+
+    const dated = DATE_LINE.exec(line);
+    if (dated) {
+      return dated[2]
+        ? { kind: 'dated', when: dated[1], text: dated[2] }
+        : { kind: 'label', text: dated[1], isDate: true };
+    }
+
+    if (LINK_ONLY.test(line)) return { kind: 'paragraph', text: line, isLink: true };
+    if (OPENS_QUOTE.test(line) && CLOSES_QUOTE.test(line) && line.length > 24) {
+      return { kind: 'quote', text: line };
+    }
+    return { kind: 'paragraph', text: line };
+  });
+
+  const isTitleish = (block: Draft | undefined, next: Draft | undefined): boolean => {
+    if (!block || block.kind !== 'paragraph' || block.isLink) return false;
+    const t = block.text;
+    const limit = t.endsWith(':') ? LABEL_MAX : TITLE_MAX;
+    if (t.length < 2 || t.length > limit) return false;
+    if (!/\p{Letter}/u.test(t)) return false;
+    // A colon in the middle means a sentence, not a title ("Contact Missy at: …").
+    if (/:.+$/.test(t)) return false;
+    // Starting lowercase or with a dash means this line finishes the one above it.
+    if (/^[\p{Lowercase_Letter}—–→]/u.test(t)) return false;
+    if (/[.!?,;]$/.test(t.replace(DECORATION, ''))) return false;
+    if (!next) return false;
+    if (!next.isLink && next.kind === 'paragraph' && /^\p{Lowercase_Letter}/u.test(next.text)) {
+      return false;
+    }
+    return true;
+  };
+
+  const introduces = (next: Draft | undefined): boolean => {
+    if (!next) return false;
+    if (next.kind === 'bullet' || next.kind === 'numbered' || next.kind === 'dated') return true;
+    if (next.text.length >= 60) return true;
+    return next.text.length >= 20 && next.text.endsWith(':');
+  };
+
+  const marks: (('heading' | 'label') | null)[] = blocks.map((block, i) => {
+    if (!isTitleish(block, blocks[i + 1])) return null;
+    if (block.text.endsWith(':')) return 'label';
+    return introduces(blocks[i + 1]) ? 'heading' : null;
+  });
+
+  // A title sitting directly on top of another title is a title too — "May
+  // Queen Bee" over "Lucas Whelan". Not when a label already opened the
+  // section, though: then these short lines are the label's contents.
+  for (let i = blocks.length - 2; i >= 0; i--) {
+    if (marks[i] || !marks[i + 1]) continue;
+    if (marks[i - 1] === 'label' || marks[i - 1] === 'heading') continue;
+    if (isTitleish(blocks[i], blocks[i + 1])) {
+      marks[i] = blocks[i].text.endsWith(':') ? 'label' : 'heading';
+    }
+  }
+
+  for (let i = 0; i < blocks.length; i++) {
+    if (marks[i] !== 'label') continue;
+    let run = 0;
+    for (let k = i + 1; k < blocks.length; k++) {
+      const b = blocks[k];
+      if (b.kind !== 'paragraph' || b.isLink) break;
+      if (b.text.length > TITLE_MAX) break;
+      if (/[.!?,;]$/.test(b.text.replace(DECORATION, ''))) break;
+      run++;
+    }
+    if (run >= 2) for (let k = 0; k < run; k++) marks[i + 1 + k] = null;
+  }
+
+  marks.forEach((mark, i) => {
+    if (mark) blocks[i].kind = mark;
+  });
+
+  const out: LetterBlock[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const next = blocks[i + 1];
+
+    // "May 2nd:" with the event on the line below is one entry, not two.
+    if (block.kind === 'label' && block.isDate && next?.kind === 'paragraph' && !next.isLink) {
+      out.push({ kind: 'dated', when: block.text, text: next.text });
+      i++;
+      continue;
+    }
+
+    // Nat signs her quotes on the next line, sometimes with a dash in front.
+    if (block.kind === 'quote' && next && next.kind !== 'quote') {
+      const who = next.text.replace(/^[-–—•*]\s*/, '');
+      if (who.length <= 40 && !/[.!?]$/.test(who)) {
+        out.push({ kind: 'quote', text: block.text });
+        out.push({ kind: 'attribution', text: who });
+        i++;
+        continue;
+      }
+    }
+
+    if (block.kind === 'dated') out.push({ kind: 'dated', when: block.when ?? '', text: block.text });
+    else if (block.kind === 'numbered') out.push({ kind: 'numbered', marker: block.marker ?? '', text: block.text });
+    else out.push({ kind: block.kind, text: block.text } as LetterBlock);
+  }
+  return out;
+}

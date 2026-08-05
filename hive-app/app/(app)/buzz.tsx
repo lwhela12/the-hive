@@ -9,7 +9,22 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
 import { SPACE_SKIN } from '../../lib/pageSkin';
+import { LetterProse, type LetterPalette } from './newsletter';
 import type { Community } from '../../types';
+
+/**
+ * The letter colours for space. The Buzz hangs in the same near-black as
+ * HIVE-Wide, so paper's charcoal-on-cream would be unreadable here — headings
+ * take the gold that reads on a dark ground, body takes the page's own ink.
+ */
+const SPACE_LETTER: LetterPalette = {
+  heading: '#E8C77E',
+  label: '#C9A961',
+  body: SPACE_SKIN.inkBody,
+  quiet: SPACE_SKIN.inkFaint,
+  rule: 'rgba(255,226,166,0.4)',
+  link: SPACE_SKIN.gold,
+};
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 /**
@@ -150,14 +165,17 @@ export default function BuzzScreen() {
 
                 {open ? (
                   <View style={{ paddingHorizontal: 16, paddingBottom: 18 }}>
-                    <Text
-                      style={{
-                        fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 24,
-                        color: skin.inkBody,
-                      }}
-                    >
-                      {item.content}
-                    </Text>
+                    {/* The letters read like letters here too.
+                        Nat has asked three times. The archive imported from the
+                        old Wix site kept every paragraph break — the text really
+                        does carry its `\n\n` — but lost every mark of what a
+                        line was FOR, and this printed the whole thing into one
+                        `<Text>` at 15px. So a 6,000-character newsletter arrived
+                        as one slab. `readLetter` reads the shape back out of the
+                        plain text and `LetterProse` gives each piece its weight;
+                        this is the same component the letter screen uses, in the
+                        space skin's colours rather than paper's. */}
+                    <LetterProse text={item.content} palette={SPACE_LETTER} />
                   </View>
                 ) : null}
               </View>
