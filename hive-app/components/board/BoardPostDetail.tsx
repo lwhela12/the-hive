@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Pressable, Alert, RefreshControl, Platform } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { EditButton } from '../ui/EditButton';
-import { Breadcrumbs, type Crumb } from '../ui/Breadcrumbs';
+import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -27,12 +27,6 @@ import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment, BoardCa
 interface BoardPostDetailProps {
   postId: string;
   onBack: () => void;
-  /**
-   * Everything above this thread — the HIVE and the board it lives on. The
-   * thread's own name is added here, once it has loaded, so a slow list on the
-   * screen behind cannot leave the trail short.
-   */
-  trail?: Crumb[];
 }
 
 type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardReaction[]; category?: BoardCategory };
@@ -100,7 +94,7 @@ function confirmBoardAction({
   ]);
 }
 
-export function BoardPostDetail({ postId, onBack, trail }: BoardPostDetailProps) {
+export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const { profile, communityId, communityRole } = useAuth();
   // A thread is read on a cream HIVE page and on the black HIVE-Wide page. One
   // source for the panels AND the words, so they can't drift apart.
@@ -112,6 +106,12 @@ export function BoardPostDetail({ postId, onBack, trail }: BoardPostDetailProps)
   const goldWash = skin.dark ? 'rgba(224,190,118,0.12)' : 'rgba(189,147,72,0.10)';
   const queryClient = useQueryClient();
   const [post, setPost] = useState<PostWithAuthor | null>(null);
+
+  // The last step of the path along the bottom. It is added here rather than by
+  // the screen behind, because this is where the thread's title actually
+  // arrives — the list on the other side may not have caught up, and a path
+  // that is briefly one step short reads as a bug.
+  useDeepTrail(post?.title ? [{ label: post.title }] : []);
   const [replies, setReplies] = useState<ReplyWithAuthor[]>([]);
   const [mentionableMembers, setMentionableMembers] = useState<Pick<Profile, 'id' | 'name'>[]>([]);
   const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
@@ -573,12 +573,6 @@ export function BoardPostDetail({ postId, onBack, trail }: BoardPostDetailProps)
         )}
       </View>
 
-      {trail ? (
-        <Breadcrumbs
-          items={[...trail, { label: post.title }]}
-          tone={skin.dark ? 'dark' : 'light'}
-        />
-      ) : null}
 
       <ScrollView
         className="flex-1"

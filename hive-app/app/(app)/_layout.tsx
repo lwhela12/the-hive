@@ -8,6 +8,8 @@ import { useNotifications } from '../../lib/hooks/useNotifications';
 import { useTotalUnreadDMs } from '../../lib/hooks/useTotalUnreadDMs';
 import { useWebAppDisplayMode } from '../../lib/hooks/useWebAppDisplayMode';
 import { AppUpdateBanner } from '../../components/ui/AppUpdateBanner';
+import { PathFooter } from '../../components/navigation/PathFooter';
+import { PathTrailProvider } from '../../lib/hooks/usePathTrail';
 import { CelebrationOverlay } from '../../components/ui/CelebrationOverlay';
 import { HivePicker } from '../../components/hive/HivePicker';
 import { SideRail } from '../../components/navigation';
@@ -192,6 +194,7 @@ export default function AppLayout() {
   }
 
   return (
+    <PathTrailProvider>
     <View style={{ flex: 1 }}>
       {/* "Fresh honey" bar — web only, shows on every tab when a new build ships */}
       <AppUpdateBanner />
@@ -462,6 +465,12 @@ export default function AppLayout() {
           }}
         />
       </Tabs>
+      {/* Finder's status bar, for the app. It belongs to the shell rather than
+          to any page, so it is the same height everywhere, appears on screens
+          nobody thought to add it to, and gives the composer at the bottom of
+          a thread a floor to sit on instead of the window's edge (Nat
+          2026-08-05). */}
+      <PathFooter />
 
       {/* Confetti for a granted wish, over every tab. Mounted once, and mounted
           INSIDE the content column rather than beside it (Nat 2026-08-04: "he's
@@ -481,5 +490,6 @@ export default function AppLayout() {
           lists to keep in step — which is exactly how Admin went missing from
           one of them last week. The rail is always there; nothing needs opening. */}
     </View>
+    </PathTrailProvider>
   );
 }

@@ -9,10 +9,7 @@ import { useBoardCategoriesQuery, useBoardPostsQuery, useBoardPostCountsQuery, u
 import { BoardCategoryList, type BoardCategorySearchMatchSummary } from '../../components/board/BoardCategoryList';
 import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
-import { Breadcrumbs, type Crumb } from '../../components/ui/Breadcrumbs';
-import { HiveMark } from '../../components/ui/HiveMark';
-import { WorldMark } from '../../components/ui/WorldMark';
-import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { BoardComposer } from '../../components/board/BoardComposer';
 import { BoardTopicComposer, type BoardTopicAudience, type BoardTopicMetadata } from '../../components/board/BoardTopicComposer';
 import { WishDetail } from '../../components/hive/WishDetail';
@@ -160,28 +157,6 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   // cream while the rail beside them was black (2026-08-03).
   const skin = usePageSkin();
 
-  /**
-   * Where you are, from the top.
-   *
-   * Nat, 2026-08-05: "I understand how the boards work, but not every one does
-   * ... some sort of: OG HIVE > Boards > HIVE approved > Favo healthcare".
-   *
-   * The boards are four levels deep and the deepest screen's header said the
-   * word "Thread", which names the KIND of thing you are looking at and not
-   * where it sits. The first step carries its HIVE's own mark — the hexagon in
-   * its colour, or the Earth at HIVE-Wide — so the trail and the badges are
-   * telling you the same thing in the same language.
-   */
-  const boardTrail = (deeper: Crumb[] = []): Crumb[] => [
-    isWide
-      ? { label: 'HIVE-Wide', mark: <WorldMark size={12} /> }
-      : {
-          label: hiveDisplayName(community?.name),
-          mark: <HiveMark size={11} colour={hiveAccent(community)} />,
-        },
-    { label: 'Boards', onPress: () => { setSelectedPostId(null); setSelectedCategoryId(null); } },
-    ...deeper,
-  ];
   const {
     data: categories = [],
     isLoading: categoriesLoading,
@@ -232,6 +207,29 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const selectedCategory = selectedCategoryId
     ? categories.find((c) => c.id === selectedCategoryId) || null
     : null;
+
+  /**
+   * How deep inside Boards you are, handed to the strip along the bottom.
+   *
+   * Nat, 2026-08-05: "I understand how the boards work, but not every one does
+   * ... some sort of: OG HIVE > Boards > HIVE approved > Favo healthcare".
+   *
+   * The HIVE and the word "Boards" are the footer's own business — it reads
+   * them off the route. Only this screen knows which board you opened and which
+   * thread you are reading, so that is all it says. The thread's own name is
+   * added by `BoardPostDetail`, which is where the title actually arrives.
+   */
+  useDeepTrail(
+    selectedCategory
+      ? [{
+          label: selectedCategory.name,
+          onPress: selectedPostId
+            ? () => setSelectedPostId(null)
+            : undefined,
+        }]
+      : [],
+  );
+
   const canManageThread = useCallback((post: Pick<BoardPost, 'author_id'>) => {
     if (!profile || !selectedCategory) return false;
     if (isAdmin || post.author_id === profile.id) return true;
@@ -1697,14 +1695,6 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       <BoardPostDetail
         postId={selectedPostId}
         onBack={handlePostBack}
-        // Everything above the thread. The detail screen appends the thread's
-        // own title once it has loaded it, so the trail is right even when this
-        // screen's post list has not caught up.
-        trail={
-          selectedCategory
-            ? boardTrail([{ label: selectedCategory.name, onPress: handlePostBack }])
-            : boardTrail()
-        }
       />
     );
   }
@@ -1772,8 +1762,6 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           }
         />
 
-        <Breadcrumbs items={boardTrail()} tone={skin.dark ? 'dark' : 'light'} />
-
         {boardListToolbar}
 
         {categoriesLoading && categories.length === 0 ? (
@@ -1840,11 +1828,6 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           </Pressable>
           ) : undefined
         }
-      />
-
-      <Breadcrumbs
-        items={boardTrail([{ label: selectedCategory.name }])}
-        tone={skin.dark ? 'dark' : 'light'}
       />
 
       <FlatList

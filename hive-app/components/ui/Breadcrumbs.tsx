@@ -51,11 +51,14 @@ export function Breadcrumbs({
   items,
   tone = 'light',
   compact,
+  dense,
 }: {
   items: Crumb[];
   /** Dark surfaces need light ink. HIVE-Wide's boards are near-black. */
   tone?: 'light' | 'dark';
   compact?: boolean;
+  /** Finder-thin, for the strip along the bottom of the app. */
+  dense?: boolean;
 }) {
   // Above the early return on purpose: a hook that only runs sometimes is a
   // hook React will refuse.
@@ -76,6 +79,12 @@ export function Breadcrumbs({
       horizontal
       showsHorizontalScrollIndicator={false}
       ref={scroller}
+      // A ScrollView takes every pixel it is offered, and a HORIZONTAL one will
+      // happily do that vertically — which is why the trail first shipped
+      // marooned in the middle of an enormous blank gap on the thread screen
+      // (Nat 2026-08-05: "there's that big weird space there"). It is exactly as
+      // tall as its own text now.
+      style={{ flexGrow: 0, flexShrink: 0 }}
       // Pinned to the right end, so a trail too long for the screen still opens
       // showing where you are rather than where you started. Done on the content
       // measuring rather than with `contentOffset`, which React Native Web does
@@ -84,9 +93,9 @@ export function Breadcrumbs({
       contentContainerStyle={{
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: compact ? 7 : 9,
-        gap: 7,
+        paddingHorizontal: dense ? 12 : 16,
+        paddingVertical: dense ? 5 : compact ? 7 : 9,
+        gap: dense ? 6 : 7,
       }}
     >
       {trail.map((item, index) => {
