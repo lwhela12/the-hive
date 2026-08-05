@@ -3,10 +3,11 @@ import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-na
 import { useRouter, usePathname } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Polygon } from 'react-native-svg';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { HiveMark } from '../ui/HiveMark';
+import { WorldMark } from '../ui/WorldMark';
 import { ADMIN_DESTINATION, destinationsForPlace, activeKeyForPath } from '../../lib/navigation';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
@@ -126,6 +127,7 @@ export const SideRail = memo(function SideRail({
     badge = 0,
     tint,
     indented,
+    world,
   }: {
     emoji: string;
     label: string;
@@ -135,6 +137,8 @@ export const SideRail = memo(function SideRail({
     /** A colour of its own — HIVE-Wide's green, or a HIVE's accent. */
     tint?: string;
     indented?: boolean;
+    /** This row is HIVE-Wide, so it wears the Earth rather than a comb. */
+    world?: boolean;
   }) => (
     <Pressable
       onPress={onPress}
@@ -164,11 +168,17 @@ export const SideRail = memo(function SideRail({
     >
       <View>
         {/* A HIVE shows as its OWN colour, as a comb — the black ⬢ was invisible
-            against the rail and told you nothing once collapsed (Nat 2026-08-03). */}
-        {indented && tint ? (
-          <Svg width={15} height={17} viewBox="0 0 15 17">
-            <Polygon points="7.5,0 15,4.25 15,12.75 7.5,17 0,12.75 0,4.25" fill={tint} />
-          </Svg>
+            against the rail and told you nothing once collapsed (Nat 2026-08-03).
+
+            HIVE-Wide gets the Earth. It was passing 🌍 and never showing it: the
+            comb branch only asked whether the row was indented and tinted, which
+            HIVE-Wide also is, so it drew a near-black hexagon on a near-black
+            rail. Hexagon means a HIVE, world means all of them — the same pair
+            the badges use (`lib/scopeLook.ts`, Nat 2026-08-05). */}
+        {indented && world ? (
+          <WorldMark size={17} />
+        ) : indented && tint ? (
+          <HiveMark size={16} colour={tint} />
         ) : (
           <Text style={{ fontSize: 19, lineHeight: 25 }}>{emoji}</Text>
         )}
@@ -391,6 +401,7 @@ export const SideRail = memo(function SideRail({
           emoji="🌍"
           label="HIVE-Wide"
           indented
+          world
           active={onHiveWide}
           tint={WIDE_BLACK}
           onPress={() => {

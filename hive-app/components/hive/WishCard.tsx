@@ -163,15 +163,17 @@ export function WishCard({
                 : formatDateShort(wish.created_at)}
             </Text>
 
-            {/* How far this wish travels. Only worth saying when it leaves its
-                own HIVE — "This HIVE only" on every card is wallpaper, and the
-                whole point is that the other two stand out (Nat 2026-08-02). */}
-            {/* Every rung, not just the unusual ones — see WishCombCard. */}
-            {true ? (
-              <View className="ml-2">
-                <ScopeBadge scope={(wish.share_scope as string) ?? 'hive'} compact />
-              </View>
-            ) : null}
+            {/* Whose wish it is, and how far it travels. The hexagon carries
+                the HIVE's own colour so the HIVE-Wide wishes box reads as three
+                HIVEs rather than one long list, and the Earth appears only on
+                the ones that left home (Nat 2026-08-05). */}
+            <View className="ml-2">
+              <ScopeBadge
+                scope={(wish.share_scope as string) ?? 'hive'}
+                communityId={wish.community_id}
+                compact
+              />
+            </View>
 
             {/* Granter avatars for granted wishes */}
             {isGranted && displayGranters.length > 0 && (

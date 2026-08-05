@@ -20,8 +20,15 @@ export function hiveDisplayName(name?: string | null): string {
   return trimmed;
 }
 
-/** The colour of this hive's header bar. Null/blank/malformed falls back to gold. */
-export function hiveAccent(community?: Community | null): string {
+/**
+ * The colour of this hive's header bar. Null/blank/malformed falls back to gold.
+ *
+ * Takes anything carrying an accent rather than a whole `Community`, because
+ * half the callers only ever selected `name, accent_color` from the database —
+ * a joined hive on a wish, a row in a list — and asking those for a full
+ * community row would mean fetching columns nobody draws.
+ */
+export function hiveAccent(community?: Pick<Community, 'accent_color'> | null): string {
   const raw = (community?.accent_color as string | undefined)?.trim();
   if (raw && /^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
   return HIVE_GOLD;

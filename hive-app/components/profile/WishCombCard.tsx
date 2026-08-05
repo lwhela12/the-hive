@@ -208,7 +208,11 @@ export function WishCombCard({
             <Text style={[styles.dateText, isGranted ? styles.dateTextGranted : null]}>
               {dateLabel}
             </Text>
-            <ScopeBadge scope={(wish.share_scope as string) ?? 'hive'} compact />
+            <ScopeBadge
+              scope={(wish.share_scope as string) ?? 'hive'}
+              communityId={wish.community_id}
+              compact
+            />
             {showGranters && (
               <View style={styles.granterRow}>
                 <Text style={styles.granterLabel}>by</Text>

@@ -10,8 +10,10 @@ import {
   getRoomCustomization,
 } from '../../lib/chatRoomDisplay';
 import { getMessagesRoomLabel } from './hiveWideRoom';
+import { HiveMark } from '../ui/HiveMark';
+import { useAuth } from '../../lib/hooks/useAuth';
+import { hiveAccent, accentWash } from '../../lib/hiveBrand';
 
-const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 import type { ChatRoom, Profile, RoomMessage } from '../../types';
 
 import { SignedImage } from '../ui/SignedImage';
@@ -41,6 +43,8 @@ export const ChatRoomItem = memo(function ChatRoomItem({
   isActive = false,
   hiveName = 'HIVE',
 }: ChatRoomItemProps) {
+  const { community } = useAuth();
+  const roomAccent = hiveAccent(community);
   const otherMembers = getOtherRoomMembers(room, currentUserId);
   const otherMember = otherMembers[0];
   const customization = getRoomCustomization(room, currentUserId);
@@ -89,9 +93,21 @@ export const ChatRoomItem = memo(function ChatRoomItem({
     }
 
     if (room.room_type === 'community') {
+      // Your HIVE's room, wearing your HIVE's colour. It used to draw the HIVE
+      // logo — the same picture for every HIVE — so on Tech's Messages list the
+      // room that IS Tech looked identical to the one on OG's (Nat 2026-08-05).
+      // The HIVE-Wide room is a card of its own further down the list and wears
+      // the Earth; hexagon here, world there, same pair as every badge.
       return (
-        <View className="w-12 h-12 rounded-full mr-3 overflow-hidden">
-          <Image source={hiveLogo} style={{ width: 48, height: 48 }} resizeMode="cover" />
+        <View
+          className="w-12 h-12 rounded-full mr-3 overflow-hidden items-center justify-center"
+          style={{
+            backgroundColor: accentWash(roomAccent, 0.14),
+            borderWidth: 1,
+            borderColor: accentWash(roomAccent, 0.35),
+          }}
+        >
+          <HiveMark size={24} colour={roomAccent} />
         </View>
       );
     }

@@ -21,12 +21,6 @@ export type ScopeRung = {
   label: string;
   /** One line, in the app. */
   meaning: string;
-  /**
-   * How far it looks. Your own HIVE wears its own colour; everything that
-   * travels wears green, and gets more solid the further it goes — so reach
-   * reads as weight before anybody reads a word.
-   */
-  treatment: 'hive-colour' | 'green-outline' | 'green-solid';
 };
 
 /** The ladder, in order. Everything in HIVE that can be shared sits on a rung. */
@@ -35,19 +29,16 @@ export const SCOPE_LADDER: ScopeRung[] = [
     key: 'hive',
     label: 'This HIVE only',
     meaning: 'The people you joined with. Where everything starts.',
-    treatment: 'hive-colour',
   },
   {
     key: 'all_hives',
     label: 'HIVE-Wide',
     meaning: 'Everyone in every HIVE, wherever they are.',
-    treatment: 'green-outline',
   },
   {
     key: 'public',
     label: 'Public',
     meaning: 'The newsletter and the-hive.app, where anyone can read it.',
-    treatment: 'green-solid',
   },
 ];
 

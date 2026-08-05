@@ -1,52 +1,147 @@
 import { View, Text } from 'react-native';
+import { HiveMark } from './HiveMark';
+import { WorldMark } from './WorldMark';
+import { useAuth } from '../../lib/hooks/useAuth';
+import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import {
+  CHIP, normaliseScope, travels, hiveChipLook, reachChipLook, scopeSpoken,
+  type ChipSize, type ScopeKey,
+} from '../../lib/scopeLook';
+import type { Community } from '../../types';
 
 /**
- * How far this thing travels, said plainly on the thing itself.
+ * Whose it is, and how far it goes — worn on the thing itself.
  *
- * Three scopes were showing as two badges: "This HIVE only" and "All HIVEs"
- * both read as "HIVErs Only", so the middle rung was invisible from the outside
- * (Nat 2026-08-02). You can't respect a boundary you can't see, and with three
- * HIVEs the difference between "just us" and "anyone in any HIVE" is the whole
- * point of having chosen.
+ * The rules live in `lib/scopeLook.ts`; this is the drawing of them. Read that
+ * file for why whose-it-is and how-far-it-goes are two chips rather than one,
+ * and why travel is near-black rather than the green it used to be.
  *
- * Events use members/all_hives/public; wishes and survey answers use
- * hive/all_hives/public. Both spellings land in the same place.
+ * The short version: a filled hexagon in a HIVE's own colour means "this is
+ * OG's" / "this is Tech's", and the Earth means it has left home. Which of the
+ * two you get depends on where you are standing — see the note further down.
+ *
+ * `members` and `hive` are the same rung under two spellings — events use one,
+ * wishes and survey answers the other.
  */
 export type Scope = 'members' | 'hive' | 'all_hives' | 'public';
 
-const LOOKS: Record<'hive' | 'all_hives' | 'public', {
-  emoji: string; label: string; bg: string; border: string; ink: string;
-}> = {
-  hive: {
-    emoji: '🔒', label: 'This HIVE only',
-    bg: '#f5f1e8', border: 'rgba(189,147,72,0.22)', ink: '#9a8060',
-  },
-  all_hives: {
-    emoji: '🐝', label: 'HIVE-Wide',
-    bg: '#f7e9cb', border: 'rgba(189,147,72,0.55)', ink: '#8a6b30',
-  },
-  public: {
-    emoji: '📣', label: 'Public',
-    bg: '#eaf3e6', border: 'rgba(122,154,107,0.35)', ink: '#5c7a4e',
-  },
-};
-
-export function ScopeBadge({ scope, compact }: { scope?: Scope | string | null; compact?: boolean }) {
-  const key = scope === 'public' ? 'public' : scope === 'all_hives' ? 'all_hives' : 'hive';
-  const look = LOOKS[key];
-
+/** A chip. One shape, two sizes, used by both halves so they can't drift. */
+function Chip({
+  size, look, children,
+}: {
+  size: ChipSize;
+  look: { bg: string; border: string; ink: string; label: string };
+  children: React.ReactNode;
+}) {
+  const s = CHIP[size];
   return (
     <View
-      className={`${compact ? 'py-1 px-2' : 'py-1.5 px-3'} rounded-full flex-row items-center`}
-      style={{ backgroundColor: look.bg, borderWidth: 1, borderColor: look.border }}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: s.gap,
+        paddingHorizontal: s.padX,
+        paddingVertical: s.padY,
+        borderRadius: 999,
+        borderWidth: 1,
+        backgroundColor: look.bg,
+        borderColor: look.border,
+      }}
     >
-      <Text className={compact ? 'text-[10px] mr-1' : 'text-xs mr-1.5'}>{look.emoji}</Text>
-      <Text
-        style={{ fontFamily: 'Lato_700Bold', color: look.ink }}
-        className={compact ? 'text-[10px]' : 'text-xs'}
-      >
+      {children}
+      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: s.text, color: look.ink }}>
         {look.label}
       </Text>
     </View>
   );
+}
+
+export function ScopeBadge({
+  scope,
+  community,
+  communityId,
+  compact,
+  size,
+  tone = 'light',
+  hideHive,
+}: {
+  scope?: Scope | string | null;
+  /** Whose it is. Pass it when you have it — this is what colours the hexagon. */
+  community?: Community | null;
+  /** Or pass the id and let the badge find the HIVE among the ones you're in. */
+  communityId?: string | null;
+  /** Older call sites say `compact`; it means `size="sm"`. */
+  compact?: boolean;
+  size?: ChipSize;
+  /** Dark pages need lifted ink — Tech's blue is unreadable on near-black. */
+  tone?: 'light' | 'dark';
+  /**
+   * Drop the hexagon and show only the reach. For a row that is already inside
+   * one HIVE's box, where repeating the hexagon on every line is just noise.
+   */
+  hideHive?: boolean;
+}) {
+  const { community: current, communityId: currentCommunityId, memberships, wholeHive } = useAuth();
+  const key: ScopeKey = normaliseScope(typeof scope === 'string' ? scope : undefined);
+  const chipSize: ChipSize = size ?? (compact ? 'sm' : 'md');
+  const s = CHIP[chipSize];
+
+  // Whose it is, in order of how much we trust the answer: what the caller
+  // handed us, then the HIVE that id belongs to, then the one you're standing
+  // in. On a per-HIVE page the last one is right; on HIVE-Wide it is a guess,
+  // which is exactly why screens there pass the row's own community.
+  const owner: Community | null =
+    community
+    ?? memberships.find((m) => m.community_id === communityId)?.community
+    ?? current
+    ?? null;
+
+  const hive = hiveChipLook(hiveAccent(owner), tone, hiveDisplayName(owner?.name));
+  const showReach = travels(key);
+
+  // The hexagon appears when it tells you something you didn't already know.
+  //
+  // Standing on OG HIVE's own page, every row belongs to OG, so stamping
+  // "OG HIVE" on all of them is wallpaper — the first badge you stop reading.
+  // There it earns its place only on the things that stay put, where it IS the
+  // "just us" badge. Standing at HIVE-Wide, or looking at another HIVE's thing,
+  // whose it is becomes the whole question, so the hexagon comes back and sits
+  // next to the world (Nat 2026-08-05).
+  const ownerId = community?.id ?? communityId ?? null;
+  const elsewhere =
+    wholeHive || (!!currentCommunityId && !!ownerId && ownerId !== currentCommunityId);
+  const showHive = !hideHive && (elsewhere || !showReach);
+
+  // Nothing to say: no hexagon wanted and it hasn't gone anywhere.
+  if (!showHive && !showReach) return null;
+
+  return (
+    <View
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
+      accessible
+      accessibilityLabel={scopeSpoken(key, hive.label)}
+    >
+      {showHive && (
+        <Chip size={chipSize} look={hive}>
+          <HiveMark size={s.mark} colour={hive.accent} />
+        </Chip>
+      )}
+      {showReach && (
+        <Chip size={chipSize} look={reachChipLook(key, tone)}>
+          {key === 'public'
+            ? <Text style={{ fontSize: s.mark }}>📣</Text>
+            : <WorldMark size={s.mark + 2} />}
+        </Chip>
+      )}
+    </View>
+  );
+}
+
+/**
+ * Just the reach, for places that are already unmistakably inside one HIVE —
+ * a wish list on your own HIVE's page, where every row would otherwise carry an
+ * identical hexagon.
+ */
+export function ReachBadge(props: Omit<Parameters<typeof ScopeBadge>[0], 'hideHive'>) {
+  return <ScopeBadge {...props} hideHive />;
 }
