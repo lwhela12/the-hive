@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, Alert, RefreshControl, Platform } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { EditButton } from '../ui/EditButton';
+import { Breadcrumbs, type Crumb } from '../ui/Breadcrumbs';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -26,6 +27,12 @@ import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment, BoardCa
 interface BoardPostDetailProps {
   postId: string;
   onBack: () => void;
+  /**
+   * Everything above this thread — the HIVE and the board it lives on. The
+   * thread's own name is added here, once it has loaded, so a slow list on the
+   * screen behind cannot leave the trail short.
+   */
+  trail?: Crumb[];
 }
 
 type PostWithAuthor = BoardPost & { author?: Profile; reactions?: BoardReaction[]; category?: BoardCategory };
@@ -93,7 +100,7 @@ function confirmBoardAction({
   ]);
 }
 
-export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
+export function BoardPostDetail({ postId, onBack, trail }: BoardPostDetailProps) {
   const { profile, communityId, communityRole } = useAuth();
   // A thread is read on a cream HIVE page and on the black HIVE-Wide page. One
   // source for the panels AND the words, so they can't drift apart.
@@ -554,13 +561,24 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         <Pressable onPress={onBack} className="mr-4">
           <Text className="text-2xl" style={{ color: skin.ink }}>←</Text>
         </Pressable>
+        {/* It said "Thread" here, which names the KIND of thing you are looking
+            at rather than where it sits — no use at all to somebody who does not
+            already carry the structure in their head (Nat 2026-08-05). The trail
+            below says where you are; the header stops pretending to. */}
         <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-lg flex-1">
-          Thread
+          {post.title || 'Thread'}
         </Text>
         {canManagePost && (
           <EditButton onPress={handleOpenEditComposer} accessibilityLabel="Edit thread" />
         )}
       </View>
+
+      {trail ? (
+        <Breadcrumbs
+          items={[...trail, { label: post.title }]}
+          tone={skin.dark ? 'dark' : 'light'}
+        />
+      ) : null}
 
       <ScrollView
         className="flex-1"

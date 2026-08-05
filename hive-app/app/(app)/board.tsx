@@ -9,6 +9,10 @@ import { useBoardCategoriesQuery, useBoardPostsQuery, useBoardPostCountsQuery, u
 import { BoardCategoryList, type BoardCategorySearchMatchSummary } from '../../components/board/BoardCategoryList';
 import { BoardPostCard } from '../../components/board/BoardPostCard';
 import { BoardPostDetail } from '../../components/board/BoardPostDetail';
+import { Breadcrumbs, type Crumb } from '../../components/ui/Breadcrumbs';
+import { HiveMark } from '../../components/ui/HiveMark';
+import { WorldMark } from '../../components/ui/WorldMark';
+import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { BoardComposer } from '../../components/board/BoardComposer';
 import { BoardTopicComposer, type BoardTopicAudience, type BoardTopicMetadata } from '../../components/board/BoardTopicComposer';
 import { WishDetail } from '../../components/hive/WishDetail';
@@ -126,7 +130,7 @@ function getRouteParam(value: string | string[] | undefined) {
 }
 
 export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } = {}) {
-  const { profile, communityId: myCommunityId, communityRole } = useAuth();
+  const { profile, communityId: myCommunityId, communityRole, community } = useAuth();
   const router = useRouter();
   const routeParams = useLocalSearchParams<{
     categoryId?: string | string[];
@@ -155,6 +159,29 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   // twice, and she was right both times: the shared boards were wearing OG's
   // cream while the rail beside them was black (2026-08-03).
   const skin = usePageSkin();
+
+  /**
+   * Where you are, from the top.
+   *
+   * Nat, 2026-08-05: "I understand how the boards work, but not every one does
+   * ... some sort of: OG HIVE > Boards > HIVE approved > Favo healthcare".
+   *
+   * The boards are four levels deep and the deepest screen's header said the
+   * word "Thread", which names the KIND of thing you are looking at and not
+   * where it sits. The first step carries its HIVE's own mark — the hexagon in
+   * its colour, or the Earth at HIVE-Wide — so the trail and the badges are
+   * telling you the same thing in the same language.
+   */
+  const boardTrail = (deeper: Crumb[] = []): Crumb[] => [
+    isWide
+      ? { label: 'HIVE-Wide', mark: <WorldMark size={12} /> }
+      : {
+          label: hiveDisplayName(community?.name),
+          mark: <HiveMark size={11} colour={hiveAccent(community)} />,
+        },
+    { label: 'Boards', onPress: () => { setSelectedPostId(null); setSelectedCategoryId(null); } },
+    ...deeper,
+  ];
   const {
     data: categories = [],
     isLoading: categoriesLoading,
@@ -1670,6 +1697,14 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       <BoardPostDetail
         postId={selectedPostId}
         onBack={handlePostBack}
+        // Everything above the thread. The detail screen appends the thread's
+        // own title once it has loaded it, so the trail is right even when this
+        // screen's post list has not caught up.
+        trail={
+          selectedCategory
+            ? boardTrail([{ label: selectedCategory.name, onPress: handlePostBack }])
+            : boardTrail()
+        }
       />
     );
   }
@@ -1736,6 +1771,8 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
               ) : undefined
           }
         />
+
+        <Breadcrumbs items={boardTrail()} tone={skin.dark ? 'dark' : 'light'} />
 
         {boardListToolbar}
 
@@ -1805,6 +1842,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         }
       />
 
+      <Breadcrumbs
+        items={boardTrail([{ label: selectedCategory.name }])}
+        tone={skin.dark ? 'dark' : 'light'}
+      />
+
       <FlatList
         data={visiblePosts}
         keyExtractor={(item) => item.id}
@@ -1839,21 +1881,27 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
                 </Text>
               </View>
             ) : null}
+            {/* The two search boxes on this screen — boards above, threads
+                here — had drifted into different corners, different fills and
+                different placeholder ink. Same job, same look (2026-08-05). */}
             {(listSourcePosts.length > 0 || threadSearch.trim().length > 0) && (
-              <View className="flex-row items-center bg-white border border-gold/15 rounded-2xl px-3 py-2 mb-3">
-                <Ionicons name="search" size={16} color="rgba(49,49,48,0.38)" />
+              <View
+                className="flex-row items-center rounded-full px-3 py-2 mb-3"
+                style={{ backgroundColor: skin.field, borderWidth: 1, borderColor: skin.border }}
+              >
+                <Ionicons name="search" size={17} color={skin.inkFaint} />
                 <TextInput
                   value={threadSearch}
                   onChangeText={setThreadSearch}
                   placeholder="Search threads"
-                  placeholderTextColor="rgba(49,49,48,0.38)"
-                  className="flex-1 ml-2 text-sm text-charcoal"
-                  style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none' } as any}
+                  placeholderTextColor={skin.inkFaint}
+                  className="flex-1 ml-2"
+                  style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: skin.ink, outlineStyle: 'none' } as any}
                   returnKeyType="search"
                 />
                 {threadSearch.length > 0 && (
                   <Pressable onPress={() => setThreadSearch('')} hitSlop={8}>
-                    <Ionicons name="close-circle" size={18} color="rgba(49,49,48,0.32)" />
+                    <Ionicons name="close-circle" size={17} color={skin.inkFaint} />
                   </Pressable>
                 )}
               </View>
