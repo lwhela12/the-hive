@@ -20,7 +20,6 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useRoomMessagesQuery } from '../../lib/hooks/useRoomMessagesQuery';
 import { queryKeys } from '../../lib/queryClient';
-import { HiveIcon } from '../ui/HiveIcon';
 
 const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 import { RoomMessageItem } from './RoomMessageItem';
@@ -388,7 +387,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
           justifyContent: 'center',
         }}
       >
-        <HiveIcon name={room.room_type === 'group_dm' ? 'message' : 'person'} size={size * 0.5} color={roomTheme.accent} />
+        <Text style={{ fontSize: size * 0.5 }}>{room.room_type === 'group_dm' ? '👥' : '👤'}</Text>
       </View>
     );
   };
@@ -1132,15 +1131,9 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                 </View>
               ) : (
                 <View className="items-center py-8">
-                  {/* A room's own emoji is member-chosen content and stays;
-                      the fallback is chrome, so it wears the footer's glyph. */}
-                  {currentCustomEmoji ? (
-                    <Text className="text-4xl mb-2">{currentCustomEmoji}</Text>
-                  ) : (
-                    <View className="mb-2">
-                      <HiveIcon name="message" size={38} color={roomTheme.accent} />
-                    </View>
-                  )}
+                  {/* A room's own emoji is member-chosen and always wins; when
+                      nobody has picked one, a speech bubble stands in. */}
+                  <Text className="text-4xl mb-2">{currentCustomEmoji || '💬'}</Text>
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
                     No messages yet. Start the conversation!
                   </Text>

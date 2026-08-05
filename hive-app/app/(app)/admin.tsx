@@ -50,7 +50,6 @@ import {
 } from '../../components/admin/GodModePanels';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { SpaceGlobe } from '../../components/ui/SpaceGlobe';
-import { HiveIcon } from '../../components/ui/HiveIcon';
 import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { useSurveys } from '../../lib/hooks/useSurveys';
@@ -1065,6 +1064,11 @@ export default function AdminScreen() {
   const useMobileLayout = width < 768;
   const currentDuesPeriod = getCurrentDuesPeriod();
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+  // The newsletter list spans every HIVE, so it is owners only — see migration
+  // 147. A HIVE's own admin running the subscriber list of all the others was
+  // the hole; showing them a box the database will hand back empty is the
+  // avoidable half of it.
+  const isOwner = profile?.is_owner === true;
   const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
   const canEditHoneyPot = isTreasurer || isAdmin;
   const [refreshing, setRefreshing] = useState(false);
@@ -2182,7 +2186,7 @@ export default function AdminScreen() {
                         pointed at a tab the rail won't take you to, and the
                         tools read as deleted rather than moved. */}
                     {([
-                      { label: 'Every meeting tool now sits inside its own HIVE, in the boxes above', icon: 'calendar' as const, route: '/meetings', params: {} },
+                      { label: 'Every meeting tool now sits inside its own HIVE, in the boxes above', emoji: '📅', route: '/meetings', params: {} },
                     ] as const).map((tool) => (
                       <Pressable
                         key={`${tool.route}-${tool.label}`}
@@ -2195,9 +2199,7 @@ export default function AdminScreen() {
                           backgroundColor: pressed ? '#fbf4e3' : 'transparent',
                         })}
                       >
-                        <View style={{ marginRight: 8 }}>
-                          <HiveIcon name={tool.icon} size={16} color="#8a6b30" />
-                        </View>
+                        <Text style={{ fontSize: 15, marginRight: 8 }}>{tool.emoji}</Text>
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', flex: 1 }}>
                           {tool.label}
                         </Text>
@@ -2221,9 +2223,7 @@ export default function AdminScreen() {
                             backgroundColor: pressed ? '#fbf4e3' : 'transparent',
                           })}
                         >
-                          <View style={{ marginRight: 8 }}>
-                            <HiveIcon name="chart" size={16} color="#8a6b30" />
-                          </View>
+                          <Text style={{ fontSize: 15, marginRight: 8 }}>📊</Text>
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', flex: 1 }}>
                             Check-in questions & responses
                           </Text>
@@ -2286,7 +2286,7 @@ export default function AdminScreen() {
           {/* The newsletter goes out past every HIVE, so its box wears the house
               cream rather than any one HIVE's colour. Nat's draft opens from
               inside it. */}
-          {isAdmin && (
+          {isOwner && (
             <NewsletterPanel
               cellStyle={dashboardCellStyle}
               panelStyle={dashboardPanelStyle}

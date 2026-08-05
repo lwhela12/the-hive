@@ -3,7 +3,6 @@ import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppHeader } from '../../components/navigation';
-import { HiveIcon } from '../../components/ui/HiveIcon';
 import { HoneyPotPaymentCard } from '../../components/hive/HoneyPotPaymentCard';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { RecordHoneyPotModal } from '../../components/hive/RecordHoneyPotModal';
@@ -114,11 +113,7 @@ export default function HoneyPotScreen() {
                 marginBottom: 14,
               }}
             >
-              {duesStatus.covered ? (
-                <HiveIcon name="checkin" size={18} color="#8e6f35" />
-              ) : (
-                <HiveIcon name="honeypot" size={18} color="#92400e" />
-              )}
+              <Text style={{ fontSize: 16 }}>{duesStatus.covered ? '✅' : '🍯'}</Text>
               <Text
                 style={{
                   fontFamily: 'Lato_700Bold',

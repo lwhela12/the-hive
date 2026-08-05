@@ -16,7 +16,6 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { AppHeader } from '../../components/navigation';
-import { HiveIcon } from '../../components/ui/HiveIcon';
 import { LinkedLogins } from '../../components/profile/LinkedLogins';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -697,7 +696,7 @@ export default function SettingsScreen() {
             className="flex-row items-center justify-center bg-gold/10 py-3 rounded-xl active:bg-gold/20"
             style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}
           >
-            <HiveIcon name="swap" size={18} color="#8e6f35" />
+            <Text style={{ fontSize: 16 }}>🔀</Text>
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold ml-2">
               Swap HIVE
             </Text>

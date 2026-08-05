@@ -14,7 +14,6 @@ import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { EditButton } from '../../components/ui/EditButton';
-import { HiveIcon } from '../../components/ui/HiveIcon';
 
 const memberHoneycombCell = require('../../assets/generated/member-honeycomb-cell.png');
 const memberHoneycombCellMe = require('../../assets/generated/member-honeycomb-cell-me.png');
@@ -2861,7 +2860,7 @@ export default function MembersScreen() {
                           accessibilityLabel={`Answer more ${theme.category} questions in Catch up`}
                           style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: pressed ? '#fbf0d7' : '#fffdf5', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 })}
                         >
-                          <HiveIcon name="star" size={13} color="#bd9348" />
+                          <Text style={{ fontSize: 12 }}>⭐</Text>
                           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#2d2d2d' }}>
                             {theme.category}
                           </Text>

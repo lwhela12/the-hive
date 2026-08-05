@@ -26,7 +26,6 @@ import { getAppNews } from '../../lib/appNews';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { parseFocusAnswer, focusAnswerDidIt, focusAnswerScore } from '../../components/surveys/SurveyQuestionField';
 import { submitOnEnter } from '../../lib/submitOnEnter';
-import { HiveIcon } from '../../components/ui/HiveIcon';
 import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
@@ -1083,7 +1082,7 @@ export default function MeetingHelperScreen() {
           <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(23, 13), color: MUTED, textAlign: 'center' }}>
             grab a plate and check in
           </Text>
-          <HiveIcon name="honeypot" size={sz(22, 13)} color={GOLD} />
+          <Text style={{ fontSize: sz(22, 13) }}>🍯</Text>
         </View>
         {survey ? (
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 11), color: MUTED, marginTop: sz(10, 6) }}>
@@ -1687,7 +1686,7 @@ export default function MeetingHelperScreen() {
           >
             <View style={{ flex: isTV ? 1 : undefined, gap: sz(10, 7) }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(8, 5) }}>
-                <HiveIcon name="chart" size={sz(16, 12)} color={GOLD} />
+                <Text style={{ fontSize: sz(16, 12) }}>📊</Text>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
                   How did we do?
                 </Text>
@@ -1736,7 +1735,7 @@ export default function MeetingHelperScreen() {
             <View style={{ flex: isTV ? 1 : undefined, gap: sz(10, 7) }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(8, 5) }}>
-                  <HiveIcon name="star" size={sz(16, 12)} color={GOLD} />
+                  <Text style={{ fontSize: sz(16, 12) }}>💡</Text>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
                     What should we do next?
                   </Text>
@@ -2386,7 +2385,7 @@ export default function MeetingHelperScreen() {
                 {liveNotesTaken.filter((note) => note.aboutId === member.id).map((note) => (
                   <View key={note.id} style={{ flexDirection: 'row', gap: sz(8, 6), alignItems: 'flex-start' }}>
                     <View style={{ paddingTop: sz(3, 2) }}>
-                      <HiveIcon name="note" size={sz(15, 12)} color={GOLD} />
+                      <Text style={{ fontSize: sz(15, 12) }}>📝</Text>
                     </View>
                     <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: sz(15, 11), lineHeight: sz(22, 16), color: CHARCOAL }}>
                       {note.text}
