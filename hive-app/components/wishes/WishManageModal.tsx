@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, Platform, Pressable, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Wish } from '../../types';
 
@@ -173,18 +173,25 @@ export function WishManageModal<TWish extends ManagedWish>({
         style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.38)', justifyContent: 'flex-end' }}
         onPress={onClose}
       >
+        {/* A ceiling and a scroll, for the same reason the event sheet needed
+            them: this shows the whole wish text above the actions, and a long
+            wish grew the sheet past the top of the window with no way to reach
+            the buttons (Nat 2026-08-05, on the event form: "i'm trapped"). */}
         <Pressable
           onPress={(event) => event.stopPropagation()}
           style={{
             backgroundColor: '#fffdf5',
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
-            padding: 22,
-            paddingBottom: 34,
             borderTopWidth: 1,
             borderColor: 'rgba(222,193,129,0.5)',
+            maxHeight: '88%',
           }}
         >
+          <ScrollView
+            contentContainerStyle={{ padding: 22, paddingBottom: 34 }}
+            showsVerticalScrollIndicator={false}
+          >
           <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.28)', borderRadius: 2, alignSelf: 'center', marginBottom: 18 }} />
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
             <View style={{ flex: 1 }}>
@@ -276,6 +283,7 @@ export function WishManageModal<TWish extends ManagedWish>({
               </View>
             ) : null}
           </View>
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>

@@ -64,6 +64,7 @@ export function ScopeBadge({
   size,
   tone = 'light',
   hideHive,
+  caption,
 }: {
   scope?: Scope | string | null;
   /** Whose it is. Pass it when you have it — this is what colours the hexagon. */
@@ -80,6 +81,16 @@ export function ScopeBadge({
    * one HIVE's box, where repeating the hexagon on every line is just noise.
    */
   hideHive?: boolean;
+  /**
+   * A tiny word in front, naming which question this badge answers.
+   *
+   * An event has two: who can see it, and who is invited. Nat, 2026-08-05, on a
+   * card showing a lone black "Public" pill: *"when i see these, i think 'oh no,
+   * i invited the whole public' and thats not what i did, i just toggled the
+   * visibility settings."* An unlabelled badge is fine when a thing has one
+   * scope and dangerously ambiguous the moment it has two.
+   */
+  caption?: string;
 }) {
   const { community: current, communityId: currentCommunityId, memberships, wholeHive } = useAuth();
   const key: ScopeKey = normaliseScope(typeof scope === 'string' ? scope : undefined);
@@ -121,6 +132,19 @@ export function ScopeBadge({
       accessible
       accessibilityLabel={scopeSpoken(key, hive.label)}
     >
+      {caption ? (
+        <Text
+          style={{
+            fontFamily: 'Lato_700Bold',
+            fontSize: chipSize === 'sm' ? 8.5 : 9.5,
+            letterSpacing: 0.9,
+            textTransform: 'uppercase',
+            color: tone === 'dark' ? 'rgba(255,248,233,0.5)' : 'rgba(49,49,48,0.42)',
+          }}
+        >
+          {caption}
+        </Text>
+      ) : null}
       {showHive && (
         <Chip size={chipSize} look={hive}>
           <HiveMark size={s.mark} colour={hive.accent} />

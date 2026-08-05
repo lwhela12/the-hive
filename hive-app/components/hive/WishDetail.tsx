@@ -21,6 +21,7 @@ import { notifyWishMentions } from '../../lib/wishMentions';
 import { confirmAction } from '../../lib/showAlert';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
+import { ScopeBadge } from '../ui/ScopeBadge';
 import { WishCommentItem, type WishCommentNode } from './WishCommentItem';
 import { getFirstName } from '../../lib/hooks/useArrivalBoard';
 import type { Attachment, Wish, Profile, WishComment, WishGranter } from '../../types';
@@ -407,12 +408,34 @@ export function WishDetail({
                   />
                 </View>
               ) : null}
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-2">
-                {formatDateShort(wish.created_at)}
-                {isGranted && wish.fulfilled_at && (
-                  <Text> · Granted {formatDateShort(wish.fulfilled_at)}</Text>
-                )}
-              </Text>
+              {/* How far this wish travels, said where the eye already is.
+                  Until now this page showed the wish, its comments and a grant
+                  button and nothing at all about who can read it — so a wish
+                  every HIVE can see looked exactly like one that stays home
+                  (Nat 2026-08-05: "this page should make it obvious what the
+                  visibility of the wish is"). It rides with the date rather
+                  than sitting at the bottom, because that line is already
+                  where you look for "when, and whose".
+
+                  The hexagon carries the wish's OWN HIVE colour — `community_id`,
+                  not whichever HIVE you happen to be standing in — so opening a
+                  wish from HIVE-Wide tells you which HIVE it came from. The
+                  caption names the question the chip answers, the same wording
+                  events use, so a black "Public" pill can't be misread as
+                  "I invited the whole public". */}
+              <View className="flex-row items-center flex-wrap mt-2" style={{ gap: 8 }}>
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40">
+                  {formatDateShort(wish.created_at)}
+                  {isGranted && wish.fulfilled_at && (
+                    <Text> · Granted {formatDateShort(wish.fulfilled_at)}</Text>
+                  )}
+                </Text>
+                <ScopeBadge
+                  scope={(wish.share_scope as string) ?? 'hive'}
+                  communityId={wish.community_id}
+                  caption="Seen by"
+                />
+              </View>
             </View>
           </View>
         </Pressable>

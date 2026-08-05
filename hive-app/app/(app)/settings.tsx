@@ -1,22 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { showAlert } from '../../lib/showAlert';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { AppHeader } from '../../components/navigation';
 import { LinkedLogins } from '../../components/profile/LinkedLogins';
+import { ScopeBadge } from '../../components/ui/ScopeBadge';
+import { Switch, SWITCH_GUTTER, SWITCH_LOOK } from '../../components/ui/Switch';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 /**
@@ -30,6 +24,17 @@ import { ThinkingBee } from '../../components/ui/ThinkingBee';
  * and forget lives here. Signing out was left exactly where it was — the foot
  * of Profile and the side rail — because people already know where to find it
  * and moving it is its own decision, not a side effect of this one.
+ *
+ * 2026-08-05: every preference on this page is now the same control.
+ *
+ * It had grown four — radio cards for how far you travel, the same cards again
+ * for your default sharing, a sliding pill for who can see you, and a gold
+ * button per email — which is four ways of asking one kind of question. Nat:
+ * *"We need one style & one alignment throughout."* They are all
+ * `components/ui/Switch.tsx` now, so every pill sits in the same column and
+ * every label starts at the same x. What each one saves, and where, did not
+ * change: a switch that quietly moved somebody's sharing default would be far
+ * worse than four mismatched controls.
  */
 
 const PANEL = '#fffdf6';

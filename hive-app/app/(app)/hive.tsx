@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, ActivityIndicator, Animated, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { useWishes } from '../../lib/hooks/useWishes';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
+import { HiveMark } from '../../components/ui/HiveMark';
 import { isInvitedToEvent, getEventEmoji, getEventHiveIcon } from '../../lib/eventDisplay';
 import { HiveIcon, type HiveIconName } from '../../components/ui/HiveIcon';
 import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
@@ -33,7 +34,7 @@ import {
   WishSectionSkeleton,
 } from '../../components/hive/skeletons';
 import { AppHeader } from '../../components/navigation';
-import { hiveDisplayName } from '../../lib/hiveBrand';
+import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { ScopeBadge } from '../../components/ui/ScopeBadge';
 import { DAILY_QUESTIONS, deckForCommunity, getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
 import type { DailyQuestion } from '../../lib/dailyQuestions';
@@ -384,9 +385,24 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
             {/* Plain emoji everywhere now (Nat 2026-08-04). The drawn icon
                 branch that used to sit here was shadowing an emoji that was
                 already chosen and already correct. */}
-            <Text className="text-2xl mr-3">
-              {getEventEmoji(event)}
-            </Text>
+            {/* A HIVE's own meeting wears that HIVE's comb, in its colour.
+                Nat, 2026-08-05: "I think our OG HIVE meeting should have this
+                icon, instead of generic bee emoji." Every HIVE's meeting was
+                drawing the same bee, so on a calendar carrying three HIVEs the
+                one glyph that should have told you whose it was told you
+                nothing. Everything else keeps its emoji. */}
+            <View className="mr-3" style={{ width: 26, alignItems: 'center' }}>
+              {event.event_type === 'meeting' ? (
+                <HiveMark
+                  size={22}
+                  colour={hiveAccent(
+                    memberships.find((m) => m.community_id === (event as any).community_id)?.community,
+                  )}
+                />
+              ) : (
+                <Text className="text-2xl">{getEventEmoji(event)}</Text>
+              )}
+            </View>
             <View className="flex-1">
               <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">{event.title}</Text>
               <View className="flex-row flex-wrap items-center mt-1">
@@ -429,12 +445,39 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
                 own colour, so on a calendar carrying three HIVEs' meetings you
                 can tell whose August meeting this is without reading the title
                 (Nat 2026-08-05). Birthdays are nobody's business but ours. */}
-            {event.event_type !== 'birthday' && (
-              <ScopeBadge
-                scope={(event as any).visibility}
-                communityId={(event as any).community_id}
-              />
-            )}
+            {event.event_type !== 'birthday' && (() => {
+              // Two questions, so two answers — but only when they differ.
+              //
+              // Nat, 2026-08-05, looking at a lone black "Public" pill: "when i
+              // see these, i think 'oh no, i invited the whole public' and thats
+              // not what i did, i just toggled the visibility settings." She was
+              // right to be alarmed: the card was showing the visibility and
+              // saying nothing about the invitation, so the widest of the two
+              // rungs spoke for both.
+              //
+              // When they agree there is nothing to disambiguate and one badge
+              // stays one badge, which is most events. When they disagree, each
+              // gets a word in front of it saying which question it answers.
+              const seen = (event as any).visibility ?? 'members';
+              const invited = (event as any).invited_scope ?? seen;
+              const differ = seen !== invited;
+              return (
+                <>
+                  <ScopeBadge
+                    scope={seen}
+                    communityId={(event as any).community_id}
+                    caption={differ ? 'Seen by' : undefined}
+                  />
+                  {differ && (
+                    <ScopeBadge
+                      scope={invited}
+                      communityId={(event as any).community_id}
+                      caption="Invited"
+                    />
+                  )}
+                </>
+              );
+            })()}
             {/* The joining details belong to the people who were invited. An
                 event can be visible to every HIVE while its link stays with the
                 HIVE whose meeting it is (Nat 2026-08-05). */}
@@ -1855,6 +1898,43 @@ export default function HiveScreen() {
     loading,
     refetch,
   } = useHiveDataQuery(communityId ?? undefined, profile?.id);
+
+  /**
+   * Places this HIVE has been before, offered as you type.
+   *
+   * Nat, 2026-08-05: *"as you type, it can start trying to guess the location
+   * with a drop down? Like how it does in google maps and apple maps? what do
+   * you think?"*
+   *
+   * A real map lookup would mean a paid Google Places key, a billing account,
+   * and every keystroke in this box leaving the app — for a group that meets at
+   * the same handful of places. So it suggests from the addresses this HIVE has
+   * actually used. It costs nothing, tells nobody, is instant, and it gets
+   * better the more the HIVE meets. It will never find a restaurant you have
+   * never been to; that is the trade, and it is the right one until somebody
+   * needs the other thing.
+   */
+  const knownLocations = useMemo(() => {
+    const seen = new Map<string, string>();
+    [...upcomingEvents, ...pastEvents].forEach((event) => {
+      const place = (event.location ?? '').trim();
+      if (place && !seen.has(place.toLowerCase())) seen.set(place.toLowerCase(), place);
+    });
+    return [...seen.values()];
+  }, [upcomingEvents, pastEvents]);
+
+  const locationSuggestions = useMemo(() => {
+    const typed = eventLocation.trim().toLowerCase();
+    // Before you type, the places you use most are the useful guess. Once you
+    // start, only what matches — and never the thing you have already typed in
+    // full, which would be a suggestion to change nothing.
+    const pool = knownLocations.filter((place) => {
+      const lower = place.toLowerCase();
+      if (lower === typed) return false;
+      return typed.length === 0 || lower.includes(typed);
+    });
+    return pool.slice(0, 4);
+  }, [knownLocations, eventLocation]);
 
   // Surveys
   const {
@@ -3636,7 +3716,24 @@ export default function HiveScreen() {
       {/* Add/Edit/View Event Modal */}
       <Modal visible={showEventModal} animationType="slide" transparent onRequestClose={() => setShowEventModal(false)}>
         <Pressable className="flex-1 bg-black/50 justify-end" onPress={() => setShowEventModal(false)}>
-          <Pressable className="bg-white rounded-t-3xl p-6" onPress={(e) => e.stopPropagation()}>
+          {/* It scrolls, and it stops short of the top of the window.
+              Nat, 2026-08-05: "i'm stuck here for some reason, i cant scroll in
+              or out or up or down, i'm trapped." She was: this sheet had no
+              ScrollView and no ceiling, so it grew to whatever its contents
+              needed and ran straight off the screen — taking Cancel and Save
+              with it. Adding the second scope picker this morning is what tipped
+              a tall form into an unusable one. A bottom sheet that can grow has
+              to be a sheet that can scroll. */}
+          <Pressable
+            className="bg-white rounded-t-3xl"
+            style={{ maxHeight: '88%' }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <ScrollView
+              contentContainerStyle={{ padding: 24 }}
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+            >
             {(() => {
               const canEdit = !!profile && !!communityId;
               const isViewOnly = editingEvent && !canEdit;
@@ -3727,20 +3824,59 @@ export default function HiveScreen() {
                         canSubmit={!savingEvent}
                         submitting={savingEvent}
                       />
-                      <View className="mb-3">
-                        <EventDatePicker
-                          value={eventDate}
-                          onChange={setEventDate}
-                        />
-                      </View>
-                      <View className="mb-3">
-                        <EventDatePicker
-                          value={eventEndDate}
-                          onChange={setEventEndDate}
-                          label="End date (optional — for multi-day stretches)"
-                          placeholder="Same day"
-                          clearable
-                        />
+                      {/* Date, end date and time on one line.
+                          Nat, 2026-08-05: "instead of it saying date and then you
+                          have to follow the screen allllllllllllll the way to the
+                          right, and then time & you have to follow it
+                          alllllllllllllllll the way to the left to see the drop
+                          down, i think they could be shortened and maybe side by
+                          side?" A full-window bar for six characters of date made
+                          the eye travel the whole screen to reach the picker.
+
+                          `flexBasis` with wrap rather than a breakpoint, so they
+                          fall into a stack on a phone on their own. The tune-up
+                          got this treatment first; this is the same form in
+                          another room. */}
+                      <View className="mb-3" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                        <View style={{ flexGrow: 1, flexBasis: 180 }}>
+                          <EventDatePicker
+                            value={eventDate}
+                            onChange={setEventDate}
+                          />
+                        </View>
+                        <View style={{ flexGrow: 1, flexBasis: 180 }}>
+                          <EventDatePicker
+                            value={eventEndDate}
+                            onChange={setEventEndDate}
+                            label="End date"
+                            placeholder="Same day — or pick one"
+                            clearable
+                          />
+                        </View>
+                        {!eventAllDay && (
+                          <View style={{ flexGrow: 1, flexBasis: 150 }}>
+                            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Time</Text>
+                            {/* A clock time, so no microphone — it wears the same
+                                fill, hairline and placeholder ink as everything
+                                around it. */}
+                            <TextInput
+                              placeholder="7:30 PM"
+                              placeholderTextColor={FIELD_LOOK.placeholder}
+                              selectionColor={FIELD_LOOK.ink}
+                              value={eventTime}
+                              onChangeText={setEventTime}
+                              returnKeyType="send"
+                              onSubmitEditing={saveEvent}
+                              className="rounded-xl px-4 py-3 text-base text-charcoal"
+                              style={{
+                                fontFamily: FIELD_LOOK.font,
+                                backgroundColor: FIELD_LOOK.fill,
+                                borderWidth: 1,
+                                borderColor: FIELD_LOOK.border,
+                              }}
+                            />
+                          </View>
+                        )}
                       </View>
                       <Pressable
                         onPress={() => setEventAllDay((prev) => !prev)}
@@ -3752,37 +3888,15 @@ export default function HiveScreen() {
                         <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal">All day (no set time)</Text>
                       </Pressable>
                       {!eventAllDay && (
-                        <View className="mb-3">
-                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Time (optional)</Text>
-                          {/* A clock time, so no microphone — it wears the same
-                              white fill, hairline and placeholder ink as the
-                              boxes above and below it. */}
-                          <TextInput
-                            placeholder="7:30 PM"
-                            placeholderTextColor={FIELD_LOOK.placeholder}
-                            selectionColor={FIELD_LOOK.ink}
-                            value={eventTime}
-                            onChangeText={setEventTime}
-                            returnKeyType="send"
-                            onSubmitEditing={saveEvent}
-                            className="rounded-xl px-4 py-3 text-base text-charcoal"
-                            style={{
-                              fontFamily: FIELD_LOOK.font,
-                              backgroundColor: FIELD_LOOK.fill,
-                              borderWidth: 1,
-                              borderColor: FIELD_LOOK.border,
-                            }}
-                          />
-                          <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-1">
-                            Extra details like doors/showtime can go here too. We’ll save the first time and keep your note.
-                          </Text>
-                        </View>
+                        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-3 -mt-1">
+                          Extra details like doors/showtime can go in the time box too. We’ll save the first time and keep your note.
+                        </Text>
                       )}
                       {/* A place is words — "the back room at Esther's Kitchen"
                           is exactly the sort of thing you say out loud. */}
                       <ComposerBar
                         variant="form"
-                        containerClassName="mb-3"
+                        containerClassName={locationSuggestions.length > 0 ? 'mb-1' : 'mb-3'}
                         placeholder="Location (optional)"
                         value={eventLocation}
                         onChangeText={setEventLocation}
@@ -3791,6 +3905,45 @@ export default function HiveScreen() {
                         canSubmit={!savingEvent}
                         submitting={savingEvent}
                       />
+                      {/* Where this HIVE has met before. See `knownLocations`
+                          for why these come from your own past events rather
+                          than from a map service. */}
+                      {locationSuggestions.length > 0 && (
+                        <View className="mb-3" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                          {locationSuggestions.map((place) => (
+                            <Pressable
+                              key={place}
+                              onPress={() => setEventLocation(place)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Use ${place}`}
+                              style={({ pressed }) => ({
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 5,
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                borderRadius: 999,
+                                borderWidth: 1,
+                                borderColor: FIELD_LOOK.border,
+                                backgroundColor: pressed ? '#fdf3dc' : FIELD_LOOK.fill,
+                              })}
+                            >
+                              <Text style={{ fontSize: 11 }}>📍</Text>
+                              <Text
+                                numberOfLines={1}
+                                style={{
+                                  fontFamily: 'Lato_400Regular',
+                                  fontSize: 12.5,
+                                  color: '#8a6b30',
+                                  maxWidth: 220,
+                                }}
+                              >
+                                {place}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
                       {/* The mic was on a strip under this box. It is inside the
                           border now, on the box's own footer. */}
                       <ComposerBar
@@ -3843,6 +3996,7 @@ export default function HiveScreen() {
                 </>
               );
             })()}
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
