@@ -28,6 +28,26 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-06-swarm-across-hives',
+    date: '2026-08-05',
+    title: 'The Swarm Report works across HIVEs now',
+    detail: 'You and someone in another HIVE never answer the same question — but if you both light up about the same things, it finds that.',
+    href: { pathname: '/members', params: { view: 'swarm' } },
+    action: 'See who you match with',
+  },
+  {
+    id: '2026-08-06-swarm-meaning',
+    date: '2026-08-05',
+    title: 'Matching understands what you meant',
+    detail: 'It used to count shared words, so "pizza" and "pasta" had nothing in common and "I love my dog" nearly matched "I hate my dog".',
+  },
+  {
+    id: '2026-08-06-swarm-why',
+    date: '2026-08-05',
+    title: 'Your match says why',
+    detail: 'The card tells you what you keep meeting each other on, instead of just a number.',
+  },
+  {
     id: '2026-08-06-one-switch',
     date: '2026-08-05',
     title: 'Every setting works the same way',

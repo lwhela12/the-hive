@@ -22,6 +22,7 @@ import { useChatRooms } from '../../lib/hooks/useChatRooms';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import { SKILL_CATEGORIES } from '../../lib/skillsList';
 import { DAILY_QUESTIONS, deckForCommunity } from '../../lib/dailyQuestions';
+import { buildSwarmMatches, describeMatch, type SwarmAnswer } from '../../lib/swarmMatch';
 import type { DailyQuestion } from '../../lib/dailyQuestions';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
@@ -76,6 +77,10 @@ interface MemberData {
   dailyMatchPercent?: number;
   dailyMatchSharedCount?: number;
   dailyMatchSimilarCount?: number;
+  /** One line saying WHY, from `describeMatch`. */
+  dailyMatchReason?: string | null;
+  /** The themes you keep meeting each other on. */
+  dailyMatchThemes?: string[];
 }
 
 const ROLE_LABELS: Partial<Record<UserRole, string>> = {
@@ -2329,8 +2334,19 @@ export default function MembersScreen() {
           .in('author_id', userIds),
         supabase
           .from('daily_question_answers')
-          .select('user_id, question_index, question_date, answer, created_at')
-          .eq('community_id', communityId)
+          // Every HIVE you are in, not just the one you are standing in.
+          //
+          // This was pinned to a single community while the member list beside
+          // it already spanned all of them, so at HIVE-Wide somebody from Tech
+          // appeared with no match data at all and nothing saying why. Widening
+          // it is only safe now that pairs are made by QUESTION rather than by
+          // date — see lib/swarmMatch.ts for what would have happened otherwise.
+          //
+          // `community_id` comes back because it says which DECK an answer
+          // belongs to, and `gist` because it is what makes the match about
+          // meaning instead of shared words.
+          .select('user_id, community_id, question_index, question_date, answer, created_at, gist')
+          .in('community_id', scopeIds)
           .in('user_id', userIds),
       ]);
 
@@ -2418,11 +2434,25 @@ export default function MembersScreen() {
         }
       });
 
+      // Each answer gets labelled with ITS OWN HIVE's deck.
+      //
+      // This used to hand every answer the deck of whoever was looking, which
+      // was invisible while answers never crossed a HIVE and would have started
+      // printing a Tech member's answer under an OG question the moment they
+      // did. The slug comes from your memberships, which is where the community
+      // rows already are.
+      const slugByCommunity = new Map<string, string | null>();
+      myHives.forEach((m) => slugByCommunity.set(m.community_id, m.community?.slug ?? null));
+      const deckFor = (answerCommunityId: string | null | undefined) =>
+        deckForCommunity(
+          answerCommunityId ? slugByCommunity.get(answerCommunityId) ?? null : community?.slug,
+        );
+
       const answersByUser = new Map<string, MemberDailyAnswer[]>();
       (answersRes.data ?? []).forEach((a: any) => {
         if (!a.user_id) return;
         const questionIndex = Number(a.question_index ?? 0);
-        const question = getDailyAnswerPrompt(questionIndex, deckForCommunity(community?.slug));
+        const question = getDailyAnswerPrompt(questionIndex, deckFor(a.community_id));
         if (!answersByUser.has(a.user_id)) answersByUser.set(a.user_id, []);
         answersByUser.get(a.user_id)!.push({
           questionIndex,
@@ -2441,7 +2471,20 @@ export default function MembersScreen() {
           return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
         });
       });
-      const dailyMatches = buildDailyMatchStats(currentUserId, (answersRes.data ?? []) as DailyAnswerRow[]);
+      // The match itself: by question, then by theme, on meaning where we have
+      // it. `lib/swarmMatch.ts` carries the reasoning.
+      const swarmAnswers: SwarmAnswer[] = (answersRes.data ?? []).map((a: any) => {
+        const question = getDailyAnswerPrompt(Number(a.question_index ?? 0), deckFor(a.community_id));
+        return {
+          userId: a.user_id,
+          communityId: a.community_id ?? null,
+          questionIndex: Number(a.question_index ?? 0),
+          answer: a.answer ?? '',
+          themes: (question as { themes?: string[] }).themes,
+          gist: a.gist ?? null,
+        };
+      });
+      const dailyMatches = buildSwarmMatches(currentUserId, swarmAnswers);
 
       memberList.forEach(m => {
         m.skills = skillsByUser.get(m.id) ?? [];
@@ -2450,10 +2493,17 @@ export default function MembersScreen() {
         m.dailyAnswers = answersByUser.get(m.id) ?? [];
         m.questionAnswerCount = m.dailyAnswers.length;
         const match = dailyMatches.get(m.id);
-        if (match && match.sharedCount > 0) {
+        const overlaps = (match?.sameQuestionCount ?? 0) + (match?.themeCount ?? 0);
+        if (match && overlaps > 0) {
           m.dailyMatchPercent = match.percent;
-          m.dailyMatchSharedCount = match.sharedCount;
-          m.dailyMatchSimilarCount = match.similarCount;
+          m.dailyMatchSharedCount = overlaps;
+          m.dailyMatchSimilarCount = match.sameQuestionCount;
+          // Why, in words. A number on its own invites you to believe it; a
+          // number with a reason invites you to check it, which is the honest
+          // way round (Nat asked how smart the analytics are — this is the
+          // answer she can actually see).
+          m.dailyMatchReason = describeMatch(match, m.name ?? '');
+          m.dailyMatchThemes = match.sharedThemes;
         }
       });
 
@@ -2978,10 +3028,21 @@ export default function MembersScreen() {
                       : isCompactHoneycomb
                         ? '0 shared'
                         : '0 shared answers';
-                    const visibleChips = [
-                      { key: 'answers', label: connectionChip },
-                      { key: 'wishes', label: wishChip },
-                    ];
+                    // In the Swarm Report the useful chip is not how many
+                    // answers exist, it is what you keep meeting each other on.
+                    // Nat asked how smart the analytics are; a theme you share
+                    // is the part of the answer she can check at a glance,
+                    // where a bare percentage is just a number to trust.
+                    const topTheme = member.dailyMatchThemes?.[0];
+                    const visibleChips = memberViewMode === 'swarm' && topTheme
+                      ? [
+                          { key: 'theme', label: isCompactHoneycomb ? topTheme : `both: ${topTheme}` },
+                          { key: 'wishes', label: wishChip },
+                        ]
+                      : [
+                          { key: 'answers', label: connectionChip },
+                          { key: 'wishes', label: wishChip },
+                        ];
                     return (
                       <Pressable
                         key={member.id}
@@ -3015,7 +3076,11 @@ export default function MembersScreen() {
                                 {hasDailyMatch && (
                                   <View
                                     accessible
-                                    accessibilityLabel={`${member.dailyMatchPercent}% daily question match with ${member.name}`}
+                                    accessibilityLabel={
+                                member.dailyMatchReason
+                                  ? `${member.dailyMatchPercent}% match with ${member.name}. ${member.dailyMatchReason}`
+                                  : `${member.dailyMatchPercent}% daily question match with ${member.name}`
+                              }
                                     style={{
                                       position: 'absolute',
                                       top: -6,
