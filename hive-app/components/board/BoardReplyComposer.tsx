@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View, Platform } from 'react-native';
-import { Image } from 'expo-image';
+import { useRef, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
@@ -9,19 +8,22 @@ import { queryKeys } from '../../lib/queryClient';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
-import { getActiveMentionQuery, getMentionedMembers, getMentionSuggestions, hasBroadcastMention, insertMention, type MentionTarget } from '../../lib/mentions';
+import { getMentionedMembers, hasBroadcastMention } from '../../lib/mentions';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { fetchCommunityMentionableMembers } from '../../lib/mentionableMembers';
-import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
 import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
-import { submitOnEnter } from '../../lib/submitOnEnter';
+import { showAlert } from '../../lib/showAlert';
 import type { Attachment, Profile } from '../../types';
-import { AttachmentPicker } from '../ui/AttachmentPicker';
-import { VoiceMicButton } from '../ui/VoiceMicButton';
-import { MentionSuggestions } from './MentionSuggestions';
-import { SelectedFilePreview } from '../ui/SelectedFilePreview';
+import { ComposerBar } from '../ui/ComposerBar';
 
-import { ThinkingBee } from '../ui/ThinkingBee';
+/**
+ * A reply cap of 2,000 characters used to sit here for no stated reason, while
+ * the same person writing to Clive got 12,000. Nat has already objected once to
+ * a cap that was tighter than the thought — so a reply now gets what a message
+ * gets.
+ */
+const REPLY_MAX_LENGTH = 12000;
+
 interface BoardReplyComposerProps {
   postId: string;
   postAuthorId?: string;
@@ -51,71 +53,22 @@ export function BoardReplyComposer({
     ? `the-hive:board-reply-draft:${profile.id}:${postId}:${parentReplyId ?? 'root'}`
     : null;
   const [reply, setReply, clearReplyDraft] = usePersistentTextDraft(replyDraftKey);
-  const [replySelection, setReplySelection] = useState({ start: 0, end: 0 });
-  const [replySelectionOverride, setReplySelectionOverride] = useState<{ start: number; end: number } | null>(null);
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
-  const voiceBaseTextRef = useRef<string | null>(null);
   const { members: activeMentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(
     communityId,
     mentionableMembers
   );
 
-  const replyCursorIndex = replySelection.start === 0 && replySelection.end === 0 && reply.length > 0
-    ? reply.length
-    : replySelection.start;
-  const mentionQuery = getActiveMentionQuery(reply, replyCursorIndex);
-  const mentionSuggestions = mentionQuery === null
-    ? []
-    : getMentionSuggestions(mentionQuery, activeMentionableMembers, profile?.id);
-  const selectedMentionsEveryone = hasBroadcastMention(reply);
-  const selectedMentionMembers = getMentionedMembers(reply, activeMentionableMembers, profile?.id);
   const hasContent = reply.trim().length > 0 || selectedImages.length > 0 || selectedFiles.length > 0;
   const inputPlaceholder = replyingToName ? 'Write your reply...' : placeholder;
 
-  useEffect(() => {
-    if (!replySelectionOverride) return;
-
-    const timeout = setTimeout(() => setReplySelectionOverride(null), 0);
-    return () => clearTimeout(timeout);
-  }, [replySelectionOverride]);
-
   const reset = () => {
     clearReplyDraft();
-    setReplySelection({ start: 0, end: 0 });
-    setReplySelectionOverride(null);
     setSelectedImages([]);
     setSelectedFiles([]);
-    voiceBaseTextRef.current = null;
-  };
-
-  const handleReplyChange = (text: string) => {
-    setReply(text);
-    setReplySelection((previousSelection) => {
-      const wasAtTextEnd = previousSelection.start === reply.length && previousSelection.end === reply.length;
-      const lookedUnreported = previousSelection.start === 0 && previousSelection.end === 0 && text.length > 0;
-      if (wasAtTextEnd || lookedUnreported) {
-        return { start: text.length, end: text.length };
-      }
-      return previousSelection;
-    });
-  };
-
-  const handleSelectMention = (member: MentionTarget) => {
-    const inserted = insertMention(reply, replyCursorIndex, member);
-    const nextSelection = { start: inserted.cursorIndex, end: inserted.cursorIndex };
-    setReply(inserted.text);
-    setReplySelection(nextSelection);
-    setReplySelectionOverride(nextSelection);
-  };
-
-  const mergeTranscript = (baseText: string, transcript: string) => {
-    const cleanBase = baseText.trimEnd();
-    const cleanTranscript = transcript.trim();
-    if (!cleanTranscript) return cleanBase;
-    return cleanBase ? `${cleanBase} ${cleanTranscript}` : cleanTranscript;
   };
 
   const handleSubmit = async () => {
@@ -184,28 +137,35 @@ export function BoardReplyComposer({
       await onSubmitted?.();
     } catch (error) {
       console.error('Error submitting board reply:', error);
-      Alert.alert('Reply Not Posted', 'Something went wrong while posting this reply. Please try again.');
+      // `Alert.alert` is an empty method on web, so this apology was never once
+      // read by anybody until it moved to showAlert.
+      showAlert('Reply Not Posted', 'Something went wrong while posting this reply. Please try again.');
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
-  const enterToSubmitCaptureProps = Platform.OS === 'web'
-    ? ({ onKeyDownCapture: submitOnEnter(handleSubmit) } as any)
-    : {};
-  const { dragDropProps, isDragActive } = useWebAttachmentDropZone({
-    selectedImages,
-    selectedFiles,
-    onImagesChange: setSelectedImages,
-    onFilesChange: setSelectedFiles,
-    captureDocumentDrops: true,
-    disabled: submitting,
-  });
-
   return (
-    <View {...dragDropProps}>
-      {replyingToName && (
+    <ComposerBar
+      variant="chat"
+      value={reply}
+      onChangeText={setReply}
+      placeholder={inputPlaceholder}
+      maxLength={REPLY_MAX_LENGTH}
+      onSubmit={handleSubmit}
+      submitting={submitting}
+      canSubmit={hasContent}
+      attachments="compact"
+      selectedImages={selectedImages}
+      onImagesChange={setSelectedImages}
+      selectedFiles={selectedFiles}
+      onFilesChange={setSelectedFiles}
+      captureDocumentDrops
+      mentionMembers={activeMentionableMembers}
+      mentionsLoading={mentionMembersLoading}
+      currentUserId={profile?.id}
+      header={replyingToName ? (
         <View className="flex-row items-center bg-cream/50 px-3 py-2 rounded-xl mb-2">
           <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal">
             Replying to{' '}
@@ -219,143 +179,7 @@ export function BoardReplyComposer({
             </Pressable>
           )}
         </View>
-      )}
-
-      <MentionSuggestions
-        active={mentionQuery !== null}
-        query={mentionQuery}
-        loading={mentionMembersLoading}
-        suggestions={mentionSuggestions}
-        onSelect={handleSelectMention}
-        placement="above"
-      />
-      {selectedMentionsEveryone ? (
-        <View className="flex-row flex-wrap mb-2" style={{ gap: 6 }}>
-          <View className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
-              Tagged everyone in HIVE
-            </Text>
-          </View>
-        </View>
-      ) : selectedMentionMembers.length > 0 && (
-        <View className="flex-row flex-wrap mb-2" style={{ gap: 6 }}>
-          {selectedMentionMembers.map((member) => (
-            <View key={member.id} className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
-                Tagged {member.name.split(/\s+/)[0]}
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {(selectedImages.length > 0 || selectedFiles.length > 0) && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="mb-2"
-          contentContainerStyle={{ gap: 8 }}
-        >
-          {selectedImages.map((image, index) => (
-            <View key={image.uri} className="relative">
-              <Image
-                source={{ uri: image.uri }}
-                style={{ width: 56, height: 56, borderRadius: 10, backgroundColor: '#f3f4f6' }}
-                contentFit="cover"
-              />
-              <Pressable
-                onPress={() => setSelectedImages((prev) => prev.filter((_, imageIndex) => imageIndex !== index))}
-                className="absolute -top-1 -right-1 bg-charcoal rounded-full w-5 h-5 items-center justify-center"
-              >
-                <Ionicons name="close" size={12} color="white" />
-              </Pressable>
-            </View>
-          ))}
-          {selectedFiles.map((file, index) => (
-            <SelectedFilePreview
-              key={`${file.uri}-${index}`}
-              file={file}
-              onRemove={() => setSelectedFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index))}
-              className="bg-white border border-gold/20"
-              widthClassName="w-44"
-            />
-          ))}
-        </ScrollView>
-      )}
-
-      {isDragActive && (
-        <View className="mb-2 rounded-xl border border-gold/30 bg-gold/10 px-3 py-2">
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
-            Drop photos, videos, or files to attach
-          </Text>
-        </View>
-      )}
-
-      <View
-        className={`flex-row items-end rounded-2xl px-3 py-2 border ${
-          isDragActive ? 'bg-gold/10 border-gold' : 'bg-cream border-transparent'
-        }`}
-        {...enterToSubmitCaptureProps}
-      >
-        <AttachmentPicker
-          compact
-          selectedImages={selectedImages}
-          onImagesChange={setSelectedImages}
-          selectedFiles={selectedFiles}
-          onFilesChange={setSelectedFiles}
-          disabled={submitting}
-        />
-        <TextInput
-          value={reply}
-          onChangeText={handleReplyChange}
-          onSelectionChange={(event) => setReplySelection(event.nativeEvent.selection)}
-          selection={replySelectionOverride ?? undefined}
-          placeholder={inputPlaceholder}
-          placeholderTextColor="#a09274"
-          selectionColor="#313130"
-          multiline
-          blurOnSubmit={Platform.OS === 'web'}
-          submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
-          returnKeyType="send"
-          enterKeyHint="send"
-          onSubmitEditing={handleSubmit}
-          onKeyPress={submitOnEnter(handleSubmit)}
-          maxLength={2000}
-          className="flex-1 max-h-32 text-base text-charcoal py-1 px-1"
-          style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none', caretColor: '#313130' } as any}
-          editable={!submitting}
-        />
-        <Pressable
-          onPress={handleSubmit}
-          disabled={!hasContent || submitting}
-          className={`w-8 h-8 rounded-full items-center justify-center ml-2 ${
-            hasContent && !submitting ? 'bg-gold active:opacity-80' : 'bg-gray-300'
-          }`}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color="#fffdf5" />
-          ) : (
-            <Text className="text-sm text-white" style={{ marginTop: -1 }}>↑</Text>
-          )}
-        </Pressable>
-        <VoiceMicButton
-          size={20}
-          style={{ marginLeft: 6 }}
-          onTranscript={(text) => {
-            const merged = mergeTranscript(voiceBaseTextRef.current ?? reply, text);
-            handleReplyChange(merged);
-            voiceBaseTextRef.current = null;
-          }}
-          onInterimTranscript={(text) => {
-            if (!text) {
-              voiceBaseTextRef.current = null;
-              return;
-            }
-            if (voiceBaseTextRef.current === null) voiceBaseTextRef.current = reply;
-            handleReplyChange(mergeTranscript(voiceBaseTextRef.current, text));
-          }}
-        />
-      </View>
-    </View>
+      ) : null}
+    />
   );
 }

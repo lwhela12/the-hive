@@ -3,13 +3,18 @@ import { View, Text, TextInput, Pressable, Modal, ScrollView, KeyboardAvoidingVi
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getMemberBoardDisplayName, getMemberHdBoardName } from '../../lib/boardWishLinks';
 import { HiveIcon, type HiveIconName } from '../ui/HiveIcon';
 import type { BoardCategory, Profile } from '../../types';
 
-import { DictationRow } from '../ui/DictationRow';
+import { ComposerBar } from '../ui/ComposerBar';
 const BOARD_DRAFT_KEY = 'board-topic-draft';
+const NAME_MAX_LENGTH = 90;
+/**
+ * Was 200, which is about two sentences — not enough to say what a board is
+ * for. Nat has complained about a cap being too tight before, so this one grew.
+ */
+const DESCRIPTION_MAX_LENGTH = 1000;
 export type BoardTopicAudience = 'community' | 'members';
 export type BoardTopicKind = 'discussion' | 'hd_board' | 'helper_log';
 
@@ -490,56 +495,39 @@ export function BoardTopicComposer({
                 confusing enough without per-member ownership on top. */}
 
             {/* Name input */}
-            <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
-                {topicKind === 'hd_board' ? 'Board Name' : 'Board Name *'}
-              </Text>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                placeholder={topicKind === 'hd_board'
-                  ? suggestedHdName || "e.g., Brit's HD Board"
-                  : topicKind === 'helper_log'
-                    ? 'HIVE Helpers'
-                    : 'e.g., Book Club, Recipes, Travel Plans...'}
-                placeholderTextColor="#a09274"
-                maxLength={90}
-                editable={topicKind !== 'helper_log'}
-                returnKeyType="send"
-                onSubmitEditing={handleSubmit}
-                className="bg-white rounded-xl px-4 py-3 text-charcoal"
-                style={{ fontFamily: 'Lato_400Regular' }}
-              />
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40 text-xs mt-1 text-right">
-                {name.length}/90
-              </Text>
-            </View>
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-4"
+              label={topicKind === 'hd_board' ? 'Board Name' : 'Board Name *'}
+              value={name}
+              onChangeText={setName}
+              placeholder={topicKind === 'hd_board'
+                ? suggestedHdName || "e.g., Brit's HD Board"
+                : topicKind === 'helper_log'
+                  ? 'HIVE Helpers'
+                  : 'e.g., Book Club, Recipes, Travel Plans...'}
+              multiline={false}
+              maxLength={NAME_MAX_LENGTH}
+              editable={topicKind !== 'helper_log'}
+              onSubmit={handleSubmit}
+              canSubmit={isValid}
+              submitting={submitting}
+            />
 
             {/* Description input */}
-            <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Description</Text>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder="What is this topic about? (optional)"
-                placeholderTextColor="#a09274"
-                multiline
-                blurOnSubmit={Platform.OS === 'web'}
-                submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
-                returnKeyType="send"
-                enterKeyHint="send"
-                onSubmitEditing={handleSubmit}
-                onKeyPress={submitOnEnter(handleSubmit)}
-                textAlignVertical="top"
-                maxLength={200}
-                className="bg-white rounded-xl px-4 py-3 text-charcoal min-h-[100px]"
-                style={{ fontFamily: 'Lato_400Regular' }}
-              />
-              <DictationRow setValue={setDescription} />
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40 text-xs mt-1 text-right">
-                {description.length}/200
-              </Text>
-            </View>
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-4"
+              label="Description"
+              value={description}
+              onChangeText={setDescription}
+              placeholder="What is this topic about? (optional)"
+              minHeight={100}
+              maxLength={DESCRIPTION_MAX_LENGTH}
+              onSubmit={handleSubmit}
+              canSubmit={isValid}
+              submitting={submitting}
+            />
 
             {/* Info note */}
             <View className="bg-gold/10 rounded-xl p-4 mb-4">

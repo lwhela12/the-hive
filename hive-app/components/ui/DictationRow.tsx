@@ -2,9 +2,22 @@ import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { usePageSkin } from '../../lib/pageSkin';
 import { VoiceMicButton } from './VoiceMicButton';
 import { useDictation } from '../../lib/hooks/useDictation';
+import { isDictationSupported } from './ComposerBar';
 
 /**
- * A mic under a text box. One line to add, and it looks the same everywhere.
+ * A mic under a text box. The old answer — prefer `ComposerBar` for new work.
+ *
+ * This is right-aligned but on the wrong AXIS. It welds a strip UNDERNEATH the
+ * field, where Clive keeps the mic INSIDE the pill on the text's own line, and
+ * Clive's is the one that reads correctly: the mic is something you do to the
+ * line you are writing, not a control for the whole form.
+ *
+ * `components/ui/ComposerBar.tsx` puts it back on the right axis —
+ * `variant="form"` draws a labelled prose box with the mic on a footer strip
+ * inside the box's own border. Twenty-five screens still call this one, and the
+ * mic cannot be moved into their fields from in here (the field is their
+ * TextInput, not ours), so this stays until each of those screens moves over.
+ * Do not add a new call site.
  *
  * Nat, 2026-08-04: *"we want a uniform experience, so all text boxes behave the
  * same way."* The app had a hundred text inputs and about ten different answers
@@ -55,6 +68,11 @@ export function DictationRow({
 }) {
   const skin = usePageSkin();
   const dictation = useDictation(setValue);
+
+  // On a phone there is no speech recognition, so VoiceMicButton draws nothing —
+  // and without this the strip stayed: an empty bordered shelf hanging off the
+  // bottom of every box, holding a mic that was not there.
+  if (!isDictationSupported() && !label) return null;
 
   // Tucked onto the bottom of the box it belongs to, rather than floating in
   // the gap below it (Nat 2026-08-04: "this talk instead of typing button
