@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { HIVE_GOLD, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { formatDateMedium } from '../../lib/dateUtils';
+import { showAlert } from '../../lib/showAlert';
 import type { UserRole } from '../../types';
 
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ThinkingBee } from '../ui/ThinkingBee';
 /**
  * Everyone, everywhere, in one room.
@@ -30,6 +33,59 @@ const ROLES: { value: UserRole; label: string }[] = [
   { value: 'treasurer', label: 'Treasurer' },
   { value: 'admin', label: 'Admin' },
 ];
+
+/* --------------------------------------------------- invited, not joined yet */
+
+/** An invite that is still waiting: a row with no `accepted_at` on it. */
+type PendingInvite = {
+  id: string;
+  community_id: string;
+  email: string;
+  role: string;
+  created_at: string;
+  expires_at: string | null;
+};
+
+const inviteKey = (invite: PendingInvite) => `${invite.community_id}:${invite.email.trim().toLowerCase()}`;
+const inviteTime = (invite: PendingInvite) => new Date(invite.created_at).getTime() || 0;
+
+/**
+ * One line per person, not one line per time you pressed send.
+ *
+ * Re-inviting the same address writes another row (or refreshes the old one),
+ * so a list straight out of the table can show the same email three times and
+ * read like three people are hovering outside the door. Newest wins, which is
+ * also the only one whose link still works.
+ */
+function newestInvitePerEmail(invites: PendingInvite[]) {
+  const byEmail = new Map<string, PendingInvite>();
+  invites.forEach((invite) => {
+    const existing = byEmail.get(inviteKey(invite));
+    if (!existing || inviteTime(invite) > inviteTime(existing)) byEmail.set(inviteKey(invite), invite);
+  });
+  return Array.from(byEmail.values()).sort((a, b) => inviteTime(b) - inviteTime(a));
+}
+
+/**
+ * An expired invite is not pending. The link in that email does nothing now, so
+ * calling it "pending" tells you to keep waiting for somebody who cannot get in
+ * — on another project that exact lie cost a real person a week of trying.
+ */
+const inviteHasExpired = (invite: PendingInvite) =>
+  !!invite.expires_at && new Date(invite.expires_at).getTime() < Date.now();
+
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+/** "today", "yesterday", "4 days ago", then a plain date once that stops helping. */
+function sentWhen(iso: string) {
+  const sent = new Date(iso);
+  if (Number.isNaN(sent.getTime())) return 'recently';
+  const days = Math.round((startOfDay(new Date()) - startOfDay(sent)) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  return `on ${formatDateMedium(iso)}`;
+}
 
 /**
  * Where each box sits on the Admin dashboard.
@@ -229,7 +285,7 @@ export function NewsletterPanel({
   const addSubscriber = async () => {
     const email = newEmail.trim();
     if (!EMAIL.test(email)) {
-      Alert.alert('That address looks off', 'Check it and try again.');
+      showAlert('That address looks off', 'Check it and try again.');
       return;
     }
     setAdding(true);
@@ -238,9 +294,9 @@ export function NewsletterPanel({
       if (error) throw error;
       setNewEmail('');
       await load();
-      Alert.alert('Added', `${email} will get the next newsletter.`);
+      showAlert('Added', `${email} will get the next newsletter.`);
     } catch {
-      Alert.alert('Could not add that', 'Try again in a moment.');
+      showAlert('Could not add that', 'Try again in a moment.');
     } finally {
       setAdding(false);
     }
@@ -252,7 +308,7 @@ export function NewsletterPanel({
       .update({ unsubscribed_at: new Date().toISOString() })
       .eq('id', sub.id);
     if (error) {
-      Alert.alert('Could not remove that', 'Try again in a moment.');
+      showAlert('Could not remove that', 'Try again in a moment.');
       return;
     }
     await load();
@@ -442,6 +498,12 @@ export function HiveMemberPanels({
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('member');
   const [sending, setSending] = useState(false);
+  // Invites waiting on an answer, per HIVE. Same shape as the members above,
+  // for the same reason: this panel draws every HIVE at once, so nothing here
+  // can hang off "the HIVE you're currently in".
+  const [invitesByHive, setInvitesByHive] = useState<Record<string, PendingInvite[]>>({});
+  const [confirmRevoke, setConfirmRevoke] = useState<{ invite: PendingInvite; hiveName: string } | null>(null);
+  const [revoking, setRevoking] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -462,6 +524,35 @@ export function HiveMemberPanels({
     }));
 
     setByHive(next);
+
+    // Who has been invited and hasn't walked in yet. Only admins may read the
+    // invite table at all, so we ask about the HIVEs where you are one — every
+    // HIVE on the screen in a single question, rather than one query each.
+    const adminIds = memberships.filter((m) => m.role === 'admin').map((m) => m.community_id);
+    const nextInvites: Record<string, PendingInvite[]> = {};
+    adminIds.forEach((id) => { nextInvites[id] = []; });
+
+    if (adminIds.length > 0) {
+      const { data } = await supabase
+        .from('community_invites')
+        .select('id, community_id, email, role, created_at, expires_at')
+        .in('community_id', adminIds)
+        .is('accepted_at', null)
+        .order('created_at', { ascending: false });
+
+      newestInvitePerEmail((data ?? []) as PendingInvite[]).forEach((invite) => {
+        const bucket = nextInvites[invite.community_id];
+        if (!bucket) return;
+        // Somebody who has since joined is a member, not an invitation. Their
+        // old row just never got tidied up, and listing it would tell you to
+        // chase a person who is already sitting in the room.
+        const joined = (next[invite.community_id] ?? [])
+          .some((r) => r.email.trim().toLowerCase() === invite.email.trim().toLowerCase());
+        if (!joined) bucket.push(invite);
+      });
+    }
+
+    setInvitesByHive(nextInvites);
     setLoading(false);
   }, [memberships]);
 
@@ -473,7 +564,7 @@ export function HiveMemberPanels({
   const sendInvite = async (targetId: string, hiveName: string) => {
     const email = inviteEmail.trim();
     if (!EMAIL.test(email)) {
-      Alert.alert('That address looks off', 'Check it and try again.');
+      showAlert('That address looks off', 'Check it and try again.');
       return;
     }
 
@@ -488,17 +579,50 @@ export function HiveMemberPanels({
       setInviteRole('member');
       setInviteFor(null);
       await load();
-      Alert.alert(
+      showAlert(
         data?.reusedInvite ? 'Invite refreshed' : 'Invite sent',
         data?.reusedInvite
           ? `${email} already had an invite waiting for ${hiveName}, so we sent the link again.`
           : `${email} will get an invite to ${hiveName}.`
       );
     } catch (err) {
-      Alert.alert('Could not send that invite', err instanceof Error ? err.message : 'Try again in a moment.');
+      showAlert('Could not send that invite', err instanceof Error ? err.message : 'Try again in a moment.');
     } finally {
       setSending(false);
     }
+  };
+
+  // Taking the invitation back. Deleting the row is what kills the link: the
+  // sign-up screen looks the token up in this table and finds nothing.
+  //
+  // The community_id in the delete is not decoration — it is the same filter
+  // the rules check, so an id from one HIVE can never reach into another's.
+  const revokeInvite = async () => {
+    if (!confirmRevoke || revoking) return;
+    const { invite } = confirmRevoke;
+
+    setRevoking(true);
+    const { data, error } = await supabase
+      .from('community_invites')
+      .delete()
+      .eq('id', invite.id)
+      .eq('community_id', invite.community_id)
+      .select();
+    setRevoking(false);
+    setConfirmRevoke(null);
+
+    if (error) {
+      showAlert('Could not revoke that invite', error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      showAlert(
+        'Nothing was revoked',
+        'That invite is already gone, or you are not an admin of this HIVE.'
+      );
+      return;
+    }
+    await load();
   };
 
   return (
@@ -520,6 +644,7 @@ export function HiveMemberPanels({
         const name = hiveDisplayName(m.community?.name);
         const inviting = inviteFor === m.community_id;
         const tab = tabFor[m.community_id] ?? 'members';
+        const invites = invitesByHive[m.community_id] ?? [];
 
         return (
           <View key={m.community_id} style={[cellStyle, { order: orderFrom + index * 2 } as any]}>
@@ -736,6 +861,105 @@ export function HiveMemberPanels({
                     </View>
                   </View>
                 ))}
+
+                {/* INVITED, NOT JOINED YET.
+                    Nat 2026-08-04: "I want to see who I've already invited &
+                    just see that their membership is pending" — and be able to
+                    take one back from this same box. Admins only, because only
+                    an admin is allowed to read this table at all. */}
+                {m.role === 'admin' && !loading ? (
+                  <View style={{ borderTopWidth: 1, borderTopColor: skin.border, marginTop: 4 }}>
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 1,
+                        textTransform: 'uppercase', color: 'rgba(246,244,229,0.65)',
+                        paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4,
+                      }}
+                    >
+                      Invited, not joined yet{invites.length > 0 ? ` (${invites.length})` : ''}
+                    </Text>
+
+                    {invites.length === 0 ? (
+                      // One quiet line rather than an empty box, so nothing is
+                      // waiting on an answer reads as an answer.
+                      <Text
+                        style={{
+                          fontFamily: 'Lato_400Regular', fontSize: 12,
+                          color: 'rgba(246,244,229,0.5)', paddingHorizontal: 14, paddingBottom: 14,
+                        }}
+                      >
+                        Nobody has an invite waiting for {name}.
+                      </Text>
+                    ) : invites.map((invite) => {
+                      const expired = inviteHasExpired(invite);
+                      return (
+                        <View
+                          key={invite.id}
+                          style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 10,
+                            paddingHorizontal: 14, paddingVertical: 10,
+                            borderTopWidth: 1, borderTopColor: skin.hairline,
+                          }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#F6F4E5' }}>
+                              {invite.email}
+                            </Text>
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
+                              Invited as {invite.role} · sent {sentWhen(invite.created_at)}
+                            </Text>
+                          </View>
+
+                          {/* Pending and expired are different states and are
+                              coloured differently. An expired invite's link is
+                              already dead — saying "pending" would send you off
+                              waiting for somebody who cannot get in. */}
+                          <View
+                            style={{
+                              paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+                              backgroundColor: expired ? 'rgba(192,82,63,0.28)' : 'rgba(255,255,255,0.09)',
+                            }}
+                          >
+                            <Text style={{
+                              fontFamily: 'Lato_700Bold', fontSize: 9.5, letterSpacing: 0.7,
+                              textTransform: 'uppercase',
+                              color: expired ? '#f4c4b8' : 'rgba(246,244,229,0.6)',
+                            }}>
+                              {expired ? 'expired' : 'pending'}
+                            </Text>
+                          </View>
+
+                          <Pressable
+                            onPress={() => setConfirmRevoke({ invite, hiveName: name })}
+                            hitSlop={6}
+                            accessibilityLabel={`Revoke the invite for ${invite.email}`}
+                            style={({ pressed }) => ({
+                              paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
+                              borderWidth: 1, borderColor: 'rgba(246,244,229,0.28)',
+                              backgroundColor: pressed ? 'rgba(255,255,255,0.14)' : 'transparent',
+                            })}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: 'rgba(246,244,229,0.8)' }}>
+                              Revoke
+                            </Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+
+                    {invites.some(inviteHasExpired) ? (
+                      <Text
+                        style={{
+                          fontFamily: 'Lato_400Regular', fontSize: 11, lineHeight: 16,
+                          color: 'rgba(246,244,229,0.5)', paddingHorizontal: 14, paddingVertical: 10,
+                        }}
+                      >
+                        An expired link no longer works. Send that person a new invite with
+                        &ldquo;+ New Member&rdquo; — it refreshes the one they already have.
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
                 </>
                 )}
               </ScrollView>
@@ -743,6 +967,22 @@ export function HiveMemberPanels({
           </View>
         );
       })}
+
+      {/* One dialog for all the HIVEs — whichever Revoke you pressed fills it
+          in. `Alert.alert` is not an option here: in a browser it does nothing
+          at all, so the question would never appear and the invite would never
+          go anywhere. */}
+      <ConfirmDialog
+        visible={!!confirmRevoke}
+        title="Revoke this invite?"
+        body={confirmRevoke
+          ? `${confirmRevoke.invite.email} will not be able to join ${confirmRevoke.hiveName} with the link we emailed them. You can invite them again any time.`
+          : undefined}
+        confirmLabel={revoking ? 'Revoking…' : 'Revoke it'}
+        destructive
+        onConfirm={() => { void revokeInvite(); }}
+        onCancel={() => { if (!revoking) setConfirmRevoke(null); }}
+      />
     </>
   );
 }
