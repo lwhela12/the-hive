@@ -167,7 +167,8 @@ export const SideRail = memo(function SideRail({
     world,
     bounceKey,
   }: {
-    emoji: string;
+    /** Left off by the rows that draw a mark instead — HIVE-Wide, and a HIVE. */
+    emoji?: string;
     label: string;
     active?: boolean;
     onPress: () => void;
@@ -211,11 +212,12 @@ export const SideRail = memo(function SideRail({
         {/* A HIVE shows as its OWN colour, as a comb — the black ⬢ was invisible
             against the rail and told you nothing once collapsed (Nat 2026-08-03).
 
-            HIVE-Wide gets the Earth. It was passing 🌍 and never showing it: the
-            comb branch only asked whether the row was indented and tinted, which
-            HIVE-Wide also is, so it drew a near-black hexagon on a near-black
-            rail. Hexagon means a HIVE, world means all of them — the same pair
-            the badges use (`lib/scopeLook.ts`, Nat 2026-08-05). */}
+            HIVE-Wide gets the drawn `WorldMark`, and carries no emoji at all.
+            It used to pass a globe emoji that never appeared: the comb branch
+            only asked whether the row was indented and tinted, which HIVE-Wide
+            also is, so it drew a near-black hexagon on a near-black rail.
+            Hexagon means a HIVE, world means all of them — the same pair the
+            badges use (`lib/scopeLook.ts`, Nat 2026-08-05). */}
         {indented && world ? (
           <WorldMark size={17} />
         ) : indented && tint ? (
@@ -439,7 +441,6 @@ export const SideRail = memo(function SideRail({
             most of OG's boards from OG's view (caught before shipping,
             2026-08-03). */}
         <Row
-          emoji="🌍"
           label="HIVE-Wide"
           indented
           world

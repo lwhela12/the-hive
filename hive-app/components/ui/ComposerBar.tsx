@@ -9,7 +9,8 @@ import { submitOnEnter } from '../../lib/submitOnEnter';
 import { useDictation } from '../../lib/hooks/useDictation';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
-import { FIELD_LOOK } from './Input';
+import { FIELD_LOOK, fieldLookFor } from './Input';
+import { usePageSkin } from '../../lib/pageSkin';
 import { AttachmentPicker } from './AttachmentPicker';
 import { MentionSuggestions } from './MentionSuggestions';
 import { SelectedFilePreview } from './SelectedFilePreview';
@@ -56,7 +57,7 @@ export type ComposerVariant = 'chat' | 'form' | 'inlineEdit';
  * file and that one both used to declare it, which is two places for one truth
  * and the exact way a look drifts apart again.
  */
-const FIELD_BORDER = FIELD_LOOK.border;
+
 /** Below this many characters left, the chat bar starts counting down. */
 const CHAT_LIMIT_WARNING = 1000;
 
@@ -136,9 +137,17 @@ export interface ComposerBarProps {
 
   containerClassName?: string;
   fieldClassName?: string;
+  /**
+   * Which page this box is sitting on. Defaults to the page you are actually
+   * on, so a field at HIVE-Wide stops being a white rectangle on the night sky
+   * (Nat 2026-08-05). A cream panel that happens to be open while you are at
+   * HIVE-Wide should pass 'light' and say so.
+   */
+  tone?: 'light' | 'dark';
 }
 
 export function ComposerBar({
+  tone,
   variant = 'chat',
   value,
   onChangeText,
@@ -173,6 +182,10 @@ export function ComposerBar({
   containerClassName = '',
   fieldClassName = '',
 }: ComposerBarProps) {
+  // The page decides how a field is drawn unless the caller knows better.
+  const pageSkin = usePageSkin();
+  const look = fieldLookFor(tone ?? (pageSkin.dark ? 'dark' : 'light'));
+  const FIELD_BORDER = look.border;
   const isChat = variant === 'chat';
   const isInlineEdit = variant === 'inlineEdit';
   const showAttach = attachments === 'compact' && !!onImagesChange;
@@ -251,8 +264,8 @@ export function ComposerBar({
       onSelectionChange={mentionsOn ? mention.textInputMentionProps.onSelectionChange : undefined}
       selection={mentionsOn ? mention.textInputMentionProps.selection : undefined}
       placeholder={placeholder}
-      placeholderTextColor={FIELD_LOOK.placeholder}
-      selectionColor={FIELD_LOOK.ink}
+      placeholderTextColor={look.placeholder}
+      selectionColor={look.ink}
       multiline={multiline}
       // Enter never takes the cursor away from you on the web.
       //
@@ -284,7 +297,7 @@ export function ComposerBar({
           : `text-charcoal px-4 py-3 ${fieldClassName}`
       }
       style={[
-        { fontFamily: FIELD_LOOK.font, outlineStyle: 'none', caretColor: FIELD_LOOK.ink } as any,
+        { fontFamily: look.font, color: look.ink, outlineStyle: 'none', caretColor: look.ink } as any,
         minHeight ? { minHeight } : null,
         maxHeight ? { maxHeight } : null,
       ]}
@@ -302,7 +315,7 @@ export function ComposerBar({
         <View key={image.uri} className="relative">
           <Image
             source={{ uri: image.uri }}
-            style={{ width: 56, height: 56, borderRadius: 10, backgroundColor: '#f3f4f6' }}
+            style={{ width: 56, height: 56, borderRadius: 10, backgroundColor: look.pillFill }}
             contentFit="cover"
           />
           <Pressable
@@ -420,8 +433,11 @@ export function ComposerBar({
 
         {showCounter && (
           <Text
-            style={{ fontFamily: 'Lato_400Regular' }}
-            className={`mt-1 text-right text-xs ${remaining <= 100 ? 'text-red-500' : 'text-charcoal/45'}`}
+            style={{
+              fontFamily: 'Lato_400Regular',
+              color: remaining <= 100 ? '#ef4444' : look.placeholder,
+            }}
+            className="mt-1 text-right text-xs"
           >
             {counterText}
           </Text>
@@ -439,7 +455,7 @@ export function ComposerBar({
     <View className={containerClassName} {...dragDropProps}>
       {header}
       {label ? (
-        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
+        <Text style={{ fontFamily: 'Lato_700Bold', color: look.ink }} className="mb-2">
           {label}
         </Text>
       ) : null}
@@ -452,7 +468,7 @@ export function ComposerBar({
         style={{
           borderWidth: 1,
           borderColor: isDragActive ? '#bd9348' : FIELD_BORDER,
-          backgroundColor: isDragActive ? '#fdf3dc' : FIELD_LOOK.fill,
+          backgroundColor: isDragActive ? (look === FIELD_LOOK ? '#fdf3dc' : 'rgba(255,226,166,0.16)') : look.fill,
         }}
         {...enterCaptureProps}
       >
@@ -478,7 +494,7 @@ export function ComposerBar({
             {micNode}
             <View className="flex-1" />
             {showCounter && (
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40 text-xs">
+              <Text style={{ fontFamily: 'Lato_400Regular', color: look.placeholder }} className="text-xs">
                 {counterText}
               </Text>
             )}

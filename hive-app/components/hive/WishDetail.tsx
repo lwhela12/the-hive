@@ -392,6 +392,21 @@ export function WishDetail({
                   {wishDetailText}
                 </LinkifiedText>
               )}
+              {/* The picture that came with the ask.
+                  Nat asked for a paperclip on the wish composer; migration 149
+                  gave the wish somewhere to keep what it picks up. It sits with
+                  the ask rather than under it, which is the whole difference
+                  between showing the broken fence and replying to yourself with
+                  a photo of it. Renders through AttachmentGallery, so it goes
+                  via SignedImage — the bucket is private. */}
+              {Array.isArray((wish as { attachments?: Attachment[] }).attachments)
+                && ((wish as { attachments?: Attachment[] }).attachments?.length ?? 0) > 0 ? (
+                <View style={{ marginTop: 10 }}>
+                  <AttachmentGallery
+                    attachments={(wish as { attachments?: Attachment[] }).attachments ?? []}
+                  />
+                </View>
+              ) : null}
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-2">
                 {formatDateShort(wish.created_at)}
                 {isGranted && wish.fulfilled_at && (

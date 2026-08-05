@@ -41,6 +41,7 @@ import {
 import { Avatar } from '../../components/ui/Avatar';
 import { MemberProfileLink } from '../../components/ui/MemberProfileLink';
 import { EventDatePicker } from '../../components/ui/DatePicker';
+import { FIELD_LOOK } from '../../components/ui/Input';
 import { AppHeader } from '../../components/navigation';
 import {
   ADMIN_PANEL_ORDER,
@@ -1856,6 +1857,11 @@ export default function AdminScreen() {
       created_by: profile?.id,
       community_id: communityId,
       visibility: eventAudience,
+      // This screen asks one question, so the answer is both: who can see it and
+      // who is invited. Leaving `invited_scope` to its default would have made
+      // an "every HIVE" event visible to everyone and open to nobody but us —
+      // a narrowing nobody asked for (migration 148).
+      invited_scope: eventAudience,
     });
 
     if (error) {
@@ -2984,19 +2990,19 @@ export default function AdminScreen() {
                   placeholder="Month YYYY-MM (auto-fills next)"
                   value={qbMonth}
                   onChangeText={setQbMonth}
-                  placeholderTextColor="#a09274"
-                  selectionColor="#313130"
+                  placeholderTextColor={FIELD_LOOK.placeholder}
+                  selectionColor={FIELD_LOOK.ink}
                   style={{
                     borderWidth: 1,
-                    borderColor: 'rgba(189,147,72,0.24)',
-                    borderRadius: 12,
-                    backgroundColor: '#ffffff',
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
+                    borderColor: FIELD_LOOK.border,
+                    borderRadius: FIELD_LOOK.radius,
+                    backgroundColor: FIELD_LOOK.fill,
+                    paddingHorizontal: FIELD_LOOK.paddingHorizontal,
+                    paddingVertical: FIELD_LOOK.paddingVertical,
                     marginBottom: 12,
-                    fontFamily: 'Lato_400Regular',
-                    fontSize: 15,
-                    color: '#313130',
+                    fontFamily: FIELD_LOOK.font,
+                    fontSize: FIELD_LOOK.fontSize,
+                    color: FIELD_LOOK.ink,
                   }}
                 />
               </>

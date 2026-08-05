@@ -1,11 +1,9 @@
-import type { ComponentProps } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Platform, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Wish } from '../../types';
 
 type ManagedWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish>;
-type ActionTone = 'gold' | 'neutral' | 'danger';
-type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 interface WishManageModalProps<TWish extends ManagedWish> {
   visible: boolean;
@@ -23,57 +21,99 @@ interface WishManageModalProps<TWish extends ManagedWish> {
   onRefine?: (wish: TWish) => void;
 }
 
-const toneColor = (tone: ActionTone = 'neutral') => (
-  tone === 'danger' ? '#ef4444' : tone === 'gold' ? '#bd9348' : 'rgba(49,49,48,0.66)'
-);
+/**
+ * What one action looks like: its emoji, its colour, and the ink its word is
+ * written in.
+ *
+ * Nat, 2026-08-05, looking at five full-width pills stacked down the sheet:
+ * "those pills are sooooooo long for no reason. Those could be side by side,
+ * left to right, and take up WAY less space & each have a different
+ * icon/colour, so its easy to tell at a glance & you dont have to read so
+ * much." So colour and emoji carry the meaning here and the word underneath
+ * only confirms it — which is also why no two of these share a colour.
+ */
+type TileLook = {
+  emoji: string;
+  /** The word and the border read in this. */
+  ink: string;
+  background: string;
+  border: string;
+};
 
-const actionStyle = (tone: ActionTone = 'neutral') => ({
-  flexDirection: 'row' as const,
-  alignItems: 'center' as const,
-  justifyContent: 'space-between' as const,
-  paddingVertical: 12,
-  paddingHorizontal: 14,
-  borderRadius: 14,
-  borderWidth: 1,
-  borderColor: tone === 'danger'
-    ? 'rgba(239,68,68,0.18)'
-    : tone === 'gold'
-      ? 'rgba(189,147,72,0.28)'
-      : 'rgba(49,49,48,0.10)',
-  backgroundColor: tone === 'danger'
-    ? '#fff1f2'
-    : tone === 'gold'
-      ? '#fff8e8'
-      : '#fffdf5',
-  marginTop: 8,
-});
+// Granting is the whole point of the app, so it is the only filled tile —
+// solid honey, cream lettering, unmistakably the first thing your eye lands on.
+const GRANT_LOOK: TileLook = { emoji: '🎁', ink: '#fffdf5', background: '#bd9348', border: '#a67f3a' };
 
-function WishManageAction({
+// Edit and Archive are the quiet ones. They stay pale and unshouty, but they
+// are warm grey and cool grey so they still read apart at a glance.
+const EDIT_LOOK: TileLook = { emoji: '✏️', ink: '#6b6257', background: '#fffdf5', border: 'rgba(49,49,48,0.13)' };
+const ARCHIVE_LOOK: TileLook = { emoji: '📦', ink: '#6b7280', background: '#f5f4f0', border: 'rgba(49,49,48,0.13)' };
+
+// Clive is a gold ✨ everywhere else in the app — the rail draws him that way,
+// and so does the "Refine with Clive ✨" link on the member cards. He keeps it.
+const CLIVE_LOOK: TileLook = { emoji: '✨', ink: '#bd9348', background: '#fff8e8', border: 'rgba(189,147,72,0.34)' };
+
+// The only red in the set. Delete and Archive are one slip apart and only one
+// of them can be undone, so Delete gets the red, the far end of the row, a rule
+// between it and everything else, and the arming tap below.
+const DELETE_LOOK: TileLook = { emoji: '🗑️', ink: '#c0523f', background: '#fdf1ee', border: 'rgba(192,82,63,0.3)' };
+const DELETE_ARMED_LOOK: TileLook = { emoji: '🗑️', ink: '#fffdf5', background: '#c0523f', border: '#a8452f' };
+
+/** How long an armed Delete stays armed before it forgets you touched it. */
+const DELETE_ARMED_MS = 4000;
+
+function WishActionTile({
   label,
-  icon,
-  tone = 'neutral',
+  look,
   onPress,
+  accessibilityLabel,
+  accessibilityHint,
+  fill = false,
 }: {
   label: string;
-  icon: IoniconName;
-  tone?: ActionTone;
+  look: TileLook;
   onPress: () => void;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  /** Fills its parent instead of claiming its own slice of the row. */
+  fill?: boolean;
 }) {
-  const color = toneColor(tone);
-
   return (
-    <Pressable onPress={onPress} style={actionStyle(tone)}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Ionicons name={icon} size={18} color={color} />
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color }}>
-          {label}
-        </Text>
-      </View>
-      <Ionicons
-        name="chevron-forward"
-        size={16}
-        color={tone === 'danger' ? 'rgba(239,68,68,0.45)' : tone === 'gold' ? 'rgba(189,147,72,0.55)' : 'rgba(49,49,48,0.32)'}
-      />
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint={accessibilityHint}
+      style={({ pressed }) => ({
+        // Every tile takes an equal share of the row and wraps onto the next
+        // line when there is no room, so this works on a phone and on a wide
+        // browser window without a breakpoint anywhere.
+        ...(fill ? { flex: 1 } : { flexGrow: 1, flexBasis: 84, minWidth: 78, maxWidth: 132 }),
+        minHeight: 74,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 6,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: look.border,
+        backgroundColor: look.background,
+        opacity: pressed ? 0.85 : 1,
+      })}
+    >
+      <Text style={{ fontSize: 20, lineHeight: 24, marginBottom: 5 }}>{look.emoji}</Text>
+      <Text
+        numberOfLines={2}
+        style={{
+          fontFamily: 'Lato_700Bold',
+          fontSize: 11.5,
+          lineHeight: 14,
+          textAlign: 'center',
+          color: look.ink,
+        }}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -93,9 +133,30 @@ export function WishManageModal<TWish extends ManagedWish>({
   onDelete,
   onRefine,
 }: WishManageModalProps<TWish>) {
+  // Delete asks for a second tap before it hands off. Every screen that opens
+  // this sheet already asks "are you sure?" — this is not that question, it is
+  // the guard for the new shape: a small tile shoulder to shoulder with Archive
+  // is easier to hit by mistake than a pill of its own was.
+  const [deleteArmed, setDeleteArmed] = useState(false);
+
+  useEffect(() => {
+    if (!visible) setDeleteArmed(false);
+  }, [visible]);
+
+  useEffect(() => {
+    setDeleteArmed(false);
+  }, [wish?.id]);
+
+  useEffect(() => {
+    if (!deleteArmed) return;
+    const timer = setTimeout(() => setDeleteArmed(false), DELETE_ARMED_MS);
+    return () => clearTimeout(timer);
+  }, [deleteArmed]);
+
   const runAction = (handler?: (wish: TWish) => void) => {
     if (!wish || !handler) return;
     const targetWish = wish;
+    setDeleteArmed(false);
     onClose();
     if (Platform.OS === 'web') {
       handler(targetWish);
@@ -150,48 +211,71 @@ export function WishManageModal<TWish extends ManagedWish>({
             </Pressable>
           </View>
 
-          {canGrant && onGrant ? (
-            <WishManageAction
-              label="Grant"
-              icon="checkmark-circle-outline"
-              tone="gold"
-              onPress={() => runAction(onGrant)}
-            />
-          ) : null}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', gap: 8, marginTop: 14 }}>
+            {canGrant && onGrant ? (
+              <WishActionTile
+                label="Grant"
+                look={GRANT_LOOK}
+                onPress={() => runAction(onGrant)}
+              />
+            ) : null}
 
-          {canEdit && onEdit ? (
-            <WishManageAction
-              label="Edit"
-              icon="pencil-outline"
-              onPress={() => runAction(onEdit)}
-            />
-          ) : null}
+            {canEdit && onEdit ? (
+              <WishActionTile
+                label="Edit"
+                look={EDIT_LOOK}
+                onPress={() => runAction(onEdit)}
+              />
+            ) : null}
 
-          {canArchive && onArchive ? (
-            <WishManageAction
-              label="Archive"
-              icon="archive-outline"
-              onPress={() => runAction(onArchive)}
-            />
-          ) : null}
+            {canArchive && onArchive ? (
+              <WishActionTile
+                label="Archive"
+                look={ARCHIVE_LOOK}
+                onPress={() => runAction(onArchive)}
+              />
+            ) : null}
 
-          {canRefine && onRefine ? (
-            <WishManageAction
-              label="Refine with Clive"
-              icon="sparkles-outline"
-              tone="gold"
-              onPress={() => runAction(onRefine)}
-            />
-          ) : null}
+            {canRefine && onRefine ? (
+              <WishActionTile
+                label="Refine with Clive"
+                look={CLIVE_LOOK}
+                onPress={() => runAction(onRefine)}
+              />
+            ) : null}
 
-          {canDelete && onDelete ? (
-            <WishManageAction
-              label="Delete"
-              icon="trash-outline"
-              tone="danger"
-              onPress={() => runAction(onDelete)}
-            />
-          ) : null}
+            {canDelete && onDelete ? (
+              // Delete travels with its own hairline rule so it never sits flush
+              // against Archive, wherever the row happens to wrap.
+              <View
+                style={{
+                  flexGrow: 1,
+                  flexBasis: 96,
+                  minWidth: 88,
+                  maxWidth: 145,
+                  flexDirection: 'row',
+                  alignItems: 'stretch',
+                  gap: 8,
+                }}
+              >
+                <View style={{ width: 1, marginVertical: 8, backgroundColor: 'rgba(49,49,48,0.12)' }} />
+                <WishActionTile
+                  fill
+                  label={deleteArmed ? 'Tap again' : 'Delete'}
+                  look={deleteArmed ? DELETE_ARMED_LOOK : DELETE_LOOK}
+                  accessibilityLabel={deleteArmed ? 'Tap again to delete this wish' : 'Delete wish'}
+                  accessibilityHint={deleteArmed ? undefined : 'Asks you to tap once more first'}
+                  onPress={() => {
+                    if (!deleteArmed) {
+                      setDeleteArmed(true);
+                      return;
+                    }
+                    runAction(onDelete);
+                  }}
+                />
+              </View>
+            ) : null}
+          </View>
         </Pressable>
       </Pressable>
     </Modal>

@@ -613,7 +613,7 @@ function MemberDetailModal({
     const fetchVisibleWishes = async () => {
       let { data, error } = await (supabase as any)
         .from('wishes')
-        .select('id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+        .select('id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
         .eq('user_id', member.id)
         .eq('community_id', communityId)
         .in('status', ['public', 'fulfilled'])
@@ -622,7 +622,7 @@ function MemberDetailModal({
       if (error && String(error.message ?? '').includes('title')) {
         const fallback = await (supabase as any)
           .from('wishes')
-          .select('id, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+          .select('id, community_id, share_scope, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
           .eq('user_id', member.id)
           .eq('community_id', communityId)
           .in('status', ['public', 'fulfilled'])
@@ -756,7 +756,7 @@ function MemberDetailModal({
 
     let { data, error } = await (supabase as any)
       .from('wishes')
-      .select('id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+      .select('id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
       .eq('user_id', member.id)
       .eq('community_id', communityId)
       .in('status', ['public', 'fulfilled'])
@@ -2293,7 +2293,13 @@ export default function MembersScreen() {
           .in('user_id', userIds),
         supabase
           .from('wishes')
-          .select('user_id, id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+          // `share_scope` and `community_id` are named here — and in every other
+          // wish query on this screen — because these rows feed the wish EDITOR.
+          // Without the scope the form read "I don't know" as "This HIVE only"
+          // and saved that back, so opening a HIVE-Wide wish from a member card
+          // to fix a typo quietly demoted it. Half of why Nat's HIVE-Wide picks
+          // never stuck (2026-08-05); the other half was the picker itself.
+          .select('user_id, id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
           .eq('community_id', communityId)
           .in('user_id', userIds)
           .in('status', ['public', 'fulfilled'])
@@ -2316,7 +2322,7 @@ export default function MembersScreen() {
       if (wishesError && String(wishesError.message ?? '').includes('title')) {
         const fallback = await supabase
           .from('wishes')
-          .select('user_id, id, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+          .select('user_id, id, community_id, share_scope, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
           .eq('community_id', communityId)
           .in('user_id', userIds)
           .in('status', ['public', 'fulfilled'])

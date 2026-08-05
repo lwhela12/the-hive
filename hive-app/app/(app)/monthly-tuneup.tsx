@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -31,7 +31,7 @@ import { getMentionTargetHandle, type MentionTarget } from '../../lib/mentions';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { pickSpotlightWish } from '../../lib/wishDisplay';
-import { parseFocusAnswer } from '../../components/surveys/SurveyQuestionField';
+import { parseFocusAnswer, parseHangsAnswer } from '../../components/surveys/SurveyQuestionField';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
@@ -40,6 +40,7 @@ import {
   isMonthlyCheckInSurvey,
   useSurveys,
   type SurveyAnswers,
+  type SurveyQuestion,
 } from '../../lib/hooks/useSurveys';
 import { SurveyQuestionField } from '../../components/surveys/SurveyQuestionField';
 import { ComposerBar } from '../../components/ui/ComposerBar';
@@ -318,6 +319,276 @@ function BoxHeading({ children, style }: { children: ReactNode; style?: TextStyl
     <Text style={[{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 22, marginBottom: 8 }, style]}>
       {children}
     </Text>
+  );
+}
+
+/**
+ * Start date and end date, side by side.
+ *
+ * They used to be two full-width bars stacked on top of each other, the second
+ * of them wearing a label three times longer than the field it named — "These
+ * seem unnecessarily long: we could shorten them & put them side by side"
+ * (Nat 2026-08-05). The explanation moved into the placeholder, where it costs
+ * nothing to read and nothing to ignore.
+ *
+ * They wrap back into a stack whenever the card is too narrow to hold both, so
+ * a phone still gets full-width pickers. The calendar itself opens in a modal,
+ * so neither field's popup cares how wide the field underneath it is.
+ */
+function EventDateRow({
+  date,
+  onDateChange,
+  endDate,
+  onEndDateChange,
+}: {
+  date: string;
+  onDateChange: (next: string) => void;
+  endDate: string;
+  onEndDateChange: (next: string) => void;
+}) {
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+      <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 190 }}>
+        <EventDatePicker value={date} onChange={onDateChange} />
+      </View>
+      <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 190 }}>
+        <EventDatePicker
+          value={endDate}
+          onChange={onEndDateChange}
+          label="End date"
+          placeholder="Same day — or pick one"
+          clearable
+        />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * A note per hang, kept on its own line and tagged with that hang's title:
+ *
+ *     Went to: Taste (4/5) · Drag Brunch
+ *     Taste: the fries were unreal
+ *     Drag Brunch: let's do that one again
+ *
+ * The first line is untouched, so the meeting deck's turnout bars and 🍯
+ * averages keep reading it exactly as they always have. Everything after it
+ * used to be ONE note about the whole month, which meant a thought about the
+ * Writers Sesh arrived detached from the Writers Sesh (Nat 2026-08-05).
+ */
+type HangNoteMap = Record<string, string>;
+
+const splitHangNotes = (note: string, titles: string[]) => {
+  // Longest title first, so a hang called "Writers Sesh" wins the line over one
+  // called "Writers" — and so a title with a colon in it ("Movie: Barbie")
+  // matches whole rather than being cut at its own colon.
+  const ordered = [...titles].sort((a, b) => b.length - a.length);
+  const byTitle: HangNoteMap = {};
+  const leftover: string[] = [];
+  let current: string | null = null;
+
+  note.split('\n').forEach((line) => {
+    const match = ordered.find((title) => line === `${title}:` || line.startsWith(`${title}: `));
+    if (match) {
+      current = match;
+      byTitle[match] = line.slice(match.length + 1).trimStart();
+      return;
+    }
+    // A note can run to several lines. Everything under a tagged line belongs
+    // to that hang until the next tagged line starts.
+    if (current) {
+      byTitle[current] = `${byTitle[current]}\n${line}`;
+      return;
+    }
+    leftover.push(line);
+  });
+
+  return { byTitle, leftover: leftover.join('\n').trim() };
+};
+
+const composeHangsAnswer = (
+  attended: { title: string; rating: number | null }[],
+  notes: HangNoteMap,
+  leftover: string,
+) => {
+  const head = attended.length > 0
+    ? `Went to: ${attended.map((entry) => (entry.rating ? `${entry.title} (${entry.rating}/5)` : entry.title)).join(' · ')}`
+    : '';
+  const noteLines = attended
+    .map((entry) => {
+      const text = (notes[entry.title] ?? '').trim();
+      return text ? `${entry.title}: ${text}` : '';
+    })
+    .filter(Boolean);
+  return [head, ...noteLines, leftover.trim()].filter(Boolean).join('\n');
+};
+
+/**
+ * The hangs rater: tap the ones you made it to, rate them, and say something
+ * about each one in its own box.
+ *
+ * It lives here rather than in `SurveyQuestionField` because the note belongs
+ * to the hang now: "i think the 'anything else you want to add' should go under
+ * or next to each one? so you could comment on each event separately"
+ * (Nat 2026-08-05).
+ */
+function HangsRecapCard({
+  question,
+  value,
+  onChange,
+  hangs,
+}: {
+  question: SurveyQuestion;
+  value: string;
+  onChange: (next: string) => void;
+  hangs: { id: string; title: string }[];
+}) {
+  const { attended, note } = parseHangsAnswer(value);
+  const titles = hangs.map((hang) => hang.title);
+  const { byTitle, leftover } = splitHangNotes(note, titles);
+
+  // A note survives an accidental un-tap. The saved answer only carries notes
+  // for hangs you are marked down for, so what you wrote is remembered here in
+  // case you tap the same hang again.
+  const rememberedNotes = useRef<HangNoteMap>({});
+
+  // An answer written before the boxes moved carries one note belonging to no
+  // particular hang. Once we've seen one, it keeps a box of its own — nobody's
+  // words should vanish the first time they open this screen.
+  const [hasLooseNote, setHasLooseNote] = useState(false);
+  useEffect(() => {
+    if (leftover.trim()) setHasLooseNote(true);
+  }, [leftover]);
+
+  if (hangs.length === 0) {
+    return (
+      <View>
+        <BoxHeading>{question.text}</BoxHeading>
+        <ComposerBar
+          variant="form"
+          value={value}
+          onChangeText={(next) => onChange(typeof next === 'function' ? next(value) : next)}
+          placeholder="Any hangs, thoughts, or suggestions?"
+          minHeight={90}
+        />
+      </View>
+    );
+  }
+
+  const toggle = (title: string) => {
+    const wasThere = attended.some((entry) => entry.title === title);
+    const next = wasThere
+      ? attended.filter((entry) => entry.title !== title)
+      : [...attended, { title, rating: null }];
+    const notes = wasThere
+      ? byTitle
+      : { ...byTitle, [title]: byTitle[title] ?? rememberedNotes.current[title] ?? '' };
+    onChange(composeHangsAnswer(next, notes, leftover));
+  };
+
+  const rate = (title: string, rating: number) => {
+    const next = attended.map((entry) =>
+      entry.title === title ? { ...entry, rating: entry.rating === rating ? null : rating } : entry
+    );
+    onChange(composeHangsAnswer(next, byTitle, leftover));
+  };
+
+  const setNote = (title: string, text: string) => {
+    rememberedNotes.current[title] = text;
+    onChange(composeHangsAnswer(attended, { ...byTitle, [title]: text }, leftover));
+  };
+
+  return (
+    <View>
+      <BoxHeading>{question.text}</BoxHeading>
+      <View style={{ gap: 10 }}>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
+          Tap the ones you made it to, rate them, and say a word about each.
+        </Text>
+        {hangs.map((hang) => {
+          const entry = attended.find((candidate) => candidate.title === hang.title);
+          return (
+            // The card hugs its title instead of ruling a line across the whole
+            // step, and there's no "didn't make it" label sitting way off to the
+            // right — not going is simply not tapping it (Nat 2026-07-25). Once
+            // you HAVE tapped it, the card stretches: a note box hugging a
+            // three-word title would be a slot too narrow to write in.
+            <View
+              key={hang.id}
+              style={{
+                alignSelf: entry ? 'stretch' : 'flex-start',
+                maxWidth: '100%',
+                backgroundColor: entry ? '#fdf3dc' : '#faf8f3',
+                borderWidth: 1,
+                borderColor: entry ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
+                borderRadius: 14,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                gap: 8,
+              }}
+            >
+              <Pressable
+                onPress={() => toggle(hang.title)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: !!entry }}
+                accessibilityLabel={entry ? `You went to ${hang.title} — tap to undo` : `I went to ${hang.title}`}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+              >
+                <Text style={{ fontSize: 15 }}>{entry ? '🙌' : '○'}</Text>
+                <Text
+                  style={{ fontFamily: entry ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 14, color: entry ? '#8a6b30' : '#6b7280', flexShrink: 1 }}
+                  numberOfLines={2}
+                >
+                  {hang.title}
+                </Text>
+              </Pressable>
+              {entry ? (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 26 }}>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>loved it?</Text>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Pressable key={star} onPress={() => rate(hang.title, star)} hitSlop={6}>
+                        <Text style={{ fontSize: 17, opacity: entry.rating && star <= entry.rating ? 1 : 0.25 }}>
+                          🍯
+                        </Text>
+                      </Pressable>
+                    ))}
+                    {entry.rating ? (
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>{entry.rating}/5</Text>
+                    ) : null}
+                  </View>
+                  <View style={{ paddingLeft: 26 }}>
+                    <ComposerBar
+                      variant="form"
+                      value={byTitle[hang.title] ?? ''}
+                      onChangeText={(next) => setNote(
+                        hang.title,
+                        typeof next === 'function' ? next(byTitle[hang.title] ?? '') : next,
+                      )}
+                      placeholder="Anything to add about this one?"
+                      minHeight={64}
+                    />
+                  </View>
+                </>
+              ) : null}
+            </View>
+          );
+        })}
+        {hasLooseNote ? (
+          <ComposerBar
+            variant="form"
+            value={leftover}
+            onChangeText={(next) => onChange(composeHangsAnswer(
+              attended,
+              byTitle,
+              typeof next === 'function' ? next(leftover) : next,
+            ))}
+            placeholder="Anything else about the month?"
+            minHeight={70}
+          />
+        ) : null}
+      </View>
+    </View>
   );
 }
 
@@ -1772,14 +2043,29 @@ export default function MonthlyTuneupScreen() {
       {(() => {
         const hangsRecap = checkInQuestions.find((question) => question.id === 'q_hangs_recap');
         return hangsRecap ? (
-          <View style={[cardStyle, { marginBottom: 10 }]}>
-            <SurveyQuestionField
+          <View style={[cardStyle, { marginBottom: 10, gap: 10 }]}>
+            <HangsRecapCard
               question={hangsRecap}
-              index={-1}
-              value={checkInAnswers[hangsRecap.id]}
+              value={typeof checkInAnswers[hangsRecap.id] === 'string' ? (checkInAnswers[hangsRecap.id] as string) : ''}
               onChange={(value) => setCheckInAnswer(hangsRecap.id, value)}
-              hangEvents={hangRecapEvents}
+              hangs={hangRecapEvents}
             />
+            {/* Nat, filling in the August tune-up: "i just want to know where
+                this info ends up… in case it doesn't carry somewhere". It
+                carries: the meeting deck's "How did we do?" panel counts the
+                taps into a turnout bar per hang and averages the 🍯 into a
+                score. Only what is TRUE goes in this line — the written notes
+                were only COUNTED on the deck when this line was written, so it
+                promised the ratings and nothing else. The deck prints them in
+                full now (meeting-helper.tsx, "What people said about the
+                hangs"), so the line can honestly claim both. If that ever stops
+                being true, this sentence has to shrink again — a promise about
+                where words go is the one thing that must not drift. */}
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
+              Your taps and 🍯 ratings land on the meeting deck — how many of us
+              went, and how each hang landed — and what you write here gets read
+              out with them.
+            </Text>
           </View>
         ) : null;
       })()}
@@ -1917,13 +2203,11 @@ export default function MonthlyTuneupScreen() {
           placeholder="Event title"
           multiline={false}
         />
-        <EventDatePicker value={eventDate} onChange={setEventDate} />
-        <EventDatePicker
-          value={eventEndDate}
-          onChange={setEventEndDate}
-          label="End date (optional — for multi-day stretches)"
-          placeholder="Same day"
-          clearable
+        <EventDateRow
+          date={eventDate}
+          onDateChange={setEventDate}
+          endDate={eventEndDate}
+          onEndDateChange={setEventEndDate}
         />
         <Pressable
           onPress={() => setEventAllDay((prev) => !prev)}
@@ -2524,13 +2808,11 @@ export default function MonthlyTuneupScreen() {
                     placeholder="Event title"
                     multiline={false}
                   />
-                  <EventDatePicker value={eventDate} onChange={setEventDate} />
-                  <EventDatePicker
-                    value={eventEndDate}
-                    onChange={setEventEndDate}
-                    label="End date (optional)"
-                    placeholder="Same day"
-                    clearable
+                  <EventDateRow
+                    date={eventDate}
+                    onDateChange={setEventDate}
+                    endDate={eventEndDate}
+                    onEndDateChange={setEventEndDate}
                   />
                   <Pressable
                     onPress={() => setEventAllDay((current) => !current)}

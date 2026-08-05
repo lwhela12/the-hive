@@ -242,6 +242,8 @@ export interface Wish extends Record<string, unknown> {
   fulfilled_by?: string;
   thank_you_message?: string;
   board_category_id?: string | null;
+  /** Pictures and files that are part of the ask itself (migration 149). */
+  attachments?: Attachment[] | null;
   source_board_post_id?: string | null;
   created_at: string;
   fulfilled_at?: string;
@@ -556,7 +558,18 @@ export interface BoardPost extends Record<string, unknown> {
    * site. Only the monthly HIVE Help focus is read publicly today, so that
    * neighbours can drop off a donation without being members.
    */
-  visibility?: 'members' | 'public';
+  /**
+   * Who can see that this event exists. The type had never caught up with
+   * migration 125 and still said `members | public`, so every screen reading it
+   * had to cast around the missing rung.
+   */
+  visibility?: 'members' | 'all_hives' | 'public';
+  /**
+   * Who is actually invited, and so who gets the address and the joining link
+   * (migration 148). Never wider than `visibility`. Events written before that
+   * migration have none, and for those the visibility was the invitation.
+   */
+  invited_scope?: 'members' | 'all_hives' | 'public';
   is_locked: boolean;
   edited_at?: string;
   reply_count: number;

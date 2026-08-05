@@ -12,7 +12,7 @@ import { useWishes } from '../../lib/hooks/useWishes';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
-import { getEventEmoji, getEventHiveIcon } from '../../lib/eventDisplay';
+import { isInvitedToEvent, getEventEmoji, getEventHiveIcon } from '../../lib/eventDisplay';
 import { HiveIcon, type HiveIconName } from '../../components/ui/HiveIcon';
 import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
 import { useActivityFeed, type ActivityItem } from '../../lib/hooks/useActivityFeed';
@@ -43,7 +43,7 @@ import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem, setStoredItemAsync } from '../../lib/webStorage';
 import { getAppNewsSeenKey, getUnseenAppNews, type AppNewsEntry } from '../../lib/appNews';
 import { loadActivityRead, persistActivityRead, loadAppNewsSeen, persistAppNewsSeen } from '../../lib/readState';
-import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
+import { EventScopeFields, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { addHomeResetListener } from '../../lib/homeNavigation';
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
@@ -366,6 +366,10 @@ const openAddToCalendar = (event: Event) => {
 };
 
 function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (event: Event) => void }) {
+  // Who you are, so an event you can only SEE does not hand you the address and
+  // the joining link (migration 148).
+  const { memberships } = useAuth();
+  const myCommunityIds = memberships.map((m) => m.community_id);
   return (
     <View className="bg-white rounded-xl shadow-sm overflow-hidden">
       {events.map((event, index) => (
@@ -400,7 +404,7 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
                   </Text>
                 )}
               </View>
-              {event.location && (
+              {event.location && isInvitedToEvent(event as never, myCommunityIds) && (
                 <Pressable
                   onPress={(e) => {
                     e.stopPropagation();
@@ -431,7 +435,10 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
                 communityId={(event as any).community_id}
               />
             )}
-            {event.meet_link && (
+            {/* The joining details belong to the people who were invited. An
+                event can be visible to every HIVE while its link stays with the
+                HIVE whose meeting it is (Nat 2026-08-05). */}
+            {event.meet_link && isInvitedToEvent(event as never, myCommunityIds) && (
               <Pressable
                 onPress={(e) => {
                   e.stopPropagation();
@@ -964,6 +971,10 @@ export default function HiveScreen() {
   // Who's it for? Defaults to HIVErs Only — an event goes public because
   // someone said so, never because nobody said otherwise.
   const [eventAudience, setEventAudience] = useState<EventAudience>('members');
+  // Who can SEE it, separately from who is invited (migration 148). Nat:
+  // "we want everyone to be able to see when our meetings are... but i dont
+  // want everyone to be able to join the meet."
+  const [eventVisibility, setEventVisibility] = useState<EventAudience>('members');
   const [savingEvent, setSavingEvent] = useState(false);
   const [eventError, setEventError] = useState<string | null>(null);
   const [homeActionItems, setHomeActionItems] = useState<ActionItem[]>([]);
@@ -990,10 +1001,17 @@ export default function HiveScreen() {
     // and none of Nat's own words.
     setEventDescription(withoutTimeNotes(event.description));
     setEventLocation(event.location || '');
-    // Pass the saved rung straight through — collapsing it to two would quietly
-    // demote an "Every HIVE" event the moment somebody opened it to edit.
-    const saved = (event as any).visibility;
-    setEventAudience(saved === 'public' || saved === 'all_hives' ? saved : 'members');
+    // Pass the saved rungs straight through — collapsing either to two would
+    // quietly demote a HIVE-Wide event the moment somebody opened it to edit.
+    const rung = (value: unknown): EventAudience =>
+      value === 'public' || value === 'all_hives' ? value : 'members';
+    const savedVisibility = rung((event as any).visibility);
+    setEventVisibility(savedVisibility);
+    // Events written before migration 148 have no invite rung of their own, and
+    // for those the visibility WAS the invitation — one column did both jobs.
+    setEventAudience(
+      (event as any).invited_scope ? rung((event as any).invited_scope) : savedVisibility,
+    );
     setShowEventModal(true);
   }, [formatDateForInput]);
 
@@ -1976,6 +1994,7 @@ export default function HiveScreen() {
     setEventDescription('');
     setEventLocation('');
     setEventAudience('members');
+    setEventVisibility('members');
     setShowEventModal(true);
   };
 
@@ -1992,6 +2011,7 @@ export default function HiveScreen() {
     setEventDescription('');
     setEventLocation('');
     setEventAudience('members');
+    setEventVisibility('members');
   };
 
   const saveEvent = async () => {
@@ -2055,7 +2075,8 @@ export default function HiveScreen() {
             event_time: normalizedTime.time,
             description: descriptionWithTimeNote || null,
             location: eventLocation || null,
-            visibility: eventAudience,
+            visibility: eventVisibility,
+            invited_scope: eventAudience,
           })
           .eq('id', editingEvent.id);
 
@@ -2072,7 +2093,8 @@ export default function HiveScreen() {
         if (eventEndDateIso) newEvent.end_date = eventEndDateIso;
         if (normalizedTime.time) newEvent.event_time = normalizedTime.time;
         if (eventLocation.trim()) newEvent.location = eventLocation.trim();
-        newEvent.visibility = eventAudience;
+        newEvent.visibility = eventVisibility;
+        (newEvent as Record<string, unknown>).invited_scope = eventAudience;
 
         const { error } = await supabase.functions.invoke('create-event', {
           body: newEvent,
@@ -3783,7 +3805,12 @@ export default function HiveScreen() {
                         submitting={savingEvent}
                       />
                       <View className="mb-4">
-                        <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
+                        <EventScopeFields
+                          visibility={eventVisibility}
+                          onVisibilityChange={setEventVisibility}
+                          invited={eventAudience}
+                          onInvitedChange={setEventAudience}
+                        />
                       </View>
 
                       {eventError && (

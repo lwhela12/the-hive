@@ -727,6 +727,8 @@ export default function MeetingHelperScreen() {
       if (normalizedTime.time) newEvent.event_time = normalizedTime.time;
       if (normalizedTime.note) newEvent.description = `Time note: ${normalizedTime.note}`;
       newEvent.visibility = quickAddAudience;
+      // One question here, so it answers both — see admin.tsx and migration 148.
+      (newEvent as Record<string, unknown>).invited_scope = quickAddAudience;
 
       const { error } = await supabase.functions.invoke('create-event', { body: newEvent });
       if (error) throw error;
@@ -1737,10 +1739,26 @@ export default function MeetingHelperScreen() {
                   </View>
                 ))
               )}
+              {/* The words themselves, not a count of them.
+                  This said "3 written thoughts in the check-ins — worth a skim
+                  out loud" and stopped there, so what somebody actually wrote
+                  about a hang was saved, counted, and never once put on a
+                  screen. Nat, doing the August tune-up: "I just want to know
+                  where this info ends up... in case it doesnt carry somewhere."
+                  It did not. The HIVE Help voices two sections down have been
+                  printed in full all along; this is the same treatment. */}
               {hangVoices.length > 0 ? (
-                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED, marginTop: sz(4, 3) }}>
-                  🗣️ {hangVoices.length} written thought{hangVoices.length === 1 ? '' : 's'} in the check-ins — worth a skim out loud.
-                </Text>
+                <View style={{ gap: sz(4, 3), marginTop: sz(6, 4) }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginTop: sz(4, 3) }}>
+                    🗣️ What people said about the hangs
+                  </Text>
+                  {hangVoices.map((voice) => (
+                    <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
+                      {voice.text}
+                    </Text>
+                  ))}
+                </View>
               ) : null}
             </View>
 

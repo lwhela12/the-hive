@@ -57,13 +57,33 @@ export function ScopePicker<K extends string>({
     (o) => RANK[o.rung] <= ceilingRank && (inSeveral || o.rung !== 'all_hives'),
   );
 
-  // Never leave a setting showing that this HIVE won't honour.
+  /**
+   * Never leave a setting showing that this HIVE won't honour — but only once
+   * we actually know what this HIVE honours.
+   *
+   * This quietly ate Nat's choice for days. Her Nellie wish was saved
+   * `all_hives` in the database and the picker kept opening on "This HIVE
+   * only": *"I've been trying to select HIVE-Wide a billion times, it never
+   * reflects that anywhere."*
+   *
+   * On the first render after the modal opens, `community` has not arrived yet,
+   * so the ceiling reads as its fallback — `hive`, the most restrictive rung —
+   * and this effect dutifully demoted a perfectly legal HIVE-Wide wish. Worse,
+   * the effect is declared above the early return, so it ran even on the
+   * renders where the picker drew nothing at all, and the demotion was then
+   * saved over her real answer.
+   *
+   * The fallback was right to be the strict one. The mistake was acting on a
+   * value we did not have yet. A rule that fires while the facts are still
+   * loading is a rule that enforces its own default.
+   */
   const current = allOptions.find((o) => o.key === value);
   useEffect(() => {
+    if (!community) return;
     if (current && RANK[current.rung] > ceilingRank && options.length) {
       onChange(options[options.length - 1].key);
     }
-  }, [value, ceilingRank, options.length]);
+  }, [value, ceilingRank, options.length, community?.id]);
 
   // One rung is not a choice.
   if (options.length < 2) return null;

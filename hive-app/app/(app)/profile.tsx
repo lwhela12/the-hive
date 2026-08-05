@@ -28,6 +28,7 @@ import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { EditButton } from '../../components/ui/EditButton';
+import { WorldMark } from '../../components/ui/WorldMark';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { showAlert } from '../../lib/showAlert';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
@@ -87,6 +88,40 @@ const DEEP_PROFILE_STEPS = ['Basics', 'Now', 'Favorites', '3MIQ'] as const;
 // keeping a copy of the list in this file would only have gone stale.
 
 const PROFILE_FORM_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * The one mark that says whether a to-do on this page has been done.
+ *
+ * Nat, 2026-08-05, looking at a row reading "✅ Complete this month's check-in":
+ * "this has a green check mark that looks like i've already done it. is it
+ * asking me to do it? or showing that i've already done it?"
+ *
+ * It was asking. The tick was decoration — drawn the same whether or not the
+ * thing had happened — so the only signal on the row said the opposite of what
+ * the row meant. Now an empty ring means still waiting for you, a tick means
+ * finished, and the two are told apart by shape alone, without reading a word.
+ * A finished thing is also drawn quietly, because it no longer wants you.
+ *
+ * Nothing on this page may draw a tick on work that has not been done.
+ */
+function TodoMark({ done, size = 18 }: { done: boolean; size?: number }) {
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderWidth: done ? 0 : Math.max(1.4, size * 0.11),
+        borderColor: 'rgba(45,45,45,0.32)',
+        backgroundColor: done ? 'rgba(45,45,45,0.12)' : 'transparent',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {done ? <Ionicons name="checkmark" size={Math.round(size * 0.7)} color="#7f715f" /> : null}
+    </View>
+  );
+}
 
 type WishStatusTabKey = HdWishTabKey;
 
@@ -1711,6 +1746,11 @@ export default function ProfileScreen() {
                     Tap one to fill it in — each moves your bee closer to the hive 🐝
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 7, marginTop: 10, maxWidth: Math.min(screenWidth - 28, 560) }}>
+                    {/* Only the pieces you have NOT filled in appear here — a
+                        finished one leaves the row rather than sitting about
+                        looking like work. Each still wears the empty ring, so
+                        this list and the check-in button below it say
+                        "not done yet" the same way. */}
                     {/* The check-in has its own big button right below — no twin chip */}
                     {missing.filter(item => item.label !== "Complete this month's check-in").map(item => (
                       <Pressable
@@ -1718,6 +1758,9 @@ export default function ProfileScreen() {
                         onPress={() => handleProfileStepPress(item.label)}
                         className="active:opacity-70"
                         style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
                           backgroundColor: '#fffaf0',
                           borderWidth: 1,
                           borderColor: 'rgba(222,193,129,0.65)',
@@ -1730,6 +1773,7 @@ export default function ProfileScreen() {
                           shadowOffset: { width: 0, height: 3 },
                         }}
                       >
+                        <TodoMark done={false} size={11} />
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348' }}>{item.actionLabel}</Text>
                       </Pressable>
                     ))}
@@ -1755,17 +1799,23 @@ export default function ProfileScreen() {
                     maxWidth: Math.min(screenWidth - 28, 420),
                   }}
                 >
-                  <Text style={{ fontSize: 16 }}>{monthlyCheckInIsEditing ? '📝' : '✅'}</Text>
+                  {/* Once you have answered, the row recedes: the ring fills in
+                      with a quiet tick, the words are struck through, and the
+                      line underneath is what invites you back in. Before you
+                      have answered it is an empty ring — a box nobody has
+                      ticked. */}
+                  <TodoMark done={monthlyCheckInIsEditing} size={18} />
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text
                       numberOfLines={1}
                       style={{
                         fontFamily: 'Lato_700Bold',
                         fontSize: 12,
-                        color: monthlyCheckInIsEditing ? '#7f715f' : '#bd9348',
+                        color: monthlyCheckInIsEditing ? '#8e7a5e' : '#bd9348',
+                        textDecorationLine: monthlyCheckInIsEditing ? 'line-through' : 'none',
                       }}
                     >
-                      {monthlyCheckInIsEditing ? "Edit this month's check-in" : "Complete this month's check-in"}
+                      {monthlyCheckInIsEditing ? "This month's check-in" : "Complete this month's check-in"}
                     </Text>
                     {monthlyCheckInIsEditing && monthlyCheckInResponse?.submitted_at ? (
                       <Text
@@ -1792,27 +1842,43 @@ export default function ProfileScreen() {
             decides whether this profile shows up when somebody stands at
             HIVE-Wide and looks at who is around. So it lives here, where you
             are when you think of it. Settings keeps its copy; they read the
-            same column, so they can't disagree. */}
+            same column, so they can't disagree.
+
+            Nat, 2026-08-05: "i love this, i think its unnecessarily long, we
+            can shorten it and center it." It was a full-width white bar with
+            two sentences in it for a switch with two states, so it is now a
+            small pill that sits in the middle of the page and says the state
+            in three words. The globe emoji went with it: the drawn Earth is
+            HIVE-Wide's mark everywhere else in the app, and an emoji globe
+            beside it is a second planet. The padlock stays — a lock is the
+            right opposite of a world. */}
         <FadeIn delay={90}>
         <Pressable
           onPress={() => void toggleHiveWideVisibility()}
           disabled={savingHiveWideVisibility}
           accessibilityRole="switch"
           accessibilityState={{ checked: visibleHiveWide }}
-          className="flex-row items-center bg-white rounded-xl px-4 py-3 mb-6 active:opacity-80"
-          style={{ width: '100%', maxWidth: 1240, alignSelf: 'center', opacity: savingHiveWideVisibility ? 0.6 : 1 }}
+          className="flex-row items-center bg-white mb-6 active:opacity-80"
+          style={{
+            alignSelf: 'center',
+            gap: 10,
+            borderRadius: 999,
+            borderWidth: 1,
+            borderColor: 'rgba(222,193,129,0.5)',
+            paddingLeft: 14,
+            paddingRight: 8,
+            paddingVertical: 7,
+            opacity: savingHiveWideVisibility ? 0.6 : 1,
+          }}
         >
-          <Text style={{ fontSize: 18 }}>{visibleHiveWide ? '🌍' : '🔒'}</Text>
-          <View className="flex-1 ml-3">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
-              {visibleHiveWide ? 'Visible HIVE-Wide' : 'Only your own HIVEs see you'}
-            </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mt-1">
-              {visibleHiveWide
-                ? 'Members of every HIVE can find you in the HIVE-Wide member list.'
-                : 'Turn this on to appear in the HIVE-Wide member list.'}
-            </Text>
+          {/* Both marks live in the same 20-wide box so the words don't shuffle
+              sideways when you flip the switch. */}
+          <View style={{ width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
+            {visibleHiveWide ? <WorldMark size={20} /> : <Text style={{ fontSize: 15 }}>🔒</Text>}
           </View>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13 }} className="text-charcoal">
+            {visibleHiveWide ? 'Visible HIVE-Wide' : 'Only your HIVEs see you'}
+          </Text>
           <View
             style={{
               width: 46, height: 27, borderRadius: 14, padding: 3,
@@ -1909,18 +1975,18 @@ export default function ProfileScreen() {
                   value={editPhone}
                   onChangeText={(text) => setEditPhone(formatPhoneNumber(text))}
                   style={{
-                    fontFamily: 'Lato_400Regular',
+                    fontFamily: FIELD_LOOK.font,
                     borderWidth: 1,
                     borderColor: FIELD_BORDER,
-                    borderRadius: 12,
-                    backgroundColor: '#ffffff',
+                    borderRadius: FIELD_LOOK.radius,
+                    backgroundColor: FIELD_LOOK.fill,
                     outlineStyle: 'none',
-                    caretColor: '#313130',
+                    caretColor: FIELD_LOOK.ink,
                   } as any}
                   className="text-charcoal text-base px-4 py-3"
                   placeholder="(555) 555-5555"
-                  placeholderTextColor="#a09274"
-                  selectionColor="#313130"
+                  placeholderTextColor={FIELD_LOOK.placeholder}
+                  selectionColor={FIELD_LOOK.ink}
                   keyboardType="phone-pad"
                 />
               ) : (

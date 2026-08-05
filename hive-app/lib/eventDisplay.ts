@@ -40,3 +40,29 @@ export function getEventHiveIcon(event: {
   if (getEventEmoji(event) === '📌') return 'pin';
   return null;
 }
+
+/**
+ * Is this person actually invited, or are they only allowed to know it exists?
+ *
+ * Nat, 2026-08-05: *"we want everyone to be able to see when our meetings are,
+ * (everyone HIVE wide) but i dont want everyone to be able to join the meet."*
+ *
+ * Seeing and coming were one column until migration 148. Now an event can be
+ * visible HIVE-Wide while the address and the joining link stay with the HIVE
+ * whose meeting it is — which is the difference between telling the other HIVEs
+ * you exist and handing them your front door.
+ *
+ * Events written before that migration have no invite rung of their own, and
+ * for those the visibility genuinely WAS the invitation, so it stands in.
+ */
+export function isInvitedToEvent(
+  event: { visibility?: string | null; invited_scope?: string | null; community_id?: string | null },
+  myCommunityIds: string[],
+): boolean {
+  const rung = event.invited_scope ?? event.visibility ?? 'members';
+  // Anyone at all, and anyone in any HIVE — everybody reading the app is in one.
+  if (rung === 'public' || rung === 'all_hives') return true;
+  // This HIVE only: you have to be in the HIVE whose event it is.
+  if (!event.community_id) return true;
+  return myCommunityIds.includes(event.community_id);
+}

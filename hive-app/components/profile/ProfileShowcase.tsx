@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
 import { ProfileHoneycombCluster, type HoneycombItem } from './ProfileHoneycombCluster';
 
 type ProfileMiqAnswers = {
@@ -49,6 +49,25 @@ const MIQ_EXPAND_THRESHOLD = {
   mobileItem: 95,
 } as const;
 
+// Ceilings, not floors (Nat, 2026-08-05). These two side panels used to be
+// pinned at minHeight 560 and stretched to whatever the honeycomb needed, so
+// somebody with one line of bio got their one line and then several hundred
+// pixels of nothing — which reads as a page that broke, not as a short answer.
+// Now each panel is exactly as tall as what's in it and scrolls inside itself
+// once it passes these numbers.
+//
+// The numbers come from what a FULL panel needs, not from a guess:
+//   story — a complete bio preview (11 lines at 22px) plus all three 3MIQ
+//   answers at three lines each, with both cards' padding, labels and "Read
+//   more" buttons, lands near 730. 780 means a fully-filled profile never
+//   scrolls; the scroll is there for when somebody presses "Read more".
+//   ask — the quote runs at 28px a line, so 340 holds about nine lines of it,
+//   far more than anyone has written in "HIVErs should ask me about".
+const DESKTOP_PANEL_MAX_HEIGHT = {
+  ask: 340,
+  story: 780,
+} as const;
+
 function clean(value?: string | null) {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : null;
@@ -74,7 +93,6 @@ function StoryCard({
   onToggle,
   actionLabel,
   onAction,
-  style,
 }: {
   label: string;
   children: ReactNode;
@@ -83,10 +101,11 @@ function StoryCard({
   onToggle?: () => void;
   actionLabel?: string;
   onAction?: () => void;
-  style?: StyleProp<ViewStyle>;
 }) {
+  // No height styling passed in on purpose: a story card is as tall as its
+  // words. The stack around it is what has a ceiling.
   return (
-    <View style={[styles.storyCard, style]}>
+    <View style={styles.storyCard}>
       <View style={styles.storyHeader}>
         <Text style={[styles.sectionLabel, styles.storyLabel]}>
           {label}
@@ -172,19 +191,12 @@ export function ProfileShowcase({
   const miqTextClampProps = miqExpanded
     ? {}
     : { numberOfLines: miqPreviewLines, ellipsizeMode: 'tail' as const };
-  const getDesktopStoryStyle = (expanded: boolean) => {
-    if (!isDesktop) return undefined;
-    return expanded
-      ? styles.desktopExpandedStoryCard
-      : styles.desktopSplitStoryCard;
-  };
   const bioCard = (
     <StoryCard
       label="Bio"
       canExpand={bioCanExpand}
       expanded={bioExpanded}
       onToggle={() => setBioExpanded(value => !value)}
-      style={isDesktop && showMiqCard ? getDesktopStoryStyle(bioExpanded) : undefined}
     >
       <Text
         key={bioExpanded ? 'bio-expanded' : 'bio-collapsed'}
@@ -207,7 +219,6 @@ export function ProfileShowcase({
       canExpand={miqCanExpand}
       expanded={miqExpanded}
       onToggle={() => setMiqExpanded(value => !value)}
-      style={getDesktopStoryStyle(miqExpanded)}
     >
       {miqItems.length > 0 ? (
         <View style={styles.miqList}>
@@ -242,12 +253,14 @@ export function ProfileShowcase({
     return (
       <View style={[styles.desktopRow, style]}>
         <View style={[styles.desktopSideCard, styles.askCard]}>
-          <Text style={[styles.sectionLabel, styles.askLabel]}>
-            HIVErs should ask me about
-          </Text>
-          <Text style={[styles.askText, !knownForText && styles.placeholderText]}>
-            {knownForText ? `"${knownForText}"` : knownForPlaceholder}
-          </Text>
+          <ScrollView nestedScrollEnabled>
+            <Text style={[styles.sectionLabel, styles.askLabel]}>
+              HIVErs should ask me about
+            </Text>
+            <Text style={[styles.askText, !knownForText && styles.placeholderText]}>
+              {knownForText ? `"${knownForText}"` : knownForPlaceholder}
+            </Text>
+          </ScrollView>
         </View>
 
         <View style={styles.desktopHoneycomb}>
@@ -260,8 +273,10 @@ export function ProfileShowcase({
         </View>
 
         <View style={styles.desktopStoryStack}>
-          {bioCard}
-          {miqCard}
+          <ScrollView contentContainerStyle={styles.desktopStoryStackContent} nestedScrollEnabled>
+            {bioCard}
+            {miqCard}
+          </ScrollView>
         </View>
       </View>
     );
@@ -302,17 +317,19 @@ export function ProfileShowcase({
 const styles = StyleSheet.create({
   desktopRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    // Each column stands at its own height. Stretching them meant the two
+    // side panels were always as tall as the honeycomb — around 700px —
+    // however little was written in them.
+    alignItems: 'flex-start',
     justifyContent: 'center',
     gap: 18,
     marginTop: 4,
   },
   desktopSideCard: {
-    minHeight: 560,
+    maxHeight: DESKTOP_PANEL_MAX_HEIGHT.ask,
     borderWidth: 1,
     paddingHorizontal: 24,
     paddingVertical: 28,
-    justifyContent: 'center',
   },
   askCard: {
     width: 290,
@@ -322,9 +339,14 @@ const styles = StyleSheet.create({
   },
   desktopStoryStack: {
     width: 330,
-    minHeight: 560,
-    gap: 14,
+    maxHeight: DESKTOP_PANEL_MAX_HEIGHT.story,
     alignItems: 'stretch',
+  },
+  desktopStoryStackContent: {
+    gap: 14,
+    // The cards carry a soft drop shadow below them; a scrolling box clips at
+    // its own edge, so leave the shadow somewhere to land.
+    paddingBottom: 6,
   },
   desktopHoneycomb: {
     width: 540,
@@ -383,13 +405,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 },
-  },
-  desktopSplitStoryCard: {
-    flex: 1,
-  },
-  desktopExpandedStoryCard: {
-    flexGrow: 0,
-    flexShrink: 0,
   },
   storyHeader: {
     flexDirection: 'row',

@@ -54,6 +54,32 @@ export const FIELD_LOOK = {
   fontSize: 16,
 } as const;
 
+/**
+ * The same field, drawn for a page made of night sky.
+ *
+ * Nat, 2026-08-05, on App Feedback at HIVE-Wide: *"I think this is very pretty,
+ * but the white is a little jarring, can we make it match the rest of the form a
+ * little more please?"* A white box on black is the brightest thing on the
+ * screen, so the empty box outshouted the question above it.
+ *
+ * Every value has a counterpart rather than a tweak, because a field is a set of
+ * decisions that have to agree: light ink needs a dark ground, and a placeholder
+ * has to be quieter than the text without disappearing into the page.
+ */
+export const FIELD_LOOK_DARK = {
+  ...FIELD_LOOK,
+  fill: 'rgba(255,248,233,0.06)',
+  pillFill: 'rgba(255,248,233,0.09)',
+  border: 'rgba(255,226,166,0.22)',
+  placeholder: 'rgba(255,248,233,0.45)',
+  ink: '#FFF8E9',
+} as const;
+
+/** Whichever of the two belongs on the page you are on. */
+export function fieldLookFor(tone: 'light' | 'dark') {
+  return tone === 'dark' ? FIELD_LOOK_DARK : FIELD_LOOK;
+}
+
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;

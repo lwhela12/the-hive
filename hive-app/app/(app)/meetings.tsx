@@ -1613,11 +1613,13 @@ export default function MeetingsScreen() {
                 returnKeyType="send"
                 onSubmitEditing={handleSaveDeckUrl}
                 style={{
-                  fontFamily: 'Lato_400Regular',
+                  fontFamily: FIELD_LOOK.font,
+                  // A URL is long, so this one field reads a step smaller than
+                  // the standard 16 — everything else about it is the shared look.
                   fontSize: 14,
-                  color: '#313130',
-                  backgroundColor: '#fff',
-                  borderRadius: 12,
+                  color: FIELD_LOOK.ink,
+                  backgroundColor: FIELD_LOOK.fill,
+                  borderRadius: FIELD_LOOK.radius,
                   borderWidth: 1,
                   borderColor: FIELD_BORDER,
                   padding: 14,

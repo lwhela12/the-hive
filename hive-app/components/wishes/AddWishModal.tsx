@@ -18,6 +18,10 @@ import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { syncWishEditToLinkedBoard } from '../../lib/wishBoardLinking';
 import { ComposerBar } from '../ui/ComposerBar';
+import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
+import type { Attachment } from '../../types';
+import type { SelectedImage } from '../../lib/imagePicker';
+import type { SelectedFile } from '../../lib/filePicker';
 import { WishScopePicker, type WishScope } from '../ui/WishScopePicker';
 import type { BoardCategory, Wish } from '../../types';
 
@@ -63,6 +67,49 @@ export function AddWishModal({
 }: AddWishModalProps) {
   const [wishText, setWishText] = useState('');
   const [wishScope, setWishScope] = useState<WishScope>('hive');
+  /**
+   * Whether we actually KNOW how far this wish already travels.
+   *
+   * Not every screen hands this modal a whole wish. Some fetch a wish with a
+   * named list of columns and `share_scope` is not on the list — the member
+   * card is the live example (`app/(app)/members.tsx`, both the directory query
+   * and `refreshManagedWishes`). The object arrives looking complete, the
+   * missing field reads as `undefined`, and a `?? 'hive'` fallback turns "I
+   * don't know" into "This HIVE only". Save, and a HIVE-Wide wish has been
+   * quietly demoted by somebody who only came to fix a typo.
+   *
+   * So: 'checking' while we go ask the database, 'unknown' if that fails, and
+   * we only write the scope back when it is 'known'. Not writing a column
+   * leaves it exactly as it was, which is the right answer to not knowing.
+   */
+  // Nat: "shouldn't it also have a clip to add attachments?" A wish is often a
+  // picture of the thing — the broken fence, the dress, the room. Until
+  // migration 149 there was nowhere on the wish to keep one, so the only way to
+  // show it was to reply to your own ask.
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
+  const [scopeStatus, setScopeStatus] = useState<'known' | 'checking' | 'unknown'>('known');
+
+  /**
+   * Put whatever was picked into storage and hand back the rows to save.
+   *
+   * Returns `undefined` when nothing was picked, which is different from an
+   * empty list: `undefined` means "leave whatever is already on this wish
+   * alone", and that distinction is the whole reason this is not inline.
+   */
+  const collectAttachments = async (uploaderId: string): Promise<Attachment[] | undefined> => {
+    if (selectedImages.length === 0 && selectedFiles.length === 0) return undefined;
+    let out: Attachment[] = [];
+    if (selectedImages.length > 0) {
+      const result = await uploadMultipleImages(uploaderId, selectedImages);
+      out = [...out, ...result.attachments];
+    }
+    if (selectedFiles.length > 0) {
+      const result = await uploadMultipleFiles(uploaderId, selectedFiles);
+      out = [...out, ...result.attachments];
+    }
+    return out.length > 0 ? out : undefined;
+  };
   const [wishTitle, setWishTitle] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -93,6 +140,8 @@ export function AddWishModal({
   };
 
   useEffect(() => {
+    let stale = false;
+
     if (visible && existingWish) {
       setWishTitle(existingWish.title ?? '');
       setWishText(existingWish.description);
@@ -100,9 +149,40 @@ export function AddWishModal({
       // on "This HIVE only" every time regardless of the truth, so even after
       // the save above is fixed, re-editing a HIVE-Wide wish would quietly
       // demote it back.
-      setWishScope(((existingWish as { share_scope?: string }).share_scope as WishScope) ?? 'hive');
+      const carriedScope = (existingWish as { share_scope?: string }).share_scope as
+        | WishScope
+        | undefined;
+      if (carriedScope) {
+        setWishScope(carriedScope);
+        setScopeStatus('known');
+      } else {
+        // The wish came from a screen that did not fetch this column. Ask the
+        // database rather than assuming the smallest answer.
+        setWishScope('hive');
+        setScopeStatus('checking');
+        supabase
+          .from('wishes')
+          .select('share_scope')
+          .eq('id', existingWish.id)
+          .maybeSingle()
+          .then(({ data, error: scopeError }) => {
+            if (stale) return;
+            const found = (data as { share_scope?: string } | null)?.share_scope as
+              | WishScope
+              | undefined;
+            if (!scopeError && found) {
+              setWishScope(found);
+              setScopeStatus('known');
+            } else {
+              setScopeStatus('unknown');
+            }
+          });
+      }
       setError('');
     } else if (visible && !existingWish) {
+      // A brand-new wish has no history to protect — the picker's own default
+      // is the truth from the first keystroke.
+      setScopeStatus('known');
       // Restore new-wish draft
       AsyncStorage.getItem(WISH_DRAFT_KEY).then(raw => {
         if (raw) setWishText(raw);
@@ -114,8 +194,19 @@ export function AddWishModal({
     } else if (!visible) {
       setWishTitle('');
       setWishText('');
+      // The scope goes home with the title and the text. It used to survive the
+      // close, so the next wish you wrote started life carrying the last wish's
+      // reach without anybody choosing that.
+      setWishScope('hive');
+      setScopeStatus('known');
       setError('');
     }
+
+    return () => {
+      // The modal moved on before the lookup came back — its answer is about a
+      // wish nobody is editing any more.
+      stale = true;
+    };
   }, [visible, existingWish]);
 
   const handleSave = async (makePublic: boolean) => {
@@ -138,11 +229,19 @@ export function AddWishModal({
         // travelled and an edited one never did. Nat, 2026-08-04: "i've marked
         // this wish HIVE-wide a bunch of times & it never saves." The picker was
         // working perfectly and writing to nowhere.
+        const attachments = await collectAttachments(ownerUserId);
         const updatePayload = {
           title: wishTitle.trim() || null,
           description: wishText.trim(),
           raw_input: wishText.trim(),
-          share_scope: wishScope,
+          // The scope is written only when it is known — see `scopeStatus`.
+          // Leaving the column out is what keeps a wish's reach intact when the
+          // screen that opened this modal never fetched it.
+          ...(scopeStatus === 'known' ? { share_scope: wishScope } : {}),
+          // Only overwrite when something new was picked. Saving `null` because
+          // the picker started empty would delete a picture that is already on
+          // the wish.
+          ...(attachments ? { attachments } : {}),
         };
         let { error: updateError } = await supabase
           .from('wishes')
@@ -174,6 +273,7 @@ export function AddWishModal({
           description: updatePayload.description,
         });
       } else {
+        const attachments = await collectAttachments(ownerUserId);
         const insertPayload: Record<string, unknown> = {
           user_id: ownerUserId,
           community_id: communityId,
@@ -184,6 +284,7 @@ export function AddWishModal({
           share_scope: wishScope,
           is_active: true,
           extracted_from: 'manual',
+          ...(attachments ? { attachments } : {}),
         };
 
         if (linkedBoardCategory?.id) {
@@ -238,6 +339,16 @@ export function AddWishModal({
     } finally {
       setSaving(false);
     }
+  };
+
+  /**
+   * A deliberate pick is knowledge. Whatever we did or did not manage to look
+   * up, once somebody has chosen a rung themselves that is the wish's reach and
+   * it gets saved.
+   */
+  const handleScopeChange = (next: WishScope) => {
+    setWishScope(next);
+    setScopeStatus('known');
   };
 
   const handleRefine = () => {
@@ -349,6 +460,11 @@ export function AddWishModal({
                   onSubmit={handleKeyboardSave}
                   canSubmit={canSubmit && !saving}
                   submitting={saving}
+                  attachments="compact"
+                  selectedImages={selectedImages}
+                  onImagesChange={setSelectedImages}
+                  selectedFiles={selectedFiles}
+                  onFilesChange={setSelectedFiles}
                   mentionMembers={mentionableMembers}
                   mentionsLoading={mentionMembersLoading}
                   currentUserId={userId}
@@ -357,7 +473,17 @@ export function AddWishModal({
                     an ask needs — "anyone know a teacher?" travels further than
                     one HIVE (Nat 2026-08-02). */}
                 <View className="mt-4">
-                  <WishScopePicker value={wishScope} onChange={setWishScope} />
+                  <WishScopePicker value={wishScope} onChange={handleScopeChange} />
+                  {isEditMode && scopeStatus !== 'known' ? (
+                    <Text
+                      style={{ fontFamily: 'Lato_400Regular' }}
+                      className="text-charcoal/60 text-sm mt-2"
+                    >
+                      {scopeStatus === 'checking'
+                        ? 'Checking how far this wish already travels...'
+                        : 'Keeping this wish where it already is. Pick an option above to change it.'}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
 
