@@ -28,6 +28,54 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-05-invited-vs-visible',
+    date: '2026-08-05',
+    title: 'Everyone can see the meeting. Not everyone is invited to it',
+    detail: 'An event now asks two questions — who can see it is happening, and who is actually coming. Only the invited get the address and the joining link.',
+    href: { pathname: '/hive' },
+    action: 'Open the calendar',
+  },
+  {
+    id: '2026-08-05-wish-paperclip',
+    date: '2026-08-05',
+    title: 'Show the thing you are wishing for',
+    detail: 'The wish box has a paperclip now, so a picture can be part of the ask instead of a reply underneath it.',
+  },
+  {
+    id: '2026-08-05-hive-wide-sticks',
+    date: '2026-08-05',
+    title: 'Choosing HIVE-Wide sticks',
+    detail: 'It was being quietly set back to "This HIVE only" the moment you opened a wish. If you set something HIVE-Wide before today, it is worth checking.',
+  },
+  {
+    id: '2026-08-05-hang-notes-read-out',
+    date: '2026-08-05',
+    title: 'What you write about a hang gets read out',
+    detail: 'A note for each hang you went to, and they show on the meeting deck instead of just being counted.',
+    href: { pathname: '/monthly-tuneup' },
+    action: 'Open the check-in',
+  },
+  {
+    id: '2026-08-05-manage-wish-tiles',
+    date: '2026-08-05',
+    title: 'Managing a wish takes one glance',
+    detail: 'Grant, Edit, Archive, Refine and Delete are a row of coloured tiles rather than five long bars.',
+  },
+  {
+    id: '2026-08-05-honest-ticks',
+    date: '2026-08-05',
+    title: 'A tick means you did it',
+    detail: 'Your profile checklist was drawing a green tick on things you had not done yet.',
+    href: { pathname: '/profile' },
+    action: 'Open your profile',
+  },
+  {
+    id: '2026-08-05-dark-fields',
+    date: '2026-08-05',
+    title: 'Writing boxes match the page they are on',
+    detail: 'A white box on HIVE-Wide\u2019s night sky was the brightest thing on the screen.',
+  },
+  {
     id: '2026-08-05-path-footer',
     date: '2026-08-05',
     title: 'The bottom of every page tells you where you are',
