@@ -1,5 +1,5 @@
-import { memo, useCallback, useState } from 'react';
-import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
+import { memo, useCallback, useRef, useState } from 'react';
+import { View, Text, Pressable, ScrollView, useWindowDimensions, Animated } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +33,9 @@ import { Avatar } from '../ui/Avatar';
  * Green is HIVE-Wide's colour everywhere in the app, so it is green here too,
  * against the HIVE's own deepened accent.
  */
+
+/** A Pressable that can be scaled — the rail dips a row you are already on. */
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const RAIL_COLLAPSED = 56;
 const RAIL_EXPANDED = 212;
@@ -73,6 +76,37 @@ export const SideRail = memo(function SideRail({
 
   const [confirmingLogOut, setConfirmingLogOut] = useState(false);
 
+  /**
+   * A press that lands somewhere you already are still has to feel like a press.
+   *
+   * Nat, 2026-08-05: "Nothing happens when you click 'home' and i know that
+   * we're already there, but they dont, so i think something should happen, like
+   * a little bounce or something, so its obvious that you're already here, not
+   * that the button is broken."
+   *
+   * The row does reload the page underneath — that was fixed the day before —
+   * but a page that reloads into exactly the same thing looks identical to a
+   * dead button. So the row dips and springs back, which reads as "yes, heard
+   * you, and you are already here".
+   *
+   * The value lives here rather than inside `Row` because `Row` is redefined on
+   * every render of this component, so anything it owned would be thrown away
+   * halfway through the animation.
+   */
+  const bounce = useRef(new Animated.Value(0)).current;
+  const [bouncingKey, setBouncingKey] = useState<string | null>(null);
+  const playBounce = useCallback((key: string) => {
+    setBouncingKey(key);
+    bounce.setValue(0);
+    Animated.sequence([
+      Animated.timing(bounce, { toValue: 1, duration: 90, useNativeDriver: true }),
+      Animated.spring(bounce, { toValue: 0, friction: 3.2, tension: 150, useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (finished) setBouncingKey(null);
+    });
+  }, [bounce]);
+  const bounceScale = bounce.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] });
+
   const isPhone = width < 768;
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
   const isOwner = profile?.is_owner === true;
@@ -96,15 +130,18 @@ export const SideRail = memo(function SideRail({
   // Router's `replace` re-runs the screen, so the page visibly refreshes and the
   // press is answered.
   const go = useCallback(
-    (route: string) => {
+    (route: string, key?: string) => {
       if (route === '/board') clearBoardNavigationState();
       if (route === '/hive') resetHomeNavigationState();
       const here = activeKeyForPath(pathname) === activeKeyForPath(route);
+      // The reload is real but invisible when the page reloads into the same
+      // thing, so the row itself answers the press (Nat 2026-08-05).
+      if (here && key) playBounce(key);
       if (here) router.replace(route as never);
       else router.push(route as never);
       if (isPhone && expanded) onToggle();
     },
-    [router, pathname, isPhone, expanded, onToggle]
+    [router, pathname, isPhone, expanded, onToggle, playBounce]
   );
 
   const railWidth = expanded ? RAIL_EXPANDED : RAIL_COLLAPSED;
@@ -128,6 +165,7 @@ export const SideRail = memo(function SideRail({
     tint,
     indented,
     world,
+    bounceKey,
   }: {
     emoji: string;
     label: string;
@@ -139,13 +177,16 @@ export const SideRail = memo(function SideRail({
     indented?: boolean;
     /** This row is HIVE-Wide, so it wears the Earth rather than a comb. */
     world?: boolean;
+    /** Identifies this row, so only the one you pressed bounces. */
+    bounceKey?: string;
   }) => (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ selected: !!active }}
       style={{
+        transform: [{ scale: bounceKey && bounceKey === bouncingKey ? bounceScale : 1 }],
         flexDirection: 'row',
         alignItems: 'center',
         // An indented row's highlight hugs its own name instead of running the
@@ -209,7 +250,7 @@ export const SideRail = memo(function SideRail({
           {label}
         </Text>
       ) : null}
-    </Pressable>
+    </AnimatedPressable>
   );
 
   return (
@@ -404,7 +445,9 @@ export const SideRail = memo(function SideRail({
           world
           active={onHiveWide}
           tint={WIDE_BLACK}
+          bounceKey="hive-wide"
           onPress={() => {
+            if (onHiveWide) playBounce('hive-wide');
             enterWholeHive();
             if (isPhone && expanded) onToggle();
           }}
@@ -417,7 +460,9 @@ export const SideRail = memo(function SideRail({
             indented
             active={m.community_id === communityId && !onHiveWide}
             tint={hiveAccent(m.community)}
+            bounceKey={m.community_id}
             onPress={() => {
+              if (m.community_id === communityId && !onHiveWide) playBounce(m.community_id);
               void switchCommunity(m.community_id);
               if (isPhone && expanded) onToggle();
             }}
@@ -434,7 +479,8 @@ export const SideRail = memo(function SideRail({
             label={item.label}
             active={activeKey === item.key}
             badge={item.badge === 'dms' ? unreadDMCount : 0}
-            onPress={() => go(item.route)}
+            bounceKey={item.key}
+            onPress={() => go(item.route, item.key)}
           />
         ))}
         {/* "Swap HIVEs" is gone (Nat 2026-08-03). Your HIVEs are already listed
@@ -467,9 +513,10 @@ export const SideRail = memo(function SideRail({
               emoji={ADMIN_DESTINATION.emoji}
               label={ADMIN_DESTINATION.label}
               active={activeKey === 'admin'}
+              bounceKey="admin"
               onPress={() => {
                 if (!onHiveWide) enterWholeHive();
-                go(ADMIN_DESTINATION.route);
+                go(ADMIN_DESTINATION.route, 'admin');
               }}
             />
           </>

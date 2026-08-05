@@ -221,6 +221,12 @@ function HiveLine({ hive, event }: { hive: Community; event: HiveEvent | null })
 export default function HiveWideScreen() {
   const router = useRouter();
   const { communityId, community, profile, refreshProfile } = useAuth();
+
+  // Read once rather than on every render — it is a constant in a file.
+  const allAppNews = useMemo(() => getAppNews(), []);
+  const oldestAppNews = allAppNews.length
+    ? allAppNews[allAppNews.length - 1].date
+    : new Date().toISOString().slice(0, 10);
   const { width } = useWindowDimensions();
   // Three boxes need real width before they stop being three narrow columns of
   // broken words. Below this they stack, in Nat's order.
@@ -416,7 +422,11 @@ export default function HiveWideScreen() {
           // has no header bar — the title floats in the sky — so the only thing
           // separating a 46pt serif headline from the first card is this
           // number, and 30 was reading as a collision rather than a gap.
-          paddingTop: 84,
+          // Eased from 84 once the welcome became the first thing here rather
+          // than the four boxes — Nat, 2026-08-05: "i'd shift it up a teeny tiny
+          // bit closer to the heading". A panel that opens with a title of its
+          // own needs less air under the headline than a row of cards does.
+          paddingTop: 62,
           width: '100%',
           maxWidth: 1240,
           alignSelf: 'center',
@@ -544,9 +554,31 @@ export default function HiveWideScreen() {
                   remember. This replaced "What's happening", which could never
                   fill up: the shared boards went home to OG in migration 142,
                   so nothing was coming. */}
-              <TopBox label="What's New" wide={wide}>
+              {/* Everything, not a sample.
+                  Nat, 2026-08-05: "its cool to see too, if we populate that at
+                  the end of every session? So people can see how much work goes
+                  into it? or i can see how much work i've done and know i'm
+                  actually doing something?" She was offered a members-see-the-
+                  highlights version and picked the whole record on purpose. So
+                  it scrolls inside its own box rather than showing the top four,
+                  and it opens with the count, because the count is the part that
+                  answers her question. */}
+              <TopBox label="What We've Been Building" wide={wide}>
+                <Text
+                  style={{
+                    fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12.5,
+                    color: INK_FAINT, marginBottom: 9,
+                  }}
+                >
+                  {allAppNews.length} changes since {formatDateLong(oldestAppNews)}
+                </Text>
+                <ScrollView
+                  style={{ maxHeight: wide ? 208 : 320 }}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                >
                 <View style={{ gap: 9 }}>
-                  {getAppNews(4).map((entry) => (
+                  {allAppNews.map((entry) => (
                     <Pressable
                       key={entry.id}
                       disabled={!entry.href}
@@ -577,6 +609,7 @@ export default function HiveWideScreen() {
                     </Pressable>
                   ))}
                 </View>
+                </ScrollView>
               </TopBox>
             </View>
           </>
