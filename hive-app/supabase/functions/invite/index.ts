@@ -102,9 +102,38 @@ serve(async (req) => {
 
   const { data: community } = await supabaseAdmin
     .from('communities')
-    .select('name')
+    .select('name, accent_color')
     .eq('id', communityId)
     .single();
+
+  /**
+   * The invite wears the HIVE's own colour.
+   *
+   * Nat, 2026-08-04: "I think we need to make 3 separate welcome emails, each
+   * one colour coded to your HIVE." Three TEMPLATES would be three things to
+   * keep in step and three places to forget a fix — so it is one letter that
+   * reads `communities.accent_color`, which is the same field the rail, the
+   * header and the tabs already use. A fourth HIVE gets its own colours on the
+   * day it is created, with nobody writing an email.
+   *
+   * OG's gold is the fallback, so a HIVE with no colour set still looks like
+   * the HIVE rather than like nothing.
+   */
+  const accent = (community?.accent_color as string | null) || '#bd9348';
+  /** A wash of the accent, for the panel behind the "finding your way back" note. */
+  const tint = (hex: string, alpha: number) => {
+    const clean = hex.replace('#', '');
+    if (clean.length !== 6) return `rgba(189,147,72,${alpha})`;
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(clean.slice(i, i + 2), 16));
+    return `rgba(${r},${g},${b},${alpha})`;
+  };
+  /**
+   * Deepened for text. Tech's #2f4a63 is fine as a button fill and too dark to
+   * read as a heading on white — and Production's purple is the opposite — so
+   * headings use the accent as-is and the button keeps white ink on top of it,
+   * which works for all three.
+   */
+  const headingColour = accent;
 
   const { data: existingProfile } = await supabaseAdmin
     .from('profiles')
@@ -233,11 +262,11 @@ serve(async (req) => {
         body: JSON.stringify({
           from: FROM_EMAIL,
           to: email,
-          subject: `🍯 You're invited to the HIVE`,
+          subject: `🍯 You're invited to ${communityName}`,
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
               <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🐝</span></div>
-              <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">Welcome to the HIVE</h1>
+              <h1 style="color: ${headingColour}; font-size: 22px; text-align: center; margin: 8px 0 4px;">Welcome to the HIVE</h1>
               <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 22px;">${inviterName ? `${inviterName} invited you` : "You've been invited"} to join ${communityName}</p>
 
               <p style="font-size: 15px;">We are so glad you're here, and we can't wait to meet you in person.</p>
@@ -247,15 +276,16 @@ serve(async (req) => {
               <p style="font-size: 15px;">This link is your way into the members' side:</p>
 
               <div style="text-align: center; margin: 22px 0;">
-                <a href="${inviteUrl}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Come on in</a>
+                <a href="${inviteUrl}" style="background: ${accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Come on in</a>
               </div>
 
-              <div style="background: #fdf3dc; border: 1px solid rgba(222,193,129,0.7); border-radius: 12px; padding: 14px 16px; margin: 22px 0;">
-                <p style="font-size: 14px; margin: 0;"><strong>Finding your way back later:</strong> go to <a href="https://www.the-hive.app" style="color: #8a6b30;">the-hive.app</a> and click <strong>Member Log In</strong>. Or bookmark <a href="https://app.the-hive.app" style="color: #8a6b30;">app.the-hive.app</a> and go straight there. No need to dig up this email again.</p>
+              <div style="background: ${tint(accent, 0.09)}; border: 1px solid ${tint(accent, 0.45)}; border-radius: 12px; padding: 14px 16px; margin: 22px 0;">
+                <p style="font-size: 14px; margin: 0;"><strong>Finding your way back later:</strong> go to <a href="https://www.the-hive.app" style="color: ${headingColour};">the-hive.app</a> and click <strong>Member Log In</strong>. Or bookmark <a href="https://app.the-hive.app" style="color: ${headingColour};">app.the-hive.app</a> and go straight there. No need to dig up this email again.</p>
               </div>
 
-              <h2 style="color: #8a6b30; font-size: 15px; margin: 26px 0 8px;">Once you're in</h2>
+              <h2 style="color: ${headingColour}; font-size: 15px; margin: 26px 0 8px;">Once you're in</h2>
               <p style="font-size: 15px; margin: 0 0 12px;">No rush, and nothing has to be perfect. Click around — you can't break anything.</p>
+              <p style="font-size: 15px; margin: 0 0 12px;"><strong>Your profile keeps score for you.</strong> It shows how far along you are and what's still blank, so you can do a bit whenever you've got a minute rather than all of it now. This list is just what's on it:</p>
               <ol style="font-size: 15px; padding-left: 20px; margin: 0;">
                 <li style="margin-bottom: 8px;"><strong>Fill out your profile.</strong> A photo and a birthday go a long way — we like cake. It'll nudge you through the rest a bit at a time.</li>
                 <li style="margin-bottom: 8px;"><strong>Meet everyone.</strong> Have a read through the other members' profiles — it's a lovely head start on knowing who you're walking into a room with.</li>
@@ -264,7 +294,7 @@ serve(async (req) => {
                 <li style="margin-bottom: 8px;"><strong>Post one wish.</strong> Something you'd genuinely love help with. Start small — "I want someone to teach me three easy weeknight dinners" beats "I want to be healthier."</li>
               </ol>
 
-              <h2 style="color: #8a6b30; font-size: 15px; margin: 26px 0 8px;">Stuck? Ask Clive</h2>
+              <h2 style="color: ${headingColour}; font-size: 15px; margin: 26px 0 8px;">Stuck? Ask Clive</h2>
               <p style="font-size: 15px; margin: 0 0 12px;">Clive is the HIVE's helper, and he lives in the app — tap the sparkles. He can explain how anything works, help you put a fuzzy wish into words, tell you what happened at a meeting you missed, or just chat. He's the fastest way to get unstuck, and he doesn't mind daft questions.</p>
 
               <p style="font-size: 15px;">And if all else fails, ${inviterName || 'whoever invited you'} is a text away — ask away, no question is too small. 💛</p>

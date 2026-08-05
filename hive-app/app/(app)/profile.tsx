@@ -1685,6 +1685,26 @@ export default function ProfileScreen() {
                 </Text>
               ) : nextMissing ? (
                 <>
+                  {/* A first-timer gets told what this IS, once.
+                      Nat asked whether the welcome email should walk somebody
+                      through setting up. It should not — an email walkthrough is
+                      read once, in a different window from the thing it
+                      describes, and cannot tick anything off. This checklist has
+                      existed all along and simply never introduced itself, so a
+                      new member met a percentage with no explanation. Below 35%
+                      is, in practice, somebody who has just arrived. */}
+                  {percent < 35 ? (
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19,
+                        color: '#8a6b30', marginTop: 10, textAlign: 'center',
+                        paddingHorizontal: 16, maxWidth: 420,
+                      }}
+                    >
+                      Welcome! This is your corner of the HIVE. Fill it in a bit at a time —
+                      nothing has to be perfect, and every piece helps somebody find you.
+                    </Text>
+                  ) : null}
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348', marginTop: 8 }}>
                     {percent}% filled out
                   </Text>
