@@ -389,10 +389,19 @@ export function ComposerBar({
         {suggestionsNode}
         {taggedPills}
 
+        {/* The pill takes its colour from the page, like the ink does.
+            It was hard-coded `bg-cream` while the text followed the skin, so on
+            a dark page you got cream-white letters on a cream pill and typing
+            looked like nothing was happening at all (Nat 2026-08-05: "this text
+            box isnt working"). It was working; it was invisible. */}
         <View
-          className={`flex-row items-end rounded-2xl px-3 py-2 border ${
-            isDragActive ? 'bg-gold/10 border-gold' : 'bg-cream border-transparent'
-          }`}
+          className="flex-row items-end rounded-2xl px-3 py-2 border"
+          style={{
+            backgroundColor: isDragActive
+              ? (look === FIELD_LOOK ? 'rgba(189,147,72,0.1)' : 'rgba(255,226,166,0.16)')
+              : look.pillFill,
+            borderColor: isDragActive ? '#bd9348' : 'transparent',
+          }}
           {...enterCaptureProps}
         >
           {showAttach && (

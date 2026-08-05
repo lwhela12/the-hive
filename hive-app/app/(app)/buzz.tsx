@@ -133,7 +133,14 @@ export default function BuzzScreen() {
           {/* This month, still being written. An invitation, drawn as one. */}
           {!loading && collecting ? (
             <Pressable
-              onPress={() => router.push({ pathname: '/board', params: { post: collecting.id } } as never)}
+              // `postId`, not `post` — the boards screen reads `postId`, so the
+              // first version handed it a parameter it did not know and the
+              // screen fell back to whatever thread you had open last. Nat
+              // pressed "Add yours" and landed in HIVE Approved.
+              onPress={() => router.push({
+                pathname: '/board',
+                params: { postId: collecting.id },
+              } as never)}
               accessibilityRole="button"
               accessibilityLabel="Add something to this month's newsletter"
               style={({ pressed }) => ({

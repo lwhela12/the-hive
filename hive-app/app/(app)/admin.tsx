@@ -955,7 +955,7 @@ function LockedAdminScreen({
 }) {
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <SpaceGlobe hue="slate" />
+      <SpaceGlobe />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
@@ -2126,7 +2126,7 @@ export default function AdminScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <SpaceGlobe hue="slate" />
+      <SpaceGlobe />
 
       <ScrollView
         className="flex-1"

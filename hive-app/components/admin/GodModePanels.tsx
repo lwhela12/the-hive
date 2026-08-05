@@ -283,6 +283,22 @@ export function NewsletterPanel({
   const [subs, setSubs] = useState<Subscriber[]>([]);
   const [newEmail, setNewEmail] = useState('');
   const [adding, setAdding] = useState(false);
+  /**
+   * Three jobs, three tabs.
+   *
+   * Nat, 2026-08-05: "so this newsletter box has different tabs: who's signed
+   * up, shout outs people want mentioned & write this months newsletter?"
+   *
+   * The shout-outs tab is the one that was missing anywhere in the app. People
+   * have been asked every month to drop things in the newsletter thread, and
+   * there has never been a screen that showed what they dropped — the words went
+   * into the board and only the draft ever read them, which is also why nobody
+   * noticed the draft was reading none of them.
+   */
+  const [tab, setTab] = useState<'write' | 'shoutouts' | 'signed'>('write');
+  const [shoutOuts, setShoutOuts] = useState<
+    { id: string; content: string; created_at: string; author: string }[]
+  >([]);
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -290,6 +306,38 @@ export function NewsletterPanel({
       .select('id, email, name, unsubscribed_at')
       .order('created_at', { ascending: true });
     setSubs((data ?? []) as Subscriber[]);
+
+    // What members have actually asked to have mentioned — the replies on the
+    // newsletter thread, the same ones the draft harvests.
+    const { data: boards } = await supabase
+      .from('board_categories')
+      .select('id')
+      .eq('topic_kind', 'newsletter');
+    const boardIds = ((boards ?? []) as { id: string }[]).map((b) => b.id);
+    if (boardIds.length === 0) { setShoutOuts([]); return; }
+
+    const { data: threads } = await supabase
+      .from('board_posts')
+      .select('id, title')
+      .in('category_id', boardIds)
+      .ilike('title', '%newsletter%')
+      .order('created_at', { ascending: false })
+      .limit(3);
+    const threadIds = ((threads ?? []) as { id: string }[]).map((t) => t.id);
+    if (threadIds.length === 0) { setShoutOuts([]); return; }
+
+    const { data: replies } = await supabase
+      .from('board_replies')
+      .select('id, content, created_at, author:profiles!author_id(name)')
+      .in('post_id', threadIds)
+      .order('created_at', { ascending: false })
+      .limit(40);
+    setShoutOuts(((replies ?? []) as any[]).map((r) => ({
+      id: r.id,
+      content: String(r.content ?? '').trim(),
+      created_at: r.created_at,
+      author: r.author?.name ?? 'Someone',
+    })).filter((r) => r.content.length > 0));
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -356,20 +404,82 @@ export function NewsletterPanel({
             </Pressable>
           ) : null}
 
-          <Text
+          {/* The three jobs, as tabs. */}
+          <View
             style={{
-              fontFamily: 'Lato_700Bold',
-              fontSize: 11,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              color: '#9a8060',
-              paddingHorizontal: 14,
-              paddingTop: 14,
+              flexDirection: 'row',
+              gap: 6,
+              paddingHorizontal: 12,
+              paddingTop: 12,
+              flexWrap: 'wrap',
             }}
           >
-            Signed up ({active.length})
-          </Text>
+            {([
+              { key: 'shoutouts' as const, label: `Shout-outs (${shoutOuts.length})` },
+              { key: 'signed' as const, label: `Signed up (${active.length})` },
+            ]).map((entry) => {
+              const on = tab === entry.key;
+              return (
+                <Pressable
+                  key={entry.key}
+                  onPress={() => setTab(entry.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: on ? 'rgba(189,147,72,0.7)' : 'rgba(189,147,72,0.25)',
+                    backgroundColor: on ? '#fdf3dc' : 'transparent',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: on ? 'Lato_700Bold' : 'Lato_400Regular',
+                      fontSize: 12.5,
+                      color: on ? '#8a6b30' : '#9a8060',
+                    }}
+                  >
+                    {entry.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
+          {tab === 'shoutouts' ? (
+            <View style={{ padding: 12, gap: 8 }}>
+              {shoutOuts.length === 0 ? (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', lineHeight: 19 }}>
+                  Nobody has asked for a mention yet. What members add to the
+                  newsletter thread lands here, and goes into the draft.
+                </Text>
+              ) : shoutOuts.map((item) => (
+                <View
+                  key={item.id}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: 'rgba(222,193,129,0.45)',
+                    backgroundColor: '#fffdf5',
+                    borderRadius: 12,
+                    padding: 11,
+                    gap: 3,
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#8a6b30' }}>
+                    {item.author}
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, color: '#4b4740', lineHeight: 20 }}>
+                    {item.content}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {tab === 'signed' ? (
+          <>
           {/* Add somebody by hand — "add my dad to the newsletter" */}
           <View style={{ flexDirection: 'row', gap: 8, padding: 12, alignItems: 'center' }}>
             {/* The ink here was cream on a white field — invisible. You could
@@ -432,6 +542,8 @@ export function NewsletterPanel({
               </Pressable>
             </View>
           ))}
+          </>
+          ) : null}
         </ScrollView>
       </Panel>
     </View>
