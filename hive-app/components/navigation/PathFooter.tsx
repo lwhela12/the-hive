@@ -81,7 +81,14 @@ export function PathFooter() {
         borderTopColor: skin.border,
         // Cream inside a HIVE, space at HIVE-Wide. A hard-coded cream strip
         // would be a bright band across the bottom of the night sky.
-        backgroundColor: skin.dark ? 'rgba(255,248,233,0.05)' : '#f4f0e6',
+        // Opaque, not a wash.
+        //
+        // A 5% tint over the HIVE-Wide page put the trail on top of the bright
+        // edge of the planet, where cream-on-white is unreadable — Nat, of the
+        // strip along the bottom: "i cant read the navigational footer". A
+        // status bar has to be legible over whatever the page happens to be
+        // doing underneath it, so it stops being see-through.
+        backgroundColor: skin.dark ? '#0B0B12' : '#f4f0e6',
       }}
     >
       <Breadcrumbs items={items} compact dense tone={skin.dark ? 'dark' : 'light'} />

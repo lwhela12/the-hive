@@ -271,7 +271,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       return matches;
     }, {});
   }, [boardSearchIndex, boardSearchQuery]);
-  const listSourceCategories = activeCategories;
+  // The newsletter board is not a board you browse.
+  //
+  // It holds every issue of The Buzz plus the thread that collects shout-outs,
+  // and The Buzz is its only door. The query already excludes it; this is the
+  // second lock, because Nat saw it in the grid anyway and a stale cache is
+  // enough to put it back. She was clear: "i'm feeling very confident right now
+  // that we dont want a newsletter board."
+  const listSourceCategories = activeCategories.filter(
+    (category) => (category as { topic_kind?: string | null }).topic_kind !== 'newsletter',
+  );
   const visibleCategories = boardSearchQuery
     ? listSourceCategories
         .filter((category) => (
@@ -1795,7 +1804,9 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
               searchMatches={boardSearchQuery ? boardSearchMatchesByCategory : undefined}
               emptyLabel={boardSearchQuery
                 ? `No boards or threads found for "${boardSearch.trim()}".`
-                : 'No boards here yet.'}
+                : isWide
+                  ? 'Nothing is shared HIVE-Wide yet. Every board still belongs to the HIVE that made it — worth deciding together which ones we all want.'
+                  : 'No boards here yet.'}
             />
           </View>
         )}

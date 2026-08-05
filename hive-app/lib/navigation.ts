@@ -101,7 +101,15 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   // (migration 142), so there is nothing up here to point at. `wideRoute` stays
   // written down: the screen still exists and works, and this is the boards
   // changing their minds rather than the idea leaving the app.
-  { key: 'boards', label: 'Boards', emoji: '📋', route: '/board', gate: 'everyone', atWholeHive: 'hidden', wideRoute: '/hive-wide-boards' },
+  // Boards shows at HIVE-Wide, and shows nothing.
+  //
+  // It was hidden up here, which was tidy and slightly dishonest: the shared
+  // boards are genuinely empty — every board in the app still belongs to the
+  // HIVE that made it — and hiding the door made that look like a missing
+  // feature rather than a decision nobody has taken yet. Nat, 2026-08-05: "we
+  // COULD have a boards button on the HIVE-Wide nav side & just say 'nothing
+  // here yet' ... the better move is to ask my HIVErs at the meeting."
+  { key: 'boards', label: 'Boards', emoji: '📋', route: '/board', gate: 'everyone', atWholeHive: 'wide', wideRoute: '/hive-wide-boards' },
   // Out of HIVE-Wide for now, at Nat's call (2026-08-03): "if you want to
   // message HIVE-Wide, you can just do so from your regular message spot for
   // now." Standing above the HIVEs, the list could only ever hold one entry —

@@ -51,7 +51,7 @@ type Buzz = {
 };
 
 export default function BuzzScreen() {
-  const { communityId, memberships } = useAuth();
+  const { communityId, memberships, switchCommunity } = useAuth();
   // The Buzz lives at HIVE-Wide and nowhere else (Nat 2026-08-03), so it is
   // always dressed for space rather than following whoever opened it.
   const skin = SPACE_SKIN;
@@ -133,14 +133,24 @@ export default function BuzzScreen() {
           {/* This month, still being written. An invitation, drawn as one. */}
           {!loading && collecting ? (
             <Pressable
-              // `postId`, not `post` — the boards screen reads `postId`, so the
-              // first version handed it a parameter it did not know and the
-              // screen fell back to whatever thread you had open last. Nat
-              // pressed "Add yours" and landed in HIVE Approved.
-              onPress={() => router.push({
-                pathname: '/board',
-                params: { postId: collecting.id },
-              } as never)}
+              /**
+               * Step into the HIVE that owns the thread first.
+               *
+               * `/board` is one HIVE's boards, and Boards is deliberately hidden
+               * at HIVE-Wide — but this link pushed straight there anyway. So
+               * pressing it while standing at HIVE-Wide showed OG's own boards
+               * under a header that still said HIVE-WIDE, which read as "all of
+               * OG's boards have been shared with everybody" (Nat 2026-08-05:
+               * "none of these boards should be on HIVE-Wide yet"). Nothing had
+               * been shared — every board in the database is still its own
+               * HIVE's — the page was just the wrong page to be on.
+               */
+              onPress={async () => {
+                if (collecting.community_id && collecting.community_id !== communityId) {
+                  await switchCommunity(collecting.community_id);
+                }
+                router.push({ pathname: '/board', params: { postId: collecting.id } } as never);
+              }}
               accessibilityRole="button"
               accessibilityLabel="Add something to this month's newsletter"
               style={({ pressed }) => ({
@@ -194,7 +204,14 @@ export default function BuzzScreen() {
               <View
                 key={item.id}
                 style={{
-                  backgroundColor: skin.card,
+                  // Opaque on the dark page, not a 5% wash.
+                  //
+                  // A whole newsletter is a long read, and this page is a
+                  // photograph of a sunrise — over the bright edge of the planet
+                  // the letter simply disappeared (Nat: "i also cant read the
+                  // news letter"). A card you glance at can float; a card you
+                  // READ needs ground under it.
+                  backgroundColor: skin.dark ? '#12131A' : skin.card,
                   borderWidth: 1,
                   borderColor: skin.border,
                   borderRadius: 18,
