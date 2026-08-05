@@ -377,11 +377,23 @@ serve(async (req) => {
     const harvest = async (match: RegExp, limit = 30) => {
       const thread = posts.find((row) => match.test(row.title ?? ''));
       if (!thread) return [] as { name: string; content: string }[];
+      // Posting in THIS thread is the consent.
+      //
+      // This asked for `share_scope = 'public'`, and nothing in the app has
+      // ever set that: all 218 replies in the database are 'hive', which is the
+      // column's default and the only value any composer writes. So the harvest
+      // has always come back empty, and the thread that says "drop it in this
+      // thread and it goes straight into the newsletter" has never once been
+      // telling the truth.
+      //
+      // The extra flag was the wrong shape for this. These threads are created
+      // by the app with copy that states exactly where the words are going —
+      // that IS the informed choice, made when you type the reply, not a second
+      // switch nobody was ever shown.
       const { data } = await supabaseAdmin
         .from('board_replies')
         .select('content, created_at, author_id, share_scope')
         .eq('post_id', thread.id)
-        .eq('share_scope', 'public')
         .gte('created_at', startIso)
         .order('created_at', { ascending: true })
         .limit(limit);
@@ -402,11 +414,12 @@ serve(async (req) => {
           /helper/i.test(row.category?.name ?? '') && !/ideas/i.test(row.title ?? '')
         ));
         if (!focusThread) return [] as { name: string; content: string }[];
+        // Same as above — the HIVE Helpers board says on its face that what you
+        // log there goes into recaps and newsletters.
         const { data } = await supabaseAdmin
           .from('board_replies')
           .select('content, created_at, author_id, share_scope')
           .eq('post_id', focusThread.id)
-          .eq('share_scope', 'public')
           .gte('created_at', startIso)
           .order('created_at', { ascending: true })
           .limit(30);

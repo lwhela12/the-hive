@@ -28,6 +28,20 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-06-show-me-hive-wide',
+    date: '2026-08-05',
+    title: 'Want the other HIVEs to be able to find you?',
+    detail: 'One switch in your settings. It is off for everyone until they turn it on, which is why the HIVE-Wide member list looks empty.',
+    href: { pathname: '/settings' },
+    action: 'Open your settings',
+  },
+  {
+    id: '2026-08-06-newsletter-actually-collects',
+    date: '2026-08-05',
+    title: 'What you add to the newsletter thread now reaches the newsletter',
+    detail: 'It has been asking for shout-outs all along and quietly collecting none of them.',
+  },
+  {
     id: '2026-08-06-swarm-across-hives',
     date: '2026-08-05',
     title: 'The Swarm Report works across HIVEs now',

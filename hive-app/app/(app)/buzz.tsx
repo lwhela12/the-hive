@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
@@ -11,6 +12,9 @@ import { formatDateLong } from '../../lib/dateUtils';
 import { SPACE_SKIN } from '../../lib/pageSkin';
 import { LetterProse, type LetterPalette } from './newsletter';
 import type { Community } from '../../types';
+
+/** How the app's own "still collecting" thread introduces itself. */
+const BREWING = /newsletter's brewing/i;
 
 /**
  * The letter colours for space. The Buzz hangs in the same near-black as
@@ -51,7 +55,10 @@ export default function BuzzScreen() {
   // The Buzz lives at HIVE-Wide and nowhere else (Nat 2026-08-03), so it is
   // always dressed for space rather than following whoever opened it.
   const skin = SPACE_SKIN;
+  const router = useRouter();
   const [items, setItems] = useState<Buzz[]>([]);
+  /** This month's collecting thread, kept out of the archive of sent letters. */
+  const [collecting, setCollecting] = useState<Buzz | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -78,8 +85,22 @@ export default function BuzzScreen() {
       .limit(40);
 
     const rows = (data ?? []) as unknown as Buzz[];
-    setItems(rows);
-    setOpenId((current) => current ?? rows[0]?.id ?? null);
+
+    // The month that is still collecting is NOT an issue of the newsletter.
+    //
+    // Nat, 2026-08-05: "will this always look like this... the whole month
+    // leading up to that, does it look like this? like its brewing? I think the
+    // 'brewing' view isn't nice."
+    //
+    // It was sitting at the top of the archive wearing the same card as the
+    // finished letters, so an invitation to add something looked like an issue
+    // you had already missed. It is an invitation, so it is drawn like one, and
+    // the archive underneath is only letters that were actually sent.
+    const brewing = rows.find((row) => BREWING.test(row.content ?? ''));
+    setCollecting(brewing ?? null);
+    const archive = brewing ? rows.filter((row) => row.id !== brewing.id) : rows;
+    setItems(archive);
+    setOpenId((current) => current ?? archive[0]?.id ?? null);
     setLoading(false);
   }, []);
 
@@ -107,7 +128,47 @@ export default function BuzzScreen() {
             <View style={{ paddingVertical: 48 }}>
               <ThinkingBee />
             </View>
-          ) : items.length === 0 ? (
+          ) : null}
+
+          {/* This month, still being written. An invitation, drawn as one. */}
+          {!loading && collecting ? (
+            <Pressable
+              onPress={() => router.push({ pathname: '/board', params: { post: collecting.id } } as never)}
+              accessibilityRole="button"
+              accessibilityLabel="Add something to this month's newsletter"
+              style={({ pressed }) => ({
+                borderRadius: 16,
+                borderWidth: 1,
+                borderStyle: 'dashed',
+                borderColor: 'rgba(255,226,166,0.45)',
+                backgroundColor: pressed ? 'rgba(255,248,233,0.1)' : 'rgba(255,248,233,0.05)',
+                padding: 16,
+                marginBottom: 18,
+                gap: 6,
+              })}
+            >
+              <Text
+                style={{
+                  fontFamily: 'Lato_700Bold', fontSize: 10.5, letterSpacing: 1.1,
+                  textTransform: 'uppercase', color: '#E8C77E',
+                }}
+              >
+                Still being written
+              </Text>
+              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: skin.ink }}>
+                {collecting.title}
+              </Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, lineHeight: 20, color: skin.inkSoft }}>
+                Want a shout-out, a plug, or a reminder in it? Add it here and it goes
+                into the letter.
+              </Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#E8C77E', marginTop: 2 }}>
+                Add yours →
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {loading ? null : items.length === 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: 56 }}>
               <Text style={{ fontSize: 34, marginBottom: 12 }}>📰</Text>
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: skin.ink, marginBottom: 6 }}>
