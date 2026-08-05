@@ -1,1221 +1,535 @@
-# H.I.V.E. - AI-Powered Wish Coordination App
+# HIVE — how this app works, and how to work on it
 
-## Project Overview
+This file is loaded at the start of every session. It describes the app **as it
+is today**, not as it was designed. Last rewritten **2026-08-05**.
 
-H.I.V.E. is a mobile + web application for a 12-person community that practices "high-definition wishing" - a framework where AI helps people articulate what they actually want beneath surface-level desires, then matches wishes to the skills and capabilities of other community members.
+If something here disagrees with the code, the code wins — and then fix this
+file. The last version of this document was the day-one build plan, and it was
+still telling sessions to build features that had been deliberately removed.
 
-### Core Philosophy
+**Read the current state before you change anything.** The living record is in
+Nat's brain folder, not in this repo:
 
-1. **High-Definition Wishing**: Vague desires ("I want to be healthier") get refined through AI conversation into actionable wishes ("I want someone to teach me three 20-minute meals I can meal-prep on Sundays")
-
-2. **Asymmetry Preserves the Engine**: Wishing feels vulnerable, granting feels powerful. The system leverages this - everyone wants to be the fairy godmother.
-
-3. **Floors, Not Ceilings**: People specify "enough" (what I need), not "maximum" (what I can extract).
-
-4. **Queen Bee Month**: Each member gets one month where the community focuses energy on their project/wishes. This solves the cold-start problem for a small group.
-
-5. **The Agent is Always Listening**: Every conversation is an opportunity to surface latent wishes. The chat interface is primary; the "board" of wishes is the refined output.
-
----
-
-## Tech Stack
-
-### Core
-- **Framework**: Expo (React Native) - single codebase for iOS + Web
-- **Language**: TypeScript
-- **Backend**: Supabase (Auth, Database, Storage, Realtime, Edge Functions)
-- **AI**: Claude API with tool use
-- **Styling**: NativeWind (Tailwind for React Native)
-
-### Integrations
-- **Auth**: Google OAuth via Supabase
-- **Calendar**: Google Calendar API (read/write sync)
-- **Transcription**: AssemblyAI (with speaker diarization)
-- **Email**: Resend
-- **Hosting**: Vercel (web), Expo EAS (iOS builds)
-
-### Why These Choices
-- Expo: Single codebase → iOS App Store + Web. Excellent audio recording support. Expo Go for instant testing.
-- Supabase: Auth + DB + Storage + Realtime in one. Generous free tier. Row-level security for privacy.
-- NativeWind: Familiar Tailwind syntax, works on both native and web.
+- `~/Library/Mobile Documents/com~apple~CloudDocs/Documents/Hermes_Brain/Productization_of_Nats_Life/Current_Projects/HIVE/PROJECT.md`
+- the newest file in that folder's `Receipts/` — start with the most recent
+  `*_SESSION_HANDOFF.md`. It says what shipped, what is live, and what to do
+  next.
+- `AGENTS.md` in this repo, for the day-to-day working rules.
 
 ---
 
-## Project Structure
+## What HIVE is
 
-```
-hive-app/
-├── app/                          # Expo Router (file-based routing)
-│   ├── (auth)/                   # Auth group (login, etc.)
-│   │   └── login.tsx
-│   ├── (app)/                    # Authenticated app group
-│   │   ├── _layout.tsx           # Tab navigator
-│   │   ├── index.tsx             # Main chat interface
-│   │   ├── hive.tsx              # "Check on HIVE" view
-│   │   ├── meetings.tsx          # Meeting history
-│   │   ├── profile.tsx           # User profile/settings
-│   │   └── admin.tsx             # Admin panel (role-gated)
-│   ├── onboarding/               # Onboarding flow
-│   │   ├── welcome.tsx
-│   │   ├── info.tsx
-│   │   ├── skills.tsx
-│   │   └── wishes.tsx
-│   └── _layout.tsx               # Root layout
-├── components/
-│   ├── chat/
-│   │   ├── ChatInterface.tsx     # Main chat component
-│   │   ├── MessageBubble.tsx
-│   │   └── TypingIndicator.tsx
-│   ├── hive/
-│   │   ├── QueenBeeCard.tsx
-│   │   ├── WishCard.tsx
-│   │   ├── WishBoard.tsx
-│   │   └── HoneyPotDisplay.tsx
-│   ├── meetings/
-│   │   ├── AudioRecorder.tsx
-│   │   ├── MeetingSummary.tsx
-│   │   └── ActionItemList.tsx
-│   ├── calendar/
-│   │   └── EventList.tsx
-│   └── ui/                       # Shared UI components
-│       ├── Button.tsx
-│       ├── Card.tsx
-│       ├── Input.tsx
-│       └── Avatar.tsx
-├── lib/
-│   ├── supabase.ts               # Supabase client
-│   ├── claude.ts                 # Claude API client with tools
-│   ├── assemblyai.ts             # Transcription client
-│   ├── google-calendar.ts        # Calendar sync
-│   ├── notifications.ts          # Email via Resend
-│   └── hooks/
-│       ├── useUser.ts
-│       ├── useChat.ts
-│       ├── useWishes.ts
-│       └── useQueenBee.ts
-├── types/
-│   └── index.ts                  # TypeScript types matching DB schema
-├── supabase/
-│   ├── migrations/
-│   │   └── 001_initial_schema.sql
-│   └── functions/
-│       ├── chat/                 # Claude chat endpoint
-│       ├── transcribe/           # AssemblyAI webhook handler
-│       └── notify/               # Email notifications
-├── assets/
-├── app.json                      # Expo config
-├── tailwind.config.js
-├── tsconfig.json
-└── package.json
-```
+HIVE is a warm, small-community app that Nat and Lucas run. Members write down
+what they are working on and what they need help with; other members help.
 
----
+**There are several HIVEs, not one.** OG HIVE is the original (Las Vegas, keeps
+the internal slug `default`). Tech HIVE and Production HIVE are separate
+communities with their own members, meetings, boards and rhythm. More are
+expected. **There is no member cap** — the old "12-person community" framing is
+dead, and no code, copy or prompt should ever quote a member count.
 
-## Database Schema
+Each HIVE is a row in `communities`. A person belongs to one or more through
+`community_memberships`. Almost everyone belongs to exactly one.
 
-Use this SQL to initialize Supabase:
+### HIVE-Wide
 
-```sql
--- Enable UUID extension
-create extension if not exists "uuid-ossp";
+**HIVE-Wide is the view above all the HIVEs** — a shared high street where you
+can see what every HIVE is up to. Everybody lands there when they arrive; you
+step down into your own HIVE when you want to.
 
--- ENUM types
-create type user_role as enum ('member', 'treasurer', 'admin');
-create type wish_status as enum ('private', 'public', 'fulfilled', 'replaced');
-create type queen_bee_status as enum ('upcoming', 'active', 'completed');
-create type event_type as enum ('meeting', 'queen_bee', 'birthday', 'custom');
-create type notification_type as enum ('wish_match', 'meeting_summary', 'queen_bee_update', 'action_item', 'general');
-create type extraction_source as enum ('chat', 'onboarding', 'meeting', 'manual');
+Two things to hold onto:
 
--- Users table (extends Supabase auth.users)
-create table public.profiles (
-  id uuid references auth.users on delete cascade primary key,
-  name text not null,
-  email text not null,
-  phone text,
-  preferred_contact text default 'email',
-  birthday date,
-  role user_role default 'member',
-  queen_bee_month text, -- Format: '2025-03'
-  google_calendar_id text,
-  google_refresh_token text, -- Encrypted
-  avatar_url text,
-  onboarded_at timestamptz,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
+1. **HIVE-Wide is a MODE, never a community id.** There is no row for it and
+   there must not be — a pretend HIVE would have every query in the app asking
+   a real database for an imaginary place. It lives in the auth context as
+   `wholeHive` (see `lib/hooks/useAuth.ts`), and persists for the browser tab's
+   lifetime via `lib/hiveSelection.ts`.
+2. **It sits under "My HIVEs" alongside the real ones**, not in a section of its
+   own. That was Nat's call and it removed a whole special case: one page list
+   serves whichever place you are standing in, so a new feature gets added once
+   instead of twice.
 
--- Skills (user capabilities, HD articulated)
-create table public.skills (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references public.profiles(id) on delete cascade not null,
-  description text not null, -- HD articulated version
-  raw_input text, -- What they originally said
-  extracted_from extraction_source default 'chat',
-  created_at timestamptz default now()
-);
+Every navigation destination declares what it does up there — see
+`atWholeHive` in `lib/navigation.ts`:
 
--- Wishes
-create table public.wishes (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references public.profiles(id) on delete cascade not null,
-  description text not null, -- HD articulated version
-  raw_input text, -- Original problem/desire
-  status wish_status default 'private',
-  is_active boolean default false, -- Only one active public wish per user
-  extracted_from extraction_source default 'chat',
-  fulfilled_by uuid references public.profiles(id),
-  created_at timestamptz default now(),
-  fulfilled_at timestamptz,
-  replaced_at timestamptz
-);
+| value | meaning | examples |
+|---|---|---|
+| `same` | means the same thing wherever you stand | App Feedback, Log out |
+| `wide` | has a real all-HIVEs version, at `wideRoute` if it needs a different door | Home, Members |
+| `hidden` | only means something inside one HIVE | Clive, Meetings, Honey Pot, Profile, Settings, Boards, Messages |
+| `only` | lives at HIVE-Wide and nowhere else | The Buzz |
 
--- Queen Bee periods
-create table public.queen_bees (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references public.profiles(id) on delete cascade not null,
-  month text not null unique, -- Format: '2025-03'
-  project_title text not null,
-  project_description text,
-  status queen_bee_status default 'upcoming',
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
+The name is **"HIVE-Wide"**, hyphenated, never "All HIVEs".
 
--- Queen Bee updates (from QB or other members)
-create table public.queen_bee_updates (
-  id uuid default uuid_generate_v4() primary key,
-  queen_bee_id uuid references public.queen_bees(id) on delete cascade not null,
-  user_id uuid references public.profiles(id) on delete cascade not null,
-  content text not null,
-  created_at timestamptz default now()
-);
+### The scope ladder
 
--- Meetings
-create table public.meetings (
-  id uuid default uuid_generate_v4() primary key,
-  date date not null,
-  audio_url text, -- Supabase Storage path
-  transcript_raw text, -- Full text with speaker labels
-  transcript_attributed text, -- Cleaned with names
-  summary text, -- AI-generated
-  recorded_by uuid references public.profiles(id),
-  processing_status text default 'pending', -- pending, transcribing, summarizing, complete, failed
-  created_at timestamptz default now()
-);
+Anything shareable in HIVE sits on one of three rungs. The vocabulary lives in
+`lib/hiveWide.ts` (`SCOPE_LADDER`) and the visual system in `lib/scopeLook.ts`.
 
--- Meeting action items
-create table public.action_items (
-  id uuid default uuid_generate_v4() primary key,
-  meeting_id uuid references public.meetings(id) on delete cascade not null,
-  description text not null,
-  assigned_to uuid references public.profiles(id),
-  due_date date,
-  completed boolean default false,
-  completed_at timestamptz,
-  created_at timestamptz default now()
-);
+| rung | key | who sees it |
+|---|---|---|
+| This HIVE only | `hive` | the people you joined with — where everything starts |
+| HIVE-Wide | `all_hives` | everyone in every HIVE |
+| Public | `public` | the newsletter and the-hive.app, where anyone can read it |
 
--- Honey Pot (community fund)
-create table public.honey_pot (
-  id uuid default uuid_generate_v4() primary key,
-  balance decimal(10,2) default 0,
-  updated_by uuid references public.profiles(id),
-  updated_at timestamptz default now()
-);
+Two facts are kept apart on purpose: **whose it is** (a filled hexagon in that
+HIVE's colour — `HiveMark`) and **how far it goes** (`WorldMark`, the Earth,
+drawn in the near-black `#0B0B12` that no HIVE owns — the same colour the rail
+and the HIVE-Wide header use). Something that stays home wears only its hexagon;
+the world only appears once it has left. Public is that same black filled in
+rather than outlined, so the ladder reads as weight before anybody reads a word.
 
--- Honey Pot transactions
-create table public.honey_pot_transactions (
-  id uuid default uuid_generate_v4() primary key,
-  amount decimal(10,2) not null,
-  transaction_type text not null, -- 'deposit', 'withdrawal', 'adjustment'
-  note text,
-  recorded_by uuid references public.profiles(id),
-  created_at timestamptz default now()
-);
+A green was used for this until 2026-08-03 and is retired. `HIVE_WIDE_GREEN` is
+still exported from `lib/scopeLook.ts` as deprecated; nothing new should use it.
 
--- Calendar events
-create table public.events (
-  id uuid default uuid_generate_v4() primary key,
-  title text not null,
-  description text,
-  event_date date not null,
-  event_time time,
-  event_type event_type default 'custom',
-  google_event_id text, -- For sync
-  related_user_id uuid references public.profiles(id), -- For birthdays
-  related_queen_bee_id uuid references public.queen_bees(id),
-  created_by uuid references public.profiles(id),
-  created_at timestamptz default now()
-);
+Columns that carry this: `wishes.share_scope`, `board_categories.reach`,
+`chat_rooms.reach`, `profiles.profile_scope`. Events say `members` and wishes
+say `hive` for the same rung — `normaliseScope()` in `lib/scopeLook.ts` folds
+them together. **Each HIVE also has a ceiling**, `communities.max_share_scope`
+(migration 125): nothing in that HIVE may travel further than its ceiling
+allows, whatever an individual member picks.
 
--- Notifications
-create table public.notifications (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references public.profiles(id) on delete cascade not null,
-  notification_type notification_type not null,
-  title text not null,
-  content text,
-  related_wish_id uuid references public.wishes(id),
-  related_meeting_id uuid references public.meetings(id),
-  related_action_item_id uuid references public.action_items(id),
-  read_at timestamptz,
-  email_sent boolean default false,
-  created_at timestamptz default now()
-);
-
--- Chat history (for context)
-create table public.chat_messages (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references public.profiles(id) on delete cascade not null,
-  role text not null, -- 'user' or 'assistant'
-  content text not null,
-  tool_calls jsonb, -- Store any tool calls made
-  created_at timestamptz default now()
-);
-
--- Row Level Security Policies
-alter table public.profiles enable row level security;
-alter table public.skills enable row level security;
-alter table public.wishes enable row level security;
-alter table public.queen_bees enable row level security;
-alter table public.queen_bee_updates enable row level security;
-alter table public.meetings enable row level security;
-alter table public.action_items enable row level security;
-alter table public.honey_pot enable row level security;
-alter table public.honey_pot_transactions enable row level security;
-alter table public.events enable row level security;
-alter table public.notifications enable row level security;
-alter table public.chat_messages enable row level security;
-
--- Profiles: Users can read all, update own
-create policy "Profiles are viewable by authenticated users" on public.profiles
-  for select using (auth.role() = 'authenticated');
-create policy "Users can update own profile" on public.profiles
-  for update using (auth.uid() = id);
-
--- Skills: Users can read all, manage own
-create policy "Skills are viewable by authenticated users" on public.skills
-  for select using (auth.role() = 'authenticated');
-create policy "Users can insert own skills" on public.skills
-  for insert with check (auth.uid() = user_id);
-create policy "Users can update own skills" on public.skills
-  for update using (auth.uid() = user_id);
-
--- Wishes: Users can read public wishes and own private wishes
-create policy "Users can read public wishes" on public.wishes
-  for select using (status = 'public' or auth.uid() = user_id);
-create policy "Users can manage own wishes" on public.wishes
-  for all using (auth.uid() = user_id);
-
--- Queen Bees: All authenticated can read, admins can manage
-create policy "Queen bees viewable by all" on public.queen_bees
-  for select using (auth.role() = 'authenticated');
-create policy "Admins can manage queen bees" on public.queen_bees
-  for all using (
-    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
-  );
-
--- Queen Bee Updates: All can read, authenticated can insert
-create policy "QB updates viewable by all" on public.queen_bee_updates
-  for select using (auth.role() = 'authenticated');
-create policy "Authenticated can add QB updates" on public.queen_bee_updates
-  for insert with check (auth.role() = 'authenticated');
-
--- Meetings: All authenticated can read and manage
-create policy "Meetings viewable by all" on public.meetings
-  for select using (auth.role() = 'authenticated');
-create policy "Authenticated can manage meetings" on public.meetings
-  for all using (auth.role() = 'authenticated');
-
--- Action Items: All can read, assigned user or admin can update
-create policy "Action items viewable by all" on public.action_items
-  for select using (auth.role() = 'authenticated');
-create policy "Assigned user can update action items" on public.action_items
-  for update using (auth.uid() = assigned_to);
-
--- Honey Pot: All can read, treasurer can manage
-create policy "Honey pot viewable by all" on public.honey_pot
-  for select using (auth.role() = 'authenticated');
-create policy "Treasurer can update honey pot" on public.honey_pot
-  for update using (
-    exists (select 1 from public.profiles where id = auth.uid() and role in ('treasurer', 'admin'))
-  );
-
--- Honey Pot Transactions: All can read, treasurer can insert
-create policy "Transactions viewable by all" on public.honey_pot_transactions
-  for select using (auth.role() = 'authenticated');
-create policy "Treasurer can add transactions" on public.honey_pot_transactions
-  for insert with check (
-    exists (select 1 from public.profiles where id = auth.uid() and role in ('treasurer', 'admin'))
-  );
-
--- Events: All can read and manage
-create policy "Events viewable by all" on public.events
-  for select using (auth.role() = 'authenticated');
-create policy "Authenticated can manage events" on public.events
-  for all using (auth.role() = 'authenticated');
-
--- Notifications: Users can only see own
-create policy "Users see own notifications" on public.notifications
-  for select using (auth.uid() = user_id);
-create policy "System can create notifications" on public.notifications
-  for insert with check (true); -- Edge functions handle creation
-
--- Chat Messages: Users can only see own
-create policy "Users see own chat history" on public.chat_messages
-  for select using (auth.uid() = user_id);
-create policy "Users can insert own messages" on public.chat_messages
-  for insert with check (auth.uid() = user_id);
-
--- Initialize honey pot with single row
-insert into public.honey_pot (balance) values (0);
-
--- Function to ensure only one active public wish per user
-create or replace function check_active_wish()
-returns trigger as $$
-begin
-  if NEW.status = 'public' and NEW.is_active = true then
-    update public.wishes 
-    set is_active = false, status = 'replaced', replaced_at = now()
-    where user_id = NEW.user_id 
-      and id != NEW.id 
-      and is_active = true;
-  end if;
-  return NEW;
-end;
-$$ language plpgsql;
-
-create trigger ensure_single_active_wish
-  before insert or update on public.wishes
-  for each row execute function check_active_wish();
-
--- Function to auto-create birthday events
-create or replace function create_birthday_event()
-returns trigger as $$
-begin
-  if NEW.birthday is not null and (OLD.birthday is null or OLD.birthday != NEW.birthday) then
-    -- Delete existing birthday event for this user
-    delete from public.events where related_user_id = NEW.id and event_type = 'birthday';
-    -- Create new birthday event
-    insert into public.events (title, event_date, event_type, related_user_id)
-    values (
-      NEW.name || '''s Birthday',
-      NEW.birthday,
-      'birthday',
-      NEW.id
-    );
-  end if;
-  return NEW;
-end;
-$$ language plpgsql;
-
-create trigger auto_birthday_event
-  after insert or update on public.profiles
-  for each row execute function create_birthday_event();
-```
+Anything unrecognised falls back to `hive`. The safe end of the ladder is always
+the one that travels least.
 
 ---
 
-## Claude Agent Configuration
+## Clive
 
-The chat agent is the heart of the application. It should feel like a helpful friend who happens to have perfect memory and can take action.
+The in-app assistant is called **Clive**. He lives in the edge function
+`hive-app/supabase/functions/chat/index.ts` — the system prompt is the
+`SYSTEM_PROMPT` constant at the top of that file, and the ~23 tool definitions
+start around line 398 in the same file. **That file is the only place Clive's
+beliefs live.** Change it there.
 
-### System Prompt
+What Clive currently knows and does:
 
-```
-You are HIVE's assistant, an AI helper for a close-knit community of 12 people practicing "high-definition wishing."
+- He is always speaking **inside exactly one HIVE** — the one in his context —
+  and knows only that HIVE's people, wishes and history. He knows there are
+  several HIVEs, and he is told never to quote a member count.
+- He does not operate at HIVE-Wide. Asked about it, he explains what it is and
+  points at it.
+- He runs "high-definition wishing": helping someone turn a vague desire into a
+  specific, actionable, bounded one. He always reflects a wish back and gets an
+  explicit yes before saving it.
+- He can act, not just chat: save and publish wishes, post to boards and reply
+  in threads on the member's behalf (everything posts under **their** name),
+  read meeting summaries, search action items and board posts, and update
+  profile fields.
+- Wider changes to shared state go through a **two-step safety flow**:
+  `propose_app_actions` first, then `apply_pending_actions` only after the
+  member's next message clearly approves it. Never both in one response.
+- He can see boards, visible wishes, skills, events, meetings and the Honey Pot.
+  He **cannot** see DMs, group DMs or private rooms, and is told to say so.
+- Models: `claude-haiku-4-5` for ordinary chat, `claude-sonnet-5` for wish
+  refinement and app stewardship (`selectChatModel`). Sonnet 5 thinks by
+  default, so the deep path gets a much larger `max_tokens` — a small cap would
+  be eaten by reasoning and truncate the reply.
 
-Your primary role is to help users articulate what they actually want. People often express vague desires ("I want to be healthier") or surface-level wants ("I want a new car"). Your job is to help them discover the underlying desire through curious, gentle questioning.
+**Queen Bee is retired.** The idea — one member a month getting the community's
+focus — is gone. Clive's prompt has an explicit instruction saying so, and
+telling him what replaced it: every member's HD wish is live at once, the
+monthly check-in gathers what everyone is working on, and HIVE Help is the
+shared act of kindness each month.
 
-## Core Behaviors
+> **A retired feature that is still a callable tool is not retired.** On
+> 2026-08-04 someone had to surgically remove `get_current_queen_bee`,
+> `add_queen_bee_update` and the `queen_bee_preference` write from the live
+> assistant, because he was still perfectly able to use them. Do not
+> reintroduce them. Do not add a tool for anything the product no longer does.
 
-1. **Always be conversational first.** You're not a form to fill out. Chat naturally. Let wishes and skills emerge organically.
+### Queen Bee leftovers still in the tree
 
-2. **Listen for latent wishes.** When someone says "I'm having a rough day" - that might lead to a wish. When they say "I wish someone could help me with X" - that's definitely a wish. Probe gently.
+These are dead or near-dead and should not be built on. Deleting them is welcome
+work; adding to them is not.
 
-3. **High-definition means specific and actionable.** 
-   - Low definition: "I want to learn to cook"
-   - High definition: "I want someone to teach me 3 easy weeknight dinners I can make in under 30 minutes, starting with pasta dishes"
-
-4. **Never push wishes public.** When a wish is well-articulated, ASK if they want to share it with HIVE. Respect if they say no.
-
-5. **You have tools.** Use them naturally. Don't announce "I'm going to use my store_skill tool now." Just do it and confirm conversationally: "Got it, I've noted that you're great at [skill]."
-
-6. **You know the community.** You can see everyone's public wishes and skills. When relevant, mention potential matches: "You know, Sarah mentioned she's been wanting to learn exactly that..."
-
-7. **The Queen Bee is special.** The current Queen Bee's project takes priority. Look for ways to help their project through the conversation.
-
-8. **Consolidation over accumulation.** Help users refine and combine wishes rather than accumulating a long list. Quality over quantity.
-
-## Conversation Starters
-
-If the user seems unsure what to talk about:
-- "How's your week going? Anything on your mind?"
-- "I was thinking about your wish for [X] - any progress or changes?"
-- "Did you know [Queen Bee] is working on [project]? Any thoughts on how you might help?"
-
-## What NOT to Do
-
-- Don't be sycophantic or overly enthusiastic
-- Don't lecture about the "high definition wishing framework" 
-- Don't create wishes without the user's explicit involvement
-- Don't share private wishes with others
-- Don't make the user feel like they're being processed
-```
-
-### Agent Tools
-
-Define these tools for Claude's function calling:
-
-```typescript
-const agentTools = [
-  {
-    name: "store_skill",
-    description: "Store a skill/capability that the user has mentioned they possess. Use this when a user describes something they're good at or enjoy doing. The skill should be stored in high-definition (specific, actionable).",
-    input_schema: {
-      type: "object",
-      properties: {
-        description: {
-          type: "string",
-          description: "The HD-articulated skill description"
-        },
-        raw_input: {
-          type: "string", 
-          description: "What the user originally said"
-        }
-      },
-      required: ["description", "raw_input"]
-    }
-  },
-  {
-    name: "store_wish",
-    description: "Store a wish that has emerged from conversation. Only use when the wish is reasonably well-articulated. Wishes start as private.",
-    input_schema: {
-      type: "object",
-      properties: {
-        description: {
-          type: "string",
-          description: "The HD-articulated wish"
-        },
-        raw_input: {
-          type: "string",
-          description: "The original problem or desire expressed"
-        }
-      },
-      required: ["description", "raw_input"]
-    }
-  },
-  {
-    name: "publish_wish",
-    description: "Make a wish public to HIVE. Only call this after explicit user confirmation. This replaces any existing active public wish.",
-    input_schema: {
-      type: "object",
-      properties: {
-        wish_id: {
-          type: "string",
-          description: "The UUID of the wish to publish"
-        }
-      },
-      required: ["wish_id"]
-    }
-  },
-  {
-    name: "get_user_wishes",
-    description: "Retrieve the current user's wishes (both private and public)",
-    input_schema: {
-      type: "object",
-      properties: {}
-    }
-  },
-  {
-    name: "get_user_skills",
-    description: "Retrieve the current user's stored skills",
-    input_schema: {
-      type: "object",
-      properties: {}
-    }
-  },
-  {
-    name: "get_public_wishes",
-    description: "Get all public wishes from other HIVE members. Use to find matches or inform the user about community needs.",
-    input_schema: {
-      type: "object",
-      properties: {}
-    }
-  },
-  {
-    name: "get_all_skills",
-    description: "Get all skills from all HIVE members. Use to find potential matches for wishes.",
-    input_schema: {
-      type: "object",
-      properties: {}
-    }
-  },
-  {
-    name: "get_current_queen_bee",
-    description: "Get information about the current Queen Bee and their project",
-    input_schema: {
-      type: "object",
-      properties: {}
-    }
-  },
-  {
-    name: "add_queen_bee_update",
-    description: "Add an update/note to the current Queen Bee's project",
-    input_schema: {
-      type: "object",
-      properties: {
-        content: {
-          type: "string",
-          description: "The update content"
-        }
-      },
-      required: ["content"]
-    }
-  },
-  {
-    name: "get_upcoming_events",
-    description: "Get upcoming calendar events for HIVE",
-    input_schema: {
-      type: "object",
-      properties: {
-        limit: {
-          type: "number",
-          description: "Number of events to retrieve (default 5)"
-        }
-      }
-    }
-  },
-  {
-    name: "get_honey_pot",
-    description: "Get the current Honey Pot balance",
-    input_schema: {
-      type: "object",
-      properties: {}
-    }
-  },
-  {
-    name: "check_wish_matches",
-    description: "Find HIVE members whose skills might match a specific wish",
-    input_schema: {
-      type: "object",
-      properties: {
-        wish_description: {
-          type: "string",
-          description: "The wish to find matches for"
-        }
-      },
-      required: ["wish_description"]
-    }
-  },
-  {
-    name: "get_hive_members",
-    description: "Get list of all HIVE members with basic info",
-    input_schema: {
-      type: "object",
-      properties: {}
-    }
-  },
-  {
-    name: "fulfill_wish",
-    description: "Mark a wish as fulfilled. Use when user confirms their wish has been granted.",
-    input_schema: {
-      type: "object",
-      properties: {
-        wish_id: {
-          type: "string",
-          description: "The wish ID to mark fulfilled"
-        },
-        fulfilled_by: {
-          type: "string",
-          description: "User ID of who fulfilled it (optional)"
-        }
-      },
-      required: ["wish_id"]
-    }
-  }
-];
-```
+- `hive-app/lib/claude.ts` — **imported by nothing.** It still defines
+  `get_current_queen_bee` and `add_queen_bee_update`. It is the file the old
+  version of this document was copied from. Dead code.
+- `app/onboarding/welcome.tsx` — a reachable URL selling a 12-person community
+  and Queen Bee Month. Nothing links to it, but in Expo Router a file existing
+  means the URL exists.
+- `lib/newsletterHeaders.ts` — matches the generic words "spotlight" and "member
+  of the month" and stamps a gold **"Our Current Queen Bee"** banner on the
+  section. Delete before the next newsletter draft.
+- `app/(app)/admin.tsx` still has a "Set Queen Bee" modal writing to a
+  `queen_bees` table; `components/hive/QueenBeeCard.tsx` and its skeletons exist;
+  `types/index.ts` still exports `QueenBee`, `QueenBeeStatus`,
+  `QueenBeePreference`, and `queen_bee` appears in `EventType`,
+  `BoardCategoryType` and `NotificationType`.
 
 ---
 
-## User Flows
+## Tech stack
 
-### Flow 1: First-Time Onboarding
+- **Expo (React Native) + TypeScript** — one codebase for iOS and web. Web is
+  where nearly everybody actually uses it.
+- **Expo Router** — file-based routing, `hive-app/app/`.
+- **NativeWind** (Tailwind syntax) plus a lot of inline styles.
+- **Supabase** — auth, Postgres with row-level security, storage, realtime, edge
+  functions (Deno).
+- **TanStack Query** for server state (`lib/queryClient.ts`, `lib/hooks/use*Query.ts`).
+- **Claude API** for Clive and for meeting/newsletter generation, called only
+  from edge functions.
+- **AssemblyAI** for meeting transcription with speaker labels.
+- **Google Calendar / Meet** for scheduling meetings.
+- **Resend** for email.
+- **Hosting**: Vercel for web (`app.the-hive.app`), Expo EAS for iOS builds.
 
-```
-1. User clicks "Sign in with Google"
-2. Google OAuth → Supabase creates auth.users entry
-3. Check if profiles entry exists
-   - If yes: redirect to main app
-   - If no: redirect to /onboarding/welcome
-
-4. /onboarding/welcome
-   - "Welcome to H.I.V.E.! Let's get you set up."
-   - [Continue]
-
-5. /onboarding/info
-   - Name (pre-filled from Google)
-   - Phone (optional)
-   - Birthday
-   - Preferred contact method
-   - [Continue]
-
-6. /onboarding/skills
-   - Chat interface with agent
-   - Agent: "What are some things you feel you're particularly good at? Things you enjoy doing, especially around creating or problem-solving?"
-   - Natural conversation extracts skills
-   - Agent uses store_skill tool as skills emerge
-   - After a few skills captured: "Great! Ready to move on?" 
-   - [Continue]
-
-7. /onboarding/wishes  
-   - Chat continues
-   - Agent: "Now, what are you working on these days? Anything you might need help with? This stays private unless you choose to share."
-   - Natural conversation extracts initial wishes (stored as private)
-   - Agent: "Perfect. You can always refine these later. Welcome to H.I.V.E.!"
-   - [Enter H.I.V.E.]
-
-8. Create profile with onboarded_at = now()
-9. Redirect to main chat
-```
-
-### Flow 2: Daily Chat Usage
-
-```
-1. User opens app → main chat interface
-2. Greeting: "Hey [Name]! How can I help today?"
-3. User chats naturally
-4. Agent:
-   - Responds conversationally
-   - Probes toward HD wishes when relevant
-   - Uses tools silently to store/retrieve
-   - Mentions relevant community context
-5. When a wish crystallizes:
-   - Agent: "That sounds like a clear wish: '[description]'. Want me to share this with HIVE? It might match someone's skills."
-   - If yes: publish_wish, notify relevant members
-   - If no: stays private, can revisit later
-```
-
-### Flow 3: Check on HIVE
-
-```
-1. User taps "HIVE" tab
-2. View shows:
-   - Current Queen Bee card (name, photo, project, recent update)
-   - "Public Wishes" section (one per member who has one)
-   - "You Might Help With" section (wishes matching user's skills)
-   - Calendar preview (next 3 events)
-   - Honey Pot balance
-3. Tapping a wish shows detail + "I can help" button
-4. Tapping Queen Bee shows full project + all updates + add update
-```
-
-### Flow 4: Record a Meeting
-
-```
-1. Admin/any member opens Meetings tab
-2. Tap "Record Meeting"
-3. Audio recording starts (MediaRecorder API / Expo AV)
-4. Recording indicator visible
-5. Tap "End Recording"
-6. Upload modal:
-   - Date (auto-filled)
-   - [Upload & Transcribe]
-7. Audio uploads to Supabase Storage
-8. Edge function triggers AssemblyAI
-9. AssemblyAI webhook returns transcript
-10. Claude summarizes:
-    - Summary paragraph
-    - Action items extracted (with assigned person if mentioned)
-    - Queen Bee updates extracted
-    - Any wishes that surfaced
-11. Admin reviews/edits summary
-12. Published to meeting history
-13. Notifications sent for action items
-```
-
-### Flow 5: Admin Actions
-
-```
-Admin Panel shows:
-1. Set Queen Bee
-   - Select member
-   - Select month
-   - Enter project title/description
-   - [Save]
-
-2. Manage Calendar
-   - Add event (title, date, time, type)
-   - Sync with Google Calendar
-   - Edit/delete events
-
-3. Member Management
-   - View all members
-   - Assign roles (member/treasurer/admin)
-   - Resend invites
-
-4. Meeting Management
-   - Edit transcripts/summaries
-   - Manage action items
-```
+Why these, still true: one codebase reaches the App Store and the browser;
+Supabase puts auth, database, storage and realtime behind one client with
+row-level security doing the privacy work; NativeWind means one styling
+vocabulary on both platforms.
 
 ---
 
-## API Integration Details
+## Where things live
 
-### Google Calendar
-
-```typescript
-// lib/google-calendar.ts
-
-// Scopes needed
-const SCOPES = [
-  'https://www.googleapis.com/auth/calendar.readonly',
-  'https://www.googleapis.com/auth/calendar.events'
-];
-
-// Store refresh token in profiles.google_refresh_token (encrypted)
-
-// Sync events FROM Google Calendar
-async function syncFromGoogle(userId: string) {
-  // Fetch events from user's primary calendar
-  // Upsert to events table with google_event_id
-}
-
-// Push events TO Google Calendar
-async function pushToGoogle(userId: string, event: Event) {
-  // Create event in user's calendar
-  // Store google_event_id in our events table
-}
-
-// Create shared HIVE calendar
-// All members subscribe to this calendar
-// Events pushed there are visible to all
+```
+the-HIVE/
+├── CLAUDE.md          ← this file
+├── AGENTS.md          ← day-to-day working rules
+├── site/              ← the PUBLIC site (the-hive.app), separate Vercel project
+└── hive-app/          ← the members' app (app.the-hive.app) — run commands here
+    ├── app/
+    │   ├── (auth)/          login, OAuth callback
+    │   ├── (app)/           the signed-in app (see below)
+    │   ├── onboarding/      welcome + chat (welcome is stale, see above)
+    │   ├── join.tsx         invite acceptance
+    │   └── _layout.tsx      root layout — this is where `wholeHive` lives
+    ├── components/
+    │   ├── ui/              shared building blocks — look here FIRST
+    │   ├── board/ chat/ hive/ meetings/ messaging/ navigation/
+    │   ├── profile/ skills/ surveys/ events/ admin/
+    ├── lib/                 one concern per file, heavily commented
+    │   └── hooks/
+    ├── types/index.ts       TypeScript types mirroring the database
+    └── supabase/
+        ├── migrations/      147 files, numbered 001–146
+        └── functions/       22 edge functions
 ```
 
-### AssemblyAI Transcription
+### The screens
 
-```typescript
-// lib/assemblyai.ts
+Everything under `app/(app)/`. The ones in the side rail, in rail order, come
+from `NAV_DESTINATIONS` in `lib/navigation.ts`:
 
-const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY;
+| route | what it is |
+|---|---|
+| `/hive` | Home for the HIVE you are in (`hive.tsx`) |
+| `/hive-wide` | Home when you are standing above the HIVEs |
+| `/` | Clive |
+| `/members` | member directory and member cards |
+| `/board` | boards, threads, replies |
+| `/hive-wide-boards` | the same screen, asked `reach="all_hives"` |
+| `/messages` | rooms, DMs, group DMs |
+| `/meetings` | meetings, recordings, summaries |
+| `/honey-pot` | the shared pot of money (per-HIVE, off by default) |
+| `/buzz` | The Buzz — every newsletter you may read. HIVE-Wide only |
+| `/profile` | your own profile |
+| `/settings` | notifications, your name in a HIVE, leaving one |
+| `/app-feedback` | tell the people who build the app something |
+| `/admin` | running a HIVE. Tabbed per HIVE |
 
-async function transcribeAudio(audioUrl: string): Promise<string> {
-  // 1. Submit for transcription with speaker_labels: true
-  const response = await fetch('https://api.assemblyai.com/v2/transcript', {
-    method: 'POST',
-    headers: {
-      'Authorization': ASSEMBLYAI_API_KEY,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      audio_url: audioUrl,
-      speaker_labels: true
-    })
-  });
-  
-  const { id } = await response.json();
-  
-  // 2. Poll for completion or use webhook
-  // 3. Return transcript with speaker labels
-  // Format: "Speaker A: Hello everyone...\nSpeaker B: Thanks for..."
-}
+Reached from inside other screens rather than the rail: `arrival-board.tsx`,
+`meeting-helper.tsx`, `monthly-tuneup.tsx`, `newsletter.tsx`.
 
-// Webhook handler in Edge Function
-// POST /functions/v1/transcribe-webhook
-```
-
-### Email Notifications
-
-```typescript
-// lib/notifications.ts
-import { Resend } from 'resend';
-
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-async function sendWishMatchNotification(
-  to: string,
-  matchedWish: Wish,
-  wisher: Profile
-) {
-  await resend.emails.send({
-    from: 'H.I.V.E. <hive@yourdomain.com>',
-    to,
-    subject: `🐝 Your skills might help ${wisher.name}!`,
-    html: `
-      <h2>A wish you might be able to grant</h2>
-      <p><strong>${wisher.name}</strong> is wishing for:</p>
-      <blockquote>${matchedWish.description}</blockquote>
-      <p>Think you can help? Open H.I.V.E. to connect.</p>
-    `
-  });
-}
-
-// Similar functions for:
-// - sendActionItemNotification
-// - sendMeetingSummaryNotification  
-// - sendQueenBeeUpdateNotification
-```
+**Adding a destination**: add it to `NAV_DESTINATIONS`, pick a standard emoji,
+done. It appears in the rail in that order and nowhere else needs editing. Nav
+icons are plain emoji on purpose — the hand-drawn HIVE icon family was retired
+from navigation so that adding a feature never means commissioning a drawing.
 
 ---
 
-## Key Implementation Notes
+## The data model, in summary
 
-### Chat Context Management
+There are **147 migration files** in `hive-app/supabase/migrations/`, numbered
+001–146 (two files share `103_`). Migrations 143–146 were applied and verified
+against production on 2026-08-04. **Do not treat any single migration as the
+current state** — later ones silently override earlier ones. To know what is
+true, query the live database.
 
-The agent needs context to be helpful. On each message, include:
-- Last 20 messages from chat_messages table
-- User's current skills
-- User's current wishes (private + public)
-- Current Queen Bee info
-- User's assigned action items
+Migration filenames from 100 onward read as sentences and are a genuinely useful
+history: `124_share_scope`, `128_owner_is_not_admin`,
+`135_hive_wide_foundations`, `142_the_boards_come_home`,
+`146_the_attachments_get_a_lock`.
 
-```typescript
-async function buildChatContext(userId: string) {
-  const [messages, skills, wishes, queenBee, actionItems] = await Promise.all([
-    getRecentMessages(userId, 20),
-    getUserSkills(userId),
-    getUserWishes(userId),
-    getCurrentQueenBee(),
-    getUserActionItems(userId)
-  ]);
-  
-  return `
-## Your Skills
-${skills.map(s => `- ${s.description}`).join('\n')}
+The authoritative shape of every table, with comments explaining why each column
+exists and which migration added it, is **`hive-app/types/index.ts`**. Read that
+rather than reconstructing DDL. The main groups:
 
-## Your Wishes
-${wishes.map(w => `- [${w.status}] ${w.description}`).join('\n')}
+- **People and places** — `profiles`, `communities`, `community_memberships`,
+  `community_invites`. `communities` carries `accent_color`,
+  `max_share_scope`, `honey_pot_enabled`, `meeting_cadence`, `slide_deck_url`,
+  `meeting_helper_notes`.
+- **Roles** — `UserRole` is `member | treasurer | admin`, held **per HIVE** on
+  the membership row. Separately, `profiles.is_owner` is the god level (Nat and
+  Lucas): anything that speaks for a HIVE to the outside world, or reads across
+  HIVEs, asks `is_owner`, not `admin` (migration 128).
+- **Wishes and skills** — `wishes` (with `share_scope`, `is_spotlight`,
+  optional link to a board), `wish_comments`, `wish_comment_reactions`,
+  `wish_granters`, `skills`.
+- **Boards** — `board_categories` (with `reach`, `topic_kind`, owner, status),
+  `board_posts` (with `visibility`, pinning, anchoring, completion,
+  attachments), `board_replies`, `board_reactions`, member tags.
+- **Messaging** — `chat_rooms` (`community | dm | group_dm`, with `reach`),
+  `chat_room_members`, `room_messages`, `message_reactions`, typing indicators.
+- **Clive** — `conversations`, `conversation_projects`, `chat_messages`,
+  `context_summaries`, `user_insights`, `agent_action_requests` (the propose /
+  apply flow).
+- **Meetings** — `meetings`, `action_items`, `events`, transcription jobs,
+  monthly highlights.
+- **Rhythm** — `surveys` and `survey_responses` (the monthly check-in),
+  `daily_question_answers`, `monthly_focus` (the HIVE Focus — one row with no
+  `community_id` is the shared one; a row naming a HIVE replaces it for them).
+- **Money** — `honey_pot`, `honey_pot_transactions`, dues.
+- **The outside world** — `newsletter_subscribers`, `waitlist`,
+  `public_newsletters`, public events view.
+- **App feedback** — `app_feedback`, deliberately not attached to a HIVE, with
+  owner replies (migration 143).
 
-## Current Queen Bee
-${queenBee.user.name} - ${queenBee.project_title}
-${queenBee.project_description}
-
-## Your Action Items
-${actionItems.map(a => `- ${a.description} (due: ${a.due_date})`).join('\n')}
-
-## Recent Conversation
-${messages.map(m => `${m.role}: ${m.content}`).join('\n')}
-`;
-}
-```
-
-### Matching Algorithm
-
-For `check_wish_matches`, use Claude to semantically match:
-
-```typescript
-async function findMatches(wishDescription: string) {
-  const allSkills = await getAllSkills();
-  
-  const response = await claude.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1000,
-    system: "You match wishes to skills. Return JSON array of matches with confidence scores.",
-    messages: [{
-      role: 'user',
-      content: `
-        Wish: "${wishDescription}"
-        
-        Available skills:
-        ${allSkills.map(s => `- ${s.user.name}: ${s.description}`).join('\n')}
-        
-        Return matches as JSON: [{ "userId": "...", "skillId": "...", "confidence": 0.8, "reason": "..." }]
-        Only include matches with confidence > 0.6
-      `
-    }]
-  });
-  
-  return JSON.parse(response.content[0].text);
-}
-```
-
-### Audio Recording (Expo)
-
-```typescript
-// components/meetings/AudioRecorder.tsx
-import { Audio } from 'expo-av';
-
-async function startRecording() {
-  await Audio.requestPermissionsAsync();
-  await Audio.setAudioModeAsync({
-    allowsRecordingIOS: true,
-    playsInSilentModeIOS: true,
-  });
-  
-  const { recording } = await Audio.Recording.createAsync(
-    Audio.RecordingOptionsPresets.HIGH_QUALITY
-  );
-  
-  return recording;
-}
-
-async function stopAndUpload(recording: Audio.Recording) {
-  await recording.stopAndUnloadAsync();
-  const uri = recording.getURI();
-  
-  // Upload to Supabase Storage
-  const file = await fetch(uri);
-  const blob = await file.blob();
-  
-  const { data, error } = await supabase.storage
-    .from('meeting-recordings')
-    .upload(`${Date.now()}.m4a`, blob);
-    
-  return data.path;
-}
-```
+Storage buckets: `avatars`, `meeting-recordings` (private, folder per
+community), and **`attachments` (private since migration 146)**.
 
 ---
 
-## Environment Variables
+## Shared building blocks — use these, do not re-invent them
 
-```bash
-# .env.local
+Look in `components/ui/` and `lib/` before writing anything. Most of these exist
+because the same thing was hand-written three or four times and drifted.
 
-# Supabase
-EXPO_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=xxx
-SUPABASE_SERVICE_ROLE_KEY=xxx  # Server-side only
+| use | for |
+|---|---|
+| `lib/showAlert.ts` → `showAlert()` | telling somebody something. **Never `Alert.alert`** |
+| `lib/showAlert.ts` → `confirmAction()` | a yes/no where restructuring state is not worth it |
+| `components/ui/ConfirmDialog.tsx` | the nicer yes/no — a real view, wears the page's colours |
+| `components/ui/SignedImage.tsx` | **any member upload.** A component, not a hook, because attachments render inside `.map()` |
+| `lib/signedAttachment.ts` | signing a stored attachment URL by hand |
+| `components/ui/DictationRow.tsx` | adding a mic to a prose text box |
+| `lib/hooks/useDictation.ts` | the append logic behind it — do not re-write it, it has been wrong twice |
+| `components/ui/ThinkingBee.tsx` | a loading state. Spinners stay only inside buttons |
+| `components/ui/HiveReactions.tsx` | emoji reactions, boards and messages alike |
+| `lib/pageSkin.ts` → `usePageSkin()` | page, card, border and ink colours. Never hard-code cream and charcoal |
+| `lib/scopeLook.ts` | scope colours, chip sizes, and what a screen reader hears |
+| `lib/hiveBrand.ts` | a HIVE's display name and accent colour, and lifting that accent so it reads on dark |
+| `lib/navigation.ts` | every destination in the app, once |
+| `lib/appNews.ts` | "what's new" — read by Home's strip, the newsletter draft and the meeting deck |
+| `lib/hiveWide.ts` | what HIVE-Wide is, said once, for three surfaces |
+| `lib/hooks/useHiveOnlyScreen.ts` | the referee for screens that only make sense inside one HIVE |
+| `lib/maintenance.ts` | the door. `HIVE_CLOSED = true` shuts the app to everyone but the keepers |
 
-# Claude
-ANTHROPIC_API_KEY=sk-ant-xxx
+The mic rule, from the 2026-08-04 sweep of 100 text inputs:
 
-# AssemblyAI
-ASSEMBLYAI_API_KEY=xxx
-
-# Google
-GOOGLE_CLIENT_ID=xxx
-GOOGLE_CLIENT_SECRET=xxx
-
-# Resend
-RESEND_API_KEY=re_xxx
-
-# App
-EXPO_PUBLIC_APP_URL=https://thehive.app
-```
-
----
-
-## Build Commands
-
-```bash
-# Development
-npx expo start  # Starts dev server, scan QR with Expo Go
-
-# Web
-npx expo start --web
-
-# iOS Build (requires EAS)
-eas build --platform ios
-
-# Deploy web to Vercel
-npx expo export --platform web
-vercel deploy web-build
-```
+| kind of field | gets |
+|---|---|
+| prose (multiline: replies, posts, wishes, bios, notes) | clip **and** mic |
+| short words (titles, skills, fun facts, search) | mic only |
+| structured (time, money, email, phone, URL, emoji, month) | neither |
 
 ---
 
-## Edge Functions: Authentication & Deployment
+## Edge functions: authentication and deployment
 
-### Why We Handle JWT Verification Ourselves
+### Why we verify JWTs ourselves
 
-Supabase Edge Functions traditionally relied on gateway-level JWT verification, but this approach has issues:
-- Gateway caching can cause stale JWT verification
-- Less control over error handling and specific error messages
-- Auth logic hidden in infrastructure rather than owned in code
+Supabase's gateway-level JWT verification caches, hides the auth logic in
+infrastructure, and gives poor error messages. **Every function is deployed with
+`verify_jwt = false`** and verifies the token in its own code using `jose`.
 
-**Our approach**: We deploy all functions with `--no-verify-jwt` and handle JWT verification inside the function code using the `jose` library. This gives us full control and avoids gateway caching issues.
+### The shared auth module
 
-### Shared Auth Module
-
-All authentication logic lives in `supabase/functions/_shared/auth.ts`:
+All of it lives in `supabase/functions/_shared/auth.ts`:
 
 ```typescript
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 
-// In your function:
-const authHeader = req.headers.get('Authorization');
-const auth = await verifySupabaseJwt(authHeader);
-
-if (isAuthError(auth)) {
-  return errorResponse(auth.error, auth.status);
-}
-
+const auth = await verifySupabaseJwt(req.headers.get('Authorization'));
+if (isAuthError(auth)) return errorResponse(auth.error, auth.status);
 const { userId, token } = auth;
-// Now use userId and token for authenticated operations
 ```
 
-### Function Types
+### Two kinds of function
 
-We have two types of Edge Functions:
+1. **User-authenticated** (`chat`, `invite`, `app-feedback`, the `notify-*`
+   family, meeting create/update/delete, …) — require a valid user JWT via
+   `verifySupabaseJwt()`, then build a Supabase client with the **user's** token
+   so row-level security still applies.
+2. **Service functions** (`notify`, `transcribe`, `meeting-reminder`,
+   `check-in-reminder`, `seal-meeting`) — use `SUPABASE_SERVICE_ROLE_KEY` for
+   admin access, called server-to-server or by cron.
 
-1. **User-authenticated functions** (`chat`, `invite`):
-   - Require a valid user JWT
-   - Use `verifySupabaseJwt()` from `_shared/auth.ts`
-   - Create a Supabase client with the user's token for RLS
+> A service-role function that never reads the Authorization header is a hole,
+> not a design. `notify-dm` and `notify-board-reply` were exactly that until
+> 2026-08-04: anyone could forge a notification and a push from any member.
+> If a function runs as service role, it must still prove who is calling it.
+> `transcribe` and `meeting-reminder` are still unauthenticated webhooks — known
+> and open.
 
-2. **Service functions** (`notify`, `transcribe`):
-   - Use `SUPABASE_SERVICE_ROLE_KEY` for admin access
-   - No user auth needed (internal/webhook endpoints)
-   - Still deployed with `verify_jwt = false` for consistency
+### Creating a new function
 
-### Deployment
-
-All functions are configured in `supabase/config.toml` with `verify_jwt = false`:
-
-```bash
-# Deploy all functions
-supabase functions deploy
-
-# Deploy a specific function
-supabase functions deploy chat
-
-# The config.toml handles --no-verify-jwt automatically
-```
-
-### Creating New Functions
-
-When creating a new Edge Function that requires user authentication:
-
-1. Create the function directory: `supabase/functions/my-function/index.ts`
-
-2. Import and use the shared auth:
-```typescript
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
-import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-
-serve(async (req) => {
-  // Handle CORS preflight
-  const corsResponse = handleCors(req);
-  if (corsResponse) return corsResponse;
-
-  // Verify JWT manually
-  const authHeader = req.headers.get('Authorization');
-  const auth = await verifySupabaseJwt(authHeader);
-
-  if (isAuthError(auth)) {
-    return errorResponse(auth.error, auth.status);
-  }
-
-  const { userId, token } = auth;
-
-  // Create authenticated Supabase client
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-    { global: { headers: { Authorization: `Bearer ${token}`, apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '' } } }
-  );
-
-  // Your function logic here...
-
-  return jsonResponse({ success: true });
-});
-```
-
+1. `supabase/functions/my-function/index.ts`
+2. Handle CORS with `handleCors` from `_shared/cors.ts`, verify the JWT as
+   above, and return with `jsonResponse` / `errorResponse`.
 3. Add to `supabase/config.toml`:
+
 ```toml
 [functions.my-function]
 verify_jwt = false
 ```
 
-### Shared Modules
+Shared modules: `_shared/auth.ts` (JWT verification against Supabase's JWKS),
+`_shared/cors.ts` (headers and response helpers), `_shared/streaming.ts` (SSE,
+used by `chat`).
 
-- `_shared/auth.ts` - JWT verification using jose library against Supabase JWKS endpoint
-- `_shared/cors.ts` - CORS headers and response helpers (`handleCors`, `jsonResponse`, `errorResponse`)
+### Deploying
 
----
-
-## Testing Checklist
-
-Before launch, verify:
-
-- [ ] Google OAuth works on iOS and web
-- [ ] Onboarding flow completes and creates profile
-- [ ] Chat sends/receives messages correctly
-- [ ] Agent tools store skills and wishes
-- [ ] Wishes can be published/replaced
-- [ ] HIVE view loads all data correctly
-- [ ] Queen Bee display works
-- [ ] Audio recording works on iOS
-- [ ] Audio uploads successfully
-- [ ] Transcription returns correctly
-- [ ] Meeting summaries generate
-- [ ] Email notifications send
-- [ ] Calendar events sync
-- [ ] Admin can set Queen Bee
-- [ ] Treasurer can update Honey Pot
-- [ ] Push notifications work (iOS)
+```bash
+supabase functions deploy               # all
+supabase functions deploy chat          # one
+```
 
 ---
 
-## Day-by-Day Build Plan
+## Environment and secrets
 
-### Day 1: Foundation
-- [ ] Create Expo project with TypeScript
-- [ ] Set up NativeWind
-- [ ] Create Supabase project
-- [ ] Run schema migration
-- [ ] Configure Google OAuth in Supabase
-- [ ] Basic app shell with navigation
+The app reads only two variables at build time — `EXPO_PUBLIC_SUPABASE_URL` and
+`EXPO_PUBLIC_SUPABASE_ANON_KEY` (`lib/supabase.ts`), plus
+`EXPO_PUBLIC_BUILD_ID`, which Vercel fills with the commit SHA and which
+`/version.json` reports. Everything secret lives in Supabase edge-function
+secrets: `ANTHROPIC_API_KEY`, `ASSEMBLYAI_API_KEY`, `RESEND_API_KEY`,
+`FROM_EMAIL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+`HIVE_GOOGLE_REFRESH_TOKEN`, `INVITE_URL_BASE`, `EXPO_PUBLIC_APP_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`.
 
-### Day 2: Auth + Onboarding
-- [ ] Login screen with Google button
-- [ ] Auth state management
-- [ ] Onboarding screens (welcome, info, skills, wishes)
-- [ ] Profile creation flow
-- [ ] Basic chat UI for onboarding
+**The service-role key in `hive-app/.env` is dead.** Get a live one from the
+Supabase management API — `GET /v1/projects/<ref>/api-keys?reveal=true`, using
+the token in the macOS keychain under `Supabase CLI`. A stale key returns a 403
+reading *"Failed to base64url decode the signature"*, which looks like a policy
+problem and is not.
 
-### Day 3: Main Chat
-- [ ] Chat interface component
-- [ ] Supabase Edge Function for Claude
-- [ ] Message persistence
-- [ ] Basic agent with system prompt
-- [ ] Tool definitions (no implementation yet)
-
-### Day 4: Agent Tools
-- [ ] Implement all tool handlers
-- [ ] store_skill, store_wish working
-- [ ] publish_wish working
-- [ ] Query tools working
-- [ ] Test full conversation flow
-
-### Day 5: HIVE View
-- [ ] Queen Bee card component
-- [ ] Wish board component
-- [ ] Calendar integration setup
-- [ ] Event list component
-- [ ] Honey Pot display
-
-### Day 6: Meetings + Admin
-- [ ] Audio recorder component
-- [ ] Upload to Supabase Storage
-- [ ] AssemblyAI integration
-- [ ] Summary generation
-- [ ] Admin panel (Queen Bee, calendar, roles)
-- [ ] Email notifications
-
-### Day 7: Polish + Deploy
-- [ ] Bug fixes from testing
-- [ ] Mobile responsiveness
-- [ ] Loading states
-- [ ] Error handling
-- [ ] Deploy web to Vercel
-- [ ] Submit iOS build to EAS
-- [ ] Seed 12 user accounts
+Database pushes need the real database password in `SUPABASE_DB_PASSWORD`. Never
+ask Nat to paste a secret into chat.
 
 ---
 
-## Future Enhancements (Post-MVP)
+## Running, building, deploying
 
-- Voice messages in chat
-- Photo attachments for wishes
-- Wish fulfillment celebrations
-- Karma/contribution tracking (optional, could conflict with philosophy)
-- Integration with payment systems
-- Multiple HIVE support
-- Public HIVE discovery
+Run everything from `hive-app/`.
+
+```bash
+npm run typecheck          # tsc --noEmit
+npm run doctor             # expo-doctor
+npm run release:check      # both of the above
+npx expo start             # dev server
+npx expo start --web       # web
+npm run export:ios         # export the iOS bundle
+eas build --platform ios   # iOS build via EAS
+```
+
+- **The members' app deploys itself.** Pushing to `main` triggers Vercel to
+  build the `the-hive` project → `app.the-hive.app`. Confirm what is actually
+  live by fetching `/version.json` and comparing the commit, not by looking for
+  a green tick.
+- **The public site does not.** `site/` is a separate Vercel project
+  (`hive-public`) that is **not** git-linked. It ships only by CLI:
+  `cd site && npx vercel --prod --token "$(security find-generic-password -s 'Vercel CI' -w)"`.
+- Code changes need a deployed bundle and a hard refresh. In-app pull-to-refresh
+  only refreshes data.
+
+---
+
+## Gotchas — each of these has cost a real session
+
+- **`Alert.alert` does nothing on web.** react-native-web's implementation is,
+  in full, `class Alert { static alert() {} }`. Not degraded — nothing. Almost
+  everybody uses HIVE in a browser, so every `Alert.alert` is a message nobody
+  receives, and it is why "the button does nothing" keeps happening: the write
+  fails, the code politely explains why, and the explanation is thrown away.
+  Use `lib/showAlert.ts` for a statement and `ConfirmDialog` for a question.
+  (`board.tsx` still calls raw `Alert.alert` in 23 of its 26 error paths.)
+
+- **The `attachments` bucket is private.** It was created public, and a public
+  bucket opens the **listing**, not just the files — an audit with no
+  credentials walked the folders (they are member ids) and downloaded a private
+  DM image. Anything that renders a member's upload must go through
+  `components/ui/SignedImage.tsx`, which resolves the stored URL to a
+  short-lived signed one via `lib/signedAttachment.ts`. "Nobody knows the
+  address" is not a control.
+
+- **The service-role key in `.env` is dead.** See above.
+
+- **`drop function if exists` with the wrong argument types is a silent no-op.**
+  It reports success and changes nothing. Verify with
+  `select oid::regprocedure from pg_proc where proname = '…'`.
+
+- **`git checkout -- <file>` reverts everything uncommitted in that file**,
+  including work from earlier in the same session. It cost a whole admin-panel
+  feature once. Also: `git add -A` sweeps in files from work you have not
+  described yet.
+
+- **A component that reads context itself will disagree with a screen that does
+  not.** `AppHeader`, `HeaderTabs` and `pageSkin` all read `wholeHive`
+  themselves, by design. `hive.tsx` referenced it nowhere — so a new account got
+  a black HIVE-Wide header over a cream HIVE page with invisible tabs. Both
+  halves were doing as told; nobody was refereeing.
+  `lib/hooks/useHiveOnlyScreen.ts` is the referee now.
+
+- **Never build the web bundle in CI from pulled environment variables.**
+  Supabase keys are marked sensitive, so `vercel env pull` returns them empty,
+  the build bakes in blank values, and every page 500s. Let Vercel build.
+
+- **Query the live data before writing a trigger or constraint.** A board-reach
+  trigger that looked obviously correct would have emptied the public newsletter
+  archive, because six live newsletters are `visibility = 'public'` posts on a
+  board whose `reach` is `hive` — on purpose.
+
+- **Migrations lie about the current state.** Later ones silently override
+  earlier ones. Work from live `pg_policies`, not from reading migration files
+  in order.
+
+- **Gating a feature on "is this person in more than one HIVE?" hides it from
+  nearly every member.** Most people are in exactly one.
+
+- **`putImageData` is banned in `SpaceGlobe`.** It writes raw device pixels
+  while everything around it respects the retina transform.
+
+- **Never name a form honeypot field `company`.** Chrome autofills it, so real
+  people trip their own bot trap and the form dies silently.
+
+---
+
+## House style
+
+- **Plain English, always.** No unexplained developer jargon anywhere, chat
+  included. Explain a term in ordinary words first.
+- **Say what a thing IS.** Never "it isn't X, it's Y" — write the Y and stop.
+  This is Nat's own brand rule and it applies to code comments too.
+- **Brand**: "H.I.V.E." for the formal name, "HIVE" in product copy. Never
+  "the Hive", "hive", or a mixed-case variant.
+- **"HIVE-Wide"**, never "All HIVEs".
+- **Comments explain why, not what.** The files in `lib/` are the model: they
+  record the decision, who made it, when, and what it replaced. That is why a
+  session six weeks later does not undo it by accident.
+- **Prefer shared components.** If you improve an interaction on one screen,
+  check whether it belongs in `components/ui/` instead of being duplicated.
+- **Ship the thing rather than describing it.** Nat's words: *"why are you just
+  telling me about these things and not fixing them?"*
+- **When she asks what something does, check whether it does it.** "Does it show
+  the turnaround?" is a bug report.
+- Leave the campsite better than you found it. Do not leave untracked files or
+  uncommitted changes without deciding what they are.
+
+---
+
+## Things this file cannot tell you
+
+Deliberately left out because they change too fast, or could not be verified
+from the repo:
+
+- **What is live right now.** Fetch `app.the-hive.app/version.json`.
+- **How many HIVEs and members exist.** Three HIVEs are named throughout the
+  code and receipts (OG, Tech, Production); the database was not queried to
+  write this. Never quote a member count anywhere in the product.
+- **What to do next.** That is the newest `*_SESSION_HANDOFF.md` receipt in the
+  brain folder, always.

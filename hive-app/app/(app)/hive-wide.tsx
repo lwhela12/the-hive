@@ -10,9 +10,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Svg, { Polygon } from 'react-native-svg';
 import { AppHeader } from '../../components/navigation';
 import { SpaceGlobe, SPACE_BLACK } from '../../components/ui/SpaceGlobe';
+import { HiveMark } from '../../components/ui/HiveMark';
+import { HiveWideWelcome } from '../../components/ui/HiveWideWelcome';
+import { loadHiveWideWelcomeSeen, persistHiveWideWelcomeSeen } from '../../lib/readState';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { STANDING_INVITATION } from '../../lib/hiveFocus';
@@ -116,16 +118,6 @@ const INK = '#FFF8E9';
 const INK_SOFT = 'rgba(255,248,233,0.72)';
 const INK_FAINT = 'rgba(255,248,233,0.45)';
 
-/** A HIVE, as a small coloured comb. Says where something came from without
- *  writing "from OG HIVE" eleven times down the page. */
-function HiveDot({ colour }: { colour: string }) {
-  return (
-    <Svg width={11} height={12} viewBox="0 0 11 12">
-      <Polygon points="5.5,0 11,3 11,9 5.5,12 0,9 0,3" fill={colour} />
-    </Svg>
-  );
-}
-
 /** One of the four boxes. Same shell for all of them so they read as a set. */
 function TopBox({ label, wide, children }: { label: string; wide: boolean; children: React.ReactNode }) {
   return (
@@ -176,7 +168,7 @@ function HiveLine({ hive, event }: { hive: Community; event: HiveEvent | null })
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
       <View style={{ paddingTop: 4 }}>
-        <HiveDot colour={colour} />
+        <HiveMark size={12} colour={colour} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: INK }}>
@@ -228,7 +220,7 @@ function HiveLine({ hive, event }: { hive: Community; event: HiveEvent | null })
 
 export default function HiveWideScreen() {
   const router = useRouter();
-  const { communityId } = useAuth();
+  const { communityId, community, profile, refreshProfile } = useAuth();
   const { width } = useWindowDimensions();
   // Three boxes need real width before they stop being three narrow columns of
   // broken words. Below this they stack, in Nat's order.
@@ -435,6 +427,20 @@ export default function HiveWideScreen() {
           <ThinkingBee />
         ) : (
           <>
+            {/* The welcome Nat asked for on 2026-08-03. It was built that day,
+                given a column to remember its dismissal (`hive_wide_welcome_seen`)
+                and then never put on a page — so no member has ever seen it. It
+                goes first, above the boxes, which is where an explanation of a
+                page belongs. Dismissing it follows the person rather than the
+                device, so putting it away on the phone puts it away on the
+                laptop. */}
+            <HiveWideWelcome
+              community={community}
+              seenVersion={loadHiveWideWelcomeSeen(profile)}
+              onDismiss={(version) => {
+                void persistHiveWideWelcomeSeen(profile, version).then(() => refreshProfile());
+              }}
+            />
             {/* Four boxes, two by two — the same shape as a HIVE's own home
                 page, so HIVE-Wide stops being a layout of its own (Nat
                 2026-08-03: "I love the colours and the look, but I want it to
@@ -490,7 +496,7 @@ export default function HiveWideScreen() {
                         }}
                       >
                         <View style={{ paddingTop: 3 }}>
-                          <HiveDot colour={accentOnDark(wish.community?.accent_color || '#bd9348')} />
+                          <HiveMark size={12} colour={accentOnDark(hiveAccent(wish.community))} />
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text

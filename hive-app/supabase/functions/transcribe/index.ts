@@ -2,8 +2,40 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { verifySupabaseJwt, isAuthError, isCommunityMember } from '../_shared/auth.ts';
 
 const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY')!;
+
+// Who is allowed to knock on this function, and how.
+//
+// Found by the 2026-08-04 audit: nobody was. Two quite different things share
+// this one address, and neither had a door.
+//
+// A webhook cannot present a signed-in person, so it does not get a JWT — it
+// gets a shared secret. AssemblyAI will send back any header we ask it to when
+// we submit the job, so we ask for this one. The secret lives in the function's
+// environment, never in the code:
+//
+//   supabase secrets set ASSEMBLYAI_WEBHOOK_SECRET=<a long random string>
+//
+// The one thing this must not do is lock out the real caller. The webhook path
+// down in serve() explains, at length, why the secret is not the ONLY check and
+// what has to change in another file before it can be.
+const WEBHOOK_SECRET = Deno.env.get('ASSEMBLYAI_WEBHOOK_SECRET') ?? '';
+const WEBHOOK_HEADER = 'x-hive-transcribe-secret';
+
+/** Ask AssemblyAI what actually happened, rather than believing the body. */
+async function fetchTranscript(transcriptId: string) {
+  const response = await fetch(
+    `https://api.assemblyai.com/v2/transcript/${transcriptId}`,
+    { headers: { Authorization: ASSEMBLYAI_API_KEY } }
+  );
+  if (!response.ok) {
+    console.error('AssemblyAI lookup failed:', response.status, await response.text());
+    return null;
+  }
+  return await response.json();
+}
 
 function formatTranscript(transcript: {
   utterances?: { speaker: string; text: string }[] | null;
@@ -21,13 +53,8 @@ function formatTranscript(transcript: {
 // on its job row; once every job for the meeting is terminal, stitch the full
 // transcript into the meeting so the normal Apply Notes flow takes over.
 // deno-lint-ignore no-explicit-any
-async function handleJobWebhook(supabaseAdmin: any, job: any, status: string) {
+async function handleJobWebhook(supabaseAdmin: any, job: any, status: string, transcript: any) {
   if (status === 'completed') {
-    const transcriptResponse = await fetch(
-      `https://api.assemblyai.com/v2/transcript/${job.transcript_id}`,
-      { headers: { Authorization: ASSEMBLYAI_API_KEY } }
-    );
-    const transcript = await transcriptResponse.json();
     await supabaseAdmin
       .from('meeting_transcription_jobs')
       .update({
@@ -110,53 +137,108 @@ serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
-  // This function uses service_role - no user auth needed (webhook endpoint)
-  const supabaseAdmin = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  );
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', serviceKey);
 
   try {
-    // Check if this is a webhook callback from AssemblyAI
-    const body = await req.json();
+    // `null` on its own is valid JSON, and so is `7`. Reading a field off
+    // either throws, which turns a junk request into a 500 instead of a plain
+    // refusal. Same fix check-in-reminder needed on 2026-08-03.
+    let body: Record<string, unknown> = {};
+    try {
+      const parsed = await req.json();
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        body = parsed as Record<string, unknown>;
+      }
+    } catch { /* an empty body is just an invalid request */ }
 
-    // Voice-memo import jobs are matched by their job row first; anything
-    // without a job row falls through to the legacy single-recording path.
-    if (body.transcript_id && (body.status === 'completed' || body.status === 'error')) {
+    const transcriptId = typeof body.transcript_id === 'string' ? body.transcript_id : '';
+
+    if (transcriptId) {
+      // ───────────────────────────────────────────────────────────────────
+      // THE WEBHOOK PATH — AssemblyAI telling us a job finished.
+      //
+      // This used to accept the caller's word for everything: who they were
+      // (nobody asked), and what had happened (`body.status`). So anyone could
+      // POST `{transcript_id, status: 'error'}` and mark somebody's meeting
+      // failed, and the old order of operations meant an unknown transcript_id
+      // still cost us a round trip to AssemblyAI before we noticed.
+      //
+      // Three things now stand between a stranger and this code, in the order
+      // they are cheapest to check:
+      //
+      //   1. The shared secret, when it is there. We ask AssemblyAI to send it
+      //      back on every job WE submit, so a request that carries the header
+      //      and gets it wrong is turned away flat.
+      //   2. The id has to be one of ours. transcript_ids are AssemblyAI's own
+      //      random ids, we only ever learn them by submitting a job, and every
+      //      one is written down against a meeting or a job row.
+      //   3. What happened is not up to the caller. We ask AssemblyAI directly
+      //      and act on ITS answer, so a forged body can only ever tell us
+      //      something true.
+      //
+      // WHY (1) IS NOT THE WHOLE LOCK, AND MUST NOT BE MADE ONE YET: the voice
+      // memo import submits its own jobs from import-meeting-notes/index.ts,
+      // and it does not send the auth header. Requiring the header outright
+      // today would mean every voice memo Nat imports transcribes fine at
+      // AssemblyAI and then silently never comes back. When that file starts
+      // sending the header too, this can become a hard requirement — delete the
+      // `if (sent)` and refuse anything without it.
+      const sentSecret = req.headers.get(WEBHOOK_HEADER);
+      if (sentSecret && (!WEBHOOK_SECRET || sentSecret !== WEBHOOK_SECRET)) {
+        console.error('Webhook secret did not match');
+        return errorResponse('Not for you', 403);
+      }
+
       const { data: job } = await supabaseAdmin
         .from('meeting_transcription_jobs')
         .select('*')
-        .eq('transcript_id', body.transcript_id)
+        .eq('transcript_id', transcriptId)
         .maybeSingle();
-      if (job) {
-        return await handleJobWebhook(supabaseAdmin, job, body.status);
+
+      // Older single-recording meetings keep the id on the meeting row itself.
+      let legacyMeeting = null;
+      if (!job) {
+        const { data } = await supabaseAdmin
+          .from('meetings')
+          .select('*')
+          .eq('assemblyai_transcript_id', transcriptId)
+          .maybeSingle();
+        legacyMeeting = data;
       }
-    }
 
-    if (body.status === 'completed') {
-      // This is the webhook callback with completed transcript
-      const { transcript_id } = body;
+      if (!job && !legacyMeeting) {
+        console.error('No job or meeting for transcript_id:', transcriptId);
+        return errorResponse('Unknown transcript', 404);
+      }
 
-      // Get the full transcript with speaker labels
-      const transcriptResponse = await fetch(
-        `https://api.assemblyai.com/v2/transcript/${transcript_id}`,
-        {
-          headers: { Authorization: ASSEMBLYAI_API_KEY }
-        }
-      );
+      const transcript = await fetchTranscript(transcriptId);
+      if (!transcript) {
+        return errorResponse('Could not confirm the transcript with AssemblyAI', 502);
+      }
 
-      const transcript = await transcriptResponse.json();
+      // AssemblyAI's own words, not the caller's. Anything still in flight is
+      // not a finished job and there is nothing to do with it yet.
+      const status: string = transcript.status;
+      if (status !== 'completed' && status !== 'error') {
+        return jsonResponse({ success: true, notFinished: status });
+      }
 
-      // Find the meeting with this transcript ID
-      const { data: meeting, error: findError } = await supabaseAdmin
-        .from('meetings')
-        .select('*')
-        .eq('assemblyai_transcript_id', transcript_id)
-        .single();
+      if (job) {
+        return await handleJobWebhook(supabaseAdmin, job, status, transcript);
+      }
 
-      if (findError || !meeting) {
-        console.error('Meeting not found for transcript_id:', transcript_id);
-        return errorResponse('Meeting not found', 404);
+      const meeting = legacyMeeting;
+
+      // A failed single recording should say so rather than being dropped on
+      // the floor, which is what happened before — only 'completed' was ever
+      // handled and an 'error' fell through to the 400 at the bottom.
+      if (status === 'error') {
+        await supabaseAdmin
+          .from('meetings')
+          .update({ processing_status: 'failed' })
+          .eq('id', meeting.id);
+        return jsonResponse({ success: true, failed: true });
       }
 
       // Format transcript with speaker labels
@@ -283,9 +365,36 @@ Format your response as JSON:
 
       return jsonResponse({ success: true });
 
-    } else if (body.meeting_id) {
-      // This is a request to start transcription
-      const { meeting_id } = body;
+    } else if (typeof body.meeting_id === 'string' && body.meeting_id) {
+      // ───────────────────────────────────────────────────────────────────
+      // THE START PATH — someone asking us to transcribe a recording.
+      //
+      // Nothing like a webhook, and it had no door either. A meeting id is not
+      // a secret — every member of a HIVE can read its meetings — so anybody
+      // signed in, or anybody at all who came by one, could POST it here and
+      // have us mint a one-hour signed URL to that meeting's audio, hand it to
+      // AssemblyAI, and reset the meeting's processing_status. On repeat that
+      // is somebody else's AssemblyAI bill and a meeting stuck saying
+      // "transcribing" forever.
+      //
+      // Two ways in, matching the rest of the app: the backend's own service
+      // key, or a signed-in member OF THAT MEETING'S HIVE. The membership check
+      // is the half that used to be missing everywhere (see _shared/auth.ts) —
+      // verifying the token only proves you are somebody, not that you are
+      // somebody with business here.
+      const meeting_id = body.meeting_id;
+      const authHeader = req.headers.get('Authorization') ?? '';
+      const calledByBackend = !!serviceKey && authHeader === `Bearer ${serviceKey}`;
+
+      // Who first, then what. Looking the meeting up before checking the token
+      // would make the difference between 404 and 403 a way to sit outside and
+      // ask "is this a real meeting id?" all afternoon.
+      let callerId = '';
+      if (!calledByBackend) {
+        const auth = await verifySupabaseJwt(authHeader);
+        if (isAuthError(auth)) return errorResponse(auth.error, auth.status);
+        callerId = auth.userId;
+      }
 
       // Get meeting
       const { data: meeting, error } = await supabaseAdmin
@@ -295,6 +404,13 @@ Format your response as JSON:
         .single();
 
       if (error || !meeting) {
+        return errorResponse('Meeting not found', 404);
+      }
+
+      if (
+        !calledByBackend &&
+        !(await isCommunityMember(supabaseAdmin, callerId, meeting.community_id))
+      ) {
         return errorResponse('Meeting not found', 404);
       }
 
@@ -318,7 +434,17 @@ Format your response as JSON:
         body: JSON.stringify({
           audio_url: signedUrl.signedUrl,
           speaker_labels: true,
-          webhook_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/transcribe`
+          webhook_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/transcribe`,
+          // Ask AssemblyAI to hand our own secret back when it calls us, so the
+          // callback can prove it came from the job we started. Left off
+          // entirely when no secret is configured — sending an empty header
+          // value would just be a shape with nothing in it.
+          ...(WEBHOOK_SECRET
+            ? {
+              webhook_auth_header_name: WEBHOOK_HEADER,
+              webhook_auth_header_value: WEBHOOK_SECRET,
+            }
+            : {}),
         })
       });
 

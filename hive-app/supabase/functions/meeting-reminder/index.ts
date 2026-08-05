@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 
 async function sendExpoPushNotification(
   pushToken: string,
@@ -38,11 +39,41 @@ serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
-  // This function uses service_role - no user auth needed
-  const supabaseAdmin = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  );
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', serviceKey);
+
+  // The comment that used to sit here said "uses service_role - no user auth
+  // needed", which is word for word what sat on notify-dm until yesterday, and
+  // meant the same wrong thing there: the DATABASE client needs no user, so
+  // nobody ever asked who the CALLER was.
+  //
+  // Anyone who knew the address could POST an empty body and fire tomorrow's
+  // reminder — an in-app notification plus a push to every member of every HIVE
+  // with a meeting tomorrow. The dedup check in the loop is the only reason it
+  // is not also a way to buzz everybody's phone on repeat, and dedup is a
+  // convenience, not a lock: change the meeting title and it fires again.
+  //
+  // Same door as check-in-reminder, for the same reasons: the nightly job comes
+  // in with the service key, Nat and Lucas can still fire it by hand, and
+  // everybody else gets the same flat answer whether they never signed in or
+  // signed in and are not an owner. A refusal shouldn't teach you what is
+  // behind it.
+  //
+  // WORTH KNOWING: nothing calls this today. There is no pg_cron entry for it
+  // (only check-in-reminder-daily and seal-meeting-nightly exist) and no client
+  // code invokes it — the sample schedule is still commented out in
+  // supabase/config.toml. So this closes a door on an empty room. When that
+  // cron finally gets written, it has to carry the SERVICE key, not the anon
+  // key, or it will be refused quietly with nobody to complain to — which is
+  // exactly the mistake migration 132 had to go back and fix.
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const calledByCron = !!serviceKey && authHeader === `Bearer ${serviceKey}`;
+  if (!calledByCron) {
+    const refusal = 'The meeting reminder runs on its own schedule.';
+    const auth = await verifySupabaseJwt(authHeader);
+    if (isAuthError(auth)) return errorResponse(refusal, 403);
+    if (!(await isOwner(supabaseAdmin, auth.userId))) return errorResponse(refusal, 403);
+  }
 
   try {
     // Calculate tomorrow's date in UTC

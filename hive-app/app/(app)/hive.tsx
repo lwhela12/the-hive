@@ -419,12 +419,18 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
           </View>
           {/* Action buttons — Meet and Calendar inline on one row */}
           <View className="flex-row flex-wrap gap-2 mt-3">
-            {/* Who's it for, right on the row. You can't respect a boundary you
-                can't see — and "everyone's invited" is the one that gets named
-                in a public newsletter, so it has to be obvious at a glance
-                (Nat 2026-07-25). Birthdays are nobody's business but ours. */}
+            {/* Whose it is and how far it goes, right on the row. You can't
+                respect a boundary you can't see — and "everyone's invited" is
+                the one that gets named in a public newsletter, so it has to be
+                obvious at a glance (Nat 2026-07-25). The hexagon is the HIVE's
+                own colour, so on a calendar carrying three HIVEs' meetings you
+                can tell whose August meeting this is without reading the title
+                (Nat 2026-08-05). Birthdays are nobody's business but ours. */}
             {event.event_type !== 'birthday' && (
-              <ScopeBadge scope={(event as any).visibility} />
+              <ScopeBadge
+                scope={(event as any).visibility}
+                communityId={(event as any).community_id}
+              />
             )}
             {event.meet_link && (
               <Pressable
