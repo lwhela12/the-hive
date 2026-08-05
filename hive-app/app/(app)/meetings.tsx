@@ -1537,8 +1537,12 @@ export default function MeetingsScreen() {
           />
           <Pressable
             onPress={(event) => event.stopPropagation()}
-            style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}
+            style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '88%', overflow: 'hidden' }}
           >
+            {/* Three buttons today, and an admin sees all three — the ceiling
+                and the scroll are here so the fourth one somebody adds later
+                doesn't quietly fall off the end of the sheet. */}
+            <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }}>
             <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 4 }}>HIVE Slide Deck</Text>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 16, lineHeight: 18 }}>
@@ -1578,6 +1582,7 @@ export default function MeetingsScreen() {
                 </Pressable>
               )}
             </View>
+            </ScrollView>
           </Pressable>
         </View>
       </Modal>
@@ -1593,8 +1598,12 @@ export default function MeetingsScreen() {
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }} pointerEvents="box-none">
             <Pressable
               onPress={(event) => event.stopPropagation()}
-              style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}
+              style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '88%', overflow: 'hidden' }}
             >
+              {/* Same rule as every other sheet: a ceiling and something to
+                  scroll, so Save Link cannot end up under the bottom edge when
+                  the keyboard is up on a short screen. */}
+              <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
               <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 4 }}>Slide Deck URL</Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 16, lineHeight: 18 }}>
@@ -1643,6 +1652,7 @@ export default function MeetingsScreen() {
                   </Text>
                 </Pressable>
               </View>
+              </ScrollView>
             </Pressable>
           </KeyboardAvoidingView>
         </View>

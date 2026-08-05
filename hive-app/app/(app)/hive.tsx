@@ -4056,7 +4056,15 @@ export default function HiveScreen() {
       {/* Add Task Modal */}
       <Modal visible={showAddTaskModal} animationType="slide" transparent onRequestClose={() => setShowAddTaskModal(false)}>
         <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'flex-end' }} onPress={() => setShowAddTaskModal(false)}>
-          <Pressable onPress={e => e.stopPropagation()} style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+          {/* A sheet that grows with what you type has to stop somewhere and
+              scroll, or the button you are typing towards leaves the screen.
+              Nat hit exactly this on 2026-08-05 — the box takes 1,000
+              characters and the Add Task button was riding below the bottom
+              edge with no way to reach it. The cap lives on the sheet and the
+              padding moved inside the ScrollView so the rounded top stays put
+              while the words move. */}
+          <Pressable onPress={e => e.stopPropagation()} style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '88%', overflow: 'hidden' }}>
+            <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
             <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d', marginBottom: 4 }}>Add a Task</Text>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 16 }}>Add something to your personal to-do list</Text>
@@ -4102,6 +4110,7 @@ export default function HiveScreen() {
                 {savingTask ? 'Saving...' : 'Add Task'}
               </Text>
             </Pressable>
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -4247,12 +4256,17 @@ export default function HiveScreen() {
               backgroundColor: 'white',
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
-              paddingBottom: useMobileLayout ? 34 : 24,
+              maxHeight: '88%',
+              overflow: 'hidden',
             }}
           >
             <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
             </View>
+            {/* Four step cards, two paragraphs and a button is a tall sheet, and
+                on a short window the Got it button was the part that fell off
+                the end — the one control that closes it. */}
+            <ScrollView contentContainerStyle={{ paddingBottom: useMobileLayout ? 34 : 24 }}>
             <View style={{ paddingHorizontal: 22, paddingTop: 8 }}>
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', marginBottom: 8 }}>
                 Add HIVE to your Home Screen
@@ -4303,6 +4317,7 @@ export default function HiveScreen() {
                 </Text>
               </Pressable>
             </View>
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -4428,10 +4443,15 @@ export default function HiveScreen() {
       {/* Daily Question Answer Modal */}
       <Modal visible={showAnswerModal} animationType="slide" transparent onRequestClose={closeAnswerModal}>
         <ModalBackdrop onClose={closeAnswerModal} style={{ justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+          {/* The answer box grows as you talk or type, and Cancel/Share sit
+              under it — so the sheet needs a ceiling and something to scroll
+              inside, the same way the Add a Task sheet does. The grabber stays
+              above the scroll so there is always a fixed thing to look at. */}
+          <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '88%', overflow: 'hidden' }}>
             <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
             </View>
+            <ScrollView keyboardShouldPersistTaps="handled">
             <View style={{ paddingHorizontal: 24, paddingBottom: 40 }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', letterSpacing: 0.8, marginTop: 12, marginBottom: 6 }}>
                 {currentAnswerPrompt.question.emoji} {currentAnswerPrompt.question.category.toUpperCase()}
@@ -4484,6 +4504,7 @@ export default function HiveScreen() {
                 </Pressable>
               </View>
             </View>
+            </ScrollView>
           </View>
         </ModalBackdrop>
       </Modal>

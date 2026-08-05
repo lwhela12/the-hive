@@ -412,12 +412,26 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   homeOwnerRow: {
+    // The pencil stays on the right now that the name no longer pushes it there.
+    justifyContent: 'space-between',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   homeOwnerLink: {
-    flex: 1,
+    // Hugs the name instead of filling the row.
+    //
+    // Nat, 2026-08-05: "nothing was happening when i clicked the wish, it forced
+    // me to click on the pencil to edit & i dont like that." Something WAS
+    // happening — this link stretched across the whole top of the card, and on
+    // your own card it pushes /profile, which navigates out from under the
+    // member sheet you are standing in. So the tap that felt dead was in fact a
+    // tap on somebody's name, and the two-thirds of that row which is empty
+    // space belonged to the name rather than to the card.
+    //
+    // A link should be exactly as big as the thing it links to. The name still
+    // opens the profile; everywhere else on the card opens the wish.
+    flexShrink: 1,
     minWidth: 0,
   },
   homeOwnerName: {

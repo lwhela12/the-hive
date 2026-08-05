@@ -482,7 +482,13 @@ function MemberDetailModal({
   const allVisibleMemberWishes = [...currentWishes, ...grantedWishes].sort((a, b) => (
     (b.created_at ?? '').localeCompare(a.created_at ?? '')
   ));
-  const memberWishPanelHeight = isPhoneProfile ? 500 : 520;
+  // A ceiling, not a floor (Nat, 2026-08-05: "if i only have one wish, shrink
+  // the box"). This panel was pinned at exactly this height whatever was in it,
+  // so a member with one HD wish got one card and then four hundred pixels of
+  // nothing — which reads as a page that broke rather than as a short list.
+  // The panel is now as tall as the wishes in it and starts scrolling inside
+  // itself once it passes this, which is roughly four cards.
+  const memberWishPanelMaxHeight = isPhoneProfile ? 500 : 520;
   const roleLabel = ROLE_LABELS[member.role];
   const { getOrCreateDMRoom } = useChatRooms(communityId ?? undefined, currentAuthId ?? undefined);
   const [introExpanded, setIntroExpanded] = useState(false);
@@ -939,9 +945,17 @@ function MemberDetailModal({
     setAddingWish(true);
   };
 
+  // Tapping a wish row opens the same Wish Details view the rest of the app
+  // opens — its comments, its granters, its Grant button. The pencil beside it
+  // still goes straight to the manage sheet and stops the press from reaching
+  // the row underneath, so the two never fire together.
+  //
+  // This used to refuse to open at all unless the screen had a HIVE of its own
+  // (`if (!communityId) return`), which is a tap that dies without a word. A
+  // wish already carries the id of the HIVE it belongs to, and at HIVE-Wide the
+  // one you are looking at may well be from another HIVE than the one you were
+  // last standing in — so let the wish speak for itself.
   const openWishDetail = (wish: MemberWish) => {
-    if (!communityId) return;
-
     setSelectedWish({
       ...normalizeMemberWish(wish),
       user: member as unknown as Profile,
@@ -1304,7 +1318,7 @@ function MemberDetailModal({
                     borderTopLeftRadius: 0,
                     borderWidth: 1,
                     borderColor: 'rgba(222,193,129,0.7)',
-                    height: memberWishPanelHeight,
+                    paddingVertical: 36,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}>
@@ -1323,17 +1337,15 @@ function MemberDetailModal({
                       shadowRadius: 18,
                       shadowOffset: { width: 0, height: 5 },
                       elevation: 3,
-                      height: memberWishPanelHeight,
+                      maxHeight: memberWishPanelMaxHeight,
                       overflow: 'hidden',
                     }}>
                       <ScrollView
                         nestedScrollEnabled
                         showsVerticalScrollIndicator={true}
-                        style={{ flex: 1 }}
                         contentContainerStyle={{
                           padding: 12,
                           paddingBottom: 12,
-                          flexGrow: visibleMyWishes.length === 0 ? 1 : undefined,
                         }}
                       >
                         {visibleMyWishes.length === 0 ? (
@@ -1852,17 +1864,19 @@ function MemberDetailModal({
                   shadowRadius: 18,
                   shadowOffset: { width: 0, height: 5 },
                   elevation: 3,
-                  height: memberWishPanelHeight,
+                  maxHeight: memberWishPanelMaxHeight,
                   overflow: 'hidden',
                 }}>
+                  {/* No `flex: 1` on the scroller on purpose: inside a box that
+                      is only capped, flex would give it a height of zero and
+                      the wishes would vanish. Left alone it is as tall as the
+                      cards and shrinks to the cap when there are many. */}
                   <ScrollView
                     nestedScrollEnabled
                     showsVerticalScrollIndicator={true}
-                    style={{ flex: 1 }}
                     contentContainerStyle={{
                       padding: 12,
                       paddingBottom: 12,
-                      flexGrow: visibleMemberWishes.length === 0 ? 1 : undefined,
                     }}
                   >
                     {visibleMemberWishes.length === 0 ? (
@@ -1872,6 +1886,11 @@ function MemberDetailModal({
                         </Text>
                       </View>
                     ) : (
+                      // `onOpen` on every card, whoever the member is: reading
+                      // a wish is for everybody, so somebody else's wish opens
+                      // the same way yours does. `onManage` — the pencil — only
+                      // appears for the people who may change it, so a visitor
+                      // sees a card that opens and nothing else.
                       visibleMemberWishes.map(w => (
                         <WishCombCard
                           key={w.id}
@@ -1927,22 +1946,20 @@ function MemberDetailModal({
                   shadowRadius: 18,
                   shadowOffset: { width: 0, height: 5 },
                   elevation: 3,
-                  height: memberWishPanelHeight,
+                  maxHeight: memberWishPanelMaxHeight,
                   overflow: 'hidden',
                 }}>
                   {wishesLoading ? (
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <View style={{ paddingVertical: 36, alignItems: 'center', justifyContent: 'center' }}>
                       <ThinkingBee />
                     </View>
                   ) : (
                     <ScrollView
                       nestedScrollEnabled
                       showsVerticalScrollIndicator={true}
-                      style={{ flex: 1 }}
                       contentContainerStyle={{
                         padding: 12,
                         paddingBottom: 12,
-                        flexGrow: visibleMyWishes.length === 0 ? 1 : undefined,
                       }}
                     >
                       {visibleMyWishes.length === 0 ? (

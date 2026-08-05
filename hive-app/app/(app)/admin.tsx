@@ -2332,7 +2332,11 @@ export default function AdminScreen() {
       {/* Survey Create Modal */}
       <Modal visible={showSurveyModal} animationType="slide" transparent onRequestClose={() => setShowSurveyModal(false)}>
         <ModalBackdrop onClose={() => setShowSurveyModal(false)} style={{ justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
+          {/* The Survey Editor next door already had a ceiling and a scroll;
+              this one, which is the same sheet with a date picker in it, had
+              neither — so Create Survey was the button that went missing. */}
+          <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%', overflow: 'hidden' }}>
+            <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 20, color: '#2d2d2d', marginBottom: 16 }}>Create Survey</Text>
             {/* A survey's name and its description are both things a person
                 writes in words, so they are the shared box with the mic inside
@@ -2382,6 +2386,7 @@ export default function AdminScreen() {
                 </Text>
               </Pressable>
             </View>
+            </ScrollView>
           </View>
         </ModalBackdrop>
       </Modal>
@@ -2959,7 +2964,11 @@ export default function AdminScreen() {
       {/* Queen Bee Modal */}
       <Modal visible={showQueenBeeModal} animationType="slide" transparent onRequestClose={() => setShowQueenBeeModal(false)}>
         <ModalBackdrop onClose={() => setShowQueenBeeModal(false)} style={{ justifyContent: 'flex-end' }}>
-          <View className="bg-white rounded-t-3xl p-6">
+          {/* Member picker, month, two text boxes and a status row, with Save
+              at the very bottom — the tallest sheet in admin and the one most
+              likely to put its own button out of reach. */}
+          <View className="bg-white rounded-t-3xl" style={{ maxHeight: '90%', overflow: 'hidden' }}>
+            <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
             <Text className="text-xl font-bold text-gray-800 mb-4">
               {editingQueenBee ? 'Edit Queen Bee' : 'Set Queen Bee'}
             </Text>
@@ -3072,6 +3081,7 @@ export default function AdminScreen() {
                 </Text>
               </Pressable>
             </View>
+            </ScrollView>
           </View>
         </ModalBackdrop>
       </Modal>
@@ -3079,7 +3089,11 @@ export default function AdminScreen() {
       {/* Event Modal */}
       <Modal visible={showEventModal} animationType="slide" transparent onRequestClose={() => setShowEventModal(false)}>
         <ModalBackdrop onClose={() => setShowEventModal(false)} style={{ justifyContent: 'flex-end' }}>
-          <View className="bg-white rounded-t-3xl p-6">
+          {/* Title, date, a growing description and the audience toggle stack
+              up taller than a phone before you have typed anything, and Create
+              lives underneath all of it. Ceiling on the sheet, scroll inside. */}
+          <View className="bg-white rounded-t-3xl" style={{ maxHeight: '90%', overflow: 'hidden' }}>
+            <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
             <Text className="text-xl font-bold text-gray-800 mb-4">
               Add Event
             </Text>
@@ -3127,6 +3141,7 @@ export default function AdminScreen() {
                 </Text>
               </Pressable>
             </View>
+            </ScrollView>
           </View>
         </ModalBackdrop>
       </Modal>

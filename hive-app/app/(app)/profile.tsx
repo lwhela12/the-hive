@@ -29,6 +29,7 @@ import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { EditButton } from '../../components/ui/EditButton';
 import { WorldMark } from '../../components/ui/WorldMark';
+import { SWITCH_LOOK } from '../../components/ui/Switch';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { showAlert } from '../../lib/showAlert';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
@@ -1879,14 +1880,25 @@ export default function ProfileScreen() {
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13 }} className="text-charcoal">
             {visibleHiveWide ? 'Visible HIVE-Wide' : 'Only your HIVEs see you'}
           </Text>
+          {/* The pill is drawn from `SWITCH_LOOK`, the same numbers
+              `components/ui/Switch.tsx` uses, so this reads as the switch from
+              Settings rather than a near-miss of it. It had drifted to 46×27
+              with a 21 knob and its own grey, against the house 44×26/20 — close
+              enough that nobody would call it wrong and far enough that the two
+              never looked like one control. The row shape stays compact and
+              centred, which is what Nat asked for on 2026-08-05; only the
+              drawing of the switch itself is shared. */}
           <View
             style={{
-              width: 46, height: 27, borderRadius: 14, padding: 3,
-              backgroundColor: visibleHiveWide ? '#bd9348' : '#ded6c6',
+              width: SWITCH_LOOK.trackWidth,
+              height: SWITCH_LOOK.trackHeight,
+              borderRadius: SWITCH_LOOK.trackHeight / 2,
+              padding: SWITCH_LOOK.inset,
+              backgroundColor: visibleHiveWide ? '#bd9348' : 'rgba(49,49,48,0.18)',
               alignItems: visibleHiveWide ? 'flex-end' : 'flex-start',
             }}
           >
-            <View style={{ width: 21, height: 21, borderRadius: 11, backgroundColor: '#fff' }} />
+            <View style={{ width: SWITCH_LOOK.knob, height: SWITCH_LOOK.knob, borderRadius: SWITCH_LOOK.knob / 2, backgroundColor: '#fffdf5' }} />
           </View>
         </Pressable>
         </FadeIn>

@@ -638,12 +638,117 @@ export default function AppFeedbackScreen() {
               })}
             </View>
 
+            <Text style={{ ...styles.caption, marginBottom: 8 }}>
+              Where in the app? <Text style={{ textTransform: 'none', letterSpacing: 0 }}>(optional)</Text>
+            </Text>
+            {/* Second, not last (Nat 2026-08-05: "I think these 2 could be
+                swapped... start with what kind is it, thats good, then go to
+                where (optional) & then what").
+
+                It used to sit under the big box, and that was asking for the
+                easy fact after the hard one. Picking a place is a two-second tap
+                that narrows what you are about to write; being asked for it
+                afterwards is filing you have already finished in your head, so
+                it got skipped.
+
+                A list rather than a blank box (Nat 2026-08-04: "i think this
+                should be a drop down").
+
+                Free text was a deliberate choice on 08-03 — "asking somebody to
+                pick their route out of a menu is asking them to do our filing" —
+                and it was wrong for a reason the empty field makes obvious: the
+                page names are OURS. Somebody who calls Boards "the threads bit"
+                writes that, and now two reports about one screen do not look
+                alike. A list of the actual page names asks for recognition
+                instead of recall, which is the easier half of remembering.
+
+                "Somewhere else" keeps the escape hatch, because the bug is
+                often in the gap between two pages. */}
+            <Pressable
+              onPress={() => setWhereOpen((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel="Choose where in the app"
+              style={[styles.field, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+            >
+              <Text
+                style={{
+                  fontFamily: 'Lato_400Regular',
+                  fontSize: 15,
+                  color: whereInApp ? skin.ink : skin.inkFaint,
+                  flex: 1,
+                }}
+                numberOfLines={1}
+              >
+                {whereInApp || 'Pick a place…'}
+              </Text>
+              <Text style={{ color: skin.inkSoft, fontSize: 12, marginLeft: 8 }}>{whereOpen ? '▲' : '▼'}</Text>
+            </Pressable>
+
+            {whereOpen ? (
+              <View
+                style={{
+                  marginTop: 6,
+                  borderWidth: 1,
+                  borderColor: skin.border,
+                  borderRadius: 12,
+                  backgroundColor: skin.card,
+                  overflow: 'hidden',
+                }}
+              >
+                {WHERE_OPTIONS.map((place, index) => (
+                  <Pressable
+                    key={place}
+                    onPress={() => {
+                      setWhereInApp(place === 'Somewhere else' ? '' : place);
+                      setWhereOpen(false);
+                      setWhereOther(place === 'Somewhere else');
+                    }}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: 14,
+                      paddingVertical: 11,
+                      borderTopWidth: index === 0 ? 0 : 1,
+                      borderTopColor: skin.border,
+                      backgroundColor: pressed ? skin.cardPressed : 'transparent',
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, color: skin.inkBody }}>
+                      {place}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+
+            {whereOther ? (
+              /* Naming a place in your own words is words, so it gets the mic —
+                 this is the escape hatch for the bug that lives in the gap
+                 between two pages, and describing that out loud is easier than
+                 typing it. 300 is the edge function's own limit. */
+              <ComposerBar
+                variant="form"
+                containerClassName="mt-2"
+                value={whereInApp}
+                onChangeText={setWhereInApp}
+                multiline={false}
+                maxLength={300}
+                placeholder="Where were you?"
+                submitOnEnterKey={false}
+              />
+            ) : null}
+
+            {/* The question belongs to the KIND, and it is deliberately the last
+                thing you read before the box it is asking about — the chips are
+                two blocks up now, so this has to stand on its own as a question
+                rather than as a caption hanging off the chip you just pressed.
+                Each one already does: every prompt names what to write, not what
+                you picked. */}
             <Text
               style={{
                 fontFamily: 'LibreBaskerville_400Regular',
                 fontSize: 18,
                 lineHeight: 26,
                 color: skin.ink,
+                marginTop: 22,
                 marginBottom: 10,
               }}
             >

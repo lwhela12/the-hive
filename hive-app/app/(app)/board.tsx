@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator, TextInput, Modal, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator, ScrollView, TextInput, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -1536,12 +1536,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
             backgroundColor: skin.card,
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
-            padding: 22,
-            paddingBottom: 34,
             borderTopWidth: 1,
             borderColor: 'rgba(222,193,129,0.5)',
+            maxHeight: '88%',
+            overflow: 'hidden',
           }}
         >
+          {/* Somebody who can moderate sees five action rows under a two-line
+              wish description, and Delete is the last of them. A ceiling and a
+              scroll, like every other bottom sheet in the app. */}
+          <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 34 }}>
           <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.28)', borderRadius: 2, alignSelf: 'center', marginBottom: 18 }} />
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d' }}>
             Manage Wish
@@ -1650,6 +1654,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
               <Ionicons name="chevron-forward" size={16} color="rgba(239,68,68,0.45)" />
             </Pressable>
           ) : null}
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>

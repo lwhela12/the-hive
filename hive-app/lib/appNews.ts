@@ -28,6 +28,38 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-06-one-switch',
+    date: '2026-08-05',
+    title: 'Every setting works the same way',
+    detail: 'Your preferences were asked in four different shapes. They are all the same switch now, in one column — and the sharing one shows you its own badge as you flip it.',
+    href: { pathname: '/settings' },
+    action: 'Open your settings',
+  },
+  {
+    id: '2026-08-06-no-more-trapped',
+    date: '2026-08-05',
+    title: 'Pop-ups scroll instead of trapping you',
+    detail: 'Sixteen of them could grow past the top of the screen and take their Save button with them.',
+  },
+  {
+    id: '2026-08-06-tap-the-wish',
+    date: '2026-08-05',
+    title: 'Tapping a wish opens it',
+    detail: 'A name link was stretched across the top of the card, so the tap that felt dead was landing on somebody\u2019s name.',
+  },
+  {
+    id: '2026-08-06-meeting-marks',
+    date: '2026-08-05',
+    title: 'A meeting wears its own HIVE\u2019s colour',
+    detail: 'And an event that everyone can see but only your HIVE is invited to now says both, instead of only the wider of the two.',
+  },
+  {
+    id: '2026-08-06-where-weve-met',
+    date: '2026-08-05',
+    title: 'The location box remembers where you meet',
+    detail: 'Start typing and the places your HIVE has used before come up to tap.',
+  },
+  {
     id: '2026-08-05-invited-vs-visible',
     date: '2026-08-05',
     title: 'Everyone can see the meeting. Not everyone is invited to it',

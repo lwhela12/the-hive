@@ -10,7 +10,7 @@ import { useNotifications } from '../../lib/hooks/useNotifications';
 import { AppHeader } from '../../components/navigation';
 import { LinkedLogins } from '../../components/profile/LinkedLogins';
 import { ScopeBadge } from '../../components/ui/ScopeBadge';
-import { Switch, SWITCH_GUTTER, SWITCH_LOOK } from '../../components/ui/Switch';
+import { Switch, SWITCH_GUTTER } from '../../components/ui/Switch';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 /**
@@ -41,7 +41,8 @@ const PANEL = '#fffdf6';
 const HAIRLINE = 'rgba(222,193,129,0.4)';
 const CHARCOAL = '#313130';
 const MUTED = '#8e7f6b';
-const GOLD = '#bd9348';
+// The gold used to live here too, for the radio dots and the On buttons. Both
+// are gone; the switch carries the gold now, out of `components/ui/Switch.tsx`.
 
 type Scope = 'hive' | 'all_hives';
 
@@ -75,14 +76,16 @@ const EMAIL_SETTINGS: EmailSetting[] = [
   {
     column: 'email_meeting_checkin_enabled',
     label: 'Before a meeting',
-    onHint: 'On — your check-in link, three days before we meet',
-    offHint: "Off — you'll still see it on Home",
+    // The pill already says on or off, so the words stopped repeating it and
+    // spend themselves on what actually lands in the inbox (2026-08-05).
+    onHint: 'Your check-in link arrives three days before we meet.',
+    offHint: "You'll still find the check-in waiting on Home.",
   },
   {
     column: 'email_midpoint_checkin_enabled',
     label: 'The month-end check-in',
-    onHint: 'On — two minutes to add something to the newsletter',
-    offHint: 'Off — the newsletter still comes out without you',
+    onHint: 'Two minutes to add something to the newsletter.',
+    offHint: 'The newsletter still comes out without you.',
   },
 ];
 
@@ -139,113 +142,17 @@ function Section({
   );
 }
 
-/** A row of choices, one of which is yours. Same shape as the wish picker. */
-function ChoiceRow({
-  options,
-  value,
-  onChange,
-  disabled,
-}: {
-  options: { key: string; label: string; hint: string }[];
-  value: string;
-  onChange: (next: string) => void;
-  disabled?: boolean;
-}) {
+/**
+ * A hairline between two switches in the same panel.
+ *
+ * It starts where the words start rather than at the panel's edge, so the
+ * column of pills reads as one column instead of a stack of separate boxes.
+ */
+function RowDivider() {
   return (
-    <View style={{ gap: 8 }}>
-      {options.map((option) => {
-        const selected = value === option.key;
-        return (
-          <Pressable
-            key={option.key}
-            onPress={() => onChange(option.key)}
-            disabled={disabled}
-            accessibilityRole="button"
-            accessibilityState={{ selected, disabled: !!disabled }}
-            accessibilityLabel={`${option.label} — ${option.hint}`}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 10,
-              backgroundColor: selected ? '#fdf3dc' : PANEL,
-              borderWidth: 1,
-              borderColor: selected ? 'rgba(222,193,129,0.75)' : HAIRLINE,
-              borderRadius: 16,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              opacity: disabled ? 0.6 : 1,
-            }}
-          >
-            <Text style={{ fontSize: 14, color: selected ? GOLD : '#c3b8a5' }}>
-              {selected ? '●' : '○'}
-            </Text>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  fontFamily: selected ? 'Lato_700Bold' : 'Lato_400Regular',
-                  fontSize: 14,
-                  color: selected ? '#8a6b30' : CHARCOAL,
-                }}
-              >
-                {option.label}
-              </Text>
-              <Text
-                style={{
-                  fontFamily: 'Lato_400Regular',
-                  fontSize: 12,
-                  lineHeight: 17,
-                  color: MUTED,
-                  marginTop: 2,
-                }}
-              >
-                {option.hint}
-              </Text>
-            </View>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-function Toggle({
-  on,
-  onPress,
-  busy,
-  label,
-}: {
-  on: boolean;
-  onPress: () => void;
-  busy?: boolean;
-  label: string;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={busy}
-      accessibilityRole="switch"
-      accessibilityLabel={label}
-      accessibilityState={{ checked: on, disabled: !!busy }}
-      style={{
-        minWidth: 58,
-        alignItems: 'center',
-        backgroundColor: on ? GOLD : '#ece7dc',
-        borderRadius: 999,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        opacity: busy ? 0.6 : 1,
-      }}
-    >
-      <Text
-        style={{
-          fontFamily: 'Lato_700Bold',
-          fontSize: 13,
-          color: on ? '#fffdf5' : '#7d715f',
-        }}
-      >
-        {on ? 'On' : 'Off'}
-      </Text>
-    </Pressable>
+    <View
+      style={{ height: 1, backgroundColor: HAIRLINE, marginLeft: SWITCH_GUTTER }}
+    />
   );
 }
 
@@ -270,7 +177,9 @@ export default function SettingsScreen() {
       .eq('id', profile.id);
     if (error) {
       setVisibleHiveWide(!next);         // put it back; nothing was saved
-      Alert.alert('Could not save that', error.message);
+      // `Alert.alert` is an empty function in a browser, so this used to slide
+      // the pill back with no word of explanation (2026-08-05).
+      showAlert('Could not save that', error.message);
     } else {
       await refreshProfile();
     }
@@ -286,6 +195,20 @@ export default function SettingsScreen() {
   const [checkedColumn, setCheckedColumn] = useState(false);
   const [hasDefaultShareColumn, setHasDefaultShareColumn] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  /**
+   * The answer you just gave, held until the profile catches up.
+   *
+   * A switch has to move under your finger. What these draw comes from the
+   * profile, and the profile only changes once the save has been round-tripped,
+   * so without this the pill sits still for half a second and reads as a
+   * control that doesn't work. The radio cards did exactly that.
+   *
+   * Keyed by column so two saves in flight can't wear each other's answer, and
+   * dropped the moment the save settles — successfully, so the profile now says
+   * the same thing, or badly, so the switch slides back on its own.
+   */
+  const [pending, setPending] = useState<Record<string, boolean>>({});
 
   const userId = profile?.id;
 
@@ -309,10 +232,16 @@ export default function SettingsScreen() {
     };
   }, [userId]);
 
+  /**
+   * Save one switch. `key` is the column it lives in and `next` is where the
+   * switch has just been put, which is only ever used to draw it — what is
+   * stored is `patch`, exactly as the caller wrote it.
+   */
   const savePatch = useCallback(
-    async (key: string, patch: Record<string, unknown>, failureMessage: string) => {
+    async (key: string, next: boolean, patch: Record<string, unknown>, failureMessage: string) => {
       if (!profile) return;
       setBusyKey(key);
+      setPending((held) => ({ ...held, [key]: next }));
       try {
         const { error } = await (supabase as any)
           .from('profiles')
@@ -320,12 +249,19 @@ export default function SettingsScreen() {
           .eq('id', profile.id);
 
         if (error) {
-          Alert.alert('Sorry', failureMessage);
+          showAlert('Sorry', failureMessage);
           return;
         }
+        // Awaited all the way, so by the time we let go of `pending` below the
+        // profile is already carrying this answer and nothing flickers.
         await refreshProfile();
       } finally {
         setBusyKey(null);
+        setPending((held) => {
+          const rest = { ...held };
+          delete rest[key];
+          return rest;
+        });
       }
     },
     [profile, refreshProfile]
@@ -360,18 +296,6 @@ export default function SettingsScreen() {
   // How far you travel is worth asking everyone, even somebody in a single
   // HIVE: the shared noticeboards reach every HIVE, so their post can be read
   // by people they've never met whether or not they belong to a second HIVE.
-  const travelOptions = [
-    {
-      key: 'hive',
-      label: 'Stay in my HIVE',
-      hint: 'The people who share a HIVE with you can open your card.',
-    },
-    {
-      key: 'all_hives',
-      label: 'Come with me',
-      hint: 'Anyone in any HIVE can open your card.',
-    },
-  ];
 
   // Your default only offers what your HIVE allows and what you could actually
   // pick on a wish — the same rule WishScopePicker follows, so a default can
@@ -393,11 +317,17 @@ export default function SettingsScreen() {
         (inSeveralHives || rung !== 'all_hives')
     ).length > 1;
 
-  const emailIsOn = (setting: EmailSetting) => (profile as any)[setting.column] !== false;
+  // Where each switch is drawn: the answer you just gave if one is in flight,
+  // otherwise what the profile says. Emails count a missing column as on.
+  const travelOn = pending.profile_scope ?? profileScope === 'all_hives';
+  const defaultWide = pending.default_share_scope ?? defaultShare === 'all_hives';
+  const emailIsOn = (setting: EmailSetting) =>
+    pending[setting.column] ?? (profile as any)[setting.column] !== false;
 
   const setEmail = (setting: EmailSetting, next: boolean) => {
     void savePatch(
       setting.column,
+      next,
       { [setting.column]: next },
       'That email setting did not save. Please try again.'
     );
@@ -437,48 +367,45 @@ export default function SettingsScreen() {
           </Text>
         </View>
 
+        {/* Two paragraphs used to wrap this one switch — an explanation above
+            and a reassurance below. Nat, 2026-08-05: *"This seems confusing to
+            me & too much reading."* The explanation should be shorter than the
+            thing it explains, so it is one line above and one line under the
+            label, and it changes with the answer.
+
+            Migration 135 promises "a little bee stands in for you" when your
+            card stays home. That bee has not been built — BoardPostCard and
+            BoardReplyItem still fall back to the word "Unknown" — so the words
+            here stop at what is true today (2026-08-03). */}
         <Section
           title="How far you travel"
-          blurb="This one is about you, and it works on top of whatever you choose for each thing you write. Post to a board that every HIVE can see and your card can ride along, so someone you've never met can tap your name and see who is vouching for it."
+          blurb="About you, on top of whatever you choose for each thing you write."
         >
-          <ChoiceRow
-            options={travelOptions}
-            value={profileScope}
-            disabled={busyKey === 'profile_scope'}
-            onChange={(next) =>
-              void savePatch(
-                'profile_scope',
-                { profile_scope: next },
-                'That setting did not save. Please try again.'
-              )
-            }
-          />
-          {/* Migration 135 promises "a little bee stands in for you" here, and
-              that bee has not been built yet — BoardPostCard and BoardReplyItem
-              still fall back to the word "Unknown" for an author they can't
-              read. So this line stops at what is true today (2026-08-03); it
-              can grow the bee back the day the bee exists. */}
-          <Text
-            style={{
-              fontFamily: 'Lato_400Regular',
-              fontSize: 12,
-              lineHeight: 18,
-              color: MUTED,
-              marginTop: 10,
-            }}
-          >
-            Keep to your HIVE and what you share still counts — the recommendation travels, you
-            stay here.
-          </Text>
+          <Panel>
+            <Switch
+              on={travelOn}
+              busy={busyKey === 'profile_scope'}
+              label="My card travels with what I share"
+              hint={
+                travelOn
+                  ? 'Anyone in any HIVE can tap your name and see who is vouching for it.'
+                  : 'Only the people who share a HIVE with you can open your card.'
+              }
+              onToggle={(next) =>
+                void savePatch(
+                  'profile_scope',
+                  next,
+                  { profile_scope: next ? 'all_hives' : 'hive' },
+                  'That setting did not save. Please try again.'
+                )
+              }
+            />
+          </Panel>
         </Section>
 
         <Section
           title="Your default sharing"
-          blurb={
-            canSendFurther
-              ? 'Where a new wish or thread starts out. Whatever you pick here, you can open any single one of them up when you share it.'
-              : 'Where a new wish or thread starts out.'
-          }
+          blurb="Where a new wish or thread starts out."
         >
           {!checkedColumn ? (
             <Panel>
@@ -487,25 +414,40 @@ export default function SettingsScreen() {
               </View>
             </Panel>
           ) : hasDefaultShareColumn && canDefaultWide ? (
-            <ChoiceRow
-              options={[
-                { key: 'hive', label: 'This HIVE only', hint: 'New wishes and threads start here.' },
-                {
-                  key: 'all_hives',
-                  label: 'HIVE-Wide',
-                  hint: 'More eyes on it — anyone in any HIVE.',
-                },
-              ]}
-              value={defaultShare}
-              disabled={busyKey === 'default_share_scope'}
-              onChange={(next) =>
-                void savePatch(
-                  'default_share_scope',
-                  { default_share_scope: next },
-                  'That setting did not save. Please try again.'
-                )
-              }
-            />
+            <Panel>
+              {/* The badge beside the label is the one your next wish will
+                  actually wear, and it changes as you flip the switch. Nat,
+                  2026-08-05: *"that just shows what things look like if they are
+                  shared, so you're toggling on and off your choice & on and off
+                  what it looks like."* The setting shows you its own result. */}
+              <Switch
+                on={defaultWide}
+                busy={busyKey === 'default_share_scope'}
+                label="Start new things HIVE-Wide"
+                hint={
+                  defaultWide
+                    ? 'New wishes and threads go out to every HIVE. You can pull any single one back when you share it.'
+                    : canSendFurther
+                      ? 'New wishes and threads start here, with your HIVE. You can send any single one further when you share it.'
+                      : 'New wishes and threads start here, with your HIVE.'
+                }
+                trailing={
+                  <ScopeBadge
+                    scope={defaultWide ? 'all_hives' : 'hive'}
+                    community={community}
+                    size="sm"
+                  />
+                }
+                onToggle={(next) =>
+                  void savePatch(
+                    'default_share_scope',
+                    next,
+                    { default_share_scope: next ? 'all_hives' : 'hive' },
+                    'That setting did not save. Please try again.'
+                  )
+                }
+              />
+            </Panel>
           ) : (
             <Panel>
               <Text
@@ -528,42 +470,19 @@ export default function SettingsScreen() {
         <Section title="Emails" blurb="One switch per email. Keep the ones you want.">
           <Panel>
             {EMAIL_SETTINGS.map((setting, index) => {
-                const on = emailIsOn(setting);
-                return (
-                  <View
-                    key={setting.column}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingVertical: 13,
-                      borderTopWidth: index > 0 ? 1 : 0,
-                      borderTopColor: HAIRLINE,
-                    }}
-                  >
-                    <View style={{ flex: 1, paddingRight: 12 }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: CHARCOAL }}>
-                        {setting.label}
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: 'Lato_400Regular',
-                          fontSize: 12,
-                          lineHeight: 17,
-                          color: MUTED,
-                          marginTop: 3,
-                        }}
-                      >
-                        {on ? setting.onHint : setting.offHint}
-                      </Text>
-                    </View>
-                    <Toggle
-                      on={on}
-                      busy={busyKey === setting.column}
-                      label={setting.label}
-                      onPress={() => setEmail(setting, !on)}
-                    />
-                  </View>
-                );
+              const on = emailIsOn(setting);
+              return (
+                <View key={setting.column}>
+                  {index > 0 ? <RowDivider /> : null}
+                  <Switch
+                    on={on}
+                    busy={busyKey === setting.column}
+                    label={setting.label}
+                    hint={on ? setting.onHint : setting.offHint}
+                    onToggle={(next) => setEmail(setting, next)}
+                  />
+                </View>
+              );
             })}
           </Panel>
         </Section>
@@ -574,64 +493,31 @@ export default function SettingsScreen() {
             title="Notifications"
             blurb="Nudges on your phone: a reply to something you posted, or your name coming up."
           >
+            {/* This one is the phone's answer, not ours — nothing here is saved
+                to a profile. It wears the same switch so the column holds, and
+                it does exactly what the gold button used to do: ask the phone
+                the first time, and send you to the phone's own settings once
+                the phone has an opinion. That is the only place these can be
+                turned back off, which is what the words say. */}
             <Panel>
-              <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}>
-                <View style={{ flex: 1, paddingRight: 12 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: CHARCOAL }}>
-                    Push notifications
-                  </Text>
-                  <Text
-                    style={{
-                      fontFamily: 'Lato_400Regular',
-                      fontSize: 12,
-                      lineHeight: 17,
-                      color: MUTED,
-                      marginTop: 3,
-                    }}
-                  >
-                    {isNotificationEnabled
-                      ? 'On — your phone will let you know'
-                      : permissionStatus === 'denied'
-                        ? 'Your phone is holding these back — open its settings to let them through'
-                        : 'Off for now'}
-                  </Text>
-                </View>
-                {isNotificationEnabled ? (
-                  <View
-                    style={{
-                      backgroundColor: '#eaf3e6',
-                      borderRadius: 999,
-                      paddingHorizontal: 14,
-                      paddingVertical: 6,
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#3F7D5C' }}>
-                      On
-                    </Text>
-                  </View>
-                ) : (
-                  <Pressable
-                    onPress={async () => {
-                      if (permissionStatus === 'denied') {
-                        Linking.openSettings();
-                        return;
-                      }
-                      await requestPermissions();
-                    }}
-                    accessibilityRole="button"
-                    style={{
-                      backgroundColor: GOLD,
-                      borderRadius: 999,
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#fffdf5' }}>
-                      {permissionStatus === 'denied' ? 'Open phone settings' : 'Turn on'}
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
+              <Switch
+                on={isNotificationEnabled}
+                label="Push notifications"
+                hint={
+                  isNotificationEnabled
+                    ? "Your phone will let you know. Turn them off in your phone's settings."
+                    : permissionStatus === 'denied'
+                      ? "Your phone is holding these back — open its settings to let them through."
+                      : 'Off for now. Turn this on and your phone will ask you to allow it.'
+                }
+                onToggle={async () => {
+                  if (isNotificationEnabled || permissionStatus === 'denied') {
+                    Linking.openSettings();
+                    return;
+                  }
+                  await requestPermissions();
+                }}
+              />
             </Panel>
           </Section>
         )}
@@ -648,42 +534,19 @@ export default function SettingsScreen() {
           blurb="Your HIVEs always see you. HIVE-Wide is your call."
         >
           <Panel>
-            <Pressable
-              onPress={() => void toggleHiveWideVisibility()}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: visibleHiveWide }}
-              disabled={savingVisibility}
-              style={{
-                flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-                paddingVertical: 4, opacity: savingVisibility ? 0.6 : 1,
-              }}
-            >
-              <View
-                style={{
-                  width: 44, height: 26, borderRadius: 13, padding: 3, marginTop: 2,
-                  backgroundColor: visibleHiveWide ? '#bd9348' : 'rgba(49,49,48,0.18)',
-                  justifyContent: 'center',
-                  alignItems: visibleHiveWide ? 'flex-end' : 'flex-start',
-                }}
-              >
-                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fffdf5' }} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14.5, color: '#313130' }}>
-                  Show me in HIVE-Wide
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19,
-                    color: 'rgba(49,49,48,0.62)', marginTop: 2,
-                  }}
-                >
-                  {visibleHiveWide
-                    ? 'Members of every HIVE you share can find you in the HIVE-Wide directory.'
-                    : 'You only appear to people inside your own HIVEs. Turn this on to be listed HIVE-Wide as well.'}
-                </Text>
-              </View>
-            </Pressable>
+            {/* This is the control the other three were made to match — it was
+                written here first and lives in `components/ui/Switch.tsx` now. */}
+            <Switch
+              on={visibleHiveWide}
+              busy={savingVisibility}
+              label="Show me in HIVE-Wide"
+              hint={
+                visibleHiveWide
+                  ? 'Members of every HIVE you share can find you in the HIVE-Wide directory.'
+                  : 'You only appear to people inside your own HIVEs.'
+              }
+              onToggle={() => void toggleHiveWideVisibility()}
+            />
           </Panel>
         </Section>
 
