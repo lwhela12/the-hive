@@ -7,11 +7,11 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../ui/Button';
+import { ComposerBar } from '../ui/ComposerBar';
 import { supabase } from '../../lib/supabase';
 import { PREDEFINED_SKILLS, shuffleSkills } from './constants';
 import type { Skill } from '../../types';
@@ -329,31 +329,19 @@ export function SkillsManageModal({
                 >
                   Add a skill not listed above
                 </Text>
-                <View className="flex-row gap-2">
-                  <TextInput
-                    value={customInput}
-                    onChangeText={setCustomInput}
-                    placeholder="Type your skill..."
-                    placeholderTextColor="#9ca3af"
-                    className="flex-1 bg-white rounded-xl px-4 py-3 text-charcoal"
-                    style={{ fontFamily: 'Lato_400Regular' }}
-                    onSubmitEditing={addCustomSkill}
-                    returnKeyType="done"
-                  />
-                  <Pressable
-                    onPress={addCustomSkill}
-                    disabled={!customInput.trim()}
-                    className={`px-4 rounded-xl items-center justify-center ${
-                      customInput.trim() ? 'bg-gold' : 'bg-charcoal/20'
-                    }`}
-                  >
-                    <Ionicons
-                      name="add"
-                      size={24}
-                      color={customInput.trim() ? 'white' : '#9ca3af'}
-                    />
-                  </Pressable>
-                </View>
+                {/* A skill is a phrase somebody writes about themselves, so
+                    this is the shared composer: the box, the mic and the Add
+                    button are one thing, and a member can say the skill out
+                    loud instead of typing it. */}
+                <ComposerBar
+                  variant="inlineEdit"
+                  value={customInput}
+                  onChangeText={setCustomInput}
+                  placeholder="Type your skill..."
+                  multiline={false}
+                  onSubmit={addCustomSkill}
+                  submitLabel="Add"
+                />
 
                 {/* Custom skills queue */}
                 {customSkills.length > 0 && (

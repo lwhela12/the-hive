@@ -1,5 +1,5 @@
-import { Pressable, Text, TextInput, View } from 'react-native';
-import { VoiceMicButton } from '../ui/VoiceMicButton';
+import { Pressable, Text, View } from 'react-native';
+import { ComposerBar } from '../ui/ComposerBar';
 import type { SurveyQuestion } from '../../lib/hooks/useSurveys';
 
 export function ScaleInput({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
@@ -66,7 +66,20 @@ export function ChoiceInput({ options, value, onChange, multi }: { options: stri
   );
 }
 
-// Text input with the same talk-to-text mic members know from chat and boards.
+/**
+ * The box you answer a survey question in — the shared message bar, wearing
+ * form clothes.
+ *
+ * It used to be a hand-rolled TextInput with the mic bolted on beside it, one
+ * of the several answers the app had to "what does a text box look like". Now
+ * it is `ComposerBar`, so a survey answer looks and behaves exactly like
+ * Clive's bar and the board composer: same cream-and-gold box, same mic in the
+ * same place, and the mic APPENDS through the shared dictation logic rather
+ * than a copy of it written here.
+ *
+ * Every survey in HIVE renders through this one function, so this is the field
+ * members type into most.
+ */
 export function VoiceTextInput({
   value,
   onChangeText,
@@ -79,37 +92,17 @@ export function VoiceTextInput({
   multiline?: boolean;
 }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: multiline ? 'flex-end' : 'center', gap: 8, marginTop: 8 }}>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder ?? 'Your answer...'}
-        placeholderTextColor="#b5ad9f"
-        multiline={multiline}
-        style={{
-          flex: 1,
-          backgroundColor: 'white',
-          borderWidth: 1,
-          borderColor: 'rgba(222,193,129,0.4)',
-          borderRadius: 12,
-          fontFamily: 'Lato_400Regular',
-          fontSize: 14,
-          color: '#2d2d2d',
-          paddingHorizontal: 14,
-          paddingVertical: 10,
-          ...(multiline ? { minHeight: 100, textAlignVertical: 'top' as const } : {}),
-        }}
-      />
-      <VoiceMicButton
-        size={20}
-        style={{ marginBottom: multiline ? 10 : 0 }}
-        onTranscript={(text) => {
-          const trimmed = text.trim();
-          if (!trimmed) return;
-          onChangeText(value ? `${value.replace(/\s+$/, '')} ${trimmed}` : trimmed);
-        }}
-      />
-    </View>
+    <ComposerBar
+      variant="form"
+      containerClassName="mt-2"
+      value={value}
+      // ComposerBar hands dictation an updater; this call site only ever wants
+      // the resulting string, so resolve it here.
+      onChangeText={(next) => onChangeText(typeof next === 'function' ? next(value) : next)}
+      placeholder={placeholder ?? 'Your answer...'}
+      multiline={multiline}
+      minHeight={multiline ? 100 : undefined}
+    />
   );
 }
 

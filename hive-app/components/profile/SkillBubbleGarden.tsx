@@ -9,11 +9,11 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line, Path, Text as SvgText, TSpan } from 'react-native-svg';
+import { ComposerBar } from '../ui/ComposerBar';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import type { MatchedWish, SkillWishMatch } from '../../lib/skillWishMatching';
 import type { Skill } from '../../types';
@@ -2570,101 +2570,32 @@ function CustomSeedButton({
     return (
       <View
         style={{
-          minHeight: compact ? 28 : 42,
-          minWidth: 186,
-          flexBasis: 220,
+          minWidth: 250,
+          flexBasis: 290,
           flexGrow: 1,
-          maxWidth: 360,
-          borderRadius: 22,
-          borderWidth: 1,
-          borderColor: 'rgba(255,253,247,0.32)',
-          backgroundColor: 'rgba(255,250,236,0.95)',
+          maxWidth: 380,
           gap: 6,
-          paddingHorizontal: 8,
-          paddingVertical: 6,
         }}
       >
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 6,
+        {/* Naming a skill is writing words about yourself, so this is the one
+            shared box — the mic sits inside its own border with Cancel and
+            Plant, instead of a bare field with two buttons beside it. The chip
+            got wider to make room for that footer. */}
+        <ComposerBar
+          variant="inlineEdit"
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="New skill"
+          multiline={false}
+          autoFocus
+          onSubmit={plantCustomSeed}
+          submitLabel="Plant"
+          onCancel={() => {
+            setDraft('');
+            setIsAdding(false);
+            if (draftKey) removeStoredItem(draftKey);
           }}
-        >
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            onSubmitEditing={plantCustomSeed}
-            autoFocus
-            returnKeyType="done"
-            placeholder="New skill"
-            placeholderTextColor="rgba(105,67,33,0.48)"
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontFamily: 'Lato_700Bold',
-              color: '#4a2b19',
-              fontSize: 12,
-              paddingVertical: 6,
-              paddingHorizontal: 4,
-              ...(Platform.OS === 'web'
-                ? ({
-                    outlineStyle: 'none',
-                  } as any)
-                : {}),
-            }}
-          />
-          <Pressable
-            onPress={plantCustomSeed}
-            accessibilityRole="button"
-            accessibilityLabel="Plant custom skill"
-            style={{
-              minWidth: 42,
-              minHeight: 28,
-              borderRadius: 999,
-              backgroundColor: '#315d4e',
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingHorizontal: 8,
-              ...(Platform.OS === 'web'
-                ? ({
-                    cursor: 'pointer',
-                    outlineStyle: 'none',
-                  } as any)
-                : {}),
-            }}
-          >
-            <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#fffdf7', fontSize: 11 }}>
-              Plant
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              setDraft('');
-              setIsAdding(false);
-              if (draftKey) removeStoredItem(draftKey);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel custom skill"
-            style={{
-              width: 26,
-              height: 26,
-              borderRadius: 13,
-              alignItems: 'center',
-              justifyContent: 'center',
-              ...(Platform.OS === 'web'
-                ? ({
-                    cursor: 'pointer',
-                    outlineStyle: 'none',
-                  } as any)
-                : {}),
-            }}
-          >
-            <Text selectable={false} style={{ fontFamily: 'Lato_700Bold', color: '#7d6843', fontSize: 14 }}>
-              x
-            </Text>
-          </Pressable>
-        </View>
+        />
         {autocompleteSeeds.length > 0 && (
           <View
             style={{

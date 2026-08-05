@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ActivityIndicator, View, Text, ScrollView, Pressable, TextInput, Modal } from 'react-native';
+import { ActivityIndicator, View, Text, ScrollView, Pressable, Modal } from 'react-native';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +17,7 @@ import {
 import type { Survey, SurveyAnswers, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { SurveyQuestionField } from './SurveyQuestionField';
 
-import { DictationRow } from '../ui/DictationRow';
+import { ComposerBar } from '../ui/ComposerBar';
 import { ThinkingBee } from '../ui/ThinkingBee';
 interface SurveyModalProps {
   survey: Survey;
@@ -291,27 +291,18 @@ export function SurveyModal({
                   })}
                 </View>
 
-                <TextInput
+                {/* The shared message bar, so a note on your roster looks and
+                    behaves like every other box you write in — mic inside the
+                    box's own border rather than on a strip welded underneath. */}
+                <ComposerBar
+                  variant="form"
                   value={response?.note ?? ''}
-                  onChangeText={(note) => updateCarryForwardItem(item, { note })}
+                  onChangeText={(next) => updateCarryForwardItem(item, {
+                    note: typeof next === 'function' ? next(response?.note ?? '') : next,
+                  })}
                   placeholder={`Optional note for ${activeStatus ? getCarryForwardStatusLabel(activeStatus).toLowerCase() : 'this item'}...`}
-                  placeholderTextColor="#b5ad9f"
-                  multiline
-                  style={{
-                    backgroundColor: 'white',
-                    borderWidth: 1,
-                    borderColor: 'rgba(222,193,129,0.32)',
-                    borderRadius: 10,
-                    fontFamily: 'Lato_400Regular',
-                    fontSize: 13,
-                    color: '#2d2d2d',
-                    paddingHorizontal: 12,
-                    paddingVertical: 9,
-                    minHeight: 42,
-                    textAlignVertical: 'top',
-                  }}
+                  minHeight={44}
                 />
-                <DictationRow setValue={(u) => updateCarryForwardItem(item, { note: u(response?.note ?? '') })} />
               </View>
             );
           })}

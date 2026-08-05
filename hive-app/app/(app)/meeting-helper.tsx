@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -25,20 +24,14 @@ import { getWishQuickTitle, pickSpotlightWish } from '../../lib/wishDisplay';
 import { getAppNews } from '../../lib/appNews';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { parseFocusAnswer, focusAnswerDidIt, focusAnswerScore } from '../../components/surveys/SurveyQuestionField';
-import { submitOnEnter } from '../../lib/submitOnEnter';
 import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
-import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
-import { DictationRow } from '../../components/ui/DictationRow';
+import { ComposerBar } from '../../components/ui/ComposerBar';
+import { FIELD_LOOK } from '../../components/ui/Input';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
-import {
-  getActiveMentionQuery,
-  getMentionedMembers,
-  getMentionSuggestions,
-  hasBroadcastMention,
-  insertMention,
-} from '../../lib/mentions';
+import { showAlert } from '../../lib/showAlert';
+import { getMentionedMembers, hasBroadcastMention } from '../../lib/mentions';
 import {
   formatMeetingDate,
   getAttendance,
@@ -63,6 +56,29 @@ const PAPER = '#fdfbf2';
 const CARD = '#fffdf5';
 
 const TAGLINE = 'HUMAN · INSIGHT · VISION · EXECUTION';
+
+/**
+ * The look worn by the boxes you would never talk into — a clock time, here.
+ *
+ * Everything on this deck that takes WORDS is a `ComposerBar`, so it comes with
+ * the microphone and you can say it out loud instead of typing at a television.
+ * A time is not words, so it keeps a plain field — but it wears the same white
+ * fill, the same gold hairline and the same placeholder ink as the composer, so
+ * the deck reads as one set of controls rather than two.
+ */
+const FIELD_BORDER = FIELD_LOOK.border;
+const PLACEHOLDER_INK = FIELD_LOOK.placeholder;
+const PLAIN_FIELD = {
+  borderWidth: 1,
+  borderColor: FIELD_LOOK.border,
+  borderRadius: FIELD_LOOK.radius,
+  backgroundColor: FIELD_LOOK.fill,
+  paddingHorizontal: FIELD_LOOK.paddingHorizontal,
+  paddingVertical: FIELD_LOOK.paddingVertical,
+  fontFamily: FIELD_LOOK.font,
+  fontSize: FIELD_LOOK.fontSize,
+  color: FIELD_LOOK.ink,
+} as const;
 
 // Tonight's agenda — drives both the Outline slide and the frozen rail.
 const AGENDA: { key: string; label: string }[] = [
@@ -292,7 +308,6 @@ export default function MeetingHelperScreen() {
   // Live meeting notes typed into an expanded HummDinger card. "@name" routes
   // the note onto that member's to-do list; no @ = the expanded member's list.
   const [liveNoteDraft, setLiveNoteDraft] = useState('');
-  const [liveNoteCursor, setLiveNoteCursor] = useState(0);
   const [liveNoteSaving, setLiveNoteSaving] = useState(false);
   const [liveNoteConfirmation, setLiveNoteConfirmation] = useState<string | null>(null);
   // Which HD the note is about. Meetings wander: someone's card is open and the
@@ -318,7 +333,7 @@ export default function MeetingHelperScreen() {
         .in('id', note.actionItemIds);
       if (error) {
         console.error('Live note undo failed:', error);
-        Alert.alert('Hmm', "Couldn't remove that one — it may need archiving from the to-do list.");
+        showAlert('Hmm', "Couldn't remove that one — it may need archiving from the to-do list.");
       }
     }
   };
@@ -826,7 +841,7 @@ export default function MeetingHelperScreen() {
       await loadDeckData();
     } catch (error) {
       console.error('Could not post HIVE Help focus:', error);
-      Alert.alert('Hmm', 'Could not post the new focus — try again, or use the Boards tab.');
+      showAlert('Hmm', 'Could not post the new focus — try again, or use the Boards tab.');
     } finally {
       setMonthFocusSaving(null);
     }
@@ -940,7 +955,7 @@ export default function MeetingHelperScreen() {
     setSavingNote(false);
     if (error) {
       console.warn('Could not save meeting note', error);
-      Alert.alert('Could not save', 'Please try again in a moment.');
+      showAlert('Could not save', 'Please try again in a moment.');
       return;
     }
     setNotes(nextNotes);
@@ -1448,26 +1463,27 @@ export default function MeetingHelperScreen() {
                 Help Focus: {existingFocus.replace(/!+$/, '')}
               </Text>
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(6, 4), justifyContent: 'center', marginBottom: sz(8, 5) }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(8, 5), justifyContent: 'center', marginBottom: sz(8, 5) }}>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(18, 11), color: GOLD_DEEP }}>
                   Help Focus:
                 </Text>
-                <TextInput
+                {/* A month's focus is a phrase somebody says out loud in the
+                    room — "pick up trash on your walk" — so it takes the
+                    composer and its microphone rather than a bare underline.
+                    Press enter and the board thread is created. */}
+                <ComposerBar
+                  variant="form"
                   value={monthFocusDrafts[monthLabel] ?? ''}
-                  onChangeText={(value) => setMonthFocusDrafts((drafts) => ({ ...drafts, [monthLabel]: value }))}
-                  onSubmitEditing={() => handlePostHelpFocus(monthLabel)}
+                  onChangeText={(next) => setMonthFocusDrafts((drafts) => ({
+                    ...drafts,
+                    [monthLabel]: typeof next === 'function' ? next(drafts[monthLabel] ?? '') : next,
+                  }))}
+                  onSubmit={() => handlePostHelpFocus(monthLabel)}
+                  submitting={monthFocusSaving === monthLabel}
                   placeholder={monthFocusSaving === monthLabel ? 'posting…' : 'type it, press enter'}
-                  placeholderTextColor="rgba(154,128,96,0.5)"
-                  style={{
-                    minWidth: sz(180, 120),
-                    borderBottomWidth: 1,
-                    borderColor: GOLD_SOFT,
-                    paddingVertical: sz(3, 2),
-                    fontFamily: 'Lato_400Regular',
-                    fontStyle: 'italic',
-                    fontSize: sz(18, 11),
-                    color: GOLD_DEEP,
-                  }}
+                  multiline={false}
+                  containerClassName="flex-1"
+                  fieldClassName={isTV ? 'text-[18px]' : 'text-[12px]'}
                 />
               </View>
             )}
@@ -2315,51 +2331,32 @@ export default function MeetingHelperScreen() {
                     })}
                   </View>
                 ) : null}
-                {(() => {
-                  const mentionQuery = getActiveMentionQuery(liveNoteDraft, liveNoteCursor);
-                  if (mentionQuery === null) return null;
-                  return (
-                    <MentionSuggestions
-                      suggestions={getMentionSuggestions(mentionQuery, members)}
-                      query={mentionQuery}
-                      active
-                      placement="above"
-                      onSelect={(target) => {
-                        const next = insertMention(liveNoteDraft, liveNoteCursor, target);
-                        setLiveNoteDraft(next.text);
-                        setLiveNoteCursor(next.cursorIndex);
-                      }}
-                    />
-                  );
-                })()}
-                <TextInput
+                {/* The jot box. Mentions, the "@" suggestions list and the
+                    microphone all come from the shared composer now, so the
+                    suggestion list this screen used to draw by hand is gone.
+                    Enter files the jot; Shift+Enter is the newline. Mid-meeting
+                    you're typing fast — reaching for the button broke the flow.
+                    The mic matters most right here: the room is talking, and
+                    saying the to-do out loud is faster than typing it. */}
+                <ComposerBar
+                  variant="form"
                   value={liveNoteDraft}
-                  onChangeText={(value) => {
-                    setLiveNoteDraft(value);
+                  onChangeText={(next) => {
+                    setLiveNoteDraft((previous) => (typeof next === 'function' ? next(previous) : next));
                     if (liveNoteConfirmation) setLiveNoteConfirmation(null);
                   }}
-                  onSelectionChange={(event) => setLiveNoteCursor(event.nativeEvent.selection.end)}
                   placeholder={`Jot a to-do — it lands on ${getFirstName(member.name)}'s list. Start a word with @ (like @Charlee, or @all) to send it to them instead.`}
-                  placeholderTextColor={MUTED}
-                  multiline
-                  // Enter files the jot; Shift+Enter is the newline. Mid-meeting
-                  // you're typing fast — reaching for the button broke the flow.
-                  blurOnSubmit={false}
-                  onKeyPress={submitOnEnter(() => handleSaveLiveNote(member, liveNoteWishId))}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: GOLD_SOFT,
-                    borderRadius: sz(12, 9),
-                    backgroundColor: CARD,
-                    paddingHorizontal: sz(14, 10),
-                    paddingVertical: sz(10, 8),
-                    fontFamily: 'Lato_400Regular',
-                    fontSize: sz(17, 12),
-                    color: CHARCOAL,
-                    minHeight: sz(64, 48),
-                  }}
+                  onSubmit={() => handleSaveLiveNote(member, liveNoteWishId)}
+                  // Deliberately not `submitting`: a jot saves in a blink and
+                  // the room keeps talking, so the box must stay typeable the
+                  // whole time. Double-firing is already impossible —
+                  // handleSaveLiveNote bows out while a save is in flight.
+                  minHeight={sz(64, 48)}
+                  fieldClassName={isTV ? 'text-[17px]' : 'text-[12px]'}
+                  // No currentUserId on purpose: whoever is typing must still be
+                  // able to put a to-do on their OWN list with "@their name".
+                  mentionMembers={members}
                 />
-                <DictationRow setValue={setLiveNoteDraft} />
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
                   <Pressable
                     onPress={() => handleSaveLiveNote(member, liveNoteWishId)}
@@ -3068,60 +3065,27 @@ export default function MeetingHelperScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: MUTED, marginTop: 4 }}>
                 Shows on the slide exactly as written. Line breaks are kept.
               </Text>
-              <TextInput
+              {/* Editing a slide in place, so this is the composer's
+                  edit-in-place shape: the same box, with Cancel and Save on the
+                  strip inside its own border. Enter makes a new line here —
+                  these notes are paragraphs, and the slide keeps the breaks. */}
+              <ComposerBar
+                variant="inlineEdit"
+                containerClassName="mt-4"
                 value={editDraft}
-                onChangeText={setEditDraft}
-                multiline
-                autoFocus
+                onChangeText={(next) => setEditDraft((previous) => (typeof next === 'function' ? next(previous) : next))}
                 placeholder={editMeta?.placeholder}
-                placeholderTextColor="#b8a888"
-                style={{
-                  marginTop: 16,
-                  minHeight: 220,
-                  borderWidth: 1,
-                  borderColor: GOLD_SOFT,
-                  borderRadius: 14,
-                  padding: 14,
-                  fontFamily: 'Lato_400Regular',
-                  fontSize: 16,
-                  lineHeight: 24,
-                  color: CHARCOAL,
-                  backgroundColor: '#fffefa',
-                  textAlignVertical: 'top',
-                }}
+                minHeight={220}
+                autoFocus
+                submitOnEnterKey={false}
+                onSubmit={() => void saveNote()}
+                // An empty note is a real answer — it clears the slide — so
+                // Save stays live even with nothing in the box.
+                canSubmit={!savingNote}
+                submitting={savingNote}
+                submitLabel="Save"
+                onCancel={() => setEditKey(null)}
               />
-              <DictationRow setValue={setEditDraft} />
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-                <Pressable
-                  onPress={() => setEditKey(null)}
-                  disabled={savingNote}
-                  style={({ pressed }) => ({
-                    paddingHorizontal: 20,
-                    paddingVertical: 11,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: GOLD_SOFT,
-                    backgroundColor: pressed ? '#fbf0d7' : CARD,
-                  })}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: GOLD_DEEP }}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => void saveNote()}
-                  disabled={savingNote}
-                  style={({ pressed }) => ({
-                    paddingHorizontal: 26,
-                    paddingVertical: 11,
-                    borderRadius: 12,
-                    backgroundColor: GOLD,
-                    opacity: pressed || savingNote ? 0.8 : 1,
-                  })}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'white' }}>
-                    {savingNote ? 'Saving…' : 'Save'}
-                  </Text>
-                </Pressable>
-              </View>
             </View>
           </View>
         </Modal>
@@ -3156,41 +3120,30 @@ export default function MeetingHelperScreen() {
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: GOLD_DEEP }}>
                 {quickAddDate ? formatMeetingDate({ title: '', event_date: quickAddDate, event_time: null }) : ''}
               </Text>
-              <TextInput
+              {/* Naming the hang is words — "Pool day at Charlee's" — so it
+                  gets the composer and its microphone. */}
+              <ComposerBar
+                variant="form"
                 value={quickAddTitle}
-                onChangeText={setQuickAddTitle}
+                onChangeText={(next) => setQuickAddTitle((previous) => (typeof next === 'function' ? next(previous) : next))}
                 placeholder="What's the hang? (e.g. Pool day at Charlee's)"
-                placeholderTextColor={MUTED}
+                multiline={false}
                 autoFocus
-                style={{
-                  borderWidth: 1,
-                  borderColor: GOLD_SOFT,
-                  borderRadius: 12,
-                  backgroundColor: CARD,
-                  paddingHorizontal: 14,
-                  paddingVertical: 11,
-                  fontFamily: 'Lato_400Regular',
-                  fontSize: 16,
-                  color: CHARCOAL,
-                }}
+                onSubmit={handleQuickAddEvent}
+                // The Add button is always live and explains what's missing;
+                // Enter behaves the same way rather than going quiet.
+                canSubmit={!quickAddSaving}
+                submitting={quickAddSaving}
               />
+              {/* A clock time is not words — nobody wants to dictate "2:30 PM" —
+                  so this keeps a plain field, wearing the composer's colours. */}
               <TextInput
                 value={quickAddTime}
                 onChangeText={setQuickAddTime}
                 placeholder="Time (optional — e.g. 2:30 PM)"
-                placeholderTextColor={MUTED}
+                placeholderTextColor={PLACEHOLDER_INK}
                 onSubmitEditing={handleQuickAddEvent}
-                style={{
-                  borderWidth: 1,
-                  borderColor: GOLD_SOFT,
-                  borderRadius: 12,
-                  backgroundColor: CARD,
-                  paddingHorizontal: 14,
-                  paddingVertical: 11,
-                  fontFamily: 'Lato_400Regular',
-                  fontSize: 16,
-                  color: CHARCOAL,
-                }}
+                style={PLAIN_FIELD}
               />
               <EventAudienceToggle value={quickAddAudience} onChange={setQuickAddAudience} />
               {quickAddError ? (
@@ -3277,24 +3230,15 @@ export default function MeetingHelperScreen() {
                 When should the countdown aim for? No hard stop — people are always welcome to hang after.
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {/* A clock time, so no microphone — the same plain field as
+                    the quick-add time box, in the composer's colours. */}
                 <TextInput
                   value={hardOutDraft}
                   onChangeText={setHardOutDraft}
                   placeholder="e.g. 8:00"
-                  placeholderTextColor={MUTED}
+                  placeholderTextColor={PLACEHOLDER_INK}
                   autoFocus
-                  style={{
-                    flex: 1,
-                    borderWidth: 1,
-                    borderColor: GOLD_SOFT,
-                    borderRadius: 12,
-                    backgroundColor: CARD,
-                    paddingHorizontal: 14,
-                    paddingVertical: 11,
-                    fontFamily: 'Lato_400Regular',
-                    fontSize: 16,
-                    color: CHARCOAL,
-                  }}
+                  style={[PLAIN_FIELD, { flex: 1 }]}
                 />
                 <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: GOLD_SOFT, borderRadius: 999, overflow: 'hidden' }}>
                   {(['AM', 'PM'] as const).map((meridiem) => (

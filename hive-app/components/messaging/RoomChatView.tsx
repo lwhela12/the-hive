@@ -7,7 +7,6 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   Image,
   ScrollView,
   Modal,
@@ -27,20 +26,15 @@ import { RoomTypingIndicator } from './RoomTypingIndicator';
 import { SelectedImage, pickSingleImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadMultipleFiles, uploadMultipleImages, uploadSingleImage } from '../../lib/attachmentUpload';
-import { submitOnEnter } from '../../lib/submitOnEnter';
-import { getMentionedMembers, type MentionTarget } from '../../lib/mentions';
+import { getMentionedMembers } from '../../lib/mentions';
 import { hiveDisplayName } from '../../lib/hiveBrand';
 import { getMessagesRoomLabel, getMessagesRoomSubtitle } from './hiveWideRoom';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
-import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
-import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
-import { AttachmentPicker } from '../ui/AttachmentPicker';
 import { Avatar } from '../ui/Avatar';
+import { ComposerBar } from '../ui/ComposerBar';
+import { FIELD_LOOK } from '../ui/Input';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
-import { MentionSuggestions } from '../ui/MentionSuggestions';
-import { SelectedFilePreview } from '../ui/SelectedFilePreview';
-import { VoiceMicButton } from '../ui/VoiceMicButton';
 import {
   CHAT_ROOM_THEMES,
   ChatRoomThemeKey,
@@ -70,6 +64,21 @@ const CHAT_EMOJI_OPTIONS = ['💬', '✨', '🎯', '🍯', '📌', '💡', '🎉
 // that meant something; nothing is forced into it now, so it is just a dark
 // room for anybody who wants one.
 const THEME_OPTIONS = Object.values(CHAT_ROOM_THEMES);
+
+/**
+ * How long a message may be.
+ *
+ * Was 2000 here and 12000 in Clive's bar, for no reason anybody could name —
+ * so the same sentence was allowed in one box and cut off in the other. They
+ * match now. Nat has already complained once about a cap being too tight.
+ */
+const MESSAGE_MAX_LENGTH = 12000;
+
+/**
+ * How long your own name for a chat may be. Was 60, which is shorter than a
+ * board name (90) for no reason; both are somebody naming a thing.
+ */
+const ROOM_TITLE_MAX_LENGTH = 90;
 
 function getFirstGrapheme(value: string): string {
   const trimmed = value.trim();
@@ -138,7 +147,6 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
   const previousMessageCountRef = useRef(0);
   const isLoadingOlderRef = useRef(false);
   const didOpenInitialCustomizeRef = useRef(false);
-  const voiceBaseTextRef = useRef<string | null>(null);
 
   const roomWithCustomization = useMemo(
     () => ({
@@ -182,28 +190,12 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
 
   // "Everyone" means something different in each room: in the HIVE's own room
   // it is the whole HIVE, and in a group chat it is the handful of people in
-  // it. The picker used to say "Everyone in HIVE" for both, so nobody could
-  // tell from the list who was about to be pinged (Nat 2026-08-03).
-  const isHiveRoom = room.room_type === 'community';
-  const broadcastLabel = useMemo(
-    () => (isHiveRoom
-      ? {
-          name: `Everyone in ${hiveName}`,
-          description: `@all, @everyone and @hive all reach ${hiveName}`,
-        }
-      : {
-          name: 'Everyone in this chat',
-          description: 'Reaches the people in this conversation',
-        }),
-    [hiveName, isHiveRoom]
-  );
-  const nameTheBroadcast = useCallback(
-    (suggestions: MentionTarget[]) =>
-      suggestions.map((suggestion) =>
-        suggestion.isBroadcast ? { ...suggestion, ...broadcastLabel } : suggestion
-      ),
-    [broadcastLabel]
-  );
+  // it. This screen used to rewrite the "@all" suggestion to say which — and it
+  // cannot any more, because the suggestion list is drawn inside ComposerBar
+  // and the broadcast wording is a fixed constant in lib/mentions.ts. So the
+  // picker says "Everyone in HIVE" in a two-person chat again, which is the
+  // thing Nat spotted on 2026-08-03. Giving ComposerBar a way to name the
+  // broadcast for the room it is sitting in would put it back.
 
   useEffect(() => {
     const customization = getRoomCustomization(room, profile?.id);
@@ -238,7 +230,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
     try {
       const attachment = await uploadSingleImage(profile.id, image);
       if (!attachment) {
-        Alert.alert('Error', 'Failed to upload image.');
+        showAlert('Photo not added', 'That image did not upload. Try again in a moment.');
         return;
       }
       setDraftImageUrl(attachment.url);
@@ -296,7 +288,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
       }
     } catch (error) {
       console.error('Error saving chat customization:', error);
-      Alert.alert('Error', 'Failed to save chat style.');
+      showAlert('Not saved', 'That chat style did not save. Try again in a moment.');
     } finally {
       setSavingCustomization(false);
     }
@@ -510,10 +502,19 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
     }
   };
 
-  const handleTextChange = (text: string) => {
-    setNewMessage(text);
+  /**
+   * Every keystroke in the message bar, and the "somebody is typing" dot.
+   *
+   * ComposerBar hands back either the new text or an updater — the updater is
+   * how dictation appends to what you have already written. The draft store
+   * wants the updater as-is so it never saves a stale copy; the typing
+   * indicator only needs to know whether the box is empty, so it resolves
+   * against the text this render is showing.
+   */
+  const handleComposerChange = (next: string | ((previous: string) => string)) => {
+    setNewMessage(next);
 
-    // Send typing indicator
+    const text = typeof next === 'function' ? next(newMessage) : next;
     if (text.length > 0) {
       sendTypingIndicator();
 
@@ -529,34 +530,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
     }
   };
 
-  const mergeTranscript = (baseText: string, transcript: string) => {
-    const cleanBase = baseText.trimEnd();
-    const cleanTranscript = transcript.trim();
-    if (!cleanTranscript) return cleanBase;
-    return cleanBase ? `${cleanBase} ${cleanTranscript}` : cleanTranscript;
-  };
-
-  const handleRemoveImage = (index: number) => {
-    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleRemoveFile = (index: number) => {
-    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
   const hasMessageContent = newMessage.trim().length > 0 || selectedImages.length > 0 || selectedFiles.length > 0;
-  const messageMentionInput = useMentionInput({
-    value: newMessage,
-    onChangeText: handleTextChange,
-    members: activeMentionableMembers,
-    currentUserId: profile?.id,
-  });
-  const editMentionInput = useMentionInput({
-    value: editContent,
-    onChangeText: setEditContent,
-    members: activeMentionableMembers,
-    currentUserId: profile?.id,
-  });
 
   const handleSend = async () => {
     if (!hasMessageContent || !profile || !communityId) return;
@@ -647,11 +621,9 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
       clearNewMessageDraft();
       setSelectedImages([]);
       setSelectedFiles([]);
-      voiceBaseTextRef.current = null;
-      messageMentionInput.resetMentionSelection();
     } catch (error) {
       console.error('Error sending message:', error);
-      Alert.alert('Error', 'Failed to send message.');
+      showAlert('Not sent', 'That message did not go through. Try again in a moment.');
     } finally {
       setSending(false);
       setUploading(false);
@@ -713,28 +685,12 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
 
       setEditingMessageId(null);
       setEditContent('');
-      editMentionInput.resetMentionSelection();
       await refetchMessages();
     } catch (error) {
       console.error('Error editing message:', error);
-      Alert.alert('Error', 'Failed to edit message.');
+      showAlert('Not saved', 'That edit did not save. Try again in a moment.');
     }
   };
-
-  const editEnterToSubmitCaptureProps = Platform.OS === 'web'
-    ? ({ onKeyDownCapture: submitOnEnter(handleSaveEdit) } as any)
-    : {};
-  const messageEnterToSubmitCaptureProps = Platform.OS === 'web'
-    ? ({ onKeyDownCapture: submitOnEnter(handleSend) } as any)
-    : {};
-  const { dragDropProps: messageDragDropProps, isDragActive: isMessageDragActive } = useWebAttachmentDropZone({
-    selectedImages,
-    selectedFiles,
-    onImagesChange: setSelectedImages,
-    onFilesChange: setSelectedFiles,
-    captureDocumentDrops: true,
-    disabled: sending || uploading,
-  });
 
   const handleDelete = useCallback(async (messageId: string) => {
     // Was Alert.alert-only, which is a no-op on web — so Delete Message did
@@ -782,38 +738,37 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
   // The General room belongs to the community, not to whoever opened it.
   const isGeneralRoom = !!room.is_community_room || /^general$/i.test(room.name ?? '');
 
-  const handleDeleteRoom = async () => {
+  const handleDeleteRoom = () => {
     if (deletingRoom || isGeneralRoom) return;
     const label = roomTitle || 'this chat';
-    const message = `Delete ${label}?\n\nEvery message in it goes too, for everyone. This can't be undone.`;
 
-    const confirmed = typeof window !== 'undefined' && window.confirm
-      ? window.confirm(message)
-      : await new Promise<boolean>((resolve) => {
-          Alert.alert('Delete chat', message, [
-            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-            { text: 'Delete', style: 'destructive', onPress: () => resolve(true) },
-          ]);
-        });
-    if (!confirmed) return;
+    // Was a hand-rolled window.confirm with an Alert.alert fallback. Same
+    // question, through the one helper that works in a browser and on a phone.
+    confirmAction({
+      title: `Delete ${label}?`,
+      message: "Every message in it goes too, for everyone. This can't be undone.",
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        setDeletingRoom(true);
+        try {
+          // Messages and membership first — a room row left without them is
+          // worse than one left whole.
+          await supabase.from('room_messages').delete().eq('room_id', room.id);
+          await supabase.from('chat_room_members').delete().eq('room_id', room.id);
+          const { error } = await supabase.from('chat_rooms').delete().eq('id', room.id);
+          if (error) throw error;
 
-    setDeletingRoom(true);
-    try {
-      // Messages and membership first — a room row left without them is worse
-      // than one left whole.
-      await supabase.from('room_messages').delete().eq('room_id', room.id);
-      await supabase.from('chat_room_members').delete().eq('room_id', room.id);
-      const { error } = await supabase.from('chat_rooms').delete().eq('id', room.id);
-      if (error) throw error;
-
-      setShowCustomizeModal(false);
-      onBack();
-    } catch (error) {
-      console.warn('Could not delete the room', error);
-      Alert.alert('Could not delete', 'That chat could not be deleted. Please try again.');
-    } finally {
-      setDeletingRoom(false);
-    }
+          setShowCustomizeModal(false);
+          onBack();
+        } catch (error) {
+          console.warn('Could not delete the room', error);
+          showAlert('Could not delete', 'That chat could not be deleted. Please try again.');
+        } finally {
+          setDeletingRoom(false);
+        }
+      },
+    });
   };
 
   return (
@@ -903,29 +858,28 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
               </View>
 
               <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 16 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
-                  Title
-                </Text>
-                <TextInput
+                {/* Naming a chat is naming a thing, so it is words and gets
+                    the mic — same box you write a message into. */}
+                <ComposerBar
+                  variant="form"
+                  containerClassName="mb-5"
+                  label="Title"
                   value={draftTitle}
                   onChangeText={setDraftTitle}
                   placeholder={roomTitle}
-                  placeholderTextColor="#a09274"
-                  className="rounded-2xl px-4 py-3 mb-5 text-charcoal"
-                  style={{
-                    fontFamily: 'Lato_400Regular',
-                    backgroundColor: '#ffffff',
-                    borderWidth: 1,
-                    borderColor: draftTheme.border,
-                    outlineStyle: 'none',
-                  } as any}
-                  maxLength={60}
+                  multiline={false}
+                  maxLength={ROOM_TITLE_MAX_LENGTH}
+                  onSubmit={handleSaveCustomization}
+                  canSubmit={!savingCustomization && !uploadingCustomizationImage}
+                  submitting={savingCustomization}
                 />
 
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
                   Icon
                 </Text>
                 <View className="flex-row items-center mb-3">
+                  {/* An emoji is not words — no mic. It wears the shared field
+                      look so it still belongs to the same set of controls. */}
                   <TextInput
                     value={draftEmoji}
                     onChangeText={(value) => {
@@ -933,14 +887,18 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                       if (value.trim()) setDraftImageUrl('');
                     }}
                     placeholder="💬"
-                    placeholderTextColor="#a09274"
-                    className="w-16 h-12 rounded-2xl text-center text-xl mr-2"
+                    placeholderTextColor={FIELD_LOOK.placeholder}
+                    selectionColor={FIELD_LOOK.ink}
+                    className="w-16 h-12 text-center text-xl mr-2"
                     style={{
-                      fontFamily: 'Lato_400Regular',
-                      backgroundColor: '#ffffff',
+                      fontFamily: FIELD_LOOK.font,
+                      backgroundColor: FIELD_LOOK.fill,
                       borderWidth: 1,
-                      borderColor: draftTheme.border,
+                      borderColor: FIELD_LOOK.border,
+                      borderRadius: FIELD_LOOK.radius,
+                      color: FIELD_LOOK.ink,
                       outlineStyle: 'none',
+                      caretColor: FIELD_LOOK.ink,
                     } as any}
                     maxLength={8}
                   />
@@ -1150,210 +1108,67 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
         {/* Typing indicator */}
         <RoomTypingIndicator typingUsers={typingUsers} currentUserId={profile?.id} />
 
-        {/* Edit mode input */}
+        {/* Editing a message you already sent. ComposerBar's inlineEdit
+            variant is exactly this shape: the box, the mic inside its own
+            border, and Cancel and Save on the footer strip. */}
         {editingMessageId ? (
           <View className="px-4 py-3" style={{ backgroundColor: roomTheme.header }}>
-            <View className="flex-row items-center mb-2">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm flex-1">
-                Editing message
-              </Text>
-              <Pressable
-                onPress={() => {
-                  setEditingMessageId(null);
-                  setEditContent('');
-                  editMentionInput.resetMentionSelection();
-                }}
-              >
-                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-red-500 text-sm">
-                  Cancel
+            <ComposerBar
+              variant="inlineEdit"
+              value={editContent}
+              onChangeText={setEditContent}
+              placeholder="Edit your message..."
+              minHeight={72}
+              maxHeight={128}
+              maxLength={MESSAGE_MAX_LENGTH}
+              onSubmit={handleSaveEdit}
+              submitLabel="Save"
+              onCancel={() => {
+                setEditingMessageId(null);
+                setEditContent('');
+              }}
+              mentionMembers={activeMentionableMembers}
+              mentionsLoading={mentionMembersLoading}
+              currentUserId={profile?.id}
+              header={
+                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mb-2">
+                  Editing message
                 </Text>
-              </Pressable>
-            </View>
-            <MentionSuggestions
-              active={editMentionInput.mentionQuery !== null}
-              query={editMentionInput.mentionQuery}
-              loading={mentionMembersLoading}
-              suggestions={nameTheBroadcast(editMentionInput.mentionSuggestions)}
-              onSelect={editMentionInput.selectMention}
-              placement="above"
+              }
             />
-            <View
-              className="flex-row items-end rounded-2xl px-3 py-2"
-              style={{ backgroundColor: roomTheme.input }}
-              {...editEnterToSubmitCaptureProps}
-            >
-              <TextInput
-                value={editContent}
-                onChangeText={editMentionInput.textInputMentionProps.onChangeText}
-                onSelectionChange={editMentionInput.textInputMentionProps.onSelectionChange}
-                selection={editMentionInput.textInputMentionProps.selection}
-                multiline
-                blurOnSubmit={Platform.OS === 'web'}
-                submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
-                returnKeyType="send"
-                enterKeyHint="send"
-                onKeyPress={submitOnEnter(handleSaveEdit)}
-                className="flex-1 max-h-32 text-base text-charcoal py-1 px-1"
-                style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none' } as any}
-              />
-              <Pressable
-                onPress={handleSaveEdit}
-                disabled={!editContent.trim()}
-                className="w-7 h-7 rounded-full items-center justify-center ml-2 active:opacity-80"
-                style={{ backgroundColor: editContent.trim() ? roomTheme.accent : '#d1d5db' }}
-              >
-                <Ionicons name="checkmark" size={16} color="white" />
-              </Pressable>
-            </View>
           </View>
         ) : (
-          /* Message input - matching ChatInput styling */
-          <View className="px-4 py-3" style={{ backgroundColor: roomTheme.header }} {...messageDragDropProps}>
-            {/* Attachment previews */}
-            {(selectedImages.length > 0 || selectedFiles.length > 0) && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                className="mb-2"
-                contentContainerStyle={{ gap: 8 }}
-              >
-                {selectedImages.map((image, index) => (
-                  <View key={image.uri} className="relative">
-                    <Image
-                      source={{ uri: image.uri }}
-                      className="w-14 h-14 rounded-lg bg-gray-100"
-                      resizeMode="cover"
-                    />
-                    <Pressable
-                      onPress={() => handleRemoveImage(index)}
-                      className="absolute -top-1 -right-1 bg-charcoal rounded-full w-5 h-5 items-center justify-center"
-                    >
-                      <Ionicons name="close" size={12} color="white" />
-                    </Pressable>
-                  </View>
-                ))}
-                {selectedFiles.map((file, index) => (
-                  <SelectedFilePreview
-                    key={`${file.uri}-${index}`}
-                    file={file}
-                    onRemove={() => handleRemoveFile(index)}
-                  />
-                ))}
-              </ScrollView>
-            )}
+          /* The message bar. This IS Clive's bar now — same component, same
+             cream pill, clip and text and send and mic all on one line — which
+             is what Nat asked for: "this is the gold standard for any and all
+             text input places... we want to make sure it looks like that
+             everywhere all the time" (2026-08-05).
 
-            {isMessageDragActive && (
-              <View
-                className="mb-2 rounded-xl border px-3 py-2"
-                style={{ backgroundColor: roomTheme.accentSoft, borderColor: roomTheme.accent }}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', color: roomTheme.accent }} className="text-sm">
-                  Drop photos, videos, or files to attach
-                </Text>
-              </View>
-            )}
-
-            <MentionSuggestions
-              active={messageMentionInput.mentionQuery !== null}
-              query={messageMentionInput.mentionQuery}
-              loading={mentionMembersLoading}
-              suggestions={nameTheBroadcast(messageMentionInput.mentionSuggestions)}
-              onSelect={messageMentionInput.selectMention}
-              placement="above"
+             The room's own colour no longer tints the pill or the send button.
+             That was the trade: one bar everybody recognises, drawn the same
+             way in Clive, in Boards and in here, beats a bar that changes
+             colour with the wallpaper. The wallpaper, the bubbles and the
+             header still wear the room's theme. */
+          <View className="px-4 py-3" style={{ backgroundColor: roomTheme.header }}>
+            <ComposerBar
+              variant="chat"
+              value={newMessage}
+              onChangeText={handleComposerChange}
+              placeholder="Message..."
+              maxLength={MESSAGE_MAX_LENGTH}
+              onSubmit={handleSend}
+              canSubmit={hasMessageContent && !sending && !uploading}
+              submitting={sending || uploading}
+              attachments="compact"
+              selectedImages={selectedImages}
+              onImagesChange={setSelectedImages}
+              selectedFiles={selectedFiles}
+              onFilesChange={setSelectedFiles}
+              captureDocumentDrops
+              mentionMembers={activeMentionableMembers}
+              mentionsLoading={mentionMembersLoading}
+              currentUserId={profile?.id}
             />
-            {/* One @all used to spell out a chip per person, which buried the
-                one fact that matters — how far this is going. Say it once, with
-                the HIVE's name on it and a head count (Nat 2026-08-03). */}
-            {messageMentionInput.mentionsEveryone && messageMentionInput.mentionedMembers.length > 0 ? (
-              <View className="flex-row flex-wrap mb-2" style={{ gap: 6 }}>
-                <View className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
-                    Tagging everyone in {isHiveRoom ? hiveName : 'this chat'} ·{' '}
-                    {messageMentionInput.mentionedMembers.length}{' '}
-                    {messageMentionInput.mentionedMembers.length === 1 ? 'person' : 'people'}
-                  </Text>
-                </View>
-              </View>
-            ) : messageMentionInput.mentionedMembers.length > 0 ? (
-              <View className="flex-row flex-wrap mb-2" style={{ gap: 6 }}>
-                {messageMentionInput.mentionedMembers.map((member) => (
-                  <View key={member.id} className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
-                      Tagged {member.name.split(/\s+/)[0]}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            <View
-              className="flex-row items-end rounded-2xl px-3 py-2"
-              style={{
-                backgroundColor: isMessageDragActive ? roomTheme.accentSoft : roomTheme.input,
-                borderColor: isMessageDragActive ? roomTheme.accent : 'transparent',
-                borderWidth: 1,
-              }}
-              {...messageEnterToSubmitCaptureProps}
-            >
-              <AttachmentPicker
-                compact
-                selectedImages={selectedImages}
-                onImagesChange={setSelectedImages}
-                selectedFiles={selectedFiles}
-                onFilesChange={setSelectedFiles}
-                disabled={sending || uploading}
-              />
-
-              <TextInput
-                value={newMessage}
-                onChangeText={messageMentionInput.textInputMentionProps.onChangeText}
-                onSelectionChange={messageMentionInput.textInputMentionProps.onSelectionChange}
-                selection={messageMentionInput.textInputMentionProps.selection}
-                placeholder="Message..."
-                placeholderTextColor="#a09274"
-                selectionColor="#313130"
-                multiline
-                blurOnSubmit={Platform.OS === 'web'}
-                submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
-                returnKeyType="send"
-                enterKeyHint="send"
-                onKeyPress={submitOnEnter(handleSend)}
-                maxLength={2000}
-                className="flex-1 max-h-32 text-base text-charcoal py-1 px-1"
-                style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none', caretColor: '#313130' } as any}
-                editable={!sending && !uploading}
-              />
-              <Pressable
-                onPress={handleSend}
-                disabled={!hasMessageContent || sending || uploading}
-                className="w-7 h-7 rounded-full items-center justify-center ml-2 active:opacity-80"
-                style={{
-                  backgroundColor:
-                    hasMessageContent && !sending && !uploading
-                      ? roomTheme.accent
-                      : '#d1d5db',
-                }}
-              >
-                <Text className="text-sm text-white" style={{ marginTop: -1 }}>↑</Text>
-              </Pressable>
-              <VoiceMicButton
-                size={20}
-                style={{ marginLeft: 6 }}
-                onTranscript={(text) => {
-                  const merged = mergeTranscript(voiceBaseTextRef.current ?? newMessage, text);
-                  handleTextChange(merged);
-                  voiceBaseTextRef.current = null;
-                }}
-                onInterimTranscript={(text) => {
-                  if (!text) {
-                    voiceBaseTextRef.current = null;
-                    return;
-                  }
-                  if (voiceBaseTextRef.current === null) voiceBaseTextRef.current = newMessage;
-                  handleTextChange(mergeTranscript(voiceBaseTextRef.current, text));
-                }}
-              />
-            </View>
           </View>
         )}
       </KeyboardAvoidingView>

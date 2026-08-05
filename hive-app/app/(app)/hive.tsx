@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, RefreshControl, Image, useWindowDimensions, Pressable, Linking, Modal, TextInput, Alert, ActivityIndicator, Animated, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
 import Svg, { Polygon } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
@@ -41,7 +40,6 @@ import type { DailyQuestion } from '../../lib/dailyQuestions';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { formatDateRangeShort, formatDateShort, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
-import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem, setStoredItemAsync } from '../../lib/webStorage';
 import { getAppNewsSeenKey, getUnseenAppNews, type AppNewsEntry } from '../../lib/appNews';
 import { loadActivityRead, persistActivityRead, loadAppNewsSeen, persistAppNewsSeen } from '../../lib/readState';
@@ -60,7 +58,8 @@ import {
 import { HONEY_POT_CASH_APP_HANDLE } from '../../lib/honeyPotPayment';
 import type { Profile, Wish, WishGranter, Event, ActionItem } from '../../types';
 
-import { DictationRow } from '../../components/ui/DictationRow';
+import { ComposerBar } from '../../components/ui/ComposerBar';
+import { FIELD_LOOK } from '../../components/ui/Input';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 type WishWithGranters = Wish & {
   user?: Profile | null;
@@ -761,21 +760,10 @@ export default function HiveScreen() {
   // Map of user_id → ISO timestamp for sorting by recency
   const [answerTimestamps, setAnswerTimestamps] = useState<Map<string, string>>(new Map());
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
-  const [isVoiceListening, setIsVoiceListening] = useState(false);
-  const voicePulse = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (isVoiceListening) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(voicePulse, { toValue: 1, duration: 700, useNativeDriver: true }),
-          Animated.timing(voicePulse, { toValue: 0, duration: 700, useNativeDriver: true }),
-        ])
-      ).start();
-    } else {
-      voicePulse.stopAnimation();
-      voicePulse.setValue(0);
-    }
-  }, [isVoiceListening, voicePulse]);
+  // The answer box used to glow and pulse a "Listening…" dot of its own while
+  // the mic was open — one screen's private idea of what dictation looks like.
+  // The answer box is the shared box now, and the mic button already says it is
+  // listening (gold ring, red dot) the same way in every box in the app.
   const [activeAnswerPrompt, setActiveAnswerPrompt] = useState<ReturnType<typeof getTodayQuestion> | null>(null);
   // Map of user_id → answer text for today's question
   const [memberAnswers, setMemberAnswers] = useState<Map<string, string>>(new Map());
@@ -3703,13 +3691,19 @@ export default function HiveScreen() {
                   ) : (
                     // Editable view for creators
                     <>
-                      <TextInput
+                      {/* Every box in this modal is the shared one now, so the
+                          event sheet reads like Clive's bar and the boards
+                          instead of like a grey web form. */}
+                      <ComposerBar
+                        variant="form"
+                        containerClassName="mb-3"
                         placeholder="Event Title"
                         value={eventTitle}
                         onChangeText={setEventTitle}
-                        returnKeyType="send"
-                        onSubmitEditing={saveEvent}
-                        className="border border-gray-300 rounded-lg px-4 py-3 text-base mb-3"
+                        multiline={false}
+                        onSubmit={saveEvent}
+                        canSubmit={!savingEvent}
+                        submitting={savingEvent}
                       />
                       <View className="mb-3">
                         <EventDatePicker
@@ -3738,39 +3732,56 @@ export default function HiveScreen() {
                       {!eventAllDay && (
                         <View className="mb-3">
                           <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/50 mb-1">Time (optional)</Text>
+                          {/* A clock time, so no microphone — it wears the same
+                              white fill, hairline and placeholder ink as the
+                              boxes above and below it. */}
                           <TextInput
                             placeholder="7:30 PM"
+                            placeholderTextColor={FIELD_LOOK.placeholder}
+                            selectionColor={FIELD_LOOK.ink}
                             value={eventTime}
                             onChangeText={setEventTime}
                             returnKeyType="send"
                             onSubmitEditing={saveEvent}
-                            className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-cream"
+                            className="rounded-xl px-4 py-3 text-base text-charcoal"
+                            style={{
+                              fontFamily: FIELD_LOOK.font,
+                              backgroundColor: FIELD_LOOK.fill,
+                              borderWidth: 1,
+                              borderColor: FIELD_LOOK.border,
+                            }}
                           />
                           <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mt-1">
                             Extra details like doors/showtime can go here too. We’ll save the first time and keep your note.
                           </Text>
                         </View>
                       )}
-                      <TextInput
+                      {/* A place is words — "the back room at Esther's Kitchen"
+                          is exactly the sort of thing you say out loud. */}
+                      <ComposerBar
+                        variant="form"
+                        containerClassName="mb-3"
                         placeholder="Location (optional)"
                         value={eventLocation}
                         onChangeText={setEventLocation}
-                        returnKeyType="send"
-                        onSubmitEditing={saveEvent}
-                        className="border border-gray-300 rounded-lg px-4 py-3 text-base mb-3"
+                        multiline={false}
+                        onSubmit={saveEvent}
+                        canSubmit={!savingEvent}
+                        submitting={savingEvent}
                       />
-                      <TextInput
+                      {/* The mic was on a strip under this box. It is inside the
+                          border now, on the box's own footer. */}
+                      <ComposerBar
+                        variant="form"
+                        containerClassName="mb-4"
                         placeholder="Description (optional)"
                         value={eventDescription}
                         onChangeText={setEventDescription}
-                        multiline
-                        blurOnSubmit={false}
-                        onKeyPress={submitOnEnter(saveEvent)}
-                        numberOfLines={3}
-                        className="border border-gray-300 rounded-lg px-4 py-3 text-base mb-4"
-                        style={{ textAlignVertical: 'top', minHeight: 80 }}
+                        minHeight={80}
+                        onSubmit={saveEvent}
+                        canSubmit={!savingEvent}
+                        submitting={savingEvent}
                       />
-                      <DictationRow setValue={setEventDescription} />
                       <View className="mb-4">
                         <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
                       </View>
@@ -3868,34 +3879,26 @@ export default function HiveScreen() {
             <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d', marginBottom: 4 }}>Add a Task</Text>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 16 }}>Add something to your personal to-do list</Text>
-            <TextInput
+            {/* A task is words, so it gets the shared box with the mic on its
+                own footer — the mic used to sit on a strip underneath.
+                The cap was 300 characters, which runs out inside one honest
+                sentence about what you actually have to do; 1,000 now. */}
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-4"
               value={newTaskText}
-              onChangeText={(text) => {
-                setNewTaskText(text);
+              onChangeText={(next) => {
+                setNewTaskText(next);
                 if (taskError) setTaskError(null);
               }}
               placeholder="What do you need to do?"
-              placeholderTextColor="#a09274"
-              multiline
-              blurOnSubmit={false}
-              onKeyPress={submitOnEnter(handleAddTask)}
+              minHeight={90}
+              maxLength={1000}
+              counter="none"
               autoFocus
-              maxLength={300}
-              style={{
-                fontFamily: 'Lato_400Regular',
-                fontSize: 15,
-                color: '#2d2d2d',
-                backgroundColor: '#fff',
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: 'rgba(189,147,72,0.35)',
-                padding: 14,
-                minHeight: 90,
-                textAlignVertical: 'top',
-                marginBottom: 16,
-              }}
+              onSubmit={handleAddTask}
+              submitting={savingTask}
             />
-            <DictationRow setValue={setNewTaskText} />
             {taskError ? (
               <View style={{ backgroundColor: '#fef2f2', borderColor: '#fecaca', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 }}>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626', textAlign: 'center' }}>
@@ -4255,67 +4258,21 @@ export default function HiveScreen() {
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 15, color: '#2d2d2d', lineHeight: 22, marginBottom: 20 }}>
                 {currentAnswerPrompt.question.text}
               </Text>
-              {/* Text input + mic */}
-              <View style={{ marginBottom: 14, position: 'relative' }}>
-                <TextInput
-                  value={myAnswer}
-                  onChangeText={setMyAnswer}
-                  placeholder={isVoiceListening ? '' : 'Share your answer with HIVE...'}
-                  placeholderTextColor="#a09274"
-                  multiline
-                  numberOfLines={4}
-                  blurOnSubmit={false}
-                  onKeyPress={submitOnEnter(handleSubmitAnswer)}
-                  style={{
-                    fontFamily: 'Lato_400Regular',
-                    fontSize: 15,
-                    color: '#2d2d2d',
-                    borderWidth: isVoiceListening ? 2 : 1,
-                    borderColor: isVoiceListening ? '#bd9348' : '#c49a3c',
-                    borderRadius: 14,
-                    padding: 14,
-                    paddingRight: 48,
-                    paddingBottom: isVoiceListening ? 38 : 14,
-                    minHeight: 100,
-                    textAlignVertical: 'top',
-                    backgroundColor: isVoiceListening ? '#fffbf0' : '#fffbf0',
-                    shadowColor: isVoiceListening ? '#bd9348' : 'transparent',
-                    shadowOpacity: isVoiceListening ? 0.35 : 0,
-                    shadowRadius: isVoiceListening ? 10 : 0,
-                    shadowOffset: { width: 0, height: 0 },
-                  }}
-                />
-            {/* One mic only. There were two: this strip and a floating button a few lines down. Only the floating one drives the listening glow on the field, so the strip changed the words while the box sat there looking idle. */}
-                {/* Listening indicator strip inside the box */}
-                {isVoiceListening && (
-                  <View style={{
-                    position: 'absolute',
-                    bottom: 10,
-                    left: 14,
-                    right: 48,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}>
-                    <Animated.View style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: 3.5,
-                      backgroundColor: '#bd9348',
-                      opacity: voicePulse,
-                    }} />
-                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#bd9348', letterSpacing: 0.5 }}>
-                      Listening…
-                    </Text>
-                  </View>
-                )}
-                <VoiceMicButton
-                  onTranscript={(text) => setMyAnswer(prev => prev ? prev + ' ' + text : text)}
-                  onListeningChange={setIsVoiceListening}
-                  size={20}
-                  style={{ position: 'absolute', bottom: 10, right: 10 }}
-                />
-              </View>
+              {/* Your answer to the day's question — the shared box, mic on its
+                  own footer inside the border. Talking here now shows the words
+                  arriving as you say them, which the hand-rolled mic never did:
+                  it only pasted the finished sentence at the end. */}
+              <ComposerBar
+                variant="form"
+                containerClassName="mb-3.5"
+                value={myAnswer}
+                onChangeText={setMyAnswer}
+                placeholder="Share your answer with HIVE..."
+                minHeight={100}
+                onSubmit={handleSubmitAnswer}
+                canSubmit={!!myAnswer.trim() && !isSubmittingAnswer}
+                submitting={isSubmittingAnswer}
+              />
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#a09274', marginBottom: 14, marginTop: -6 }}>
                 Press Enter to send · Shift+Enter for a new line
               </Text>

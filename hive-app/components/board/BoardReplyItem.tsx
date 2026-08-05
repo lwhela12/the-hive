@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, TextInput, Platform } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { formatDateShort } from '../../lib/dateUtils';
 import type { BoardReply, Profile } from '../../types';
 import { BoardReactionBar } from './BoardReactionBar';
@@ -7,10 +7,9 @@ import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
-import { submitOnEnter } from '../../lib/submitOnEnter';
 import { usePageSkin } from '../../lib/pageSkin';
 
-import { DictationRow } from '../ui/DictationRow';
+import { ComposerBar } from '../ui/ComposerBar';
 interface BoardReplyItemProps {
   reply: BoardReply & { author?: Profile };
   currentUserId?: string;
@@ -85,57 +84,25 @@ export function BoardReplyItem({
           </View>
 
           {isEditing ? (
-            <View className="mb-2">
-              <TextInput
-                value={editContent}
-                onChangeText={setEditContent}
-                placeholder="Edit your reply..."
-                placeholderTextColor={skin.inkFaint}
-                multiline
-                blurOnSubmit={Platform.OS === 'web'}
-                submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
-                returnKeyType="send"
-                enterKeyHint="send"
-                onSubmitEditing={handleSaveEdit}
-                onKeyPress={submitOnEnter(handleSaveEdit)}
-                className="rounded-lg p-3 mb-2"
-                style={{
-                  fontFamily: 'Lato_400Regular',
-                  backgroundColor: skin.field,
-                  borderWidth: 1,
-                  borderColor: skin.border,
-                  color: skin.ink,
-                }}
-              />
-              <DictationRow setValue={setEditContent} />
-              <View className="flex-row gap-2">
-                <Pressable
-                  onPress={handleSaveEdit}
-                  className="px-3 py-1 rounded-lg"
-                  style={{ backgroundColor: skin.gold }}
-                >
-                  {/* The space gold is a light gold, so white on it is a smudge.
-                      The label takes the page's own colour instead. */}
-                  <Text
-                    style={{ fontFamily: 'Lato_700Bold', color: skin.dark ? skin.page : '#ffffff' }}
-                    className="text-sm"
-                  >
-                    Save
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setIsEditing(false);
-                    setEditContent(reply.content);
-                  }}
-                  className="px-3 py-1"
-                >
-                  <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-sm">
-                    Cancel
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
+            /* Edit-in-place, which is exactly what ComposerBar's inlineEdit
+               variant is for: the box, the microphone inside its own border,
+               and Cancel and Save on the same footer strip. It used to be a
+               hand-rolled field with the mic welded on underneath and the two
+               buttons floating below that. */
+            <ComposerBar
+              variant="inlineEdit"
+              containerClassName="mb-2"
+              value={editContent}
+              onChangeText={setEditContent}
+              placeholder="Edit your reply..."
+              minHeight={72}
+              onSubmit={handleSaveEdit}
+              submitLabel="Save"
+              onCancel={() => {
+                setIsEditing(false);
+                setEditContent(reply.content);
+              }}
+            />
           ) : (
             <LinkifiedText
               style={{ fontFamily: 'Lato_400Regular', fontSize: 16, color: skin.ink, marginBottom: 8 }}

@@ -6,8 +6,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMemberBoardDisplayName, getMemberHdBoardName } from '../../lib/boardWishLinks';
 import { HiveIcon, type HiveIconName } from '../ui/HiveIcon';
 import type { BoardCategory, Profile } from '../../types';
-
 import { ComposerBar } from '../ui/ComposerBar';
+import { FIELD_LOOK } from '../ui/Input';
+
 const BOARD_DRAFT_KEY = 'board-topic-draft';
 const NAME_MAX_LENGTH = 90;
 /**
@@ -418,6 +419,12 @@ export function BoardTopicComposer({
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8e7a5e', flex: 1 }}>
                     Type or paste any emoji →
                   </Text>
+                  {/* An emoji is not words, so no microphone. It wears the one
+                      field look — same hairline, same corner, same fill — as
+                      the other two emoji boxes in the app (HiveReactions and
+                      a room's icon), and only lights up gold once it holds
+                      something. This box had its own grey placeholder and its
+                      own corner until the 2026-08-05 sweep. */}
                   <TextInput
                     ref={customInputRef}
                     value={customEmoji}
@@ -428,15 +435,17 @@ export function BoardTopicComposer({
                       height: 44,
                       textAlign: 'center',
                       borderWidth: 1,
-                      borderColor: customEmoji ? '#bd9348' : 'rgba(222,193,129,0.4)',
-                      borderRadius: 10,
-                      backgroundColor: customEmoji ? '#fdf3dc' : '#faf8f3',
+                      borderColor: customEmoji ? '#bd9348' : FIELD_LOOK.border,
+                      borderRadius: FIELD_LOOK.radius,
+                      backgroundColor: customEmoji ? '#fdf3dc' : FIELD_LOOK.fill,
+                      color: FIELD_LOOK.ink,
                     }}
                     maxLength={8}
                     autoCorrect={false}
                     autoCapitalize="none"
                     placeholder="🐝"
-                    placeholderTextColor="#d1d5db"
+                    placeholderTextColor={FIELD_LOOK.placeholder}
+                    selectionColor={FIELD_LOOK.ink}
                   />
                 </Pressable>
 

@@ -7,15 +7,12 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
 import { supabase } from '../../lib/supabase';
-import { VoiceMicButton } from '../ui/VoiceMicButton';
-import { useDictation } from '../../lib/hooks/useDictation';
-import { submitOnEnter } from '../../lib/submitOnEnter';
+import { ComposerBar } from '../ui/ComposerBar';
 import type { Wish, Profile } from '../../types';
 
 
@@ -50,7 +47,6 @@ export function GrantWishModal({
   onGrant,
 }: GrantWishModalProps) {
   const [thankYouMessage, setThankYouMessage] = useState('');
-  const thanksDictation = useDictation(setThankYouMessage);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -304,35 +300,23 @@ export function GrantWishModal({
                 >
                   Share your gratitude with the community
                 </Text>
-                <TextInput
+                {/* The warmest thing anybody writes in this app, so it gets the
+                    shared box: mic and counter on the strip inside the border,
+                    and Enter still marks the wish granted the way it always did
+                    (Shift+Enter for a new line). `canSubmit` stays true with an
+                    empty box because the thank-you is optional — you can grant a
+                    wish without writing one. */}
+                <ComposerBar
+                  variant="form"
                   value={thankYouMessage}
                   onChangeText={setThankYouMessage}
                   placeholder="Thank you so much for helping me with..."
-                  placeholderTextColor="#a09274"
-                  multiline
-                  blurOnSubmit={false}
-                  onKeyPress={submitOnEnter(handleGrant)}
-                  numberOfLines={4}
+                  minHeight={100}
                   maxLength={THANK_YOU_LIMIT}
-                  className="bg-white rounded-xl px-4 py-3 text-charcoal min-h-[100px]"
-                  style={{
-                    fontFamily: 'Lato_400Regular',
-                    textAlignVertical: 'top',
-                  }}
+                  onSubmit={handleGrant}
+                  canSubmit={!loading}
+                  submitting={loading}
                 />
-                <View className="flex-row items-center justify-between mt-1">
-                  <VoiceMicButton
-                    size={20}
-                    onTranscript={thanksDictation.onTranscript}
-                    onInterimTranscript={thanksDictation.onInterimTranscript}
-                  />
-                  <Text
-                    style={{ fontFamily: 'Lato_400Regular' }}
-                    className="text-charcoal/40 text-xs"
-                  >
-                    {thankYouMessage.length}/{THANK_YOU_LIMIT}
-                  </Text>
-                </View>
               </View>
 
               {/* Celebration Note */}

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Modal, View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { Modal, View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { DictationRow } from '../ui/DictationRow';
+import { ComposerBar } from '../ui/ComposerBar';
+import { FIELD_LOOK } from '../ui/Input';
 import { ThinkingBee } from '../ui/ThinkingBee';
 import {
   HONEY_POT_PAYMENT_METHOD_OPTIONS,
@@ -120,15 +121,23 @@ export function RecordHoneyPotModal({
 
             <View style={{ gap: 6 }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>How much?</Text>
+              {/* Money, so no microphone — nobody dictates "twenty dollars
+                  forty-two" into a number pad. It still wears the same white
+                  fill, hairline and placeholder ink as every box in the app so
+                  the controls read as one set. */}
               <TextInput
                 value={amount}
                 onChangeText={setAmount}
                 placeholder="0.00"
+                placeholderTextColor={FIELD_LOOK.placeholder}
+                selectionColor={FIELD_LOOK.ink}
                 keyboardType="decimal-pad"
                 style={{
-                  fontFamily: 'Lato_400Regular', fontSize: 17, color: '#313130',
-                  backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(189,147,72,0.4)',
-                  borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+                  fontFamily: FIELD_LOOK.font, fontSize: FIELD_LOOK.fontSize, color: FIELD_LOOK.ink,
+                  backgroundColor: FIELD_LOOK.fill, borderWidth: 1, borderColor: FIELD_LOOK.border,
+                  borderRadius: FIELD_LOOK.radius,
+                  paddingHorizontal: FIELD_LOOK.paddingHorizontal,
+                  paddingVertical: FIELD_LOOK.paddingVertical,
                 }}
               />
             </View>
@@ -154,32 +163,33 @@ export function RecordHoneyPotModal({
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
                 {type === 'deposit' ? 'Who from?' : 'Who to?'}
               </Text>
-              <TextInput
+              {/* A person's name is words — you should be able to say it. */}
+              <ComposerBar
+                variant="form"
                 value={fromWhom}
                 onChangeText={setFromWhom}
                 placeholder="Optional"
-                style={{
-                  fontFamily: 'Lato_400Regular', fontSize: 15, color: '#313130',
-                  backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(189,147,72,0.4)',
-                  borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11,
-                }}
+                multiline={false}
+                onSubmit={save}
+                canSubmit={!saving}
+                submitting={saving}
               />
             </View>
 
             <View style={{ gap: 6 }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>What was it for?</Text>
-              <TextInput
+              {/* The mic used to sit on a strip UNDER this box. It is inside the
+                  border now, on the same footer as everywhere else. */}
+              <ComposerBar
+                variant="form"
                 value={note}
                 onChangeText={setNote}
                 placeholder="Shelter donation, Q3 dues, pizza…"
-                multiline
-                style={{
-                  fontFamily: 'Lato_400Regular', fontSize: 15, color: '#313130', minHeight: 74,
-                  backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(189,147,72,0.4)',
-                  borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, textAlignVertical: 'top',
-                }}
+                minHeight={74}
+                onSubmit={save}
+                canSubmit={!saving}
+                submitting={saving}
               />
-              <DictationRow setValue={setNote} />
             </View>
 
             {error ? (

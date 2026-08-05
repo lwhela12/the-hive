@@ -8,10 +8,9 @@ import {
   KeyboardAvoidingView,
   ScrollView,
 } from 'react-native';
-import { Input } from '../ui/Input';
+import { ComposerBar } from '../ui/ComposerBar';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
-import { submitOnEnter } from '../../lib/submitOnEnter';
 import type { Profile } from '../../types';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveDisplayName } from '../../lib/hiveBrand';
@@ -290,34 +289,54 @@ export function ScheduleMeetingModal({
               </Pressable>
             </View>
 
-            {/* Form */}
-            <Input
+            {/* Form.
+                A meeting's name, what it's about and where it is are all words a
+                member writes, so all three are the shared composer with the mic
+                on the text's own line — the same box the event forms in
+                monthly-tuneup, hive.tsx and the Meeting Helper already use. The
+                date, time and length below are structured, so they keep their
+                pickers and no microphone. */}
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-4"
               label="Meeting Title"
               value={title}
-              onChangeText={(text) => setTitle(normalizeHiveBrandText(text))}
+              // Every meeting title goes through the brand normaliser ("Hive" →
+              // "HIVE"), including one arriving from dictation, which is why the
+              // updater form is resolved here rather than at the composer.
+              onChangeText={(next) =>
+                setTitle((previous) =>
+                  normalizeHiveBrandText(typeof next === 'function' ? next(previous) : next)
+                )
+              }
               placeholder="e.g., Weekly Check-in"
-              returnKeyType="send"
-              onSubmitEditing={handleSchedule}
+              multiline={false}
+              onSubmit={handleSchedule}
+              canSubmit={!loading}
             />
 
-            <Input
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-4"
               label="Description (optional)"
               value={description}
               onChangeText={setDescription}
               placeholder="What's this meeting about?"
-              multiline
-              blurOnSubmit={false}
-              onKeyPress={submitOnEnter(handleSchedule)}
-              numberOfLines={3}
+              minHeight={92}
+              onSubmit={handleSchedule}
+              canSubmit={!loading}
             />
 
-            <Input
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-4"
               label="Location (optional)"
               value={location}
               onChangeText={setLocation}
               placeholder="Physical address for in-person meetings"
-              returnKeyType="send"
-              onSubmitEditing={handleSchedule}
+              multiline={false}
+              onSubmit={handleSchedule}
+              canSubmit={!loading}
             />
 
             {/* Date Picker */}

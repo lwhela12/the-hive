@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { VoiceMicButton } from '../ui/VoiceMicButton';
-import { useDictation } from '../../lib/hooks/useDictation';
 import {
   View,
   Text,
@@ -9,7 +7,6 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,15 +15,26 @@ import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import { invalidateWishQueries } from '../../lib/queryClient';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
-import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { syncWishEditToLinkedBoard } from '../../lib/wishBoardLinking';
-import { MentionSuggestions } from '../ui/MentionSuggestions';
+import { ComposerBar } from '../ui/ComposerBar';
 import { WishScopePicker, type WishScope } from '../ui/WishScopePicker';
 import type { BoardCategory, Wish } from '../../types';
 
 const WISH_DRAFT_KEY = 'add-wish-draft';
 const WISH_TITLE_DRAFT_KEY = 'add-wish-title-draft';
+/**
+ * How long a wish can be.
+ *
+ * The title was 80 and the wish itself 500 — about three sentences. A wish is
+ * the thing this whole app is built around, and the description is where you
+ * explain what you actually need; 500 characters is a place to run out of room
+ * mid-thought. Nat has already hit a cap that was too tight once (the thank-you
+ * box, 2026-08-04), so these grew. The title matches the 90 characters the
+ * quick-glance line already shows.
+ */
+const WISH_TITLE_MAX_LENGTH = 90;
+const WISH_TEXT_MAX_LENGTH = 2000;
 
 interface AddWishModalProps {
   visible: boolean;
@@ -58,37 +66,31 @@ export function AddWishModal({
   const [wishTitle, setWishTitle] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  // Routed so a spoken wish is drafted like a typed one. Going straight to
-  // setWishText would skip handleWishTextChange, and the draft this modal
-  // carefully keeps in AsyncStorage would only ever hold what you had typed —
-  // so talking your wish and then closing the sheet would lose it.
-  const wishDictation = useDictation((updater) =>
-    setWishText((prev) => {
-      const next = updater(prev);
-      if (!existingWish) AsyncStorage.setItem(WISH_DRAFT_KEY, next).catch(() => {});
-      return next;
-    })
-  );
   const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
   const isEditMode = !!existingWish;
   const isLinkedWish = !!linkedBoardCategory && !existingWish;
 
-  const handleWishTextChange = (text: string) => {
-    setWishText(text);
-    if (!existingWish) AsyncStorage.setItem(WISH_DRAFT_KEY, text).catch(() => {});
+  /**
+   * Both boxes keep a draft, and both take an updater as well as a string —
+   * dictation writes by reading what the box already said. Writing straight to
+   * setWishText would skip the draft, so talking your wish and then closing the
+   * sheet would lose it.
+   */
+  const handleWishTextChange = (next: string | ((previous: string) => string)) => {
+    setWishText((previous) => {
+      const text = typeof next === 'function' ? next(previous) : next;
+      if (!existingWish) AsyncStorage.setItem(WISH_DRAFT_KEY, text).catch(() => {});
+      return text;
+    });
   };
 
-  const handleWishTitleChange = (text: string) => {
-    setWishTitle(text);
-    if (!existingWish) AsyncStorage.setItem(WISH_TITLE_DRAFT_KEY, text).catch(() => {});
+  const handleWishTitleChange = (next: string | ((previous: string) => string)) => {
+    setWishTitle((previous) => {
+      const text = typeof next === 'function' ? next(previous) : next;
+      if (!existingWish) AsyncStorage.setItem(WISH_TITLE_DRAFT_KEY, text).catch(() => {});
+      return text;
+    });
   };
-
-  const wishMentionInput = useMentionInput({
-    value: wishText,
-    onChangeText: handleWishTextChange,
-    members: mentionableMembers,
-    currentUserId: userId,
-  });
 
   useEffect(() => {
     if (visible && existingWish) {
@@ -113,7 +115,6 @@ export function AddWishModal({
       setWishTitle('');
       setWishText('');
       setError('');
-      wishMentionInput.resetMentionSelection();
     }
   }, [visible, existingWish]);
 
@@ -230,7 +231,6 @@ export function AddWishModal({
         AsyncStorage.removeItem(WISH_DRAFT_KEY).catch(() => {});
         AsyncStorage.removeItem(WISH_TITLE_DRAFT_KEY).catch(() => {});
       }
-      wishMentionInput.resetMentionSelection();
       await onSave();
       onClose();
     } catch (err) {
@@ -246,6 +246,12 @@ export function AddWishModal({
   };
 
   const canSubmit = wishText.trim().length > 0;
+  // What pressing Enter in either box does: the same thing the big button at
+  // the bottom does, whichever button that is right now.
+  const handleKeyboardSave = () => {
+    if (!canSubmit || saving) return;
+    void handleSave(isEditMode ? existingWish?.status === 'public' : true);
+  };
 
   return (
     <Modal
@@ -305,22 +311,20 @@ export function AddWishModal({
                     </Text>
                   </View>
                 )}
-                <Text
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  className="text-charcoal text-sm mb-2"
-                >
-                  Quick glance title
-                </Text>
-                <TextInput
+                {/* A title is words too — short ones. Same box, one line. */}
+                <ComposerBar
+                  variant="form"
+                  containerClassName="mb-4"
+                  label="Quick glance title"
                   value={wishTitle}
                   onChangeText={handleWishTitleChange}
                   placeholder="Rose bushes, tap shoes, HIVE app suggestions..."
-                  placeholderTextColor="#a09274"
-                  maxLength={80}
-                  className="bg-white rounded-xl px-4 py-3 text-charcoal mb-4"
-                  style={{
-                    fontFamily: 'Lato_400Regular',
-                  }}
+                  multiline={false}
+                  maxLength={WISH_TITLE_MAX_LENGTH}
+                  counter="none"
+                  onSubmit={handleKeyboardSave}
+                  canSubmit={canSubmit && !saving}
+                  submitting={saving}
                 />
                 <Text
                   style={{ fontFamily: 'Lato_400Regular' }}
@@ -328,69 +332,33 @@ export function AddWishModal({
                 >
                   {isLinkedWish ? 'Make this one clear, claimable ask from the linked thread.' : 'Describe what you need help with'}
                 </Text>
-                {/* The mic sits INSIDE the box, hard right, wordless — Clive's
-                    geometry (Nat 2026-08-04). It was parked underneath on the
-                    left wearing the words "Talk instead of typing", which is a
-                    third position for the one control the app has for talking.
-                    A wish said out loud is usually a better wish than a wish
-                    typed, so this is the box where it most wants finding. */}
-                <View className="flex-row items-end bg-white rounded-2xl px-3 py-2 min-h-[150px]">
-                  <TextInput
-                    value={wishText}
-                    onChangeText={wishMentionInput.textInputMentionProps.onChangeText}
-                    onSelectionChange={wishMentionInput.textInputMentionProps.onSelectionChange}
-                    selection={wishMentionInput.textInputMentionProps.selection}
-                    placeholder="I want help learning to cook healthier meals..."
-                    placeholderTextColor="#a09274"
-                    multiline
-                    numberOfLines={6}
-                    maxLength={500}
-                    className="flex-1 text-base text-charcoal py-1 px-1"
-                    style={{
-                      fontFamily: 'Lato_400Regular',
-                      textAlignVertical: 'top',
-                      outlineStyle: 'none',
-                      caretColor: '#313130',
-                    } as any}
-                  />
-                  <VoiceMicButton
-                    size={20}
-                    style={{ marginLeft: 6 }}
-                    onTranscript={wishDictation.onTranscript}
-                    onInterimTranscript={wishDictation.onInterimTranscript}
-                  />
-                </View>
+                {/* The one box, wearing form clothes. The mic is inside its own
+                    border with the counter — Clive's geometry (Nat 2026-08-04),
+                    now the shared component rather than a copy of it. A wish
+                    said out loud is usually a better wish than a wish typed, so
+                    this is the box where talking most wants finding.
+                    @ tagging, the tagged pills and the draft all still work;
+                    they moved into the bar instead of living out here. */}
+                <ComposerBar
+                  variant="form"
+                  value={wishText}
+                  onChangeText={handleWishTextChange}
+                  placeholder="I want help learning to cook healthier meals..."
+                  minHeight={150}
+                  maxLength={WISH_TEXT_MAX_LENGTH}
+                  onSubmit={handleKeyboardSave}
+                  canSubmit={canSubmit && !saving}
+                  submitting={saving}
+                  mentionMembers={mentionableMembers}
+                  mentionsLoading={mentionMembersLoading}
+                  currentUserId={userId}
+                />
                 {/* Who can see this wish. More eyes is sometimes exactly what
                     an ask needs — "anyone know a teacher?" travels further than
                     one HIVE (Nat 2026-08-02). */}
                 <View className="mt-4">
                   <WishScopePicker value={wishScope} onChange={setWishScope} />
                 </View>
-
-                <MentionSuggestions
-                  active={wishMentionInput.mentionQuery !== null}
-                  query={wishMentionInput.mentionQuery}
-                  loading={mentionMembersLoading}
-                  suggestions={wishMentionInput.mentionSuggestions}
-                  onSelect={wishMentionInput.selectMention}
-                />
-                {wishMentionInput.mentionedMembers.length > 0 && (
-                  <View className="flex-row flex-wrap mt-2" style={{ gap: 6 }}>
-                    {wishMentionInput.mentionedMembers.map((member) => (
-                      <View key={member.id} className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
-                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
-                          Tagged {member.name.split(/\s+/)[0]}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-                <Text
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal/40 text-xs mt-1 text-right"
-                >
-                  {wishText.length}/500
-                </Text>
               </View>
 
               {/* Info Box */}

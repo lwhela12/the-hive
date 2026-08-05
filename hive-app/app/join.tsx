@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../lib/supabase';
@@ -7,8 +7,8 @@ import { useAuth } from '../lib/hooks/useAuth';
 import { hiveDisplayName } from '../lib/hiveBrand';
 import type { CommunityInvite, Community, Profile } from '../types';
 
-import { DictationRow } from '../components/ui/DictationRow';
-import { confirmAction } from '../lib/showAlert';
+import { ComposerBar } from '../components/ui/ComposerBar';
+import { confirmAction, showAlert } from '../lib/showAlert';
 import { ThinkingBee } from '../components/ui/ThinkingBee';
 type InviteWithDetails = CommunityInvite & {
   community: Community;
@@ -326,14 +326,14 @@ export default function JoinScreen() {
       router.replace('/(app)/hive');
     } catch (err) {
       console.error('Error bootstrapping genesis community:', err);
-      Alert.alert('Error', 'Failed to set up community. Please try again.');
+      showAlert('Could not set up your HIVE', 'Something went wrong building the first HIVE. Please try again.');
       setLoading(false);
     }
   };
 
   const handleAcceptInvite = async () => {
     if (!invite) {
-      Alert.alert('Error', 'No invite found. Please refresh and try again.');
+      showAlert('No invite found', 'Refresh the page and try again.');
       return;
     }
     if (normalizeEmail(invite.email) !== normalizedUserEmail) {
@@ -352,7 +352,7 @@ export default function JoinScreen() {
       const activeProfile = await ensureProfile();
 
       if (!activeProfile) {
-        Alert.alert('Error', 'Profile not loaded. Please refresh and try again.');
+        showAlert('Your profile has not loaded yet', 'Refresh the page and try again.');
         return;
       }
 
@@ -441,7 +441,7 @@ export default function JoinScreen() {
       router.replace('/(app)/hive');
     } catch (err) {
       console.error('Error accepting invite:', err);
-      Alert.alert('Error', 'Failed to accept invite. Please try again.');
+      showAlert('Could not join', 'That invite did not go through. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -480,11 +480,11 @@ export default function JoinScreen() {
         }
       } else {
         setAlreadyOnWaitlist(true);
-        Alert.alert('Success', "You've been added to the waitlist! We'll be in touch.");
+        showAlert("You're on the waitlist", "We'll be in touch.");
       }
     } catch (err) {
       console.error('Error joining waitlist:', err);
-      Alert.alert('Error', 'Failed to join waitlist. Please try again.');
+      showAlert('Could not add you', 'The waitlist did not save your details. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -663,37 +663,38 @@ export default function JoinScreen() {
               Interested in starting or joining a HIVE? Let us know and we'll be in touch.
             </Text>
 
-            <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2 text-sm">
-                Your Name
-              </Text>
-              <TextInput
-                value={waitlistName}
-                onChangeText={setWaitlistName}
-                placeholder={profile?.name || 'Enter your name'}
-                placeholderTextColor="#9ca3af"
-                className="bg-cream rounded-xl px-4 py-3 text-charcoal"
-                style={{ fontFamily: 'Lato_400Regular' }}
-              />
-            </View>
+            {/* Your own name is words, so it gets the microphone too — this is
+                somebody's very first screen in HIVE and they may be on a phone
+                they are holding one-handed. */}
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-4"
+              label="Your Name"
+              value={waitlistName}
+              onChangeText={setWaitlistName}
+              placeholder={profile?.name || 'Enter your name'}
+              multiline={false}
+              maxLength={120}
+              onSubmit={handleJoinWaitlist}
+              submitting={submitting}
+            />
 
-            <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2 text-sm">
-                Message (optional)
-              </Text>
-              <TextInput
-                value={waitlistMessage}
-                onChangeText={setWaitlistMessage}
-                placeholder="Tell us a bit about yourself..."
-                placeholderTextColor="#9ca3af"
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-                className="bg-cream rounded-xl px-4 py-3 text-charcoal min-h-[80px]"
-                style={{ fontFamily: 'Lato_400Regular' }}
-              />
-              <DictationRow setValue={setWaitlistMessage} />
-            </View>
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-4"
+              label="Message (optional)"
+              value={waitlistMessage}
+              onChangeText={setWaitlistMessage}
+              placeholder="Tell us a bit about yourself..."
+              minHeight={80}
+              // Deliberately uncapped, as it always has been. Somebody
+              // introducing themselves should not be cut off mid-sentence.
+              // Enter makes a new paragraph here. Somebody introducing
+              // themselves writes more than one line, and sending the form out
+              // from under them mid-sentence would be the wrong answer.
+              submitOnEnterKey={false}
+              submitting={submitting}
+            />
 
             <Pressable
               onPress={handleJoinWaitlist}

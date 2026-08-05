@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, RefreshControl, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, Modal, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, RefreshControl, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -39,10 +39,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import type { Skill, Wish, UserInsights, Profile } from '../../types';
 
-import { DictationRow } from '../../components/ui/DictationRow';
+import { ComposerBar } from '../../components/ui/ComposerBar';
+import { FIELD_LOOK } from '../../components/ui/Input';
 import { confirmAction } from '../../lib/showAlert';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
+
+/**
+ * The hairline every field in the app wears — the same value `ComposerBar` uses.
+ *
+ * Only one box on this page is not made of words (your phone number), so it does
+ * not get a microphone. It still has to look like it belongs to the same set of
+ * controls as everything around it, which is all this constant is for.
+ */
+const FIELD_BORDER = FIELD_LOOK.border;
 
 // Format phone number as (XXX) XXX-XXXX
 const formatPhoneNumber = (value: string): string => {
@@ -594,7 +604,7 @@ export default function ProfileScreen() {
 
     const { cleanBirthday, birthdayIso, payload } = buildProfileUpdate();
     if (cleanBirthday && !birthdayIso) {
-      Alert.alert('Birthday format', 'Please enter your birthday as MM-DD-YYYY, like 10-12-1987.');
+      showAlert('Birthday format', 'Please enter your birthday as MM-DD-YYYY, like 10-12-1987.');
       return false;
     }
 
@@ -606,7 +616,7 @@ export default function ProfileScreen() {
         .eq('id', profile.id);
 
       if (error) {
-        Alert.alert('Error', failureMessage);
+        showAlert('Error', failureMessage);
         return false;
       }
 
@@ -708,7 +718,7 @@ export default function ProfileScreen() {
       await refreshProfile();
     } catch (error) {
       console.error('Error uploading avatar:', error);
-      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+      showAlert('Error', 'Failed to upload photo. Please try again.');
     } finally {
       setIsUploadingPhoto(false);
     }
@@ -735,7 +745,7 @@ export default function ProfileScreen() {
     const { error } = await supabase.auth.signOut({ scope: 'local' });
     if (error) {
       console.error('Sign out error:', error);
-      Alert.alert('Error', 'Failed to sign out. Please try again.');
+      showAlert('Error', 'Failed to sign out. Please try again.');
       return;
     }
     router.replace('/(auth)/login');
@@ -766,7 +776,7 @@ export default function ProfileScreen() {
       const { error } = await query;
 
       if (error) {
-        Alert.alert('Error', 'Failed to archive wish. Please try again.');
+        showAlert('Error', 'Failed to archive wish. Please try again.');
         return;
       }
 
@@ -832,7 +842,7 @@ export default function ProfileScreen() {
       .eq('community_id', communityId);
 
     if (error) {
-      Alert.alert('Error', 'Failed to update that skill flower. Please try again.');
+      showAlert('Error', 'Failed to update that skill flower. Please try again.');
       await fetchData();
     }
   };
@@ -913,7 +923,7 @@ export default function ProfileScreen() {
         .eq('community_id', communityId);
 
       if (error) {
-        Alert.alert('Error', 'Failed to plant that skill. Please try again.');
+        showAlert('Error', 'Failed to plant that skill. Please try again.');
         await fetchData();
       }
       return;
@@ -933,7 +943,7 @@ export default function ProfileScreen() {
       .single();
 
     if (error) {
-      Alert.alert('Error', 'Failed to plant that skill. Please try again.');
+      showAlert('Error', 'Failed to plant that skill. Please try again.');
       return;
     }
 
@@ -978,7 +988,7 @@ export default function ProfileScreen() {
         .eq('community_id', communityId);
 
       if (resetError) {
-        Alert.alert('Error', 'Failed to clear your current garden. Please try again.');
+        showAlert('Error', 'Failed to clear your current garden. Please try again.');
         return null;
       }
 
@@ -1033,7 +1043,7 @@ export default function ProfileScreen() {
           .single();
 
         if (error) {
-          Alert.alert('Error', 'Failed to plant that garden. Please try again.');
+          showAlert('Error', 'Failed to plant that garden. Please try again.');
           await fetchData();
           return null;
         }
@@ -1059,7 +1069,7 @@ export default function ProfileScreen() {
         .select('*');
 
       if (error) {
-        Alert.alert('Error', 'Failed to plant that garden. Please try again.');
+        showAlert('Error', 'Failed to plant that garden. Please try again.');
         await fetchData();
         return null;
       }
@@ -1120,7 +1130,7 @@ export default function ProfileScreen() {
         .eq('community_id', communityId);
 
       if (error) {
-        Alert.alert('Error', 'Failed to remove that skill. Please try again.');
+        showAlert('Error', 'Failed to remove that skill. Please try again.');
         return;
       }
 
@@ -1141,7 +1151,7 @@ export default function ProfileScreen() {
       });
 
       if (error) {
-        Alert.alert('Error', 'Failed to delete wish. Please try again.');
+        showAlert('Error', 'Failed to delete wish. Please try again.');
         return;
       }
 
@@ -1150,19 +1160,15 @@ export default function ProfileScreen() {
       setManagingWish(null);
     };
 
-    const message = `Delete this wish?\n\n"${wish.description}"`;
-
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) {
-        deleteWish();
-      }
-      return;
-    }
-
-    Alert.alert('Delete Wish', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: deleteWish },
-    ]);
+    // Same question, both platforms — this file had hand-rolled the browser
+    // half a few lines above Archive, which had none at all.
+    confirmAction({
+      title: 'Delete wish',
+      message: `Delete this wish?\n\n"${wish.description}"`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: deleteWish,
+    });
   };
 
   const handleRefineWithClive = (roughWish: string) => {
@@ -1298,31 +1304,25 @@ export default function ProfileScreen() {
     multiline?: boolean;
   }) => (
     <View style={{ marginBottom: 14 }}>
+      {/* The little gold caps stay — they are how this walk-through labels its
+          steps. Only the box below changed: it is the shared one now, so the
+          mic sits inside its own border on the field's line instead of hanging
+          off the bottom on a strip of its own. */}
       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#9a7a3a', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
         {label}
       </Text>
-      <TextInput
+      <ComposerBar
+        variant="form"
         value={value}
-        onChangeText={onChangeText}
+        // The shared bar hands back either the new text or a function that
+        // works out the new text from the old (which is what talking does).
+        onChangeText={(next) => onChangeText(typeof next === 'function' ? next(value) : next)}
         placeholder={placeholder}
-        placeholderTextColor="#b8ad9f"
         multiline={multiline}
-        textAlignVertical={multiline ? 'top' : 'center'}
-        style={{
-          minHeight: multiline ? 86 : 44,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: 'rgba(222,193,129,0.55)',
-          backgroundColor: '#fffdf7',
-          paddingHorizontal: 14,
-          paddingVertical: multiline ? 12 : 0,
-          fontFamily: 'Lato_400Regular',
-          fontSize: 14,
-          lineHeight: 20,
-          color: '#2d2d2d',
-        }}
+        minHeight={multiline ? 86 : 44}
+        // Nothing here sends anything, so Enter should make a new line.
+        submitOnEnterKey={false}
       />
-      <DictationRow setValue={(u: (prev: string) => string) => onChangeText(u(value))} label={multiline ? 'Talk instead of typing' : null} size={18} />
     </View>
   );
 
@@ -1874,13 +1874,13 @@ export default function ProfileScreen() {
             <View className="p-4 border-b border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Name</Text>
               {isEditing ? (
-                <TextInput
+                <ComposerBar
+                  variant="form"
                   value={editName}
                   onChangeText={setEditName}
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal text-base p-0"
                   placeholder="Your name"
-                  placeholderTextColor="#a09274"
+                  multiline={false}
+                  submitOnEnterKey={false}
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -1899,13 +1899,28 @@ export default function ProfileScreen() {
             <View className="p-4 border-b border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Phone</Text>
               {isEditing ? (
+                // The one box on this page that is not made of words, so it is
+                // the one box with no microphone — reading a phone number aloud
+                // to a speech recogniser is not a thing anybody wants. It wears
+                // the same white fill, the same gold hairline and the same
+                // corner as every field around it, so it still reads as part of
+                // one set of controls.
                 <TextInput
                   value={editPhone}
                   onChangeText={(text) => setEditPhone(formatPhoneNumber(text))}
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal text-base p-0"
+                  style={{
+                    fontFamily: 'Lato_400Regular',
+                    borderWidth: 1,
+                    borderColor: FIELD_BORDER,
+                    borderRadius: 12,
+                    backgroundColor: '#ffffff',
+                    outlineStyle: 'none',
+                    caretColor: '#313130',
+                  } as any}
+                  className="text-charcoal text-base px-4 py-3"
                   placeholder="(555) 555-5555"
                   placeholderTextColor="#a09274"
+                  selectionColor="#313130"
                   keyboardType="phone-pad"
                 />
               ) : (
@@ -1934,13 +1949,13 @@ export default function ProfileScreen() {
             <View className="p-4 border-b border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Self-appointed title</Text>
               {isEditing ? (
-                <TextInput
+                <ComposerBar
+                  variant="form"
                   value={editProfileTitle}
                   onChangeText={setEditProfileTitle}
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal text-base p-0"
                   placeholder="Founder, Tarot Reader, Spreadsheet Sorcerer..."
-                  placeholderTextColor="#a09274"
+                  multiline={false}
+                  submitOnEnterKey={false}
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -1953,13 +1968,13 @@ export default function ProfileScreen() {
             <View className="p-4 border-b border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Occupation</Text>
               {isEditing ? (
-                <TextInput
+                <ComposerBar
+                  variant="form"
                   value={editOccupation}
                   onChangeText={setEditOccupation}
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal text-base p-0"
                   placeholder="Your occupation"
-                  placeholderTextColor="#a09274"
+                  multiline={false}
+                  submitOnEnterKey={false}
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -1972,19 +1987,14 @@ export default function ProfileScreen() {
             <View className="p-4 border-b border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">About me</Text>
               {isEditing ? (
-                <>
-                <TextInput
+                <ComposerBar
+                  variant="form"
                   value={editBio}
                   onChangeText={setEditBio}
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal text-base p-0"
                   placeholder="A few sentences about yourself..."
-                  placeholderTextColor="#a09274"
-                  multiline
-                  numberOfLines={3}
+                  minHeight={86}
+                  submitOnEnterKey={false}
                 />
-                <DictationRow setValue={setEditBio} />
-                </>
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
                   {(profile as any).bio || 'Not set'}
@@ -1996,13 +2006,16 @@ export default function ProfileScreen() {
             <View className="p-4 border-b border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Current project</Text>
               {isEditing ? (
-                <TextInput
+                // Prose here, same as the walk-through's version of this very
+                // field. The two editors write the same column and used to
+                // disagree about whether it was one line or several.
+                <ComposerBar
+                  variant="form"
                   value={editCurrentProject}
                   onChangeText={setEditCurrentProject}
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal text-base p-0"
                   placeholder="What are you working on right now?"
-                  placeholderTextColor="#a09274"
+                  minHeight={86}
+                  submitOnEnterKey={false}
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -2015,13 +2028,13 @@ export default function ProfileScreen() {
             <View className="p-4 border-b border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Hometown</Text>
               {isEditing ? (
-                <TextInput
+                <ComposerBar
+                  variant="form"
                   value={editHometown}
                   onChangeText={setEditHometown}
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal text-base p-0"
                   placeholder="Where are you from?"
-                  placeholderTextColor="#a09274"
+                  multiline={false}
+                  submitOnEnterKey={false}
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -2034,13 +2047,13 @@ export default function ProfileScreen() {
             <View className="p-4 border-b border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">HIVErs should ask me about</Text>
               {isEditing ? (
-                <TextInput
+                <ComposerBar
+                  variant="form"
                   value={editKnownFor}
                   onChangeText={setEditKnownFor}
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal text-base p-0"
                   placeholder="What should HIVErs come to you for?"
-                  placeholderTextColor="#a09274"
+                  minHeight={86}
+                  submitOnEnterKey={false}
                 />
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -2060,38 +2073,34 @@ export default function ProfileScreen() {
               {isEditing ? (
                 <View>
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">Experiences I want to have</Text>
-                  <TextInput
+                  <ComposerBar
+                    variant="form"
+                    containerClassName="mb-4"
                     value={editMiqExperiences}
                     onChangeText={setEditMiqExperiences}
-                    style={{ fontFamily: 'Lato_400Regular' }}
-                    className="text-charcoal text-base p-0 mb-4"
                     placeholder="What experiences would make life feel rich?"
-                    placeholderTextColor="#a09274"
-                    multiline
+                    minHeight={86}
+                    submitOnEnterKey={false}
                   />
-                  <DictationRow setValue={setEditMiqExperiences} />
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">Ways I want to grow</Text>
-                  <TextInput
+                  <ComposerBar
+                    variant="form"
+                    containerClassName="mb-4"
                     value={editMiqGrowth}
                     onChangeText={setEditMiqGrowth}
-                    style={{ fontFamily: 'Lato_400Regular' }}
-                    className="text-charcoal text-base p-0 mb-4"
                     placeholder="Who do I want to become?"
-                    placeholderTextColor="#a09274"
-                    multiline
+                    minHeight={86}
+                    submitOnEnterKey={false}
                   />
-                  <DictationRow setValue={setEditMiqGrowth} />
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">How I want to contribute</Text>
-                  <TextInput
+                  <ComposerBar
+                    variant="form"
                     value={editMiqContribution}
                     onChangeText={setEditMiqContribution}
-                    style={{ fontFamily: 'Lato_400Regular' }}
-                    className="text-charcoal text-base p-0"
                     placeholder="How do I want to help, serve, or create?"
-                    placeholderTextColor="#a09274"
-                    multiline
+                    minHeight={86}
+                    submitOnEnterKey={false}
                   />
-                  <DictationRow setValue={setEditMiqContribution} />
                 </View>
               ) : (
                 <View className="gap-3">
@@ -2122,13 +2131,13 @@ export default function ProfileScreen() {
                   <View key={field} className={idx < 2 ? 'mb-3' : ''}>
                     <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">{labels[idx]}</Text>
                     {isEditing ? (
-                      <TextInput
+                      <ComposerBar
+                        variant="form"
                         value={values[idx]}
                         onChangeText={setters[idx]}
-                        style={{ fontFamily: 'Lato_400Regular' }}
-                        className="text-charcoal text-base p-0"
                         placeholder="Not set"
-                        placeholderTextColor="#a09274"
+                        multiline={false}
+                        submitOnEnterKey={false}
                       />
                     ) : (
                       <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
@@ -2145,18 +2154,21 @@ export default function ProfileScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-3">3 fun facts about me</Text>
               {isEditing ? (
                 editFunFacts.map((fact, idx) => (
-                  <TextInput
+                  <ComposerBar
                     key={idx}
+                    variant="form"
+                    containerClassName="mb-3"
                     value={fact}
-                    onChangeText={(text) => {
+                    // This one lives in a list, so it takes the new text — or
+                    // works it out from the old, which is what talking does.
+                    onChangeText={(next) => {
                       const updated = [...editFunFacts];
-                      updated[idx] = text;
+                      updated[idx] = typeof next === 'function' ? next(fact) : next;
                       setEditFunFacts(updated);
                     }}
-                    style={{ fontFamily: 'Lato_400Regular' }}
-                    className="text-charcoal text-base p-0 mb-3"
                     placeholder={`Fun fact ${idx + 1}...`}
-                    placeholderTextColor="#a09274"
+                    minHeight={86}
+                    submitOnEnterKey={false}
                   />
                 ))
               ) : (

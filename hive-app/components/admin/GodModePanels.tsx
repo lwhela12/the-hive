@@ -10,6 +10,7 @@ import { showAlert } from '../../lib/showAlert';
 import type { UserRole } from '../../types';
 
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { FIELD_LOOK } from '../ui/Input';
 import { ThinkingBee } from '../ui/ThinkingBee';
 /**
  * Everyone, everywhere, in one room.
@@ -27,6 +28,17 @@ type Row = { id: string; name: string; email: string; role: string };
 type Subscriber = { id: string; email: string; name: string | null; unsubscribed_at: string | null };
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/**
+ * What every box you type into wears: cream-white fill, the gold hairline, the
+ * same rounded edge and the same muted placeholder ink as Clive's message bar.
+ *
+ * The two fields in this file both take an email address, which is not something
+ * anybody wants to say out loud — dictating an address is worse than typing one —
+ * so they keep a plain field and no microphone. Matching the bar's colours is
+ * what keeps them in the same family as the boxes that do have one.
+ */
+const FIELD = FIELD_LOOK;
 
 const ROLES: { value: UserRole; label: string }[] = [
   { value: 'member', label: 'Member' },
@@ -360,16 +372,22 @@ export function NewsletterPanel({
 
           {/* Add somebody by hand — "add my dad to the newsletter" */}
           <View style={{ flexDirection: 'row', gap: 8, padding: 12, alignItems: 'center' }}>
+            {/* The ink here was cream on a white field — invisible. You could
+                type an address into this box and never see a letter of it, on
+                the one form that adds somebody to the mailing list. Same bug
+                the invite field below already had fixed. */}
             <TextInput
               value={newEmail}
               onChangeText={setNewEmail}
               placeholder="their@email.com"
+              placeholderTextColor={FIELD.placeholder}
+              selectionColor={FIELD.ink}
               autoCapitalize="none"
               keyboardType="email-address"
               style={{
-                flex: 1, fontFamily: 'Lato_400Regular', fontSize: 13, color: '#F6F4E5',
-                backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(189,147,72,0.4)',
-                borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+                flex: 1, fontFamily: 'Lato_400Regular', fontSize: 13, color: FIELD.ink,
+                backgroundColor: FIELD.fill, borderWidth: 1, borderColor: FIELD.border,
+                borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9,
               }}
             />
             <Pressable
@@ -757,7 +775,12 @@ export function HiveMemberPanels({
                       value={inviteEmail}
                       onChangeText={setInviteEmail}
                       placeholder="their@email.com"
-                      placeholderTextColor="rgba(246,244,229,0.38)"
+                      // The hint was cream too, at barely a third strength, so
+                      // the box looked empty of everything including its own
+                      // prompt. It takes the same muted gold-brown as the
+                      // placeholder in every other box in the app.
+                      placeholderTextColor={FIELD.placeholder}
+                      selectionColor={FIELD.ink}
                       autoCapitalize="none"
                       keyboardType="email-address"
                       editable={!sending}
@@ -765,9 +788,13 @@ export function HiveMemberPanels({
                         // Cream ink on a white field is invisible. It read as
                         // an empty box you could type into and never see, on
                         // the one form that sends somebody an email.
-                        fontFamily: 'Lato_400Regular', fontSize: 13, color: '#2d2d2d',
-                        backgroundColor: '#fff', borderWidth: 1, borderColor: skin.border,
-                        borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+                        //
+                        // The edge stays in this HIVE's own colour: inside a
+                        // purple panel the purple hairline does the job the gold
+                        // one does on a cream page.
+                        fontFamily: 'Lato_400Regular', fontSize: 13, color: FIELD.ink,
+                        backgroundColor: FIELD.fill, borderWidth: 1, borderColor: skin.border,
+                        borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9,
                         opacity: sending ? 0.65 : 1,
                       }}
                     />

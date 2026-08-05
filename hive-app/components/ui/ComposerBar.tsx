@@ -9,6 +9,7 @@ import { submitOnEnter } from '../../lib/submitOnEnter';
 import { useDictation } from '../../lib/hooks/useDictation';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
+import { FIELD_LOOK } from './Input';
 import { AttachmentPicker } from './AttachmentPicker';
 import { MentionSuggestions } from './MentionSuggestions';
 import { SelectedFilePreview } from './SelectedFilePreview';
@@ -48,8 +49,14 @@ import { VoiceMicButton } from './VoiceMicButton';
 
 export type ComposerVariant = 'chat' | 'form' | 'inlineEdit';
 
-/** The hairline every field in the app wears. */
-const FIELD_BORDER = 'rgba(189,147,72,0.24)';
+/**
+ * The hairline every field in the app wears.
+ *
+ * Written down once, in `Input.tsx`'s `FIELD_LOOK`, and read from there — this
+ * file and that one both used to declare it, which is two places for one truth
+ * and the exact way a look drifts apart again.
+ */
+const FIELD_BORDER = FIELD_LOOK.border;
 /** Below this many characters left, the chat bar starts counting down. */
 const CHAT_LIMIT_WARNING = 1000;
 
@@ -244,10 +251,24 @@ export function ComposerBar({
       onSelectionChange={mentionsOn ? mention.textInputMentionProps.onSelectionChange : undefined}
       selection={mentionsOn ? mention.textInputMentionProps.selection : undefined}
       placeholder={placeholder}
-      placeholderTextColor="#a09274"
-      selectionColor="#313130"
+      placeholderTextColor={FIELD_LOOK.placeholder}
+      selectionColor={FIELD_LOOK.ink}
       multiline={multiline}
-      blurOnSubmit={Platform.OS === 'web'}
+      // Enter never takes the cursor away from you on the web.
+      //
+      // This was `Platform.OS === 'web'` flat. react-native-web honours it for
+      // MULTILINE boxes too, so on every prose field in this sweep, pressing
+      // Enter inserted the newline and then threw you out of the box — two
+      // sentences into your monthly tune-up, hit return for a new paragraph,
+      // and you are typing into nothing. Two agents hit this independently
+      // while converting and neither owned this file; both were right.
+      //
+      // It is false rather than "only when Enter sends", because the fields
+      // where Enter DOES send are the ones you use repeatedly — add a to-do,
+      // log a HIVE Help, send a message — and losing the cursor after each one
+      // means clicking back in to write the next. Native keeps its own default,
+      // where Return closing the keyboard on a single-line field is expected.
+      blurOnSubmit={Platform.OS === 'web' ? false : undefined}
       submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
       returnKeyType="send"
       enterKeyHint="send"
@@ -263,7 +284,7 @@ export function ComposerBar({
           : `text-charcoal px-4 py-3 ${fieldClassName}`
       }
       style={[
-        { fontFamily: 'Lato_400Regular', outlineStyle: 'none', caretColor: '#313130' } as any,
+        { fontFamily: FIELD_LOOK.font, outlineStyle: 'none', caretColor: FIELD_LOOK.ink } as any,
         minHeight ? { minHeight } : null,
         maxHeight ? { maxHeight } : null,
       ]}
@@ -431,7 +452,7 @@ export function ComposerBar({
         style={{
           borderWidth: 1,
           borderColor: isDragActive ? '#bd9348' : FIELD_BORDER,
-          backgroundColor: isDragActive ? '#fdf3dc' : '#ffffff',
+          backgroundColor: isDragActive ? '#fdf3dc' : FIELD_LOOK.fill,
         }}
         {...enterCaptureProps}
       >

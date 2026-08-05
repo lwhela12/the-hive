@@ -14,10 +14,10 @@ import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { EditButton } from '../../components/ui/EditButton';
+import { FIELD_LOOK } from '../../components/ui/Input';
 
 const memberHoneycombCell = require('../../assets/generated/member-honeycomb-cell.png');
 const memberHoneycombCellMe = require('../../assets/generated/member-honeycomb-cell-me.png');
-import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useChatRooms } from '../../lib/hooks/useChatRooms';
 import { isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import { SKILL_CATEGORIES } from '../../lib/skillsList';
@@ -34,12 +34,12 @@ import { WishDetail } from '../../components/hive/WishDetail';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { WishManageModal } from '../../components/wishes/WishManageModal';
-import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { getHdWishTabLabel, pickSpotlightWish, type HdWishTabKey } from '../../lib/wishDisplay';
 import { useWishes } from '../../lib/hooks/useWishes';
 
-import { DictationRow } from '../../components/ui/DictationRow';
+import { ComposerBar } from '../../components/ui/ComposerBar';
+import { showAlert } from '../../lib/showAlert';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish> & {
@@ -84,11 +84,16 @@ const ROLE_LABELS: Partial<Record<UserRole, string>> = {
 };
 
 
+// `short` was 180 and `funFact` 220 — about a sentence and a half, which cut
+// people off mid-answer on prompts like "what should HIVErs ask me about".
+// Nat has already said once that a cap was too tight, so both grew. Everywhere
+// these land on the profile card clamps with numberOfLines, so a long answer
+// makes a longer read rather than a broken layout.
 const PROFILE_PROMPT_LIMITS = {
   name: 80,
   bio: 1000,
-  short: 180,
-  funFact: 220,
+  short: 300,
+  funFact: 300,
   skills: 700,
 };
 
@@ -366,6 +371,15 @@ function Avatar({ uri, name, size }: { uri?: string | null; name: string; size: 
   );
 }
 
+/**
+ * One profile question. Every answer here is words a member writes about
+ * themselves, so it is the shared composer with the mic on the text's own line
+ * — the same box they get in Clive and on the boards.
+ *
+ * `structured` is the exception: a birthday is typed as MM-DD-YYYY and nobody
+ * dictates a date, so it keeps a plain field and only borrows the family's
+ * cream fill, hairline and placeholder ink.
+ */
 function ProfilePromptInput({
   label,
   placeholder,
@@ -373,6 +387,8 @@ function ProfilePromptInput({
   onChangeText,
   multiline = false,
   maxLength = PROFILE_PROMPT_LIMITS.short,
+  structured = false,
+  keyboardType,
 }: {
   label: string;
   placeholder: string;
@@ -380,7 +396,29 @@ function ProfilePromptInput({
   onChangeText: (value: string) => void;
   multiline?: boolean;
   maxLength?: number;
+  structured?: boolean;
+  keyboardType?: 'default' | 'numbers-and-punctuation';
 }) {
+  if (!structured) {
+    return (
+      <ComposerBar
+        variant="form"
+        containerClassName="mb-3"
+        label={label}
+        value={value}
+        // The composer hands back either a string or an updater (dictation has
+        // to read what is already in the box to append to it); this call site
+        // only knows about strings, so resolve it here.
+        onChangeText={(next) => onChangeText(typeof next === 'function' ? next(value) : next)}
+        placeholder={placeholder}
+        multiline={multiline}
+        minHeight={multiline ? 92 : 44}
+        maxLength={maxLength}
+        counter="count"
+      />
+    );
+  }
+
   const countColor = value.length > maxLength * 0.9 ? '#bd9348' : '#a09274';
   return (
     <View style={{ marginBottom: 12 }}>
@@ -392,24 +430,26 @@ function ProfilePromptInput({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#b5ad9f"
+        placeholderTextColor={FIELD_LOOK.placeholder}
+        selectionColor={FIELD_LOOK.ink}
         maxLength={maxLength}
-        multiline={multiline}
-        textAlignVertical={multiline ? 'top' : 'center'}
+        keyboardType={keyboardType}
+        textAlignVertical="center"
+        // The one field look, read from the one place it is written down, so a
+        // birthday cannot drift away from the prose boxes it sits between.
         style={{
-          backgroundColor: 'white',
+          backgroundColor: FIELD_LOOK.fill,
           borderWidth: 1,
-          borderColor: 'rgba(222,193,129,0.45)',
-          borderRadius: 12,
-          color: '#2d2d2d',
-          fontFamily: 'Lato_400Regular',
-          fontSize: 14,
-          minHeight: multiline ? 92 : 44,
-          paddingHorizontal: 12,
-          paddingVertical: multiline ? 10 : 8,
+          borderColor: FIELD_LOOK.border,
+          borderRadius: FIELD_LOOK.radius,
+          color: FIELD_LOOK.ink,
+          fontFamily: FIELD_LOOK.font,
+          fontSize: FIELD_LOOK.fontSize,
+          minHeight: 44,
+          paddingHorizontal: FIELD_LOOK.paddingHorizontal,
+          paddingVertical: FIELD_LOOK.paddingVertical,
         }}
       />
-      <DictationRow setValue={(u: (prev: string) => string) => onChangeText(u(value))} label={multiline ? 'Talk instead of typing' : null} size={18} />
     </View>
   );
 }
@@ -486,13 +526,10 @@ function MemberDetailModal({
   const [addingWish, setAddingWish] = useState(false);
   const [newWishInput, setNewWishInput] = useState('');
   const [startingMessage, setStartingMessage] = useState(false);
+  // Tagging with "@" used to be wired up by hand here. ComposerBar carries it
+  // now — it tracks the "@", draws the suggestion list and the "Tagged Nat"
+  // pills itself — so the composers below only have to hand it the members.
   const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
-  const wishMentionInput = useMentionInput({
-    value: newWishInput,
-    onChangeText: setNewWishInput,
-    members: mentionableMembers,
-    currentUserId: currentAuthId ?? undefined,
-  });
 
   const introContent = member.introPost?.content ?? '';
   const hasProfileBio = !!normalizeProfileStoryText(member.bio);
@@ -637,7 +674,13 @@ function MemberDetailModal({
 
   const addSkillChip = () => {
     const trimmed = newSkillInput.trim();
-    if (!trimmed || draftSkillList.length >= 30) return;
+    if (!trimmed) return;
+    // At the cap this used to return without a word, so the Add button simply
+    // stopped working and never said why.
+    if (draftSkillList.length >= 30) {
+      showAlert('That is a full set of skills', 'Skills are capped at 30. Remove one to make room for this.');
+      return;
+    }
     if (!draftSkillList.some(s => s.toLowerCase() === trimmed.toLowerCase())) {
       setDraftSkillList(prev => [...prev, trimmed]);
     }
@@ -783,7 +826,10 @@ function MemberDetailModal({
         .eq('community_id', communityId);
 
       if (error) {
-        Alert.alert('Error', 'Failed to archive wish. Please try again.');
+        // Alert.alert does nothing on web, and nearly everybody is on web —
+        // so this explanation used to be thrown away and the button just
+        // looked broken.
+        showAlert('Error', 'Failed to archive wish. Please try again.');
         return;
       }
 
@@ -818,7 +864,7 @@ function MemberDetailModal({
         ownerId: member.id,
       });
       if (error) {
-        Alert.alert('Error', 'Failed to delete wish. Please try again.');
+        showAlert('Error', 'Failed to delete wish. Please try again.');
         return;
       }
       await invalidateWishQueries(communityId, member.id);
@@ -853,7 +899,6 @@ function MemberDetailModal({
   const cancelNewWish = () => {
     setAddingWish(false);
     setNewWishInput('');
-    wishMentionInput.resetMentionSelection();
   };
 
   const saveNewWish = async () => {
@@ -881,7 +926,6 @@ function MemberDetailModal({
       await invalidateWishQueries(communityId, member.id);
     }
     setNewWishInput('');
-    wishMentionInput.resetMentionSelection();
     setAddingWish(false);
     setWishStatusTab('public');
   };
@@ -912,7 +956,7 @@ function MemberDetailModal({
       return;
     }
     if (!currentAuthId || !communityId) {
-      Alert.alert('Could not open message', 'Please refresh HIVE and try again.');
+      showAlert('Could not open message', 'Please refresh HIVE and try again.');
       return;
     }
     setStartingMessage(true);
@@ -924,34 +968,11 @@ function MemberDetailModal({
       router.push({ pathname: '/messages', params: { roomId: room.id } });
     } catch (error) {
       console.warn('[Members] start DM failed', error);
-      Alert.alert('Could not open message', 'Please try again from Messages.');
+      showAlert('Could not open message', 'Please try again from Messages.');
     } finally {
       setStartingMessage(false);
     }
   };
-
-  const renderNewWishMentions = () => (
-    <>
-      <MentionSuggestions
-        active={wishMentionInput.mentionQuery !== null}
-        query={wishMentionInput.mentionQuery}
-        loading={mentionMembersLoading}
-        suggestions={wishMentionInput.mentionSuggestions}
-        onSelect={wishMentionInput.selectMention}
-      />
-      {wishMentionInput.mentionedMembers.length > 0 && (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, marginBottom: 10 }}>
-          {wishMentionInput.mentionedMembers.map(mentionedMember => (
-            <View key={mentionedMember.id} style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', color: '#1d4ed8', fontSize: 11 }}>
-                Tagged {mentionedMember.name.split(/\s+/)[0]}
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
-    </>
-  );
 
   const saveProfilePrompts = async () => {
     setSaving(true);
@@ -1134,33 +1155,46 @@ function MemberDetailModal({
                     {draftSkillList.length} selected · tap any to remove
                   </Text>
                 )}
-                {/* Search */}
+                {/* Search. Finding a word in a list is not writing one, so no
+                    mic — but it wears the same fill, hairline and placeholder
+                    ink as every other box in the app. It had a fill of its own
+                    (#fffdf5, a shade nothing else uses) until 2026-08-05. */}
                 <TextInput
                   value={skillSearch}
                   onChangeText={setSkillSearch}
                   placeholder="Search skills..."
-                  placeholderTextColor="#b5ad9f"
-                  style={{ backgroundColor: '#fdf8ec', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 4 }}
+                  placeholderTextColor={FIELD_LOOK.placeholder}
+                  selectionColor={FIELD_LOOK.ink}
+                  style={{
+                    backgroundColor: FIELD_LOOK.fill,
+                    borderWidth: 1,
+                    borderColor: FIELD_LOOK.border,
+                    borderRadius: FIELD_LOOK.radius,
+                    paddingHorizontal: FIELD_LOOK.paddingHorizontal,
+                    paddingVertical: FIELD_LOOK.paddingVertical,
+                    fontFamily: FIELD_LOOK.font,
+                    fontSize: FIELD_LOOK.fontSize,
+                    color: FIELD_LOOK.ink,
+                    marginBottom: 4,
+                  }}
                 />
               </View>
               <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
                 {/* Custom / type-your-own */}
                 <View style={{ marginBottom: 20 }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#a09274', letterSpacing: 0.7, marginBottom: 8 }}>✍️ TYPE YOUR OWN</Text>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TextInput
-                      value={newSkillInput}
-                      onChangeText={setNewSkillInput}
-                      onSubmitEditing={addSkillChip}
-                      placeholder="Something unique to you..."
-                      placeholderTextColor="#b5ad9f"
-                      returnKeyType="done"
-                      style={{ flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 12, color: '#2d2d2d', fontFamily: 'Lato_400Regular', fontSize: 14, paddingHorizontal: 12, paddingVertical: 9 }}
-                    />
-                    <Pressable onPress={addSkillChip} style={{ backgroundColor: '#bd9348', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9, justifyContent: 'center' }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>+ Add</Text>
-                    </Pressable>
-                  </View>
+                  {/* A skill is a phrase you write about yourself, so it is
+                      words: the box, the mic and the Add button are one thing
+                      now instead of a field with a button welded beside it. */}
+                  <ComposerBar
+                    variant="inlineEdit"
+                    value={newSkillInput}
+                    onChangeText={setNewSkillInput}
+                    placeholder="Something unique to you..."
+                    multiline={false}
+                    onSubmit={addSkillChip}
+                    submitLabel="+ Add"
+                  />
                 </View>
 
                 {/* Category sections */}
@@ -1331,18 +1365,22 @@ function MemberDetailModal({
 
                     {addingWish && (
                       <View style={{ backgroundColor: '#fdf8ec', borderRadius: 16, padding: 16, marginTop: 12, marginBottom: 12 }}>
-                        <TextInput
+                        {/* A wish is prose, so it gets the shared box: mic on
+                            the text's own line, "@" tagging built in. No
+                            onSubmit — Enter still makes a new line here,
+                            because the Add HD Wish button is right below. */}
+                        <ComposerBar
+                          variant="form"
+                          containerClassName="mb-2.5"
                           value={newWishInput}
-                          onChangeText={wishMentionInput.textInputMentionProps.onChangeText}
-                          onSelectionChange={wishMentionInput.textInputMentionProps.onSelectionChange}
-                          selection={wishMentionInput.textInputMentionProps.selection}
+                          onChangeText={setNewWishInput}
                           placeholder="Describe what you're wishing for..."
-                          placeholderTextColor="#b5ad9f"
-                          multiline
+                          minHeight={80}
                           autoFocus
-                          style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', minHeight: 80, textAlignVertical: 'top', marginBottom: 10 }}
+                          mentionMembers={mentionableMembers}
+                          mentionsLoading={mentionMembersLoading}
+                          currentUserId={currentAuthId ?? undefined}
                         />
-                        {renderNewWishMentions()}
                         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                           <Pressable onPress={cancelNewWish} style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 10 }}>
                             <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e7a5e', textAlign: 'center', fontSize: 13 }}>Cancel</Text>
@@ -1600,6 +1638,8 @@ function MemberDetailModal({
                       value={draftBirthday}
                       onChangeText={setDraftBirthday}
                       maxLength={10}
+                      structured
+                      keyboardType="numbers-and-punctuation"
                     />
                     <ProfilePromptInput
                       label="Tiny bio"
@@ -1713,20 +1753,15 @@ function MemberDetailModal({
                           ))}
                         </View>
                       )}
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TextInput
-                          value={newSkillInput}
-                          onChangeText={setNewSkillInput}
-                          onSubmitEditing={addSkillChip}
-                          placeholder="Add a skill..."
-                          placeholderTextColor="#b5ad9f"
-                          returnKeyType="done"
-                          style={{ flex: 1, backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 12, color: '#2d2d2d', fontFamily: 'Lato_400Regular', fontSize: 14, paddingHorizontal: 12, paddingVertical: 8 }}
-                        />
-                        <Pressable onPress={addSkillChip} style={{ backgroundColor: '#bd9348', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, justifyContent: 'center' }}>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: 'white' }}>+ Add</Text>
-                        </Pressable>
-                      </View>
+                      <ComposerBar
+                        variant="inlineEdit"
+                        value={newSkillInput}
+                        onChangeText={setNewSkillInput}
+                        placeholder="Add a skill..."
+                        multiline={false}
+                        onSubmit={addSkillChip}
+                        submitLabel="+ Add"
+                      />
                       <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#b5a898', marginTop: 6 }}>
                         Tap any bubble to remove it. Up to 30 skills.
                       </Text>
@@ -1942,17 +1977,17 @@ function MemberDetailModal({
                 {addingWish && (
                   <View style={{ backgroundColor: '#fffbf0', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 14, padding: 14, marginTop: 12 }}>
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#2d2d2d', marginBottom: 8 }}>New HD wish</Text>
-                        <TextInput
+                        <ComposerBar
+                          variant="form"
+                          containerClassName="mb-2.5"
                           value={newWishInput}
-                          onChangeText={wishMentionInput.textInputMentionProps.onChangeText}
-                          onSelectionChange={wishMentionInput.textInputMentionProps.onSelectionChange}
-                          selection={wishMentionInput.textInputMentionProps.selection}
+                          onChangeText={setNewWishInput}
                           placeholder="What is the HD wish? Describe it as specifically as you can..."
-                          placeholderTextColor="#b5ad9f"
-                          multiline
-                          style={{ backgroundColor: 'white', borderWidth: 1, borderColor: 'rgba(222,193,129,0.4)', borderRadius: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', paddingHorizontal: 12, paddingVertical: 10, minHeight: 80, marginBottom: 10, textAlignVertical: 'top' }}
+                          minHeight={80}
+                          mentionMembers={mentionableMembers}
+                          mentionsLoading={mentionMembersLoading}
+                          currentUserId={currentAuthId ?? undefined}
                         />
-                        {renderNewWishMentions()}
                         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                           <Pressable
                             onPress={cancelNewWish}

@@ -4,11 +4,8 @@ import {
   Text,
   Pressable,
   ScrollView,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EditButton } from '../ui/EditButton';
@@ -18,21 +15,18 @@ import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { formatDateShort } from '../../lib/dateUtils';
 import { GrantWishModal } from './GrantWishModal';
-import { VoiceMicButton } from '../ui/VoiceMicButton';
-import { useDictation } from '../../lib/hooks/useDictation';
-import { submitOnEnter } from '../../lib/submitOnEnter';
 import { getWishDetailText, getWishQuickTitle, shouldShowWishDescription } from '../../lib/wishDisplay';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
-import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { notifyWishMentions } from '../../lib/wishMentions';
+import { confirmAction } from '../../lib/showAlert';
 import { LinkifiedText } from '../ui/LinkifiedText';
-import { MentionSuggestions } from '../ui/MentionSuggestions';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { WishCommentItem, type WishCommentNode } from './WishCommentItem';
 import { getFirstName } from '../../lib/hooks/useArrivalBoard';
-import type { Wish, Profile, WishComment, WishGranter } from '../../types';
+import type { Attachment, Wish, Profile, WishComment, WishGranter } from '../../types';
 
-import { AttachmentPicker } from '../ui/AttachmentPicker';
+import { ComposerBar } from '../ui/ComposerBar';
+import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
 import type { SelectedImage } from '../../lib/imagePicker';
 import type { SelectedFile } from '../../lib/filePicker';
 import { ThinkingBee } from '../ui/ThinkingBee';
@@ -68,19 +62,12 @@ export function WishDetail({
   const [comments, setComments] = useState<WishCommentWithUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
-  const commentDictation = useDictation(setNewComment);
   const [commentImages, setCommentImages] = useState<SelectedImage[]>([]);
   const [commentFiles, setCommentFiles] = useState<SelectedFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [showGrantModal, setShowGrantModal] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
   const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
-  const commentMentionInput = useMentionInput({
-    value: newComment,
-    onChangeText: setNewComment,
-    members: mentionableMembers,
-    currentUserId: profile?.id,
-  });
 
   // Check if this is the user's own wish and can be granted
   const isOwnWish = profile?.id === wish.user_id;
@@ -139,6 +126,21 @@ export function WishDetail({
 
     setSubmitting(true);
     try {
+      // The paperclip has been on this bar since it was rebuilt, and what it
+      // picked never went anywhere — the insert below simply did not carry the
+      // photos, so they vanished on send. Uploaded the same way board posts do.
+      let attachments: Attachment[] | undefined;
+      if (commentImages.length > 0) {
+        const uploaded = await uploadMultipleImages(profile.id, commentImages);
+        if (uploaded.attachments.length > 0) attachments = uploaded.attachments;
+      }
+      if (commentFiles.length > 0) {
+        const uploaded = await uploadMultipleFiles(profile.id, commentFiles);
+        if (uploaded.attachments.length > 0) {
+          attachments = [...(attachments ?? []), ...uploaded.attachments];
+        }
+      }
+
       const { data, error } = await supabase
         .from('wish_comments')
         .insert({
@@ -147,6 +149,7 @@ export function WishDetail({
           community_id: communityId,
           content: newComment.trim(),
           parent_comment_id: replyingTo?.id ?? null,
+          attachments: attachments ?? null,
         })
         .select('*, user:profiles!user_id(*)')
         .single();
@@ -163,8 +166,9 @@ export function WishDetail({
         wishOwnerName,
       });
       setNewComment('');
+      setCommentImages([]);
+      setCommentFiles([]);
       setReplyingTo(null);
-      commentMentionInput.resetMentionSelection();
     } catch (error) {
       console.error('Error submitting comment:', error);
     } finally {
@@ -228,14 +232,13 @@ export function WishDetail({
       setReplyingTo((current) => (current?.id === comment.id ? null : current));
     };
 
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Delete this comment? ${message}`)) void performDelete();
-    } else {
-      Alert.alert('Delete Comment', message, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => void performDelete() },
-      ]);
-    }
+    confirmAction({
+      title: 'Delete this comment?',
+      message,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: performDelete,
+    });
   };
 
   const handleReact = async (commentId: string, emoji: string) => {
@@ -516,95 +519,45 @@ export function WishDetail({
       {/* Comment Input */}
       <View className="border-t px-4 py-3" style={{ borderTopColor: 'rgba(222,193,129,0.5)' }}>
         <View style={{ maxWidth: 840, width: '100%', alignSelf: 'center' }}>
-        {replyingTo && (
-          <View className="flex-row items-center mb-2 bg-gold/10 border border-gold/25 rounded-full px-3 py-1.5 self-start">
-            <Ionicons name="return-down-forward-outline" size={14} color="#bd9348" />
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-[#8e6f35] text-xs ml-1.5">
-              Replying to {getFirstName(replyingTo.authorName)}
-            </Text>
-            <Pressable
-              onPress={() => setReplyingTo(null)}
-              hitSlop={8}
-              className="ml-2"
-              accessibilityLabel="Cancel reply"
-            >
-              <Ionicons name="close" size={14} color="#8e7a5e" />
-            </Pressable>
-          </View>
-        )}
-        <MentionSuggestions
-          active={commentMentionInput.mentionQuery !== null}
-          query={commentMentionInput.mentionQuery}
-          loading={mentionMembersLoading}
-          suggestions={commentMentionInput.mentionSuggestions}
-          onSelect={commentMentionInput.selectMention}
-          placement="above"
+        {/* The gold standard bar itself, not a copy of it (Nat 2026-08-05:
+            "we want to make sure it looks like that everywhere all the time").
+            This used to be a hand-built pill that had drifted three ways at
+            once. Everything it did — the paperclip, @ tagging, dictation, Enter
+            to send — is what the shared bar does, so it is the shared bar now.
+            The "Replying to Nat" chip rides above it as the bar's header. */}
+        <ComposerBar
+          variant="chat"
+          containerClassName="mb-3"
+          value={newComment}
+          onChangeText={setNewComment}
+          placeholder={replyingTo ? 'Write your reply...' : 'Write a comment...'}
+          onSubmit={handleSubmitComment}
+          submitting={submitting}
+          attachments="compact"
+          selectedImages={commentImages}
+          onImagesChange={setCommentImages}
+          selectedFiles={commentFiles}
+          onFilesChange={setCommentFiles}
+          mentionMembers={mentionableMembers}
+          mentionsLoading={mentionMembersLoading}
+          currentUserId={profile?.id}
+          header={replyingTo ? (
+            <View className="flex-row items-center mb-2 bg-gold/10 border border-gold/25 rounded-full px-3 py-1.5 self-start">
+              <Ionicons name="return-down-forward-outline" size={14} color="#bd9348" />
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-[#8e6f35] text-xs ml-1.5">
+                Replying to {getFirstName(replyingTo.authorName)}
+              </Text>
+              <Pressable
+                onPress={() => setReplyingTo(null)}
+                hitSlop={8}
+                className="ml-2"
+                accessibilityLabel="Cancel reply"
+              >
+                <Ionicons name="close" size={14} color="#8e7a5e" />
+              </Pressable>
+            </View>
+          ) : null}
         />
-        {commentMentionInput.mentionedMembers.length > 0 && (
-          <View className="flex-row flex-wrap mb-2" style={{ gap: 6 }}>
-            {commentMentionInput.mentionedMembers.map((member) => (
-              <View key={member.id} className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
-                  Tagged {member.name.split(/\s+/)[0]}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-        {/* Rebuilt to match Clive exactly (Nat 2026-08-04): "here's your gold
-            standard — see how the paper clip is on the left, the send button is
-            on the right & then there's a microphone?"
-
-            This bar got three things wrong at once. The mic and the send were
-            swapped. The send was a ~44px paper-plane where every other bar in
-            the app uses a 28px ↑. And there was no paperclip at all, so a photo
-            could not go on a wish comment even though the gallery below has
-            always been able to show one. Now it is one cream pill with the four
-            controls in the one order the app uses: 📎 · text · ↑ · 🎤. */}
-        <View
-          className="flex-row items-end rounded-2xl px-3 py-2 border bg-cream border-transparent mb-3"
-        >
-          <AttachmentPicker
-            compact
-            selectedImages={commentImages}
-            onImagesChange={setCommentImages}
-            selectedFiles={commentFiles}
-            onFilesChange={setCommentFiles}
-          />
-          <TextInput
-            className="flex-1 max-h-32 text-base text-charcoal py-1 px-1"
-            style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none', caretColor: '#313130' } as any}
-            placeholder={replyingTo ? 'Write your reply...' : 'Write a comment...'}
-            placeholderTextColor="#a09274"
-            value={newComment}
-            onChangeText={commentMentionInput.textInputMentionProps.onChangeText}
-            onSelectionChange={commentMentionInput.textInputMentionProps.onSelectionChange}
-            selection={commentMentionInput.textInputMentionProps.selection}
-            multiline
-            blurOnSubmit={false}
-            onKeyPress={submitOnEnter(handleSubmitComment)}
-            editable={!submitting}
-          />
-          <Pressable
-            onPress={handleSubmitComment}
-            disabled={!newComment.trim() || submitting}
-            className={`w-7 h-7 rounded-full items-center justify-center ml-2 ${
-              newComment.trim() && !submitting ? 'bg-gold active:opacity-80' : 'bg-[#ddd3b6]'
-            }`}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color="#fffdf5" />
-            ) : (
-              <Text className="text-sm text-white" style={{ marginTop: -1 }}>↑</Text>
-            )}
-          </Pressable>
-          <VoiceMicButton
-            size={20}
-            style={{ marginLeft: 6 }}
-            onTranscript={commentDictation.onTranscript}
-            onInterimTranscript={commentDictation.onInterimTranscript}
-          />
-        </View>
         </View>
       </View>
 

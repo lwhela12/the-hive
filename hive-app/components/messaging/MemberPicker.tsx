@@ -160,16 +160,32 @@ export function MemberPicker({
           </View>
         )}
 
-        {/* Search */}
+        {/* Search. Looking somebody up is not writing words, so there is no
+            mic here — but the box wears the message bar's own shape: the same
+            cream pill, the same rounded edge, the same muted gold-brown
+            placeholder, so it reads as one family of controls. */}
         <View className="p-4 bg-white">
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search members..."
-            placeholderTextColor="#a09274"
-            className="bg-cream rounded-xl px-4 py-3"
-            style={{ fontFamily: 'Lato_400Regular' }}
-          />
+          <View className="flex-row items-center bg-cream rounded-2xl px-4 py-3">
+            <Ionicons name="search" size={16} color="#a09274" style={{ marginRight: 8 }} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search members..."
+              placeholderTextColor="#a09274"
+              className="flex-1 text-charcoal"
+              style={{ fontFamily: 'Lato_400Regular', outlineStyle: 'none' } as any}
+            />
+            {search.length > 0 && (
+              <Pressable
+                onPress={() => setSearch('')}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+                className="ml-2 active:opacity-60"
+              >
+                <Ionicons name="close-circle" size={16} color="#a09274" />
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {/* Member list */}

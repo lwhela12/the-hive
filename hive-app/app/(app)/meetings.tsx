@@ -14,11 +14,21 @@ import { FadeIn } from '../../components/ui/FadeIn';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
 import { formatDateLong, parseAmericanDate } from '../../lib/dateUtils';
 import { EventDatePicker } from '../../components/ui/DatePicker';
-import { submitOnEnter } from '../../lib/submitOnEnter';
+import { ComposerBar } from '../../components/ui/ComposerBar';
+import { FIELD_LOOK } from '../../components/ui/Input';
+import { showAlert } from '../../lib/showAlert';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import type { Meeting, Event } from '../../types';
 
-import { DictationRow } from '../../components/ui/DictationRow';
+/**
+ * The look worn by the two boxes here you would never talk into — a clock time
+ * and a link. Everything that takes WORDS is a `ComposerBar`, mic and all; these
+ * two keep a plain field but wear the composer's white fill, gold hairline and
+ * placeholder ink so the form reads as one set of controls.
+ */
+const FIELD_BORDER = FIELD_LOOK.border;
+const PLACEHOLDER_INK = FIELD_LOOK.placeholder;
+const FIELD_LABEL_CLASS = 'text-charcoal mb-2';
 interface MeetingSummaryPreview {
   title?: string;
   source?: string;
@@ -83,7 +93,7 @@ const getIsMobileWeb = () => {
 const openExternalUrl = async (url: string, errorMessage: string) => {
   const trimmedUrl = url.trim();
   if (!trimmedUrl) {
-    Alert.alert('Error', errorMessage);
+    showAlert('Error', errorMessage);
     return;
   }
 
@@ -109,7 +119,7 @@ const openExternalUrl = async (url: string, errorMessage: string) => {
   try {
     await Linking.openURL(trimmedUrl);
   } catch {
-    Alert.alert('Error', errorMessage);
+    showAlert('Error', errorMessage);
   }
 };
 
@@ -193,7 +203,7 @@ export default function MeetingsScreen() {
       await fetchLatestSlideDeckUrl();
       setShowDeckEdit(false);
     } else {
-      Alert.alert('Error', 'Could not save the slide deck link. Please try again.');
+      showAlert('Error', 'Could not save the slide deck link. Please try again.');
       console.error('Slide deck URL save failed:', error);
     }
   };
@@ -465,10 +475,9 @@ export default function MeetingsScreen() {
       throw new Error(errorMsg);
     }
 
-    Alert.alert(
+    showAlert(
       'Meeting Scheduled',
-      'Your meeting has been created with a Google Meet link. All HIVE members can see it.',
-      [{ text: 'OK' }]
+      'Your meeting has been created with a Google Meet link. All HIVE members can see it.'
     );
 
     await fetchMeetings();
@@ -476,7 +485,7 @@ export default function MeetingsScreen() {
 
   const handleJoinMeeting = (meetLink: string) => {
     Linking.openURL(meetLink).catch(() => {
-      Alert.alert('Error', 'Could not open the meeting link');
+      showAlert('Error', 'Could not open the meeting link');
     });
   };
 
@@ -489,7 +498,7 @@ export default function MeetingsScreen() {
       });
 
       if (error) {
-        Alert.alert('Error', `Failed to delete meeting: ${error.message}`);
+        showAlert('Error', `Failed to delete meeting: ${error.message}`);
         console.error('Delete error:', error);
       } else {
         await fetchMeetings();
@@ -521,7 +530,7 @@ export default function MeetingsScreen() {
         .eq('id', meetingId);
 
       if (error) {
-        Alert.alert('Error', 'Failed to update meeting status');
+        showAlert('Error', 'Failed to update meeting status');
       } else {
         await fetchMeetings();
       }
@@ -595,10 +604,10 @@ export default function MeetingsScreen() {
       if (activeMeetingEditKey) removeStoredItem(activeMeetingEditKey);
       setEditingEvent(null);
       await fetchMeetings();
-      Alert.alert('Success', 'Meeting updated');
+      showAlert('Success', 'Meeting updated');
     } catch (error) {
       console.error('Error updating event:', error);
-      Alert.alert('Error', 'Failed to update meeting');
+      showAlert('Error', 'Failed to update meeting');
     } finally {
       setSavingEdit(false);
     }
@@ -750,7 +759,7 @@ export default function MeetingsScreen() {
         setNotesImportForm((form) => ({ ...form, audioFiles: [...form.audioFiles, uploaded] }));
       } catch (error) {
         console.error('Voice memo upload failed:', error);
-        Alert.alert('Upload Failed', `Could not upload ${input.fileName}. Please try again.`);
+        showAlert('Upload Failed', `Could not upload ${input.fileName}. Please try again.`);
       } finally {
         setUploadingAudioCount((count) => Math.max(0, count - 1));
       }
@@ -815,7 +824,7 @@ export default function MeetingsScreen() {
       })));
     } catch (error) {
       console.error('Error picking meeting notes file:', error);
-      Alert.alert('File Not Imported', 'Could not read that file. Try a voice memo (.m4a), .docx, .pdf, .txt, or paste the notes.');
+      showAlert('File Not Imported', 'Could not read that file. Try a voice memo (.m4a), .docx, .pdf, .txt, or paste the notes.');
     }
   };
 
@@ -831,7 +840,7 @@ export default function MeetingsScreen() {
         file.type.startsWith('text/') ||
         ['pdf', 'docx', 'txt', 'md', 'jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension);
       if (!supported) {
-        Alert.alert('File Not Imported', `${file.name} isn't a supported type. Drop voice memos, .docx, .pdf, .txt, or images.`);
+        showAlert('File Not Imported', `${file.name} isn't a supported type. Drop voice memos, .docx, .pdf, .txt, or images.`);
         continue;
       }
       try {
@@ -850,7 +859,7 @@ export default function MeetingsScreen() {
         }));
       } catch (error) {
         console.error('Error reading dropped file:', error);
-        Alert.alert('File Not Imported', `Could not read ${file.name}.`);
+        showAlert('File Not Imported', `Could not read ${file.name}.`);
       }
     }
 
@@ -945,7 +954,7 @@ export default function MeetingsScreen() {
       }));
     } catch (error) {
       console.error('Error picking notes photos:', error);
-      Alert.alert('Photos Not Added', 'Could not read those note photos. Please try again.');
+      showAlert('Photos Not Added', 'Could not read those note photos. Please try again.');
     }
   };
 
@@ -967,7 +976,7 @@ export default function MeetingsScreen() {
       }));
     } catch (error) {
       console.error('Error taking notes photo:', error);
-      Alert.alert('Photo Not Added', 'Could not read that note photo. Please try again.');
+      showAlert('Photo Not Added', 'Could not read that note photo. Please try again.');
     }
   };
 
@@ -980,7 +989,7 @@ export default function MeetingsScreen() {
 
   const handleImportNotes = async () => {
     if (!communityId) {
-      Alert.alert('Error', 'No active community selected.');
+      showAlert('Error', 'No active community selected.');
       return;
     }
 
@@ -992,17 +1001,17 @@ export default function MeetingsScreen() {
     const hasPastedNotes = notes.length >= 40;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      Alert.alert('Date Needed', 'Please use a date like 05-12-2026.');
+      showAlert('Date Needed', 'Please use a date like 05-12-2026.');
       return;
     }
 
     if (uploadingAudioCount > 0) {
-      Alert.alert('Still Uploading', 'The voice memos are still uploading — give it a moment, then try again.');
+      showAlert('Still Uploading', 'The voice memos are still uploading — give it a moment, then try again.');
       return;
     }
 
     if (!hasPastedNotes && !hasFile && !hasAudio) {
-      Alert.alert('Notes Needed', 'Drop in the voice memos, paste the notes, or upload a .docx, .pdf, or text file.');
+      showAlert('Notes Needed', 'Drop in the voice memos, paste the notes, or upload a .docx, .pdf, or text file.');
       return;
     }
 
@@ -1034,7 +1043,7 @@ export default function MeetingsScreen() {
       });
       await fetchMeetings();
 
-      Alert.alert(
+      showAlert(
         hasAudio ? 'Transcribing' : 'Notes Imported',
         hasAudio
           ? 'The voice memos are transcribing now — the full transcript lands in Meeting Summaries in a few minutes. Then open it and tap Apply Notes when you are ready for Clive.'
@@ -1042,7 +1051,7 @@ export default function MeetingsScreen() {
       );
     } catch (error) {
       console.error('Error importing meeting notes:', error);
-      Alert.alert('Import Failed', 'Clive could not import those notes yet. Please try again.');
+      showAlert('Import Failed', 'Clive could not import those notes yet. Please try again.');
     } finally {
       setImportingNotes(false);
     }
@@ -1429,44 +1438,59 @@ export default function MeetingsScreen() {
           </View>
 
           <ScrollView className="flex-1 p-4">
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-1">Title</Text>
-              <TextInput
-                value={editForm.title}
-                onChangeText={(text) => setEditForm((f) => ({ ...f, title: normalizeHiveBrandText(text) }))}
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                placeholder="HIVE Meeting"
-                returnKeyType="send"
-                onSubmitEditing={handleSaveEdit}
-              />
-            </View>
+            {/* "Hive" typed anywhere in the title still becomes "HIVE", and it
+                does so for a spoken title too — the fix sits on the way in, not
+                on the keystroke. */}
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-4"
+              label="Title"
+              value={editForm.title}
+              onChangeText={(next) => setEditForm((f) => ({
+                ...f,
+                title: normalizeHiveBrandText(typeof next === 'function' ? next(f.title ?? '') : next),
+              }))}
+              placeholder="HIVE Meeting"
+              multiline={false}
+              onSubmit={handleSaveEdit}
+              canSubmit={!!editForm.title.trim() && !savingEdit}
+              submitting={savingEdit}
+            />
 
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-1">Description</Text>
-              <TextInput
-                value={editForm.description}
-                onChangeText={(text) => setEditForm((f) => ({ ...f, description: text }))}
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                placeholder="Optional description"
-                multiline
-                blurOnSubmit={false}
-                onKeyPress={submitOnEnter(handleSaveEdit)}
-                numberOfLines={3}
-              />
-              <DictationRow setValue={(u) => setEditForm((f) => ({ ...f, description: u(f.description ?? '') }))} />
-            </View>
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-4"
+              label="Description"
+              value={editForm.description}
+              onChangeText={(next) => setEditForm((f) => ({
+                ...f,
+                description: typeof next === 'function' ? next(f.description ?? '') : next,
+              }))}
+              placeholder="Optional description"
+              minHeight={90}
+              onSubmit={handleSaveEdit}
+              canSubmit={!!editForm.title.trim() && !savingEdit}
+              submitting={savingEdit}
+            />
 
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-1">Location / Address</Text>
-              <TextInput
-                value={editForm.location}
-                onChangeText={(text) => setEditForm((f) => ({ ...f, location: text }))}
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                placeholder="e.g., 123 Main St or Joe's Coffee"
-                returnKeyType="send"
-                onSubmitEditing={handleSaveEdit}
-              />
-            </View>
+            {/* Where to meet is words — "Joe's Coffee", "the big park by the
+                library" — and people dictate addresses all day long, so this
+                one keeps the microphone. */}
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-4"
+              label="Location / Address"
+              value={editForm.location}
+              onChangeText={(next) => setEditForm((f) => ({
+                ...f,
+                location: typeof next === 'function' ? next(f.location ?? '') : next,
+              }))}
+              placeholder="e.g., 123 Main St or Joe's Coffee"
+              multiline={false}
+              onSubmit={handleSaveEdit}
+              canSubmit={!!editForm.title.trim() && !savingEdit}
+              submitting={savingEdit}
+            />
 
             <View className="mb-4">
               <EventDatePicker
@@ -1475,13 +1499,17 @@ export default function MeetingsScreen() {
               />
             </View>
 
+            {/* A clock time is not words, so no microphone — just the same
+                white fill and gold hairline as the boxes above it. */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-1">Time (optional)</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className={FIELD_LABEL_CLASS}>Time (optional)</Text>
               <TextInput
                 value={editForm.event_time}
                 onChangeText={(text) => setEditForm((f) => ({ ...f, event_time: text }))}
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-cream"
+                className="rounded-xl px-4 py-3 text-base bg-white"
+                style={{ fontFamily: 'Lato_400Regular', borderWidth: 1, borderColor: FIELD_BORDER }}
                 placeholder="e.g. 6:00 PM"
+                placeholderTextColor={PLACEHOLDER_INK}
                 returnKeyType="send"
                 onSubmitEditing={handleSaveEdit}
               />
@@ -1572,11 +1600,13 @@ export default function MeetingsScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 16, lineHeight: 18 }}>
                 Paste the Canva "View" link (not the edit link). The view link always shows the latest saved version.{'\n\n'}In Canva: Share → Copy link → choose "View only".
               </Text>
+              {/* A pasted link, so no microphone — dictating a URL is a joke.
+                  It wears the composer's hairline and placeholder ink instead. */}
               <TextInput
                 value={deckUrlDraft}
                 onChangeText={setDeckUrlDraft}
                 placeholder="https://www.canva.com/design/..."
-                placeholderTextColor="#a09274"
+                placeholderTextColor={PLACEHOLDER_INK}
                 autoCapitalize="none"
                 autoCorrect={false}
                 autoFocus
@@ -1585,11 +1615,11 @@ export default function MeetingsScreen() {
                 style={{
                   fontFamily: 'Lato_400Regular',
                   fontSize: 14,
-                  color: '#2d2d2d',
+                  color: '#313130',
                   backgroundColor: '#fff',
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: 'rgba(189,147,72,0.35)',
+                  borderColor: FIELD_BORDER,
                   padding: 14,
                   marginBottom: 16,
                 }}

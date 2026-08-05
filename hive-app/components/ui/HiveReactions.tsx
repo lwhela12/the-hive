@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { View, Text, Pressable, Modal, ScrollView, TextInput } from 'react-native';
 import { Avatar } from './Avatar';
+import { FIELD_LOOK } from './Input';
 import { MemberProfileLink } from './MemberProfileLink';
 import type { ReactionUserProfile } from '../../types';
 
@@ -262,18 +263,31 @@ export function HiveReactionPickerModal({
                 Want another emoji?
               </Text>
               <View className="flex-row items-center">
+                {/* An emoji is not words, so no microphone — nobody dictates
+                    "🐝". It still wears the app's one field look, so it belongs
+                    to the same set of controls as every box you write into. */}
                 <TextInput
                   value={customEmoji}
                   onChangeText={onCustomEmojiChange}
                   placeholder="Paste/type any emoji"
-                  placeholderTextColor="#a09274"
-                  className="flex-1 bg-white rounded-xl px-3 py-2 text-base"
+                  placeholderTextColor={FIELD_LOOK.placeholder}
+                  selectionColor={FIELD_LOOK.ink}
+                  className="flex-1 px-3 py-2 text-base"
                   autoCapitalize="none"
                   autoCorrect={false}
                   maxLength={8}
                   returnKeyType="done"
                   onSubmitEditing={() => addReaction(customEmoji)}
-                  style={{ fontFamily: 'Lato_400Regular' }}
+                  style={{
+                    fontFamily: FIELD_LOOK.font,
+                    backgroundColor: FIELD_LOOK.fill,
+                    borderWidth: 1,
+                    borderColor: FIELD_LOOK.border,
+                    borderRadius: FIELD_LOOK.radius,
+                    color: FIELD_LOOK.ink,
+                    outlineStyle: 'none',
+                    caretColor: FIELD_LOOK.ink,
+                  } as any}
                 />
                 <Pressable
                   onPress={() => addReaction(customEmoji)}

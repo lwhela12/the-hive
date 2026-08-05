@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -27,7 +26,6 @@ import { getCycleStart, getHalfwayDoneKey } from '../../lib/meetingCycle';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { Avatar } from '../../components/ui/Avatar';
-import { MentionSuggestions } from '../../components/ui/MentionSuggestions';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { getMentionTargetHandle, type MentionTarget } from '../../lib/mentions';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
@@ -44,18 +42,17 @@ import {
   type SurveyAnswers,
 } from '../../lib/hooks/useSurveys';
 import { SurveyQuestionField } from '../../components/surveys/SurveyQuestionField';
-import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
+import { ComposerBar } from '../../components/ui/ComposerBar';
+import { FIELD_LOOK } from '../../components/ui/Input';
 import { WishCombCard } from '../../components/profile/WishCombCard';
 import { WishManageModal } from '../../components/wishes/WishManageModal';
 import { AddWishModal } from '../../components/wishes/AddWishModal';
 import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { parseAmericanDate } from '../../lib/dateUtils';
-import { submitOnEnter } from '../../lib/submitOnEnter';
 import type { Profile, Wish } from '../../types';
 
-import { DictationRow } from '../../components/ui/DictationRow';
-import { confirmAction } from '../../lib/showAlert';
+import { confirmAction, showAlert } from '../../lib/showAlert';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 const hiveBee = require('../../assets/HIVE Bee.png');
 // The crest (bee inside a 30-ray sunburst ring) needs room to read — its
@@ -268,17 +265,29 @@ const cardStyle = {
   padding: 16,
 } as const;
 
+/**
+ * The look for the boxes that are NOT words.
+ *
+ * Everywhere on this screen that a member writes a sentence or a phrase is a
+ * `ComposerBar` now — same box, same mic, same behaviour as Clive's bar. What
+ * is left here is the clock time, which nobody is going to dictate. It keeps a
+ * plain input, wearing the composer's own fill, hairline, corner and
+ * placeholder ink so the page still reads as one set of controls.
+ */
 const inputStyle = {
-  backgroundColor: 'white',
+  backgroundColor: FIELD_LOOK.fill,
   borderWidth: 1,
-  borderColor: 'rgba(222,193,129,0.4)',
-  borderRadius: 12,
-  fontFamily: 'Lato_400Regular',
-  fontSize: 14,
-  color: '#2d2d2d',
-  paddingHorizontal: 14,
-  paddingVertical: 10,
+  borderColor: FIELD_LOOK.border,
+  borderRadius: FIELD_LOOK.radius,
+  fontFamily: FIELD_LOOK.font,
+  fontSize: FIELD_LOOK.fontSize,
+  color: FIELD_LOOK.ink,
+  paddingHorizontal: FIELD_LOOK.paddingHorizontal,
+  paddingVertical: FIELD_LOOK.paddingVertical,
 } as const;
+
+/** The muted gold-brown every placeholder in the app is written in. */
+const PLACEHOLDER_INK = FIELD_LOOK.placeholder;
 
 function StepHeader({ title, subtitle, icon }: { title: string; subtitle: string; icon?: ReactNode }) {
   return (
@@ -399,14 +408,14 @@ export default function MonthlyTuneupScreen() {
   const [showNewsletterEventComposer, setShowNewsletterEventComposer] = useState(false);
   const [finished, setFinished] = useState(false);
 
+  // The box itself does its own @ tagging now (it's a ComposerBar). This tracker
+  // stays for the FACE BUBBLES: it reads who the text already mentions, and a
+  // tapped face writes the mention into the same text.
   const {
-    mentionQuery: newsletterMentionQuery,
-    mentionSuggestions: newsletterMentionSuggestions,
     mentionsEveryone: newsletterMentionsEveryone,
     mentionedMembers: newsletterMentionedMembers,
     resetMentionSelection: resetNewsletterMentionSelection,
     selectMention: selectNewsletterMention,
-    textInputMentionProps: newsletterMentionInputProps,
   } = useMentionInput({
     value: newsletterText,
     onChangeText: setNewsletterText,
@@ -706,7 +715,7 @@ export default function MonthlyTuneupScreen() {
       .eq('user_id', profile.id)
       .eq('is_spotlight', true);
     if (clearError) {
-      Alert.alert('Hmm', 'Could not update your HD spotlight — try again.');
+      showAlert('Hmm', 'Could not update your HD spotlight — try again.');
       return;
     }
     const { error } = await (supabase as any)
@@ -715,7 +724,7 @@ export default function MonthlyTuneupScreen() {
       .eq('id', wishId)
       .eq('user_id', profile.id);
     if (error) {
-      Alert.alert('Hmm', 'Could not update your HD spotlight — try again.');
+      showAlert('Hmm', 'Could not update your HD spotlight — try again.');
       return;
     }
     await refreshWishes();
@@ -1325,7 +1334,7 @@ export default function MonthlyTuneupScreen() {
         .eq('community_id', communityId);
 
       if (error) {
-        Alert.alert('Error', 'Failed to archive wish. Please try again.');
+        showAlert('Error', 'Failed to archive wish. Please try again.');
         return;
       }
 
@@ -1356,7 +1365,7 @@ export default function MonthlyTuneupScreen() {
       });
 
       if (error) {
-        Alert.alert('Error', 'Failed to delete wish. Please try again.');
+        showAlert('Error', 'Failed to delete wish. Please try again.');
         return;
       }
 
@@ -1365,19 +1374,16 @@ export default function MonthlyTuneupScreen() {
       setManagingWish(null);
     };
 
-    const message = `Delete this wish?\n\n"${wish.description}"`;
-
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) {
-        deleteWish();
-      }
-      return;
-    }
-
-    Alert.alert('Delete Wish', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: deleteWish },
-    ]);
+    // One shared ask, the same on both platforms — this used to hand-roll the
+    // web branch and then fall through to `Alert.alert`, which says nothing at
+    // all in a browser.
+    confirmAction({
+      title: 'Delete wish',
+      message: `Delete this wish?\n\n"${wish.description}"`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: deleteWish,
+    });
   };
 
   const handleGrantWish = async (data: {
@@ -1834,34 +1840,23 @@ export default function MonthlyTuneupScreen() {
             +1 sent — it's on the idea's thread 🎉 (tap again to take it back)
           </Text>
         ) : null}
-        <TextInput
+        <ComposerBar
+          variant="form"
           value={hangTitle}
           onChangeText={setHangTitle}
           placeholder="Title (optional)"
-          placeholderTextColor="#b5ad9f"
-          style={inputStyle}
+          multiline={false}
         />
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-          <TextInput
-            value={hangContent}
-            onChangeText={setHangContent}
-            placeholder="Bowling night? Beach day? Potluck?..."
-            placeholderTextColor="#b5ad9f"
-            multiline
-            blurOnSubmit={false}
-            onKeyPress={submitOnEnter(handlePostHangIdea)}
-            style={[inputStyle, { flex: 1, minHeight: 90, textAlignVertical: 'top' }]}
-          />
-          <VoiceMicButton
-            size={20}
-            style={{ marginBottom: 10 }}
-            onTranscript={(text) => {
-              const trimmed = text.trim();
-              if (!trimmed) return;
-              setHangContent((prev) => (prev ? `${prev.replace(/\s+$/, '')} ${trimmed}` : trimmed));
-            }}
-          />
-        </View>
+        <ComposerBar
+          variant="form"
+          value={hangContent}
+          onChangeText={setHangContent}
+          placeholder="Bowling night? Beach day? Potluck?..."
+          minHeight={90}
+          onSubmit={handlePostHangIdea}
+          canSubmit={!!hangContent.trim()}
+          submitting={hangPosting}
+        />
         {hangError ? (
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626' }}>{hangError}</Text>
         ) : null}
@@ -1915,12 +1910,12 @@ export default function MonthlyTuneupScreen() {
           <Text style={{ fontSize: 13 }}>✈️</Text>
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>I'm out of town</Text>
         </Pressable>
-        <TextInput
+        <ComposerBar
+          variant="form"
           value={eventTitle}
           onChangeText={setEventTitle}
           placeholder="Event title"
-          placeholderTextColor="#b5ad9f"
-          style={inputStyle}
+          multiline={false}
         />
         <EventDatePicker value={eventDate} onChange={setEventDate} />
         <EventDatePicker
@@ -1950,21 +1945,23 @@ export default function MonthlyTuneupScreen() {
           </View>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#4a4a4a' }}>All day (no set time)</Text>
         </Pressable>
+        {/* A clock time is not something anybody dictates, so it keeps the plain
+            box — same cream fill, same gold hairline as everything around it. */}
         {!eventAllDay && (
           <TextInput
             value={eventTime}
             onChangeText={setEventTime}
             placeholder="Time (optional) — 7:30 PM"
-            placeholderTextColor="#b5ad9f"
+            placeholderTextColor={PLACEHOLDER_INK}
             style={inputStyle}
           />
         )}
-        <TextInput
+        <ComposerBar
+          variant="form"
           value={eventLocation}
           onChangeText={setEventLocation}
           placeholder="Location (optional)"
-          placeholderTextColor="#b5ad9f"
-          style={inputStyle}
+          multiline={false}
         />
         <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
         {eventError ? (
@@ -2117,18 +2114,19 @@ export default function MonthlyTuneupScreen() {
               once. Logging stays optional either way. */}
           {wantsLog ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <TextInput
+              <ComposerBar
+                variant="form"
+                containerClassName="flex-1"
                 value={halfwayHelpLog}
                 onChangeText={setHalfwayHelpLog}
                 placeholder={halfwayHelpStatus === 'other' ? 'What did you do instead?' : 'Want to log it? (optional)'}
-                placeholderTextColor="#b5ad9f"
-                blurOnSubmit={false}
-                onKeyPress={submitOnEnter(() => {
+                multiline={false}
+                onSubmit={() => {
                   const content = halfwayHelpLog.trim();
                   if (!content) return;
                   void postHelperLog(content).then(() => setHalfwayHelpLog(''));
-                })}
-                style={[inputStyle, { flex: 1 }]}
+                }}
+                canSubmit={!!halfwayHelpLog.trim()}
               />
               <Pressable
                 onPress={() => {
@@ -2259,14 +2257,16 @@ export default function MonthlyTuneupScreen() {
           </Text>
         ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <TextInput
+          <ComposerBar
+            variant="form"
+            containerClassName="flex-1"
             value={helpIdeaContent}
             onChangeText={setHelpIdeaContent}
             placeholder="Add your own idea here…"
-            placeholderTextColor="#b5ad9f"
-            blurOnSubmit={false}
-            onKeyPress={submitOnEnter(handlePostHelpIdea)}
-            style={[inputStyle, { flex: 1 }]}
+            multiline={false}
+            onSubmit={handlePostHelpIdea}
+            canSubmit={!!helpIdeaContent.trim()}
+            submitting={helpIdeaPosting}
           />
           <Pressable
             onPress={handlePostHelpIdea}
@@ -2517,12 +2517,12 @@ export default function MonthlyTuneupScreen() {
 
               {showNewsletterEventComposer ? (
                 <View style={{ gap: 9, borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.35)', paddingTop: 10 }}>
-                  <TextInput
+                  <ComposerBar
+                    variant="form"
                     value={eventTitle}
                     onChangeText={setEventTitle}
                     placeholder="Event title"
-                    placeholderTextColor="#b5ad9f"
-                    style={inputStyle}
+                    multiline={false}
                   />
                   <EventDatePicker value={eventDate} onChange={setEventDate} />
                   <EventDatePicker
@@ -2550,21 +2550,22 @@ export default function MonthlyTuneupScreen() {
                     </View>
                     <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#4a4a4a' }}>All day</Text>
                   </Pressable>
+                  {/* A clock time stays a plain box — nobody dictates "7:30 PM". */}
                   {!eventAllDay ? (
                     <TextInput
                       value={eventTime}
                       onChangeText={setEventTime}
                       placeholder="Time (optional) — 7:30 PM"
-                      placeholderTextColor="#b5ad9f"
+                      placeholderTextColor={PLACEHOLDER_INK}
                       style={inputStyle}
                     />
                   ) : null}
-                  <TextInput
+                  <ComposerBar
+                    variant="form"
                     value={eventLocation}
                     onChangeText={setEventLocation}
                     placeholder="Location (optional)"
-                    placeholderTextColor="#b5ad9f"
-                    style={inputStyle}
+                    multiline={false}
                   />
                   <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />
                   {eventError ? (
@@ -2596,14 +2597,23 @@ export default function MonthlyTuneupScreen() {
 
           <View style={{ gap: 8 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TextInput
+            {/* The shared bar carries @ tagging itself — the suggestion list and
+                the "Tagged Nat" pills are drawn inside it now, so the face
+                bubbles above and typing "@" here are still two doors into the
+                same mention. */}
+            <ComposerBar
+              variant="form"
+              containerClassName="flex-1"
               value={newsletterText}
-              {...newsletterMentionInputProps}
+              onChangeText={setNewsletterText}
               placeholder={active.prompt}
-              placeholderTextColor="#b5ad9f"
-              blurOnSubmit={false}
-              onKeyPress={submitOnEnter(submitNewsletterItem)}
-              style={[inputStyle, { flex: 1 }]}
+              multiline={false}
+              onSubmit={submitNewsletterItem}
+              canSubmit={canPostNewsletterItem}
+              submitting={newsletterPosting}
+              mentionMembers={mentionableMembers}
+              mentionsLoading={mentionableMembersLoading}
+              currentUserId={profile?.id}
             />
             <Pressable
               onPress={() => void submitNewsletterItem()}
@@ -2625,13 +2635,6 @@ export default function MonthlyTuneupScreen() {
               </Text>
             </Pressable>
             </View>
-            <MentionSuggestions
-              suggestions={newsletterMentionSuggestions}
-              onSelect={selectNewsletterMention}
-              active={newsletterMentionQuery !== null}
-              query={newsletterMentionQuery}
-              loading={mentionableMembersLoading}
-            />
           </View>
 
           {newsletterError ? (
@@ -2665,22 +2668,15 @@ export default function MonthlyTuneupScreen() {
         answer is a fine answer. It lands on your profile so people can find
         their fellow readers.
       </Text>
-      <TextInput
+      <ComposerBar
+        variant="form"
         value={readingDraft}
-        onChangeText={(value) => { setReadingDraft(value); setReadingDirty(true); }}
-        placeholder="Currently reading…"
-        placeholderTextColor="#b5ad9f"
-        style={{
-          borderWidth: 1,
-          borderColor: 'rgba(222,193,129,0.6)',
-          borderRadius: 12,
-          backgroundColor: '#fffdf5',
-          paddingHorizontal: 14,
-          paddingVertical: 11,
-          fontFamily: 'Lato_400Regular',
-          fontSize: 15,
-          color: '#2d2d2d',
+        onChangeText={(next) => {
+          setReadingDraft((current) => (typeof next === 'function' ? next(current) : next));
+          setReadingDirty(true);
         }}
+        placeholder="Currently reading…"
+        multiline={false}
       />
       {profileSaveError ? (
         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626', marginTop: 8 }}>
@@ -2723,32 +2719,31 @@ export default function MonthlyTuneupScreen() {
                 {field.label}
               </Text>
               {isEditing ? (
-                <>
-                <TextInput
+                // Editing one line of your profile in place — the shared box
+                // with its own Done button, so the mic and the button that puts
+                // the field away sit inside the same border.
+                <ComposerBar
+                  variant="inlineEdit"
                   value={profileDrafts[field.column] ?? ''}
-                  onChangeText={(value) => {
-                    setProfileDrafts((drafts) => ({ ...drafts, [field.column]: value }));
+                  onChangeText={(next) => {
+                    setProfileDrafts((drafts) => ({
+                      ...drafts,
+                      [field.column]: typeof next === 'function' ? next(drafts[field.column] ?? '') : next,
+                    }));
                     setProfileDirty(true);
                   }}
                   placeholder={field.placeholder}
-                  placeholderTextColor="#b5ad9f"
                   multiline={field.multiline}
+                  minHeight={field.multiline ? 74 : undefined}
                   autoFocus
-                  style={{
-                    borderWidth: 1,
-                    borderColor: 'rgba(222,193,129,0.6)',
-                    borderRadius: 10,
-                    backgroundColor: '#ffffff',
-                    paddingHorizontal: 12,
-                    paddingVertical: 9,
-                    fontFamily: 'Lato_400Regular',
-                    fontSize: 15,
-                    color: '#2d2d2d',
-                    minHeight: field.multiline ? 74 : undefined,
-                  }}
+                  submitLabel="Done"
+                  onSubmit={() => setEditingProfileField(null)}
+                  // A bio is a paragraph — Enter still starts a new line there.
+                  submitOnEnterKey={!field.multiline}
+                  // Emptying a field on purpose is a real answer, so Done stays
+                  // available even when the box is blank.
+                  canSubmit
                 />
-                <DictationRow setValue={(u) => setProfileDrafts((drafts) => ({ ...drafts, [field.column]: u(drafts[field.column] ?? '') }))} />
-                </>
               ) : (
                 <Text
                   style={{
@@ -2762,22 +2757,26 @@ export default function MonthlyTuneupScreen() {
                   {current || 'Nothing here yet'}
                 </Text>
               )}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Pressable
-                  onPress={() => setEditingProfileField(isEditing ? null : field.column)}
-                  accessibilityRole="button"
-                  hitSlop={6}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
-                    {isEditing ? 'Done' : current ? 'Change it' : 'Add one'}
-                  </Text>
-                </Pressable>
-                {!isEditing && current ? (
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
-                    {field.prompt} Leave it be if so.
-                  </Text>
-                ) : null}
-              </View>
+              {/* While you're editing, Done lives inside the box itself — a
+                  second one out here would be the same button twice. */}
+              {isEditing ? null : (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Pressable
+                    onPress={() => setEditingProfileField(field.column)}
+                    accessibilityRole="button"
+                    hitSlop={6}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+                      {current ? 'Change it' : 'Add one'}
+                    </Text>
+                  </Pressable>
+                  {current ? (
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
+                      {field.prompt} Leave it be if so.
+                    </Text>
+                  ) : null}
+                </View>
+              )}
             </View>
           );
         })}
@@ -2821,13 +2820,16 @@ export default function MonthlyTuneupScreen() {
           ))
         )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-          <TextInput
+          <ComposerBar
+            variant="form"
+            containerClassName="flex-1"
             value={newTodoText}
             onChangeText={setNewTodoText}
             placeholder="Add one (e.g. send Sara that Netherlands contact)"
-            placeholderTextColor="#b5ad9f"
-            onKeyPress={submitOnEnter(handleAddTodo)}
-            style={[inputStyle, { flex: 1 }]}
+            multiline={false}
+            onSubmit={handleAddTodo}
+            canSubmit={!!newTodoText.trim()}
+            submitting={todoSaving}
           />
           <Pressable
             onPress={handleAddTodo}

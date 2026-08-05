@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, TextInput, Platform } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { formatDateShort } from '../../lib/dateUtils';
 import type { Profile, WishComment } from '../../types';
 import { BoardReactionBar } from '../board/BoardReactionBar';
@@ -7,9 +7,7 @@ import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
-import { VoiceMicButton } from '../ui/VoiceMicButton';
-import { useDictation } from '../../lib/hooks/useDictation';
-import { submitOnEnter } from '../../lib/submitOnEnter';
+import { ComposerBar } from '../ui/ComposerBar';
 
 export type WishCommentNode = WishComment & {
   user?: Profile | null;
@@ -43,7 +41,6 @@ export function WishCommentItem({
 }: WishCommentItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
-  const editDictation = useDictation(setEditContent);
 
   const isAuthor = currentUserId === comment.user_id;
   const timeAgo = getTimeAgo(new Date(comment.created_at));
@@ -94,49 +91,25 @@ export function WishCommentItem({
           </View>
 
           {isEditing ? (
-            <View className="mb-2">
-              <TextInput
-                value={editContent}
-                onChangeText={setEditContent}
-                placeholder="Edit your comment..."
-                placeholderTextColor="#a09274"
-                multiline
-                blurOnSubmit={Platform.OS === 'web'}
-                submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
-                returnKeyType="send"
-                enterKeyHint="send"
-                onSubmitEditing={handleSaveEdit}
-                onKeyPress={submitOnEnter(handleSaveEdit)}
-                className="bg-cream rounded-lg p-3 text-charcoal mb-2"
-                style={{ fontFamily: 'Lato_400Regular' }}
-                autoFocus
-              />
-              <View className="flex-row items-center gap-2 mb-2">
-                <VoiceMicButton
-                  size={18}
-                  onTranscript={editDictation.onTranscript}
-                  onInterimTranscript={editDictation.onInterimTranscript}
-                />
-              </View>
-              <View className="flex-row gap-2">
-                <Pressable onPress={handleSaveEdit} className="bg-gold px-3 py-1 rounded-lg">
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">
-                    Save
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setIsEditing(false);
-                    setEditContent(comment.content);
-                  }}
-                  className="px-3 py-1"
-                >
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm">
-                    Cancel
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
+            /* Changing your own words in place — the shared box wearing its
+               edit clothes. The mic, the Save and the Cancel all sit on one
+               strip inside the box's own border, so an edit looks like every
+               other place in the app you write something. */
+            <ComposerBar
+              variant="inlineEdit"
+              containerClassName="mb-2"
+              value={editContent}
+              onChangeText={setEditContent}
+              placeholder="Edit your comment..."
+              minHeight={64}
+              autoFocus
+              onSubmit={handleSaveEdit}
+              onCancel={() => {
+                setIsEditing(false);
+                setEditContent(comment.content);
+              }}
+              submitLabel="Save"
+            />
           ) : (
             <LinkifiedText
               style={{ fontFamily: 'Lato_400Regular', fontSize: 16, color: '#313130', marginBottom: 8 }}

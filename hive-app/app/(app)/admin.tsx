@@ -64,8 +64,14 @@ import { parseAmericanDate } from '../../lib/dateUtils';
 import { getWishQuickTitle } from '../../lib/wishDisplay';
 import type { Profile, QueenBee, UserRole, CommunityInvite, Event, Wish } from '../../types';
 
-import { DictationRow } from '../../components/ui/DictationRow';
+import { ComposerBar } from '../../components/ui/ComposerBar';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+// Every statement on this screen used to be an `Alert.alert`, which in a browser
+// draws nothing whatsoever — so "Please enter an email" and "Failed to create
+// event" were both delivered to nobody. The two `Alert.alert` calls left are the
+// native halves of a question, and each already has a `window.confirm` beside it
+// for the web.
+import { showAlert } from '../../lib/showAlert';
 type MemberRow = {
   id: string;
   role: UserRole;
@@ -1277,7 +1283,7 @@ export default function AdminScreen() {
       await Clipboard.setStringAsync(text);
       flashDeckCopyFeedback('pop');
     } catch {
-      Alert.alert('Copy failed', 'Could not copy the POP preview to the clipboard.');
+      showAlert('Copy failed', 'Could not copy the POP preview to the clipboard.');
     }
   }, [activeSurveyPopPreview, flashDeckCopyFeedback]);
 
@@ -1298,7 +1304,7 @@ export default function AdminScreen() {
 
       const activeWishes = (data ?? []) as (Wish & { user: Profile | null })[];
       if (activeWishes.length === 0) {
-        Alert.alert('No HD wishes', 'There are no active public wishes to copy yet.');
+        showAlert('No HD wishes', 'There are no active public wishes to copy yet.');
         return;
       }
 
@@ -1323,7 +1329,7 @@ export default function AdminScreen() {
       await Clipboard.setStringAsync(text);
       flashDeckCopyFeedback('wishes');
     } catch {
-      Alert.alert('Copy failed', 'Could not load HD wishes. Try again in a moment.');
+      showAlert('Copy failed', 'Could not load HD wishes. Try again in a moment.');
     } finally {
       setHdWishesCopying(false);
     }
@@ -1634,7 +1640,7 @@ export default function AdminScreen() {
     if (!surveyTitle.trim() || !communityId) return;
     const { dueDate, error: dueDateError } = normalizeSurveyDueDateInput(surveyDueDate, surveyDueTime);
     if (dueDateError) {
-      Alert.alert('Due date', dueDateError);
+      showAlert('Due date', dueDateError);
       return;
     }
 
@@ -1656,7 +1662,7 @@ export default function AdminScreen() {
       setShowSurveyModal(false);
       refetchSurveys();
     } catch (e) {
-      Alert.alert('Error', 'Failed to create survey');
+      showAlert('Error', 'Failed to create survey');
     } finally {
       setSavingSurvey(false);
     }
@@ -1669,7 +1675,7 @@ export default function AdminScreen() {
       .eq('id', membershipId);
 
     if (error) {
-      Alert.alert('Error', 'Failed to update role');
+      showAlert('Error', 'Failed to update role');
     } else {
       await fetchData();
     }
@@ -1678,7 +1684,7 @@ export default function AdminScreen() {
   const removeMember = async (membershipId: string, memberName: string, memberId: string) => {
     // Don't allow removing yourself
     if (memberId === profile?.id) {
-      Alert.alert('Error', "You can't remove yourself from the community.");
+      showAlert('Error', "You can't remove yourself from the community.");
       return;
     }
 
@@ -1691,10 +1697,10 @@ export default function AdminScreen() {
 
         if (error) throw error;
         await fetchData();
-        Alert.alert('Success', `${memberName} has been removed from the community.`);
+        showAlert('Success', `${memberName} has been removed from the community.`);
       } catch (err) {
         console.error('Remove member error:', err);
-        Alert.alert('Error', 'Failed to remove member');
+        showAlert('Error', 'Failed to remove member');
       }
     };
 
@@ -1717,7 +1723,7 @@ export default function AdminScreen() {
 
   const createQueenBee = async () => {
     if (!selectedMember || !communityId) {
-      Alert.alert('Error', 'Please select a member');
+      showAlert('Error', 'Please select a member');
       return;
     }
 
@@ -1789,7 +1795,7 @@ export default function AdminScreen() {
     });
 
     if (error) {
-      Alert.alert('Error', 'Failed to create Queen Bee');
+      showAlert('Error', 'Failed to create Queen Bee');
     } else {
       closeQueenBeeModal();
       await fetchData();
@@ -1798,7 +1804,7 @@ export default function AdminScreen() {
 
   const updateQueenBee = async () => {
     if (!editingQueenBee || !qbTitle) {
-      Alert.alert('Error', 'Please fill in required fields');
+      showAlert('Error', 'Please fill in required fields');
       return;
     }
 
@@ -1812,7 +1818,7 @@ export default function AdminScreen() {
       .eq('id', editingQueenBee.id);
 
     if (error) {
-      Alert.alert('Error', 'Failed to update Queen Bee');
+      showAlert('Error', 'Failed to update Queen Bee');
     } else {
       closeQueenBeeModal();
       await fetchData();
@@ -1831,14 +1837,14 @@ export default function AdminScreen() {
 
   const createEvent = async () => {
     if (!eventTitle || !eventDate || !communityId) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      showAlert('Error', 'Please fill in all required fields');
       return;
     }
 
     // Convert American date format to ISO for storage
     const eventDateIso = parseAmericanDate(eventDate);
     if (!eventDateIso) {
-      Alert.alert('Error', 'Please enter date in MM-DD-YYYY format');
+      showAlert('Error', 'Please enter date in MM-DD-YYYY format');
       return;
     }
 
@@ -1853,7 +1859,7 @@ export default function AdminScreen() {
     });
 
     if (error) {
-      Alert.alert('Error', 'Failed to create event');
+      showAlert('Error', 'Failed to create event');
     } else {
       setShowEventModal(false);
       setEventTitle('');
@@ -1868,7 +1874,7 @@ export default function AdminScreen() {
     const trimmedEmail = inviteEmail.trim();
 
     if (!trimmedEmail || !communityId) {
-      Alert.alert('Error', 'Please enter an email');
+      showAlert('Error', 'Please enter an email');
       return;
     }
 
@@ -1890,7 +1896,7 @@ export default function AdminScreen() {
       }
 
       await fetchData();
-      Alert.alert(
+      showAlert(
         data?.reusedInvite ? 'Invite refreshed' : 'Invite sent',
         data?.reusedInvite
           ? `${trimmedEmail} already had a pending invite, so we refreshed it and sent the link again.`
@@ -1901,7 +1907,7 @@ export default function AdminScreen() {
       setShowInviteMember(false);
     } catch (error) {
       console.error('Invite send error:', error);
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to send invite');
+      showAlert('Error', error instanceof Error ? error.message : 'Failed to send invite');
     } finally {
       setSendingInvite(false);
     }
@@ -1925,7 +1931,7 @@ export default function AdminScreen() {
     if (!confirmed) return;
 
     if (!communityId) {
-      Alert.alert('Error', 'No community context. Please refresh and try again.');
+      showAlert('Error', 'No community context. Please refresh and try again.');
       return;
     }
 
@@ -2322,22 +2328,25 @@ export default function AdminScreen() {
         <ModalBackdrop onClose={() => setShowSurveyModal(false)} style={{ justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 20, color: '#2d2d2d', marginBottom: 16 }}>Create Survey</Text>
-            <TextInput
-              placeholder="Survey title"
+            {/* A survey's name and its description are both things a person
+                writes in words, so they are the shared box with the mic inside
+                it rather than a field with a mic welded underneath. */}
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-3"
+              label="Survey title"
               value={surveyTitle}
               onChangeText={setSurveyTitle}
-              style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 15, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3' }}
-              placeholderTextColor="#b5ad9f"
+              multiline={false}
             />
-            <TextInput
-              placeholder="Description (optional)"
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-3"
+              label="Description (optional)"
               value={surveyDescription}
               onChangeText={setSurveyDescription}
-              multiline
-              style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3', minHeight: 72, textAlignVertical: 'top' }}
-              placeholderTextColor="#b5ad9f"
+              minHeight={72}
             />
-            <DictationRow setValue={setSurveyDescription} />
             <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 16 }}>
               <View style={{ flex: 2, minWidth: 180 }}>
                 <EventDatePicker
@@ -2397,22 +2406,22 @@ export default function AdminScreen() {
                 </Pressable>
               </View>
 
-              <TextInput
-                placeholder="Survey title"
+              <ComposerBar
+                variant="form"
+                containerClassName="mb-3"
+                label="Survey title"
                 value={surveyEditorTitle}
                 onChangeText={setSurveyEditorTitle}
-                style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 15, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3' }}
-                placeholderTextColor="#b5ad9f"
+                multiline={false}
               />
-              <TextInput
-                placeholder="Description"
+              <ComposerBar
+                variant="form"
+                containerClassName="mb-3"
+                label="Description"
                 value={surveyEditorDescription}
                 onChangeText={setSurveyEditorDescription}
-                multiline
-                style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, padding: 12, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', marginBottom: 10, backgroundColor: '#faf8f3', minHeight: 72, textAlignVertical: 'top' }}
-                placeholderTextColor="#b5ad9f"
+                minHeight={72}
               />
-              <DictationRow setValue={setSurveyEditorDescription} />
               <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 8 }}>
                 <View style={{ flex: 2, minWidth: 180 }}>
                   <EventDatePicker
@@ -2821,15 +2830,22 @@ export default function AdminScreen() {
                         </View>
                       </View>
 
-                    <TextInput
+                    {/* The question itself is a sentence somebody writes, so it
+                        gets the shared box. The text lives inside a question
+                        object rather than in its own useState, so the setter
+                        unwraps both shapes the box can hand back: a plain
+                        string when you type, an updater when you talk. */}
+                    <ComposerBar
+                      variant="form"
+                      containerClassName="mb-3"
                       value={question.text}
-                      onChangeText={(text) => updateSurveyQuestion(index, current => ({ ...current, text }))}
+                      onChangeText={(next) => updateSurveyQuestion(index, (current) => ({
+                        ...current,
+                        text: typeof next === 'function' ? next(current.text ?? '') : next,
+                      }))}
                       placeholder="Question text"
-                      multiline
-                      style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 10, padding: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', backgroundColor: 'white', minHeight: 58, textAlignVertical: 'top', marginBottom: 10 }}
-                      placeholderTextColor="#b5ad9f"
+                      minHeight={58}
                     />
-                    <DictationRow setValue={(u) => updateSurveyQuestion(index, (current) => ({ ...current, text: u(current.text ?? '') }))} />
 
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: question.type === 'choice' ? 10 : 0 }}>
                       {SURVEY_QUESTION_TYPES.map((type) => {
@@ -2871,16 +2887,19 @@ export default function AdminScreen() {
                     </View>
 
                     {question.type === 'choice' && (
-                      <TextInput
+                      // The answers people will pick from are words too, so this
+                      // box takes the mic as well. One choice per line: speaking
+                      // adds to the line you are on, so start a new line first.
+                      <ComposerBar
+                        variant="form"
                         value={(question.options ?? []).join('\n')}
-                        onChangeText={(text) => updateSurveyQuestion(index, current => ({
-                          ...current,
-                          options: text.split('\n'),
-                        }))}
+                        onChangeText={(next) => updateSurveyQuestion(index, (current) => {
+                          const previous = (current.options ?? []).join('\n');
+                          const text = typeof next === 'function' ? next(previous) : next;
+                          return { ...current, options: text.split('\n') };
+                        })}
                         placeholder="One choice per line"
-                        multiline
-                        style={{ borderWidth: 1, borderColor: 'rgba(222,193,129,0.45)', borderRadius: 10, padding: 10, fontFamily: 'Lato_400Regular', fontSize: 14, color: '#2d2d2d', backgroundColor: 'white', minHeight: 78, textAlignVertical: 'top' }}
-                        placeholderTextColor="#b5ad9f"
+                        minHeight={78}
                       />
                     )}
                   </View>
@@ -2958,11 +2977,27 @@ export default function AdminScreen() {
                   ))}
                 </ScrollView>
 
+                {/* A month is a slot on a calendar, not a sentence, so no mic —
+                    but it wears the same fill, edge and placeholder ink as every
+                    box around it. */}
                 <TextInput
                   placeholder="Month YYYY-MM (auto-fills next)"
                   value={qbMonth}
                   onChangeText={setQbMonth}
-                  className="border border-gray-200 rounded-lg p-3 mb-3 bg-gray-50"
+                  placeholderTextColor="#a09274"
+                  selectionColor="#313130"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: 'rgba(189,147,72,0.24)',
+                    borderRadius: 12,
+                    backgroundColor: '#ffffff',
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    marginBottom: 12,
+                    fontFamily: 'Lato_400Regular',
+                    fontSize: 15,
+                    color: '#313130',
+                  }}
                 />
               </>
             )}
@@ -2975,21 +3010,23 @@ export default function AdminScreen() {
               </View>
             )}
 
-            <TextInput
-              placeholder="Project Title (optional - defaults to TBD)"
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-3"
+              label="Project title"
               value={qbTitle}
               onChangeText={setQbTitle}
-              className="border border-gray-200 rounded-lg p-3 mb-3 bg-gray-50"
+              placeholder="Optional — defaults to TBD"
+              multiline={false}
             />
-            <TextInput
-              placeholder="Project Description (optional)"
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-3"
+              label="Project description (optional)"
               value={qbDescription}
               onChangeText={setQbDescription}
-              multiline
-              numberOfLines={3}
-              className="border border-gray-200 rounded-lg p-3 mb-3 bg-gray-50"
+              minHeight={78}
             />
-            <DictationRow setValue={setQbDescription} />
 
             <Text className="text-gray-600 mb-2">Status</Text>
             <View className="flex-row mb-4">
@@ -3041,11 +3078,13 @@ export default function AdminScreen() {
               Add Event
             </Text>
 
-            <TextInput
-              placeholder="Event Title"
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-3"
+              label="Event title"
               value={eventTitle}
               onChangeText={setEventTitle}
-              className="border border-gray-300 rounded-lg p-3 mb-3"
+              multiline={false}
             />
             <View className="mb-3">
               <EventDatePicker
@@ -3053,15 +3092,14 @@ export default function AdminScreen() {
                 onChange={setEventDate}
               />
             </View>
-            <TextInput
-              placeholder="Description (optional)"
+            <ComposerBar
+              variant="form"
+              containerClassName="mb-4"
+              label="Description (optional)"
               value={eventDescription}
               onChangeText={setEventDescription}
-              multiline
-              numberOfLines={3}
-              className="border border-gray-300 rounded-lg p-3 mb-4"
+              minHeight={78}
             />
-            <DictationRow setValue={setEventDescription} />
 
             <View className="mb-4">
               <EventAudienceToggle value={eventAudience} onChange={setEventAudience} />

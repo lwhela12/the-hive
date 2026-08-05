@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Image,
   Platform,
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,14 +13,12 @@ import { usePageSkin } from '../../lib/pageSkin';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
-import { AttachmentPicker } from '../../components/ui/AttachmentPicker';
-import { VoiceMicButton } from '../../components/ui/VoiceMicButton';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadMultipleImages, uploadMultipleFiles } from '../../lib/attachmentUpload';
 import type { Attachment } from '../../types';
 
-import { DictationRow } from '../../components/ui/DictationRow';
+import { ComposerBar } from '../../components/ui/ComposerBar';
 import { SignedImage } from '../../components/ui/SignedImage';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 /**
@@ -158,10 +153,9 @@ export default function AppFeedbackScreen() {
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
 
-  // Dictation writes into the same box you are typing in, so it has to remember
-  // what was there before the mic opened — otherwise each interim guess appends
-  // to the last one and you get the sentence four times.
-  const voiceBaseRef = useRef<string | null>(null);
+  // The "what was in the box before the mic opened" bookkeeping used to live
+  // here, hand-written. It lives in ComposerBar now, through the shared
+  // `useDictation` hook, which has been got wrong twice and is right once.
 
   const [sent, setSent] = useState<SentItem[] | null>(null);
   const [all, setAll] = useState<SentItem[] | null>(null);
@@ -262,7 +256,6 @@ export default function AppFeedbackScreen() {
       setWhereOpen(false);
       setSelectedImages([]);
       setSelectedFiles([]);
-      voiceBaseRef.current = null;
       // Told the truth about which half worked. The note is safe either way —
       // the function stores before it emails — so a failed email is a smaller
       // sentence, not an error.
@@ -464,16 +457,31 @@ export default function AppFeedbackScreen() {
           <View style={{ marginTop: 12 }}>
             {!item.reply ? (
               <>
-                <TextInput
+                {/* The owner's answer. Words, so it gets the microphone — and
+                    the mic sits inside the box's own border rather than on a
+                    shelf underneath it. `next` arrives as either a string or an
+                    updater, because dictation has to read what is already there
+                    to append to it. */}
+                <ComposerBar
+                  variant="form"
                   value={replyDrafts[item.id] ?? ''}
-                  onChangeText={(text) => setReplyDrafts((prev) => ({ ...prev, [item.id]: text }))}
-                  multiline
+                  onChangeText={(next) =>
+                    setReplyDrafts((prev) => ({
+                      ...prev,
+                      [item.id]: typeof next === 'function' ? next(prev[item.id] ?? '') : next,
+                    }))
+                  }
+                  minHeight={64}
+                  // 4000 is what the app-feedback edge function accepts. Raising
+                  // it here would only let somebody write a reply the server
+                  // then refuses.
                   maxLength={4000}
                   placeholder="What happened about it?"
-                  placeholderTextColor={skin.inkFaint}
-                  style={[styles.field, { minHeight: 64, textAlignVertical: 'top' }]}
+                  // Enter makes a new paragraph. An answer to a bug report runs
+                  // to several lines, and "Answer & tell them" is right below.
+                  submitOnEnterKey={false}
+                  submitting={replyingTo === item.id}
                 />
-                <DictationRow setValue={(u) => setReplyDrafts((prev) => ({ ...prev, [item.id]: u(prev[item.id] ?? '') }))} />
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                   <Pressable
                     onPress={() => void sendReply(item.id)}
@@ -642,108 +650,37 @@ export default function AppFeedbackScreen() {
               {active.prompt}
             </Text>
 
-            <TextInput
+            {/* The whole report, in one box: the words, the clip and the mic,
+                all inside the same border. It used to be a bare field with the
+                clip and the mic on a strip underneath, which is the wrong axis
+                — both are things you do TO the report you are writing.
+                ComposerBar also draws the previews and takes a file dropped
+                anywhere on the page. */}
+            <ComposerBar
+              variant="form"
               value={message}
               onChangeText={setMessage}
-              multiline
-              numberOfLines={7}
+              minHeight={150}
+              // 4000 is what the app-feedback edge function accepts. Raising it
+              // here would only let somebody write a report the server refuses.
               maxLength={4000}
               placeholder="Say it however it comes out. Nothing here has to be tidy."
-              placeholderTextColor={skin.inkFaint}
-              style={[styles.field, { minHeight: 150, textAlignVertical: 'top' }]}
+              // Enter makes a new paragraph. A bug report is several sentences
+              // and "Send it" is right below.
+              submitOnEnterKey={false}
+              submitting={sending}
+              attachments="compact"
+              selectedImages={selectedImages}
+              onImagesChange={setSelectedImages}
+              selectedFiles={selectedFiles}
+              onFilesChange={setSelectedFiles}
+              maxImages={MAX_FEEDBACK_ATTACHMENTS}
+              maxFiles={MAX_FEEDBACK_ATTACHMENTS}
+              captureDocumentDrops
             />
-
-            {/* The clip and the mic, under the box they belong to. Attach a
-                screenshot, or talk instead of typing — both land in the same
-                report. */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 4 }}>
-              <AttachmentPicker
-                compact
-                selectedImages={selectedImages}
-                onImagesChange={setSelectedImages}
-                selectedFiles={selectedFiles}
-                onFilesChange={setSelectedFiles}
-                maxImages={MAX_FEEDBACK_ATTACHMENTS}
-                maxFiles={MAX_FEEDBACK_ATTACHMENTS}
-              />
-              <VoiceMicButton
-                size={20}
-                onTranscript={(text) => {
-                  setMessage((prev) => {
-                    const base = (voiceBaseRef.current ?? prev).trimEnd();
-                    const spoken = text.trim();
-                    return base ? `${base} ${spoken}` : spoken;
-                  });
-                  voiceBaseRef.current = null;
-                }}
-                onInterimTranscript={(text) => {
-                  if (!text) {
-                    voiceBaseRef.current = null;
-                    return;
-                  }
-                  setMessage((prev) => {
-                    if (voiceBaseRef.current === null) voiceBaseRef.current = prev;
-                    const base = voiceBaseRef.current.trimEnd();
-                    const spoken = text.trim();
-                    return base ? `${base} ${spoken}` : spoken;
-                  });
-                }}
-              />
-              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.inkFaint, marginLeft: 4 }}>
-                Add a screenshot, or talk instead of typing
-              </Text>
-            </View>
-
-            {/* Previews, so nobody sends a picture they cannot see. */}
-            {hasAttachments ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }} contentContainerStyle={{ gap: 8 }}>
-                {selectedImages.map((image, index) => (
-                  <View key={image.uri} style={{ position: 'relative' }}>
-                    <Image
-                      source={{ uri: image.uri }}
-                      style={{ width: 84, height: 84, borderRadius: 10, backgroundColor: skin.field }}
-                      resizeMode="cover"
-                    />
-                    <Pressable
-                      onPress={() => setSelectedImages((prev) => prev.filter((_, i) => i !== index))}
-                      style={{
-                        position: 'absolute',
-                        top: -6,
-                        right: -6,
-                        width: 22,
-                        height: 22,
-                        borderRadius: 11,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: '#313130',
-                      }}
-                    >
-                      <Text style={{ color: '#fff', fontSize: 13, lineHeight: 15 }}>×</Text>
-                    </Pressable>
-                  </View>
-                ))}
-                {selectedFiles.map((file, index) => (
-                  <Pressable
-                    key={`${file.uri}-${index}`}
-                    onPress={() => setSelectedFiles((prev) => prev.filter((_, i) => i !== index))}
-                    style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      borderRadius: 10,
-                      borderWidth: 1,
-                      borderColor: skin.border,
-                      backgroundColor: skin.field,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text numberOfLines={1} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.inkBody, maxWidth: 160 }}>
-                      📎 {file.name}
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: skin.inkFaint }}>tap to remove</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            ) : null}
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.inkFaint, marginTop: 8 }}>
+              Add a screenshot, or talk instead of typing
+            </Text>
 
             <Text style={{ ...styles.caption, marginTop: 18, marginBottom: 8 }}>
               Where in the app? <Text style={{ textTransform: 'none', letterSpacing: 0 }}>(optional)</Text>
@@ -817,13 +754,19 @@ export default function AppFeedbackScreen() {
             ) : null}
 
             {whereOther ? (
-              <TextInput
+              /* Naming a place in your own words is words, so it gets the mic —
+                 this is the escape hatch for the bug that lives in the gap
+                 between two pages, and describing that out loud is easier than
+                 typing it. 300 is the edge function's own limit. */
+              <ComposerBar
+                variant="form"
+                containerClassName="mt-2"
                 value={whereInApp}
                 onChangeText={setWhereInApp}
+                multiline={false}
                 maxLength={300}
                 placeholder="Where were you?"
-                placeholderTextColor={skin.inkFaint}
-                style={[styles.field, { marginTop: 8 }]}
+                submitOnEnterKey={false}
               />
             ) : null}
 
