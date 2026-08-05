@@ -8,6 +8,7 @@ import { LinkifiedText } from '../ui/LinkifiedText';
 import { getReactionGroups, HiveReactionPills } from '../ui/HiveReactions';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
+import { usePageSkin } from '../../lib/pageSkin';
 import type { BoardPost, BoardReaction, Profile } from '../../types';
 
 import { SignedImage } from '../ui/SignedImage';
@@ -54,6 +55,9 @@ export function BoardPostCard({
   onLinkedWishPress,
   currentUserId,
 }: BoardPostCardProps) {
+  // Cream page or space page, same card. The skin decides both the fill and
+  // the ink so the two can never disagree.
+  const skin = usePageSkin();
   const timeAgo = getTimeAgo(new Date(post.created_at));
   const isCompleted = post.status === 'completed';
   const isArchived = !!post.archived_at;
@@ -72,17 +76,32 @@ export function BoardPostCard({
     : { width: '100%' as const, height: 210 };
   const authorId = post.author?.id ?? post.author_id;
   const authorName = post.author?.name || 'Unknown';
+  // A granted thread wears a wash of the accent. pageSkin has no "gold at a
+  // whisper" token, so the two live here — both are just skin.gold turned
+  // right down, which is why they read the same on either page.
+  const grantedWash = skin.dark ? 'rgba(224,190,118,0.10)' : 'rgba(189,147,72,0.06)';
+  // An archived thread is muted by stepping the WHOLE card back, not by
+  // greying the text — grey text on black is the thing we're fixing.
+  const cardOpacity = isArchived ? 0.72 : 1;
+  // A small tab (attachment count, reply count) sits on top of the card, so it
+  // needs to be a shade off the card itself, not off the page.
+  const chipFill = skin.dark ? 'rgba(255,255,255,0.08)' : '#faf8f3';
 
   return (
-    <View className={`relative rounded-xl mb-3 shadow-sm overflow-hidden border ${
-      isArchived
-        ? 'bg-charcoal/5 border-charcoal/10'
-        : isCompleted ? 'bg-gold/5 border-gold/30' : 'bg-white border-white'
-    }`}>
+    <View
+      className="relative rounded-xl mb-3 shadow-sm overflow-hidden border"
+      style={{
+        backgroundColor: isCompleted ? grantedWash : skin.card,
+        borderColor: isCompleted ? skin.borderStrong : skin.border,
+        opacity: cardOpacity,
+      }}
+    >
       <Pressable onPress={onPress} className="active:opacity-80">
         <View style={useCompactImage ? { flexDirection: 'row', alignItems: 'stretch' } : undefined}>
           {firstAttachment && (
             <View style={{ position: 'relative', flexShrink: 0 }}>
+              {/* The video poster keeps its own charcoal-and-cream pair: it is a
+                  picture well, not a panel, and it reads on either page. */}
               {isVideoPreview ? (
                 <View
                   style={[imageStyle, { backgroundColor: '#313130', alignItems: 'center', justifyContent: 'center' }]}
@@ -130,20 +149,31 @@ export function BoardPostCard({
             {(post.is_pinned || isCompleted || isArchived) && (
               <View className="flex-row items-center mb-2" style={{ gap: 6 }}>
                 {post.is_pinned && (
-                  <Text className="text-xs text-gold">📌 Pinned</Text>
+                  <Text className="text-xs" style={{ color: skin.gold }}>📌 Pinned</Text>
                 )}
                 {isCompleted && (
-                  <View className="flex-row items-center bg-gold rounded-full px-2 py-0.5">
-                    <Ionicons name="checkmark-circle-outline" size={12} color="white" />
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-xs ml-1">
+                  <View
+                    className="flex-row items-center rounded-full px-2 py-0.5"
+                    style={{ backgroundColor: skin.gold }}
+                  >
+                    {/* The space gold is a pale gold — white on it disappears,
+                        so the badge writes in the page's own colour there. */}
+                    <Ionicons name="checkmark-circle-outline" size={12} color={skin.dark ? skin.page : '#ffffff'} />
+                    <Text
+                      style={{ fontFamily: 'Lato_700Bold', color: skin.dark ? skin.page : '#ffffff' }}
+                      className="text-xs ml-1"
+                    >
                       Granted
                     </Text>
                   </View>
                 )}
                 {isArchived && (
-                  <View className="flex-row items-center bg-charcoal/10 rounded-full px-2 py-0.5">
-                    <Ionicons name="archive-outline" size={12} color="rgba(49,49,48,0.58)" />
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60 text-xs ml-1">
+                  <View
+                    className="flex-row items-center rounded-full px-2 py-0.5"
+                    style={{ backgroundColor: chipFill }}
+                  >
+                    <Ionicons name="archive-outline" size={12} color={skin.inkSoft} />
+                    <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkSoft }} className="text-xs ml-1">
                       Archived
                     </Text>
                   </View>
@@ -151,8 +181,8 @@ export function BoardPostCard({
               </View>
             )}
             <Text
-              style={{ fontFamily: 'Lato_700Bold' }}
-              className="text-charcoal text-base mb-1"
+              style={{ fontFamily: 'Lato_700Bold', color: skin.ink }}
+              className="text-base mb-1"
               numberOfLines={2}
             >
               {post.title}
@@ -161,10 +191,10 @@ export function BoardPostCard({
               style={{
                 fontFamily: 'Lato_400Regular',
                 fontSize: 14,
-                color: 'rgba(49, 49, 48, 0.7)',
+                color: skin.inkBody,
                 marginBottom: linkedWishLabel ? 6 : 8,
               }}
-              linkStyle={{ color: '#bd9348' }}
+              linkStyle={{ color: skin.gold }}
             >
               {contentPreview}
             </LinkifiedText>
@@ -175,12 +205,13 @@ export function BoardPostCard({
                   onLinkedWishPress?.();
                 }}
                 disabled={!onLinkedWishPress}
-                className="self-start flex-row items-center bg-cream/75 border border-gold/20 rounded-full px-2 py-1 mb-2 active:opacity-70"
+                className="self-start flex-row items-center border rounded-full px-2 py-1 mb-2 active:opacity-70"
+                style={{ backgroundColor: chipFill, borderColor: skin.border }}
                 accessibilityRole={onLinkedWishPress ? 'button' : undefined}
                 accessibilityLabel={linkedWishLabel}
               >
-                <Ionicons name="link-outline" size={12} color="#bd9348" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
+                <Ionicons name="link-outline" size={12} color={skin.gold} />
+                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.gold }} className="text-xs ml-1">
                   {linkedWishLabel}
                 </Text>
               </Pressable>
@@ -197,8 +228,8 @@ export function BoardPostCard({
                   <Avatar name={authorName} url={post.author?.avatar_url} size={24} />
                 </MemberProfileLink>
                 <Text
-                  style={{ fontFamily: 'Lato_400Regular' }}
-                  className="text-charcoal/50 text-xs flex-1"
+                  style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }}
+                  className="text-xs flex-1"
                   numberOfLines={1}
                 >
                   {authorName} · {timeAgo}
@@ -206,17 +237,23 @@ export function BoardPostCard({
               </View>
               <View className="flex-row items-center gap-1">
                 {hasAttachments && !firstAttachment && (
-                  <View className="flex-row items-center bg-cream px-2 py-1 rounded-full">
-                    <Ionicons name="attach-outline" size={12} color="#bd9348" />
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-xs ml-1">
+                  <View
+                    className="flex-row items-center px-2 py-1 rounded-full"
+                    style={{ backgroundColor: chipFill }}
+                  >
+                    <Ionicons name="attach-outline" size={12} color={skin.gold} />
+                    <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-xs ml-1">
                       {post.attachments!.length}
                     </Text>
                   </View>
                 )}
 
-                <View className="flex-row items-center bg-cream px-2 py-1 rounded-full">
+                <View
+                  className="flex-row items-center px-2 py-1 rounded-full"
+                  style={{ backgroundColor: chipFill }}
+                >
                   <Text className="text-xs mr-1">💬</Text>
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-xs">
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-xs">
                     {post.reply_count}
                   </Text>
                 </View>

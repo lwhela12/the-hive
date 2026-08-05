@@ -8,6 +8,7 @@ import { LinkifiedText } from '../ui/LinkifiedText';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { submitOnEnter } from '../../lib/submitOnEnter';
+import { usePageSkin } from '../../lib/pageSkin';
 
 import { DictationRow } from '../ui/DictationRow';
 interface BoardReplyItemProps {
@@ -33,8 +34,13 @@ export function BoardReplyItem({
   onDelete,
   canModerate = false,
 }: BoardReplyItemProps) {
+  const skin = usePageSkin();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(reply.content);
+
+  // Tailwind's red-500 is a hole in the black page. Same warning, lifted so it
+  // reads there — pageSkin has no danger colour and it isn't mine to add.
+  const dangerInk = skin.dark ? '#ff9a9a' : '#ef4444';
 
   const isAuthor = currentUserId === reply.author_id;
   const canManage = isAuthor || canModerate;
@@ -50,7 +56,10 @@ export function BoardReplyItem({
   };
 
   return (
-    <View className={`${isNested ? 'ml-6 border-l-2 border-cream pl-4' : ''} py-3`}>
+    <View
+      className={`${isNested ? 'ml-6 border-l-2 pl-4' : ''} py-3`}
+      style={isNested ? { borderLeftColor: skin.border } : undefined}
+    >
       <View className="flex-row items-start">
         <MemberProfileLink
           memberId={authorId}
@@ -62,14 +71,14 @@ export function BoardReplyItem({
         </MemberProfileLink>
         <View className="flex-1">
           <View className="flex-row items-center mb-1">
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-sm">
+            <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-sm">
               {authorName}
             </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs ml-2">
+            <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-xs ml-2">
               {timeAgo}
             </Text>
             {reply.edited_at && (
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/40 text-xs ml-1">
+              <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkFaint }} className="text-xs ml-1">
                 (edited)
               </Text>
             )}
@@ -81,7 +90,7 @@ export function BoardReplyItem({
                 value={editContent}
                 onChangeText={setEditContent}
                 placeholder="Edit your reply..."
-                placeholderTextColor="#a09274"
+                placeholderTextColor={skin.inkFaint}
                 multiline
                 blurOnSubmit={Platform.OS === 'web'}
                 submitBehavior={Platform.OS === 'web' ? 'submit' : 'newline'}
@@ -89,16 +98,28 @@ export function BoardReplyItem({
                 enterKeyHint="send"
                 onSubmitEditing={handleSaveEdit}
                 onKeyPress={submitOnEnter(handleSaveEdit)}
-                className="bg-cream rounded-lg p-3 text-charcoal mb-2"
-                style={{ fontFamily: 'Lato_400Regular' }}
+                className="rounded-lg p-3 mb-2"
+                style={{
+                  fontFamily: 'Lato_400Regular',
+                  backgroundColor: skin.field,
+                  borderWidth: 1,
+                  borderColor: skin.border,
+                  color: skin.ink,
+                }}
               />
               <DictationRow setValue={setEditContent} />
               <View className="flex-row gap-2">
                 <Pressable
                   onPress={handleSaveEdit}
-                  className="bg-gold px-3 py-1 rounded-lg"
+                  className="px-3 py-1 rounded-lg"
+                  style={{ backgroundColor: skin.gold }}
                 >
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-sm">
+                  {/* The space gold is a light gold, so white on it is a smudge.
+                      The label takes the page's own colour instead. */}
+                  <Text
+                    style={{ fontFamily: 'Lato_700Bold', color: skin.dark ? skin.page : '#ffffff' }}
+                    className="text-sm"
+                  >
                     Save
                   </Text>
                 </Pressable>
@@ -109,7 +130,7 @@ export function BoardReplyItem({
                   }}
                   className="px-3 py-1"
                 >
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm">
+                  <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-sm">
                     Cancel
                   </Text>
                 </Pressable>
@@ -117,8 +138,8 @@ export function BoardReplyItem({
             </View>
           ) : (
             <LinkifiedText
-              style={{ fontFamily: 'Lato_400Regular', fontSize: 16, color: '#313130', marginBottom: 8 }}
-              linkStyle={{ color: '#bd9348' }}
+              style={{ fontFamily: 'Lato_400Regular', fontSize: 16, color: skin.ink, marginBottom: 8 }}
+              linkStyle={{ color: skin.gold }}
             >
               {reply.content}
             </LinkifiedText>
@@ -142,7 +163,7 @@ export function BoardReplyItem({
           <View className="flex-row items-center gap-4">
             {onReply && (
               <Pressable onPress={() => onReply(reply.id, reply.author?.name || 'Unknown')}>
-                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-gold text-sm">
+                <Text style={{ fontFamily: 'Lato_400Regular', color: skin.gold }} className="text-sm">
                   Reply
                 </Text>
               </Pressable>
@@ -150,12 +171,12 @@ export function BoardReplyItem({
             {canManage && (
               <>
                 <Pressable onPress={() => setIsEditing(true)}>
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm">
+                  <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-sm">
                     Edit
                   </Text>
                 </Pressable>
                 <Pressable onPress={() => onDelete?.(reply.id)}>
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-red-500 text-sm">
+                  <Text style={{ fontFamily: 'Lato_400Regular', color: dangerInk }} className="text-sm">
                     Delete
                   </Text>
                 </Pressable>

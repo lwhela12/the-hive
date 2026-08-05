@@ -20,6 +20,7 @@ import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
+import { usePageSkin } from '../../lib/pageSkin';
 import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment, BoardCategory } from '../../types';
 
 interface BoardPostDetailProps {
@@ -94,6 +95,14 @@ function confirmBoardAction({
 
 export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const { profile, communityId, communityRole } = useAuth();
+  // A thread is read on a cream HIVE page and on the black HIVE-Wide page. One
+  // source for the panels AND the words, so they can't drift apart.
+  const skin = usePageSkin();
+  // Two shades the palette doesn't carry: a chip that has to sit ON a panel
+  // rather than on the page, and a warning that isn't a hole in the black.
+  const chipFill = skin.dark ? 'rgba(255,255,255,0.08)' : '#faf8f3';
+  const dangerInk = skin.dark ? '#ff9a9a' : '#ef4444';
+  const goldWash = skin.dark ? 'rgba(224,190,118,0.12)' : 'rgba(189,147,72,0.10)';
   const queryClient = useQueryClient();
   const [post, setPost] = useState<PostWithAuthor | null>(null);
   const [replies, setReplies] = useState<ReplyWithAuthor[]>([]);
@@ -523,8 +532,12 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
 
   if (!post) {
     return (
-      <SafeAreaView className="flex-1 bg-cream items-center justify-center" edges={['top']}>
-        <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
+      <SafeAreaView
+        className="flex-1 items-center justify-center"
+        edges={['top']}
+        style={{ backgroundColor: skin.page }}
+      >
+        <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }}>
           Loading...
         </Text>
       </SafeAreaView>
@@ -532,13 +545,16 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+    <SafeAreaView className="flex-1" edges={['top']} style={{ backgroundColor: skin.page }}>
       {/* Header */}
-      <View className="flex-row items-center px-4 py-3 bg-white border-b border-cream">
+      <View
+        className="flex-row items-center px-4 py-3 border-b"
+        style={{ backgroundColor: skin.card, borderBottomColor: skin.border }}
+      >
         <Pressable onPress={onBack} className="mr-4">
-          <Text className="text-2xl">←</Text>
+          <Text className="text-2xl" style={{ color: skin.ink }}>←</Text>
         </Pressable>
-        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg flex-1">
+        <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-lg flex-1">
           Thread
         </Text>
         {canManagePost && (
@@ -550,33 +566,39 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         className="flex-1"
         contentContainerClassName="pb-24"
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#bd9348" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={skin.gold} />
         }
       >
         {/* Post content */}
-        <View className="bg-white p-4 mb-2">
+        <View className="p-4 mb-2" style={{ backgroundColor: skin.card }}>
           {post.is_pinned && (
             <View className="flex-row items-center mb-2">
-              <Text className="text-xs text-gold">📌 Pinned</Text>
+              <Text className="text-xs" style={{ color: skin.gold }}>📌 Pinned</Text>
             </View>
           )}
           {post.status === 'completed' && (
-            <View className="flex-row items-center self-start bg-gold/10 border border-gold/20 rounded-full px-3 py-1 mb-3">
-              <Ionicons name="checkmark-circle-outline" size={15} color="#bd9348" />
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
+            <View
+              className="flex-row items-center self-start border rounded-full px-3 py-1 mb-3"
+              style={{ backgroundColor: goldWash, borderColor: skin.borderStrong }}
+            >
+              <Ionicons name="checkmark-circle-outline" size={15} color={skin.gold} />
+              <Text style={{ fontFamily: 'Lato_700Bold', color: skin.gold }} className="text-xs ml-1">
                 HD Wish Granted
               </Text>
             </View>
           )}
           {post.archived_at && (
-            <View className="flex-row items-center self-start bg-charcoal/10 border border-charcoal/10 rounded-full px-3 py-1 mb-3">
-              <Ionicons name="archive-outline" size={15} color="rgba(49,49,48,0.58)" />
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60 text-xs ml-1">
+            <View
+              className="flex-row items-center self-start border rounded-full px-3 py-1 mb-3"
+              style={{ backgroundColor: chipFill, borderColor: skin.border }}
+            >
+              <Ionicons name="archive-outline" size={15} color={skin.inkSoft} />
+              <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkSoft }} className="text-xs ml-1">
                 Archived
               </Text>
             </View>
           )}
-          <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-charcoal text-xl mb-2">
+          <Text style={{ fontFamily: 'LibreBaskerville_700Bold', color: skin.ink }} className="text-xl mb-2">
             {post.title}
           </Text>
           <View className="flex-row items-center mb-3">
@@ -588,15 +610,18 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             >
               <Avatar name={postAuthorName} url={post.author?.avatar_url} size={32} />
             </MemberProfileLink>
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal">
+            <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }}>
               {postAuthorName}
             </Text>
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm ml-2">
+            <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-sm ml-2">
               {formatDateMedium(post.created_at)}
               {post.edited_at && ' (edited)'}
             </Text>
           </View>
-          <MarkdownContent content={post.content} />
+          {/* `isUser` is MarkdownContent's light-ink-on-a-dark-ground setting —
+              white words, cream links, translucent code blocks. That is exactly
+              what the body copy needs on the space page. */}
+          <MarkdownContent content={post.content} isUser={skin.dark} />
           <View className="mb-4" />
 
           {post.attachments && post.attachments.length > 0 && (
@@ -614,18 +639,18 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         </View>
 
         {/* Replies */}
-        <View className="bg-white p-4">
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-4">
+        <View className="p-4" style={{ backgroundColor: skin.card }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="mb-4">
             {post.reply_count} {post.reply_count === 1 ? 'Reply' : 'Replies'}
           </Text>
 
           {replies.length === 0 ? (
-            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center py-4">
+            <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-center py-4">
               No replies yet. Be the first to respond!
             </Text>
           ) : (
             replies.map((reply) => (
-              <View key={reply.id} className="border-t border-cream">
+              <View key={reply.id} className="border-t" style={{ borderTopColor: skin.border }}>
                 <BoardReplyItem
                   reply={reply}
                   currentUserId={profile?.id}
@@ -642,9 +667,14 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         </View>
       </ScrollView>
 
-      {/* Reply input */}
+      {/* Reply input. This bar floats OVER the thread, so it has to be opaque —
+          the see-through card fill would let replies scroll through it. The
+          panels above it are in the flow and stay translucent on purpose. */}
       {!post.is_locked && (
-        <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-cream">
+        <View
+          className="absolute bottom-0 left-0 right-0 border-t"
+          style={{ backgroundColor: skin.dark ? skin.page : skin.card, borderTopColor: skin.border }}
+        >
           <View className="p-4">
             <BoardReplyComposer
               postId={postId}
@@ -678,10 +708,11 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             {canCompletePost && (
               <Pressable
                 onPress={() => handleCompletePost(handleCloseEditComposer)}
-                className="flex-row items-center bg-gold/10 border border-gold/20 rounded-full px-3 py-2 active:opacity-75"
+                className="flex-row items-center border rounded-full px-3 py-2 active:opacity-75"
+                style={{ backgroundColor: goldWash, borderColor: skin.borderStrong }}
               >
-                <Ionicons name="checkmark-circle-outline" size={16} color="#bd9348" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
+                <Ionicons name="checkmark-circle-outline" size={16} color={skin.gold} />
+                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.gold }} className="text-xs ml-1">
                   HD Granted
                 </Text>
               </Pressable>
@@ -689,14 +720,15 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             {canManagePost && (
               <Pressable
                 onPress={() => handleArchivePost(handleCloseEditComposer)}
-                className="flex-row items-center bg-charcoal/5 border border-charcoal/10 rounded-full px-3 py-2 active:opacity-75"
+                className="flex-row items-center border rounded-full px-3 py-2 active:opacity-75"
+                style={{ backgroundColor: chipFill, borderColor: skin.border }}
               >
                 <Ionicons
                   name={post.archived_at ? 'arrow-undo-outline' : 'archive-outline'}
                   size={16}
-                  color="rgba(49,49,48,0.62)"
+                  color={skin.inkSoft}
                 />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60 text-xs ml-1">
+                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkSoft }} className="text-xs ml-1">
                   {post.archived_at ? 'Restore' : 'Archive'}
                 </Text>
               </Pressable>
@@ -704,10 +736,14 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             {canManagePost && (
               <Pressable
                 onPress={() => handleDeletePost(handleCloseEditComposer)}
-                className="flex-row items-center bg-red-50 border border-red-100 rounded-full px-3 py-2 active:opacity-75"
+                className="flex-row items-center border rounded-full px-3 py-2 active:opacity-75"
+                style={{
+                  backgroundColor: skin.dark ? 'rgba(255,154,154,0.10)' : '#fef2f2',
+                  borderColor: skin.dark ? 'rgba(255,154,154,0.28)' : '#fee2e2',
+                }}
               >
-                <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-500 text-xs ml-1">
+                <Ionicons name="trash-outline" size={16} color={dangerInk} />
+                <Text style={{ fontFamily: 'Lato_700Bold', color: dangerInk }} className="text-xs ml-1">
                   Delete
                 </Text>
               </Pressable>

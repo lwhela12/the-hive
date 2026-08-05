@@ -3,6 +3,7 @@ import { FlatList, Pressable, Text, View, useWindowDimensions } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { HiveIcon, type HiveIconName } from '../ui/HiveIcon';
 import { HIVE_ICON_PREFIX } from './BoardTopicComposer';
+import { usePageSkin } from '../../lib/pageSkin';
 import type { BoardCategory } from '../../types';
 
 const EMOJI_MAP: Record<string, string> = {
@@ -61,6 +62,11 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   emptyLabel = 'No boards here yet.',
   searchMatches,
 }: BoardCategoryListProps) {
+  // The same grid stands on a cream HIVE page and on the near-black HIVE-Wide
+  // page, so every colour below comes from one place. Ink and card have to be
+  // chosen together — a card that reads its background here and its text from a
+  // constant is how you end up with grey words on black.
+  const skin = usePageSkin();
   // Boards render as actual boards — a grid of pinned bulletin cards
   // (mirrors the Boards nav icon). Column count follows the window, and the
   // cards stretch so the grid fills the screen instead of leaving dead space.
@@ -168,17 +174,20 @@ export const BoardCategoryList = memo(function BoardCategoryList({
             <View
               style={{
                 flex: 1,
-                backgroundColor: '#fffdf5',
+                backgroundColor: skin.card,
                 borderWidth: 1,
-                borderColor: 'rgba(222,193,129,0.7)',
+                borderColor: skin.borderStrong,
                 borderRadius: 18,
                 padding: 16,
                 minHeight: cardMinHeight,
+                // A gold glow lifts a cream card off a cream page. On the black
+                // page there is nothing to lift off, and the shadow only turns
+                // the card's edge muddy, so it goes away.
                 shadowColor: '#bd9348',
-                shadowOpacity: 0.14,
+                shadowOpacity: skin.dark ? 0 : 0.14,
                 shadowRadius: 12,
                 shadowOffset: { width: 0, height: 4 },
-                elevation: 2,
+                elevation: skin.dark ? 0 : 2,
               }}
             >
               {/* Emoji only (Nat 2026-08-04). Checked before deleting: ZERO
@@ -188,22 +197,27 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                   last way one could still appear. */}
               <Text style={{ fontSize: iconSize, lineHeight: iconSize + 4 }}>{emoji}</Text>
               <Text
-                style={{ fontFamily: 'Lato_700Bold', fontSize: titleSize, lineHeight: titleSize + 5, marginTop: 8 }}
-                className={isCompleted ? 'text-charcoal/60' : 'text-charcoal'}
+                style={{
+                  fontFamily: 'Lato_700Bold',
+                  fontSize: titleSize,
+                  lineHeight: titleSize + 5,
+                  marginTop: 8,
+                  color: isCompleted ? skin.inkSoft : skin.ink,
+                }}
                 numberOfLines={2}
               >
                 {item.name}
               </Text>
               {subtitle && !compact ? (
                 <Text
-                  style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 18, color: '#8e7a5e', marginTop: 4 }}
+                  style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 18, color: skin.inkSoft, marginTop: 4 }}
                   numberOfLines={descLines}
                 >
                   {subtitle}
                 </Text>
               ) : null}
               <Text
-                style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 11, color: '#a09274', marginTop: 3 }}
+                style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 11, color: skin.inkFaint, marginTop: 3 }}
               >
                 {countLabel}
               </Text>
@@ -213,7 +227,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                     marginTop: 8,
                     paddingTop: 6,
                     borderTopWidth: 1,
-                    borderTopColor: 'rgba(222,193,129,0.32)',
+                    borderTopColor: skin.border,
                   }}
                 >
                   {recentThreads.map((thread) => (
@@ -236,12 +250,12 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                         gap: 6,
                         borderRadius: 6,
                         paddingHorizontal: 3,
-                        backgroundColor: pressed ? 'rgba(222,193,129,0.2)' : 'transparent',
+                        backgroundColor: pressed ? skin.cardPressed : 'transparent',
                       })}
                     >
-                      <Text style={{ fontSize: 9, lineHeight: 21, color: '#bd9348' }}>▪</Text>
+                      <Text style={{ fontSize: 9, lineHeight: 21, color: skin.gold }}>▪</Text>
                       <Text
-                        style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 21, color: 'rgba(49,49,48,0.75)', flex: 1 }}
+                        style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 21, color: skin.inkBody, flex: 1 }}
                         numberOfLines={1}
                       >
                         {thread.title}
@@ -253,7 +267,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
               <View style={{ flexGrow: 1 }} />
               {matchLabel ? (
                 <Text
-                  style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#8e6f35', marginTop: 3 }}
+                  style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: skin.gold, marginTop: 3 }}
                   numberOfLines={2}
                 >
                   {matchLabel}
@@ -265,10 +279,10 @@ export const BoardCategoryList = memo(function BoardCategoryList({
       }}
       ListEmptyComponent={
         <View className="items-center justify-center px-8 py-16">
-          <Ionicons name="search-outline" size={28} color="rgba(49,49,48,0.28)" />
+          <Ionicons name="search-outline" size={28} color={skin.inkFaint} />
           <Text
-            style={{ fontFamily: 'Lato_400Regular' }}
-            className="text-charcoal/50 text-sm text-center mt-3"
+            style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }}
+            className="text-sm text-center mt-3"
           >
             {emptyLabel}
           </Text>
