@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, FlatList, RefreshControl, Pressable, Alert, ActivityIndicator, TextInput, Modal, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator, TextInput, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -28,6 +28,7 @@ import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webSto
 import { linkThreadToCommunityWish, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
 import { deleteWishById } from '../../lib/wishMutations';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
+import { confirmAction, showAlert } from '../../lib/showAlert';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -46,6 +47,8 @@ function isArchivedCategory(category: BoardCategory) {
   return category.status === 'archived' || category.status === 'completed';
 }
 
+// Every failure on this screen ends up here first, so the member reads one
+// sentence about what happened rather than a database error on its own.
 function getBoardErrorMessage(error: unknown, fallback = 'Something went wrong.') {
   if (error instanceof Error) return error.message;
   if (error && typeof error === 'object') {
@@ -57,15 +60,6 @@ function getBoardErrorMessage(error: unknown, fallback = 'Something went wrong.'
     return extra ? `${message}\n${extra}` : message;
   }
   return fallback;
-}
-
-function showBoardAlert(title: string, message: string) {
-  if (typeof window !== 'undefined' && window.alert) {
-    window.alert(`${title}\n\n${message}`);
-    return;
-  }
-
-  Alert.alert(title, message);
 }
 
 function isCompletableHdAsk(category: BoardCategory) {
@@ -567,7 +561,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
   const handleCreatePost = async (title: string, content: string, attachments?: Attachment[]) => {
     if (!profile || !communityId || !selectedCategory) {
-      Alert.alert('Not ready', 'Your profile is still loading. Please try again in a moment.');
+      showAlert('Give it a second', 'Your profile is still loading. What you wrote is still here — try posting again in a moment.');
       return false;
     }
 
@@ -582,12 +576,15 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       }).select().single();
 
       if (error) {
-        Alert.alert('Error', `Failed to create post: ${error.message}`);
+        showAlert('That post did not save', `${error.message}\n\nWhat you wrote is still here — try posting again.`);
         return false;
       }
 
       if (!data) {
-        Alert.alert('Error', 'Post was not created. You may not have permission to post in this category.');
+        showAlert(
+          'That post did not save',
+          'It looks like you cannot post on this board. Ask an admin to open it up, and copy your words somewhere safe first.'
+        );
         return false;
       }
 
@@ -611,15 +608,14 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       });
       return true;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      Alert.alert('Error', `Failed to create post: ${message}`);
+      showAlert('That post did not save', `${getBoardErrorMessage(error)}\n\nWhat you wrote is still here — try posting again.`);
       return false;
     }
   };
 
   const handleUpdatePost = async (title: string, content: string, attachments?: Attachment[]) => {
     if (!profile || !communityId || !editingPost || !canManageThread(editingPost)) {
-      Alert.alert('Not ready', 'This thread could not be edited. Please try again in a moment.');
+      showAlert('This thread cannot be edited right now', 'Either it is still loading or it is not yours to change. Close this and open it again.');
       return false;
     }
 
@@ -636,7 +632,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         .eq('community_id', communityId);
 
       if (error) {
-        Alert.alert('Error', `Failed to edit thread: ${error.message}`);
+        showAlert('Your edit did not save', `${error.message}\n\nYour changes are still here — try saving again.`);
         return false;
       }
 
@@ -645,8 +641,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       await Promise.all([refetchPosts(), refetchPostCounts()]);
       return true;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      Alert.alert('Error', `Failed to edit thread: ${message}`);
+      showAlert('Your edit did not save', `${getBoardErrorMessage(error)}\n\nYour changes are still here — try saving again.`);
       return false;
     }
   };
@@ -703,7 +698,10 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       .eq('community_id', communityId);
 
     if (deleteError) {
-      Alert.alert('Error', `Failed to update topic tags: ${deleteError.message}`);
+      showAlert(
+        'Could not update who is tagged',
+        `${deleteError.message}\n\nEverything else about the board is saved. Open Edit board to try the tags again.`
+      );
       return false;
     }
 
@@ -722,7 +720,10 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       .insert(rows);
 
     if (insertError) {
-      Alert.alert('Error', `Failed to save topic tags: ${insertError.message}`);
+      showAlert(
+        'Could not save who is tagged',
+        `${insertError.message}\n\nEverything else about the board is saved. Open Edit board to try the tags again.`
+      );
       return false;
     }
 
@@ -738,7 +739,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     metadata: BoardTopicMetadata
   ) => {
     if (!profile || !communityId) {
-      Alert.alert('Not ready', 'Your profile is still loading. Please try again in a moment.');
+      showAlert('Give it a second', 'Your profile is still loading. What you typed is still here — try again in a moment.');
       return false;
     }
 
@@ -769,12 +770,12 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       }).select().single();
 
       if (error) {
-        Alert.alert('Error', `Failed to create topic: ${error.message}`);
+        showAlert('That board was not created', `${error.message}\n\nWhat you typed is still here — try again.`);
         return false;
       }
 
       if (!data) {
-        Alert.alert('Error', 'Topic was not created. Please try again.');
+        showAlert('That board was not created', 'It looks like you cannot make a board here. An admin can make one for you.');
         return false;
       }
 
@@ -785,8 +786,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       setSelectedCategoryId(data.id);
       return true;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      Alert.alert('Error', `Failed to create topic: ${message}`);
+      showAlert('That board was not created', `${getBoardErrorMessage(error)}\n\nWhat you typed is still here — try again.`);
       return false;
     }
   };
@@ -800,12 +800,12 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     metadata: BoardTopicMetadata
   ) => {
     if (!editingTopic || !profile || !communityId || !canManageCategory(editingTopic)) {
-      Alert.alert('Not ready', 'Your profile is still loading. Please try again in a moment.');
+      showAlert('This board cannot be edited right now', 'Either it is still loading or it is not yours to change. Close this and open it again.');
       return false;
     }
 
     if (editingTopic.is_system) {
-      Alert.alert('Protected topic', 'Default board topics cannot be edited here.');
+      showAlert('This one is built in', 'Every HIVE gets these boards, so they cannot be edited here.');
       return false;
     }
 
@@ -825,7 +825,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         .eq('community_id', communityId);
 
       if (error) {
-        Alert.alert('Error', `Failed to update topic: ${error.message}`);
+        showAlert('Your changes did not save', `${error.message}\n\nWhat you typed is still here — try saving again.`);
         return false;
       }
 
@@ -836,8 +836,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       setEditingTopic(null);
       return true;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      Alert.alert('Error', `Failed to update topic: ${message}`);
+      showAlert('Your changes did not save', `${getBoardErrorMessage(error)}\n\nWhat you typed is still here — try saving again.`);
       return false;
     }
   };
@@ -858,8 +857,8 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
     const count = postCounts?.[category.id]?.count ?? 0;
     const message = count > 0
-      ? `Delete "${category.name}" and its ${count} ${count === 1 ? 'post' : 'posts'}? This cannot be undone.`
-      : `Delete "${category.name}"? This cannot be undone.`;
+      ? `"${category.name}" and its ${count} ${count === 1 ? 'post' : 'posts'} go with it. This cannot be undone.`
+      : `"${category.name}" goes for good. This cannot be undone.`;
 
     const deleteCategory = async () => {
       try {
@@ -871,7 +870,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           .eq('is_system', false);
 
         if (error) {
-          Alert.alert('Error', `Failed to delete topic: ${error.message}`);
+          showAlert('That board was not deleted', `${error.message}\n\nIt is still on the list — nothing was lost.`);
           return;
         }
 
@@ -890,22 +889,17 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         invalidateCategories();
         onDone?.();
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        Alert.alert('Error', `Failed to delete topic: ${errorMessage}`);
+        showAlert('That board was not deleted', `${getBoardErrorMessage(error)}\n\nIt is still on the list — nothing was lost.`);
       }
     };
 
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) {
-        deleteCategory();
-      }
-      return;
-    }
-
-    Alert.alert('Delete Board', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: deleteCategory },
-    ]);
+    confirmAction({
+      title: 'Delete this board?',
+      message,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: deleteCategory,
+    });
   }, [
     boardCategoryStorageKey,
     boardComposerStorageKey,
@@ -922,8 +916,8 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     const restore = isArchivedCategory(category);
     const nextStatus = restore ? 'active' : 'archived';
     const message = restore
-      ? `Restore "${category.name}" to the active board list?`
-      : `Archive "${category.name}"? It disappears from the board list for everyone and can't be reopened from the app.`;
+      ? `"${category.name}" goes back on the active board list.`
+      : `"${category.name}" disappears from the board list for everyone, and it can't be reopened from the app.`;
 
     const updateStatus = async () => {
       try {
@@ -939,7 +933,10 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           .eq('community_id', category.community_id);
 
         if (error) {
-          Alert.alert('Error', `Failed to ${restore ? 'restore' : 'archive'} topic: ${error.message}`);
+          showAlert(
+            restore ? 'That board was not restored' : 'That board was not archived',
+            `${error.message}\n\nNothing changed — try again in a moment.`
+          );
           return;
         }
 
@@ -952,28 +949,27 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         invalidateCategories();
         onDone?.();
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        Alert.alert('Error', `Failed to ${restore ? 'restore' : 'archive'} topic: ${errorMessage}`);
+        showAlert(
+          restore ? 'That board was not restored' : 'That board was not archived',
+          `${getBoardErrorMessage(error)}\n\nNothing changed — try again in a moment.`
+        );
       }
     };
 
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) updateStatus();
-      return;
-    }
-
-    Alert.alert(restore ? 'Restore Board' : 'Archive Board', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: restore ? 'Restore' : 'Archive', onPress: updateStatus },
-    ]);
+    confirmAction({
+      title: restore ? 'Restore this board?' : 'Archive this board?',
+      message,
+      confirmLabel: restore ? 'Restore' : 'Archive',
+      onConfirm: updateStatus,
+    });
   }, [boardCategoryStorageKey, canArchiveCategory, invalidateCategories]);
 
   const handleCompleteTopic = useCallback((category: BoardCategory, onDone?: () => void) => {
     if (!profile || !communityId || !canArchiveCategory(category) || !isCompletableHdAsk(category)) return;
 
     const message = category.source_wish_id
-      ? `Mark "${category.name}" complete? Its source wish will move to Granted, and the board will move into Archive.`
-      : `Mark "${category.name}" complete? The board will move into Archive, but linked open wishes will stay open until each one is granted.`;
+      ? `"${category.name}" moves into Archive and its source wish moves to Granted.`
+      : `"${category.name}" moves into Archive. Any linked wishes stay open until each one is granted.`;
 
     const completeTopic = async () => {
       const completedAt = new Date().toISOString();
@@ -990,7 +986,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           .eq('community_id', communityId);
 
         if (error) {
-          Alert.alert('Error', `Failed to complete board: ${error.message}`);
+          showAlert('Could not mark that complete', `${error.message}\n\nThe board is unchanged — try again in a moment.`);
           return;
         }
 
@@ -1020,20 +1016,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         invalidateLinkedWishes();
         onDone?.();
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        Alert.alert('Error', `Failed to complete board: ${errorMessage}`);
+        showAlert('Could not mark that complete', `${getBoardErrorMessage(error)}\n\nThe board is unchanged — try again in a moment.`);
       }
     };
 
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) completeTopic();
-      return;
-    }
-
-    Alert.alert('Complete HD Board', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Complete', onPress: completeTopic },
-    ]);
+    confirmAction({
+      title: 'Mark this board complete?',
+      message,
+      confirmLabel: 'Complete',
+      onConfirm: completeTopic,
+    });
   }, [boardCategoryStorageKey, canArchiveCategory, communityId, invalidateCategories, invalidateLinkedWishes, profile]);
 
   const handleGrantLinkedWish = async (data: {
@@ -1136,8 +1128,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       await Promise.all([refetchPosts(), refetchLinkedWishes()]);
       onDone?.();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      Alert.alert('Error', `Failed to link wish: ${message}`);
+      showAlert('Could not turn this into a wish', `${getBoardErrorMessage(error)}\n\nThe thread itself is untouched — try again in a moment.`);
     }
   }, [
     canManageThread,
@@ -1165,21 +1156,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         }
         onDone?.();
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        Alert.alert('Error', `Failed to unlink wish: ${message}`);
+        showAlert('That wish is still linked', `${getBoardErrorMessage(error)}\n\nNothing changed — try again in a moment.`);
       }
     };
 
-    const message = `Unlink this wish from this board?\n\n"${wish.description}"`;
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) unlink();
-      return;
-    }
-
-    Alert.alert('Unlink Wish', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Unlink', onPress: unlink },
-    ]);
+    confirmAction({
+      title: 'Unlink this wish?',
+      message: `It stays a wish — it just stops showing on this board.\n\n"${wish.description}"`,
+      confirmLabel: 'Unlink',
+      onConfirm: unlink,
+    });
   }, [
     canManageLinkedWish,
     communityId,
@@ -1208,21 +1194,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         setManagingLinkedWish(null);
         setSelectedLinkedWish(null);
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        Alert.alert('Error', `Failed to archive wish: ${message}`);
+        showAlert('That wish was not archived', `${getBoardErrorMessage(error)}\n\nIt is still on the board — try again in a moment.`);
       }
     };
 
-    const message = `Archive this wish from HD Wishes?\n\n"${wish.description}"`;
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) archive();
-      return;
-    }
-
-    Alert.alert('Archive Wish', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Archive', onPress: archive },
-    ]);
+    confirmAction({
+      title: 'Archive this wish?',
+      message: `It comes off HD Wishes for everyone.\n\n"${wish.description}"`,
+      confirmLabel: 'Archive',
+      onConfirm: archive,
+    });
   }, [canModerateLinkedWish, communityId, invalidateLinkedWishes, refetchLinkedWishes]);
 
   const handleDeleteLinkedWish = useCallback((wish: LinkedWish) => {
@@ -1242,21 +1223,17 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         setManagingLinkedWish(null);
         setSelectedLinkedWish(null);
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        Alert.alert('Error', `Failed to delete wish: ${message}`);
+        showAlert('That wish was not deleted', `${getBoardErrorMessage(error)}\n\nIt is still here — try again in a moment.`);
       }
     };
 
-    const message = `Delete this wish?\n\n"${wish.description}"`;
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) deleteWish();
-      return;
-    }
-
-    Alert.alert('Delete Wish', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: deleteWish },
-    ]);
+    confirmAction({
+      title: 'Delete this wish?',
+      message: `This cannot be undone.\n\n"${wish.description}"`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: deleteWish,
+    });
   }, [canModerateLinkedWish, communityId, invalidateLinkedWishes, refetchLinkedWishes]);
 
   const handleUnlinkThreadWish = useCallback((post: BoardPost, onDone?: () => void) => {
@@ -1279,14 +1256,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       const wish = linkedWish ?? await fetchLinkedWishById(wishId);
 
       if (!wish) {
-        Alert.alert('Error', 'The linked wish was created, but could not be opened. Please refresh and try again.');
+        showAlert(
+          'Almost — the wish would not open',
+          'The wish behind this thread was made, but it did not come back to us. Pull down to refresh and press Granted again.'
+        );
         return;
       }
 
       setGrantThreadContext({ post, wish, onDone });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      Alert.alert('Error', `Failed to prepare granted wish: ${message}`);
+      showAlert('Could not set up the granting', `${getBoardErrorMessage(error)}\n\nThe thread is unchanged — try again in a moment.`);
     }
   }, [
     canCompleteThread,
@@ -1340,8 +1319,8 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
     const restore = !!post.archived_at;
     const message = restore
-      ? `Restore "${post.title}" to this board?`
-      : `Archive "${post.title}"? It moves out of the thread list — search still finds it if you need it back.`;
+      ? `"${post.title}" goes back on this board.`
+      : `"${post.title}" moves out of the thread list. Search still finds it if you want it back.`;
 
     const updateArchiveState = async () => {
       try {
@@ -1365,19 +1344,19 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         await refetchPosts();
         onDone?.();
       } catch (error: unknown) {
-        showBoardAlert('Error', `Failed to ${restore ? 'restore' : 'archive'} thread: ${getBoardErrorMessage(error, 'Unknown error')}`);
+        showAlert(
+          restore ? 'That thread was not restored' : 'That thread was not archived',
+          `${getBoardErrorMessage(error)}\n\nNothing changed — try again in a moment.`
+        );
       }
     };
 
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) updateArchiveState();
-      return;
-    }
-
-    Alert.alert(restore ? 'Restore Thread' : 'Archive Thread', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: restore ? 'Restore' : 'Archive', onPress: updateArchiveState },
-    ]);
+    confirmAction({
+      title: restore ? 'Restore this thread?' : 'Archive this thread?',
+      message,
+      confirmLabel: restore ? 'Restore' : 'Archive',
+      onConfirm: updateArchiveState,
+    });
   }, [canManageThread, communityId, invalidatePosts, profile, refetchPosts, updatePostInCache]);
 
   /**
@@ -1392,8 +1371,8 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
     const goingPublic = post.visibility !== 'public';
     const message = goingPublic
-      ? `Show "${post.title}" on the public site? Anyone visiting the-hive.app will see the title and what you wrote here — replies stay inside the HIVE.`
-      : `Take "${post.title}" off the public site? It stays here for members either way.`;
+      ? `Anyone visiting the-hive.app will see "${post.title}" and what you wrote here. Replies stay inside the HIVE.`
+      : `"${post.title}" comes off the public site. It stays here for members either way.`;
 
     const applyVisibility = async () => {
       try {
@@ -1404,7 +1383,10 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           .eq('community_id', communityId);
 
         if (error) {
-          showBoardAlert('Error', `Could not change that: ${error.message}`);
+          showAlert(
+            goingPublic ? 'It did not go public' : 'It is still on the public site',
+            `${error.message}\n\nNothing changed — try again in a moment.`
+          );
           return;
         }
 
@@ -1416,25 +1398,25 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         await refetchPosts();
         onDone?.();
       } catch (error: unknown) {
-        showBoardAlert('Error', `Could not change that: ${getBoardErrorMessage(error, 'Unknown error')}`);
+        showAlert(
+          goingPublic ? 'It did not go public' : 'It is still on the public site',
+          `${getBoardErrorMessage(error)}\n\nNothing changed — try again in a moment.`
+        );
       }
     };
 
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) applyVisibility();
-      return;
-    }
-
-    Alert.alert(goingPublic ? 'Show on the public site' : 'Keep it inside the HIVE', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: goingPublic ? 'Show it' : 'Take it off', onPress: applyVisibility },
-    ]);
+    confirmAction({
+      title: goingPublic ? 'Show this on the public site?' : 'Keep this inside the HIVE?',
+      message,
+      confirmLabel: goingPublic ? 'Show it' : 'Take it off',
+      onConfirm: applyVisibility,
+    });
   }, [canManageThread, communityId, invalidatePosts, profile, refetchPosts, updatePostInCache]);
 
   const handleDeleteThread = useCallback((post: BoardPost, onDone?: () => void) => {
     if (!communityId || !canManageThread(post)) return;
 
-    const message = `Delete "${post.title}"? This will also delete all replies.`;
+    const message = `"${post.title}" and every reply on it go too. This cannot be undone.`;
 
     const deleteThread = async () => {
       try {
@@ -1446,12 +1428,15 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           .select('id');
 
         if (error) {
-          Alert.alert('Error', `Failed to delete thread: ${error.message}`);
+          showAlert('That thread was not deleted', `${error.message}\n\nIt is still on the board — try again in a moment.`);
           return;
         }
 
         if (!data || data.length === 0) {
-          Alert.alert('Not deleted', 'This thread was not deleted. You may not have permission to delete it.');
+          showAlert(
+            'That thread was not deleted',
+            'It looks like it is not yours to delete. Whoever started it, or an admin, can take it down.'
+          );
           return;
         }
 
@@ -1459,20 +1444,17 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         await refetchPosts();
         onDone?.();
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        Alert.alert('Error', `Failed to delete thread: ${errorMessage}`);
+        showAlert('That thread was not deleted', `${getBoardErrorMessage(error)}\n\nIt is still on the board — try again in a moment.`);
       }
     };
 
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) deleteThread();
-      return;
-    }
-
-    Alert.alert('Delete Thread', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: deleteThread },
-    ]);
+    confirmAction({
+      title: 'Delete this thread?',
+      message,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: deleteThread,
+    });
   }, [canManageThread, communityId, invalidatePosts, refetchPosts]);
 
   const topicManagementActions = editingTopic ? (
