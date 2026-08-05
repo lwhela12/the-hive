@@ -626,8 +626,28 @@ function SectionMoveButton({ direction, disabled, onPress }: {
 }
 
 export default function HiveScreen() {
-  const { profile, communityId, communityRole, session, refreshProfile, community, memberships, openHivePicker } = useAuth();
+  const { profile, communityId, communityRole, session, refreshProfile, community, memberships, openHivePicker, wholeHive } = useAuth();
   const router = useRouter();
+
+  // A HIVE's home cannot be drawn while the app thinks you are standing above
+  // the HIVEs, and until now nothing stopped it.
+  //
+  // Nat, 2026-08-04, signing in on a brand-new account: "oh no, we broke it,
+  // this is all sorts of messed up." The header read "HIVE-WIDE / Tech HIVE",
+  // the page was cream, and every panel tab was invisible.
+  //
+  // The cause is a disagreement nobody was refereeing. `AppHeader`, `HeaderTabs`
+  // and `pageSkin` all read `wholeHive` themselves — deliberately, so a screen
+  // never has to remember — so they dressed for space. This screen referenced
+  // `wholeHive` NOWHERE, so it painted a HIVE. Both were doing as told.
+  //
+  // A new account is the one case that reliably lands here: everybody arrives in
+  // HIVE-Wide mode, and `initialRouteName` falls back to the `hive` tab when
+  // there is no remembered one — which there never is on a first sign-in. So the
+  // very first screen a new member ever saw was the broken combination.
+  useEffect(() => {
+    if (wholeHive) router.replace('/hive-wide' as never);
+  }, [wholeHive, router]);
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
   const homeScrollRef = useRef<ScrollView>(null);

@@ -1164,33 +1164,16 @@ export default function MeetingsScreen() {
 
 
 
-            {/* Newsletter Draft — everything since the last meeting, gathered
-                into the same shape as a meeting summary so writing the
-                newsletter is picking what to keep, not remembering what
-                happened. Nat writes it elsewhere, so the tile leads to a
-                Copy button. */}
-            {isAdmin && (
-              <Pressable
-                onPress={() => router.push({ pathname: '/newsletter' as any, params: { from: 'meetings' } })}
-                style={({ pressed }) => ({
-                  flex: useCompactActions ? undefined : 1,
-                  width: useCompactActions ? '48%' : undefined,
-                  backgroundColor: 'rgba(255,255,255,0.08)',
-                  borderRadius: 14,
-                  paddingVertical: 16,
-                  alignItems: 'center',
-                  opacity: pressed ? 0.75 : 1,
-                })}
-              >
-                <Text style={{ fontSize: 22, marginBottom: 4 }}>🗞️</Text>
-                <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 13 }}>
-                  Newsletter
-                </Text>
-                <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 2 }}>
-                  draft from this cycle
-                </Text>
-              </Pressable>
-            )}
+            {/* The Newsletter tile is gone (Nat 2026-08-04). Third and last
+                place it was duplicated: it was on Admin's Meeting tools, in the
+                Newsletter box, and here.
+
+                Same reason each time, and it is not really about duplication.
+                There is ONE Buzz across all the HIVEs — that is why The Buzz
+                lives at HIVE-Wide and nowhere else — so a "draft the newsletter"
+                button inside Tech HIVE's Meetings screen said Tech has a
+                newsletter of its own, sitting beside OG's and Production's. It
+                is written from the Newsletter box, once, for everybody. */}
 
             {/* Schedule */}
             <Pressable
