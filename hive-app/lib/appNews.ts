@@ -28,6 +28,24 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-06-faster',
+    date: '2026-08-06',
+    title: 'HIVE opens a lot faster now',
+    detail: 'It was quietly asking your phone to download the whole app again on every single visit. It keeps it now, and there is less of it to keep.',
+  },
+  {
+    id: '2026-08-06-public-is-teal',
+    date: '2026-08-06',
+    title: 'Anything shared with the public wears its own teal badge',
+    detail: 'It used to be the same near-black as HIVE-Wide, which is a very different audience to be mistaken for.',
+  },
+  {
+    id: '2026-08-06-bounce',
+    date: '2026-08-06',
+    title: 'Pages give a little when you reach the end of them',
+    detail: 'A screen that would not move used to look broken. Now it springs, the way the rest of your phone does.',
+  },
+  {
     id: '2026-08-06-buzz-shoutouts-in-place',
     date: '2026-08-06',
     title: 'Add a shout-out to the newsletter without leaving The Buzz',

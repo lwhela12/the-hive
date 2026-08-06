@@ -1997,7 +1997,9 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: skin.page }} edges={['top']}>
-      <SpaceBackdrop />
+        {/* One sky, not two. This was written twice on adjacent lines, so the
+            slowest HIVE-Wide screen painted the whole scene a second time on top
+            of itself for nothing. */}
         <SpaceBackdrop />
         {/* One header treatment on every width, so Boards wears its HIVE's
             colour and name like every other page (Nat 2026-07-31). */}

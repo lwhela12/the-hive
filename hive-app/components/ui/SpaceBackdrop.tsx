@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { SpaceGlobe } from './SpaceGlobe';
 
@@ -16,8 +17,49 @@ import { SpaceGlobe } from './SpaceGlobe';
  * Mount it as the FIRST child of a screen's root view and leave the scrolling
  * content transparent; it fills the parent absolutely and does not take touches.
  */
+
+/**
+ * One sky at a time.
+ *
+ * The backdrop fills its parent edge to edge, so a second one stacked on the
+ * first is an identical picture painted twice — two canvases, two animation
+ * loops, double the drawing for a screen that looks exactly the same. Boards
+ * has had two of them side by side since 2026-08-06 (`board.tsx`, the pair at
+ * the top of the wide layout), which made the slowest HIVE-Wide screen the one
+ * doing the most work.
+ *
+ * Every backdrop takes a ticket on mount and the earliest one holds the sky.
+ * When it leaves, the next in line picks it up, so removing a duplicate at the
+ * call site later changes nothing.
+ */
+const queue: symbol[] = [];
+const watchers = new Set<() => void>();
+
 export function SpaceBackdrop() {
   const { wholeHive } = useAuth();
-  if (!wholeHive) return null;
+
+  const ticket = useRef<symbol | null>(null);
+  if (ticket.current === null) ticket.current = Symbol('space-backdrop');
+  const id = ticket.current;
+
+  // Starts true so a lone backdrop paints on its very first frame; a duplicate
+  // corrects itself the moment the effects run.
+  const [holding, setHolding] = useState(true);
+
+  useEffect(() => {
+    if (!wholeHive) return;
+    const check = () => setHolding(queue[0] === id);
+    watchers.add(check);
+    queue.push(id);
+    watchers.forEach((w) => w());
+    return () => {
+      const at = queue.indexOf(id);
+      if (at >= 0) queue.splice(at, 1);
+      watchers.delete(check);
+      watchers.forEach((w) => w());
+    };
+  }, [wholeHive, id]);
+
+  if (!wholeHive || !holding) return null;
   return <SpaceGlobe />;
 }

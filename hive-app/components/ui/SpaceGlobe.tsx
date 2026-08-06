@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { View, Platform, StyleSheet } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import React from 'react';
 
 /**
@@ -28,6 +29,52 @@ import React from 'react';
  * device pixels while the halo respected the retina transform, so the planet
  * landed at half size beside its own ghost. Nothing here uses putImageData —
  * it is arcs and gradients, which all obey the same transform.
+ *
+ * ── It is a picture, so it is painted once (2026-08-06) ───────────────────────
+ *
+ * Nat, twice in one day: "still a really long load time for such a simple app",
+ * about HIVE-Wide specifically. Every database call in the app answers in about
+ * 150ms whatever it asks, so the wait was never the data — it was this. The
+ * backdrop draws only at HIVE-Wide, which is exactly the difference she felt.
+ *
+ * Then she looked at it and named the real thing: "we dont even have a spinning
+ * earth any more. We just have this static one, with the occasional shooting
+ * star. So totally ditch the spinning whatever thats slowing us down."
+ *
+ * She was reading the code correctly from the outside. Nothing here rotates or
+ * advances. What the old version did was run an animation loop sixty times a
+ * second to redraw a picture identical to the one before it — nine gradients, a
+ * full-screen stamp, around eighty-five city lights each building its own radial
+ * gradient, and five canvas blur passes at 14, 5, 18, 6 and 3 pixels. Canvas
+ * blur is the expensive one: on iOS Safari it is a real filter over every pixel
+ * it touches, and there were five of them per frame, full-screen, at a phone's
+ * pixel density. All of that to produce the same image again.
+ *
+ * The only movement in it was two brightness wobbles nobody could see — stars
+ * breathing by a quarter of their own faintness, city lights by a fifth of
+ * almost nothing — and the shooting star, which Nat named because it is the one
+ * you notice.
+ *
+ * So: the whole scene is painted ONCE into an offscreen canvas and stamped, and
+ * then the app does nothing at all while you read. The two wobbles are baked at
+ * the average brightness they used to pass through, so the picture at rest is
+ * the picture you were already looking at. The shooting star still flies — a
+ * frame loop starts when one launches and stops the moment it lands.
+ *
+ * Three things follow from the same idea:
+ *
+ * - **The scene outlives the mount.** Stepping between HIVE-Wide screens
+ *   unmounts and remounts this component, and painting the scene is a
+ *   synchronous burst on the same thread that has to lay out Members. `painted`
+ *   below keeps the last one, so the second visit pays nothing.
+ * - **It repaints on geometry, never on a timer** — the window resizing, the
+ *   side rail opening or closing, the display's pixel density changing. A
+ *   ResizeObserver on the parent catches all three, which a window `resize`
+ *   listener alone does not.
+ * - **Nothing happens off screen.** Another screen in front (`useIsFocused`),
+ *   the tab hidden, or the canvas scrolled out of view all stop the shooting
+ *   stars being scheduled. `usePathname` is banned for this — it is global, so
+ *   every screen holding one re-renders on every navigation.
  */
 
 const isWeb = Platform.OS === 'web';
@@ -57,8 +104,31 @@ type Land = { a: number; d: number; r: number; warm: number };
 type Cloud = { a: number; d: number; r: number; squash: number; turn: number; b: number };
 type Shooter = { x: number; y: number; vx: number; vy: number; life: number; len: number };
 
+/**
+ * The picture, kept between mounts.
+ *
+ * Every step into a HIVE-Wide screen mounts a fresh globe, and painting the
+ * scene means 46 land blobs, 58 clouds, a field of city lights and five blurred
+ * passes — all synchronous, all on the thread that is trying to lay out the page
+ * you just asked for. One scene is held, keyed by colour, size and pixel
+ * density, so going Members → Boards → The Buzz pays for the planet once.
+ *
+ * One entry rather than a list, deliberately: each scene is a canvas the size of
+ * the window, which on a large desktop is tens of megabytes. Holding several
+ * would trade a load time for a memory problem.
+ */
+type Painted = { key: string; scene: any };
+
+let painted: Painted | null = null;
+
 export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
   const canvasRef = useRef<any>(null);
+
+  // Whether this screen is the one in front. When it is not — Members sitting
+  // behind an open thread, say — no shooting star gets scheduled.
+  const focused = useIsFocused();
+  const focusedRef = useRef(true);
+  const syncRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!isWeb) return;
@@ -101,14 +171,22 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
     // on the curve, in frame.
     const SUN_A = 0.25;
 
-    let W = 0, H = 0, raf = 0, t = 0;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // The brightness each wobble used to average out at, now painted and left
+    // there. A star spent its life between 0.44 and 1 of its own alpha and a
+    // city light between 0.64 and 1 of its own; these are the middles, so the
+    // still picture is the picture that was on screen at any given moment.
+    const STAR_LEVEL = 0.72;
+    const CITY_LEVEL = 0.82;
+
+    let W = 0, H = 0, dpr = 1;
     let stars: Star[] = [];
     let lights: Light[] = [];
     let lands: Land[] = [];
     let clouds: Cloud[] = [];
-    let shooters: Shooter[] = [];
-    let nextShooter = 2.5;
+
+    // The scene, painted once. Everything below draws into it except the
+    // shooting star, which is the only thing that ever moves.
+    let scene: any = null;
 
     // Real blur, where the browser has it. Every edge in a photograph of the
     // Earth is soft — the air, the coastlines, the cloud tops — and drawing them
@@ -116,19 +194,16 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
     // picture (Nat 2026-08-04: "make it look more 'real'... or blur it out a
     // little"). Safari only shipped canvas filters in 17, so it is a feature
     // test: without it everything still draws, just crisper.
+    //
+    // All five passes happen while the scene is being painted, so they are paid
+    // once for as long as the page is open.
     const canBlur = typeof ctx.filter === 'string';
-    const blur = (px: number) => {
-      if (canBlur) ctx.filter = `blur(${px}px)`;
+    const softly = (c: any, px: number) => {
+      if (canBlur) c.filter = `blur(${px}px)`;
     };
-    const unblur = () => {
-      if (canBlur) ctx.filter = 'none';
+    const sharp = (c: any) => {
+      if (canBlur) c.filter = 'none';
     };
-
-    // The planet's surface — land and cloud — is painted once into its own
-    // canvas and stamped down each frame, rather than redrawn sixty times a
-    // second. It never changes, and a dozen heavily blurred blobs per frame on
-    // every space page in the app is a real cost on a phone.
-    let surface: HTMLCanvasElement | null = null;
 
     // Geometry of the limb. The sphere's centre sits far below the bottom edge,
     // so only the very top of a very large circle crosses the screen — that is
@@ -149,15 +224,21 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       cy = horizon + R;
     }
 
-    function resize() {
-      const parent = canvas.parentElement;
-      W = parent ? parent.clientWidth : window.innerWidth;
-      H = parent ? parent.clientHeight : window.innerHeight;
-      canvas.width = Math.floor(W * dpr);
-      canvas.height = Math.floor(H * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      layout();
+    /** A fresh transparent canvas the size of the window, at the same density. */
+    function canvasLike(): { off: any; c: any } | null {
+      const off = document.createElement('canvas');
+      off.width = Math.max(1, Math.floor(W * dpr));
+      off.height = Math.max(1, Math.floor(H * dpr));
+      const c = off.getContext('2d');
+      if (!c) return null;
+      // Destination sizes are always given in CSS pixels, so everything lands
+      // exactly where it was painted whatever the device pixel ratio — the same
+      // discipline that keeps `putImageData` out of this file.
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { off, c };
+    }
 
+    function scatter() {
       // Stars only in the sky, and never right on the horizon where the air
       // would have washed them out anyway.
       const count = Math.round((W * H) / 5200);
@@ -240,12 +321,10 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
           b: 0.28 + Math.random() * 0.72,
         });
       }
-
-      surface = null;
     }
 
     /**
-     * Land and weather, painted once.
+     * Land and weather, painted into their own canvas first.
      *
      * Everything in here is blurred hard and kept dim. The temptation with
      * clouds is to make them white and legible, which turns the planet into a
@@ -254,16 +333,9 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
      * to the sunrise.
      */
     function buildSurface() {
-      const off = document.createElement('canvas');
-      off.width = Math.max(1, Math.floor(W * dpr));
-      off.height = Math.max(1, Math.floor(H * dpr));
-      const c = off.getContext('2d');
-      if (!c) return null;
-      c.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-      const softly = (px: number) => {
-        if (typeof c.filter === 'string') c.filter = `blur(${px}px)`;
-      };
+      const made = canvasLike();
+      if (!made) return null;
+      const c = made.c;
 
       c.save();
       c.beginPath();
@@ -278,7 +350,7 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       // height was the same colour, which is the one thing an ocean never is.
       // Broad cool patches at very low strength give it depth and current
       // without ever resolving into shapes you could mistake for a map.
-      softly(34);
+      softly(c, 34);
       for (const l of lands) {
         // Reuse the land field, offset, so the water varies where the land
         // does not — one set of numbers, two layers.
@@ -302,7 +374,7 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       }
 
       // Land, over the water and under the weather.
-      softly(22);
+      softly(c, 22);
       for (const l of lands) {
         const rr = R - l.d * l.d * R * 0.30;
         const x = cx + Math.sin(l.a) * rr;
@@ -345,8 +417,7 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
 
       // Cloud. Brightest near the sunrise, almost nothing on the far side —
       // which is what tells you where the light is coming from.
-      const sun = sunPoint();
-      softly(16);
+      softly(c, 16);
       c.globalCompositeOperation = 'lighter';
       for (const cl of clouds) {
         const rr = R - cl.d * cl.d * R * 0.30;
@@ -377,10 +448,11 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       }
 
       c.restore();
-      return off;
+      sharp(c);
+      return made.off;
     }
 
-    function drawSky() {
+    function drawSky(c: any) {
       // Not flat black — space photographs have a faint lift near the planet.
       //
       // Painted over the WHOLE height, which is the fix for Nat's "staunch
@@ -390,92 +462,47 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       // edge sits well below it. That left a band of sky under the cut-off, and
       // #070C18 meeting #05060B along a perfectly straight line drew a hard rule
       // right across the picture. Nothing in a photograph is that straight.
-      const g = ctx.createLinearGradient(0, 0, 0, H);
+      const g = c.createLinearGradient(0, 0, 0, H);
       const edge = Math.max(0.001, Math.min(0.999, horizon / Math.max(H, 1)));
       g.addColorStop(0, '#04050A');
       g.addColorStop(edge * 0.62, '#05070E');
       g.addColorStop(edge, slate ? '#0B0E14' : '#070C18');
       g.addColorStop(1, slate ? '#0B0E14' : '#070C18');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
+      c.fillStyle = g;
+      c.fillRect(0, 0, W, H);
     }
 
-    function drawStars() {
+    function drawStars(c: any) {
+      c.fillStyle = '#fff';
       for (const s of stars) {
-        const tw = reduce ? 1 : 0.72 + 0.28 * Math.sin(t * s.tw + s.x);
-        ctx.globalAlpha = s.a * tw;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fill();
+        c.globalAlpha = s.a * STAR_LEVEL;
+        c.beginPath();
+        c.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        c.fill();
       }
-      ctx.globalAlpha = 1;
-    }
-
-    function drawShooters(dt: number) {
-      if (reduce) return;
-      nextShooter -= dt;
-      if (nextShooter <= 0) {
-        // Rare, and always up in the empty part of the sky. One at a time —
-        // a shower would be a screensaver, and this is a page you read.
-        nextShooter = 5 + Math.random() * 11;
-        const fromLeft = Math.random() < 0.5;
-        const speed = 460 + Math.random() * 320;
-        const ang = (fromLeft ? 0.34 : Math.PI - 0.34) + (Math.random() - 0.5) * 0.16;
-        shooters.push({
-          x: fromLeft ? -60 : W + 60,
-          y: Math.random() * horizon * 0.5,
-          vx: Math.cos(ang) * speed,
-          vy: Math.sin(ang) * speed * 0.55,
-          life: 1,
-          len: 70 + Math.random() * 90,
-        });
-      }
-
-      shooters = shooters.filter((s) => s.life > 0);
-      for (const s of shooters) {
-        s.x += s.vx * dt;
-        s.y += s.vy * dt;
-        s.life -= dt * 0.62;
-        const nx = s.vx, ny = s.vy;
-        const m = Math.hypot(nx, ny) || 1;
-        const tail = ctx.createLinearGradient(
-          s.x, s.y, s.x - (nx / m) * s.len, s.y - (ny / m) * s.len,
-        );
-        const a = Math.max(0, Math.min(1, s.life)) * 0.9;
-        tail.addColorStop(0, `rgba(255,255,255,${a})`);
-        tail.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.strokeStyle = tail;
-        ctx.lineWidth = 1.6;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(s.x, s.y);
-        ctx.lineTo(s.x - (nx / m) * s.len, s.y - (ny / m) * s.len);
-        ctx.stroke();
-      }
+      c.globalAlpha = 1;
     }
 
     /** The dark body of the planet, below the curve. */
-    function drawEarth() {
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.clip();
+    function drawEarth(c: any) {
+      c.save();
+      c.beginPath();
+      c.arc(cx, cy, R, 0, Math.PI * 2);
+      c.clip();
 
       // Ocean at night: deep, and warmer at the lit edge than in the depths.
-      const g = ctx.createLinearGradient(0, horizon, 0, H);
+      const g = c.createLinearGradient(0, horizon, 0, H);
       g.addColorStop(0, slate ? '#161B23' : '#0C1A2C');
       g.addColorStop(0.45, slate ? '#0B0E13' : '#06101E');
       g.addColorStop(1, '#03050A');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, horizon - 2, W, H - horizon + 4);
+      c.fillStyle = g;
+      c.fillRect(0, horizon - 2, W, H - horizon + 4);
 
-      // Land and cloud, stamped from the layer built at resize. Destination
-      // size is given in CSS pixels so it lands exactly where it was painted,
-      // whatever the device pixel ratio — the same discipline that keeps
-      // `putImageData` out of this file.
-      if (!surface) surface = buildSurface();
-      if (surface) ctx.drawImage(surface, 0, 0, W, H);
+      // Land and cloud, stamped from their own layer. Destination size is given
+      // in CSS pixels so it lands exactly where it was painted, whatever the
+      // device pixel ratio.
+      const surface = buildSurface();
+      if (surface) c.drawImage(surface, 0, 0, W, H);
 
       // Daybreak creeping across the surface. The world is dark on the far side
       // and warm where the sun has reached it — without this the sun hangs over
@@ -486,29 +513,28 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
         // the strength, which put a visible brown disc on the planet — you
         // could see where the gradient ended (Nat spotted it, 2026-08-03).
         const reach = R * 1.05;
-        ctx.globalCompositeOperation = 'lighter';
-        const dawn = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, reach);
+        c.globalCompositeOperation = 'lighter';
+        const dawn = c.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, reach);
         dawn.addColorStop(0, `rgba(${SUN_WARM},0.17)`);
         dawn.addColorStop(0.22, `rgba(${SUN_DEEP},0.075)`);
         dawn.addColorStop(0.6, `rgba(${SUN_DEEP},0.02)`);
         dawn.addColorStop(1, `rgba(${SUN_DEEP},0)`);
-        ctx.fillStyle = dawn;
-        ctx.beginPath();
-        ctx.arc(sun.x, sun.y, reach, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalCompositeOperation = 'source-over';
+        c.fillStyle = dawn;
+        c.beginPath();
+        c.arc(sun.x, sun.y, reach, 0, Math.PI * 2);
+        c.fill();
+        c.globalCompositeOperation = 'source-over';
       }
 
       // City lights. Each sits at (angle, depth) on the sphere and gets flattened
       // toward the limb, which is the whole reason they look like they are on a
       // curved surface rather than scattered on glass.
-      ctx.globalCompositeOperation = 'lighter';
+      c.globalCompositeOperation = 'lighter';
       for (const l of lights) {
         const rr = R - l.d * l.d * R * 0.30;
         const x = cx + Math.sin(l.a) * rr;
         const y = cy - Math.cos(l.a) * rr;
         if (y > H + 8 || y < horizon - 8) continue;
-        const tw = reduce ? 1 : 0.82 + 0.18 * Math.sin(t * 1.7 + l.a * 40 + l.d * 12);
         // Distant lights are dimmer and smaller: haze, and less of them per pixel.
         const fade = 1 - l.d * 0.55;
         const size = (0.6 + l.s * 1.5) * fade;
@@ -516,19 +542,19 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
         // on the planet and read as glitter scattered over the top of it —
         // "confetti", in Nat's screenshot — instead of towns seen from orbit.
         // In the photograph the ground at night is very nearly nothing.
-        const alpha = l.b * fade * 0.30 * tw;
+        const alpha = l.b * fade * 0.30 * CITY_LEVEL;
 
-        const glow = ctx.createRadialGradient(x, y, 0, x, y, size * 4.2);
+        const glow = c.createRadialGradient(x, y, 0, x, y, size * 4.2);
         glow.addColorStop(0, `rgba(${CITY},${alpha})`);
         glow.addColorStop(0.4, `rgba(${CITY},${alpha * 0.28})`);
         glow.addColorStop(1, `rgba(${CITY},0)`);
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(x, y, size * 4.2, 0, Math.PI * 2);
-        ctx.fill();
+        c.fillStyle = glow;
+        c.beginPath();
+        c.arc(x, y, size * 4.2, 0, Math.PI * 2);
+        c.fill();
       }
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.restore();
+      c.globalCompositeOperation = 'source-over';
+      c.restore();
     }
 
     /**
@@ -536,9 +562,9 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
      * bright wire exactly on the edge, going blue and then to nothing over a
      * surprisingly short distance.
      */
-    function drawAtmosphere() {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
+    function drawAtmosphere(c: any) {
+      c.save();
+      c.globalCompositeOperation = 'lighter';
 
       // The ring starts well INSIDE the planet and ramps up to the edge, rather
       // than switching on at full strength exactly at R*0.985. That switch was
@@ -548,7 +574,7 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       // Air glows on the planet's side of the edge too — it just fades in.
       const inner = R * 0.94;
       const outer = R * 1.075;
-      const air = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
+      const air = c.createRadialGradient(cx, cy, inner, cx, cy, outer);
       air.addColorStop(0, `rgba(${AIR_FAR},0)`);
       air.addColorStop(0.30, `rgba(${AIR_MID},0.10)`);
       // 0.444 is where R itself falls between inner and outer — the true edge.
@@ -557,19 +583,19 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       air.addColorStop(0.66, `rgba(${AIR_MID},0.34)`);
       air.addColorStop(0.84, `rgba(${AIR_FAR},0.14)`);
       air.addColorStop(1, `rgba(${AIR_FAR},0)`);
-      ctx.fillStyle = air;
+      c.fillStyle = air;
       // A RING, not a disc. Filling the whole circle painted the planet's
       // entire face with the gradient's first stop — a radial gradient hands
       // everything inside its inner radius that colour — so a near-white at 92%
       // in "lighter" mode was being laid over the world every frame. That is
       // why it read as a glowing ice dome rather than a planet at night
       // (Nat: "look a little more earthy", 2026-08-03).
-      ctx.beginPath();
-      ctx.arc(cx, cy, outer, 0, Math.PI * 2);
-      ctx.arc(cx, cy, inner, 0, Math.PI * 2, true);
-      ctx.fill();
+      c.beginPath();
+      c.arc(cx, cy, outer, 0, Math.PI * 2);
+      c.arc(cx, cy, inner, 0, Math.PI * 2, true);
+      c.fill();
 
-      ctx.restore();
+      c.restore();
 
       // ── the edge itself ────────────────────────────────────────────────────
       //
@@ -583,46 +609,46 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
       // the edge still has somewhere definite to be; softness everywhere would
       // read as fog rather than air.
       const sun = sunPoint();
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
+      c.save();
+      c.globalCompositeOperation = 'lighter';
 
-      const wire = ctx.createLinearGradient(sun.x - R * 0.5, 0, sun.x + R * 0.9, 0);
+      const wire = c.createLinearGradient(sun.x - R * 0.5, 0, sun.x + R * 0.9, 0);
       wire.addColorStop(0, `rgba(${AIR_CORE},0.30)`);
       wire.addColorStop(0.28, `rgba(${SUN_CORE},0.85)`);
       wire.addColorStop(0.55, `rgba(${AIR_CORE},0.55)`);
       wire.addColorStop(1, `rgba(${AIR_MID},0.16)`);
 
-      const halo = ctx.createLinearGradient(sun.x - R * 0.5, 0, sun.x + R * 0.9, 0);
+      const halo = c.createLinearGradient(sun.x - R * 0.5, 0, sun.x + R * 0.9, 0);
       halo.addColorStop(0, `rgba(${AIR_MID},0.16)`);
       halo.addColorStop(0.28, `rgba(${SUN_WARM},0.40)`);
       halo.addColorStop(0.55, `rgba(${AIR_MID},0.28)`);
       halo.addColorStop(1, `rgba(${AIR_FAR},0.08)`);
 
-      ctx.lineCap = 'round';
+      c.lineCap = 'round';
       const arc = () => {
-        ctx.beginPath();
-        ctx.arc(cx, cy, R, -Math.PI / 2 - 1.0, -Math.PI / 2 + 1.0);
-        ctx.stroke();
+        c.beginPath();
+        c.arc(cx, cy, R, -Math.PI / 2 - 1.0, -Math.PI / 2 + 1.0);
+        c.stroke();
       };
 
-      blur(14);
-      ctx.strokeStyle = halo;
-      ctx.lineWidth = 16;
+      softly(c, 14);
+      c.strokeStyle = halo;
+      c.lineWidth = 16;
       arc();
 
-      blur(5);
-      ctx.strokeStyle = wire;
-      ctx.lineWidth = 5;
+      softly(c, 5);
+      c.strokeStyle = wire;
+      c.lineWidth = 5;
       arc();
 
-      unblur();
-      ctx.strokeStyle = wire;
-      ctx.lineWidth = 1.2;
+      sharp(c);
+      c.strokeStyle = wire;
+      c.lineWidth = 1.2;
       arc();
 
-      ctx.restore();
+      c.restore();
 
-      drawSunrise(sun);
+      drawSunrise(c, sun);
     }
 
     /** Where on the limb the sun is, in screen coordinates. */
@@ -643,96 +669,288 @@ export function SpaceGlobe({ hue = 'space' }: { hue?: 'space' | 'slate' }) {
      * star: a wide warm bloom that spills into the black, a tighter gold core,
      * and a hot white centre small enough to look like it hurts to look at.
      */
-    function drawSunrise(sun: { x: number; y: number }) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
+    function drawSunrise(c: any, sun: { x: number; y: number }) {
+      c.save();
+      c.globalCompositeOperation = 'lighter';
 
       const bloom = Math.max(W, H) * 0.5;
-      const g1 = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, bloom);
+      const g1 = c.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, bloom);
       g1.addColorStop(0, `rgba(${SUN_WARM},0.46)`);
       g1.addColorStop(0.14, `rgba(${SUN_DEEP},0.27)`);
       g1.addColorStop(0.45, `rgba(${SUN_DEEP},0.10)`);
       g1.addColorStop(1, `rgba(${SUN_DEEP},0)`);
-      ctx.fillStyle = g1;
-      ctx.beginPath();
-      ctx.arc(sun.x, sun.y, bloom, 0, Math.PI * 2);
-      ctx.fill();
+      c.fillStyle = g1;
+      c.beginPath();
+      c.arc(sun.x, sun.y, bloom, 0, Math.PI * 2);
+      c.fill();
 
       // The flare along the edge. When the sun clears a planet's limb the light
       // smears sideways ALONG it, and that streak is most of why the reference
       // photograph reads as a photograph. Squashed hard against the curve and
       // blurred, so it never resolves into a shape you could name.
-      blur(canBlur ? 18 : 0);
+      softly(c, 18);
       const flareW = R * 0.30;
-      const flare = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, flareW);
+      const flare = c.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, flareW);
       flare.addColorStop(0, `rgba(${SUN_CORE},0.55)`);
       flare.addColorStop(0.35, `rgba(${SUN_WARM},0.22)`);
       flare.addColorStop(1, `rgba(${SUN_WARM},0)`);
-      ctx.fillStyle = flare;
-      ctx.save();
-      ctx.translate(sun.x, sun.y);
+      c.fillStyle = flare;
+      c.save();
+      c.translate(sun.x, sun.y);
       // Tangent to the limb at the sun's angle — the streak lies along the
       // horizon rather than across it.
-      ctx.rotate(SUN_A);
-      ctx.beginPath();
-      ctx.ellipse(0, 0, flareW, flareW * 0.20, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      c.rotate(SUN_A);
+      c.beginPath();
+      c.ellipse(0, 0, flareW, flareW * 0.20, 0, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
 
       const glow = R * 0.115;
-      blur(canBlur ? 6 : 0);
-      const g2 = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, glow);
+      softly(c, 6);
+      const g2 = c.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, glow);
       g2.addColorStop(0, `rgba(${SUN_CORE},0.95)`);
       g2.addColorStop(0.18, `rgba(${SUN_WARM},0.72)`);
       g2.addColorStop(0.55, `rgba(${SUN_WARM},0.22)`);
       g2.addColorStop(1, `rgba(${SUN_WARM},0)`);
-      ctx.fillStyle = g2;
-      ctx.beginPath();
-      ctx.arc(sun.x, sun.y, glow, 0, Math.PI * 2);
-      ctx.fill();
+      c.fillStyle = g2;
+      c.beginPath();
+      c.arc(sun.x, sun.y, glow, 0, Math.PI * 2);
+      c.fill();
 
       // The hot centre. Small and slightly soft — at 0.22 of the glow radius
       // and perfectly sharp it was a white circle sitting on the picture like a
       // sticker, which is the single most drawn-looking thing a sun can do. In
       // a photograph the blown-out core has no edge at all; the sensor just
       // gives up somewhere in the middle of the bloom.
-      blur(canBlur ? 3 : 0);
-      ctx.fillStyle = `rgba(${SUN_CORE},0.98)`;
-      ctx.beginPath();
-      ctx.arc(sun.x, sun.y, glow * 0.13, 0, Math.PI * 2);
-      ctx.fill();
-      unblur();
+      softly(c, 3);
+      c.fillStyle = `rgba(${SUN_CORE},0.98)`;
+      c.beginPath();
+      c.arc(sun.x, sun.y, glow * 0.13, 0, Math.PI * 2);
+      c.fill();
+      sharp(c);
 
-      ctx.restore();
+      c.restore();
     }
 
-    let last = performance.now();
-    function frame(now: number) {
+    /** The whole picture, in one pass, into whatever canvas is handed over. */
+    function paintScene(c: any) {
+      c.fillStyle = SPACE_BLACK;
+      c.fillRect(0, 0, W, H);
+      drawSky(c);
+      drawStars(c);
+      drawEarth(c);
+      drawAtmosphere(c);
+    }
+
+    /** Paint the scene, or take the one the last mount left behind. */
+    function build() {
+      const key = `${hue}|${W}x${H}|${dpr}`;
+      if (painted && painted.key === key) {
+        scene = painted.scene;
+        return;
+      }
+      scatter();
+      const made = canvasLike();
+      if (made) paintScene(made.c);
+      scene = made ? made.off : null;
+      painted = { key, scene };
+    }
+
+    // ── the one thing that moves ──────────────────────────────────────────────
+    //
+    // Rare, and always up in the empty part of the sky. One at a time — a shower
+    // would be a screensaver, and this is a page you read. A frame loop runs for
+    // as long as a star is in flight, about a second and a half, and stops the
+    // moment it lands.
+
+    let shooters: Shooter[] = [];
+    let raf = 0;
+    let waiting: any = 0;
+    let last = 0;
+
+    function stamp() {
+      if (scene) ctx.drawImage(scene, 0, 0, W, H);
+    }
+
+    function tick(now: number) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      t += dt;
 
-      ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = SPACE_BLACK;
-      ctx.fillRect(0, 0, W, H);
+      for (const s of shooters) {
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        s.life -= dt * 0.62;
+      }
+      shooters = shooters.filter((s) => s.life > 0);
 
-      drawSky();
-      drawStars();
-      drawShooters(dt);
-      drawEarth();
-      drawAtmosphere();
+      stamp();
+      for (const s of shooters) {
+        const nx = s.vx, ny = s.vy;
+        const m = Math.hypot(nx, ny) || 1;
+        const tail = ctx.createLinearGradient(
+          s.x, s.y, s.x - (nx / m) * s.len, s.y - (ny / m) * s.len,
+        );
+        const a = Math.max(0, Math.min(1, s.life)) * 0.9;
+        tail.addColorStop(0, `rgba(255,255,255,${a})`);
+        tail.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.strokeStyle = tail;
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x - (nx / m) * s.len, s.y - (ny / m) * s.len);
+        ctx.stroke();
+      }
 
-      raf = window.requestAnimationFrame(frame);
+      if (shooters.length) {
+        raf = window.requestAnimationFrame(tick);
+        return;
+      }
+      // Landed. Back to a still picture and no work at all.
+      raf = 0;
+      queue();
     }
 
-    resize();
-    raf = window.requestAnimationFrame(frame);
-    window.addEventListener('resize', resize);
+    function launch() {
+      waiting = 0;
+      if (!watched()) return;
+      const fromLeft = Math.random() < 0.5;
+      const speed = 460 + Math.random() * 320;
+      const ang = (fromLeft ? 0.34 : Math.PI - 0.34) + (Math.random() - 0.5) * 0.16;
+      shooters.push({
+        x: fromLeft ? -60 : W + 60,
+        y: Math.random() * horizon * 0.5,
+        vx: Math.cos(ang) * speed,
+        vy: Math.sin(ang) * speed * 0.55,
+        life: 1,
+        len: 70 + Math.random() * 90,
+      });
+      if (!raf) {
+        last = performance.now();
+        raf = window.requestAnimationFrame(tick);
+      }
+    }
+
+    /** Book the next one. The first comes sooner, so arriving feels alive. */
+    function queue(first = false) {
+      if (reduce || waiting || raf) return;
+      const wait = first ? 2.5 : 5 + Math.random() * 11;
+      waiting = window.setTimeout(launch, wait * 1000);
+    }
+
+    function hush() {
+      if (waiting) {
+        window.clearTimeout(waiting);
+        waiting = 0;
+      }
+      if (raf) {
+        window.cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      shooters = [];
+      stamp();
+    }
+
+    // ── when any of this is worth doing ───────────────────────────────────────
+
+    let onScreen = true;
+
+    function watched() {
+      return (
+        onScreen &&
+        focusedRef.current &&
+        (typeof document === 'undefined' || document.visibilityState !== 'hidden')
+      );
+    }
+
+    function sync() {
+      if (watched()) queue();
+      else hush();
+    }
+
+    syncRef.current = sync;
+
+    /**
+     * Repaint only when the picture would genuinely be a different shape: the
+     * window resizing, the side rail opening or closing, the display's pixel
+     * density changing. A ResizeObserver on the parent catches the rail, which a
+     * window `resize` listener never sees.
+     */
+    function measure() {
+      const parent = canvas.parentElement;
+      const w = parent ? parent.clientWidth : window.innerWidth;
+      const h = parent ? parent.clientHeight : window.innerHeight;
+      const d = Math.min(window.devicePixelRatio || 1, 2);
+      // A ResizeObserver can report a box of nothing before the page has been
+      // laid out, and painting a scene for that would throw away the one the
+      // last screen left behind.
+      if (!w || !h) return;
+      if (w === W && h === H && d === dpr && scene) return;
+
+      W = w;
+      H = h;
+      dpr = d;
+      canvas.width = Math.floor(W * dpr);
+      canvas.height = Math.floor(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      layout();
+      build();
+      stamp();
+    }
+
+    let box: any = null;
+    if (typeof ResizeObserver === 'function' && canvas.parentElement) {
+      box = new ResizeObserver(() => measure());
+      box.observe(canvas.parentElement);
+    }
+
+    let seen: any = null;
+    if (typeof IntersectionObserver === 'function') {
+      seen = new IntersectionObserver((entries: any[]) => {
+        onScreen = entries.some((e) => e.isIntersecting);
+        sync();
+      });
+      seen.observe(canvas);
+    }
+
+    // Moving a window to a display with a different pixel density fires nothing
+    // else, so it gets asked directly.
+    const density =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+        : null;
+    const onDensity = () => measure();
+    if (density && typeof density.addEventListener === 'function') {
+      density.addEventListener('change', onDensity);
+    }
+
+    const onVisibility = () => sync();
+    const onResize = () => measure();
+
+    measure();
+    queue(true);
+
+    window.addEventListener('resize', onResize);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      window.cancelAnimationFrame(raf);
-      window.removeEventListener('resize', resize);
+      hush();
+      syncRef.current = null;
+      window.removeEventListener('resize', onResize);
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (density && typeof density.removeEventListener === 'function') {
+        density.removeEventListener('change', onDensity);
+      }
+      if (box) box.disconnect();
+      if (seen) seen.disconnect();
+      scene = null;
     };
   }, [hue]);
+
+  // Kept after the painting effect so the scene exists by the time this runs.
+  useEffect(() => {
+    focusedRef.current = focused;
+    syncRef.current?.();
+  }, [focused]);
 
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: SPACE_BLACK }]}>
