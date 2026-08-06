@@ -224,6 +224,25 @@ export default function HiveWideScreen() {
 
   // Read once rather than on every render — it is a constant in a file.
   const allAppNews = useMemo(() => getAppNews(), []);
+
+  /**
+   * The record, in days.
+   *
+   * Nat, 2026-08-05: "this is what we implemented on this date & this date &
+   * this date? that would be cool to see." A flat list of forty-five lines is a
+   * list; the same lines under their dates are a history, and the shape of the
+   * work — a quiet week, then eleven things in one afternoon — only shows up
+   * once the days are drawn.
+   */
+  const appNewsByDay = useMemo(() => {
+    const days: { date: string; entries: typeof allAppNews }[] = [];
+    allAppNews.forEach((entry) => {
+      const last = days[days.length - 1];
+      if (last && last.date === entry.date) last.entries.push(entry);
+      else days.push({ date: entry.date, entries: [entry] });
+    });
+    return days;
+  }, [allAppNews]);
   const oldestAppNews = allAppNews.length
     ? allAppNews[allAppNews.length - 1].date
     : new Date().toISOString().slice(0, 10);
@@ -573,12 +592,25 @@ export default function HiveWideScreen() {
                   {allAppNews.length} changes since {formatDateLong(oldestAppNews)}
                 </Text>
                 <ScrollView
-                  style={{ maxHeight: wide ? 208 : 320 }}
+                  // Taller now that it is a history with dates in it rather
+                  // than a handful of lines — 208px showed about two days.
+                  style={{ maxHeight: wide ? 340 : 380 }}
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={false}
                 >
                 <View style={{ gap: 9 }}>
-                  {allAppNews.map((entry) => (
+                  {appNewsByDay.map((day) => (
+                    <View key={day.date} style={{ gap: 9 }}>
+                      <Text
+                        style={{
+                          fontFamily: 'Lato_700Bold', fontSize: 10.5, letterSpacing: 1.1,
+                          textTransform: 'uppercase', color: INK_FAINT, marginTop: 4,
+                        }}
+                      >
+                        {formatDateLong(day.date)}
+                        {day.entries.length > 1 ? ` · ${day.entries.length} things` : ''}
+                      </Text>
+                      {day.entries.map((entry) => (
                     <Pressable
                       key={entry.id}
                       disabled={!entry.href}
@@ -607,6 +639,8 @@ export default function HiveWideScreen() {
                         </Text>
                       ) : null}
                     </Pressable>
+                  ))}
+                    </View>
                   ))}
                 </View>
                 </ScrollView>
