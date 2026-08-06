@@ -148,6 +148,32 @@ function Section({
 }
 
 /**
+ * The receipt under a switch that has just been saved.
+ *
+ * A pill sliding under your finger looks identical whether or not anything
+ * reached the database, which is how a setting can be flipped a dozen times and
+ * still be wrong. This says, in words, that the answer is stored — and then
+ * leaves, because a permanent "Saved" is furniture rather than news.
+ */
+function SavedNote({ children }: { children: React.ReactNode }) {
+  return (
+    <Text
+      style={{
+        fontFamily: 'Lato_400Regular',
+        fontSize: 12,
+        lineHeight: 18,
+        color: MUTED,
+        marginTop: 8,
+        marginBottom: 10,
+        marginLeft: SWITCH_GUTTER,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
+/**
  * A hairline between two switches in the same panel.
  *
  * It starts where the words start rather than at the panel's edge, so the
@@ -163,33 +189,6 @@ function RowDivider() {
 
 export default function SettingsScreen() {
   const { profile, community, memberships, refreshProfile, openHivePicker } = useAuth();
-  const [visibleHiveWide, setVisibleHiveWide] = useState<boolean>(!!(profile as any)?.visible_hive_wide);
-  const [savingVisibility, setSavingVisibility] = useState(false);
-
-  // Kept in step with the profile, so arriving here fresh shows the truth
-  // rather than whatever this screen last remembered.
-  useEffect(() => {
-    setVisibleHiveWide(!!(profile as any)?.visible_hive_wide);
-  }, [profile]);
-
-  const toggleHiveWideVisibility = useCallback(async () => {
-    if (!profile?.id || savingVisibility) return;
-    const next = !visibleHiveWide;
-    setSavingVisibility(true);
-    setVisibleHiveWide(next);            // answer the tap immediately
-    const { error } = await (supabase.from('profiles') as any)
-      .update({ visible_hive_wide: next })
-      .eq('id', profile.id);
-    if (error) {
-      setVisibleHiveWide(!next);         // put it back; nothing was saved
-      // `Alert.alert` is an empty function in a browser, so this used to slide
-      // the pill back with no word of explanation (2026-08-05).
-      showAlert('Could not save that', error.message);
-    } else {
-      await refreshProfile();
-    }
-    setSavingVisibility(false);
-  }, [profile?.id, savingVisibility, visibleHiveWide, refreshProfile]);
   const { permissionStatus, requestPermissions } = useNotifications({ enableListeners: false });
   const isNotificationEnabled =
     permissionStatus === 'granted' || permissionStatus === 'provisional';
@@ -214,6 +213,23 @@ export default function SettingsScreen() {
    * the same thing, or badly, so the switch slides back on its own.
    */
   const [pending, setPending] = useState<Record<string, boolean>>({});
+
+  /**
+   * Which switch has just been saved, so the page can say so.
+   *
+   * A switch that slides under your finger looks the same whether or not
+   * anything reached the database — which is exactly how "I've been tryin to
+   * select HIVE wide a billion times" happened. A short line under the control
+   * says the save landed, and it goes on its own once you have read it
+   * (2026-08-06).
+   */
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!savedKey) return;
+    const timer = setTimeout(() => setSavedKey(null), 4000);
+    return () => clearTimeout(timer);
+  }, [savedKey]);
 
   const userId = profile?.id;
 
@@ -246,6 +262,7 @@ export default function SettingsScreen() {
     async (key: string, next: boolean, patch: Record<string, unknown>, failureMessage: string) => {
       if (!profile) return;
       setBusyKey(key);
+      setSavedKey(null);
       setPending((held) => ({ ...held, [key]: next }));
       try {
         const { error } = await (supabase as any)
@@ -254,12 +271,14 @@ export default function SettingsScreen() {
           .eq('id', profile.id);
 
         if (error) {
-          showAlert('Sorry', failureMessage);
+          console.warn('[Settings] save failed', key, error);
+          showAlert('Sorry', `${failureMessage} (${error.message})`);
           return;
         }
         // Awaited all the way, so by the time we let go of `pending` below the
         // profile is already carrying this answer and nothing flickers.
         await refreshProfile();
+        setSavedKey(key);
       } finally {
         setBusyKey(null);
         setPending((held) => {
@@ -296,7 +315,7 @@ export default function SettingsScreen() {
   }
 
   const profileScope: Scope =
-    (profile as any).profile_scope === 'all_hives' ? 'all_hives' : 'hive';
+    profile.profile_scope === 'all_hives' ? 'all_hives' : 'hive';
 
   // How far you travel is worth asking everyone, even somebody in a single
   // HIVE: the shared noticeboards reach every HIVE, so their post can be read
@@ -306,8 +325,10 @@ export default function SettingsScreen() {
   // pick on a wish — the same rule WishScopePicker follows, so a default can
   // never disagree with the picker you meet later.
   const ceiling = (community?.max_share_scope as string | undefined) ?? 'hive';
-  const inSeveralHives = memberships.length > 1;
-  const canDefaultWide = inSeveralHives && SCOPE_RANK[ceiling] >= SCOPE_RANK.all_hives;
+  // Belonging to one HIVE no longer hides the HIVE-Wide rung — see the note in
+  // ScopePicker for why that rule was retired on 2026-08-06. This mirror has to
+  // move with it, or a default here would promise something the picker refuses.
+  const canDefaultWide = SCOPE_RANK[ceiling] >= SCOPE_RANK.all_hives;
   const defaultShare: Scope =
     (profile as any).default_share_scope === 'all_hives' ? 'all_hives' : 'hive';
 
@@ -317,9 +338,7 @@ export default function SettingsScreen() {
   // further, because they can't.
   const canSendFurther =
     ['hive', 'all_hives', 'public'].filter(
-      (rung) =>
-        SCOPE_RANK[rung] <= (SCOPE_RANK[ceiling] ?? 0) &&
-        (inSeveralHives || rung !== 'all_hives')
+      (rung) => SCOPE_RANK[rung] <= (SCOPE_RANK[ceiling] ?? 0)
     ).length > 1;
 
   // Where each switch is drawn: the answer you just gave if one is in flight,
@@ -372,19 +391,40 @@ export default function SettingsScreen() {
           </Text>
         </View>
 
-        {/* Two paragraphs used to wrap this one switch — an explanation above
-            and a reassurance below. Nat, 2026-08-05: *"This seems confusing to
-            me & too much reading."* The explanation should be shorter than the
-            thing it explains, so it is one line above and one line under the
-            label, and it changes with the answer.
+        {/* Who can see you, and where. One switch, one column.
+
+            This page carried TWO of these for the same idea — "How far you
+            travel", which wrote `profiles.profile_scope`, and "Show me in
+            HIVE-Wide" at the foot of the page, which wrote
+            `profiles.visible_hive_wide`. The database's own security policy
+            reads `profile_scope` and has never heard of the other column, and
+            the HIVE-Wide member list filtered on the other column alone. So a
+            member had to find and turn on BOTH before anything happened, and
+            turning on either one by itself changed nothing they could see. Nat,
+            2026-08-04 and again 08-05: "I've been tryin to select 'HIVE wide' a
+            billion times, it never reflects that anywhere" and "I want to make
+            my profile visible hive-wide, but i dont see that option anywhere."
+            One idea, one flag, one switch, in three places that agree
+            (2026-08-06).
+
+            The HIVE-Wide member list is opt-in and starts off for everybody
+            (Nat 2026-08-03): "everyone's preferences default to a visibility of
+            this HIVE only, they'd have to go in and toggle on HIVE-Wide
+            visibility in order to populate here." Being in one HIVE was never
+            consent to be listed to the others.
+
+            Two paragraphs used to wrap this switch — an explanation above and a
+            reassurance below. Nat, 2026-08-05: "This seems confusing to me & too
+            much reading." So it is one line above and one line under the label,
+            and it changes with the answer.
 
             Migration 135 promises "a little bee stands in for you" when your
-            card stays home. That bee has not been built — BoardPostCard and
+            profile stays home. That bee has not been built — BoardPostCard and
             BoardReplyItem still fall back to the word "Unknown" — so the words
             here stop at what is true today (2026-08-03). */}
         <Section
-          title="How far you travel"
-          blurb="About you, on top of whatever you choose for each thing you write."
+          title="Who can see you"
+          blurb="Your HIVEs always see you. HIVE-Wide is your call."
         >
           <Panel>
             <Switch
@@ -393,11 +433,11 @@ export default function SettingsScreen() {
               // "Card" appears nowhere else in the app — Nat: "Whats a 'card'?
               // we dont use that anywhere, what are you referring to?" It meant
               // your profile, so it says profile.
-              label="My profile travels with what I share"
+              label="Show me HIVE-Wide"
               hint={
                 travelOn
-                  ? 'Anyone in any HIVE can tap your name and open your profile.'
-                  : 'Only the people who share a HIVE with you can open your profile.'
+                  ? 'Anyone in any HIVE can find you in the HIVE-Wide members list, and open your profile from anything you share.'
+                  : 'Only the people who share a HIVE with you can find you or open your profile.'
               }
               onToggle={(next) =>
                 void savePatch(
@@ -409,6 +449,13 @@ export default function SettingsScreen() {
               }
             />
           </Panel>
+          {savedKey === 'profile_scope' && (
+            <SavedNote>
+              {travelOn
+                ? 'Saved. You are in the HIVE-Wide members list now.'
+                : 'Saved. You show up only inside your own HIVEs now.'}
+            </SavedNote>
+          )}
         </Section>
 
         <Section
@@ -459,6 +506,13 @@ export default function SettingsScreen() {
                   )
                 }
               />
+              {savedKey === 'default_share_scope' && (
+                <SavedNote>
+                  {defaultWide
+                    ? 'Saved. New wishes and threads will start HIVE-Wide.'
+                    : 'Saved. New wishes and threads will start in your HIVE.'}
+                </SavedNote>
+              )}
             </Panel>
           ) : (
             <Panel>
@@ -533,34 +587,6 @@ export default function SettingsScreen() {
             </Panel>
           </Section>
         )}
-
-        {/* Who can see you, and where.
-
-            The HIVE-Wide members list is opt-in and starts off for everybody
-            (Nat 2026-08-03): "everyone's preferences default to a visibility of
-            this HIVE only, they'd have to go in and toggle on HIVE-Wide
-            visibility in order to populate here." Being in one HIVE was never
-            consent to be listed to the others. */}
-        <Section
-          title="Who can see you"
-          blurb="Your HIVEs always see you. HIVE-Wide is your call."
-        >
-          <Panel>
-            {/* This is the control the other three were made to match — it was
-                written here first and lives in `components/ui/Switch.tsx` now. */}
-            <Switch
-              on={visibleHiveWide}
-              busy={savingVisibility}
-              label="Show me in HIVE-Wide"
-              hint={
-                visibleHiveWide
-                  ? 'Members of every HIVE you share can find you in the HIVE-Wide directory.'
-                  : 'You only appear to people inside your own HIVEs.'
-              }
-              onToggle={() => void toggleHiveWideVisibility()}
-            />
-          </Panel>
-        </Section>
 
         <View style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}>
           <LinkedLogins />

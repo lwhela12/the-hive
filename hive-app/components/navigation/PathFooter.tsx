@@ -1,5 +1,6 @@
 import { View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Breadcrumbs, type Crumb } from '../ui/Breadcrumbs';
 import { HiveMark } from '../ui/HiveMark';
 import { WorldMark } from '../ui/WorldMark';
@@ -45,6 +46,15 @@ export function PathFooter() {
   const { community, wholeHive } = useAuth();
   const deep = usePathTrail();
   const skin = usePageSkin();
+  /**
+   * The strip sits on the bottom edge of the window, and on an iPhone added to
+   * the home screen that edge is behind the home indicator — the app runs
+   * `display: standalone` with a see-through status bar and `viewport-fit=cover`,
+   * so the page really does reach the glass. Screens handle their own top edge
+   * with `edges={['top']}`; this belongs to the shell around them, so it clears
+   * its own (2026-08-06).
+   */
+  const insets = useSafeAreaInsets();
 
   const activeKey = activeKeyForPath(pathname);
   const page = [...NAV_DESTINATIONS, ADMIN_DESTINATION].find((d) => d.key === activeKey);
@@ -90,6 +100,11 @@ export function PathFooter() {
         // status bar has to be legible over whatever the page happens to be
         // doing underneath it, so it stops being see-through.
         backgroundColor: skin.dark ? '#0B0B12' : '#f4f0e6',
+        // The bar's colour carries on under the home indicator; the words stop
+        // above it. The right edge is the landscape notch — the left one is
+        // already taken care of by the rail standing in front of it.
+        paddingBottom: insets.bottom,
+        paddingRight: insets.right,
       }}
     >
       <Breadcrumbs items={items} compact dense tone={skin.dark ? 'dark' : 'light'} />

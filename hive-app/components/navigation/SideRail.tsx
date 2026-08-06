@@ -1,6 +1,7 @@
 import { memo, useCallback, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, useWindowDimensions, Animated } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -39,6 +40,21 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const RAIL_COLLAPSED = 56;
 const RAIL_EXPANDED = 212;
+/**
+ * The collapsed rail on a phone, where it carries names as well as pictures.
+ *
+ * The tab bar came out on 2026-08-03 and this rail became the only way to move
+ * around. On a phone it starts collapsed, so at 375px wide the whole of
+ * navigation was 🏠 👥 📋 📰 📣 👋 down the left edge — a column of pictures with
+ * nothing to tell you what any of them opened. Nat's words for who is using
+ * this: "we have very very very very not tech savvy people."
+ *
+ * So a collapsed row on a phone puts a small name under its picture, and the
+ * rail is eight pixels wider to hold one. Eight pixels is the whole price of
+ * every destination being readable, and 56 pixels of unreadable pictures was
+ * already the more expensive of the two.
+ */
+const RAIL_COLLAPSED_PHONE = 64;
 
 /** HIVE-Wide's green — the one colour that never belongs to a single HIVE. */
 const WIDE_BLACK = '#0B0B12';
@@ -73,6 +89,17 @@ export const SideRail = memo(function SideRail({
   const pathname = usePathname();
   const { profile, community, communityId, communityRole, memberships, switchCommunity, wholeHive, enterWholeHive } = useAuth();
   const { width } = useWindowDimensions();
+  /**
+   * How much of the screen the phone's hardware is already using.
+   *
+   * The app is installed to the home screen as a standalone app
+   * (`manifest.json`), and `public/index.html` asks iOS for a see-through status
+   * bar with `viewport-fit=cover` — so the web page really does start at the top
+   * of the glass, under the notch. Every SCREEN handles that with
+   * `edges={['top']}`; the shell around them did not, so the rail drew under the
+   * clock with its expand button hidden behind the time (2026-08-06).
+   */
+  const insets = useSafeAreaInsets();
 
   const [confirmingLogOut, setConfirmingLogOut] = useState(false);
 
@@ -144,7 +171,13 @@ export const SideRail = memo(function SideRail({
     [router, pathname, isPhone, expanded, onToggle, playBounce]
   );
 
-  const railWidth = expanded ? RAIL_EXPANDED : RAIL_COLLAPSED;
+  /**
+   * The collapsed rail on a phone shows a name under every picture, so a person
+   * who has never opened the app can read where each row goes without opening
+   * the menu first. `tight` is that state: narrow, stacked, and labelled.
+   */
+  const tight = isPhone && !expanded;
+  const railWidth = expanded ? RAIL_EXPANDED : tight ? RAIL_COLLAPSED_PHONE : RAIL_COLLAPSED;
   const divider = (
     <View
       style={{
@@ -159,6 +192,7 @@ export const SideRail = memo(function SideRail({
   const Row = ({
     emoji,
     label,
+    shortLabel,
     active,
     onPress,
     badge = 0,
@@ -170,6 +204,8 @@ export const SideRail = memo(function SideRail({
     /** Left off by the rows that draw a mark instead — HIVE-Wide, and a HIVE. */
     emoji?: string;
     label: string;
+    /** A shorter name for the phone's narrow rail, when the full one is long. */
+    shortLabel?: string;
     active?: boolean;
     onPress: () => void;
     badge?: number;
@@ -183,12 +219,18 @@ export const SideRail = memo(function SideRail({
   }) => (
     <AnimatedPressable
       onPress={onPress}
+      // One thing to a screen reader, named by its label. Without this the
+      // picture and the small name underneath are two separate stops on a
+      // phone, and the first one is read out as "house".
+      accessible
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ selected: !!active }}
       style={{
         transform: [{ scale: bounceKey && bounceKey === bouncingKey ? bounceScale : 1 }],
-        flexDirection: 'row',
+        // Picture over name on the phone's narrow rail; picture beside name
+        // everywhere else.
+        flexDirection: tight ? 'column' : 'row',
         alignItems: 'center',
         // An indented row's highlight hugs its own name instead of running the
         // full width of the rail (Nat 2026-08-03: "let's make the HIVE-Wide bar
@@ -196,11 +238,11 @@ export const SideRail = memo(function SideRail({
         // a page, and a full-width bar behind it claimed otherwise.
         alignSelf: expanded && indented ? 'flex-start' : 'auto',
         paddingRight: expanded && indented ? 16 : undefined,
-        gap: 11,
-        marginHorizontal: expanded ? 8 : 6,
+        gap: tight ? 3 : 11,
+        marginHorizontal: tight ? 3 : expanded ? 8 : 6,
         marginLeft: expanded && indented ? 20 : undefined,
-        paddingVertical: 9,
-        paddingHorizontal: expanded ? 8 : 0,
+        paddingVertical: tight ? 7 : 9,
+        paddingHorizontal: expanded ? 8 : tight ? 2 : 0,
         justifyContent: expanded ? 'flex-start' : 'center',
         borderRadius: 10,
         backgroundColor: active ? 'rgba(255,255,255,0.22)' : 'transparent',
@@ -239,17 +281,25 @@ export const SideRail = memo(function SideRail({
           </View>
         ) : null}
       </View>
-      {expanded ? (
+      {/* The name. On a phone it shows in BOTH states — small and underneath
+          when the rail is narrow, full size beside the picture when it is open
+          — because the narrow rail is the only navigation a phone has and an
+          unnamed picture is a quiz (2026-08-06). A wide screen keeps the plain
+          icon strip: the mouse can open the rail, and there is a whole page
+          beside it that the labels would eat into. */}
+      {expanded || tight ? (
         <Text
-          numberOfLines={1}
+          numberOfLines={tight ? 2 : 1}
           style={{
-            flex: 1,
+            flex: tight ? undefined : 1,
+            textAlign: tight ? 'center' : 'left',
             fontFamily: active ? 'Lato_700Bold' : 'Lato_400Regular',
-            fontSize: indented ? 12.5 : 14.5,
-            color: '#fff',
+            fontSize: tight ? 9.5 : indented ? 12.5 : 14.5,
+            lineHeight: tight ? 11.5 : undefined,
+            color: tight ? 'rgba(255,255,255,0.92)' : '#fff',
           }}
         >
-          {label}
+          {tight && shortLabel ? shortLabel : label}
         </Text>
       ) : null}
     </AnimatedPressable>
@@ -258,10 +308,17 @@ export const SideRail = memo(function SideRail({
   return (
     <View
       style={{
-        width: railWidth,
+        // The rail keeps its own width and the phone's hardware gets its own
+        // strip beside it, so a landscape notch takes space from the edge
+        // rather than from the menu.
+        width: railWidth + insets.left,
         backgroundColor: railColour,
-        paddingTop: 12,
-        paddingBottom: 8,
+        // Clear of the clock at the top and the home bar at the bottom. The bee
+        // and the expand button live in the first 42 pixels of this rail, which
+        // is exactly where an iPhone puts the time.
+        paddingTop: 12 + insets.top,
+        paddingBottom: 8 + insets.bottom,
+        paddingLeft: insets.left,
         ...(isPhone && expanded
           ? { position: 'absolute', top: 0, bottom: 0, left: 0, zIndex: 40 }
           : null),
@@ -431,6 +488,25 @@ export const SideRail = memo(function SideRail({
           >
             My HIVEs
           </Text>
+        ) : tight ? (
+          // The phone's narrow rail says it too. The two rows under this
+          // heading are the HIVE-Wide globe and your own HIVE's hexagon, and
+          // without a word above them they are two coloured shapes (2026-08-06).
+          <Text
+            style={{
+              fontFamily: 'Lato_700Bold',
+              fontSize: 8.5,
+              letterSpacing: 0.6,
+              textTransform: 'uppercase',
+              textAlign: 'center',
+              color: 'rgba(255,255,255,0.45)',
+              paddingTop: 10,
+              paddingBottom: 6,
+              height: 27,
+            }}
+          >
+            My HIVEs
+          </Text>
         ) : (
           <View style={{ height: 27 }} />
         )}
@@ -478,6 +554,7 @@ export const SideRail = memo(function SideRail({
             key={item.key}
             emoji={item.emoji}
             label={item.label}
+            shortLabel={item.shortLabel}
             active={activeKey === item.key}
             badge={item.badge === 'dms' ? unreadDMCount : 0}
             bounceKey={item.key}
@@ -540,4 +617,9 @@ export const SideRail = memo(function SideRail({
   );
 });
 
-export const RAIL_WIDTHS = { collapsed: RAIL_COLLAPSED, expanded: RAIL_EXPANDED };
+export const RAIL_WIDTHS = {
+  collapsed: RAIL_COLLAPSED,
+  /** Wider, because on a phone the collapsed rail carries names too. */
+  collapsedPhone: RAIL_COLLAPSED_PHONE,
+  expanded: RAIL_EXPANDED,
+};

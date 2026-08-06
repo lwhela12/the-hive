@@ -25,7 +25,7 @@ import { RoomMessageItem } from './RoomMessageItem';
 import { RoomTypingIndicator } from './RoomTypingIndicator';
 import { SelectedImage, pickSingleImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
-import { uploadMultipleFiles, uploadMultipleImages, uploadSingleImage } from '../../lib/attachmentUpload';
+import { uploadAttachments, uploadSingleImage } from '../../lib/attachmentUpload';
 import { getMentionedMembers } from '../../lib/mentions';
 import { hiveDisplayName } from '../../lib/hiveBrand';
 import { getMessagesRoomLabel, getMessagesRoomSubtitle } from './hiveWideRoom';
@@ -540,24 +540,28 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
       clearTypingIndicator();
 
       let attachments: Attachment[] | undefined;
-      if (selectedImages.length > 0) {
+      if (selectedImages.length > 0 || selectedFiles.length > 0) {
         setUploading(true);
-        const result = await uploadMultipleImages(profile.id, selectedImages);
-        if (result.attachments.length > 0) {
-          attachments = result.attachments;
-        }
+        const outcome = await uploadAttachments({
+          userId: profile.id,
+          images: selectedImages,
+          files: selectedFiles,
+        });
         setUploading(false);
-      }
-      if (selectedFiles.length > 0) {
-        setUploading(true);
-        const result = await uploadMultipleFiles(profile.id, selectedFiles);
-        if (result.attachments.length > 0) {
-          attachments = [...(attachments ?? []), ...result.attachments];
-        }
-        setUploading(false);
+
+        // Every photo failed. This used to carry on and insert a message with
+        // empty text and no attachments — a blank bubble in the room, with no
+        // word to the sender. `uploadAttachments` has already said what
+        // happened; stopping here leaves the photos in the composer to retry.
+        if (!outcome.readyToSend) return;
+        attachments = outcome.attachments;
       }
 
-      const messageContent = newMessage.trim() || (attachments ? '' : '');
+      const messageContent = newMessage.trim();
+
+      // A message with no words and nothing attached has nothing to say.
+      if (!messageContent && (attachments?.length ?? 0) === 0) return;
+
       const { error } = await supabase.from('room_messages').insert({
         community_id: communityId,
         room_id: room.id,

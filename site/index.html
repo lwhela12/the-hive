@@ -198,11 +198,26 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 
 /* ---------- the panel under it ---------- */
 .panels{max-width:640px;margin:6px auto 0}
+/* The panel reads as one centred block, agreeing with the hexagon buttons
+   sitting above it — the paragraph, the empty states and the gold call to
+   action all land on the same centre line. (Nat 2026-08-06, testing on her
+   phone: the words and the "See the swag" button were hard against the left
+   edge under centred buttons, so the whole block looked lopsided.)
+   The exceptions are listed a few rules down. */
 .pane{background:var(--paper);border:1px solid rgba(189,147,72,.24);border-radius:18px;
-  padding:26px 24px;text-align:left;box-shadow:0 14px 36px rgba(138,106,47,.09)}
+  padding:26px 24px;text-align:center;box-shadow:0 14px 36px rgba(138,106,47,.09)}
 .pane[hidden]{display:none}
-.pane p{margin:0 0 14px;font-size:.97rem;color:#5c5a54;line-height:1.65}
-".pane p:last-child{margin-bottom:0}
+/* text-wrap:pretty keeps a single word off the last line, which is the thing
+   that makes centred prose look accidental. */
+.pane p{margin:0 0 14px;font-size:.97rem;color:#5c5a54;line-height:1.65;text-wrap:pretty}
+.pane p:last-child{margin-bottom:0}
+/* What keeps its left edge, and why: a form's labels belong on the corner of
+   the box they name, typed text starts where a cursor starts, a quote hangs off
+   its gold rule, and a newsletter is long enough to actually read. Each of
+   those is a bordered box of its own, so it still holds the centre line as an
+   object while its words begin at the left. */
+.pane .f,.pane blockquote,.buzzlist{text-align:left}
+.pane input,.pane textarea{text-align:left}
 .pane blockquote{margin:0 0 14px;padding:0 0 0 18px;border-left:3px solid var(--goldlight);
   font-family:var(--serif);font-style:italic;font-size:1.04rem;line-height:1.5;color:var(--deepgold)}
 .pane .cash{font-family:var(--serif);font-size:1.16rem;color:var(--charcoal);margin:0 0 14px}
@@ -328,7 +343,11 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   .sec,.origin,.join{padding-top:38px}
 }
 
-#subscribe{display:flex;flex-direction:row;flex-wrap:wrap;gap:10px;margin:0;align-items:center}
+/* On a phone the email box takes the full width and the button drops onto its
+   own line — justify-content keeps that button under the middle of the box
+   rather than tucked into the left corner. */
+#subscribe{display:flex;flex-direction:row;flex-wrap:wrap;gap:10px;margin:0;align-items:center;
+  justify-content:center}
 #subscribe input{flex:1 1 220px;border-radius:999px}
 #subscribe button,#contact button{border:0;cursor:pointer;font-family:var(--sans)}
 .formnote{flex-basis:100%;margin:0 0 10px;font-size:.86rem;color:var(--label);min-height:1.2em}
@@ -868,8 +887,17 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
         var li = document.createElement('li');
         li.appendChild(line('evwhen', whenText(ev)));
         li.appendChild(line('evwhat', ev.title || 'An event'));
-        if (ev.location) li.appendChild(line('evwhere', '📍 ' + ev.location));
-        if (ev.description) li.appendChild(line('evnote', ev.description));
+        // An event can be publicly visible and still keep its address to
+        // itself — the public_events view hands back a null location for a
+        // meeting that only invited members can attend (Nat 2026-08-06). Each
+        // line is added only when there is something to say, so a missing
+        // address leaves no lonely pin, no blank row and no gap: the card is
+        // simply one line shorter. The trim covers a location that is there in
+        // the database but is only spaces.
+        var where = (ev.location || '').trim();
+        if (where) li.appendChild(line('evwhere', '📍 ' + where));
+        var note = (ev.description || '').trim();
+        if (note) li.appendChild(line('evnote', note));
         evList.appendChild(li);
       });
       evList.hidden = false;

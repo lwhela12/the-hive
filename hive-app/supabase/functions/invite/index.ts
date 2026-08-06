@@ -283,6 +283,9 @@ serve(async (req) => {
                 <p style="font-size: 14px; margin: 0;"><strong>Finding your way back later:</strong> go to <a href="https://www.the-hive.app" style="color: ${headingColour};">the-hive.app</a> and click <strong>Member Log In</strong>. Or bookmark <a href="https://app.the-hive.app" style="color: ${headingColour};">app.the-hive.app</a> and go straight there. No need to dig up this email again.</p>
               </div>
 
+              <h2 style="color: ${headingColour}; font-size: 15px; margin: 26px 0 8px;">The first thing you'll see</h2>
+              <p style="font-size: 15px; margin: 0 0 12px;">You'll land on <strong>HIVE-Wide</strong> — a page with a picture of the Earth on it, showing every HIVE at once. Yours is <strong>${communityName}</strong>, and that's where everything below lives. Tap the big <strong>Go into ${communityName}</strong> button to step in. HIVE-Wide stays at the top of the menu on the left, with the little world beside it, whenever you want to look around again.</p>
+
               <h2 style="color: ${headingColour}; font-size: 15px; margin: 26px 0 8px;">Once you're in</h2>
               <p style="font-size: 15px; margin: 0 0 12px;">No rush, and nothing has to be perfect. Click around — you can't break anything.</p>
               <p style="font-size: 15px; margin: 0 0 12px;"><strong>Your profile keeps score for you.</strong> It shows how far along you are and what's still blank, so you can do a bit whenever you've got a minute rather than all of it now. This list is just what's on it:</p>

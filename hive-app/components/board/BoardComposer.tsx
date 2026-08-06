@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
-import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
+import { uploadAttachments } from '../../lib/attachmentUpload';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
@@ -95,26 +95,25 @@ export function BoardComposer({
     try {
       // Upload attachments first if any are selected
       let attachments: Attachment[] | undefined;
-      if (selectedImages.length > 0) {
-        setUploadStatus('Uploading images...');
-        const result = await uploadMultipleImages(userId, selectedImages, (progress) => {
-          setUploadStatus(`Uploading ${progress.current}/${progress.total}...`);
+      if (selectedImages.length > 0 || selectedFiles.length > 0) {
+        setUploadStatus('Uploading attachments...');
+        const outcome = await uploadAttachments({
+          userId,
+          images: selectedImages,
+          files: selectedFiles,
+          onProgress: (progress) => {
+            setUploadStatus(`Uploading ${progress.current}/${progress.total}...`);
+          },
         });
-        if (result.attachments.length > 0) {
-          attachments = result.attachments;
-        }
-      }
-      if (selectedFiles.length > 0) {
-        setUploadStatus('Uploading files...');
-        const result = await uploadMultipleFiles(userId, selectedFiles, (progress) => {
-          setUploadStatus(`Uploading file ${progress.current}/${progress.total}...`);
-        });
-        if (result.attachments.length > 0) {
-          attachments = [...(attachments ?? []), ...result.attachments];
-        }
+        setUploadStatus('');
+
+        // Every attachment failed. `uploadAttachments` has already said so, and
+        // stopping here keeps the title, the words and the pictures in the
+        // composer instead of posting without the thing the post is about.
+        if (!outcome.readyToSend) return;
+        attachments = outcome.attachments;
       }
 
-      setUploadStatus('');
       const didPost = await onSubmit(title.trim(), content.trim(), attachments);
       if (didPost) {
         setTitle('');

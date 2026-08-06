@@ -50,12 +50,19 @@ export function ScopePicker<K extends string>({
   const ceiling = (community?.max_share_scope as ScopeKey | undefined) ?? 'hive';
   const ceilingRank = RANK[ceiling] ?? 0;
 
-  // Somebody in one HIVE has no use for "HIVE-Wide" — and being asked about it
-  // would tell them other HIVEs exist, which is nobody's business (Nat 2026-08-02).
-  const inSeveral = memberships.length > 1;
-  const options = allOptions.filter(
-    (o) => RANK[o.rung] <= ceilingRank && (inSeveral || o.rung !== 'all_hives'),
-  );
+  // This used to hide "HIVE-Wide" from anybody in a single HIVE, because being
+  // asked about it would have told them other HIVEs existed and that was
+  // nobody's business (Nat, 2026-08-02).
+  //
+  // That reason is gone. Since 2026-08-03 every member lands on HIVE-Wide, and
+  // it names all three HIVEs on arrival — so there is nothing left to keep from
+  // them, and almost everybody is in exactly one HIVE. The rule was hiding the
+  // rung from very nearly the whole community, including the people the
+  // August newsletter is about to invite to use it.
+  //
+  // The ceiling still decides. A HIVE whose `max_share_scope` is `hive` shows
+  // nothing beyond its own walls, however many HIVEs you belong to.
+  const options = allOptions.filter((o) => RANK[o.rung] <= ceilingRank);
 
   /**
    * Never leave a setting showing that this HIVE won't honour — but only once

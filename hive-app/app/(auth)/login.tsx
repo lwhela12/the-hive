@@ -143,14 +143,24 @@ export default function LoginScreen() {
             Sign in with the email address that received your invite.
           </Text>
 
+          {/* The button is sized to its own words. At full width it was a white
+              slab with about seventy points of empty either side of the
+              wordmark, which made it the loudest thing on a quiet dark page
+              (Nat 2026-08-06, testing on her phone). minWidth holds the shape
+              while the spinner is in there, so it doesn't collapse to a dot
+              mid sign-in and snap back; maxWidth keeps it inside the column on
+              a narrow phone. Vertical padding is unchanged, so it still stands
+              about 52 points tall — comfortably over the 44 a thumb needs. */}
           <Pressable
             onPress={() => handleGoogleSignIn()}
             disabled={loading}
-            style={{ width: '100%', opacity: loading ? 0.5 : 1 }}
+            style={{ minWidth: 236, maxWidth: '100%', opacity: loading ? 0.5 : 1 }}
             className="flex-row items-center justify-center bg-white rounded-xl py-4 px-6 active:opacity-80"
           >
             {loading ? (
-              <ActivityIndicator size="small" color="#fffdf5" />
+              // Charcoal, because the spinner sits on the white button. It was
+              // cream on cream, so signing in looked like nothing happening.
+              <ActivityIndicator size="small" color="#313130" />
             ) : (
               <>
                 <Image

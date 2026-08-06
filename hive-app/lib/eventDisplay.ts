@@ -7,7 +7,6 @@ export function getEventEmoji(event: {
 }): string {
   if (event.event_type === 'birthday') return '🎂';
   if (event.event_type === 'meeting') return '🐝';
-  if (event.event_type === 'queen_bee') return '👑';
 
   const title = (event.title ?? '').toLowerCase();
   if (/\b(out of town|travel|traveling|trip|away|galavant|vacation|flight)\b/.test(title) || event.end_date) return '✈️';
@@ -25,14 +24,16 @@ export function getEventEmoji(event: {
 
 // Family-icon counterpart: returns a HiveIcon name when the event type has
 // earned its own drawing; null falls back to the smart emoji.
+//
+// The 'crown' went with Queen Bee, retired April 2026. Nothing maps to it now,
+// so it is gone from the list of icons an event can ask for.
 export function getEventHiveIcon(event: {
   title?: string | null;
   event_type?: string | null;
   end_date?: string | null;
-}): 'cake' | 'bee' | 'crown' | 'suitcase' | 'note' | 'pin' | null {
+}): 'cake' | 'bee' | 'suitcase' | 'note' | 'pin' | null {
   if (event.event_type === 'birthday') return 'cake';
   if (event.event_type === 'meeting') return 'bee';
-  if (event.event_type === 'queen_bee') return 'crown';
   const title = (event.title ?? '').toLowerCase();
   if (/\b(out of town|travel|traveling|trip|away|galavant|vacation|flight)\b/.test(title) || event.end_date) return 'suitcase';
   if (/\b(writer|writers|writing)\b/.test(title)) return 'note';

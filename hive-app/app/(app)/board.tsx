@@ -127,7 +127,15 @@ function getRouteParam(value: string | string[] | undefined) {
 }
 
 export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } = {}) {
-  const { profile, communityId: myCommunityId, communityRole, community } = useAuth();
+  const {
+    profile,
+    communityId: myCommunityId,
+    communityRole,
+    community,
+    memberships,
+    wholeHive,
+    switchCommunity,
+  } = useAuth();
   const router = useRouter();
   const routeParams = useLocalSearchParams<{
     categoryId?: string | string[];
@@ -171,6 +179,32 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const routeOrigin = getRouteParam(routeParams.from);
   const hasRouteTarget = !!routeCategoryId || !!routePostId;
   const shouldReturnHomeFromRoute = routeOrigin === 'home' && hasRouteTarget;
+
+  // ── Opening a link to one thread ───────────────────────────────────────────
+  //
+  // A link carries a post id and nothing else, so this screen used to draw that
+  // thread inside whichever HIVE you happened to be standing in. Nat walked it
+  // on 2026-08-06: a link opened from HIVE-Wide put an OG HIVE thread on screen
+  // wearing HIVE-Wide's black-and-globe, the trail along the bottom named a
+  // board the thread has never been on, and pressing back left her inside that
+  // board — one she had never opened, in a HIVE the page said she was above.
+  //
+  // Opening a link to a thing puts you where that thing lives. So the row is
+  // read first — it names its own HIVE and its own board — and the screen is
+  // drawn from those two facts: step down into that HIVE, open that board's
+  // thread. A thread this person cannot read gets a sentence saying so instead
+  // of somebody else's board.
+  type RoutePostLanding =
+    | { postId: string; state: 'looking' }
+    | { postId: string; state: 'found'; communityId: string; categoryId: string | null }
+    | { postId: string; state: 'unreachable' };
+  const [landing, setLanding] = useState<RoutePostLanding | null>(null);
+  // /hive-wide-boards shows boards that belong to no one HIVE, so "step into the
+  // HIVE this post lives in" is not a thing it can do. Only /board resolves.
+  const resolvesRoutePost = !!routePostId && !isWide;
+  const landedHere = landing && landing.postId === routePostId ? landing : null;
+  const routePostReady = landedHere?.state === 'found';
+
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -218,9 +252,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
    * them off the route. Only this screen knows which board you opened and which
    * thread you are reading, so that is all it says. The thread's own name is
    * added by `BoardPostDetail`, which is where the title actually arrives.
+   *
+   * A board is named here only once it is genuinely the one you are inside. A
+   * link that is still being placed says nothing about a board, because the
+   * board sitting in state at that moment is the last one you had open — which
+   * is exactly how "Favorite Books!" got into the trail of a thread that has
+   * never been on it (Nat 2026-08-06).
    */
+  const placingRoutePost = resolvesRoutePost && !routePostReady;
   useDeepTrail(
-    selectedCategory
+    selectedCategory && !placingRoutePost
       ? [{
           label: selectedCategory.name,
           onPress: selectedPostId
@@ -407,6 +448,93 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     }, [boardCategoryStorageKey, boardComposerStorageKey, boardDirectOpenStorageKey, boardPostStorageKey, hasRouteTarget, resetBoardToList])
   );
 
+  /**
+   * /board is one HIVE's boards, so it has nothing to say while you are
+   * standing above them all.
+   *
+   * `atWholeHive: 'hidden'` in lib/navigation.ts already says this, and the
+   * rail obeys it — which is why nobody noticed that the SCREEN did not.
+   * `wholeHive` lasts as long as the browser tab, so a link, a reload or a back
+   * press could put you here with the app still up at HIVE-Wide: Nat pressed
+   * back out of a thread on 2026-08-06 and landed on OG HIVE's "Favorite
+   * Books!" wearing HIVE-Wide's black-and-globe, with the trail underneath
+   * calling it a shared board. It was never shared; the page was the wrong page
+   * to be on. This is `lib/hooks/useHiveOnlyScreen.ts`'s job, written out here
+   * because /hive-wide-boards is this same component and genuinely belongs up
+   * there.
+   *
+   * A link still on its way down into a HIVE is left alone — it is about to
+   * bring you into one, and bouncing it would beat it to the punch.
+   */
+  useEffect(() => {
+    if (isWide || !wholeHive || resolvesRoutePost) return;
+    router.replace('/hive-wide' as never);
+  }, [isWide, resolvesRoutePost, router, wholeHive]);
+
+  // Where does this thread actually live? Ask the row, then go there.
+  useEffect(() => {
+    if (!resolvesRoutePost || !routePostId) {
+      setLanding(null);
+      return;
+    }
+    // Already answered for this link. Without this the effect would re-ask on
+    // every render, because switching HIVEs changes the values it reads.
+    if (landing?.postId === routePostId) return;
+    // Which HIVEs this person belongs to lands a moment after the screen does,
+    // and it is the fact that decides whether we can step into one. Deciding
+    // without it would answer "no" to everybody who arrived by link, which is
+    // the bug this whole effect exists to end.
+    if (memberships.length === 0) return;
+
+    let cancelled = false;
+    setLanding({ postId: routePostId, state: 'looking' });
+
+    (async () => {
+      // Row-level security is the referee: a thread this person may not read
+      // comes back empty, and that is the answer, not an error to explain away.
+      const { data, error } = await supabase
+        .from('board_posts')
+        .select('id, community_id, category_id')
+        .eq('id', routePostId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      const row = data as { id: string; community_id: string; category_id: string | null } | null;
+      if (error || !row) {
+        setLanding({ postId: routePostId, state: 'unreachable' });
+        return;
+      }
+
+      setLanding({
+        postId: row.id,
+        state: 'found',
+        communityId: row.community_id,
+        categoryId: row.category_id,
+      });
+
+      // Standing above the HIVEs, or standing in a different one: come down
+      // into the one that owns this thread so the page, the header, the trail
+      // and the way back all agree about where you are. Somebody who can read
+      // the thread without belonging to its HIVE — a board shared HIVE-Wide —
+      // stays exactly where they are, because there is nowhere to step into.
+      const belongsHere = memberships.some((m) => m.community_id === row.community_id);
+      if (belongsHere && (wholeHive || row.community_id !== myCommunityId)) {
+        await switchCommunity(row.community_id);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [
+    landing?.postId,
+    memberships,
+    myCommunityId,
+    resolvesRoutePost,
+    routePostId,
+    switchCommunity,
+    wholeHive,
+  ]);
+
   useEffect(() => {
     if (!communityId || !hasRouteTarget) return;
 
@@ -436,11 +564,27 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       if (boardCategoryStorageKey && shouldPersistRouteTarget) {
         setStoredItem(boardCategoryStorageKey, routeCategoryId);
       }
+    } else if (routePostId) {
+      // The board a thread belongs to is the one named on its own row.
+      //
+      // This branch used to leave whatever was already selected alone, so a
+      // link to a thread inherited the last board you had open: Nat's trail
+      // read "HIVE-Wide › Boards › Favorite Books! › July Newsletter 📰" for a
+      // thread that has never been on Favorite Books!, and pressing back put
+      // her inside that board (2026-08-06). Nothing else knows the answer, so
+      // nothing else may fill it in — it stays empty until the row says.
+      const ownBoardId = routePostReady ? landedHere.categoryId : null;
+      setSelectedCategoryId(ownBoardId);
+      if (boardCategoryStorageKey) {
+        if (ownBoardId && shouldPersistRouteTarget) setStoredItem(boardCategoryStorageKey, ownBoardId);
+        else removeStoredItem(boardCategoryStorageKey);
+      }
     } else if (!shouldPersistRouteTarget) {
       setSelectedCategoryId(null);
     }
 
-    if (routePostId) {
+    // A thread opens once we know where it lives, and not a moment before.
+    if (routePostId && (routePostReady || !resolvesRoutePost)) {
       setSelectedPostId(routePostId);
       if (boardPostStorageKey && shouldPersistRouteTarget) {
         setStoredItem(boardPostStorageKey, routePostId);
@@ -459,20 +603,27 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     boardPostStorageKey,
     communityId,
     hasRouteTarget,
+    landedHere,
+    resolvesRoutePost,
     routeCategoryId,
     routeOpenKey,
     routeOrigin,
     routePostId,
+    routePostReady,
   ]);
 
+  // The two effects below put you back where you were last time. A link names
+  // where it wants you, so they keep their hands off it — otherwise the board
+  // you had open last week quietly reappears around somebody else's thread.
   useEffect(() => {
+    if (hasRouteTarget) return;
     if (!boardCategoryStorageKey || selectedCategoryId || categories.length === 0) return;
 
     const savedCategoryId = getStoredItem(boardCategoryStorageKey);
     if (savedCategoryId && categories.some((category) => category.id === savedCategoryId)) {
       setSelectedCategoryId(savedCategoryId);
     }
-  }, [boardCategoryStorageKey, categories, selectedCategoryId]);
+  }, [boardCategoryStorageKey, categories, hasRouteTarget, selectedCategoryId]);
 
   useEffect(() => {
     if (!boardComposerStorageKey || !selectedCategoryId) return;
@@ -481,13 +632,14 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   }, [boardComposerStorageKey, selectedCategoryId]);
 
   useEffect(() => {
+    if (hasRouteTarget) return;
     if (!boardPostStorageKey || selectedPostId) return;
 
     const savedPostId = getStoredItem(boardPostStorageKey);
     if (savedPostId) {
       setSelectedPostId(savedPostId);
     }
-  }, [boardPostStorageKey, selectedPostId]);
+  }, [boardPostStorageKey, hasRouteTarget, selectedPostId]);
 
   useEffect(() => {
     if (!communityId) return;
@@ -1668,6 +1820,69 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       </Pressable>
     </Modal>
   );
+
+  // A link to one thread, before the thread is on screen.
+  //
+  // This gets a screen of its own rather than letting the boards list draw
+  // underneath while we work it out. The list under a half-arrived link is how
+  // somebody ends up looking at a board they never opened.
+  if (resolvesRoutePost && !routePostReady) {
+    return (
+      <SafeAreaView className="flex-1" style={{ backgroundColor: skin.page }} edges={['top']}>
+        <SpaceBackdrop />
+        {/* A link opened from HIVE-Wide is still at HIVE-Wide until it has
+            found its HIVE, so the header says so rather than putting one
+            HIVE's gold over a page that has not chosen one yet. */}
+        <AppHeader title="Boards" tone={isWide || wholeHive ? 'wide' : 'hive'} />
+        {landedHere?.state !== 'unreachable' ? (
+          <View style={{ flex: 1, justifyContent: 'center' }}>
+            <ThinkingBee />
+          </View>
+        ) : (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 10 }}>
+            <Text style={{ fontSize: 32 }}>🔒</Text>
+            <Text
+              style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: skin.ink, textAlign: 'center' }}
+            >
+              That thread lives somewhere else
+            </Text>
+            <Text
+              style={{
+                fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21,
+                color: skin.inkSoft, textAlign: 'center', maxWidth: 340,
+              }}
+            >
+              It belongs to a HIVE you are not in, or it has been taken down since
+              the link was made.
+            </Text>
+            {/* The way out goes to wherever this person is standing: back up
+                to HIVE-Wide if they came from there, into their own boards if
+                they were already inside a HIVE. */}
+            <Pressable
+              onPress={() => {
+                setLanding(null);
+                router.replace((wholeHive ? '/hive-wide' : '/board') as never);
+              }}
+              accessibilityRole="button"
+              style={({ pressed }) => ({
+                marginTop: 6,
+                paddingHorizontal: 18,
+                paddingVertical: 11,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: skin.border,
+                backgroundColor: pressed ? skin.cardPressed : skin.card,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: skin.ink }}>
+                {wholeHive ? 'Back to HIVE-Wide' : 'Your boards'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+      </SafeAreaView>
+    );
+  }
 
   // Post detail view
   if (selectedLinkedWish) {

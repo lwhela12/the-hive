@@ -36,15 +36,15 @@ export type NewsletterHeader = {
 /**
  * Order matters — the most specific phrases sit above the general ones, so
  * "compliment corner" doesn't get eaten by "corner" or a stray "wins".
+ *
+ * The "Our Current Queen Bee" header came out on 2026-08-06. Queen Bee — one
+ * member a month getting the community's focus — was dissolved in April 2026 and
+ * replaced by the Hummdinger session, where everyone's wish is live at once. Its
+ * art matched the generic words "spotlight" and "member of the month" as well as
+ * "queen bee", so an ordinary section title would have printed a gold banner
+ * announcing a person the HIVE no longer picks.
  */
 export const NEWSLETTER_HEADERS: NewsletterHeader[] = [
-  {
-    key: 'queen-bee',
-    source: require('../assets/newsletter/queen-bee.png'),
-    ratio: 1000 / 320,
-    matches: ['queen bee', 'spotlight', 'member of the month'],
-    alt: 'Our Current Queen Bee',
-  },
   {
     key: 'looking-ahead',
     source: require('../assets/newsletter/looking-ahead.png'),
@@ -57,7 +57,7 @@ export const NEWSLETTER_HEADERS: NewsletterHeader[] = [
     source: require('../assets/newsletter/keep-humming.png'),
     ratio: 1000 / 320,
     matches: ['hive help', 'hang', 'humming', 'kindness', 'giving back', 'meetup'],
-    alt: 'Keep the Hive Humming',
+    alt: 'Keep the HIVE Humming',
   },
   {
     key: 'highlights',
@@ -187,7 +187,7 @@ const LABEL_MAX = 60;
  *   another title. That is what stops "Sort" and "Replant all" from becoming
  *   headings while "Around the HIVE" and "HIVE Help" still do.
  * - A short line ending in a colon is a label rather than a heading, so
- *   "Queen Bee for April:" sits quietly over the name it announces.
+ *   "Wishes granted in April:" sits quietly over the names it announces.
  * - Two or more short lines in a row under a label are that label's list, not a
  *   stack of headings ("General meeting reminders:" / "Bring a snack…").
  */
@@ -251,8 +251,8 @@ export function readLetter(text: string): LetterBlock[] {
     return introduces(blocks[i + 1]) ? 'heading' : null;
   });
 
-  // A title sitting directly on top of another title is a title too — "May
-  // Queen Bee" over "Lucas Whelan". Not when a label already opened the
+  // A title sitting directly on top of another title is a title too — "HIVE
+  // Help in May" over "Lucas Whelan". Not when a label already opened the
   // section, though: then these short lines are the label's contents.
   for (let i = blocks.length - 2; i >= 0; i--) {
     if (marks[i] || !marks[i + 1]) continue;

@@ -9,14 +9,18 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { AppHeader } from '../../components/navigation';
+// No AppHeader here on purpose — the title floats in the sky, and a gold bar
+// across the top would put you back inside a HIVE (Nat 2026-08-03). The import
+// hung around after the header came out.
 import { SpaceGlobe, SPACE_BLACK } from '../../components/ui/SpaceGlobe';
 import { HiveMark } from '../../components/ui/HiveMark';
 import { HiveWideWelcome } from '../../components/ui/HiveWideWelcome';
+import { HIVE_WIDE_WELCOME_VERSION } from '../../lib/hiveWide';
 import { loadHiveWideWelcomeSeen, persistHiveWideWelcomeSeen } from '../../lib/readState';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../lib/hooks/useAuth';
+import { useAuth, type HiveMembership } from '../../lib/hooks/useAuth';
 import { STANDING_INVITATION } from '../../lib/hiveFocus';
 import { getAppNews } from '../../lib/appNews';
 import { accentOnDark, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
@@ -117,6 +121,8 @@ const CARD_EDGE = 'rgba(255,226,166,0.22)';
 const INK = '#FFF8E9';
 const INK_SOFT = 'rgba(255,248,233,0.72)';
 const INK_FAINT = 'rgba(255,248,233,0.45)';
+/** The gold that reads on space — the same one the welcome panel wears. */
+const GOLD_ON_SPACE = '#E8C77E';
 
 /** One of the four boxes. Same shell for all of them so they read as a set. */
 function TopBox({ label, wide, children }: { label: string; wide: boolean; children: React.ReactNode }) {
@@ -218,9 +224,146 @@ function HiveLine({ hive, event }: { hive: Community; event: HiveEvent | null })
   );
 }
 
+/**
+ * The way down into your own HIVE.
+ *
+ * HIVE-Wide stays the page everybody lands on — Nat, 2026-08-06: "otherwise you
+ * might never go there." What that costs is paid here. Somebody who accepted an
+ * invite an hour ago opens the app to a black photograph of the Earth, and the
+ * five numbered steps in their invite email — fill in your profile, read the
+ * other members, answer the daily question, add what you are good at, post a
+ * wish — are all inside their own HIVE, along with Clive, who the email calls
+ * the fastest way to get unstuck. Standing above the HIVEs, every one of those
+ * doors is out of the menu on purpose (`atWholeHive: 'hidden'` in
+ * lib/navigation.ts), so the page has to say where they went.
+ *
+ * So this is the first thing under the title: the member's HIVE, by name, in
+ * its own colour, as one big button that goes there. Nat on who is reading it:
+ * "we have very very very very not tech savvy people."
+ */
+function WayIntoYourHive({
+  memberships,
+  firstName,
+  firstVisit,
+  onEnter,
+}: {
+  memberships: HiveMembership[];
+  firstName: string | null;
+  /** Shown the long explanation, until they put the welcome away. */
+  firstVisit: boolean;
+  onEnter: (communityId: string) => void;
+}) {
+  if (memberships.length === 0) return null;
+
+  const names = memberships.map((m) => hiveDisplayName(m.community?.name));
+  const many = names.length > 1;
+  // "OG HIVE", "OG HIVE and Tech HIVE", "OG HIVE, Tech HIVE and Production HIVE"
+  const nameList = names.length <= 1
+    ? names[0]
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+  return (
+    <View
+      style={{
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: CARD_EDGE,
+        borderLeftWidth: 4,
+        borderLeftColor: GOLD_ON_SPACE,
+        // A little brighter than the cards below it. On a first visit this sits
+        // right above the HIVE-Wide welcome, which wears the same gold edge, and
+        // two identical panels one on top of the other read as one long
+        // paragraph. The door is the thing to look at first.
+        backgroundColor: 'rgba(255,248,233,0.09)',
+        padding: 20,
+        gap: 14,
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, color: INK,
+        }}
+      >
+        {firstVisit
+          ? `Welcome${firstName ? `, ${firstName}` : ''} 🐝`
+          : many ? 'Your HIVEs' : 'Your HIVE'}
+      </Text>
+
+      {firstVisit ? (
+        <Text
+          style={{
+            fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 23, color: INK_SOFT,
+          }}
+        >
+          This page shows all the HIVEs at once. {many ? 'Yours are' : 'Yours is'}{' '}
+          <Text style={{ fontFamily: 'Lato_700Bold', color: INK }}>{nameList}</Text>, and
+          that is where the rest of the app is: your profile, the other members, the
+          daily question, your wishes, and Clive, who answers questions. Tap
+          {many ? ' one of the buttons' : ' the button'} below to go in.
+        </Text>
+      ) : null}
+
+      <View style={{ gap: 10 }}>
+        {memberships.map((m) => {
+          const name = hiveDisplayName(m.community?.name);
+          // The HIVE's own colour, lifted until it reads on the night sky, and
+          // filled rather than outlined — this is the one thing on the page
+          // that has to look like a button to somebody who has never seen it.
+          const colour = accentOnDark(hiveAccent(m.community));
+          return (
+            <Pressable
+              key={m.community_id}
+              onPress={() => onEnter(m.community_id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Go into ${name}`}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 11,
+                paddingVertical: 15,
+                paddingHorizontal: 18,
+                borderRadius: 14,
+                backgroundColor: colour,
+              }}
+            >
+              <HiveMark size={16} colour={SPACE_BLACK} />
+              <Text
+                style={{
+                  flex: 1, fontFamily: 'Lato_700Bold', fontSize: 16, color: SPACE_BLACK,
+                }}
+                numberOfLines={2}
+              >
+                Go into {name}
+              </Text>
+              <Ionicons name="arrow-forward" size={19} color={SPACE_BLACK} />
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Said once, and said the same way the rail is drawn: HIVE-Wide is the
+          first row under "My HIVEs", with the Earth on it. Somebody who goes in
+          needs to know the way back before they take it. */}
+      <Text
+        style={{
+          fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: INK_FAINT,
+        }}
+      >
+        HIVE-Wide is here whenever you want it — it is the top of the menu on the
+        left, with the little world beside it.
+      </Text>
+    </View>
+  );
+}
+
 export default function HiveWideScreen() {
   const router = useRouter();
-  const { communityId, community, profile, refreshProfile } = useAuth();
+  const { communityId, community, profile, refreshProfile, memberships, switchCommunity } = useAuth();
+
+  // Whether this person has put the HIVE-Wide welcome away is the same question
+  // as whether they have been here before, so the door reads it rather than
+  // inventing a second "have you seen this?" flag on the profile.
+  const firstVisit = loadHiveWideWelcomeSeen(profile) !== HIVE_WIDE_WELCOME_VERSION;
 
   // Read once rather than on every render — it is a constant in a file.
   const allAppNews = useMemo(() => getAppNews(), []);
@@ -452,6 +595,19 @@ export default function HiveWideScreen() {
         }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {/* Outside the loading branch on purpose. The door is built entirely
+            from who you are, which the app already knows the moment you sign
+            in — so a new member sees the way into their HIVE while the rest of
+            this page is still fetching, rather than after it. */}
+        <WayIntoYourHive
+          memberships={memberships}
+          firstName={(profile?.name ?? '').trim().split(/\s+/)[0] || null}
+          firstVisit={firstVisit}
+          // Picking a HIVE by name is how you come down out of HIVE-Wide —
+          // `switchCommunity` clears the HIVE-Wide standing and lands you on
+          // that HIVE's home page (see lib/hiveSwitchRoute.ts).
+          onEnter={(id) => { void switchCommunity(id); }}
+        />
         {loading ? (
           <ThinkingBee />
         ) : (

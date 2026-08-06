@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   Pressable,
-  TextInput,
   Alert,
   RefreshControl,
   Modal,
@@ -41,7 +40,6 @@ import {
 import { Avatar } from '../../components/ui/Avatar';
 import { MemberProfileLink } from '../../components/ui/MemberProfileLink';
 import { EventDatePicker } from '../../components/ui/DatePicker';
-import { FIELD_LOOK } from '../../components/ui/Input';
 import { AppHeader } from '../../components/navigation';
 import {
   ADMIN_PANEL_ORDER,
@@ -63,7 +61,7 @@ import {
 import type { Survey, SurveyAnswers, SurveyQuestion, SurveyResponse } from '../../lib/hooks/useSurveys';
 import { parseAmericanDate } from '../../lib/dateUtils';
 import { getWishQuickTitle } from '../../lib/wishDisplay';
-import type { Profile, QueenBee, UserRole, CommunityInvite, Event, Wish } from '../../types';
+import type { Profile, UserRole, CommunityInvite, Event, Wish } from '../../types';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -114,13 +112,9 @@ type InviteFunctionResponse = {
   reusedInvite?: boolean;
 };
 
-const ROLE_OPTIONS: UserRole[] = ['member', 'treasurer', 'admin'];
-
-const ROLE_LABELS: Record<UserRole, string> = {
-  member: 'Member',
-  treasurer: 'Treasurer',
-  admin: 'Admin',
-};
+// The three roles and their labels moved out with the member editor above —
+// they live as `ROLES` in `components/admin/GodModePanels.tsx` now, beside the
+// buttons that set them, with a line each saying what the role actually does.
 
 const DUES_QUARTERS = [1, 2, 3, 4] as const;
 
@@ -1092,11 +1086,9 @@ export default function AdminScreen() {
   const canEditHoneyPot = isTreasurer || isAdmin;
   const [refreshing, setRefreshing] = useState(false);
   const [members, setMembers] = useState<MemberRow[]>([]);
-  const [queenBees, setQueenBees] = useState<QueenBee[]>([]);
   const [pendingInvites, setPendingInvites] = useState<InviteRow[]>([]);
 
   // Modal states
-  const [showQueenBeeModal, setShowQueenBeeModal] = useState(false);
   const [pendingCheckInOpen, setPendingCheckInOpen] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
@@ -1130,13 +1122,6 @@ export default function AdminScreen() {
   const [draggingQuestionId, setDraggingQuestionId] = useState<string | null>(null);
 
   // Form states
-  const [selectedMember, setSelectedMember] = useState<Profile | null>(null);
-  const [qbMonth, setQbMonth] = useState('');
-  const [qbTitle, setQbTitle] = useState('');
-  const [qbDescription, setQbDescription] = useState('');
-  const [qbStatus, setQbStatus] = useState<'upcoming' | 'active' | 'completed'>('upcoming');
-  const [editingQueenBee, setEditingQueenBee] = useState<QueenBee | null>(null);
-
   const [eventTitle, setEventTitle] = useState('');
   const [eventAudience, setEventAudience] = useState<EventAudience>('members');
   const [eventDate, setEventDate] = useState('');
@@ -1178,16 +1163,6 @@ export default function AdminScreen() {
       .order('created_at', { ascending: true });
     const memberRows = (membersData || []) as unknown as MemberRow[];
     if (membersData) setMembers(memberRows);
-
-    // Fetch queen bees (ordered by display_order for queue)
-    const { data: qbData } = await supabase
-      .from('queen_bees')
-      .select('*')
-      .eq('community_id', communityId)
-      .order('display_order', { ascending: true })
-      .order('month', { ascending: true })
-      .limit(12);
-    if (qbData) setQueenBees(qbData);
 
     // Fetch pending invites
     const { data: invitesData } = await supabase
@@ -1681,172 +1656,18 @@ export default function AdminScreen() {
     }
   };
 
-  const updateMemberRole = async (membershipId: string, role: UserRole) => {
-    const { error } = await supabase
-      .from('community_memberships')
-      .update({ role })
-      .eq('id', membershipId);
-
-    if (error) {
-      showAlert('Error', 'Failed to update role');
-    } else {
-      await fetchData();
-    }
-  };
-
-  const removeMember = async (membershipId: string, memberName: string, memberId: string) => {
-    // Don't allow removing yourself
-    if (memberId === profile?.id) {
-      showAlert('Error', "You can't remove yourself from the community.");
-      return;
-    }
-
-    const doRemove = async () => {
-      try {
-        const { error } = await supabase
-          .from('community_memberships')
-          .delete()
-          .eq('id', membershipId);
-
-        if (error) throw error;
-        await fetchData();
-        showAlert('Success', `${memberName} has been removed from the community.`);
-      } catch (err) {
-        console.error('Remove member error:', err);
-        showAlert('Error', 'Failed to remove member');
-      }
-    };
-
-    // Confirmation
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(`Remove ${memberName} from the community?\n\nThey can be re-invited later.`)) {
-        await doRemove();
-      }
-    } else {
-      Alert.alert(
-        'Remove Member',
-        `Remove ${memberName} from the community?\n\nThey can be re-invited later.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Remove', style: 'destructive', onPress: doRemove },
-        ]
-      );
-    }
-  };
-
-  const createQueenBee = async () => {
-    if (!selectedMember || !communityId) {
-      showAlert('Error', 'Please select a member');
-      return;
-    }
-
-    // Auto-generate month if not provided (next available month)
-    // Format: YYYY-MM (ISO format for proper sorting and querying)
-    let month = qbMonth;
-
-    // Normalize manual input: convert MM-YYYY to YYYY-MM if needed
-    if (month) {
-      const parts = month.split('-');
-      if (parts.length === 2) {
-        const first = parseInt(parts[0], 10);
-        const second = parseInt(parts[1], 10);
-        if (first <= 12 && second > 12) {
-          // MM-YYYY format entered, convert to YYYY-MM
-          month = `${second}-${String(first).padStart(2, '0')}`;
-        }
-      }
-    }
-
-    if (!month) {
-      // Sort existing months to find the latest one
-      const existingMonths = queenBees.map(qb => qb.month);
-      // Parse both MM-YYYY and YYYY-MM formats for backwards compatibility
-      const parsedMonths = existingMonths
-        .map(m => {
-          const parts = m.split('-');
-          if (parts.length === 2) {
-            // Could be MM-YYYY or YYYY-MM
-            const first = parseInt(parts[0], 10);
-            const second = parseInt(parts[1], 10);
-            if (first > 12) {
-              // YYYY-MM format
-              return { year: first, month: second };
-            } else {
-              // MM-YYYY format (legacy)
-              return { year: second, month: first };
-            }
-          }
-          return null;
-        })
-        .filter(Boolean) as { year: number; month: number }[];
-
-      if (parsedMonths.length > 0) {
-        // Find the latest month
-        parsedMonths.sort((a, b) => {
-          if (a.year !== b.year) return b.year - a.year;
-          return b.month - a.month;
-        });
-        const latest = parsedMonths[0];
-        // Increment
-        const nextMonth = latest.month === 12 ? 1 : latest.month + 1;
-        const nextYear = latest.month === 12 ? latest.year + 1 : latest.year;
-        month = `${nextYear}-${String(nextMonth).padStart(2, '0')}`;
-      } else {
-        // Start with current month
-        const now = new Date();
-        month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      }
-    }
-
-    const { error } = await supabase.from('queen_bees').insert({
-      user_id: selectedMember.id,
-      community_id: communityId,
-      month,
-      project_title: qbTitle || 'TBD',
-      project_description: qbDescription || null,
-      status: qbStatus,
-    });
-
-    if (error) {
-      showAlert('Error', 'Failed to create Queen Bee');
-    } else {
-      closeQueenBeeModal();
-      await fetchData();
-    }
-  };
-
-  const updateQueenBee = async () => {
-    if (!editingQueenBee || !qbTitle) {
-      showAlert('Error', 'Please fill in required fields');
-      return;
-    }
-
-    const { error } = await supabase
-      .from('queen_bees')
-      .update({
-        project_title: qbTitle,
-        project_description: qbDescription,
-        status: qbStatus,
-      })
-      .eq('id', editingQueenBee.id);
-
-    if (error) {
-      showAlert('Error', 'Failed to update Queen Bee');
-    } else {
-      closeQueenBeeModal();
-      await fetchData();
-    }
-  };
-
-  const closeQueenBeeModal = () => {
-    setShowQueenBeeModal(false);
-    setEditingQueenBee(null);
-    setSelectedMember(null);
-    setQbMonth('');
-    setQbTitle('');
-    setQbDescription('');
-    setQbStatus('upcoming');
-  };
+  // `updateMemberRole` and `removeMember` used to live here, and they are gone
+  // (2026-08-06). They were the reason Nat could not manage anybody who had
+  // actually joined: the per-HIVE members panel moved into
+  // `components/admin/GodModePanels.tsx` on 2026-08-03, and these two were left
+  // behind — defined, called by nothing, looking from the outside like the
+  // feature was still here. The working version is `changeRole` and
+  // `removeMember` in that file, on each HIVE's own Members tab.
+  //
+  // Worth keeping in mind if either is ever reached for again: the old pair
+  // said "the community" for a per-HIVE fact, told `window.confirm` on web and
+  // `Alert.alert` on a phone (which does nothing in a browser), and let the
+  // last admin of a HIVE be demoted away, leaving nobody who could run it.
 
   const createEvent = async () => {
     if (!eventTitle || !eventDate || !communityId) {
@@ -2968,131 +2789,6 @@ export default function AdminScreen() {
                   </Text>
                 </Pressable>
               </View>
-            </ScrollView>
-          </View>
-        </ModalBackdrop>
-      </Modal>
-
-      {/* Queen Bee Modal */}
-      <Modal visible={showQueenBeeModal} animationType="slide" transparent onRequestClose={() => setShowQueenBeeModal(false)}>
-        <ModalBackdrop onClose={() => setShowQueenBeeModal(false)} style={{ justifyContent: 'flex-end' }}>
-          {/* Member picker, month, two text boxes and a status row, with Save
-              at the very bottom — the tallest sheet in admin and the one most
-              likely to put its own button out of reach. */}
-          <View className="bg-white rounded-t-3xl" style={{ maxHeight: '90%', overflow: 'hidden' }}>
-            <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
-            <Text className="text-xl font-bold text-gray-800 mb-4">
-              {editingQueenBee ? 'Edit Queen Bee' : 'Set Queen Bee'}
-            </Text>
-
-            {!editingQueenBee && (
-              <>
-                <Text className="text-gray-600 mb-2">Select Member</Text>
-                <ScrollView horizontal className="mb-4">
-                  {members.map((member) => (
-                    <Pressable
-                      key={member.id}
-                      onPress={() => setSelectedMember(member.profiles)}
-                      className={`mr-2 p-2 rounded-lg ${
-                        selectedMember?.id === member.profiles.id
-                          ? 'bg-honey-100 border-2 border-honey-500'
-                          : 'bg-gray-100'
-                      }`}
-                    >
-                      <Text className="font-medium">{member.profiles.name}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-
-                {/* A month is a slot on a calendar, not a sentence, so no mic —
-                    but it wears the same fill, edge and placeholder ink as every
-                    box around it. */}
-                <TextInput
-                  placeholder="Month YYYY-MM (auto-fills next)"
-                  value={qbMonth}
-                  onChangeText={setQbMonth}
-                  placeholderTextColor={FIELD_LOOK.placeholder}
-                  selectionColor={FIELD_LOOK.ink}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: FIELD_LOOK.border,
-                    borderRadius: FIELD_LOOK.radius,
-                    backgroundColor: FIELD_LOOK.fill,
-                    paddingHorizontal: FIELD_LOOK.paddingHorizontal,
-                    paddingVertical: FIELD_LOOK.paddingVertical,
-                    marginBottom: 12,
-                    fontFamily: FIELD_LOOK.font,
-                    fontSize: FIELD_LOOK.fontSize,
-                    color: FIELD_LOOK.ink,
-                  }}
-                />
-              </>
-            )}
-
-            {editingQueenBee && (
-              <View className="mb-3 p-3 bg-gray-50 rounded-lg">
-                <Text className="text-gray-600">
-                  {selectedMember?.name} • {qbMonth}
-                </Text>
-              </View>
-            )}
-
-            <ComposerBar
-              variant="form"
-              containerClassName="mb-3"
-              label="Project title"
-              value={qbTitle}
-              onChangeText={setQbTitle}
-              placeholder="Optional — defaults to TBD"
-              multiline={false}
-            />
-            <ComposerBar
-              variant="form"
-              containerClassName="mb-3"
-              label="Project description (optional)"
-              value={qbDescription}
-              onChangeText={setQbDescription}
-              minHeight={78}
-            />
-
-            <Text className="text-gray-600 mb-2">Status</Text>
-            <View className="flex-row mb-4">
-              {(['upcoming', 'active', 'completed'] as const).map((status) => (
-                <Pressable
-                  key={status}
-                  onPress={() => setQbStatus(status)}
-                  className={`px-4 py-2 rounded-lg mr-2 ${
-                    qbStatus === status
-                      ? status === 'active' ? 'bg-green-500' :
-                        status === 'completed' ? 'bg-gray-500' : 'bg-honey-500'
-                      : 'bg-gray-100'
-                  }`}
-                >
-                  <Text className={`capitalize ${
-                    qbStatus === status ? 'text-white' : 'text-gray-600'
-                  }`}>
-                    {status}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <View className="flex-row">
-              <Pressable
-                onPress={closeQueenBeeModal}
-                className="flex-1 bg-gray-200 py-3 rounded-lg mr-2"
-              >
-                <Text className="text-center font-semibold">Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={editingQueenBee ? updateQueenBee : createQueenBee}
-                className="flex-1 bg-honey-500 py-3 rounded-lg"
-              >
-                <Text className="text-center font-semibold text-white">
-                  {editingQueenBee ? 'Save' : 'Create'}
-                </Text>
-              </Pressable>
-            </View>
             </ScrollView>
           </View>
         </ModalBackdrop>

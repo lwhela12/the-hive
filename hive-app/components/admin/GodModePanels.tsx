@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { HIVE_GOLD, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { HIVE_GOLD, accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateMedium } from '../../lib/dateUtils';
 import { showAlert } from '../../lib/showAlert';
 import type { UserRole } from '../../types';
@@ -40,11 +40,46 @@ const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
  */
 const FIELD = FIELD_LOOK;
 
-const ROLES: { value: UserRole; label: string }[] = [
-  { value: 'member', label: 'Member' },
-  { value: 'treasurer', label: 'Treasurer' },
-  { value: 'admin', label: 'Admin' },
+const ROLES: { value: UserRole; label: string; hint: string }[] = [
+  { value: 'member', label: 'Member', hint: 'Everything a HIVE is for' },
+  { value: 'treasurer', label: 'Treasurer', hint: 'Looks after the Honey Pot' },
+  { value: 'admin', label: 'Admin', hint: 'Invites, roles and the settings' },
 ];
+
+/**
+ * What somebody is, in their HIVE's own colour.
+ *
+ * These were grey pills, in all three boxes, so Tech HIVE's ADMIN and OG HIVE's
+ * ADMIN looked like the same fact about the same place (Nat 2026-08-06). The
+ * panel already knows whose box it is drawing, so the chip may as well say it.
+ *
+ * The lettering goes through `accentOnDark` because these sit on a dark panel:
+ * Tech's #2f4a63 as ink on near-black is about 1.9:1, which is a word nobody
+ * can read. Admin carries the most colour and member the least, so the row
+ * still sorts itself by weight before anybody reads a word.
+ */
+function RoleChip({ accent, role }: { accent: string; role: string }) {
+  const fill = role === 'admin' ? 0.32 : role === 'treasurer' ? 0.24 : 0.14;
+  const edge = role === 'member' ? 0.34 : 0.62;
+  return (
+    <View
+      style={{
+        paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+        backgroundColor: accentWash(accent, fill),
+        borderWidth: 1, borderColor: accentWash(accent, edge),
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: 'Lato_700Bold', fontSize: 9.5, letterSpacing: 0.7,
+          textTransform: 'uppercase', color: accentOnDark(accent),
+        }}
+      >
+        {role}
+      </Text>
+    </View>
+  );
+}
 
 /* --------------------------------------------------- invited, not joined yet */
 
@@ -295,7 +330,19 @@ export function NewsletterPanel({
    * into the board and only the draft ever read them, which is also why nobody
    * noticed the draft was reading none of them.
    */
-  const [tab, setTab] = useState<'shoutouts' | 'signed'>('shoutouts');
+  /**
+   * Writing it is a tab too, now.
+   *
+   * Nat, 2026-08-06: "I just think we need to move the 'write this months
+   * newsletter' into it's own tab." It was a full-width banner pinned above the
+   * tab row, so it stayed on screen whichever tab you were reading — one job
+   * shouting over the other two instead of standing beside them.
+   *
+   * The box opens on Shout-outs rather than Write, because what the box is FOR
+   * on arrival is showing you what members have asked to have mentioned. Write
+   * is where you go once you've read them.
+   */
+  const [tab, setTab] = useState<'write' | 'shoutouts' | 'signed'>('shoutouts');
   const [shoutOuts, setShoutOuts] = useState<
     { id: string; content: string; created_at: string; author: string }[]
   >([]);
@@ -387,37 +434,51 @@ export function NewsletterPanel({
       <Panel
         title="Newsletter"
         tabs={[
+          // The draft quotes members before Nat has chosen what stays in, so
+          // the tab itself is hers alone. Anyone else never sees the door.
+          ...(profile?.is_owner ? [{ key: 'write', label: 'Write this month’s' }] : []),
           { key: 'shoutouts', label: `Shout-outs (${shoutOuts.length})` },
           { key: 'signed', label: `Signed up (${active.length})` },
         ]}
         activeTab={tab}
-        onTabChange={(key: string) => setTab(key as 'shoutouts' | 'signed')}
+        onTabChange={(key: string) => setTab(key as 'write' | 'shoutouts' | 'signed')}
         style={panelStyle}
         bodyStyle={bodyStyle}
       >
         <ScrollView style={scrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
-          {/* The draft quotes members before Nat has chosen what stays in, so
-              the screen itself is hers alone. Anyone else never sees the door. */}
-          {profile?.is_owner ? (
-            <Pressable
-              onPress={() => router.push({ pathname: '/newsletter', params: { from: 'admin' } } as any)}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-                paddingHorizontal: 14,
-                paddingVertical: 13,
-                borderBottomWidth: 1,
-                borderBottomColor: 'rgba(222,193,129,0.35)',
-                backgroundColor: pressed ? '#fbf0d7' : '#fdf9ee',
-              })}
-            >
-              <Ionicons name="create-outline" size={18} color="#bd9348" />
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#8a6b30', flex: 1 }}>
-                Write this month&rsquo;s newsletter
+          {tab === 'write' && profile?.is_owner ? (
+            <View>
+              <Pressable
+                onPress={() => router.push({ pathname: '/newsletter', params: { from: 'admin' } } as any)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  paddingHorizontal: 14,
+                  paddingVertical: 13,
+                  borderBottomWidth: 1,
+                  borderBottomColor: 'rgba(222,193,129,0.35)',
+                  backgroundColor: pressed ? '#fbf0d7' : '#fdf9ee',
+                })}
+              >
+                <Ionicons name="create-outline" size={18} color="#bd9348" />
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#8a6b30', flex: 1 }}>
+                  Write this month&rsquo;s newsletter
+                </Text>
+                <Ionicons name="chevron-forward" size={15} color="#bd9348" />
+              </Pressable>
+              <Text
+                style={{
+                  fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060',
+                  lineHeight: 19, padding: 14,
+                }}
+              >
+                The draft opens on its own page, where you shape it and post it.
+                {shoutOuts.length > 0
+                  ? ` The ${shoutOuts.length} ${shoutOuts.length === 1 ? 'thing' : 'things'} members have asked to have mentioned are in Shout-outs — worth reading before you start.`
+                  : ' Anything members ask to have mentioned shows up in Shout-outs.'}
               </Text>
-              <Ionicons name="chevron-forward" size={15} color="#bd9348" />
-            </Pressable>
+            </View>
           ) : null}
 
           {tab === 'shoutouts' ? (
@@ -569,7 +630,7 @@ export function HiveMemberPanels({
   /** Opens the check-in editor on the Admin screen, for whichever HIVE is current. */
   onOpenCheckIns?: () => void;
 }) {
-  const { memberships, communityId, switchCommunity } = useAuth();
+  const { memberships, communityId, switchCommunity, profile, refreshProfile } = useAuth();
   const router = useRouter();
 
   // Every tool link switches into the HIVE first, then opens the page. Without
@@ -606,6 +667,25 @@ export function HiveMemberPanels({
   const [invitesByHive, setInvitesByHive] = useState<Record<string, PendingInvite[]>>({});
   const [confirmRevoke, setConfirmRevoke] = useState<{ invite: PendingInvite; hiveName: string } | null>(null);
   const [revoking, setRevoking] = useState(false);
+  /**
+   * Managing somebody who has already walked in.
+   *
+   * Nat, 2026-08-06: "I added 'thenateffect' to tech hive, but now i cant
+   * revoke access or change them to admin or treasurer, i need to be able to do
+   * that from my admin site." A pending invite had a Revoke button and a joined
+   * member had a chip and nothing else, so the moment somebody accepted they
+   * became unmanageable.
+   *
+   * The open row is keyed by HIVE **and** person, because the same face can sit
+   * in three boxes on this screen and opening her in Tech must not also open her
+   * in OG.
+   */
+  const [managing, setManaging] = useState<string | null>(null);
+  const [savingRow, setSavingRow] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<
+    { hiveId: string; hiveName: string; row: Row; isSelf: boolean } | null
+  >(null);
+  const [removing, setRemoving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -727,6 +807,92 @@ export function HiveMemberPanels({
     await load();
   };
 
+  /**
+   * Make somebody a member, a treasurer or an admin — of THIS HIVE.
+   *
+   * The role lives on the `community_memberships` row, one row per person per
+   * HIVE, so this is the whole reason both filters are on the write: changing
+   * what somebody is in Tech HIVE leaves what they are in OG HIVE alone.
+   *
+   * The database agrees: the UPDATE rule on that table is
+   * `is_community_admin(community_id)`, which is true for an admin of that HIVE
+   * and for Nat and Lucas everywhere (checked against live `pg_policies`,
+   * 2026-08-06). Nothing here needs a migration.
+   */
+  const changeRole = async (hiveId: string, hiveName: string, row: Row, next: UserRole) => {
+    const key = `${hiveId}:${row.id}`;
+    if (savingRow || row.role === next) return;
+
+    setSavingRow(key);
+    const { data, error } = await supabase
+      .from('community_memberships')
+      .update({ role: next })
+      .eq('community_id', hiveId)
+      .eq('user_id', row.id)
+      .select();
+    setSavingRow(null);
+
+    if (error) {
+      showAlert('Could not change that', error.message);
+      return;
+    }
+    // An empty answer means the rules let the write run and then found no row
+    // it was allowed to touch. Saying nothing here is how "the button does
+    // nothing" happens.
+    if (!data || data.length === 0) {
+      showAlert(
+        'Nothing changed',
+        `${row.name} is no longer in ${hiveName}, or you are not an admin of it.`
+      );
+      await load();
+      return;
+    }
+
+    await load();
+    // Your own badge is drawn from the rail's copy of your memberships, so it
+    // has to be told when you change your own.
+    if (row.id === profile?.id) await refreshProfile();
+  };
+
+  /**
+   * Take somebody out of one HIVE.
+   *
+   * Deleting the membership row is the whole of it — everything in the app asks
+   * that table who belongs where. Their profile, and every other HIVE they are
+   * in, is untouched.
+   */
+  const removeMember = async () => {
+    if (!confirmRemove || removing) return;
+    const { hiveId, hiveName, row, isSelf } = confirmRemove;
+
+    setRemoving(true);
+    const { data, error } = await supabase
+      .from('community_memberships')
+      .delete()
+      .eq('community_id', hiveId)
+      .eq('user_id', row.id)
+      .select();
+    setRemoving(false);
+    setConfirmRemove(null);
+
+    if (error) {
+      showAlert('Could not remove them', error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      showAlert(
+        'Nobody was removed',
+        `${row.name} is already out of ${hiveName}, or you are not an admin of it.`
+      );
+      await load();
+      return;
+    }
+
+    setManaging(null);
+    await load();
+    if (isSelf) await refreshProfile();
+  };
+
   return (
     <>
       {/* EVERY HIVE, including the one you happen to be standing in.
@@ -747,6 +913,16 @@ export function HiveMemberPanels({
         const inviting = inviteFor === m.community_id;
         const tab = tabFor[m.community_id] ?? 'members';
         const invites = invitesByHive[m.community_id] ?? [];
+        // Who is allowed to change what people are here. An admin of this HIVE,
+        // and Nat and Lucas anywhere — which is exactly what the database's own
+        // rule says, so the buttons and the rules agree rather than one of them
+        // quietly failing.
+        const canManage = m.role === 'admin' || !!profile?.is_owner;
+        // The one person whose badge cannot come off. A HIVE with no admin has
+        // nobody who can invite, nobody who can hand the job to anyone else, and
+        // no way back without somebody going into the database by hand.
+        const admins = rows.filter((r) => r.role === 'admin');
+        const soleAdminId = admins.length === 1 ? admins[0].id : null;
 
         return (
           <View key={m.community_id} style={[cellStyle, { order: orderFrom + index * 2 } as any]}>
@@ -933,13 +1109,22 @@ export function HiveMemberPanels({
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.55)', padding: 16 }}>
                     Nobody here yet.
                   </Text>
-                ) : rows.map((r) => (
+                ) : rows.map((r) => {
+                  const rowKey = `${m.community_id}:${r.id}`;
+                  const open = managing === rowKey;
+                  const busy = savingRow === rowKey;
+                  const onlyAdmin = soleAdminId === r.id;
+                  const isSelf = r.id === profile?.id;
+
+                  return (
                   <View
                     key={r.id}
+                    style={{ borderBottomWidth: 1, borderBottomColor: skin.hairline }}
+                  >
+                  <View
                     style={{
                       flexDirection: 'row', alignItems: 'center', gap: 10,
                       paddingHorizontal: 14, paddingVertical: 10,
-                      borderBottomWidth: 1, borderBottomColor: skin.hairline,
                     }}
                   >
                     <View style={{ flex: 1 }}>
@@ -953,25 +1138,139 @@ export function HiveMemberPanels({
                     {/* Everyone says what they are, including plain members —
                         "each one should show what they are" (Nat 2026-08-03).
                         Only marking the exceptions meant a blank row could be
-                        read either as a member or as something still loading. */}
+                        read either as a member or as something still loading.
+
+                        The chip is also the way in: press it and the row opens
+                        onto what you can change. It was a flat label, which is
+                        why a joined member looked like a fact rather than a
+                        person you could do something about. */}
+                    {canManage ? (
+                      <Pressable
+                        onPress={() => setManaging(open ? null : rowKey)}
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: open }}
+                        accessibilityLabel={`${r.name} is ${r.role} in ${name}. Change their role, or remove them.`}
+                        hitSlop={6}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row', alignItems: 'center', gap: 4,
+                          opacity: pressed || busy ? 0.7 : 1,
+                        })}
+                      >
+                        <RoleChip accent={accent} role={r.role} />
+                        <Ionicons
+                          name={open ? 'chevron-up' : 'chevron-down'}
+                          size={13}
+                          color="rgba(246,244,229,0.6)"
+                        />
+                      </Pressable>
+                    ) : (
+                      <RoleChip accent={accent} role={r.role} />
+                    )}
+                  </View>
+
+                  {/* WHAT YOU CAN DO ABOUT THIS PERSON.
+                      Opened from their chip, so the controls sit under the name
+                      they belong to — in a half-width box there is nowhere to
+                      put three role buttons and a Remove on one line without
+                      them wrapping into soup. */}
+                  {open && canManage ? (
                     <View
                       style={{
-                        paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
-                        backgroundColor: r.role === 'member'
-                          ? 'rgba(255,255,255,0.09)'
-                          : 'rgba(255,255,255,0.17)',
+                        paddingHorizontal: 14, paddingTop: 4, paddingBottom: 12, gap: 8,
+                        backgroundColor: skin.inset,
                       }}
                     >
-                      <Text style={{
-                        fontFamily: 'Lato_700Bold', fontSize: 9.5, letterSpacing: 0.7,
-                        textTransform: 'uppercase',
-                        color: r.role === 'member' ? 'rgba(246,244,229,0.6)' : '#F6F4E5',
-                      }}>
-                        {r.role}
+                      <Text
+                        style={{
+                          fontFamily: 'Lato_700Bold', fontSize: 10.5, letterSpacing: 0.9,
+                          textTransform: 'uppercase', color: 'rgba(246,244,229,0.6)',
+                          paddingTop: 8,
+                        }}
+                      >
+                        What {r.name} is in {name}
                       </Text>
+
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        {ROLES.map((role) => {
+                          const chosen = r.role === role.value;
+                          // Taking the only admin's badge off leaves the HIVE
+                          // with nobody who can run it.
+                          const wouldStrand = onlyAdmin && role.value !== 'admin';
+                          return (
+                            <Pressable
+                              key={role.value}
+                              onPress={() => void changeRole(m.community_id, name, r, role.value)}
+                              disabled={chosen || busy || wouldStrand}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Make ${r.name} a ${role.label.toLowerCase()} in ${name}. ${role.hint}.`}
+                              style={({ pressed }) => ({
+                                backgroundColor: chosen ? accent : 'rgba(255,255,255,0.09)',
+                                borderRadius: 8,
+                                paddingHorizontal: 12,
+                                paddingVertical: 7,
+                                opacity: wouldStrand ? 0.4 : pressed ? 0.8 : busy ? 0.7 : 1,
+                              })}
+                            >
+                              <Text style={{
+                                fontFamily: 'Lato_700Bold', fontSize: 12,
+                                color: chosen ? '#fffdf5' : 'rgba(246,244,229,0.72)',
+                              }}>
+                                {role.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+
+                      <Pressable
+                        onPress={() => setConfirmRemove({
+                          hiveId: m.community_id, hiveName: name, row: r, isSelf,
+                        })}
+                        disabled={onlyAdmin || busy}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${r.name} from ${name}`}
+                        style={({ pressed }) => ({
+                          alignSelf: 'flex-start',
+                          paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+                          borderWidth: 1, borderColor: 'rgba(224,140,120,0.55)',
+                          backgroundColor: pressed ? 'rgba(192,82,63,0.28)' : 'transparent',
+                          opacity: onlyAdmin ? 0.4 : 1,
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#f4c4b8' }}>
+                          {isSelf ? `Leave ${name}` : `Remove from ${name}`}
+                        </Text>
+                      </Pressable>
+
+                      {/* Say why, rather than greying two buttons out and
+                          leaving somebody pressing them. */}
+                      {onlyAdmin ? (
+                        <Text
+                          style={{
+                            fontFamily: 'Lato_400Regular', fontSize: 11.5, lineHeight: 17,
+                            color: 'rgba(246,244,229,0.62)',
+                          }}
+                        >
+                          {isSelf ? 'You are' : `${r.name} is`} the only admin {name} has, and a
+                          HIVE with no admin has nobody who can invite anybody or hand the job on.
+                          Make somebody else an admin first, and then this opens up.
+                        </Text>
+                      ) : (
+                        <Text
+                          style={{
+                            fontFamily: 'Lato_400Regular', fontSize: 11.5, lineHeight: 17,
+                            color: 'rgba(246,244,229,0.5)',
+                          }}
+                        >
+                          This is about {name} only. Any other HIVE {isSelf ? 'you are' : 'they are'} in
+                          stays exactly as it is.
+                        </Text>
+                      )}
                     </View>
+                  ) : null}
                   </View>
-                ))}
+                  );
+                })}
 
                 {/* INVITED, NOT JOINED YET.
                     Nat 2026-08-04: "I want to see who I've already invited &
@@ -1024,17 +1323,26 @@ export function HiveMemberPanels({
                           {/* Pending and expired are different states and are
                               coloured differently. An expired invite's link is
                               already dead — saying "pending" would send you off
-                              waiting for somebody who cannot get in. */}
+                              waiting for somebody who cannot get in.
+
+                              Neither wears the HIVE's colour, and that is the
+                              point: since 2026-08-06 a filled chip in the HIVE's
+                              own colour means "this is what they ARE here". An
+                              invite is a different kind of fact — somebody
+                              outside the door — so it stays an outline in no
+                              colour at all. */}
                           <View
                             style={{
                               paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
-                              backgroundColor: expired ? 'rgba(192,82,63,0.28)' : 'rgba(255,255,255,0.09)',
+                              borderWidth: 1,
+                              borderColor: expired ? 'rgba(224,140,120,0.5)' : 'rgba(246,244,229,0.32)',
+                              backgroundColor: expired ? 'rgba(192,82,63,0.28)' : 'transparent',
                             }}
                           >
                             <Text style={{
                               fontFamily: 'Lato_700Bold', fontSize: 9.5, letterSpacing: 0.7,
                               textTransform: 'uppercase',
-                              color: expired ? '#f4c4b8' : 'rgba(246,244,229,0.6)',
+                              color: expired ? '#f4c4b8' : 'rgba(246,244,229,0.66)',
                             }}>
                               {expired ? 'expired' : 'pending'}
                             </Text>
@@ -1093,6 +1401,30 @@ export function HiveMemberPanels({
         destructive
         onConfirm={() => { void revokeInvite(); }}
         onCancel={() => { if (!revoking) setConfirmRevoke(null); }}
+      />
+
+      {/* Taking somebody out of a HIVE. The one thing this has to say plainly is
+          how far it reaches: one HIVE, and no further. Somebody in OG and Tech
+          who gets removed from Tech still has OG exactly as they left it, and
+          nobody should have to guess that before pressing a red button. */}
+      <ConfirmDialog
+        visible={!!confirmRemove}
+        title={confirmRemove
+          ? confirmRemove.isSelf
+            ? `Leave ${confirmRemove.hiveName}?`
+            : `Remove ${confirmRemove.row.name} from ${confirmRemove.hiveName}?`
+          : ''}
+        body={confirmRemove
+          ? confirmRemove.isSelf
+            ? `You will lose ${confirmRemove.hiveName} — its members, boards, meetings and messages. This is about ${confirmRemove.hiveName} only; every other HIVE you are in stays exactly as it is, and somebody there can invite you back any time.`
+            : `${confirmRemove.row.name} will lose ${confirmRemove.hiveName} — its members, boards, meetings and messages. This is about ${confirmRemove.hiveName} only; any other HIVE they are in stays exactly as it is, and you can invite them back any time.`
+          : undefined}
+        confirmLabel={removing
+          ? 'Removing…'
+          : confirmRemove?.isSelf ? 'Leave it' : 'Remove them'}
+        destructive
+        onConfirm={() => { void removeMember(); }}
+        onCancel={() => { if (!removing) setConfirmRemove(null); }}
       />
     </>
   );

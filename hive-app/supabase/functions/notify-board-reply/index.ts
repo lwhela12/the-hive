@@ -7,7 +7,12 @@ interface NotifyBoardReplyPayload {
   post_id: string;
   reply_author_id: string;
   reply_preview: string;
-  community_id: string;
+  /**
+   * Sent by the app and deliberately ignored. Which HIVE a reply belongs to is
+   * a fact about the post, and the post is the thing we can check. See the
+   * derivation below.
+   */
+  community_id?: string;
 }
 
 async function sendExpoPushNotification(
@@ -68,7 +73,7 @@ serve(async (req) => {
     }
 
     const payload: NotifyBoardReplyPayload = await req.json();
-    const { post_id, reply_author_id, reply_preview, community_id } = payload;
+    const { post_id, reply_author_id, reply_preview } = payload;
 
     if (auth.userId !== reply_author_id) {
       return errorResponse('Authenticated user does not match the reply author', 403);
@@ -77,7 +82,7 @@ serve(async (req) => {
     // Look up the post to get the author's user_id
     const { data: post, error: postError } = await supabaseAdmin
       .from('board_posts')
-      .select('author_id, title')
+      .select('author_id, title, community_id')
       .eq('id', post_id)
       .single();
 
@@ -85,6 +90,39 @@ serve(async (req) => {
       console.error('Failed to get post:', postError);
       return errorResponse('Post not found', 404);
     }
+
+    // Proving who is CALLING was only ever half of it. Until now, `community_id`
+    // came out of the request body and was used as it arrived, and nothing asked
+    // whether this person could see the post at all — so any signed-in member
+    // could push an in-app notification and an Expo push to any post author in
+    // any HIVE, under their own real name. Being signed in is not the same as
+    // being allowed.
+    //
+    // Asked with the CALLER'S OWN token, so the board's row-level security
+    // answers the question instead of a hand-copied version of it. That keeps
+    // HIVE-Wide boards working — a member of another HIVE may legitimately reply
+    // there, and a plain "are you in this HIVE?" check would have refused them —
+    // and it cannot drift out of step with the policy the way a copy would.
+    const supabaseAsCaller = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: `Bearer ${auth.token}` } } }
+    );
+
+    const { data: visibleToCaller } = await supabaseAsCaller
+      .from('board_posts')
+      .select('id')
+      .eq('id', post_id)
+      .maybeSingle();
+
+    if (!visibleToCaller) {
+      return errorResponse('That post is not yours to reply to', 403);
+    }
+
+    // The HIVE is the post's, never the caller's word for it. `notifications` is
+    // only readable by a member of the HIVE stamped on it, so a forged one would
+    // have produced a notification the post author could never see.
+    const community_id: string = post.community_id;
 
     // Skip notification if the reply author is the post author
     if (reply_author_id === post.author_id) {

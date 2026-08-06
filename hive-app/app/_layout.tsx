@@ -2,7 +2,7 @@ import '../global.css';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Stack, usePathname, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, Pressable, Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
@@ -22,8 +22,11 @@ import { HIVE_WIDE_ROUTE } from '../lib/navigation';
 import { resetHomeNavigationState } from '../lib/homeNavigation';
 import type { Profile, Community, UserRole } from '../types';
 import { MaintenanceScreen } from '../components/ui/MaintenanceScreen';
+import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { routeAfterHiveSwitch } from '../lib/hiveSwitchRoute';
 import { HIVE_CLOSED, isHiveKeeper, hasBypassTicket } from '../lib/maintenance';
+import { HIVE_GOLD } from '../lib/hiveBrand';
+import { HIVE_SKIN } from '../lib/pageSkin';
 
 // ---------------------------------------------------------------------------
 // The door now lives in lib/maintenance.ts, so it reads the same as Jammin'
@@ -39,6 +42,75 @@ import {
   Lato_400Regular,
   Lato_700Bold,
 } from '@expo-google-fonts/lato';
+
+// ---------------------------------------------------------------------------
+// The splash screen always ends.
+//
+// Two jobs run before the app can draw anything: reading the saved sign-in and
+// downloading the fonts. Both can stall on a phone that shows full signal and
+// has no working connection, and a stalled promise never fails — it simply
+// never answers. A `.catch()` alone still leaves the gold bee flying forever
+// with nothing to press, which is exactly what members were seeing.
+//
+// So each wait gets a deadline as well as a catch. Whichever arrives first, the
+// splash screen comes down and the member gets words.
+// ---------------------------------------------------------------------------
+const SESSION_DEADLINE_MS = 12000;
+const FONT_DEADLINE_MS = 8000;
+
+/** The same work, with a promise that fails if the answer never comes. */
+function withDeadline<T>(work: PromiseLike<T>, ms: number, what: string): Promise<T> {
+  let answered = false;
+  const deadline = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      if (!answered) reject(new Error(`${what} took too long`));
+    }, ms);
+  });
+  const watched = Promise.resolve(work).then((value) => {
+    answered = true;
+    return value;
+  });
+  return Promise.race([watched, deadline]);
+}
+
+// ---------------------------------------------------------------------------
+// Where you land: your own HIVE the first time, HIVE-Wide every time after.
+//
+// Nat's rule, 2026-08-06, after opening an invite on her phone: "the email
+// invites bring people directly to their hive, and then any time you come in
+// from the public facing website after that (any time you use the member log
+// in) then it starts you out in HIVE-Wide." Somebody arriving for the very
+// first time has never seen any of this, and a black photo of Earth is not
+// their HIVE. Everybody after that keeps landing above the HIVEs, for the
+// reason Nat gave for putting it there: "otherwise you might never go there."
+//
+// The signal is "this person accepted an invite a moment ago" — deliberately
+// NOT "this person is in exactly one HIVE". Nearly every member is in exactly
+// one, so counting memberships would keep almost everybody out of HIVE-Wide for
+// good, which is the opposite of what it is for. A long-standing member of a
+// single HIVE signing in normally has no fresh join to report, so they land
+// above the HIVEs like everyone else.
+//
+// So the join screen says it out loud: it hands over the id of the HIVE it has
+// just put somebody into, and the next load of their data honours it once and
+// forgets it. A plain variable in this module is the right lifetime — the join
+// screen sets it and calls refreshProfile() in the same breath, with no reload
+// in between — and reading it clears it, so a fresh join can never colour a
+// sign-in later on.
+// ---------------------------------------------------------------------------
+let justJoinedCommunityId: string | null = null;
+
+/** Called by app/join.tsx the moment somebody becomes a member of a HIVE. */
+export function markJustJoinedHive(communityId: string): void {
+  justJoinedCommunityId = communityId;
+}
+
+/** The fresh join, if there is one — and only ever once. */
+function takeJustJoinedHive(): string | null {
+  const id = justJoinedCommunityId;
+  justJoinedCommunityId = null;
+  return id;
+}
 
 // Inner component to handle prefetching (must be inside QueryClientProvider)
 function AppPrefetcher({
@@ -110,7 +182,7 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in
   });
 }
 
-export default function RootLayout() {
+function RootLayoutInner() {
   const pathname = usePathname();
   // switchCommunity and enterWholeHive are memoised without `pathname` in their
   // deps on purpose — rebuilding them on every navigation would churn the whole
@@ -135,13 +207,37 @@ export default function RootLayout() {
   const [memberships, setMemberships] = useState<MembershipWithCommunity[]>([]);
   const [hivePickerOpen, setHivePickerOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+  // True once the first read of the saved sign-in gave up. It puts a screen
+  // with a Try again button in front of the member instead of a spinning bee.
+  const [startupFailed, setStartupFailed] = useState<boolean>(false);
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     LibreBaskerville_400Regular,
     LibreBaskerville_700Bold,
     Lato_400Regular,
     Lato_700Bold,
   });
+
+  // A typeface that will not download holds nobody hostage.
+  //
+  // This used to read `const [fontsLoaded] = useFonts(...)`, throwing the error
+  // away — so a font that failed to fetch left `fontsLoaded` false forever and
+  // the app never got past the splash screen. The words matter more than the
+  // lettering, so a font failure draws HIVE in the system font and says so in
+  // the console. The deadline covers the other half: a download that hangs
+  // without ever failing.
+  const [fontWaitOver, setFontWaitOver] = useState<boolean>(false);
+  useEffect(() => {
+    if (fontsLoaded || fontError) return;
+    const timer = setTimeout(() => setFontWaitOver(true), FONT_DEADLINE_MS);
+    return () => clearTimeout(timer);
+  }, [fontsLoaded, fontError]);
+  useEffect(() => {
+    if (fontError) {
+      console.warn('[Fonts] HIVE fonts did not load, drawing in the system font:', fontError.message);
+    }
+  }, [fontError]);
+  const fontsSettled = fontsLoaded || !!fontError || fontWaitOver;
 
   // Guard same-user duplicate loads while still allowing account switches to win.
   const initializingRef = useRef(false);
@@ -159,11 +255,18 @@ export default function RootLayout() {
     if (initializingRef.current && initializingUserIdRef.current === userId) return;
     initializingRef.current = true;
     initializingUserIdRef.current = userId;
+    // A fresh attempt takes the "could not reach the hive" screen back down —
+    // signing in again counts as a retry, not only the button.
+    setStartupFailed(false);
     const isCurrentLoad = () => initializingUserIdRef.current === userId;
     try {
     // Fetch profile AND all memberships (with community data) in parallel
-    // This reduces 4-5 sequential calls to just 1 parallel batch
-    const [profileResult, membershipsResult] = await Promise.all([
+    // This reduces 4-5 sequential calls to just 1 parallel batch.
+    //
+    // With a deadline on it, because this is the other way the splash screen
+    // used to last forever: a request that stalls rather than failing keeps
+    // `loading` true and never reaches the catch below.
+    const [profileResult, membershipsResult] = await withDeadline(Promise.all([
       supabase
         .from('profiles')
         .select('*')
@@ -174,7 +277,7 @@ export default function RootLayout() {
         .select('community_id, role, community:communities(*)')
         .eq('user_id', userId)
         .order('created_at', { ascending: true }),
-    ]);
+    ]), SESSION_DEADLINE_MS, 'Loading your HIVE');
 
     // Handle profile
     let profileData = profileResult.data as Profile | null;
@@ -242,11 +345,21 @@ export default function RootLayout() {
       return;
     }
 
+    // A HIVE joined seconds ago wins over the remembered one — it is the whole
+    // reason this person is standing here. Read after the empty-memberships
+    // return above on purpose: if the new membership row has not caught up yet
+    // the fresh join stays on the books for the next load rather than being
+    // spent on a list that does not contain it yet.
+    const justJoinedId = takeJustJoinedHive();
+    const justJoinedMembership = justJoinedId
+      ? memberships.find(m => m.community_id === justJoinedId)
+      : undefined;
+
     // Find the active membership: use profile's current_community_id or fall back to first
     const currentCommunityId = profileData?.current_community_id;
-    let activeMembership = currentCommunityId
+    let activeMembership = justJoinedMembership ?? (currentCommunityId
       ? memberships.find(m => m.community_id === currentCommunityId)
-      : memberships[0];
+      : memberships[0]);
 
     // If profile had a community_id but we don't have membership there, use first
     if (!activeMembership) {
@@ -280,14 +393,29 @@ export default function RootLayout() {
     // A fresh arrival starts at HIVE-Wide. A reload inside the same tab keeps
     // wherever you already were, because being bounced out of what you were
     // reading is the thing the "fresh honey" bar already got wrong once.
-    if (!hasConfirmedHive()) {
+    //
+    // Somebody who has this second accepted an invite is the exception, and
+    // lands inside the HIVE they joined (Nat 2026-08-06 — see the note on
+    // markJustJoinedHive at the top of this file). It counts as answering the
+    // "which HIVE?" question, so the rest of this tab's life leaves them where
+    // they are, and their next sign-in starts above the HIVEs like anyone
+    // else's.
+    if (justJoinedId) {
+      markHiveConfirmed();
+      setWholeHive(false);
+    } else if (!hasConfirmedHive()) {
       markHiveConfirmed();
       setWholeHive(true);
     }
     setLoading(false);
     } catch (err) {
+      // Clearing loading on its own would drop somebody into an app that
+      // believes they belong to no HIVE — which reads as "you have been thrown
+      // out" rather than "the connection dropped". Say the true thing and
+      // offer the Try again button instead.
       console.error('[Auth] initializeUserData failed:', err);
       if (isCurrentLoad()) {
+        setStartupFailed(true);
         setLoading(false);
       }
     } finally {
@@ -298,20 +426,37 @@ export default function RootLayout() {
     }
   }, []);
 
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        setProfile(prev => prev?.id === session.user.id ? prev : null);
-        setCommunity(null);
-        setCommunityId(null);
-        setCommunityRole(null);
-        initializeUserData(session.user.id, session.user);
-      } else {
+  // Read the saved sign-in. Separated out from the effect below so the Try
+  // again button can run it again without tearing down the auth listener.
+  const loadInitialSession = useCallback(() => {
+    setStartupFailed(false);
+    setLoading(true);
+
+    withDeadline(supabase.auth.getSession(), SESSION_DEADLINE_MS, 'Reading your sign-in')
+      .then(({ data: { session } }) => {
+        setStartupFailed(false);
+        setSession(session);
+        if (session?.user) {
+          setProfile(prev => prev?.id === session.user.id ? prev : null);
+          setCommunity(null);
+          setCommunityId(null);
+          setCommunityRole(null);
+          initializeUserData(session.user.id, session.user);
+        } else {
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        // Usually a phone that has drifted off its connection. Say so and give
+        // the member a button, rather than leaving the bee flying forever.
+        console.error('[Auth] Could not read the saved sign-in:', err);
+        setStartupFailed(true);
         setLoading(false);
-      }
-    });
+      });
+  }, [initializeUserData]);
+
+  useEffect(() => {
+    loadInitialSession();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -345,6 +490,9 @@ export default function RootLayout() {
           clearLastAppPath();
           // Next person in gets asked which hive, even on a shared machine.
           clearHiveConfirmation();
+          // A join that never finished being read belongs to the person who
+          // just left, so it never follows the next account into a HIVE.
+          justJoinedCommunityId = null;
         }
         setProfile(null);
         setCommunity(null);
@@ -357,7 +505,7 @@ export default function RootLayout() {
     });
 
     return () => subscription.unsubscribe();
-  }, [initializeUserData]);
+  }, [initializeUserData, loadInitialSession]);
 
   const refreshProfile = useCallback(async () => {
     if (session?.user) {
@@ -461,20 +609,62 @@ export default function RootLayout() {
     if (!keeperIsHere) {
       if (loading) {
         return (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#bd9348' }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: HIVE_GOLD }}>
             <ThinkingBee />
           </View>
         );
       }
-      if (fontsLoaded) return <MaintenanceScreen />;
+      if (fontsSettled) return <MaintenanceScreen />;
     }
   }
 
   // Show loading screen while fonts load
-  if (!fontsLoaded) {
+  if (!fontsSettled) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#bd9348' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: HIVE_GOLD }}>
         <ThinkingBee />
+      </View>
+    );
+  }
+
+  // The connection gave out before HIVE could read who is signed in. This is
+  // the same gold splash the member was already looking at, now with words on
+  // it and a button — the state it used to sit in silently, forever.
+  if (startupFailed) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 28, backgroundColor: HIVE_GOLD }}>
+        <View style={{ maxWidth: 340, alignItems: 'center' }}>
+          <Text style={{ fontSize: 44, marginBottom: 18 }}>🐝</Text>
+          <Text
+            style={{
+              fontFamily: 'LibreBaskerville_700Bold', fontSize: 21, lineHeight: 30,
+              color: HIVE_SKIN.card, textAlign: 'center',
+            }}
+          >
+            HIVE could not reach the hive
+          </Text>
+          <Text
+            style={{
+              fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 24,
+              color: HIVE_SKIN.card, opacity: 0.85, textAlign: 'center', marginTop: 12,
+            }}
+          >
+            Your connection dropped while HIVE was checking you in. Have a look
+            at your signal, then give it another go.
+          </Text>
+          <Pressable
+            onPress={loadInitialSession}
+            style={({ pressed }) => ({
+              marginTop: 24, paddingVertical: 14, paddingHorizontal: 34,
+              borderRadius: 14, backgroundColor: HIVE_SKIN.card,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: HIVE_GOLD }}>
+              Try again
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -491,10 +681,29 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(app)" />
-          <Stack.Screen name="onboarding" />
+          {/* app/onboarding/ was removed on 2026-08-06 — it was a reachable URL
+              still selling a 12-person community and Queen Bee Month, both
+              retired, and nothing linked to it. A Stack.Screen naming a route
+              that has no folder throws at runtime, so the line goes with it. */}
           <Stack.Screen name="join" />
         </Stack>
       </AuthContext.Provider>
     </QueryClientProvider>
+  );
+}
+
+/**
+ * The root of the app, with the net underneath it.
+ *
+ * The boundary sits outside everything — the maintenance door, the fonts, the
+ * auth context, every screen — because a render error anywhere below it used to
+ * take the whole tree down to a blank white page with no scroll and no way
+ * back. Now it catches, and the member gets a sentence and a button.
+ */
+export default function RootLayout() {
+  return (
+    <ErrorBoundary>
+      <RootLayoutInner />
+    </ErrorBoundary>
   );
 }

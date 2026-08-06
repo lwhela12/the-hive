@@ -7,6 +7,7 @@ import { useAuth } from '../lib/hooks/useAuth';
 import { hiveDisplayName } from '../lib/hiveBrand';
 import type { CommunityInvite, Community, Profile } from '../types';
 
+import { markJustJoinedHive } from './_layout';
 import { ComposerBar } from '../components/ui/ComposerBar';
 import { confirmAction, showAlert } from '../lib/showAlert';
 import { ThinkingBee } from '../components/ui/ThinkingBee';
@@ -19,7 +20,18 @@ type InviteBlock = {
   title: string;
   message: string;
   detail?: string;
-  action?: 'switch-account' | 'go-home';
+  /**
+   * Which button actually leads somewhere from here.
+   *
+   * `switch-account` — coming back with the invited email fixes it.
+   * `go-home` — this person already has a HIVE and can walk straight into it.
+   * `retry` — the check itself fell over, so asking again is the fix.
+   * `none` — only a fresh invite fixes it, so offering a big gold button that
+   *   changes nothing would be a lie. A quiet sign-out is still there.
+   */
+  action?: 'switch-account' | 'go-home' | 'retry' | 'none';
+  /** Sets the tone above the title. The lock is for the ones about accounts. */
+  emoji?: string;
 };
 
 const normalizeEmail = (email?: string | null) => (email ?? '').trim().toLowerCase();
@@ -43,6 +55,10 @@ export default function JoinScreen() {
   const userEmail = session?.user?.email || profile?.email;
   const normalizedUserEmail = normalizeEmail(userEmail);
   const joinReturnPath = hasInviteToken ? `/join?token=${encodeURIComponent(inviteToken)}` : '/join';
+  // For the dead ends only a new invite can fix: somebody who is already in a
+  // HIVE gets walked into it, and somebody who is not gets a plain sign-out
+  // rather than a gold button that goes nowhere.
+  const escapeAction: InviteBlock['action'] = communityId ? 'go-home' : 'none';
 
   useEffect(() => {
     // If auth is still loading, wait
@@ -105,12 +121,24 @@ export default function JoinScreen() {
     setInviteBlock(null);
     try {
       if (hasInviteToken) {
+        // Look the invite up by its token alone.
+        //
+        // This query used to also demand `accepted_at is null` and an unexpired
+        // date, which meant three completely different situations arrived here
+        // as one empty result and got one answer: "sign out and open it with
+        // the email that received it". For the member who had already joined —
+        // the one clicking the link in their email because that IS the way back
+        // into the app — that answer was impossible to act on. They signed out,
+        // signed back in with exactly the right account, and read it again.
+        //
+        // Row-level security only ever hands you an invite addressed to your
+        // own email address, so whatever comes back is genuinely yours to read.
+        // Asking without the filters is what lets the three cases be told apart
+        // and answered honestly.
         const { data: invites, error } = await supabase
           .from('community_invites')
           .select('*, community:communities(*), inviter:profiles!community_invites_invited_by_fkey(*)')
           .eq('token', inviteToken)
-          .is('accepted_at', null)
-          .gt('expires_at', new Date().toISOString())
           .limit(1);
 
         if (error) {
@@ -119,6 +147,9 @@ export default function JoinScreen() {
 
         const tokenInvite = invites?.[0] as InviteWithDetails | undefined;
 
+        // Nothing came back at all. Either no invite has ever carried this
+        // token, or it belongs to a different email than the one signed in —
+        // those look identical from here, so the message covers both.
         if (!tokenInvite) {
           setInviteBlock({
             title: 'Invite needs the right account',
@@ -142,23 +173,66 @@ export default function JoinScreen() {
           return;
         }
 
-        if (profile?.id) {
+        // Who to ask for a new one. The invite carries the inviter, and the
+        // HIVE's own name only reads once you are a member of it, so a used or
+        // expired invite says "whoever invited you" rather than naming a place
+        // it cannot see.
+        const inviterName = tokenInvite.inviter?.name?.trim();
+        const askWho = inviterName || 'whoever invited you';
+
+        // The signed-in account's id, whether or not the profile row has
+        // arrived yet — they are the same id, and waiting for the profile would
+        // show a returning member the wrong answer for a second first.
+        const memberId = profile?.id || session?.user?.id;
+
+        if (memberId) {
           const { data: existingMembership } = await supabase
             .from('community_memberships')
             .select('id, role')
             .eq('community_id', tokenInvite.community_id)
-            .eq('user_id', profile.id)
+            .eq('user_id', memberId)
             .maybeSingle();
 
+          // Already a member. This is the case the old code hid behind an
+          // impossible instruction, and it is the most common one of the three:
+          // the email link is how people come back.
           if (existingMembership) {
             setInviteBlock({
-              title: 'This account is already in HIVE',
-              message: `${profile.name || userEmail} is already a member of ${normalizeHiveBrandName(tokenInvite.community?.name)}. We kept the invite link from opening that existing profile.`,
-              detail: 'To test a brand-new member onboarding flow, send an invite to a different email address and sign in with that Google account.',
+              title: "You're already in",
+              message: `${profile?.name || userEmail} is a member of ${normalizeHiveBrandName(tokenInvite.community?.name)}, so this link has done its job.`,
+              detail: 'Your HIVE is one tap away.',
               action: 'go-home',
+              emoji: '🐝',
             });
             return;
           }
+        }
+
+        // Accepted once, with no membership to show for it. Rare, and the
+        // database will refuse a second join, so the only way forward is a
+        // fresh invite.
+        if (tokenInvite.accepted_at) {
+          setInviteBlock({
+            title: 'This invite has already been used',
+            message: 'Each invite link opens a single time, and this one has been used.',
+            detail: `Ask ${askWho} to send a fresh invite to ${userEmail}.`,
+            action: escapeAction,
+            emoji: '⏳',
+          });
+          return;
+        }
+
+        // Past its date. Invites last seven days; a new one takes a moment.
+        const expiresAt = tokenInvite.expires_at ? new Date(tokenInvite.expires_at) : null;
+        if (expiresAt && expiresAt.getTime() <= Date.now()) {
+          setInviteBlock({
+            title: 'This invite has expired',
+            message: 'Invite links last seven days, and this one is past that. A new one takes a moment to send.',
+            detail: `Ask ${askWho} to send a fresh invite to ${userEmail}.`,
+            action: escapeAction,
+            emoji: '⏳',
+          });
+          return;
         }
 
         setInvite(tokenInvite);
@@ -203,11 +277,14 @@ export default function JoinScreen() {
     } catch (err) {
       console.error('Error checking invite:', err);
       if (hasInviteToken) {
+        // Signing out was the offer here, and it fixes nothing — the check
+        // fell over on the way to the database. Asking again is the fix.
         setInviteBlock({
           title: 'Invite check got stuck',
-          message: 'HIVE could not finish verifying this invite link, so we did not open any member data.',
-          detail: 'Refresh and try once more. If it happens again, ask Nat to resend the invite.',
-          action: 'switch-account',
+          message: 'HIVE could not finish checking this invite link, so it stopped rather than guessing.',
+          detail: 'Give it another go. If it sticks again, ask Nat to resend the invite.',
+          action: 'retry',
+          emoji: '🐝',
         });
       }
     } finally {
@@ -319,6 +396,11 @@ export default function JoinScreen() {
         } as any);
       }
 
+      // The first person in a brand-new install is arriving for the first time
+      // too, so they walk straight into the HIVE they have just built rather
+      // than looking at a photo of Earth (Nat 2026-08-06).
+      markJustJoinedHive(communityId);
+
       // Refresh profile to get new community context
       await refreshProfile();
 
@@ -365,25 +447,55 @@ export default function JoinScreen() {
 
       if (existingMembership) {
         setInviteBlock({
-          title: 'This account is already in HIVE',
-          message: `${activeProfile.name || userEmail} is already a member of ${normalizeHiveBrandName(invite.community?.name)}. We kept the invite link from opening that existing profile.`,
-          detail: 'To test a brand-new member onboarding flow, send an invite to a different email address and sign in with that Google account.',
+          title: "You're already in",
+          message: `${activeProfile.name || userEmail} is a member of ${normalizeHiveBrandName(invite.community?.name)}, so this link has done its job.`,
+          detail: 'Your HIVE is one tap away.',
           action: 'go-home',
+          emoji: '🐝',
         });
         setInvite(null);
         return;
       }
 
-      // Create membership
+      // Create membership.
+      //
+      // No role goes up from here. This used to send `role: invite.role`, which
+      // had the page telling the database what standing its own member holds —
+      // and the database only checked THAT you hold a valid invite, never WHAT
+      // it grants, so an invited member could have joined as an admin. Leaving
+      // it out lands you as a member, which is the column's own default, and
+      // the database decides what the invite actually granted.
       const { error: membershipError } = await supabase
         .from('community_memberships')
         .insert({
           community_id: invite.community_id,
           user_id: activeProfile.id,
-          role: invite.role,
         });
 
-      if (membershipError) throw membershipError;
+      if (membershipError) {
+        // A refusal here is the database saying this invite no longer opens the
+        // door — used, expired, or withdrawn while this page sat open. Say that
+        // in words somebody can act on rather than the generic "try again",
+        // because trying again gets the same refusal every time.
+        const refused =
+          membershipError.code === '42501' ||
+          /row-level security|violates row-level/i.test(membershipError.message || '');
+
+        if (refused) {
+          const inviterName = invite.inviter?.name?.trim();
+          setInviteBlock({
+            title: 'This invite has closed',
+            message: 'HIVE checked the invite as you joined, and it has already been used or has run out. Each link opens once, within seven days.',
+            detail: `Ask ${inviterName || 'whoever invited you'} to send a fresh invite to ${userEmail}.`,
+            action: escapeAction,
+            emoji: '⏳',
+          });
+          setInvite(null);
+          return;
+        }
+
+        throw membershipError;
+      }
 
       // Update profile with current community
       const { error: profileError } = await supabase
@@ -434,10 +546,18 @@ export default function JoinScreen() {
         } as any);
       }
 
+      // Say out loud that this person has just joined, so the load below lands
+      // them in the HIVE they came here for. An invite email is somebody's very
+      // first sight of HIVE, and their own HIVE is what they were invited to —
+      // HIVE-Wide is where every visit after this one starts (Nat 2026-08-06).
+      // The rule lives in app/_layout.tsx next to markJustJoinedHive.
+      markJustJoinedHive(invite.community_id);
+
       // Refresh profile to get new community context
       await refreshProfile();
 
-      // Navigate to main app
+      // Navigate to main app. `/(app)/hive` is the HIVE they just joined, and
+      // it stays their own HIVE now rather than bouncing on to HIVE-Wide.
       router.replace('/(app)/hive');
     } catch (err) {
       console.error('Error accepting invite:', err);
@@ -572,7 +692,7 @@ export default function JoinScreen() {
       <SafeAreaView className="flex-1 bg-cream">
         <ScrollView className="flex-1" contentContainerClassName="p-6">
           <View className="items-center mb-8 mt-8">
-            <Text className="text-6xl mb-4">🔐</Text>
+            <Text className="text-6xl mb-4">{inviteBlock.emoji || '🔐'}</Text>
             <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-charcoal text-center">
               {inviteBlock.title}
             </Text>
@@ -589,6 +709,10 @@ export default function JoinScreen() {
             )}
           </View>
 
+          {/* The gold button is only ever the thing that actually fixes this
+              particular dead end. Where nothing on this screen can fix it, the
+              quiet sign-out is the whole offer — a big button that changes
+              nothing is what sent members round the same loop for weeks. */}
           {inviteBlock.action === 'go-home' && (
             <Pressable
               onPress={handleGoHome}
@@ -600,16 +724,27 @@ export default function JoinScreen() {
             </Pressable>
           )}
 
+          {inviteBlock.action === 'retry' && (
+            <Pressable
+              onPress={() => { void checkForInvite(); }}
+              className="py-4 rounded-xl items-center mb-3 bg-gold active:opacity-80"
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-lg">
+                Try again
+              </Text>
+            </Pressable>
+          )}
+
           <Pressable
             onPress={handleSignOut}
             disabled={submitting}
-            className={`${inviteBlock.action === 'go-home' ? 'py-3' : 'py-4 rounded-xl items-center mb-3 bg-gold active:opacity-80'}`}
+            className={`${inviteBlock.action === 'switch-account' ? 'py-4 rounded-xl items-center mb-3 bg-gold active:opacity-80' : 'py-3'}`}
           >
             <Text
-              style={{ fontFamily: inviteBlock.action === 'go-home' ? 'Lato_400Regular' : 'Lato_700Bold' }}
-              className={`${inviteBlock.action === 'go-home' ? 'text-center text-charcoal/60' : 'text-white text-lg'}`}
+              style={{ fontFamily: inviteBlock.action === 'switch-account' ? 'Lato_700Bold' : 'Lato_400Regular' }}
+              className={`${inviteBlock.action === 'switch-account' ? 'text-white text-lg' : 'text-center text-charcoal/60'}`}
             >
-              Sign Out and Switch Account
+              {inviteBlock.action === 'switch-account' ? 'Sign Out and Switch Account' : 'Sign out'}
             </Text>
           </Pressable>
         </ScrollView>

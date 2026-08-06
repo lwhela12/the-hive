@@ -14,6 +14,8 @@ import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { EditButton } from '../../components/ui/EditButton';
+import { WorldMark } from '../../components/ui/WorldMark';
+import { SWITCH_LOOK } from '../../components/ui/Switch';
 import { FIELD_LOOK } from '../../components/ui/Input';
 
 const memberHoneycombCell = require('../../assets/generated/member-honeycomb-cell.png');
@@ -42,6 +44,15 @@ import { useWishes } from '../../lib/hooks/useWishes';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { showAlert } from '../../lib/showAlert';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+/**
+ * The padding the member list puts either side of its contents.
+ *
+ * Named because two things need to agree on it: the scroll view that applies it,
+ * and the honeycomb, which sizes itself from the room left over once it has been
+ * applied. Two copies of 16 would drift the first time one of them was tuned.
+ */
+const LIST_PADDING = 16;
+
 type MemberSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
 type MemberWish = Pick<Wish, 'id' | 'description' | 'status'> & Partial<Wish> & {
   granters?: (WishGranter & { granter?: Profile })[];
@@ -53,7 +64,6 @@ interface MemberData {
   name: string;
   avatar_url?: string | null;
   role: UserRole;
-  queen_bee_month?: string | null;
   occupation?: string | null;
   profile_title?: string | null;
   bio?: string | null;
@@ -651,7 +661,7 @@ function MemberDetailModal({
       ) {
         const fallback = await (supabase as any)
           .from('wishes')
-          .select('id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
+          .select('id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
           .eq('user_id', member.id)
           .eq('community_id', communityId)
           .in('status', ['public', 'fulfilled'])
@@ -663,7 +673,7 @@ function MemberDetailModal({
       if (error && String(error.message ?? '').includes('title')) {
         const fallback = await (supabase as any)
           .from('wishes')
-          .select('id, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
+          .select('id, community_id, share_scope, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
           .eq('user_id', member.id)
           .eq('community_id', communityId)
           .in('status', ['public', 'fulfilled'])
@@ -698,8 +708,23 @@ function MemberDetailModal({
     setNewSkillInput('');
   };
 
-  const saveSkillsOnly = async () => {
-    if (!communityId) return;
+  /**
+   * Save the skills you just picked. Says whether it worked.
+   *
+   * It used to await the delete and the insert without ever looking at what came
+   * back. supabase-js hands a failed write back as `{ error }` rather than
+   * throwing, so the `catch` around this could never fire, and the screen went
+   * on to redraw the new skills as though they had been stored. Somebody would
+   * add five skills, watch the sheet close with all five sitting there, refresh,
+   * and find none of them — then do the whole thing again (2026-08-06).
+   *
+   * Both writes are checked now, the person is told in words when one fails, and
+   * the list on screen is only updated once the database actually holds it.
+   * Returns true when everything landed, so the caller knows whether it may
+   * close the sheet.
+   */
+  const saveSkillsOnly = async (): Promise<boolean> => {
+    if (!communityId) return false;
     setSavingSkills(true);
     const skillDescriptions = Array.from(new Set(draftSkillList.map(s => s.trim()).filter(Boolean)));
     try {
@@ -712,12 +737,29 @@ function MemberDetailModal({
       const toInsert = skillDescriptions.filter(d => !existingSkillSet.has(d.toLowerCase()));
 
       if (idsToDelete.length > 0) {
-        await (supabase as any).from('skills').delete().in('id', idsToDelete).eq('user_id', member.id);
+        const { error } = await (supabase as any)
+          .from('skills').delete().in('id', idsToDelete).eq('user_id', member.id);
+        if (error) {
+          console.warn('[Members] skills delete failed', error);
+          showAlert(
+            'Your skills did not save',
+            `${error.message ?? 'The skills you removed are still there.'} Nothing was changed — please try again.`
+          );
+          return false;
+        }
       }
       if (toInsert.length > 0) {
-        await (supabase as any).from('skills').insert(toInsert.map(description => ({
+        const { error } = await (supabase as any).from('skills').insert(toInsert.map(description => ({
           user_id: member.id, community_id: communityId, description, raw_input: description, extracted_from: 'manual',
         })));
+        if (error) {
+          console.warn('[Members] skills insert failed', error);
+          showAlert(
+            'Your new skills did not save',
+            `${error.message ?? 'They could not be added.'} Please try again.`
+          );
+          return false;
+        }
       }
       onMemberUpdated({
         ...member,
@@ -726,8 +768,14 @@ function MemberDetailModal({
           description,
         })),
       });
-    } catch (e) {
+      return true;
+    } catch (e: any) {
       console.warn('[Members] skills save failed', e);
+      showAlert(
+        'Your skills did not save',
+        e?.message ? String(e.message) : 'Something went wrong on the way to the database. Please try again.'
+      );
+      return false;
     } finally {
       setSavingSkills(false);
     }
@@ -782,7 +830,7 @@ function MemberDetailModal({
     ) {
       const fallback = await (supabase as any)
         .from('wishes')
-        .select('id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
+        .select('id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
         .eq('user_id', member.id)
         .eq('community_id', communityId)
         .in('status', ['public', 'fulfilled'])
@@ -794,7 +842,7 @@ function MemberDetailModal({
     if (error && String(error.message ?? '').includes('title')) {
       const fallback = await (supabase as any)
         .from('wishes')
-        .select('id, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
+        .select('id, community_id, share_scope, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
         .eq('user_id', member.id)
         .eq('community_id', communityId)
         .in('status', ['public', 'fulfilled'])
@@ -918,10 +966,15 @@ function MemberDetailModal({
     const { data, error } = await (supabase as any)
       .from('wishes')
       .insert({ user_id: member.id, community_id: communityId, description: desc, raw_input: desc, status: 'public', is_active: true, extracted_from: 'manual' })
-      .select('id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
+      .select('id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
       .single();
     if (error) {
+      // This used to end at the console. The composer emptied itself either
+      // way, so a wish that never reached the database looked exactly like one
+      // that did — the same silence the skills sheet had (2026-08-06). The
+      // words you typed stay in the box now, so you can send them again.
       console.warn('[Members] wish save failed', error);
+      showAlert('Your wish did not save', `${error.message ?? 'It was not stored.'} Please try again.`);
       return;
     }
     if (data) {
@@ -1269,7 +1322,15 @@ function MemberDetailModal({
                   <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e7a5e', textAlign: 'center' }}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  onPress={async () => { await saveSkillsOnly(); setShowSkillPicker(false); setSkillSearch(''); }}
+                  // The sheet closes when the save landed, and stays open when it
+                  // did not — so the words you picked are still in front of you
+                  // to try again with, next to the message saying what happened.
+                  onPress={async () => {
+                    const saved = await saveSkillsOnly();
+                    if (!saved) return;
+                    setShowSkillPicker(false);
+                    setSkillSearch('');
+                  }}
                   disabled={savingSkills}
                   style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: savingSkills ? 0.6 : 1 }}
                 >
@@ -1553,18 +1614,20 @@ function MemberDetailModal({
               {/* Self actions: the round pencil + one Tune-up pill. No "You"
                   chip (you know who you are), admin shows as a quiet chip —
                   so every profile header reads the same, member to member. */}
-              {(roleLabel || member.queen_bee_month) && (
+              {/* A crown chip reading "Queen Bee: <month>" used to sit beside
+                  the role. Queen Bee — one member a month getting the
+                  community's focus — was dissolved in April 2026 and the
+                  Hummdinger session took its place, and this card was the last
+                  place a member could still see it. It read from a plain text
+                  column on the profile rather than the `queen_bees` table, so
+                  the sweep that cleared Admin, the newsletter headers and Home
+                  went straight past it (2026-08-06). The column itself is left
+                  alone; nothing in the app reads it now. */}
+              {roleLabel && (
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  {roleLabel && (
-                    <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.35)' }}>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8e7a5e' }}>{roleLabel}</Text>
-                    </View>
-                  )}
-                  {member.queen_bee_month && (
-                    <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.35)' }}>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8e7a5e' }}>👑 Queen Bee: {member.queen_bee_month}</Text>
-                    </View>
-                  )}
+                  <View style={{ backgroundColor: '#fffaf0', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(222,193,129,0.35)' }}>
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8e7a5e' }}>{roleLabel}</Text>
+                  </View>
                 </View>
               )}
               {/* Stacked identity column: what you do → where you're from → your answers → message */}
@@ -2165,7 +2228,7 @@ function MemberDetailModal({
 }
 
 export default function MembersScreen() {
-  const { communityId, profile, session, community, wholeHive, memberships: myHives } = useAuth();
+  const { communityId, profile, session, community, wholeHive, memberships: myHives, refreshProfile } = useAuth();
   // Cream inside a HIVE, space at HIVE-Wide — "instead of cream it should
   // always be the world in space look, because we want to make sure you know
   // which one you're in" (Nat 2026-08-03).
@@ -2180,6 +2243,23 @@ export default function MembersScreen() {
   const routeOpen = Array.isArray(routeOpenParam) ? routeOpenParam[0] : routeOpenParam;
   const router = useRouter();
   const { width } = useWindowDimensions();
+  /**
+   * How wide the list column actually is, measured rather than assumed.
+   *
+   * `useWindowDimensions` reports the whole window — the entire phone screen, or
+   * the entire browser window. The list draws inside a column with the
+   * navigation rail standing in front of it, so the window is always the wrong
+   * number by however wide the rail happens to be that day. The rail also
+   * changes width (it grew from 56 to 64 points on a phone on 2026-08-06 to fit
+   * labels under its icons), so a number copied into this file would go stale
+   * the next time somebody touched it.
+   *
+   * The scroll view below reports its own width as it lays out, which is the
+   * answer to the actual question and costs this file no knowledge of the rail
+   * at all. The window is the first guess, for the single frame before the
+   * measurement arrives.
+   */
+  const [listColumnWidth, setListColumnWidth] = useState<number | null>(null);
   const [members, setMembers] = useState<MemberData[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -2258,7 +2338,17 @@ export default function MembersScreen() {
       // order to populate here." Being in OG HIVE was never consent to be
       // listed to Tech and Production, so it starts off for everybody and this
       // list starts empty. That is correct, not broken.
-      if (wholeHive) profilesQuery = profilesQuery.eq('visible_hive_wide', true);
+      //
+      // `profile_scope` is the flag, and the only one (2026-08-06). There were
+      // two columns for this one idea: this list filtered on
+      // `visible_hive_wide`, and the database's own security policy — the thing
+      // that decides which profile rows are readable at all — keys on
+      // `profile_scope` and has never heard of the other one. So a member had to
+      // find and turn on BOTH to appear here, and turning on either one alone
+      // did nothing visible anywhere. Nat, 2026-08-04 and again on 08-05: "I've
+      // been tryin to select 'HIVE wide' a billion times, it never reflects that
+      // anywhere." She was doing it right; the app was asking twice.
+      if (wholeHive) profilesQuery = profilesQuery.eq('profile_scope', 'all_hives');
 
       const { data: profilesData, error: profilesErr } = await profilesQuery;
 
@@ -2284,7 +2374,6 @@ export default function MembersScreen() {
           name: memberProfile?.name ?? 'Unknown member',
           avatar_url: memberProfile?.avatar_url ?? null,
           role: (m.role ?? memberProfile?.role ?? 'member') as UserRole,
-          queen_bee_month: memberProfile?.queen_bee_month ?? null,
           birthday: memberProfile?.birthday ?? null,
           occupation: memberProfile?.occupation ?? null,
           profile_title: memberProfile?.profile_title ?? null,
@@ -2373,7 +2462,7 @@ export default function MembersScreen() {
       ) {
         const fallback = await supabase
           .from('wishes')
-          .select('user_id, id, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
+          .select('user_id, id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
           .eq('community_id', communityId)
           .in('user_id', userIds)
           .in('status', ['public', 'fulfilled'])
@@ -2385,7 +2474,7 @@ export default function MembersScreen() {
       if (wishesError && String(wishesError.message ?? '').includes('title')) {
         const fallback = await supabase
           .from('wishes')
-          .select('user_id, id, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
+          .select('user_id, id, community_id, share_scope, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
           .eq('community_id', communityId)
           .in('user_id', userIds)
           .in('status', ['public', 'fulfilled'])
@@ -2416,6 +2505,15 @@ export default function MembersScreen() {
         if (!wishesByUser.has(w.user_id)) wishesByUser.set(w.user_id, []);
         wishesByUser.get(w.user_id)!.push({
           id: w.id,
+          // How far this wish already travels, carried through rather than
+          // dropped here. Every query above asks for `share_scope` for a stated
+          // reason — these rows feed the wish EDITOR, and a form that reads "I
+          // don't know" as "This HIVE only" saves that back, so opening a
+          // HIVE-Wide wish from a member card to fix a typo quietly pulled it
+          // home again. The queries were fixed on 2026-08-05 and this hand-built
+          // object still threw the answer away one line later (2026-08-06).
+          community_id: w.community_id,
+          share_scope: w.share_scope,
           title: w.title,
           description: w.description,
           status: w.status,
@@ -2520,6 +2618,58 @@ export default function MembersScreen() {
   useEffect(() => {
     loadMembers();
   }, [loadMembers]);
+
+  /**
+   * Whether you are listed HIVE-Wide, changeable from right here.
+   *
+   * Standing at HIVE-Wide, the rail hides both Profile and Settings — they are
+   * about the HIVE you are inside — so the only two places that carried this
+   * switch were places you could not get to. The empty state under this
+   * nonetheless told people to "turn on HIVE-Wide visibility in Settings", which
+   * is a new member's first sight of Members: nobody here, and an instruction
+   * they cannot follow (2026-08-06).
+   *
+   * So the switch is on this page too. `profile_scope` is the one flag — the
+   * same column Settings and Profile write, and the one the database's security
+   * policy reads — and the value is taken from the signed-in profile, so it
+   * opens showing the truth rather than a default.
+   */
+  // Read through the type rather than around it. `visible_hive_wide` was never
+  // declared on `Profile`, so every read of it needed an `as any` — which is
+  // also what let a column nothing enforced live in three screens unnoticed.
+  const listedHiveWide = profile?.profile_scope === 'all_hives';
+  const [savingListing, setSavingListing] = useState(false);
+  const [listingSaved, setListingSaved] = useState(false);
+
+  const toggleHiveWideListing = useCallback(async () => {
+    if (!profile?.id || savingListing) return;
+    const next = !listedHiveWide;
+    setSavingListing(true);
+    setListingSaved(false);
+    const { error } = await (supabase as any)
+      .from('profiles')
+      .update({ profile_scope: next ? 'all_hives' : 'hive' })
+      .eq('id', profile.id);
+    if (error) {
+      console.warn('[Members] HIVE-Wide listing save failed', error);
+      showAlert('That did not save', `${error.message ?? 'Your choice was not stored.'} Please try again.`);
+      setSavingListing(false);
+      return;
+    }
+    // Pull the profile fresh so the switch is drawn from what the database now
+    // holds, then reload the list so you can see yourself arrive.
+    await refreshProfile();
+    await loadMembers(true);
+    setSavingListing(false);
+    setListingSaved(true);
+  }, [profile?.id, listedHiveWide, savingListing, refreshProfile, loadMembers]);
+
+  // The "Saved" line is a receipt, so it goes once you have read it.
+  useEffect(() => {
+    if (!listingSaved) return;
+    const timer = setTimeout(() => setListingSaved(false), 4000);
+    return () => clearTimeout(timer);
+  }, [listingSaved]);
 
   useEffect(() => {
     if (routeView === 'swarm') {
@@ -2688,17 +2838,42 @@ export default function MembersScreen() {
       .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category))
       .slice(0, 3);
   }, [filtered]);
-  // Phone widths render "launcher mode": compact hexes ~3 across with avatar +
+  /**
+   * The room the honeycomb has to draw in.
+   *
+   * The measured column, less the padding the scroll view puts either side of
+   * its contents. Falls back to the window for the first frame.
+   */
+  const listContentWidth = Math.max(200, (listColumnWidth ?? width) - LIST_PADDING * 2);
+
+  // Narrow columns render "launcher mode": compact hexes ~3 across with avatar +
   // first name only, so the whole hive fits roughly one screen.
-  const isPhoneHoneycomb = width < 768;
-  const desiredHoneycombColumns = width >= 1500 ? 5 : width >= 1120 ? 4 : width >= 768 ? 3 : width >= 340 ? 3 : 2;
+  //
+  // These thresholds read the column rather than the window, so they sit about
+  // 96 points below the window numbers they replaced — that is the rail plus the
+  // padding, which is exactly the room the comb never had.
+  const isPhoneHoneycomb = listContentWidth < 672;
+  const desiredHoneycombColumns =
+    listContentWidth >= 1400 ? 5 : listContentWidth >= 1024 ? 4 : listContentWidth >= 260 ? 3 : 2;
   const honeycombColumns = Math.max(1, Math.min(desiredHoneycombColumns, Math.max(1, visibleMembers.length)));
-  const honeycombOuterGutter = width < 520 ? 12 : 32;
-  const honeycombMaxWidth = Math.max(280, Math.min(width - honeycombOuterGutter, 1680));
   const honeycombCellCap = isPhoneHoneycomb ? 220 : 320;
-  const honeycombCellWidth = honeycombColumns === 1
-    ? Math.min(honeycombMaxWidth, 360)
-    : Math.min(honeycombCellCap, honeycombMaxWidth / (1 + 0.75 * (honeycombColumns - 1)));
+  /**
+   * One hexagon, capped whatever the count.
+   *
+   * A single member used to skip the cap and take `min(column, 360)` instead, so
+   * one person at HIVE-Wide drew a 360-point hexagon — on Nat's iPhone, into a
+   * column with under 300 points in it. Her words, 2026-08-06: "the size of my
+   * honeycomb seems silly." It filled the screen and read as a bug rather than a
+   * member.
+   *
+   * Now every count uses the same cap, so a comb of one is a cell the size of
+   * the cells in a comb of nine. The share of the column widens as the count
+   * drops, which is the honest way for it to feel roomier with fewer people.
+   */
+  const honeycombCellWidth = Math.min(
+    honeycombCellCap,
+    listContentWidth / (1 + 0.75 * (honeycombColumns - 1)),
+  );
   const honeycombCardHeight = Math.round(honeycombCellWidth * 0.866);
   const honeycombStepX = honeycombCellWidth * 0.75;
   const honeycombGridWidth = honeycombCellWidth + honeycombStepX * (honeycombColumns - 1);
@@ -2719,11 +2894,85 @@ export default function MembersScreen() {
           The tone follows the reader on its own now, so nothing is passed. */}
       <AppHeader title="Members" />
 
+      {/* Your own place in this list, decided from inside it.
+          Nat, 2026-08-04: "i want to make my profile visible hive-wide, but i
+          dont see that option anywhere." This is where she looked. */}
+      {!loading && wholeHive && (
+        <View style={{ alignItems: 'center', paddingHorizontal: 24, paddingTop: 14, paddingBottom: 4 }}>
+          <Pressable
+            onPress={() => void toggleHiveWideListing()}
+            disabled={savingListing}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: listedHiveWide }}
+            accessibilityLabel="Show me in the HIVE-Wide members list"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              alignSelf: 'center',
+              gap: 10,
+              backgroundColor: skin.card,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: skin.borderStrong,
+              paddingLeft: 14,
+              paddingRight: 8,
+              paddingVertical: 7,
+              opacity: savingListing ? 0.6 : 1,
+            }}
+          >
+            {/* The drawn Earth, the mark HIVE-Wide wears everywhere else — an
+                emoji globe beside it would be a second planet. Both marks sit in
+                one 20-wide box so the words hold still when the switch flips. */}
+            <View style={{ width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
+              {listedHiveWide ? <WorldMark size={20} /> : <Text style={{ fontSize: 15 }}>🔒</Text>}
+            </View>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: skin.ink }}>
+              {/* The same two phrases the pill on your Profile uses — Nat
+                  settled these on 2026-08-05, and one control should not have
+                  two vocabularies. */}
+              {listedHiveWide ? 'Visible HIVE-Wide' : 'Only your HIVEs see you'}
+            </Text>
+            {/* Drawn from `SWITCH_LOOK`, the numbers `components/ui/Switch.tsx`
+                uses, so this reads as the same control as the one on Settings
+                and the one on your Profile — because it is. */}
+            <View
+              style={{
+                width: SWITCH_LOOK.trackWidth,
+                height: SWITCH_LOOK.trackHeight,
+                borderRadius: SWITCH_LOOK.trackHeight / 2,
+                padding: SWITCH_LOOK.inset,
+                backgroundColor: listedHiveWide ? skin.gold : (skin.dark ? 'rgba(255,255,255,0.18)' : 'rgba(49,49,48,0.18)'),
+                alignItems: listedHiveWide ? 'flex-end' : 'flex-start',
+              }}
+            >
+              <View style={{ width: SWITCH_LOOK.knob, height: SWITCH_LOOK.knob, borderRadius: SWITCH_LOOK.knob / 2, backgroundColor: '#fffdf5' }} />
+            </View>
+          </Pressable>
+          {listingSaved && (
+            <Text
+              style={{
+                fontFamily: 'Lato_400Regular', fontSize: 12, color: skin.inkSoft,
+                marginTop: 8, textAlign: 'center',
+              }}
+            >
+              {listedHiveWide
+                ? 'Saved. Everyone in every HIVE can find you here now.'
+                : 'Saved. You show up only inside your own HIVEs now.'}
+            </Text>
+          )}
+        </View>
+      )}
+
       {/* Nobody has opted in yet, and that is the honest answer rather than a
           failure. Says what would put a face here instead of leaving the page
-          blank and letting it read as broken (Nat 2026-08-03). */}
+          blank and letting it read as broken (Nat 2026-08-03).
+
+          The words used to send people to Settings, which the rail hides while
+          you are standing at HIVE-Wide — a first look at Members that showed
+          nobody and asked for something the reader could not do. The switch is
+          directly above this now, so the sentence points at it (2026-08-06). */}
       {!loading && wholeHive && members.length === 0 && (
-        <View style={{ alignItems: 'center', paddingHorizontal: 32, paddingVertical: 64 }}>
+        <View style={{ alignItems: 'center', paddingHorizontal: 32, paddingTop: 40, paddingBottom: 64 }}>
           <Text style={{ fontSize: 34, marginBottom: 14 }}>🐝</Text>
           <Text
             style={{
@@ -2739,9 +2988,9 @@ export default function MembersScreen() {
               color: skin.inkSoft, textAlign: 'center', maxWidth: 380,
             }}
           >
-            Everyone starts visible only inside their own HIVE. Turn on HIVE-Wide
-            visibility in Settings, from inside one of your HIVEs, and you will
-            show up here.
+            {listedHiveWide
+              ? 'You are listed. Everyone starts visible only inside their own HIVE, and nobody else has opened up yet.'
+              : 'Everyone starts visible only inside their own HIVE. Flip the switch above and you are the first face here.'}
           </Text>
         </View>
       )}
@@ -2791,7 +3040,7 @@ export default function MembersScreen() {
                     backgroundColor: active ? '#bd9348' : 'transparent',
                     paddingHorizontal: 14,
                     paddingVertical: 7,
-                    minWidth: width < 420 ? 108 : 128,
+                    minWidth: listContentWidth < 324 ? 108 : 128,
                     alignItems: 'center',
                   }}
                 >
@@ -2879,7 +3128,13 @@ export default function MembersScreen() {
       )}
 
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: 140 }}
+        // The column measures itself here. Whatever the navigation rail is doing
+        // in front of it, this is the width the contents actually get.
+        onLayout={(event) => {
+          const measured = Math.round(event.nativeEvent.layout.width);
+          if (measured > 0) setListColumnWidth(measured);
+        }}
+        contentContainerStyle={{ padding: LIST_PADDING, paddingBottom: 140 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadMembers(true)} tintColor="#bd9348" />}
       >
         {loading ? (
@@ -2899,7 +3154,10 @@ export default function MembersScreen() {
                   borderWidth: 1,
                   borderColor: 'rgba(222,193,129,0.58)',
                   borderRadius: 18,
-                  padding: width < 420 ? 14 : 16,
+                  // Everything inside this scroll view measures the column it is
+                  // drawn in rather than the window in front of it — the same
+                  // reason the honeycomb does (2026-08-06).
+                  padding: listContentWidth < 324 ? 14 : 16,
                   marginBottom: 18,
                   shadowColor: '#bd9348',
                   shadowOpacity: 0.08,
@@ -2908,7 +3166,7 @@ export default function MembersScreen() {
                   elevation: 2,
                 }}
               >
-                <View style={{ flexDirection: width < 620 ? 'column' : 'row', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+                <View style={{ flexDirection: listContentWidth < 524 ? 'column' : 'row', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: '#2d2d2d' }}>
                       Swarm Report
@@ -2941,7 +3199,7 @@ export default function MembersScreen() {
                         borderRadius: 12,
                         paddingHorizontal: 11,
                         paddingVertical: 9,
-                        minWidth: width < 420 ? '47%' : 118,
+                        minWidth: listContentWidth < 324 ? '47%' : 118,
                       }}
                     >
                       <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 10, color: '#bd9348', textTransform: 'uppercase', letterSpacing: 0.5 }}>

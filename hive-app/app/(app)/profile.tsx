@@ -165,31 +165,53 @@ export default function ProfileScreen() {
   const [selectedWish, setSelectedWish] = useState<(Wish & { user: Profile }) | null>(null);
   const [wishToGrant, setWishToGrant] = useState<(Wish & { user: Profile }) | null>(null);
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
-  const [visibleHiveWide, setVisibleHiveWide] = useState<boolean>(!!(profile as any)?.visible_hive_wide);
+  /**
+   * Whether the rest of the HIVEs can see you.
+   *
+   * Drawn straight from the signed-in profile rather than held in this screen's
+   * own memory, so it opens showing what the database holds. `profile_scope` is
+   * the one flag for this: it is what the security policy on `profiles` reads
+   * when it decides whether somebody in another HIVE may see your row at all,
+   * and it is what the HIVE-Wide members list filters on.
+   *
+   * There used to be a second column, `visible_hive_wide`, written by this
+   * switch and by a second switch on Settings, and read by nothing that governs
+   * access. Turning it on did nothing anybody could see, which is why Nat spent
+   * two days flipping it: "I've been tryin to select 'HIVE wide' a billion
+   * times, it never reflects that anywhere" (2026-08-04). One flag now
+   * (2026-08-06).
+   */
+  const listedHiveWide = profile?.profile_scope === 'all_hives';
   const [savingHiveWideVisibility, setSavingHiveWideVisibility] = useState(false);
+  const [hiveWideSaved, setHiveWideSaved] = useState(false);
 
-  useEffect(() => {
-    setVisibleHiveWide(!!(profile as any)?.visible_hive_wide);
-  }, [profile]);
-
-  // Same column, same shape as the copy on Settings — they read and write
-  // `profiles.visible_hive_wide`, so whichever one you touch, both are right.
   const toggleHiveWideVisibility = useCallback(async () => {
     if (!profile?.id || savingHiveWideVisibility) return;
-    const next = !visibleHiveWide;
+    const next = !listedHiveWide;
     setSavingHiveWideVisibility(true);
-    setVisibleHiveWide(next);            // answer the tap straight away
+    setHiveWideSaved(false);
     const { error } = await (supabase.from('profiles') as any)
-      .update({ visible_hive_wide: next })
+      .update({ profile_scope: next ? 'all_hives' : 'hive' })
       .eq('id', profile.id);
     if (error) {
-      setVisibleHiveWide(!next);         // put it back; nothing was saved
-      showAlert('Could not save that', error.message);
-    } else {
-      await refreshProfile();
+      console.warn('[Profile] HIVE-Wide visibility save failed', error);
+      showAlert('That did not save', `${error.message ?? 'Your choice was not stored.'} Please try again.`);
+      setSavingHiveWideVisibility(false);
+      return;
     }
+    // The pill is redrawn from the profile, so waiting for the refresh is what
+    // makes the movement mean "stored" rather than "tapped".
+    await refreshProfile();
     setSavingHiveWideVisibility(false);
-  }, [profile?.id, savingHiveWideVisibility, visibleHiveWide, refreshProfile]);
+    setHiveWideSaved(true);
+  }, [profile?.id, savingHiveWideVisibility, listedHiveWide, refreshProfile]);
+
+  // The "Saved" line is a receipt, so it goes once you have read it.
+  useEffect(() => {
+    if (!hiveWideSaved) return;
+    const timer = setTimeout(() => setHiveWideSaved(false), 4000);
+    return () => clearTimeout(timer);
+  }, [hiveWideSaved]);
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
   const [replantingGarden, setReplantingGarden] = useState(false);
   const [replantNotice, setReplantNotice] = useState<string | null>(null);
@@ -1842,8 +1864,9 @@ export default function ProfileScreen() {
             it and the wrong one, because it is a fact about THIS page: it
             decides whether this profile shows up when somebody stands at
             HIVE-Wide and looks at who is around. So it lives here, where you
-            are when you think of it. Settings keeps its copy; they read the
-            same column, so they can't disagree.
+            are when you think of it. Settings keeps its copy and the HIVE-Wide
+            members list has one too; all three write `profiles.profile_scope`,
+            so they can't disagree.
 
             Nat, 2026-08-05: "i love this, i think its unnecessarily long, we
             can shorten it and center it." It was a full-width white bar with
@@ -1854,12 +1877,13 @@ export default function ProfileScreen() {
             beside it is a second planet. The padlock stays — a lock is the
             right opposite of a world. */}
         <FadeIn delay={90}>
+        <View className="items-center mb-6">
         <Pressable
           onPress={() => void toggleHiveWideVisibility()}
           disabled={savingHiveWideVisibility}
           accessibilityRole="switch"
-          accessibilityState={{ checked: visibleHiveWide }}
-          className="flex-row items-center bg-white mb-6 active:opacity-80"
+          accessibilityState={{ checked: listedHiveWide }}
+          className="flex-row items-center bg-white active:opacity-80"
           style={{
             alignSelf: 'center',
             gap: 10,
@@ -1875,10 +1899,10 @@ export default function ProfileScreen() {
           {/* Both marks live in the same 20-wide box so the words don't shuffle
               sideways when you flip the switch. */}
           <View style={{ width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
-            {visibleHiveWide ? <WorldMark size={20} /> : <Text style={{ fontSize: 15 }}>🔒</Text>}
+            {listedHiveWide ? <WorldMark size={20} /> : <Text style={{ fontSize: 15 }}>🔒</Text>}
           </View>
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13 }} className="text-charcoal">
-            {visibleHiveWide ? 'Visible HIVE-Wide' : 'Only your HIVEs see you'}
+            {listedHiveWide ? 'Visible HIVE-Wide' : 'Only your HIVEs see you'}
           </Text>
           {/* The pill is drawn from `SWITCH_LOOK`, the same numbers
               `components/ui/Switch.tsx` uses, so this reads as the switch from
@@ -1894,13 +1918,29 @@ export default function ProfileScreen() {
               height: SWITCH_LOOK.trackHeight,
               borderRadius: SWITCH_LOOK.trackHeight / 2,
               padding: SWITCH_LOOK.inset,
-              backgroundColor: visibleHiveWide ? '#bd9348' : 'rgba(49,49,48,0.18)',
-              alignItems: visibleHiveWide ? 'flex-end' : 'flex-start',
+              backgroundColor: listedHiveWide ? '#bd9348' : 'rgba(49,49,48,0.18)',
+              alignItems: listedHiveWide ? 'flex-end' : 'flex-start',
             }}
           >
             <View style={{ width: SWITCH_LOOK.knob, height: SWITCH_LOOK.knob, borderRadius: SWITCH_LOOK.knob / 2, backgroundColor: '#fffdf5' }} />
           </View>
         </Pressable>
+        {/* The receipt. A pill that slides under your finger looks the same
+            whether or not anything was stored, so it says so in words for a few
+            seconds and then leaves. */}
+        {hiveWideSaved && (
+          <Text
+            style={{
+              fontFamily: 'Lato_400Regular', fontSize: 12, lineHeight: 18,
+              color: '#8e7a5e', marginTop: 8, textAlign: 'center',
+            }}
+          >
+            {listedHiveWide
+              ? 'Saved. You are in the HIVE-Wide members list now.'
+              : 'Saved. You show up only inside your own HIVEs now.'}
+          </Text>
+        )}
+        </View>
         </FadeIn>
 
         {/* Profile Information */}

@@ -18,7 +18,7 @@ import { GrantWishModal } from './GrantWishModal';
 import { getWishDetailText, getWishQuickTitle, shouldShowWishDescription } from '../../lib/wishDisplay';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { notifyWishMentions } from '../../lib/wishMentions';
-import { confirmAction } from '../../lib/showAlert';
+import { confirmAction, showAlert } from '../../lib/showAlert';
 import { LinkifiedText } from '../ui/LinkifiedText';
 import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { ScopeBadge } from '../ui/ScopeBadge';
@@ -27,7 +27,7 @@ import { getFirstName } from '../../lib/hooks/useArrivalBoard';
 import type { Attachment, Wish, Profile, WishComment, WishGranter } from '../../types';
 
 import { ComposerBar } from '../ui/ComposerBar';
-import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
+import { uploadAttachments } from '../../lib/attachmentUpload';
 import type { SelectedImage } from '../../lib/imagePicker';
 import type { SelectedFile } from '../../lib/filePicker';
 import { ThinkingBee } from '../ui/ThinkingBee';
@@ -131,15 +131,17 @@ export function WishDetail({
       // picked never went anywhere — the insert below simply did not carry the
       // photos, so they vanished on send. Uploaded the same way board posts do.
       let attachments: Attachment[] | undefined;
-      if (commentImages.length > 0) {
-        const uploaded = await uploadMultipleImages(profile.id, commentImages);
-        if (uploaded.attachments.length > 0) attachments = uploaded.attachments;
-      }
-      if (commentFiles.length > 0) {
-        const uploaded = await uploadMultipleFiles(profile.id, commentFiles);
-        if (uploaded.attachments.length > 0) {
-          attachments = [...(attachments ?? []), ...uploaded.attachments];
-        }
+      if (commentImages.length > 0 || commentFiles.length > 0) {
+        const outcome = await uploadAttachments({
+          userId: profile.id,
+          images: commentImages,
+          files: commentFiles,
+        });
+
+        // Every attachment failed. `uploadAttachments` has already said so, and
+        // stopping here keeps the comment and its pictures in the box to retry.
+        if (!outcome.readyToSend) return;
+        attachments = outcome.attachments;
       }
 
       const { data, error } = await supabase
@@ -172,6 +174,9 @@ export function WishDetail({
       setReplyingTo(null);
     } catch (error) {
       console.error('Error submitting comment:', error);
+      // The comment box emptied itself and the comment was nowhere, with the
+      // reason sitting in a console nobody has open.
+      showAlert('Comment not posted', 'That comment did not go through. Try again in a moment.');
     } finally {
       setSubmitting(false);
     }

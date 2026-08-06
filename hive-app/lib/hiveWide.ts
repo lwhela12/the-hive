@@ -57,11 +57,20 @@ export const HIVE_WIDE_WELCOME = {
   panels: [
     {
       heading: 'What you are looking at',
+      // This used to promise "the boards we all share — HIVE Approved and
+      // Announcements". Migration 142 sent every board home to the HIVE that
+      // made it, so the Boards screen up here correctly says nothing is shared
+      // yet — and this paragraph was standing next to it saying the opposite.
+      // Nat spotted the contradiction on 2026-08-06.
+      //
+      // Do NOT bump HIVE_WIDE_WELCOME_VERSION for this: that re-opens the panel
+      // for everyone who has already put it away, and the shorter rewrite Nat
+      // wants is deliberately parked until the rest is built and tested.
       body:
-        'The month’s HIVE Focus, the boards we all share — HIVE Approved and '
-        + 'Announcements — The Buzz, what’s new in the app, and a calendar with '
-        + 'every HIVE’s meetings on it. Plus anything a member has opened up: a '
-        + 'wish, a thread, a kindness they logged.',
+        'The month’s HIVE Focus, The Buzz, what’s new in the app, and a '
+        + 'calendar with every HIVE’s meetings on it. Plus anything a member has '
+        + 'opened up: a wish, a thread, a kindness they logged. Boards live '
+        + 'inside the HIVE that made them, and appear here as each one is shared.',
     },
     {
       heading: 'Why it exists',

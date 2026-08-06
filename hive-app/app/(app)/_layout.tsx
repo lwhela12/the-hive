@@ -19,6 +19,7 @@ import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { useSignedAvatar } from '../../components/ui/Avatar';
 function TabIcon({
   icon,
   imageSource,
@@ -94,6 +95,11 @@ function TabIcon({
 
 export default function AppLayout() {
   const { session, communityId, communityRole, profile, loading, hivePickerOpen } = useAuth();
+  // Signed here in the body rather than inside `tabBarIcon`, which is a plain
+  // render callback and not a component — a hook cannot live in one. This and
+  // Home's daily-question strip were the last two faces drawn from the stored
+  // address, and closing them is what lets the avatars bucket be private.
+  const signedOwnAvatar = useSignedAvatar(profile?.avatar_url);
   const router = useRouter();
   const pathname = usePathname();
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
@@ -372,7 +378,7 @@ export default function AppLayout() {
             tabBarIcon: ({ focused }) => (
               <TabIcon
                 icon="👤"
-                imageSource={profile?.avatar_url ? { uri: profile.avatar_url } : undefined}
+                imageSource={signedOwnAvatar ? { uri: signedOwnAvatar } : undefined}
                 label="Profile"
                 focused={focused}
                 isCircular

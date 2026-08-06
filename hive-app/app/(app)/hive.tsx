@@ -5,6 +5,12 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polygon } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
+// Home used to tell people things with `Alert.alert`, which does nothing at all
+// in a browser — and nearly everybody is in a browser. Eleven explanations were
+// being thrown away here, several of them beside an optimistic undo, so a tick
+// un-ticked itself and a task came back with no word about why. `showAlert` and
+// `confirmAction` say it on both platforms (see `lib/showAlert.ts`).
+import { showAlert, confirmAction } from '../../lib/showAlert';
 import { getHalfwayDoneKey } from '../../lib/meetingCycle';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
@@ -36,6 +42,7 @@ import {
 import { AppHeader } from '../../components/navigation';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { ScopeBadge } from '../../components/ui/ScopeBadge';
+import { SignedAvatarImage } from '../../components/ui/Avatar';
 import { DAILY_QUESTIONS, deckForCommunity, getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
 import type { DailyQuestion } from '../../lib/dailyQuestions';
 import { EventDatePicker } from '../../components/ui/DatePicker';
@@ -358,6 +365,9 @@ const openAddToCalendar = (event: Event) => {
     return;
   }
 
+  // The last raw `Alert.alert` on this screen, and it is safe: the browser path
+  // returns above, so only a phone reaches here. It offers three choices, which
+  // `confirmAction` (a yes or no) cannot carry.
   Alert.alert('Add to Calendar', event.title, [
     { text: 'Google Calendar', onPress: () => Linking.openURL(links.google) },
     { text: 'Outlook Calendar', onPress: () => Linking.openURL(links.outlook) },
@@ -785,7 +795,10 @@ export default function HiveScreen() {
 
     if (error) {
       console.warn('Could not save home section order', error);
-      Alert.alert('Could not save layout', 'Your new order is showing for now, but it may not stick. Please try again.');
+      showAlert(
+        'That layout did not save',
+        'Your new order is showing here for now. Check your connection and press Done again to keep it.',
+      );
     } else {
       // Refresh the cached auth profile so the saved order follows the member everywhere.
       await refreshProfile();
@@ -1270,7 +1283,12 @@ export default function HiveScreen() {
       setHomeActionItems(prev => prev.map(action => (
         action.id === item.id ? item : action
       )));
-      Alert.alert('Could not update task', 'Please try again.');
+      // The line above puts the tick back the way it was, so the person has to
+      // be told why it moved on its own.
+      showAlert(
+        'That tick did not save',
+        'Your task is back the way it was. Check your connection and tap it again.',
+      );
     }
   }, [triggerCompletion]);
 
@@ -1287,20 +1305,22 @@ export default function HiveScreen() {
         console.warn('Could not archive action item', error);
         setHomeActionItems(prev => [item, ...prev]);
         forgetDismissedDuesReminder([item]);
-        Alert.alert('Could not archive task', 'Please try again.');
+        // The two lines above put the task back on the list, so say why it
+        // reappeared and what to do about it.
+        showAlert(
+          'That task came back',
+          'Archiving it did not save, so it is still on your list. Check your connection and try again.',
+        );
       }
     };
 
-    const message = `Archive this task from your list?\n\n"${item.description}"`;
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) archive();
-      return;
-    }
-
-    Alert.alert('Archive Task', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Archive', style: 'destructive', onPress: archive },
-    ]);
+    confirmAction({
+      title: 'Archive Task',
+      message: `Archive this task from your list?\n\n"${item.description}"`,
+      confirmLabel: 'Archive',
+      destructive: true,
+      onConfirm: archive,
+    });
   }, [forgetDismissedDuesReminder, rememberDismissedDuesReminder]);
 
   const archiveCompletedActionItems = useCallback(() => {
@@ -1321,21 +1341,22 @@ export default function HiveScreen() {
         console.warn('Could not archive completed action items', error);
         setHomeActionItems(previousItems);
         forgetDismissedDuesReminder(completedItems);
-        Alert.alert('Could not archive tasks', 'Please try again.');
+        // The whole list has just been put back, so say why it reappeared.
+        showAlert(
+          completedItems.length === 1 ? 'That task came back' : 'Those tasks came back',
+          'Archiving did not save, so they are still on your list. Check your connection and try again.',
+        );
       }
     };
 
     const taskLabel = completedItems.length === 1 ? 'task' : 'tasks';
-    const message = `Archive ${completedItems.length} completed ${taskLabel} from your list?`;
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) archive();
-      return;
-    }
-
-    Alert.alert('Archive Completed Tasks', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Archive', style: 'destructive', onPress: archive },
-    ]);
+    confirmAction({
+      title: 'Archive Completed Tasks',
+      message: `Archive ${completedItems.length} completed ${taskLabel} from your list?`,
+      confirmLabel: 'Archive',
+      destructive: true,
+      onConfirm: archive,
+    });
   }, [forgetDismissedDuesReminder, homeActionItems, rememberDismissedDuesReminder]);
 
   const handleAddTask = async () => {
@@ -1428,7 +1449,12 @@ export default function HiveScreen() {
         setHomeActionItems(prev => prev.map(action => (
           action.id === existingItem.id ? existingItem : action
         )));
-        Alert.alert('Could not update dues reminder', 'Please try again.');
+        // The dues row has just reverted on screen — say so rather than letting
+        // it look like the tick was imagined.
+        showAlert(
+          'Your dues are not marked paid yet',
+          'That tick did not save, so the reminder is back. Check your connection and tick it again.',
+        );
       }
       return;
     }
@@ -1465,7 +1491,11 @@ export default function HiveScreen() {
     if (error) {
       console.warn('Could not save dues reminder completion', error);
       setHomeActionItems(prev => prev.filter(action => action.id !== optimisticAction.id));
-      Alert.alert('Could not update dues reminder', 'Please try again.');
+      // The row that just appeared has been taken away again, so explain it.
+      showAlert(
+        'Your dues are not marked paid yet',
+        'That tick did not save, so the reminder is back. Check your connection and tick it again.',
+      );
       return;
     }
 
@@ -1640,7 +1670,10 @@ export default function HiveScreen() {
         clearSelectedWishResume();
       }
       if (options.alertOnUnavailable) {
-        Alert.alert('Wish unavailable', 'That wish may have been archived or moved.');
+        showAlert(
+          'We could not open that wish',
+          'It may have been archived or moved since that link was made. Have a look in Wishes for what is live now.',
+        );
       }
     }
   }, [clearSelectedWishResume, communityId, openWishDetail]);
@@ -1700,7 +1733,10 @@ export default function HiveScreen() {
       openEditEvent(data as Event);
     } catch (error) {
       console.warn('Could not open event', error);
-      Alert.alert('Event unavailable', 'That event may have been deleted or moved.');
+      showAlert(
+        'We could not open that event',
+        'It may have been deleted or moved since that link was made. Check the calendar on Home for what is coming up.',
+      );
     }
   }, [communityId, openEditEvent]);
 
@@ -2215,25 +2251,20 @@ export default function HiveScreen() {
         await refetch();
       } catch (error) {
         console.error('Error deleting event:', error);
-        Alert.alert('Error', 'Failed to delete event');
+        showAlert(
+          'That event is still on the calendar',
+          'Deleting it did not save. Check your connection and try again.',
+        );
       }
     };
 
-    // Use window.confirm on web, Alert.alert on native
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm('Are you sure you want to delete this event?')) {
-        await doDelete();
-      }
-    } else {
-      Alert.alert(
-        'Delete Event',
-        'Are you sure you want to delete this event?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: doDelete },
-        ]
-      );
-    }
+    confirmAction({
+      title: 'Delete Event',
+      message: 'Are you sure you want to delete this event?',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: doDelete,
+    });
   };
 
   // Handle grant wish
@@ -2295,7 +2326,11 @@ export default function HiveScreen() {
       const { error } = await query;
 
       if (error) {
-        Alert.alert('Error', 'Failed to archive wish. Please try again.');
+        console.warn('Could not archive wish', error);
+        showAlert(
+          'That wish is still in Wishes',
+          'Archiving it did not save. Check your connection and try again.',
+        );
         return;
       }
 
@@ -2309,19 +2344,12 @@ export default function HiveScreen() {
       }
     };
 
-    const message = `Archive this wish from Wishes?\n\n"${wish.description}"`;
-
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) {
-        archiveWish();
-      }
-      return;
-    }
-
-    Alert.alert('Archive Wish', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Archive', onPress: archiveWish },
-    ]);
+    confirmAction({
+      title: 'Archive Wish',
+      message: `Archive this wish from Wishes?\n\n"${wish.description}"`,
+      confirmLabel: 'Archive',
+      onConfirm: archiveWish,
+    });
   }, [canArchiveWish, closeWishDetail, communityId, isAdmin, managingWish?.id, profile, refetch, selectedWish?.id]);
 
   const handleDeleteWish = (wish: Wish) => {
@@ -2336,7 +2364,11 @@ export default function HiveScreen() {
       });
 
       if (error) {
-        Alert.alert('Error', 'Failed to delete wish. Please try again.');
+        console.warn('Could not delete wish', error);
+        showAlert(
+          'That wish is still here',
+          'Deleting it did not save. Check your connection and try again.',
+        );
         return;
       }
 
@@ -2350,19 +2382,13 @@ export default function HiveScreen() {
       }
     };
 
-    const message = `Delete this wish?\n\n"${wish.description}"`;
-
-    if (typeof window !== 'undefined' && window.confirm) {
-      if (window.confirm(message)) {
-        deleteWish();
-      }
-      return;
-    }
-
-    Alert.alert('Delete Wish', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: deleteWish },
-    ]);
+    confirmAction({
+      title: 'Delete Wish',
+      message: `Delete this wish?\n\n"${wish.description}"`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: deleteWish,
+    });
   };
 
   // Halfway between meetings the newsletter goes out. The nudge used to be a
@@ -2956,18 +2982,21 @@ export default function HiveScreen() {
                         shadowOffset: { width: 0, height: 1 },
                         elevation: isMe || hasAnswered ? 2 : 1,
                       }}>
-                        {member.avatar_url ? (
-                          <Image
-                            source={{ uri: member.avatar_url }}
-                            style={{ width: 44, height: 44, borderRadius: 22, opacity: imgOpacity }}
-                            resizeMode="cover"
-                          />
-                        ) : (
+                        {/* Signed rather than the stored address: this strip and the
+                            profile tab icon were the last two places drawing a face
+                            straight from `avatar_url`, which is what kept the avatars
+                            bucket open. Its own grey silhouette is kept as the
+                            stand-in — initials would be a different screen. */}
+                        <SignedAvatarImage
+                          url={member.avatar_url}
+                          style={{ width: 44, height: 44, borderRadius: 22, opacity: imgOpacity }}
+                          fallback={
                           <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#e8e3da', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden', opacity: imgOpacity }}>
                             <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#b8b0a4', position: 'absolute', top: 8 }} />
                             <View style={{ width: 32, height: 21, borderTopLeftRadius: 16, borderTopRightRadius: 16, backgroundColor: '#b8b0a4' }} />
                           </View>
-                        )}
+                          }
+                        />
                       </View>
                     </Pressable>
 

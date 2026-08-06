@@ -228,7 +228,7 @@ from `NAV_DESTINATIONS` in `lib/navigation.ts`:
 | `/honey-pot` | the shared pot of money (per-HIVE, off by default) |
 | `/buzz` | The Buzz — every newsletter you may read. HIVE-Wide only |
 | `/profile` | your own profile |
-| `/settings` | notifications, your name in a HIVE, leaving one |
+| `/settings` | notifications, email preferences, who can see you, your name in a HIVE |
 | `/app-feedback` | tell the people who build the app something |
 | `/admin` | running a HIVE. Tabbed per HIVE |
 
@@ -316,7 +316,7 @@ because the same thing was hand-written three or four times and drifted.
 | `lib/navigation.ts` | every destination in the app, once |
 | `lib/appNews.ts` | "what's new" — read by Home's strip, the newsletter draft and the meeting deck |
 | `lib/hiveWide.ts` | what HIVE-Wide is, said once, for three surfaces |
-| `lib/hooks/useHiveOnlyScreen.ts` | the referee for screens that only make sense inside one HIVE |
+| ~~`lib/hooks/useHiveOnlyScreen.ts`~~ | **imported by nothing.** See the gotcha below before reaching for it |
 | `lib/maintenance.ts` | the door. `HIVE_CLOSED = true` shuts the app to everyone but the keepers |
 
 The mic rule, from the 2026-08-04 sweep of 100 text inputs:
@@ -473,7 +473,13 @@ eas build --platform ios   # iOS build via EAS
   themselves, by design. `hive.tsx` referenced it nowhere — so a new account got
   a black HIVE-Wide header over a cream HIVE page with invisible tabs. Both
   halves were doing as told; nobody was refereeing.
-  `lib/hooks/useHiveOnlyScreen.ts` is the referee now.
+  **`hive.tsx` reads `wholeHive` itself now** (`:694`, and the redirect at
+  `:714`), which is what actually fixes it.
+  > A previous version of this file said "`lib/hooks/useHiveOnlyScreen.ts` is
+  > the referee now." **That hook is imported by nothing** — checked 2026-08-06.
+  > It was written for this bug and never wired into a single screen, so for a
+  > while the file said fixed while the fix sat on a shelf. Either wire it up
+  > everywhere or delete it; do not cite it as the answer again.
 
 - **Never build the web bundle in CI from pulled environment variables.**
   Supabase keys are marked sensitive, so `vercel env pull` returns them empty,

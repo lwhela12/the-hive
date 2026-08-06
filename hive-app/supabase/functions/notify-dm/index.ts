@@ -8,7 +8,12 @@ interface NotifyDMPayload {
   sender_id: string;
   recipient_id: string;
   message_preview: string;
-  community_id: string;
+  /**
+   * Sent by the app and deliberately ignored. Which HIVE a direct message
+   * belongs to is a fact about the room, and the room is the thing we can
+   * check. See the derivation below.
+   */
+  community_id?: string;
 }
 
 async function sendExpoPushNotification(
@@ -69,11 +74,53 @@ serve(async (req) => {
     }
 
     const payload: NotifyDMPayload = await req.json();
-    const { room_id, sender_id, recipient_id, message_preview, community_id } = payload;
+    const { room_id, sender_id, recipient_id, message_preview } = payload;
 
     if (auth.userId !== sender_id) {
       return errorResponse('Authenticated user does not match sender', 403);
     }
+
+    // Proving who is CALLING was only ever half of it. Until now, `recipient_id`
+    // and `community_id` came out of the request body and were used as they
+    // arrived — so any signed-in member could push an in-app notification and an
+    // Expo push to any person in any HIVE, under their own real name, about a
+    // conversation they were not part of. Being signed in is not the same as
+    // being allowed.
+    //
+    // The room settles both questions at once. Two people who are both in a
+    // direct-message room are two people who may notify each other, and the
+    // room's own `community_id` is the HIVE the notification belongs to — which
+    // matters more than it looks, because `notifications` is only readable when
+    // the reader is a member of the HIVE stamped on it. A forged HIVE would have
+    // produced a notification the recipient could never see.
+    const { data: room, error: roomError } = await supabaseAdmin
+      .from('chat_rooms')
+      .select('id, community_id')
+      .eq('id', room_id)
+      .single();
+
+    if (roomError || !room) {
+      console.error('Failed to find the room:', roomError);
+      return errorResponse('Room not found', 404);
+    }
+
+    const { data: roomMembers, error: roomMemberError } = await supabaseAdmin
+      .from('chat_room_members')
+      .select('user_id')
+      .eq('room_id', room_id)
+      .in('user_id', [sender_id, recipient_id]);
+
+    if (roomMemberError) {
+      console.error('Failed to verify room membership:', roomMemberError);
+      return errorResponse('Could not verify the room', 500);
+    }
+
+    const inRoom = new Set((roomMembers ?? []).map((member: { user_id: string }) => member.user_id));
+    if (!inRoom.has(sender_id) || !inRoom.has(recipient_id)) {
+      return errorResponse('Sender or recipient is not in this room', 403);
+    }
+
+    const community_id: string = room.community_id;
 
     // Get sender profile for the notification title
     const { data: sender, error: senderError } = await supabaseAdmin

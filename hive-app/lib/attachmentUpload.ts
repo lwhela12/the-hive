@@ -4,6 +4,7 @@ import { Attachment } from '../types';
 import { SelectedImage, getImageExtension, getContentType } from './imagePicker';
 import type { SelectedFile } from './filePicker';
 import { getShortVideoRejectionReason } from './mediaAttachments';
+import { showAlert } from './showAlert';
 
 // Generate a UUID v4
 function generateUUID(): string {
@@ -155,6 +156,10 @@ export async function uploadSingleImage(
 /**
  * Upload multiple images to Supabase Storage
  * Returns an array of successfully uploaded attachments
+ *
+ * `app/(app)/app-feedback.tsx` calls this directly and counts its own failures.
+ * Everywhere somebody posts, sends or saves, use `uploadAttachments()` below —
+ * it does the counting and the telling once, in one voice.
  */
 export async function uploadMultipleImages(
   userId: string,
@@ -257,6 +262,9 @@ export async function uploadSingleFile(
 
 /**
  * Upload multiple non-image files to Supabase Storage.
+ *
+ * `app/(app)/app-feedback.tsx` calls this directly and counts its own failures.
+ * Everywhere somebody posts, sends or saves, use `uploadAttachments()` below.
  */
 export async function uploadMultipleFiles(
   userId: string,
@@ -283,6 +291,121 @@ export async function uploadMultipleFiles(
     attachments,
     errors,
   };
+}
+
+/**
+ * What came back from `uploadAttachments()`.
+ *
+ * The two halves are separate types on purpose. `UploadResult` hands back
+ * `{ success, attachments, errors }`, and every one of the six composers that
+ * used it reached straight for `.attachments` and left `.errors` sitting there
+ * — so somebody picked three photos, watched the spinner, saw the post land,
+ * and got one photo or none with nothing said. The worst of them wrote a chat
+ * message with empty text and no attachments: a blank bubble in the room.
+ *
+ * Here `attachments` exists only on the `readyToSend: true` half, so reaching
+ * for it without answering "did this work?" does not compile. That is the whole
+ * point of the shape — please keep it. (2026-08-06)
+ */
+export type AttachmentUploadOutcome =
+  | { readyToSend: true; attachments?: Attachment[] }
+  | { readyToSend: false };
+
+/** Join names the way a person would say them out loud. */
+function nameList(names: string[]) {
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/**
+ * Put everything somebody attached into storage, tell them plainly about
+ * anything that stayed behind, and hand back what made it.
+ *
+ * This is the one shared way to attach something to a post, a reply, a comment,
+ * a chat message or a wish. The telling lives in here rather than in each
+ * composer because six hand-written versions of "some photos are missing" drift
+ * apart, and the version that drifts is always the one whose comment says it
+ * matches the others.
+ *
+ * Two answers come back:
+ *
+ * - `readyToSend: true` — carry on and save. `attachments` is `undefined` when
+ *   nothing was picked at all, which is different from an empty list: for a
+ *   wish being edited, `undefined` means "leave the picture already on it
+ *   alone". Some may still have failed; the person has already been told, and
+ *   what survived is worth sending.
+ * - `readyToSend: false` — everything failed. The caller stops without writing
+ *   anything, which keeps the words and the pictures sitting in the composer so
+ *   the person can try again. Sending anyway would post a message with nothing
+ *   in it.
+ */
+export async function uploadAttachments({
+  userId,
+  images = [],
+  files = [],
+  onProgress,
+}: {
+  userId: string;
+  images?: SelectedImage[];
+  files?: SelectedFile[];
+  onProgress?: (progress: UploadProgress) => void;
+}): Promise<AttachmentUploadOutcome> {
+  const total = images.length + files.length;
+  if (total === 0) return { readyToSend: true, attachments: undefined };
+
+  const attachments: Attachment[] = [];
+  const missedNames: string[] = [];
+  const reasons: string[] = [];
+  let done = 0;
+
+  for (const image of images) {
+    onProgress?.({ current: done + 1, total });
+    const uploaded = await uploadSingleImage(userId, image);
+    if (uploaded) {
+      attachments.push(uploaded);
+    } else {
+      missedNames.push(image.fileName || 'one photo');
+    }
+    done += 1;
+  }
+
+  for (const file of files) {
+    onProgress?.({ current: done + 1, total });
+
+    // A video that is too long or too big is turned away before the upload
+    // starts. Saying which rule it broke saves somebody retrying the same
+    // 3-minute clip four times.
+    const rejection = getShortVideoRejectionReason(file);
+    const uploaded = rejection ? null : await uploadSingleFile(userId, file);
+
+    if (uploaded) {
+      attachments.push(uploaded);
+    } else {
+      missedNames.push(file.name || 'one file');
+      if (rejection && !reasons.includes(rejection)) reasons.push(rejection);
+    }
+    done += 1;
+  }
+
+  if (missedNames.length === 0) return { readyToSend: true, attachments };
+
+  const missed = nameList(missedNames);
+  const why = reasons.length > 0 ? ` ${reasons.join(' ')}` : '';
+
+  if (attachments.length === 0) {
+    showAlert(
+      missedNames.length === 1 ? 'That attachment stayed behind' : 'Those attachments stayed behind',
+      `${missed} could not be uploaded, so nothing was sent.${why} Everything you wrote is still here — have another go in a moment.`
+    );
+    return { readyToSend: false };
+  }
+
+  showAlert(
+    'Some attachments stayed behind',
+    `${missed} could not be uploaded.${why} Everything else goes with what you wrote.`
+  );
+  return { readyToSend: true, attachments };
 }
 
 /**

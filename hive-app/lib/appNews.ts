@@ -28,6 +28,46 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-06-buzz-shoutouts-in-place',
+    date: '2026-08-06',
+    title: 'Add a shout-out to the newsletter without leaving The Buzz',
+    detail: 'It opens a box right there. What you have already added is waiting for you when you come back.',
+    href: { pathname: '/buzz' },
+    action: 'Open The Buzz',
+  },
+  {
+    id: '2026-08-06-links-land-in-the-right-hive',
+    date: '2026-08-06',
+    title: 'A link to a thread now takes you to the HIVE it actually lives in',
+    detail: 'And the trail along the bottom names the board it is really on, so going back puts you where you were.',
+  },
+  {
+    id: '2026-08-06-hive-wide-switch-works',
+    date: '2026-08-06',
+    title: 'Being listed HIVE-Wide is one switch now, and it is on the Members page',
+    detail: 'There used to be two switches in two places and you needed both. Flip it and watch yourself appear.',
+    href: { pathname: '/members' },
+    action: 'Open Members',
+  },
+  {
+    id: '2026-08-06-your-photo-is-private',
+    date: '2026-08-06',
+    title: 'Your profile photo is behind the door now',
+    detail: 'Member photos used to be reachable by anyone who knew where to look. They are signed out to members only.',
+  },
+  {
+    id: '2026-08-06-things-say-when-they-fail',
+    date: '2026-08-06',
+    title: 'When something does not save, it tells you',
+    detail: 'Ticking a task, adding skills, attaching a photo — these could all fail quietly and put themselves back. Now they say so, and keep what you typed.',
+  },
+  {
+    id: '2026-08-06-phone-navigation',
+    date: '2026-08-06',
+    title: 'The menu on a phone has words under the pictures',
+    detail: 'It also sits clear of the clock and the home bar. Add HIVE to your home screen and it behaves like an app.',
+  },
+  {
     id: '2026-08-06-show-me-hive-wide',
     date: '2026-08-05',
     title: 'Want the other HIVEs to be able to find you?',

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
+import { ComposerBar } from '../../components/ui/ComposerBar';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
@@ -51,17 +51,23 @@ type Buzz = {
 };
 
 export default function BuzzScreen() {
-  const { communityId, memberships, switchCommunity } = useAuth();
+  const { profile, communityId, memberships } = useAuth();
   // The Buzz lives at HIVE-Wide and nowhere else (Nat 2026-08-03), so it is
   // always dressed for space rather than following whoever opened it.
   const skin = SPACE_SKIN;
-  const router = useRouter();
   const [items, setItems] = useState<Buzz[]>([]);
   /** This month's collecting thread, kept out of the archive of sent letters. */
   const [collecting, setCollecting] = useState<Buzz | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  /** The shout-out box, open only once somebody asks for it. */
+  const [adding, setAdding] = useState(false);
+  const [shoutOut, setShoutOut] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [shoutOutError, setShoutOutError] = useState<string | null>(null);
+  /** What this person has already put in this month's letter, read back. */
+  const [added, setAdded] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     // Row-level security already decides what comes back — this asks for every
@@ -73,7 +79,7 @@ export default function BuzzScreen() {
 
     const boardIds = (boards ?? []).map((b: any) => b.id);
     if (boardIds.length === 0) {
-      setItems([]); setLoading(false); return;
+      setItems([]); setCollecting(null); setAdded([]); setLoading(false); return;
     }
 
     const { data } = await supabase
@@ -85,6 +91,7 @@ export default function BuzzScreen() {
       .limit(40);
 
     const rows = (data ?? []) as unknown as Buzz[];
+    const memberIn = new Set(memberships.map((m) => m.community_id));
 
     // The month that is still collecting is NOT an issue of the newsletter.
     //
@@ -96,13 +103,37 @@ export default function BuzzScreen() {
     // finished letters, so an invitation to add something looked like an issue
     // you had already missed. It is an invitation, so it is drawn like one, and
     // the archive underneath is only letters that were actually sent.
-    const brewing = rows.find((row) => BREWING.test(row.content ?? ''));
-    setCollecting(brewing ?? null);
-    const archive = brewing ? rows.filter((row) => row.id !== brewing.id) : rows;
+    const brewingRows = rows.filter((row) => BREWING.test(row.content ?? ''));
+    // Your own HIVE's collecting thread first. A shout-out is a reply on that
+    // thread, and the database only accepts a reply from somebody who belongs
+    // to the HIVE the thread lives in — so offering another HIVE's thread would
+    // be offering a box that cannot post.
+    const mine = brewingRows.find((row) => memberIn.has(row.community_id));
+    const brewing = mine ?? brewingRows[0] ?? null;
+    setCollecting(brewing);
+    const brewingIds = new Set(brewingRows.map((row) => row.id));
+    const archive = rows.filter((row) => !brewingIds.has(row.id));
     setItems(archive);
     setOpenId((current) => current ?? archive[0]?.id ?? null);
     setLoading(false);
-  }, []);
+
+    // What this person has already put in this month, read back off the thread
+    // rather than remembered in the page. A shout-out you added yesterday is
+    // still in the letter today, and the card should say so.
+    if (brewing && profile?.id) {
+      const { data: mineOnThread } = await supabase
+        .from('board_replies')
+        .select('id, content')
+        .eq('post_id', brewing.id)
+        .eq('author_id', profile.id)
+        .order('created_at', { ascending: true });
+      setAdded(((mineOnThread ?? []) as { content: string | null }[])
+        .map((reply) => String(reply.content ?? '').trim())
+        .filter((content) => content.length > 0));
+    } else {
+      setAdded([]);
+    }
+  }, [memberships, profile?.id]);
 
   useEffect(() => { void load(); }, [load, communityId]);
 
@@ -113,6 +144,58 @@ export default function BuzzScreen() {
   };
 
   const showWhichHive = memberships.length > 1;
+
+  /**
+   * Adding a shout-out, without leaving The Buzz.
+   *
+   * "Add yours →" used to push you to `/board?postId=…` — a newsletter board
+   * that Nat deliberately deleted (2026-08-05: *"i'm feeling very confident
+   * right now that we dont want a news letter board"*). So the invitation
+   * pointed at a room that had been taken down, and the app rebuilt it around
+   * you for the length of one screen.
+   *
+   * The words were never the problem. A shout-out is one line, and one line
+   * deserves a box, not a trip. It is stored exactly where it always was — a
+   * reply on this month's collecting thread — which is the same row Admin's
+   * "Shout-outs" tab lists and the same row the newsletter draft harvests, so
+   * nothing that already works has to learn anything new.
+   *
+   * Words only, on purpose: the Shout-outs tab and the draft both read the
+   * reply's text, so a photo attached here would be a photo nobody downstream
+   * ever sees. What you add is exactly what lands in the letter.
+   */
+  const canAddShoutOut = !!profile
+    && !!collecting
+    && memberships.some((m) => m.community_id === collecting.community_id);
+
+  const submitShoutOut = async () => {
+    const content = shoutOut.trim();
+    if (!content || !profile || !collecting || posting) return;
+
+    setPosting(true);
+    setShoutOutError(null);
+    // The same four columns every other reply in the app is written with. The
+    // thread's reply count and last-reply time are kept up to date by a
+    // database trigger, so there is nothing else to touch.
+    const { error } = await (supabase as any).from('board_replies').insert({
+      community_id: collecting.community_id,
+      post_id: collecting.id,
+      author_id: profile.id,
+      content,
+    });
+    setPosting(false);
+
+    if (error) {
+      // The box keeps what you wrote, so the reason goes beside it rather than
+      // into an alert you have to dismiss before you can try again.
+      setShoutOutError(`Your words are still here. ${error.message}`);
+      return;
+    }
+
+    setAdded((current) => [...current, content]);
+    setShoutOut('');
+    setAdding(false);
+  };
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: skin.page }} edges={['top']}>
@@ -130,39 +213,20 @@ export default function BuzzScreen() {
             </View>
           ) : null}
 
-          {/* This month, still being written. An invitation, drawn as one. */}
+          {/* This month, still being written. An invitation, drawn as one —
+              and answerable right here. "Add it here" now means here. */}
           {!loading && collecting ? (
-            <Pressable
-              /**
-               * Step into the HIVE that owns the thread first.
-               *
-               * `/board` is one HIVE's boards, and Boards is deliberately hidden
-               * at HIVE-Wide — but this link pushed straight there anyway. So
-               * pressing it while standing at HIVE-Wide showed OG's own boards
-               * under a header that still said HIVE-WIDE, which read as "all of
-               * OG's boards have been shared with everybody" (Nat 2026-08-05:
-               * "none of these boards should be on HIVE-Wide yet"). Nothing had
-               * been shared — every board in the database is still its own
-               * HIVE's — the page was just the wrong page to be on.
-               */
-              onPress={async () => {
-                if (collecting.community_id && collecting.community_id !== communityId) {
-                  await switchCommunity(collecting.community_id);
-                }
-                router.push({ pathname: '/board', params: { postId: collecting.id } } as never);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Add something to this month's newsletter"
-              style={({ pressed }) => ({
+            <View
+              style={{
                 borderRadius: 16,
                 borderWidth: 1,
                 borderStyle: 'dashed',
                 borderColor: 'rgba(255,226,166,0.45)',
-                backgroundColor: pressed ? 'rgba(255,248,233,0.1)' : 'rgba(255,248,233,0.05)',
+                backgroundColor: 'rgba(255,248,233,0.05)',
                 padding: 16,
                 marginBottom: 18,
                 gap: 6,
-              })}
+              }}
             >
               <Text
                 style={{
@@ -179,10 +243,119 @@ export default function BuzzScreen() {
                 Want a shout-out, a plug, or a reminder in it? Add it here and it goes
                 into the letter.
               </Text>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#E8C77E', marginTop: 2 }}>
-                Add yours →
-              </Text>
-            </Pressable>
+
+              {/* What you have already put in, read back to you. Nat's own test
+                  of whether a thing worked is seeing it afterwards. */}
+              {added.length > 0 ? (
+                <View style={{ gap: 6, marginTop: 4 }}>
+                  {added.map((entry, index) => (
+                    <View
+                      key={`${index}-${entry.slice(0, 12)}`}
+                      style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}
+                    >
+                      <Ionicons name="checkmark-circle" size={15} color="#E8C77E" style={{ marginTop: 2 }} />
+                      <Text
+                        style={{
+                          flex: 1, fontFamily: 'Lato_400Regular', fontSize: 13.5,
+                          lineHeight: 20, color: skin.ink,
+                        }}
+                      >
+                        {entry}
+                      </Text>
+                    </View>
+                  ))}
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, color: skin.inkFaint }}>
+                    {added.length === 1 ? "That's in the letter." : "They're in the letter."}
+                  </Text>
+                </View>
+              ) : null}
+
+              {shoutOutError ? (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, color: '#F2A5A5', marginTop: 2 }}>
+                  {shoutOutError}
+                </Text>
+              ) : null}
+
+              {adding ? (
+                <View style={{ marginTop: 6, gap: 10 }}>
+                  {/* The app's one text box, in its form shape: the mic and the
+                      character count sit inside its own border. Its buttons are
+                      drawn here instead of asked for, because the built-in pair
+                      is charcoal-on-cream and this card hangs in space. Enter
+                      makes a new line — a shout-out often wants two. */}
+                  <ComposerBar
+                    variant="form"
+                    tone="dark"
+                    value={shoutOut}
+                    onChangeText={setShoutOut}
+                    placeholder="A shout-out, a plug, a reminder — one or two lines is plenty."
+                    minHeight={92}
+                    maxLength={600}
+                    autoFocus
+                    submitOnEnterKey={false}
+                    editable={!posting}
+                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Pressable
+                      onPress={submitShoutOut}
+                      disabled={!shoutOut.trim() || posting}
+                      accessibilityRole="button"
+                      style={({ pressed }) => ({
+                        paddingHorizontal: 18,
+                        paddingVertical: 10,
+                        borderRadius: 999,
+                        backgroundColor: shoutOut.trim() && !posting ? '#E8C77E' : 'rgba(255,248,233,0.12)',
+                        opacity: pressed ? 0.8 : 1,
+                      })}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: 'Lato_700Bold',
+                          fontSize: 13.5,
+                          color: shoutOut.trim() && !posting ? '#1A1A22' : skin.inkFaint,
+                        }}
+                      >
+                        {posting ? 'Adding…' : 'Add it'}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        setAdding(false);
+                        setShoutOut('');
+                        setShoutOutError(null);
+                      }}
+                      disabled={posting}
+                      accessibilityRole="button"
+                      hitSlop={6}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                    >
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, color: skin.inkSoft }}>
+                        Cancel
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : canAddShoutOut ? (
+                <Pressable
+                  onPress={() => { setAdding(true); setShoutOutError(null); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add something to this month's newsletter"
+                  hitSlop={6}
+                  style={({ pressed }) => ({ alignSelf: 'flex-start', opacity: pressed ? 0.6 : 1, marginTop: 2 })}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#E8C77E' }}>
+                    {added.length > 0 ? 'Add another →' : 'Add yours →'}
+                  </Text>
+                </Pressable>
+              ) : (
+                // The letter on screen belongs to a HIVE this person is reading
+                // across into. They can read every word of it; adding to it is
+                // for the people whose letter it is.
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, color: skin.inkFaint, marginTop: 2 }}>
+                  This one is {hiveDisplayName(collecting.community?.name)}&rsquo;s letter to write.
+                </Text>
+              )}
+            </View>
           ) : null}
 
           {loading ? null : items.length === 0 ? (

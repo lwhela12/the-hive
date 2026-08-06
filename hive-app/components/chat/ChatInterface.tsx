@@ -3,7 +3,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   Pressable,
   Text,
   View,
@@ -18,7 +17,8 @@ import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { ChatInput, type ChatInputAttachments } from './ChatInput';
 import { SelectedImage } from '../../lib/imagePicker';
-import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
+import { uploadAttachments } from '../../lib/attachmentUpload';
+import { showAlert } from '../../lib/showAlert';
 import type { ChatMessage, Conversation, ConversationMode, Attachment } from '../../types';
 
 const cliveIcon = require('../../assets/Clive_logo.png');
@@ -724,17 +724,21 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
 
     // Upload attachments if any
     let attachments: Attachment[] | undefined;
-    if (images && images.length > 0) {
-      const result = await uploadMultipleImages(session.user.id, images);
-      if (result.attachments.length > 0) {
-        attachments = result.attachments;
+    if ((images?.length ?? 0) > 0 || (files?.length ?? 0) > 0) {
+      const outcome = await uploadAttachments({
+        userId: session.user.id,
+        images: images ?? [],
+        files: files ?? [],
+      });
+
+      // Every attachment failed. Clive would otherwise be asked about a picture
+      // he cannot see, and answer as though he could. `uploadAttachments` has
+      // already said what happened, so stop and let them try again.
+      if (!outcome.readyToSend) {
+        setIsLoading(false);
+        return;
       }
-    }
-    if (files && files.length > 0) {
-      const result = await uploadMultipleFiles(session.user.id, files);
-      if (result.attachments.length > 0) {
-        attachments = [...(attachments ?? []), ...result.attachments];
-      }
+      attachments = outcome.attachments;
     }
 
     // Ensure we have a conversation before adding messages
@@ -779,10 +783,11 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
     const saveUserMessagePromise = retryWithBackoff(saveUserMessage);
     saveUserMessagePromise.catch((error) => {
       console.error('Failed to save user message after retries:', error);
-      Alert.alert(
+      // `Alert.alert` is an empty method on web, so this warning reached nobody
+      // where nearly everybody uses HIVE.
+      showAlert(
         'Message not saved',
-        'Your message was sent but could not be saved. Please check your connection.',
-        [{ text: 'OK' }]
+        'Clive got your message, and it could not be saved to this conversation. Check your connection.'
       );
     });
 

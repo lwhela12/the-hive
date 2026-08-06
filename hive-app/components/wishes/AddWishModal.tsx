@@ -18,7 +18,7 @@ import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { syncWishEditToLinkedBoard } from '../../lib/wishBoardLinking';
 import { ComposerBar } from '../ui/ComposerBar';
-import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
+import { uploadAttachments, type AttachmentUploadOutcome } from '../../lib/attachmentUpload';
 import type { Attachment } from '../../types';
 import type { SelectedImage } from '../../lib/imagePicker';
 import type { SelectedFile } from '../../lib/filePicker';
@@ -91,25 +91,21 @@ export function AddWishModal({
   const [scopeStatus, setScopeStatus] = useState<'known' | 'checking' | 'unknown'>('known');
 
   /**
-   * Put whatever was picked into storage and hand back the rows to save.
+   * Put whatever was picked into storage and say whether the save may go ahead.
    *
-   * Returns `undefined` when nothing was picked, which is different from an
-   * empty list: `undefined` means "leave whatever is already on this wish
-   * alone", and that distinction is the whole reason this is not inline.
+   * On the `readyToSend: true` answer, `attachments` is `undefined` when nothing
+   * was picked, which is different from an empty list: `undefined` means "leave
+   * whatever is already on this wish alone", and that distinction is the whole
+   * reason this is not inline. On `readyToSend: false` every picture failed and
+   * `uploadAttachments` has already told the person, so the save stops and the
+   * modal stays open with their words and their pictures still in it.
    */
-  const collectAttachments = async (uploaderId: string): Promise<Attachment[] | undefined> => {
-    if (selectedImages.length === 0 && selectedFiles.length === 0) return undefined;
-    let out: Attachment[] = [];
-    if (selectedImages.length > 0) {
-      const result = await uploadMultipleImages(uploaderId, selectedImages);
-      out = [...out, ...result.attachments];
-    }
-    if (selectedFiles.length > 0) {
-      const result = await uploadMultipleFiles(uploaderId, selectedFiles);
-      out = [...out, ...result.attachments];
-    }
-    return out.length > 0 ? out : undefined;
-  };
+  const collectAttachments = (uploaderId: string): Promise<AttachmentUploadOutcome> =>
+    uploadAttachments({
+      userId: uploaderId,
+      images: selectedImages,
+      files: selectedFiles,
+    });
   const [wishTitle, setWishTitle] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -229,7 +225,9 @@ export function AddWishModal({
         // travelled and an edited one never did. Nat, 2026-08-04: "i've marked
         // this wish HIVE-wide a bunch of times & it never saves." The picker was
         // working perfectly and writing to nowhere.
-        const attachments = await collectAttachments(ownerUserId);
+        const picked = await collectAttachments(ownerUserId);
+        if (!picked.readyToSend) return;
+        const attachments = picked.attachments;
         const updatePayload = {
           title: wishTitle.trim() || null,
           description: wishText.trim(),
@@ -241,7 +239,7 @@ export function AddWishModal({
           // Only overwrite when something new was picked. Saving `null` because
           // the picker started empty would delete a picture that is already on
           // the wish.
-          ...(attachments ? { attachments } : {}),
+          ...(attachments && attachments.length > 0 ? { attachments } : {}),
         };
         let { error: updateError } = await supabase
           .from('wishes')
@@ -273,7 +271,9 @@ export function AddWishModal({
           description: updatePayload.description,
         });
       } else {
-        const attachments = await collectAttachments(ownerUserId);
+        const picked = await collectAttachments(ownerUserId);
+        if (!picked.readyToSend) return;
+        const attachments = picked.attachments;
         const insertPayload: Record<string, unknown> = {
           user_id: ownerUserId,
           community_id: communityId,
@@ -284,7 +284,7 @@ export function AddWishModal({
           share_scope: wishScope,
           is_active: true,
           extracted_from: 'manual',
-          ...(attachments ? { attachments } : {}),
+          ...(attachments && attachments.length > 0 ? { attachments } : {}),
         };
 
         if (linkedBoardCategory?.id) {

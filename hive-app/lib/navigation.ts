@@ -32,6 +32,15 @@ export type NavDestination = {
   label: string;
   /** Standard emoji. Every platform already has it; nobody has to draw one. */
   emoji: string;
+  /**
+   * A shorter name, for the phone's narrow rail.
+   *
+   * The collapsed rail on a phone now writes a name under every picture
+   * (2026-08-06), and it is about 58 pixels wide. Most labels fit on one line
+   * or wrap neatly onto two; the ones that read badly when they wrap say so
+   * here. Leave it off and the full label is used.
+   */
+  shortLabel?: string;
   route: string;
   /** Who sees it at all. */
   gate: NavGate;
@@ -50,6 +59,16 @@ export type NavDestination = {
    * 'hidden' — only means something inside one HIVE, so it steps out of the
    *            list rather than showing you one HIVE's answer while you are
    *            standing above all of them.
+   *
+   *            Six rows sit here — Clive, Messages, Meetings, Honey Pot,
+   *            Profile, Settings — and together they are most of what a new
+   *            member's invite email tells them to go and do. HIVE-Wide stays
+   *            the page everybody lands on (Nat 2026-08-06: "otherwise you
+   *            might never go there"), so the landing page carries the way
+   *            down instead: `app/(app)/hive-wide.tsx` opens with a named
+   *            door into the member's own HIVE, where all six live. Hiding a
+   *            row costs nothing as long as something on the page says where
+   *            it went.
    * 'only'   — the reverse: it lives at HIVE-Wide and nowhere else, so it is
    *            absent from every HIVE's page list. The Buzz is the one, and it
    *            always was one newsletter across all of them.
@@ -149,7 +168,7 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   // blob against the dark rail, and it sat four rows under 💌 Messages saying
   // the same thing — two "somebody is talking" icons for two different places.
   // A megaphone is speaking UP, which is what this screen is for.
-  { key: 'feedback', label: 'App Feedback', emoji: '📣', route: '/app-feedback', gate: 'everyone', atWholeHive: 'same' },
+  { key: 'feedback', label: 'App Feedback', emoji: '📣', shortLabel: 'Feedback', route: '/app-feedback', gate: 'everyone', atWholeHive: 'same' },
 ];
 
 /** The two zoom levels, above the line. HIVE-Wide is always first. */

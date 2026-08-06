@@ -7,7 +7,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { queryKeys } from '../../lib/queryClient';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
-import { uploadMultipleFiles, uploadMultipleImages } from '../../lib/attachmentUpload';
+import { uploadAttachments } from '../../lib/attachmentUpload';
 import { getMentionedMembers, hasBroadcastMention } from '../../lib/mentions';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { fetchCommunityMentionableMembers } from '../../lib/mentionableMembers';
@@ -78,18 +78,24 @@ export function BoardReplyComposer({
     setSubmitting(true);
     try {
       let attachments: Attachment[] | undefined;
-      if (selectedImages.length > 0) {
-        const result = await uploadMultipleImages(profile.id, selectedImages);
-        if (result.attachments.length > 0) attachments = result.attachments;
-      }
-      if (selectedFiles.length > 0) {
-        const result = await uploadMultipleFiles(profile.id, selectedFiles);
-        if (result.attachments.length > 0) {
-          attachments = [...(attachments ?? []), ...result.attachments];
-        }
+      if (selectedImages.length > 0 || selectedFiles.length > 0) {
+        const outcome = await uploadAttachments({
+          userId: profile.id,
+          images: selectedImages,
+          files: selectedFiles,
+        });
+
+        // Every attachment failed. `uploadAttachments` has already said so, and
+        // stopping here keeps the reply and its pictures in the box to retry.
+        if (!outcome.readyToSend) return;
+        attachments = outcome.attachments;
       }
 
       const replyText = reply.trim();
+
+      // A reply with no words and nothing attached has nothing to say.
+      if (!replyText && (attachments?.length ?? 0) === 0) return;
+
       const { error } = await supabase.from('board_replies').insert({
         community_id: communityId,
         post_id: postId,
