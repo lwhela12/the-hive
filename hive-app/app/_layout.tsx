@@ -1,6 +1,7 @@
 import '../global.css';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Stack, usePathname, router } from 'expo-router';
+import { ThemeProvider, DefaultTheme } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, Pressable, Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
@@ -26,7 +27,30 @@ import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { routeAfterHiveSwitch } from '../lib/hiveSwitchRoute';
 import { HIVE_CLOSED, isHiveKeeper, hasBypassTicket } from '../lib/maintenance';
 import { HIVE_GOLD } from '../lib/hiveBrand';
-import { HIVE_SKIN } from '../lib/pageSkin';
+import { HIVE_SKIN, SPACE_SKIN } from '../lib/pageSkin';
+
+// ---------------------------------------------------------------------------
+// The colour underneath the whole app.
+//
+// React Navigation paints a container behind every screen in the stock grey
+// `rgb(242,242,242)` unless somebody names a colour, and nobody ever had. On a
+// HIVE page that grey is close enough to the cream to go unnoticed; at HIVE-Wide
+// it is a near-white sheet behind a near-black app, and it is what members saw
+// as a white flash the first time they opened a screen (Nat 2026-08-06).
+//
+// Only `background` is replaced. The rest of the stock palette stays as it is —
+// every header, card and letterform in HIVE is drawn by our own components, so
+// widening this into a theme would be inventing a second source of colour
+// alongside lib/pageSkin.ts.
+// ---------------------------------------------------------------------------
+const HIVE_NAV_THEME = {
+  ...DefaultTheme,
+  colors: { ...DefaultTheme.colors, background: HIVE_SKIN.page },
+};
+const SPACE_NAV_THEME = {
+  ...DefaultTheme,
+  colors: { ...DefaultTheme.colors, background: SPACE_SKIN.page },
+};
 
 // ---------------------------------------------------------------------------
 // The door now lives in lib/maintenance.ts, so it reads the same as Jammin'
@@ -34,14 +58,17 @@ import { HIVE_SKIN } from '../lib/pageSkin';
 // ---------------------------------------------------------------------------
 import { useFonts } from 'expo-font';
 import { ThinkingBee } from '../components/ui/ThinkingBee';
-import {
-  LibreBaskerville_400Regular,
-  LibreBaskerville_700Bold,
-} from '@expo-google-fonts/libre-baskerville';
-import {
-  Lato_400Regular,
-  Lato_700Bold,
-} from '@expo-google-fonts/lato';
+// Four weights, asked for by name.
+//
+// Reaching into '@expo-google-fonts/libre-baskerville' takes its index, which
+// requires all eight cuts of the face — italics, medium, semibold — and Lato's
+// index requires all ten. HIVE draws four. The other fourteen typefaces were
+// being written into the build and listed as downloads for nothing. Naming the
+// weight in the path takes exactly the one file. (2026-08-06)
+import { LibreBaskerville_400Regular } from '@expo-google-fonts/libre-baskerville/400Regular';
+import { LibreBaskerville_700Bold } from '@expo-google-fonts/libre-baskerville/700Bold';
+import { Lato_400Regular } from '@expo-google-fonts/lato/400Regular';
+import { Lato_700Bold } from '@expo-google-fonts/lato/700Bold';
 
 // ---------------------------------------------------------------------------
 // The splash screen always ends.
@@ -677,16 +704,24 @@ function RootLayoutInner() {
         isAuthenticated={!!session && !loading && !isJoinRoute}
       />
       <AuthContext.Provider value={authContextValue}>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(app)" />
-          {/* app/onboarding/ was removed on 2026-08-06 — it was a reachable URL
-              still selling a 12-person community and Queen Bee Month, both
-              retired, and nothing linked to it. A Stack.Screen naming a route
-              that has no folder throws at runtime, so the line goes with it. */}
-          <Stack.Screen name="join" />
-        </Stack>
+        <ThemeProvider value={wholeHive ? SPACE_NAV_THEME : HIVE_NAV_THEME}>
+          <StatusBar style="dark" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              // Same reason as the theme above, for the stack's own scenes.
+              contentStyle: { backgroundColor: wholeHive ? SPACE_SKIN.page : HIVE_SKIN.page },
+            }}
+          >
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(app)" />
+            {/* app/onboarding/ was removed on 2026-08-06 — it was a reachable URL
+                still selling a 12-person community and Queen Bee Month, both
+                retired, and nothing linked to it. A Stack.Screen naming a route
+                that has no folder throws at runtime, so the line goes with it. */}
+            <Stack.Screen name="join" />
+          </Stack>
+        </ThemeProvider>
       </AuthContext.Provider>
     </QueryClientProvider>
   );

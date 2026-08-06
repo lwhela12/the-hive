@@ -20,6 +20,7 @@ import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import { useSignedAvatar } from '../../components/ui/Avatar';
+import { usePageSkin } from '../../lib/pageSkin';
 function TabIcon({
   icon,
   imageSource,
@@ -95,6 +96,9 @@ function TabIcon({
 
 export default function AppLayout() {
   const { session, communityId, communityRole, profile, loading, hivePickerOpen } = useAuth();
+  // The colour of wherever this reader is standing. The layout needs it as much
+  // as the pages do — see the note on `sceneStyle` further down.
+  const skin = usePageSkin();
   // Signed here in the body rather than inside `tabBarIcon`, which is a plain
   // render callback and not a component — a hook cannot live in one. This and
   // Home's daily-question strip were the last two faces drawn from the stored
@@ -189,10 +193,14 @@ export default function AppLayout() {
     }
   }, [loading, session, communityId, pathname]);
 
-  // Show a spinner while auth is resolving rather than flashing empty tabs
+  // Show a spinner while auth is resolving rather than flashing empty tabs.
+  //
+  // Wearing the reader's own skin rather than cream: this used to be a hard
+  // `#faf8f3`, which is the HIVE page colour, so somebody standing at HIVE-Wide
+  // got a pale card thrown over a near-black app for as long as auth took.
   if (loading || !session || !communityId) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#faf8f3' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: skin.page }}>
         <ThinkingBee />
       </View>
     );
@@ -227,6 +235,32 @@ export default function AppLayout() {
         initialRouteName={getLastAppTabName()}
         screenOptions={{
           headerShown: false,
+          // ------------------------------------------------------------------
+          // The floor under every page, in the colour of the place you are in.
+          //
+          // This is what caused the white flash on a first visit to Boards
+          // (Nat 2026-08-06: "the first time you're in HIVE wide & click boards
+          // you get a flash of a white screen"). React Navigation gives every
+          // screen a container painted with the navigation theme's background,
+          // and nobody had ever set that theme — so it was the stock
+          // `rgb(242,242,242)`, a near-white grey, sitting directly behind a
+          // near-black HIVE-Wide page.
+          //
+          // It only ever showed on the FIRST visit because tabs are lazy: a tab
+          // you have never opened is not in the tree at all, so pressing it
+          // creates that container, and the grey is what fills it for the frames
+          // it takes the screen to mount, lay out its list and start its globe.
+          // Come back later and the screen is already mounted, so there is
+          // nothing to fill.
+          //
+          // Naming the colour here fixes it at the source rather than covering
+          // it: the container is the page's own colour from its very first
+          // frame, so there is no wrong colour to see. It also gives the right
+          // floor to any screen that is still arriving — which is what makes
+          // splitting the download per screen (app.json → asyncRoutes) safe,
+          // since a route that has not landed yet draws nothing at all.
+          // ------------------------------------------------------------------
+          sceneStyle: { backgroundColor: skin.page },
           // Seven tabs at about 55px each had run out of room, and every new
           // feature made it worse. The rail scrolls, so it never does.
           tabBarStyle: { display: 'none' },

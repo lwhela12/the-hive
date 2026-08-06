@@ -347,8 +347,12 @@ export default function LoginScreen() {
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.55)', textAlign: 'center' }}>
               {/* The explicit space matters: JSX eats the trailing one before a
                   line break, which is why this read "yet?Come find us". */}
+              {/* Named to match where it lands. The public site's section was
+                  called "Come find us" and is now "Get involved" (Nat,
+                  2026-08-06) — a link and its destination calling themselves
+                  different things is how somebody decides they clicked wrong. */}
               Not a member yet?{' '}
-              <Text style={{ fontFamily: 'Lato_700Bold', color: '#dec181' }}>Come find us &rarr;</Text>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: '#dec181' }}>Get involved &rarr;</Text>
             </Text>
           </Pressable>
         </View>

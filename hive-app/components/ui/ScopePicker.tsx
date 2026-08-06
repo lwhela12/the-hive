@@ -3,8 +3,8 @@ import { Pressable, Text, View } from 'react-native';
 import { HiveMark } from './HiveMark';
 import { WorldMark } from './WorldMark';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
-import { hiveChipLook, reachChipLook, HIVE_WIDE_INK, type ScopeKey } from '../../lib/scopeLook';
+import { accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { hiveChipLook, reachChipLook, type ScopeKey } from '../../lib/scopeLook';
 
 /**
  * Choosing how far something goes, wearing the badge it will get.
@@ -107,10 +107,16 @@ export function ScopePicker<K extends string>({
           // The option is tinted in the colour it will produce, so the choice
           // and the result are the same colour before anybody reads either.
           const look = option.rung === 'hive' ? hiveLook : reachChipLook(option.rung, 'light');
-          // Public's chip is black-filled with white ink, which would be
-          // unreadable as an option's label, so the option wears the ink colour
-          // rather than the fill.
-          const tint = option.rung === 'public' ? HIVE_WIDE_INK : look.ink;
+          // Every rung is drawn the same way here: its own colour as the word,
+          // a tenth of it as the fill behind the row. The badge that results
+          // fills that colour in solid; an option row this size would be
+          // unreadable if it did the same.
+          //
+          // This used to be a hand-written "public is black" exception, and it
+          // outlived public being black — the picker went on teaching a colour
+          // the badge had stopped using. `look.accent` asks `lib/scopeLook.ts`
+          // instead, so a rung can change colour in one place again.
+          const tint = look.accent;
 
           return (
             <Pressable
@@ -123,7 +129,7 @@ export function ScopePicker<K extends string>({
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 9,
-                backgroundColor: selected ? (option.rung === 'public' ? 'rgba(11,11,18,0.06)' : look.bg) : '#faf8f3',
+                backgroundColor: selected ? accentWash(tint, 0.1) : '#faf8f3',
                 borderWidth: selected ? 1.5 : 1,
                 borderColor: selected ? look.border : 'rgba(49,49,48,0.12)',
                 borderRadius: 14,

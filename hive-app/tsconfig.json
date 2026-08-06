@@ -4,7 +4,8 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@expo/vector-icons": ["./lib/vectorIcons"]
     }
   },
   "include": [

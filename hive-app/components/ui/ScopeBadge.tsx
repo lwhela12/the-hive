@@ -14,11 +14,14 @@ import type { Community } from '../../types';
  *
  * The rules live in `lib/scopeLook.ts`; this is the drawing of them. Read that
  * file for why whose-it-is and how-far-it-goes are two chips rather than one,
- * and why travel is near-black rather than the green it used to be.
+ * and why each rung wears the colour it does.
  *
  * The short version: a filled hexagon in a HIVE's own colour means "this is
- * OG's" / "this is Tech's", and the Earth means it has left home. Which of the
- * two you get depends on where you are standing — see the note further down.
+ * OG's" / "this is Tech's", the near-black Earth means it has reached every
+ * HIVE, and the solid teal megaphone means it has left the HIVEs altogether.
+ * Three colours, three shapes — the eye gets the answer before the word does.
+ * Which of the two chips you get depends on where you are standing — see the
+ * note further down.
  *
  * `members` and `hive` are the same rung under two spellings — events use one,
  * wishes and survey answers the other.
@@ -139,7 +142,10 @@ export function ScopeBadge({
             fontSize: chipSize === 'sm' ? 8.5 : 9.5,
             letterSpacing: 0.9,
             textTransform: 'uppercase',
-            color: tone === 'dark' ? 'rgba(255,248,233,0.5)' : 'rgba(49,49,48,0.42)',
+            // Firm enough to actually read. This word is the whole reason two
+            // badges on one row are not ambiguous, and at 42% on cream it was
+            // fainter than the thing it was disambiguating.
+            color: tone === 'dark' ? 'rgba(255,248,233,0.68)' : 'rgba(49,49,48,0.62)',
           }}
         >
           {caption}

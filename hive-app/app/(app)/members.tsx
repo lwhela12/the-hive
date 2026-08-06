@@ -2259,12 +2259,15 @@ export default function MembersScreen() {
   const roster = rosterQuery.data;
   const rosterUserIds = useMemo(() => (roster ?? []).map(entry => entry.userId), [roster]);
 
-  // Sign every face in one request, the moment we know who is here.
+  // Sign every face in one request, rather than one request per person — a comb
+  // of twelve used to arrive twelve faces at a time and you watched them trickle
+  // in.
   //
-  // Each `Avatar` signs its own photo otherwise, which is one round trip per
-  // person — so a comb of twelve arrived twelve faces at a time and you watched
-  // them trickle in. Nothing waits on this: a face that lands before the batch
-  // does still signs itself, so this only ever makes the page quicker.
+  // The roster fetch itself now starts this the moment the names land, a render
+  // earlier than an effect can (see `lib/hooks/useMembersQuery.ts`). This is what
+  // covers the times that fetch does not run: arriving back on Members from
+  // cache, and a signature that has since gone stale. Asking twice is free —
+  // `warmAvatarCache` skips anything already signed or already on its way.
   useEffect(() => {
     if (!roster?.length) return;
     void warmAvatarCache(roster.map(entry => entry.profile?.avatar_url));

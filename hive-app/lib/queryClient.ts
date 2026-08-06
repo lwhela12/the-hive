@@ -36,6 +36,11 @@ export const queryKeys = {
   meetings: (communityId: string) => ['meetings', communityId] as const,
   fallbackAdmin: (communityId: string) => ['fallbackAdmin', communityId] as const,
 
+  // Who the "@" picker can offer, per HIVE. One list, shared by every composer
+  // in the app — a member card, a board reply, a chat box, a wish, the monthly
+  // check-in — so opening any of them a second time costs nothing.
+  mentionableMembers: (communityId: string) => ['mentionableMembers', communityId] as const,
+
   // Conversations
   conversations: (communityId: string, userId: string) =>
     ['conversations', communityId, userId] as const,

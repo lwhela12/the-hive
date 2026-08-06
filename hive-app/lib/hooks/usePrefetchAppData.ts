@@ -4,6 +4,7 @@ import { InteractionManager } from 'react-native';
 import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
 import { fetchHoneyPotBalance } from '../honeyPot';
+import { memberRosterQueryOptions } from './useMembersQuery';
 import type { Event, Wish, Profile, BoardCategory } from '../../types';
 
 /**
@@ -35,6 +36,27 @@ export function usePrefetchAppData(
     const task = InteractionManager.runAfterInteractions(() => {
     // Prefetch all critical data in parallel
     // These match the exact queries in useHiveDataQuery, useChatRoomsQuery, useBoardQuery
+
+    // 0. The member roster — for BOTH doors.
+    //
+    // Landing at HIVE-Wide and tapping Members is the most walked path in the
+    // app, and it was the one thing this list did not warm, so it always paid a
+    // full round trip that could have been spent while she read the landing
+    // page. Both keys are warmed because HIVE-Wide and your own HIVE ask
+    // different questions of the same table and cache separately.
+    //
+    // `scopeIds` at HIVE-Wide is every HIVE you belong to; here we only know the
+    // one you are standing in, which is exactly right for the second key and a
+    // safe subset for the first — a wider roster still resolves in ~150ms and
+    // this only ever removes waiting.
+    queryClient.prefetchQuery({
+      ...memberRosterQueryOptions([communityId], false),
+      staleTime: 2 * 60 * 1000,
+    });
+    queryClient.prefetchQuery({
+      ...memberRosterQueryOptions([communityId], true),
+      staleTime: 2 * 60 * 1000,
+    });
 
     // 1. Public wishes for HIVE page
     queryClient.prefetchQuery({

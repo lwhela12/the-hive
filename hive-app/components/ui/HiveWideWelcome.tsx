@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text } from 'react-native';
 import { HIVE_WIDE_WELCOME, SCOPE_LADDER, HIVE_WIDE_WELCOME_VERSION } from '../../lib/hiveWide';
-import { CollapsiblePanel } from './CollapsiblePanel';
+import { CollapsiblePanel, type CollapsiblePanelColours } from './CollapsiblePanel';
 import { ScopeBadge } from './ScopeBadge';
 import type { Community } from '../../types';
 
@@ -39,22 +39,20 @@ import type { Community } from '../../types';
  * night, so it is dark panel with light ink using that page's own tokens rather
  * than the cream-and-charcoal every other card in the app uses. It was cream
  * when it was written, which would have put a bright slab across the sky.
+ *
+ * ## The page hands it every colour it uses
+ *
+ * Nat, 2026-08-06, on the finished landing page: *"Only thing missing is
+ * continuity."* This file used to keep its own copy of the page's tokens, and
+ * the copy had drifted — its quiet ink was 74% where the page's was 72%, and its
+ * faintest ink 50% where the page's was 45%. Near enough to look like nothing in
+ * a diff, and exactly the sort of nearly-but-not-quite Nat keeps seeing on the
+ * screen.
+ *
+ * So `app/(app)/hive-wide.tsx` owns the palette and passes it in, the same
+ * object it gives every other panel on the page. One place to change a colour,
+ * and a panel that cannot quietly drift away from its neighbours.
  */
-
-/** The HIVE-Wide page's own tokens, so this box belongs to the page it is on. */
-const INK = '#FFF8E9';
-const INK_SOFT = 'rgba(255,248,233,0.74)';
-const INK_FAINT = 'rgba(255,248,233,0.5)';
-const CARD_FILL = 'rgba(255,248,233,0.055)';
-const CARD_EDGE = 'rgba(255,226,166,0.22)';
-/** The gold that reads on space — the same one the page's headings use. */
-const GOLD_ON_SPACE = '#E8C77E';
-/**
- * Space, laid under the panel's own colour so the panel dims the picture behind
- * it. `SPACE_BLACK` at not quite two thirds — the same number the page uses, and
- * the reasoning lives with it in `app/(app)/hive-wide.tsx`.
- */
-const SPACE_SCRIM = 'rgba(5,6,11,0.62)';
 
 /**
  * The ladder, taught by showing the actual badges.
@@ -81,10 +79,19 @@ export function ScopeBadgeSample({
 
 export function HiveWideWelcome({
   community,
+  colours,
+  inkFaint,
   seenVersion,
   onDismiss,
 }: {
   community: Community | null;
+  /**
+   * The one palette HIVE-Wide gives every panel on it. Required rather than
+   * optional, so this panel is drawn in the page's colours or not at all.
+   */
+  colours: CollapsiblePanelColours;
+  /** The page's quietest ink, for the footnote under the ladder. */
+  inkFaint: string;
   /** What this person has already put away, from their profile. */
   seenVersion: string | null;
   onDismiss: (version: string) => void;
@@ -93,11 +100,15 @@ export function HiveWideWelcome({
   /** Shut on arrival, and open only once this person opens it. */
   const [open, setOpen] = useState(false);
 
+  // The body's own type takes the same ink and the same gold as the header, so
+  // an open panel is the shut panel with more of it rather than a second design.
+  const inkSoft = colours.inkSoft;
+  const gold = colours.accent;
+
   return (
     <CollapsiblePanel
       title={HIVE_WIDE_WELCOME.title}
       collapsedTitle="What is HIVE-Wide?"
-      icon="help-circle-outline"
       open={open}
       onToggle={(next) => {
         setOpen(next);
@@ -106,28 +117,25 @@ export function HiveWideWelcome({
         // trip to the profile.
         if (next && !alreadySeen) onDismiss(HIVE_WIDE_WELCOME_VERSION);
       }}
-      colours={{
-        ink: INK,
-        inkSoft: INK_SOFT,
-        fill: CARD_FILL,
-        border: CARD_EDGE,
-        accent: GOLD_ON_SPACE,
-        pressed: 'rgba(255,248,233,0.1)',
-        scrim: SPACE_SCRIM,
-      }}
+      colours={colours}
       // No gold band down the left edge, and no panel on HIVE-Wide has one.
       // Nat, 2026-08-06: *"why do the first 2 have gold on the left hand side &
       // the other ones dont? That feels weird and inconsistent."* The band was
       // tried on one panel and she asked about it again — see the note in
       // `app/(app)/hive-wide.tsx`.
       //
-      // The title takes the panel's own size (17) rather than a bigger one of
-      // its own. Two reasons, both from 2026-08-06: every panel on this page is
-      // the same panel, and this one carries a question-mark badge, so its title
-      // has 28 fewer points to live in than its neighbours. At 19 the shut
-      // title, "What is HIVE-Wide?", wanted 215 of the 188 points a 375-point
-      // phone gives it and broke in half. At 17 it fits with room to spare, and
-      // the longer open title shrinks itself the rest of the way.
+      // The title takes the panel's own size (17), same as every other panel
+      // here, and no `titleStyle` of its own. It used to be set at 19 and broke
+      // in half: the shut title, "What is HIVE-Wide?", wanted 215 of the 188
+      // points a 375-point phone left it once the question-mark badge and the
+      // chevron had taken their share.
+      //
+      // With the badge gone (Nat, 2026-08-06: *"get rid of it"*) that column is
+      // 218 points on the same phone, and the shut title wants about 192 of
+      // them — so it now sets at the full 17 with nothing shrinking it at all.
+      // The open title, "Welcome to HIVE-Wide", is the longer of the two and
+      // lands within a few points of the line; `fitTitle` stays on so that one
+      // takes a hair off itself on the narrowest screens instead of wrapping.
       fitTitle
       bodyStyle={{ gap: 16 }}
     >
@@ -136,7 +144,7 @@ export function HiveWideWelcome({
           fontFamily: 'Lato_400Regular',
           fontSize: 14.5,
           lineHeight: 22,
-          color: INK_SOFT,
+          color: inkSoft,
         }}
       >
         {HIVE_WIDE_WELCOME.standfirst}
@@ -150,7 +158,7 @@ export function HiveWideWelcome({
               fontSize: 11,
               letterSpacing: 1.1,
               textTransform: 'uppercase',
-              color: GOLD_ON_SPACE,
+              color: gold,
             }}
           >
             {panel.heading}
@@ -160,7 +168,7 @@ export function HiveWideWelcome({
               fontFamily: 'Lato_400Regular',
               fontSize: 14,
               lineHeight: 21,
-              color: INK_SOFT,
+              color: inkSoft,
             }}
           >
             {panel.body}
@@ -174,7 +182,10 @@ export function HiveWideWelcome({
           gap: 10,
           paddingTop: 14,
           borderTopWidth: 1,
-          borderTopColor: 'rgba(255,248,233,0.12)',
+          // The page's one edge colour, the same hairline that draws the panel
+          // itself. It was a cream 12% of its own, which read as a second kind
+          // of line inside a panel drawn with the first kind.
+          borderTopColor: colours.border,
         }}
       >
         <Text
@@ -183,7 +194,7 @@ export function HiveWideWelcome({
             fontSize: 11,
             letterSpacing: 1.1,
             textTransform: 'uppercase',
-            color: GOLD_ON_SPACE,
+            color: gold,
           }}
         >
           How far something travels
@@ -203,7 +214,7 @@ export function HiveWideWelcome({
                 fontFamily: 'Lato_400Regular',
                 fontSize: 13.5,
                 lineHeight: 19,
-                color: INK_SOFT,
+                color: inkSoft,
               }}
             >
               {rung.meaning}
@@ -215,7 +226,7 @@ export function HiveWideWelcome({
             fontFamily: 'Lato_400Regular',
             fontSize: 13,
             lineHeight: 19,
-            color: INK_FAINT,
+            color: inkFaint,
             marginTop: 2,
           }}
         >

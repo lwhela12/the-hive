@@ -1,57 +1,68 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   fetchCommunityMentionableMembers,
   taggableHiveFromCommunity,
   taggableHivesFromMemberships,
   MentionableMember,
 } from '../mentionableMembers';
+import { queryKeys } from '../queryClient';
 import type { MentionReach, TaggableHive } from '../mentions';
 import { useAuth } from './useAuth';
 
-/** The people a picker can offer, for the HIVE a screen is standing in. */
+/**
+ * How long the list of who is in a HIVE stays good for.
+ *
+ * Ten minutes, because people join a HIVE by invitation and a directory that
+ * is a few minutes behind has never been the reason a mention failed. What it
+ * buys is the whole point: within that window, opening a composer costs nothing
+ * at all.
+ */
+const MENTIONABLE_STALE_MS = 10 * 60 * 1000;
+
+/**
+ * The people a picker can offer, for the HIVE a screen is standing in.
+ *
+ * This is asked for by nine different composers — a member card, both board
+ * composers, the chat box, a room, a wish, the monthly check-in, The Buzz — and
+ * it used to be a plain fetch held in the screen's own state, which meant every
+ * single open paid for it again. Opening a member card, closing it and opening
+ * it again was two round trips each time, and the list it fetched was the same
+ * list both times. Nat, 2026-08-06: *"still long load time for members page."*
+ *
+ * It goes through TanStack Query now, on one key per HIVE, so the first open
+ * pays for it and every open after that is instant — including from a
+ * different screen, because they all share the one cache.
+ *
+ * `providedMembers` still wins where a caller already knows the answer: a DM or
+ * a group chat is a closed room and its members are the people in it, which no
+ * database round trip could tell you better.
+ */
 export function useMentionableMembers(
   communityId?: string | null,
   providedMembers: MentionableMember[] = []
 ) {
-  const [loadedMembers, setLoadedMembers] = useState<MentionableMember[]>([]);
-  const [loading, setLoading] = useState(false);
   const hasProvidedMembers = providedMembers.length > 0;
+  const shouldFetch = !hasProvidedMembers && !!communityId;
 
-  useEffect(() => {
-    if (hasProvidedMembers) {
-      setLoading(false);
-      return;
-    }
+  const { data, isLoading } = useQuery<MentionableMember[]>({
+    queryKey: queryKeys.mentionableMembers(communityId ?? ''),
+    enabled: shouldFetch,
+    staleTime: MENTIONABLE_STALE_MS,
+    queryFn: () => fetchCommunityMentionableMembers(communityId!),
+  });
 
-    if (!communityId) {
-      setLoadedMembers([]);
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setLoadedMembers([]);
-    setLoading(true);
-
-    fetchCommunityMentionableMembers(communityId)
-      .then((members) => {
-        if (!cancelled) setLoadedMembers(members);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [communityId, hasProvidedMembers]);
+  const loadedMembers = data;
 
   return useMemo(
     () => ({
-      members: hasProvidedMembers ? providedMembers : loadedMembers,
-      loading: !hasProvidedMembers && loading,
+      members: hasProvidedMembers ? providedMembers : loadedMembers ?? [],
+      // A disabled query is never loading — TanStack reports it as pending
+      // forever, which is a picker that says "finding people" about a HIVE it
+      // was never asked to look in.
+      loading: shouldFetch && isLoading,
     }),
-    [hasProvidedMembers, loadedMembers, loading, providedMembers]
+    [hasProvidedMembers, isLoading, loadedMembers, providedMembers, shouldFetch]
   );
 }
 

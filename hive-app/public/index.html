@@ -43,12 +43,117 @@
         }
       }
     </style>
+
+    <!--
+      The bee arrives before the app does.
+
+      Nat, twice on 2026-08-06: "still a really long load time for such a simple
+      app." A good part of what that felt like was a plain white browser page —
+      HIVE's own gold splash lives inside the app's JavaScript, so it could not
+      appear until a megabyte of script had arrived, parsed and run. On a phone
+      on cellular that is several seconds of nothing.
+
+      These few lines are HTML, so they paint on the first frame the browser
+      draws, before a single byte of the app is asked for. Same gold, same bee,
+      same flight as components/ui/ThinkingBee — so when the real one takes over
+      there is nothing to see happening.
+
+      The gold on html/body also means there is no white left anywhere: a gap
+      between screens shows HIVE's colour rather than the browser's.
+    -->
+    <style id="hive-boot">
+      html,
+      body {
+        background-color: #bd9348;
+      }
+
+      #hive-boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #bd9348;
+      }
+
+      #hive-boot-splash span {
+        font-size: 22px;
+        line-height: 28px;
+        animation: hive-boot-flight 2.6s linear infinite;
+      }
+
+      /* A figure of eight: across on one cycle, up and down on two. */
+      @keyframes hive-boot-flight {
+        0%   { transform: translate(0, 0) rotate(-12deg); }
+        12.5%{ transform: translate(6px, -6px) rotate(-1deg); }
+        25%  { transform: translate(12px, 0) rotate(10deg); }
+        37.5%{ transform: translate(6px, 6px) rotate(11deg); }
+        50%  { transform: translate(0, 0) rotate(12deg); }
+        62.5%{ transform: translate(-6px, -6px) rotate(1deg); }
+        75%  { transform: translate(-12px, 0) rotate(-10deg); }
+        87.5%{ transform: translate(-6px, 6px) rotate(-11deg); }
+        100% { transform: translate(0, 0) rotate(-12deg); }
+      }
+
+      /* Somebody who asked for less movement still needs to know it is busy. */
+      @media (prefers-reduced-motion: reduce) {
+        #hive-boot-splash span {
+          animation: none;
+        }
+      }
+    </style>
   </head>
 
   <body>
     <noscript>
       You need to enable JavaScript to run this app.
     </noscript>
+    <div id="hive-boot-splash" role="progressbar" aria-label="HIVE is opening">
+      <span aria-hidden="true">&#128029;</span>
+    </div>
     <div id="root"></div>
+    <script>
+      // Clear the boot splash the moment the app has drawn its own first frame.
+      //
+      // Watching for content in #root rather than waiting for `load`, because
+      // the point is to hand over exactly when there is something behind this to
+      // see — a timer would either uncover a blank page or sit on top of a ready
+      // one. If anything here goes wrong the splash still goes, so a member can
+      // never be left looking at a bee with the app running underneath it.
+      (function () {
+        var splash = document.getElementById('hive-boot-splash');
+        var root = document.getElementById('root');
+        if (!splash || !root) return;
+
+        var done = false;
+        function handOver() {
+          if (done) return;
+          done = true;
+          if (splash.parentNode) splash.parentNode.removeChild(splash);
+        }
+
+        if (root.childNodes.length > 0) {
+          handOver();
+          return;
+        }
+
+        try {
+          var watcher = new MutationObserver(function () {
+            if (root.childNodes.length > 0) {
+              watcher.disconnect();
+              handOver();
+            }
+          });
+          watcher.observe(root, { childList: true });
+        } catch (err) {
+          window.addEventListener('load', handOver);
+        }
+
+        // A last resort, well past any normal start, so a browser that never
+        // fires the observer cannot strand somebody on the splash.
+        window.setTimeout(handOver, 20000);
+      })();
+    </script>
   </body>
 </html>

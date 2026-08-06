@@ -31,7 +31,7 @@ import { HIVE_GOLD, accentWash, accentOnDark } from './hiveBrand';
  * wears its hexagon AND the world, so you can see at a glance both which HIVE
  * an August meeting belongs to and that everyone is invited.
  *
- * ## Why travel is black, and not green
+ * ## Why HIVE-Wide is black, and not green
  *
  * Anything that leaves a HIVE has to wear a colour no HIVE can claim, or
  * "further away" would read as "belongs to whoever owns that colour". That used
@@ -39,12 +39,42 @@ import { HIVE_GOLD, accentWash, accentOnDark } from './hiveBrand';
  * space: the rail and the header have been `#0B0B12` ever since. Messaging kept
  * the green for a day and the HIVE-Wide row in Messages was green while the
  * HIVE-Wide row in the rail two inches away was black — which is how these
- * things go wrong. So travel is the same near-black the globe hangs in, and the
- * Earth on the chip is the same Earth the page is a photograph of.
+ * things go wrong. So HIVE-Wide is the same near-black the globe hangs in, and
+ * the Earth on the chip is the same Earth the page is a photograph of.
  *
- * The ladder is weight: your HIVE is a soft wash of its own colour, HIVE-Wide is
- * that black outlined, public is that black filled in. The further it goes, the
- * more solid it looks, before anybody reads a word.
+ * ## Why public is teal, and not more black
+ *
+ * Until 2026-08-06 the ladder was weight alone: your HIVE a soft wash of its own
+ * colour, HIVE-Wide that black outlined, public that same black filled in. The
+ * idea was that the further a thing goes, the more solid it looks.
+ *
+ * It taught the opposite. Nat, 2026-08-06, on an event card in OG HIVE: *"It
+ * looks like it is marked as 'public' which would mean that we could see it. But
+ * 'public' is in black, and isn't black supposed to be more like HIVE-Wide
+ * colors?"* She read the colour, decided the card said HIVE-Wide, and stopped.
+ * A filled black pill and an outlined black pill are the same colour, colour is
+ * what a person reads first, and filled-versus-outlined is far too fine a
+ * distinction to carry the difference between "everyone in the HIVEs" and
+ * "anybody on the internet" — which is the most consequential line in the app.
+ *
+ * So public is the one rung with a colour of its own: `#0C7C7C`, a teal. It sits
+ * at hue 180°, which puts it as far as one colour can get from every colour this
+ * app has already spoken for — the same distance from Tech HIVE's blue (209°) as
+ * from the retired green (148°), a long way from OG's gold (38°) and Show HIVE's
+ * purple (269°), and a long way from the red that means an error or a Delete.
+ * Public is a choice a member is allowed to make, so it reads as a signal.
+ *
+ * **No HIVE may be given `#0C7C7C` as its accent colour.** That is the whole
+ * point: the two rungs that leave a HIVE wear colours nobody in the app owns.
+ *
+ * The ladder now reads as three different things rather than three weights:
+ * your HIVE is a wash of its own colour behind its hexagon, HIVE-Wide is
+ * near-black behind the Earth, public is solid teal behind the megaphone.
+ *
+ * Public looks the same on cream and on the HIVE-Wide night sky — one colour,
+ * one badge, wherever you are standing. It used to invert to a cream fill on
+ * dark pages, which meant the single most consequential rung in the app looked
+ * like two different badges depending on which page you were on.
  */
 
 export type ScopeKey = 'hive' | 'all_hives' | 'public';
@@ -55,6 +85,18 @@ export type ScopeKey = 'hive' | 'all_hives' | 'public';
  * down; this is the copy the badges read.
  */
 export const HIVE_WIDE_INK = '#0B0B12';
+
+/**
+ * The colour of the rung that leaves the HIVEs entirely.
+ *
+ * Reserved: no HIVE gets this as an accent. See the note at the top of the file
+ * for how it was picked and why public stopped being black on 2026-08-06.
+ *
+ * It carries white text at 5.0:1, sits at 4.9:1 against a cream card and 4.0:1
+ * against the HIVE-Wide sky, so one value reads on both pages and public never
+ * has to change shape to survive a dark background.
+ */
+export const PUBLIC_MARK = '#0C7C7C';
 
 /**
  * The old green, kept only because a couple of surfaces still import it by
@@ -97,6 +139,16 @@ export const CHIP: Record<ChipSize, {
 
 export type ChipLook = {
   label: string;
+  /**
+   * The colour this rung IS, at full strength — the HIVE's accent, HIVE-Wide's
+   * near-black, public's teal.
+   *
+   * Every rung carries one so that anything drawing a rung somewhere OTHER than
+   * a chip has a colour to reach for and never has to guess. `ScopePicker` used
+   * to guess, with a hand-written "public is black" special case that survived
+   * public no longer being black.
+   */
+  accent: string;
   bg: string;
   border: string;
   ink: string;
@@ -114,7 +166,7 @@ export function hiveChipLook(
   accent: string | null | undefined,
   tone: 'light' | 'dark' = 'light',
   name?: string | null,
-): ChipLook & { accent: string } {
+): ChipLook {
   const colour = accent && /^#[0-9a-fA-F]{6}$/.test(accent.trim()) ? accent.trim() : HIVE_GOLD;
   return {
     accent: colour,
@@ -131,15 +183,22 @@ export function reachChipLook(
   tone: 'light' | 'dark' = 'light',
 ): ChipLook {
   if (scope === 'public') {
-    // Filled: it has left the HIVEs entirely and anyone can read it. On a dark
-    // page a black fill would vanish into the background, so it inverts —
-    // solid still means "furthest", which is the part that has to survive.
-    return tone === 'dark'
-      ? { label: 'Public', bg: '#F2EFE6', border: '#F2EFE6', ink: HIVE_WIDE_INK }
-      : { label: 'Public', bg: HIVE_WIDE_INK, border: HIVE_WIDE_INK, ink: '#ffffff' };
+    // The same solid teal wherever you are standing. `tone` is deliberately
+    // ignored here: the rung where a thing leaves the HIVEs is the one that
+    // most needs to look identical on every page, and this colour reads on
+    // cream and on the night sky alike. It used to flip to a cream fill on
+    // dark, which gave the most consequential badge in the app two faces.
+    return {
+      label: 'Public',
+      accent: PUBLIC_MARK,
+      bg: PUBLIC_MARK,
+      border: PUBLIC_MARK,
+      ink: '#ffffff',
+    };
   }
   return {
     label: 'HIVE-Wide',
+    accent: HIVE_WIDE_INK,
     bg: tone === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(11,11,18,0.06)',
     border: tone === 'dark' ? 'rgba(255,255,255,0.34)' : 'rgba(11,11,18,0.34)',
     ink: tone === 'dark' ? 'rgba(255,255,255,0.86)' : HIVE_WIDE_INK,
@@ -153,7 +212,10 @@ export function reachChipLook(
  */
 export function scopeSpoken(scope: ScopeKey, hiveName?: string | null): string {
   const hive = (hiveName ?? '').trim() || 'your HIVE';
-  if (scope === 'public') return `${hive}. Public — anyone can read this.`;
+  // Public says where it went, not just how many people can see it. Somebody
+  // hearing "public" alone can land where Nat's eye did on 2026-08-06 and take
+  // it for a wider room inside HIVE.
+  if (scope === 'public') return `${hive}. Public — this is outside the HIVEs, where anyone can read it.`;
   if (scope === 'all_hives') return `${hive}. HIVE-Wide — everyone in every HIVE can see this.`;
   return `${hive} only.`;
 }

@@ -87,7 +87,19 @@ export interface CollapsiblePanelProps {
   eyebrow?: string;
   /** A quiet line under the title — a date, a count. Shown open or shut. */
   subtitle?: ReactNode;
-  /** An icon to the left of the title. */
+  /**
+   * An icon to the left of the title.
+   *
+   * **Nothing in the app passes this today, and HIVE-Wide passes it on purpose
+   * never again.** The welcome panel wore a question-mark badge until Nat looked
+   * at the finished page on 2026-08-06: *"'what is HIVE wide' has a question mark
+   * icon at the beginning & none of the others have that, so get rid of it."*
+   * One panel in a stack of five carrying a badge is the badge saying "this one
+   * is different", which is the opposite of what a stack of five is for.
+   *
+   * A page whose panels are genuinely different things may still want it. A page
+   * that is one shape repeated should leave it alone.
+   */
   icon?: keyof typeof Ionicons.glyphMap;
   /** A band of colour across the very top, for whose thing this is. */
   topAccent?: string;
@@ -212,9 +224,10 @@ export function CollapsiblePanel({
    *
    * The column is narrower than the panel by more than it looks: 16 points of
    * padding each side, the chevron and its gap, and — where a panel has one —
-   * the icon and its gap. The HIVE-Wide welcome wears a question-mark badge, and
-   * those two pieces of furniture take 57 points off a 375-point phone before
-   * the title gets a word in.
+   * the icon and its gap. On a 375-point phone that is 61 points gone before the
+   * title gets a word in, and 89 on a panel carrying an icon. HIVE-Wide's
+   * welcome carried one until 2026-08-06 and now none of them do, which handed
+   * its title 28 points back.
    *
    * Both numbers arrive as whole pixels, which is why the shrink holds
    * `FITTED_TITLE_SLACK` back rather than aiming at the room exactly.

@@ -15,10 +15,10 @@
  *
  * Two changes, and they are separate ideas:
  *
- * **The roster is now one trip, not two.** A membership row and the profile it
- * points at come back together — `community_memberships` has a foreign key to
- * `profiles`, so the database can join them itself. That is a name, a face and a
- * role: everything the honeycomb draws on a phone.
+ * **The roster is now one trip, not two.** A person and the membership that puts
+ * them in this list come back together — `community_memberships` has a foreign
+ * key to `profiles`, so the database can join them itself. That is a name, a
+ * face and a role: everything the honeycomb draws on a phone.
  *
  * **Everything else is a second, later trip.** Skills, wishes, intro posts and
  * daily answers fill in the match badge, the wish count and the member card.
@@ -30,6 +30,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../supabase';
+import { warmAvatarCache } from '../../components/ui/Avatar';
 import type { UserRole } from '../../types';
 
 /**
@@ -99,7 +100,7 @@ export type MemberDetailRows = {
   answers: any[];
 };
 
-/** Highest role anybody holds anywhere wins, so nobody is listed twice. */
+/** Highest role anybody holds anywhere wins. */
 const ROLE_RANK: Record<string, number> = { member: 0, treasurer: 1, admin: 2 };
 
 function scopeKey(scopeIds: string[]) {
@@ -107,20 +108,37 @@ function scopeKey(scopeIds: string[]) {
 }
 
 /**
- * The faces. One round trip.
+ * The faces. One round trip, one row per person.
  *
- * `profiles!inner(...)` asks the database to hand back each membership row with
- * its person attached. `!inner` means a membership with no readable profile is
- * dropped rather than drawn as "Unknown member" — which is what the screen did
- * by hand afterwards, and the honest answer either way: a row you cannot read is
- * somebody who has not agreed to be seen by you.
+ * The question is asked from the person's side: **which people, out of the ones
+ * I may read, hold a membership in these HIVEs** — `community_memberships!inner`
+ * carries the role along and `!inner` drops anybody with no membership you can
+ * see. It was asked from the membership side, which is the same set of people
+ * and a different number of rows: somebody in three HIVEs came back three times,
+ * carrying a full copy of their profile each time, and the screen threw two of
+ * them away. That is nobody's problem at HIVE-Wide today, where the list is one
+ * person — and it is the shape that gets worse fastest as people opt in, because
+ * it multiplies by the number of HIVEs rather than the number of members.
+ * Measured against the live database on 2026-08-06: 8.0 KB down to 2.8 KB at
+ * HIVE-Wide, the same 150 ms either way.
+ *
+ * **150 ms either way is the real finding.** The database is not what anybody is
+ * waiting for on this screen — every question in this file comes back in about
+ * the time one round trip takes, whichever way it is asked. What costs a phone
+ * is how many trips have to happen one after another, so the work here is to
+ * keep this at one and to start the faces signing the moment the names land,
+ * rather than a render later.
  *
  * **The HIVE-Wide filter is unchanged and it is load-bearing.** At HIVE-Wide
  * only `profile_scope = 'all_hives'` is listed. Row-level security lets you read
  * the profile of anybody who shares a HIVE with you (migration 135), so at
  * HIVE-Wide — where the scope is *your* HIVEs — this filter, not the database
- * policy, is what keeps somebody who kept to their own HIVE out of the list.
- * It now runs inside the query, so those rows never leave the database at all.
+ * policy, is what keeps somebody who kept to their own HIVE out of the list. It
+ * sits on `profiles` itself now rather than on an embedded table, which is the
+ * plainest place for it to be. Checked against live data from two accounts on
+ * 2026-08-06: both shapes return exactly the same people, both return nothing at
+ * all for a HIVE you are not a member of, and both list exactly one person at
+ * HIVE-Wide.
  */
 export function useMemberRosterQuery({
   scopeIds,
@@ -131,18 +149,34 @@ export function useMemberRosterQuery({
   wholeHive: boolean;
   enabled?: boolean;
 }) {
-  const key = scopeKey(scopeIds);
-
   return useQuery<MemberRosterEntry[]>({
-    queryKey: ['membersRoster', key, wholeHive],
+    ...memberRosterQueryOptions(scopeIds, wholeHive),
     enabled: enabled && scopeIds.length > 0,
-    queryFn: async () => {
+  });
+}
+
+/**
+ * The roster's key and its fetch, in one place so it can be WARMED as well as
+ * read.
+ *
+ * `usePrefetchAppData` starts wishes, events, chat rooms, boards and the honey
+ * pot the moment somebody signs in, and Members was missing from that list — so
+ * the most common path in the app (land at HIVE-Wide, tap Members) always paid a
+ * full round trip that could have been spent while she was reading the landing
+ * page. A hook cannot be called from a prefetch, so the query moved out here and
+ * the hook spreads it.
+ */
+export function memberRosterQueryOptions(scopeIds: string[], wholeHive: boolean) {
+  const key = scopeKey(scopeIds);
+  return {
+    queryKey: ['membersRoster', key, wholeHive] as const,
+    queryFn: async (): Promise<MemberRosterEntry[]> => {
       const run = async (columns: string) => {
         let query = supabase
-          .from('community_memberships')
-          .select(`user_id, role, profiles!inner(${columns})`)
-          .in('community_id', scopeIds);
-        if (wholeHive) query = query.eq('profiles.profile_scope', 'all_hives');
+          .from('profiles')
+          .select(`${columns}, community_memberships!inner(community_id, role)`)
+          .in('community_memberships.community_id', scopeIds);
+        if (wholeHive) query = query.eq('profile_scope', 'all_hives');
         return query;
       };
 
@@ -158,21 +192,41 @@ export function useMemberRosterQuery({
 
       if (error || !data) throw error ?? new Error('Could not load members.');
 
-      // Somebody in two of your HIVEs is still one person (Nat 2026-08-03).
-      const byUser = new Map<string, MemberRosterEntry>();
+      const roster: MemberRosterEntry[] = [];
       for (const row of data as any[]) {
-        const userId = row?.user_id;
-        const memberProfile = row?.profiles;
-        if (!userId || !memberProfile) continue;
-        const role = (row.role ?? memberProfile.role ?? 'member') as UserRole;
-        const existing = byUser.get(userId);
-        if (existing && (ROLE_RANK[role] ?? 0) <= (ROLE_RANK[existing.role] ?? 0)) continue;
-        byUser.set(userId, { userId, role, profile: memberProfile as MemberProfileRow });
+        if (!row?.id) continue;
+        const { community_memberships: heldMemberships, ...memberProfile } = row;
+        // The highest role anybody holds in any of these HIVEs wins, so somebody
+        // who runs one HIVE and sits quietly in another is listed as what they
+        // are at their most (Nat 2026-08-03). A role held in a HIVE always beats
+        // the one on the profile row; the profile's is what is left when there
+        // is no role on the membership at all.
+        let role: UserRole | null = null;
+        for (const held of (heldMemberships ?? []) as any[]) {
+          const heldRole = held?.role as UserRole | undefined;
+          if (!heldRole) continue;
+          if (!role || (ROLE_RANK[heldRole] ?? 0) > (ROLE_RANK[role] ?? 0)) role = heldRole;
+        }
+        roster.push({
+          userId: row.id,
+          role: role ?? ((memberProfile.role ?? 'member') as UserRole),
+          profile: memberProfile as MemberProfileRow,
+        });
       }
 
-      return Array.from(byUser.values());
+      // Sign every face now, rather than a render later.
+      //
+      // This ran in an effect on the Members screen, which means it could not
+      // start until React had drawn the whole directory — and at HIVE-Wide there
+      // is an animated planet drawing behind that. On a phone the names were on
+      // screen and the faces were still waiting on a request that had not been
+      // sent yet. Nothing waits on this and a face that lands first still signs
+      // itself, so it can only ever make the page quicker.
+      void warmAvatarCache(roster.map((entry) => entry.profile?.avatar_url));
+
+      return roster;
     },
-  });
+  };
 }
 
 /**

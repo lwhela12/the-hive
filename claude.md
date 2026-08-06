@@ -77,8 +77,18 @@ Two facts are kept apart on purpose: **whose it is** (a filled hexagon in that
 HIVE's colour — `HiveMark`) and **how far it goes** (`WorldMark`, the Earth,
 drawn in the near-black `#0B0B12` that no HIVE owns — the same colour the rail
 and the HIVE-Wide header use). Something that stays home wears only its hexagon;
-the world only appears once it has left. Public is that same black filled in
-rather than outlined, so the ladder reads as weight before anybody reads a word.
+the world only appears once it has left.
+
+**Public has a colour of its own**: solid teal `#0C7C7C` (`PUBLIC_MARK` in
+`lib/scopeLook.ts`) behind the 📣, the same on cream and on the night sky. No
+HIVE may be given that accent — it is reserved, exactly as the near-black is.
+Public was the near-black filled in rather than outlined until 2026-08-06, on
+the theory that the ladder would read as weight. It read as HIVE-Wide instead:
+Nat, looking at an event card in OG HIVE, *"It looks like it is marked as
+'public'… but 'public' is in black, and isn't black supposed to be more like
+HIVE-Wide colors?"* Colour is what a person reads first, and filled-versus-
+outlined in one colour is too fine to carry the difference between everyone in
+the HIVEs and anybody on the internet.
 
 A green was used for this until 2026-08-03 and is retired. `HIVE_WIDE_GREEN` is
 still exported from `lib/scopeLook.ts` as deprecated; nothing new should use it.

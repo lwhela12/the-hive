@@ -134,24 +134,34 @@ const GOLD_ON_SPACE = '#E8C77E';
 const SPACE_SCRIM = 'rgba(5,6,11,0.62)';
 
 /**
- * **No panel on this page wears a gold band down its left edge. This was tried
- * twice and Nat said no twice. Do not put it back.**
+ * **Every panel on this page is the same panel. Making "Your HIVEs" stand out
+ * was tried twice, Nat looked at the result both times, and both times she chose
+ * sameness. There is no third way to try it.**
  *
- * Nat, 2026-08-06: *"why do the first 2 have gold on the left hand side & the
- * other ones dont? That feels weird and inconsistent."* Two of five came off,
- * and the band stayed on "Your HIVEs" as a deliberate mark meaning *this is the
- * way in* — the one panel a brand-new member has to find.
+ * Attempt one was a gold band down the left edge. Nat, 2026-08-06: *"why do the
+ * first 2 have gold on the left hand side & the other ones dont? That feels
+ * weird and inconsistent."* Two of the three came off and the band stayed on
+ * "Your HIVEs" as a deliberate mark meaning *this is the way in*. She asked
+ * about it again the same day — *"why does 'your hives' still have gold on the
+ * left hand side?"* — so the band came off that one too.
  *
- * She asked about it again the same day: *"why does 'your hives' still have gold
- * on the left hand side?"* A mark that has to be explained twice is not reading
- * as a mark, it is reading as something somebody forgot to tidy up. Every panel
- * on HIVE-Wide is now the same panel.
+ * Attempt two was a brighter fill, 11% cream where the rest of the page sits at
+ * 5.5%, on the same reasoning: the door should be findable now that every panel
+ * arrives shut. Nat, looking at the finished page: *"'Your HIVEs' is a slightly
+ * different color than all the rest, and it should match transparency and
+ * style."* The brighter value is deleted rather than left defined, because a
+ * number sitting here unused is a number the next session reaches for.
  *
- * What still makes the door findable while it is shut: its own name in the
- * header, and a fill a little brighter than the panels under it.
+ * The door is findable because it is second on the page and says "Your HIVEs".
+ * It does not need to be louder. Her word for what she wants is *continuity*.
  */
 
-/** This page's own colours, handed to every panel on it so they read as a set. */
+/**
+ * This page's one palette. Every panel on the page is handed this exact object —
+ * the welcome, the door, and all three boxes — so no panel can drift a few
+ * percent away from its neighbours without somebody changing it here for all of
+ * them.
+ */
 const PANEL_COLOURS = {
   ink: INK,
   inkSoft: INK_SOFT,
@@ -333,9 +343,9 @@ const TITLE_EMS = (6.27 + 9 * TITLE_TRACKING) * 1.06;
  * savvy people." It sat first until 2026-08-06, when Nat put the "what is
  * HIVE-Wide" panel above it — what a place is comes before the way off it.
  *
- * It wears the same panel as everything else on the page, with one difference:
- * a slightly brighter fill, which is how the door stays findable now that it
- * arrives shut like the rest.
+ * It wears the same panel as everything else on the page, with no difference at
+ * all. See the note above `PANEL_COLOURS` for the two attempts at making it
+ * stand out and why both were undone.
  */
 function WayIntoYourHive({
   memberships,
@@ -369,20 +379,19 @@ function WayIntoYourHive({
       // open — it is the door, and a member who accepted an invite an hour ago
       // needs it — and said all of them, so all of them it is.
       //
-      // What makes the door findable while it is shut: its own name in the
-      // header, and a fill a little brighter than the panels under it. It wore a
-      // gold left band too until Nat asked about it twice — see the note above
-      // PANEL_COLOURS, and leave it off.
+      // What makes the door findable while it is shut is where it sits and what
+      // it says: second on the page, named "Your HIVEs". It wore a gold left
+      // band and then a brighter fill, and Nat undid both — see the note above
+      // PANEL_COLOURS before reaching for a third.
       defaultOpen={false}
-      colours={{
-        ...PANEL_COLOURS,
-        // A little brighter than the cards below it. This sits second on the
-        // page, under the HIVE-Wide welcome, and a row of five identical shut
-        // panels reads as a list rather than a way in.
-        fill: 'rgba(255,248,233,0.11)',
-      }}
+      colours={PANEL_COLOURS}
       fitTitle
-      bodyStyle={{ gap: 14, paddingBottom: 20 }}
+      // The panel's own 16 points along the bottom, like every other panel here.
+      // This one asked for 20 and that extra 4 is exactly the kind of almost-
+      // the-same Nat keeps spotting. `gap` stays its own number because it is
+      // the space between this panel's paragraphs and pills, which no other
+      // panel has.
+      bodyStyle={{ gap: 14 }}
     >
       {firstVisit ? (
         <Text
@@ -743,6 +752,11 @@ export default function HiveWideScreen() {
             and shoving it down. */}
         <HiveWideWelcome
           community={community}
+          // The same object every other panel here gets. It used to keep its own
+          // copy of these colours and the copy had drifted a couple of percent
+          // (Nat, 2026-08-06: "Only thing missing is continuity").
+          colours={PANEL_COLOURS}
+          inkFaint={INK_FAINT}
           seenVersion={loadHiveWideWelcomeSeen(profile)}
           onDismiss={(version) => {
             void persistHiveWideWelcomeSeen(profile, version).then(() => refreshProfile());
@@ -776,7 +790,15 @@ export default function HiveWideScreen() {
               style={{
                 flexDirection: wide ? 'row' : 'column',
                 flexWrap: wide ? 'wrap' : 'nowrap',
-                gap: 12,
+                // One rhythm down the whole page. The scroll view sets 18
+                // between the welcome, the door and this group; this group used
+                // to set 12 between the boxes inside it, so the spacing quietly
+                // tightened halfway down — and on a phone, where the boxes
+                // stack, that is five panels in one column with two different
+                // gaps in it. The 12 stays only as the gutter BETWEEN two
+                // side-by-side boxes on a wide screen, which is a different job.
+                rowGap: 18,
+                columnGap: 12,
               }}
             >
               <TopBox label="Meetings" wide={wide}>
