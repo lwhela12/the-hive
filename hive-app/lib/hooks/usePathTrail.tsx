@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePathname } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import type { Crumb } from '../../components/ui/Breadcrumbs';
 
 /**
@@ -37,11 +38,20 @@ type Entry = {
    * Expo Router's tabs keep a screen MOUNTED when you leave it — that is what
    * makes coming back instant — so a screen's cleanup never runs and it never
    * takes its crumb back. The path along the bottom said "July Newsletter" on
-   * Members, on Boards, on App Feedback, on Admin: Nat, "he really wants every
-   * page to be newsletter". Everything was contributing, forever, and the
-   * newest contribution won.
+   * Members, on Boards, on App Feedback, on Admin.
    *
-   * Unmounting is not the signal. Being the page you are looking at is.
+   * The first fix tagged each contribution with `usePathname()` and filtered by
+   * it, which failed for a reason worth writing down: **`usePathname` is
+   * global.** It reports where the APP is, not where the screen is, so every
+   * mounted screen saw the value change on every navigation, re-ran its effect,
+   * and re-filed its crumb under whatever page you had just opened. The trail
+   * was still wrong, and now the whole app re-rendered on every hop — which is
+   * exactly when Nat said "its loading so slow & is really janky on the scrolls
+   * everywhere".
+   *
+   * Focus is the signal. A screen contributes while it is the one you are
+   * looking at and withdraws the moment it is not, so there is one contributor
+   * at a time and navigating costs one small state change instead of a storm.
    */
   pathname: string;
 };
@@ -80,9 +90,8 @@ export function PathTrailProvider({ children }: { children: ReactNode }) {
  * page you are actually on, and nobody else.
  */
 export function usePathTrail(): Crumb[] {
-  const { entries } = useContext(Ctx);
-  const here = usePathname();
-  return entries.filter((e) => e.pathname === here).flatMap((e) => e.crumbs);
+  // Only the focused screen is ever in here now, so there is nothing to filter.
+  return useContext(Ctx).entries.flatMap((e) => e.crumbs);
 }
 
 /**
@@ -94,7 +103,13 @@ export function usePathTrail(): Crumb[] {
  */
 export function useDeepTrail(crumbs: Crumb[]) {
   const { contribute } = useContext(Ctx);
-  const pathname = usePathname();
+  const focused = useIsFocused();
+  // The route this screen belongs to, captured once. `usePathname` is global,
+  // so reading it later would hand back wherever the app has since gone.
+  const ownPath = useRef<string | null>(null);
+  const nowPath = usePathname();
+  if (ownPath.current === null) ownPath.current = nowPath;
+
   const id = useRef<symbol>(Symbol('trail'));
   const signature = crumbs.map((c) => c.label).join(' › ');
 
@@ -107,7 +122,12 @@ export function useDeepTrail(crumbs: Crumb[]) {
 
   useEffect(() => {
     const me = id.current;
-    contribute(me, latest.current, pathname);
-    return () => contribute(me, null, pathname);
-  }, [signature, contribute, pathname]);
+    const mine = ownPath.current ?? '';
+    if (!focused) {
+      contribute(me, null, mine);
+      return;
+    }
+    contribute(me, latest.current, mine);
+    return () => contribute(me, null, mine);
+  }, [signature, contribute, focused]);
 }

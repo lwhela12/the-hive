@@ -876,17 +876,29 @@ function AdminPanel({
               accessibilityRole="tab"
               accessibilityState={{ selected: on }}
               style={{
-                backgroundColor: on ? tabFill : 'transparent',
+                // An UNSELECTED tab had a transparent ground and kept the
+                // selected tab's near-black ink, so on the space-black admin
+                // page it was black text on black — Nat: "These headers
+                // disappear here, they are too black." It gets a dim ground of
+                // its own and light ink, so all three read as a row of tabs with
+                // one of them in front.
+                backgroundColor: on ? tabFill : 'rgba(255,248,233,0.07)',
                 borderColor: edge, borderWidth: 1, borderBottomWidth: 0,
                 borderTopLeftRadius: 12, borderTopRightRadius: 12,
                 paddingHorizontal: 11,
                 // An inactive tab sits lower, so the active one reads as the
                 // sheet in front rather than one of a row.
                 paddingVertical: on ? 7 : 5,
-                opacity: on ? 1 : 0.72,
               }}
             >
-              <Text numberOfLines={1} style={{ fontFamily: on ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 12.5, color: tabText }}>
+              <Text
+                numberOfLines={1}
+                style={{
+                  fontFamily: on ? 'Lato_700Bold' : 'Lato_400Regular',
+                  fontSize: 12.5,
+                  color: on ? tabText : 'rgba(255,248,233,0.72)',
+                }}
+              >
                 {t.label}
               </Text>
             </Pressable>

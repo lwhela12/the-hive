@@ -63,16 +63,17 @@ export function PathFooter() {
 
   const items: Crumb[] = [
     place,
-    // Home IS the place, so naming it twice would read as a stutter.
-    ...(page && page.key !== 'home'
-      ? [{ label: page.label, onPress: () => router.push(page.route as never) }]
-      : []),
+    // Home is named too. Leaving it out avoided a stutter and cost something
+    // worth more: the strip vanished on the one page people land on first, so
+    // it looked like a thing that comes and goes. Nat: "HIVE-Wide is missing a
+    // nav footer on home... I think we should ALWAYS have the navigation
+    // footers." A status bar that is sometimes absent is worse than one that
+    // occasionally states the obvious.
+    ...(page ? [{ label: page.label, onPress: () => router.push(page.route as never) }] : []),
     ...deep,
   ];
 
-  // Nothing to say beyond which HIVE you are in — the rail already shows that,
-  // and a strip that only ever repeats it is furniture.
-  if (items.length < 2) return null;
+  if (items.length === 0) return null;
 
   return (
     <View

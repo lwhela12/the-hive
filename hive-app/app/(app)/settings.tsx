@@ -84,8 +84,13 @@ const EMAIL_SETTINGS: EmailSetting[] = [
   {
     column: 'email_midpoint_checkin_enabled',
     label: 'The month-end check-in',
-    onHint: 'Two minutes to add something to the newsletter.',
-    offHint: 'The newsletter still comes out without you.',
+    // Not "add something to the newsletter". Nat, 2026-08-05: "no one cares
+    // about the newsletter but me. I'd pitch it as more of an 'end of the month
+    // check-in'." The check-in is the thing a member does; the newsletter is
+    // one of the places their answers end up, and leading with it made a
+    // two-minute reflection sound like an errand for somebody else.
+    onHint: 'Two minutes at the end of the month — how it went, what is next.',
+    offHint: "You'll still find the check-in waiting on Home.",
   },
 ];
 
@@ -385,11 +390,14 @@ export default function SettingsScreen() {
             <Switch
               on={travelOn}
               busy={busyKey === 'profile_scope'}
-              label="My card travels with what I share"
+              // "Card" appears nowhere else in the app — Nat: "Whats a 'card'?
+              // we dont use that anywhere, what are you referring to?" It meant
+              // your profile, so it says profile.
+              label="My profile travels with what I share"
               hint={
                 travelOn
-                  ? 'Anyone in any HIVE can tap your name and see who is vouching for it.'
-                  : 'Only the people who share a HIVE with you can open your card.'
+                  ? 'Anyone in any HIVE can tap your name and open your profile.'
+                  : 'Only the people who share a HIVE with you can open your profile.'
               }
               onToggle={(next) =>
                 void savePatch(
@@ -423,7 +431,11 @@ export default function SettingsScreen() {
               <Switch
                 on={defaultWide}
                 busy={busyKey === 'default_share_scope'}
-                label="Start new things HIVE-Wide"
+                // The label used to read "Start new things HIVE-Wide" whether
+                // the switch was on or off, so an OFF switch sat under a
+                // sentence describing the ON state and the badge beside it said
+                // something different again (Nat: "this doesnt match up").
+                label={defaultWide ? 'New things go out HIVE-Wide' : 'New things start in your HIVE'}
                 hint={
                   defaultWide
                     ? 'New wishes and threads go out to every HIVE. You can pull any single one back when you share it.'
@@ -554,36 +566,11 @@ export default function SettingsScreen() {
           <LinkedLogins />
         </View>
 
-        {/* Swapping HIVEs is plumbing, so it came here with the rest of it. The
-            rail has it too, for anyone already on their way somewhere. */}
-        {memberships.length > 1 && (
-          <Pressable
-            onPress={openHivePicker}
-            accessibilityRole="button"
-            accessibilityLabel="Swap HIVE"
-            className="flex-row items-center justify-center bg-gold/10 py-3 rounded-xl active:bg-gold/20"
-            style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}
-          >
-            <Text style={{ fontSize: 16 }}>🔀</Text>
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold ml-2">
-              Swap HIVE
-            </Text>
-          </Pressable>
-        )}
-
-        <Pressable
-          onPress={() => router.push('/profile')}
-          accessibilityRole="button"
-          className="flex-row items-center justify-center active:opacity-70"
-          style={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingVertical: 18 }}
-        >
-          <Ionicons name="person-circle-outline" size={18} color={MUTED} />
-          <Text
-            style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: MUTED, marginLeft: 8 }}
-          >
-            Back to your profile
-          </Text>
-        </Pressable>
+        {/* "Swap HIVE" and "Back to your profile" both left on 2026-08-05.
+            Every HIVE you belong to is listed by name in the rail and tapping
+            one swaps to it, and Profile is a rail entry too — Nat: "We can get
+            rid of these now, because they are in the side navigation panel."
+            Two doors to the same room is two things to keep in step. */}
       </ScrollView>
     </SafeAreaView>
   );

@@ -65,8 +65,7 @@ export function Breadcrumbs({
   const scroller = useRef<ScrollView>(null);
 
   const trail = items.filter((item) => item.label.trim().length > 0);
-  // One step is not a trail — it says nothing the page title has not.
-  if (trail.length < 2) return null;
+  if (trail.length === 0) return null;
 
   const dark = tone === 'dark';
   const quiet = dark ? 'rgba(255,248,233,0.6)' : 'rgba(49,49,48,0.5)';
