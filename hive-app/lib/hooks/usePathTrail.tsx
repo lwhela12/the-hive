@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { usePathname } from 'expo-router';
 import type { Crumb } from '../../components/ui/Breadcrumbs';
 
 /**
@@ -27,11 +28,27 @@ import type { Crumb } from '../../components/ui/Breadcrumbs';
  * them up. Any depth works, and no screen has to know what is above it.
  */
 
-type Entry = { id: symbol; crumbs: Crumb[] };
+type Entry = {
+  id: symbol;
+  crumbs: Crumb[];
+  /**
+   * Which screen said this, so the strip can ignore everybody else.
+   *
+   * Expo Router's tabs keep a screen MOUNTED when you leave it — that is what
+   * makes coming back instant — so a screen's cleanup never runs and it never
+   * takes its crumb back. The path along the bottom said "July Newsletter" on
+   * Members, on Boards, on App Feedback, on Admin: Nat, "he really wants every
+   * page to be newsletter". Everything was contributing, forever, and the
+   * newest contribution won.
+   *
+   * Unmounting is not the signal. Being the page you are looking at is.
+   */
+  pathname: string;
+};
 
 type TrailContext = {
   entries: Entry[];
-  contribute: (id: symbol, crumbs: Crumb[] | null) => void;
+  contribute: (id: symbol, crumbs: Crumb[] | null, pathname: string) => void;
 };
 
 const Ctx = createContext<TrailContext>({ entries: [], contribute: () => {} });
@@ -39,16 +56,16 @@ const Ctx = createContext<TrailContext>({ entries: [], contribute: () => {} });
 export function PathTrailProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<Entry[]>([]);
 
-  const contribute = useMemo(() => (id: symbol, crumbs: Crumb[] | null) => {
+  const contribute = useMemo(() => (id: symbol, crumbs: Crumb[] | null, pathname: string) => {
     setEntries((current) => {
       if (crumbs === null) {
         const without = current.filter((e) => e.id !== id);
         return without.length === current.length ? current : without;
       }
       const at = current.findIndex((e) => e.id === id);
-      if (at === -1) return [...current, { id, crumbs }];
+      if (at === -1) return [...current, { id, crumbs, pathname }];
       const next = current.slice();
-      next[at] = { id, crumbs };
+      next[at] = { id, crumbs, pathname };
       return next;
     });
   }, []);
@@ -58,9 +75,14 @@ export function PathTrailProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-/** Everything below the page name, in the order you walked into it. */
+/**
+ * Everything below the page name, in the order you walked into it — from the
+ * page you are actually on, and nobody else.
+ */
 export function usePathTrail(): Crumb[] {
-  return useContext(Ctx).entries.flatMap((e) => e.crumbs);
+  const { entries } = useContext(Ctx);
+  const here = usePathname();
+  return entries.filter((e) => e.pathname === here).flatMap((e) => e.crumbs);
 }
 
 /**
@@ -72,6 +94,7 @@ export function usePathTrail(): Crumb[] {
  */
 export function useDeepTrail(crumbs: Crumb[]) {
   const { contribute } = useContext(Ctx);
+  const pathname = usePathname();
   const id = useRef<symbol>(Symbol('trail'));
   const signature = crumbs.map((c) => c.label).join(' › ');
 
@@ -84,7 +107,7 @@ export function useDeepTrail(crumbs: Crumb[]) {
 
   useEffect(() => {
     const me = id.current;
-    contribute(me, latest.current);
-    return () => contribute(me, null);
-  }, [signature, contribute]);
+    contribute(me, latest.current, pathname);
+    return () => contribute(me, null, pathname);
+  }, [signature, contribute, pathname]);
 }

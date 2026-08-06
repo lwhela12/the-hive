@@ -295,7 +295,7 @@ export function NewsletterPanel({
    * into the board and only the draft ever read them, which is also why nobody
    * noticed the draft was reading none of them.
    */
-  const [tab, setTab] = useState<'write' | 'shoutouts' | 'signed'>('write');
+  const [tab, setTab] = useState<'shoutouts' | 'signed'>('shoutouts');
   const [shoutOuts, setShoutOuts] = useState<
     { id: string; content: string; created_at: string; author: string }[]
   >([]);
@@ -378,7 +378,23 @@ export function NewsletterPanel({
 
   return (
     <View style={[cellStyle, { order } as any]}>
-      <Panel title="Newsletter" style={panelStyle} bodyStyle={bodyStyle}>
+      {/* Real tabs, the same ones every HIVE box wears.
+          Nat, 2026-08-05: "These were supposed to be tabs, more like this" —
+          with a screenshot of the OG HIVE folder tabs. `Panel` has taken a
+          `tabs` prop all along; the pills were a second way of doing something
+          the component already did, which is the drift this whole day has been
+          about. */}
+      <Panel
+        title="Newsletter"
+        tabs={[
+          { key: 'shoutouts', label: `Shout-outs (${shoutOuts.length})` },
+          { key: 'signed', label: `Signed up (${active.length})` },
+        ]}
+        activeTab={tab}
+        onTabChange={(key: string) => setTab(key as 'shoutouts' | 'signed')}
+        style={panelStyle}
+        bodyStyle={bodyStyle}
+      >
         <ScrollView style={scrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
           {/* The draft quotes members before Nat has chosen what stays in, so
               the screen itself is hers alone. Anyone else never sees the door. */}
@@ -403,50 +419,6 @@ export function NewsletterPanel({
               <Ionicons name="chevron-forward" size={15} color="#bd9348" />
             </Pressable>
           ) : null}
-
-          {/* The three jobs, as tabs. */}
-          <View
-            style={{
-              flexDirection: 'row',
-              gap: 6,
-              paddingHorizontal: 12,
-              paddingTop: 12,
-              flexWrap: 'wrap',
-            }}
-          >
-            {([
-              { key: 'shoutouts' as const, label: `Shout-outs (${shoutOuts.length})` },
-              { key: 'signed' as const, label: `Signed up (${active.length})` },
-            ]).map((entry) => {
-              const on = tab === entry.key;
-              return (
-                <Pressable
-                  key={entry.key}
-                  onPress={() => setTab(entry.key)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 7,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: on ? 'rgba(189,147,72,0.7)' : 'rgba(189,147,72,0.25)',
-                    backgroundColor: on ? '#fdf3dc' : 'transparent',
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: on ? 'Lato_700Bold' : 'Lato_400Regular',
-                      fontSize: 12.5,
-                      color: on ? '#8a6b30' : '#9a8060',
-                    }}
-                  >
-                    {entry.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
 
           {tab === 'shoutouts' ? (
             <View style={{ padding: 12, gap: 8 }}>
