@@ -190,10 +190,13 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .cell:hover{background:var(--stroke) center/100% 100% no-repeat,linear-gradient(160deg,#fdf6e6,#e7d19c)}
 .cell:nth-child(even):hover{transform:translateY(calc(var(--hw)*.433)) scale(1.03)}
 .cell:nth-child(odd):hover{transform:scale(1.03)}
-/* Dark gold means "you picked this one". Nothing wears it on arrival — all four
+/* Dark gold means "this one is open". Nothing wears it on arrival — all four
    cells start in the light gold and the panels stay shut (Nat 2026-08-06: "they
    should start out none deployed. Just light golden, not already selected.
-   That's what happens when you select one, it gets dark golden & drops down"). */
+   That's what happens when you select one, it gets dark golden & drops down").
+   It hangs off aria-expanded rather than a class of its own, so the fill and
+   the panel are the same fact: press the open cell again, aria-expanded goes
+   back to false, and the cell returns to the light gold with its panel. */
 .cell[aria-expanded="true"]{background:linear-gradient(160deg,var(--gold),#a87f37);color:#fffdf5}
 .cell[aria-expanded="true"] .sub{color:rgba(255,253,245,.82)}
 .cell .lab{font-family:var(--serif);font-weight:700;font-size:.98rem;line-height:1.15}
@@ -492,7 +495,8 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
        always moved between these cells, that promise was false. They are what
        they behave like: four buttons that each open a panel, each saying
        whether its panel is open. Tab reaches all four, in the order they are
-       read, whether or not one is open. -->
+       read, whether or not one is open — and pressing the open one shuts it,
+       which a tablist has no way to express. -->
   <div class="comb" role="group" aria-label="Ways to get involved">
     <button class="cell" type="button" id="t-message" aria-controls="p-message" aria-expanded="false">
       <span class="lab">Message us</span><span class="sub">Say hello</span></button>
@@ -790,12 +794,22 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
   });
 
-  /* ---------- the comb: four doors, one open at a time ----------
-     The page arrives with all four shut, so this runs only on a click. One
-     open at a time: opening a cell closes whichever was open. Clicking the
-     open one leaves it open — the way out of a panel is another cell or the
-     rest of the page, so nobody taps twice and loses the form they were
-     filling in. */
+  /* ---------- the comb: four doors, press to open, press again to shut ----------
+     The page arrives with all four shut. One open at a time: opening a cell
+     shuts whichever was open, and pressing the open one shuts it too, landing
+     back in exactly the state the page arrived in (Nat 2026-08-06: "if you
+     click it once, it expands, then you click it again and it unpresses").
+
+     Until then, pressing the open cell did nothing on purpose, to protect the
+     half-written message in the contact form from a stray second tap. A shut
+     panel keeps its <input> and <textarea> nodes — `hidden` plus
+     `.pane[hidden]{display:none}` takes it off the screen and leaves it in the
+     page — so every word typed is still there when the panel comes back, by
+     either route. That has always been true of opening a different cell; it is
+     now true of shutting one directly as well.
+
+     `aria-expanded` is the single source of truth here: the dark gold fill is a
+     CSS rule hanging off it, so the fill leaves the moment the panel does. */
   var cells = [].slice.call(document.querySelectorAll('.comb .cell[aria-controls]'));
   function showPane(id){
     cells.forEach(function(c){
@@ -805,8 +819,59 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       p.hidden = p.id !== id;
     });
   }
+  /* ---------- keeping the hexagons still ----------
+     Get involved is the last section on the page, so a panel that shuts takes
+     its height out of the very bottom. There is nothing underneath to give way,
+     so the browser drags the whole page's scroll position up to match — and the
+     hexagon slides down the screen, out from under the thumb that just pressed
+     it. Measured on a phone-sized screen with the tallest panel (Message us):
+     376px of slide, which is half a screen.
+
+     So the page is held tall enough to stand where we were standing: empty room
+     on the bottom of <body>, exactly as much as was lost. It is cream under a
+     footer that has no floor of its own, so it reads as room rather than as a
+     gap, and it is gone before anyone counts it — the moment a scroll makes it
+     stop holding anything up, it shrinks by that much. Trimming room that is
+     already below the bottom of the screen moves nothing on it. */
+  var roomPx = 0;
+  function roomTo(px){
+    roomPx = Math.max(0, Math.round(px));
+    document.body.style.paddingBottom = roomPx ? roomPx + 'px' : '';
+  }
+  /* How tall the page would be with none of that room held. */
+  function naturalHeight(){ return document.documentElement.scrollHeight - roomPx; }
+  function trimRoom(){
+    if(roomPx) roomTo(window.pageYOffset + window.innerHeight - naturalHeight());
+  }
+  addEventListener('scroll', trimRoom, { passive: true });
+  addEventListener('resize', trimRoom);
+
   cells.forEach(function(c){
-    c.addEventListener('click', function(){ showPane(c.getAttribute('aria-controls')); });
+    c.addEventListener('click', function(){
+      var id = c.getAttribute('aria-controls');
+      var closing = c.getAttribute('aria-expanded') === 'true';
+
+      /* Where we are standing, and where this hexagon sits on the screen. */
+      var wasY = window.pageYOffset;
+      var before = c.getBoundingClientRect().top;
+
+      showPane(closing ? null : id);
+
+      /* Hold the room, then put the screen back so the hexagon has not moved.
+         This runs on every press, not only on a shut: swapping a tall panel for
+         a short one loses height the same way.
+
+         behavior must be 'instant'. 'auto' means "whatever the stylesheet asks
+         for", and this stylesheet asks html for scroll-behavior:smooth — so
+         'auto' animates, the correction lands a few frames later, and the trim
+         on the next line reads a scroll position that has not moved yet and
+         takes the room straight back out. This is a correction, and a
+         correction that glides is a lurch. */
+      roomTo(wasY + window.innerHeight - naturalHeight());
+      var drift = c.getBoundingClientRect().top - before;
+      if (Math.abs(drift) > 0.5) window.scrollBy({ top: drift, left: 0, behavior: 'instant' });
+      trimRoom();
+    });
   });
 
   /* ---------- contact: posts to the handler, falls back to mail ---------- */

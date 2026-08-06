@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { View, Text, Pressable, useWindowDimensions, Animated, Platform } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -125,6 +125,29 @@ const SIZE_STEP: Record<RailSize, string> = {
  * long as the app is running. Nearly everybody uses HIVE in a browser, and the
  * alternative — async storage — cannot answer before the first frame, so the
  * rail would visibly jump from one size to another on every launch.
+ *
+ * ON A PHONE, BIG IS NOT ONE OF THE REMEMBERED SIZES (2026-08-06).
+ *
+ * Nat, arriving on her iPhone having closed every tab and browser: "this was
+ * where it dropped me first. Sloppy. That's hard to read, huh? Not a good first
+ * impression." The whole 390-point screen was the open drawer — bee, WELCOME,
+ * her face, three HIVE names, every page — with HIVE-Wide's title sliced in
+ * half behind it. She had cycled through all three sizes while testing, so her
+ * device had `big` written down, and closing tabs does not clear `localStorage`.
+ *
+ * Big is a genuine SIDEBAR on a wide screen: it sits beside the page and both
+ * are readable, so it is remembered and honoured there exactly as before. On a
+ * phone the same 212 points is a DRAWER over the page, and a phone already
+ * treats it as one — `foldAwayOnPhone` puts it away the moment you pick a
+ * destination. So on a phone it was never a size anybody could rest at; it only
+ * got written down because the one size button writes on every tap. It is now
+ * what it always behaved like: a menu you open, held for as long as it is open,
+ * leaving the narrow size you actually rest at untouched underneath.
+ *
+ * Both halves are needed and both are here. `rememberRailSize` stops a phone
+ * writing `big` down, and `openingRailSize` steps a phone past one that is
+ * already written down — which is the only thing that helps the devices, like
+ * Nat's, that are carrying one today.
  */
 const SIZE_KEY = 'hive:railSize';
 
@@ -141,22 +164,56 @@ const sizeStore = (): Storage | null => {
   }
 };
 
-let chosenSize: RailSize | null = null;
-
-export function rememberedRailSize(): RailSize | null {
-  if (chosenSize) return chosenSize;
+/** What this browser has written down, if it has a store and anything in it. */
+function storedRailSize(): RailSize | null {
   try {
     const stored = sizeStore()?.getItem(SIZE_KEY);
-    if (isRailSize(stored)) {
-      chosenSize = stored;
-      return stored;
-    }
-  } catch { /* fall through to memory */ }
+    if (isRailSize(stored)) return stored;
+  } catch { /* no store to read */ }
   return null;
 }
 
-export function rememberRailSize(next: RailSize): void {
+/**
+ * The size the rail is at RIGHT NOW, for as long as the app stays loaded.
+ *
+ * Deliberately not filled in from the browser's store on the way past: it means
+ * "somebody chose this, in this session", and `openingRailSize` leans on that
+ * to tell arriving apart from remounting.
+ */
+let chosenSize: RailSize | null = null;
+
+/**
+ * The size to open at.
+ *
+ * `startBig` is the shell's opening offer for a device that has never chosen —
+ * see `app/(app)/_layout.tsx`.
+ */
+export function openingRailSize({ phone, startBig }: { phone: boolean; startBig: boolean }): RailSize {
+  // Mid-session, this is not an arrival. Somebody who tapped to big, walked to
+  // another screen and came back must not find the menu folded under them, so
+  // the size they are actually at wins here — big included, phone included.
+  if (chosenSize) return chosenSize;
+
+  const stored = storedRailSize();
+  // Arriving is the case Nat hit. A phone opens at the fullest size that still
+  // leaves the page readable beside it: medium, where every destination keeps
+  // its name. The stored big is left alone rather than rewritten, because it is
+  // the right answer on a wide screen and this device may be one tomorrow.
+  if (stored === 'big' && phone) return 'medium';
+  if (stored) return stored;
+  return startBig ? 'big' : 'medium';
+}
+
+/**
+ * Write down the size somebody just picked.
+ *
+ * `carriesOver` is false for a size this device can only hold for the session —
+ * a phone's big drawer. It is still the size the rail IS; it just does not
+ * overwrite the narrow size this person comes back to.
+ */
+export function rememberRailSize(next: RailSize, carriesOver = true): void {
   chosenSize = next;
+  if (!carriesOver) return;
   try { sizeStore()?.setItem(SIZE_KEY, next); } catch { /* memory is enough */ }
 }
 
@@ -181,27 +238,30 @@ function deepen(hex: string, amount = 0.32): string {
 }
 
 export const SideRail = memo(function SideRail({
-  expanded = true,
-  onToggle,
+  startBig = true,
   unreadDMCount = 0,
 }: {
   /**
-   * The shell's opinion of where to START — true for the big drawer, false for
-   * the narrow one. It seeds the size on the very first visit and nothing else:
+   * The shell's opinion of where to START — true for the big sidebar, false for
+   * the narrow rail. It seeds the size on the very first visit and nothing else:
    * once a person has picked a size, their pick wins.
+   *
+   * It was called `expanded` until 2026-08-06, which read as live state and is
+   * not: changing it after the rail has mounted does nothing at all.
    */
-  expanded?: boolean;
-  /**
-   * Told whenever the rail crosses in or out of the big drawer, so a shell
-   * holding a plain "is the drawer open?" boolean stays truthful.
-   */
-  onToggle?: () => void;
+  startBig?: boolean;
   unreadDMCount?: number;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const { profile, community, communityId, communityRole, memberships, switchCommunity, wholeHive, enterWholeHive } = useAuth();
   const { width } = useWindowDimensions();
+  /**
+   * Narrow enough that the big rail stops being a sidebar and becomes a drawer
+   * over the page. Read up here rather than further down because the very first
+   * decision the rail makes — which size to open at — turns on it.
+   */
+  const isPhone = width < 768;
   /**
    * How much of the screen the phone's hardware is already using.
    *
@@ -220,12 +280,12 @@ export const SideRail = memo(function SideRail({
    * Which of the three sizes the rail is at.
    *
    * The rail owns this rather than the shell, because it is now a choice with
-   * three answers and the shell only ever had a yes/no to hold it in. A
-   * remembered pick wins; failing that the shell's starting opinion decides
-   * between big and medium. Nobody ever LANDS on small — see the note above.
+   * three answers and the shell only ever had a yes/no to hold it in.
+   * `openingRailSize` holds the whole arrival rule, including why a phone never
+   * opens at the big drawer. Nobody ever LANDS on small — see the note above.
    */
   const [size, setSize] = useState<RailSize>(
-    () => rememberedRailSize() ?? (expanded ? 'big' : 'medium')
+    () => openingRailSize({ phone: isPhone, startBig })
   );
   const big = size === 'big';
   const medium = size === 'medium';
@@ -244,20 +304,12 @@ export const SideRail = memo(function SideRail({
   const changeSize = useCallback((next: RailSize) => {
     if (next === size) return;
     if (next !== 'big') narrowSize.current = next;
-    rememberRailSize(next);
+    // On a phone, big is the drawer being open rather than a size to come back
+    // to, so it is held for the session only and the narrow size underneath it
+    // stays written down. See the long note above `SIZE_KEY`.
+    rememberRailSize(next, !(isPhone && next === 'big'));
     setSize(next);
-  }, [size]);
-
-  // Keep the shell's yes/no in step with the three-way size. It is a starting
-  // opinion on the way in and a report on the way out, so a shell that dims the
-  // page behind a phone's open drawer keeps working. The ref means a parent that
-  // rebuilds `onToggle` every render does not make this fire twice.
-  const shellThinksBig = useRef(expanded);
-  useEffect(() => {
-    if (shellThinksBig.current === big) return;
-    shellThinksBig.current = big;
-    onToggle?.();
-  }, [big, onToggle]);
+  }, [size, isPhone]);
 
   /**
    * A press that lands somewhere you already are still has to feel like a press.
@@ -290,7 +342,6 @@ export const SideRail = memo(function SideRail({
   }, [bounce]);
   const bounceScale = bounce.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] });
 
-  const isPhone = width < 768;
   const isAdmin = communityRole === 'admin' || communityRole === 'treasurer';
   const isOwner = profile?.is_owner === true;
   const canSeeAdmin = isAdmin || isOwner;
@@ -497,364 +548,411 @@ export const SideRail = memo(function SideRail({
     </AnimatedPressable>
   );
 
+  /**
+   * A phone's big drawer really is an overlay, so it is dressed as one.
+   *
+   * It always covered the page — `position: absolute` below — but it did it
+   * with no dimming and the page still bright and half-readable beside it,
+   * which is why Nat's screenshot reads as a broken screen rather than as an
+   * open menu. Two things make it legible as a menu instead: the page behind
+   * goes dark, and the drawer casts a shadow onto it, so one is plainly in
+   * front of the other.
+   *
+   * The dark part is also the way out. Tapping anywhere on the page puts the
+   * drawer away — the gesture everybody already has for every menu on a phone,
+   * and one more escape hatch on top of the size button. It folds back to the
+   * size the person was actually at, the same as picking a destination does.
+   */
+  const phoneDrawer = isPhone && big;
+
   return (
-    <View
-      style={{
-        // The rail keeps its own width and the phone's hardware gets its own
-        // strip beside it, so a landscape notch takes space from the edge
-        // rather than from the menu.
-        width: railWidth + insets.left,
-        backgroundColor: railColour,
-        // Clear of the clock at the top and the home bar at the bottom. The bee
-        // and the size button live in the first 42 pixels of this rail, which
-        // is exactly where an iPhone puts the time.
-        paddingTop: 12 + insets.top,
-        paddingBottom: 8 + insets.bottom,
-        paddingLeft: insets.left,
-        ...(isPhone && big
-          ? { position: 'absolute', top: 0, bottom: 0, left: 0, zIndex: 40 }
-          : null),
-      }}
-    >
-      {/* The name sits at the very top with the size button beside it, rather
-          than underneath a button that pushed it down the page (Nat 2026-08-03). */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'flex-start',
-          paddingHorizontal: big ? 14 : 0,
-          justifyContent: big ? 'space-between' : 'center',
-          marginBottom: big ? 14 : 10,
-        }}
-      >
-        {big ? (
-          // Just the bee (Nat 2026-08-03). The wordmark and the line about being
-          // a bee were saying the name and the motto to somebody already inside
-          // the app, on every screen, forever. The mark alone says it once.
-          //
-          // Two false starts worth recording. The first used bee_favicon.png,
-          // which is the SEAL — a gold sunburst ring with the bee inside it —
-          // and at this size the whole thing collapsed into a dark smudge
-          // ("hahaha what happened here"). The second would have been the plain
-          // bee on its own, which Nat asked for and then talked herself out of
-          // in the same breath: it is black, and so is this rail.
-          //
-          // So it sits on a cream coin. The bee is the brand's black and gold,
-          // the coin is the brand's cream, and a light disc on a dark rail is
-          // legible at any size — which the bee alone would not have been.
-          // CENTRED now (Nat 2026-08-04): "maybe we center the bee? so it's not
-          // confusing with the profile bubble." Both are light discs of nearly
-          // the same size, and stacked hard against the left edge they read as
-          // a pair — as if the bee were an account too. Moving the mark to the
-          // middle of the rail breaks the column, and the two stop rhyming.
-          <View style={{ flex: 1, paddingRight: 8, alignItems: 'center', justifyContent: 'center' }}>
-            <View
-              style={{
-                width: 34, height: 34, borderRadius: 17,
-                backgroundColor: '#FFF8E9',
-                alignItems: 'center', justifyContent: 'center',
-                overflow: 'hidden',
-              }}
-            >
-              <Image
-                source={require('../../assets/BEE ONLY IN GOLD BG.png')}
-                style={{ width: 30, height: 30 }}
-                contentFit="contain"
-                accessibilityLabel="HIVE"
-              />
-            </View>
-          </View>
-        ) : null}
-        {/* ONE control for three sizes, stepping big → medium → small → big.
-            It replaced a two-state open/close toggle on 2026-08-06.
-
-            Why one button and not two. The rail at its smallest is 56 pixels
-            wide, and two buttons in there would be two more unlabelled pictures
-            in the size that already has the least to go on. One button in one
-            spot, identical in all three sizes, is a single thing to learn — and
-            it is the same object Nat already knows, in the same place.
-
-            The chevron never lies about direction: pointing back means the next
-            press makes the menu smaller, pointing forward means it opens the
-            big menu. The only jump in the cycle is small → big, which is the
-            one that has to be obvious, because it is the way out. */}
+    <>
+      {phoneDrawer ? (
         <Pressable
-          onPress={() => changeSize(NEXT_SIZE[size])}
-          {...(Platform.OS === 'web' ? ({ title: SIZE_STEP[size] } as object) : null)}
+          onPress={foldAwayOnPhone}
           accessibilityRole="button"
-          accessibilityLabel={SIZE_STEP[size]}
-          hitSlop={6}
+          accessibilityLabel="Close the menu"
           style={{
-            width: 30, height: 30, borderRadius: 15,
-            alignItems: 'center', justifyContent: 'center',
-            backgroundColor: 'rgba(255,255,255,0.16)',
-          }}
-        >
-          <Ionicons name={small ? 'chevron-forward' : 'chevron-back'} size={16} color="#fff" />
-        </Pressable>
-      </View>
-
-      {/* Who you are signed in as.
-          Nat, 2026-08-04: "what if right here, on this side bar, we had a
-          'welcome, User' … and maybe a profile bubble, so you could see which
-          account you're signed in as?"
-
-          It earns its space for a reason particular to this app: the two people
-          who build it share screens constantly, and both have owner accounts, so
-          "which of us is this?" is a real question asked several times a week —
-          and the answer changes what you are allowed to see. Every other surface
-          that could have told you is one tap away instead of in front of you.
-
-          It is a door as of 2026-08-06 — see `openMyProfile` above for what it
-          does at HIVE-Wide and why. It was a label until then, on the reasoning
-          that Profile needs a HIVE; Nat's answer was that a face you can't press
-          is the odd one out in an app where every other face opens somebody. */}
-      {profile ? (
-        <AnimatedPressable
-          onPress={openMyProfile}
-          {...(Platform.OS === 'web' && small
-            ? ({ title: `Your profile, ${(profile.name ?? 'You').split(/\s+/)[0]}` } as object)
-            : null)}
-          accessible
-          accessibilityRole="button"
-          accessibilityLabel={`Your profile, ${(profile.name ?? 'You').split(/\s+/)[0]}`}
-          accessibilityState={{ selected: activeKey === 'profile' }}
-          style={{
-            transform: [{ scale: bouncingKey === 'profile' ? bounceScale : 1 }],
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 10,
-            paddingHorizontal: big ? 14 : 0,
-            justifyContent: big ? 'flex-start' : 'center',
-            // Fixed height, all three sizes. Nat, 2026-08-04: the icons "shift
-            // up and down, and i'd like them to just slide horizontally." Every
-            // row below here was moving because the blocks ABOVE changed height
-            // when the words disappeared — a 30px avatar became 26px, and the
-            // two lines of name went from two lines to nothing. Reserving the
-            // same height in every size is what turns a size change into a
-            // purely horizontal move.
-            height: 46,
-            paddingBottom: 12,
-            marginBottom: 4,
-            // The line Nat pointed at: "see how there's a little line under my
-            // profile bubble, before 'MY HIVES'?" It closes off who you are,
-            // so the block underneath can be about where you are.
-            borderBottomWidth: 1,
-            borderBottomColor: 'rgba(255,255,255,0.10)',
-          }}
-        >
-          <Avatar name={profile.name ?? 'You'} url={profile.avatar_url} size={30} />
-          {big ? (
-            <View style={{ flex: 1 }}>
-              <Text
-                numberOfLines={1}
-                style={{
-                  fontFamily: 'Lato_400Regular',
-                  fontSize: 11,
-                  letterSpacing: 0.5,
-                  textTransform: 'uppercase',
-                  color: 'rgba(255,255,255,0.52)',
-                }}
-              >
-                Welcome
-              </Text>
-              <Text
-                numberOfLines={1}
-                style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#fff' }}
-              >
-                {(profile.name ?? 'You').split(/\s+/)[0]}
-              </Text>
-            </View>
-          ) : null}
-        </AnimatedPressable>
-      ) : null}
-
-      {/* The rubber-band at the end of the list, so a rail that has run out of
-          rows says so rather than looking stuck (Nat 2026-08-06: "Any time we
-          cant scroll, i want to have the bounce feature, so you can tell, oh,
-          thats the end of the page, not 'is this broken?'").
-
-          `BounceScrollView` sets the real iOS and Android props and draws the
-          bounce itself in a browser, which is where the rail is nearly always
-          read and where a plain ScrollView gives nothing. */}
-      <BounceScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 14 }}
-      >
-        {/* "My HIVEs" is Home, and HIVE-Wide is the first thing under it —
-            not a second section with its own children.
-
-            Nat's call, 2026-08-03: "we just move HIVE-Wide under My HIVEs, then
-            we aren't trying to reinvent the wheel, it's just the same format as
-            all the other ones." Which is right. HIVE-Wide is not a different
-            KIND of place, it is one more place of the same kind, and the one
-            page list below serves whichever of them you're standing in. */}
-        {/* A heading, not a door (Nat 2026-08-04). It used to navigate to
-            /hive as well as label the list beneath it, which is why Home
-            appeared to be missing: a row with three indented children under it
-            reads as a section title, and nobody presses a section title to go
-            home. Home is now the first entry in the page list below, and this
-            just says what the indented rows are. */}
-        {/* The heading holds its line at every size rather than disappearing, so
-            the HIVEs beneath it stay on the same rows however wide the rail is.
-            No emoji: it names the list under it, and a heading with a picture on
-            it reads as another button (Nat 2026-08-04, and there is no beehive
-            in Unicode anyway). */}
-        {big ? (
-          <Text
-            style={{
-              fontFamily: 'Lato_700Bold',
-              fontSize: 11,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.45)',
-              paddingHorizontal: 14,
-              paddingTop: 10,
-              paddingBottom: 6,
-              height: 27,
-            }}
-          >
-            My HIVEs
-          </Text>
-        ) : medium ? (
-          // The medium rail says it too. The two rows under this heading are the
-          // HIVE-Wide globe and your own HIVE's hexagon, and without a word
-          // above them they are two coloured shapes (2026-08-06).
-          <Text
-            style={{
-              fontFamily: 'Lato_700Bold',
-              fontSize: 8.5,
-              letterSpacing: 0.6,
-              textTransform: 'uppercase',
-              textAlign: 'center',
-              color: 'rgba(255,255,255,0.45)',
-              paddingTop: 10,
-              paddingBottom: 6,
-              height: 27,
-            }}
-          >
-            My HIVEs
-          </Text>
-        ) : (
-          <View style={{ height: 27 }} />
-        )}
-        {/* HIVE-Wide shows for EVERYONE, not only people in more than one HIVE.
-            Nearly every member is in exactly one, and the shared boards — HIVE
-            Approved, Announcements, the Favourites — are where their own
-            content now lives. Hiding this from them would have quietly deleted
-            most of OG's boards from OG's view (caught before shipping,
-            2026-08-03). */}
-        <Row
-          label="HIVE-Wide"
-          indented
-          world
-          active={onHiveWide}
-          tint={WIDE_BLACK}
-          bounceKey="hive-wide"
-          onPress={() => {
-            if (onHiveWide) playBounce('hive-wide');
-            enterWholeHive();
-            foldAwayOnPhone();
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            // Under the drawer, over everything else. The drawer is 40.
+            zIndex: 39,
           }}
         />
-        {memberships.map((m) => (
+      ) : null}
+      <View
+        style={{
+          // The rail keeps its own width and the phone's hardware gets its own
+          // strip beside it, so a landscape notch takes space from the edge
+          // rather than from the menu.
+          width: railWidth + insets.left,
+          backgroundColor: railColour,
+          // Clear of the clock at the top and the home bar at the bottom. The bee
+          // and the size button live in the first 42 pixels of this rail, which
+          // is exactly where an iPhone puts the time.
+          paddingTop: 12 + insets.top,
+          paddingBottom: 8 + insets.bottom,
+          paddingLeft: insets.left,
+          ...(phoneDrawer
+            ? {
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 0,
+                zIndex: 40,
+                shadowColor: '#000',
+                shadowOpacity: 0.45,
+                shadowRadius: 18,
+                shadowOffset: { width: 4, height: 0 },
+                elevation: 16,
+              }
+            : null),
+        }}
+      >
+        {/* The name sits at the very top with the size button beside it, rather
+            than underneath a button that pushed it down the page (Nat 2026-08-03). */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            paddingHorizontal: big ? 14 : 0,
+            justifyContent: big ? 'space-between' : 'center',
+            marginBottom: big ? 14 : 10,
+          }}
+        >
+          {big ? (
+            // Just the bee (Nat 2026-08-03). The wordmark and the line about being
+            // a bee were saying the name and the motto to somebody already inside
+            // the app, on every screen, forever. The mark alone says it once.
+            //
+            // Two false starts worth recording. The first used bee_favicon.png,
+            // which is the SEAL — a gold sunburst ring with the bee inside it —
+            // and at this size the whole thing collapsed into a dark smudge
+            // ("hahaha what happened here"). The second would have been the plain
+            // bee on its own, which Nat asked for and then talked herself out of
+            // in the same breath: it is black, and so is this rail.
+            //
+            // So it sits on a cream coin. The bee is the brand's black and gold,
+            // the coin is the brand's cream, and a light disc on a dark rail is
+            // legible at any size — which the bee alone would not have been.
+            // CENTRED now (Nat 2026-08-04): "maybe we center the bee? so it's not
+            // confusing with the profile bubble." Both are light discs of nearly
+            // the same size, and stacked hard against the left edge they read as
+            // a pair — as if the bee were an account too. Moving the mark to the
+            // middle of the rail breaks the column, and the two stop rhyming.
+            <View style={{ flex: 1, paddingRight: 8, alignItems: 'center', justifyContent: 'center' }}>
+              <View
+                style={{
+                  width: 34, height: 34, borderRadius: 17,
+                  backgroundColor: '#FFF8E9',
+                  alignItems: 'center', justifyContent: 'center',
+                  overflow: 'hidden',
+                }}
+              >
+                <Image
+                  source={require('../../assets/BEE ONLY IN GOLD BG.png')}
+                  style={{ width: 30, height: 30 }}
+                  contentFit="contain"
+                  accessibilityLabel="HIVE"
+                />
+              </View>
+            </View>
+          ) : null}
+          {/* ONE control for three sizes, stepping big → medium → small → big.
+              It replaced a two-state open/close toggle on 2026-08-06.
+
+              Why one button and not two. The rail at its smallest is 56 pixels
+              wide, and two buttons in there would be two more unlabelled pictures
+              in the size that already has the least to go on. One button in one
+              spot, identical in all three sizes, is a single thing to learn — and
+              it is the same object Nat already knows, in the same place.
+
+              The chevron never lies about direction: pointing back means the next
+              press makes the menu smaller, pointing forward means it opens the
+              big menu. The only jump in the cycle is small → big, which is the
+              one that has to be obvious, because it is the way out. */}
+          <Pressable
+            onPress={() => changeSize(NEXT_SIZE[size])}
+            {...(Platform.OS === 'web' ? ({ title: SIZE_STEP[size] } as object) : null)}
+            accessibilityRole="button"
+            accessibilityLabel={SIZE_STEP[size]}
+            hitSlop={6}
+            style={{
+              width: 30, height: 30, borderRadius: 15,
+              alignItems: 'center', justifyContent: 'center',
+              backgroundColor: 'rgba(255,255,255,0.16)',
+            }}
+          >
+            <Ionicons name={small ? 'chevron-forward' : 'chevron-back'} size={16} color="#fff" />
+          </Pressable>
+        </View>
+
+        {/* Who you are signed in as.
+            Nat, 2026-08-04: "what if right here, on this side bar, we had a
+            'welcome, User' … and maybe a profile bubble, so you could see which
+            account you're signed in as?"
+
+            It earns its space for a reason particular to this app: the two people
+            who build it share screens constantly, and both have owner accounts, so
+            "which of us is this?" is a real question asked several times a week —
+            and the answer changes what you are allowed to see. Every other surface
+            that could have told you is one tap away instead of in front of you.
+
+            It is a door as of 2026-08-06 — see `openMyProfile` above for what it
+            does at HIVE-Wide and why. It was a label until then, on the reasoning
+            that Profile needs a HIVE; Nat's answer was that a face you can't press
+            is the odd one out in an app where every other face opens somebody. */}
+        {profile ? (
+          <AnimatedPressable
+            onPress={openMyProfile}
+            {...(Platform.OS === 'web' && small
+              ? ({ title: `Your profile, ${(profile.name ?? 'You').split(/\s+/)[0]}` } as object)
+              : null)}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={`Your profile, ${(profile.name ?? 'You').split(/\s+/)[0]}`}
+            accessibilityState={{ selected: activeKey === 'profile' }}
+            style={{
+              transform: [{ scale: bouncingKey === 'profile' ? bounceScale : 1 }],
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              paddingHorizontal: big ? 14 : 0,
+              justifyContent: big ? 'flex-start' : 'center',
+              // Fixed height, all three sizes. Nat, 2026-08-04: the icons "shift
+              // up and down, and i'd like them to just slide horizontally." Every
+              // row below here was moving because the blocks ABOVE changed height
+              // when the words disappeared — a 30px avatar became 26px, and the
+              // two lines of name went from two lines to nothing. Reserving the
+              // same height in every size is what turns a size change into a
+              // purely horizontal move.
+              height: 46,
+              paddingBottom: 12,
+              marginBottom: 4,
+              // The line Nat pointed at: "see how there's a little line under my
+              // profile bubble, before 'MY HIVES'?" It closes off who you are,
+              // so the block underneath can be about where you are.
+              borderBottomWidth: 1,
+              borderBottomColor: 'rgba(255,255,255,0.10)',
+            }}
+          >
+            <Avatar name={profile.name ?? 'You'} url={profile.avatar_url} size={30} />
+            {big ? (
+              <View style={{ flex: 1 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontFamily: 'Lato_400Regular',
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                    textTransform: 'uppercase',
+                    color: 'rgba(255,255,255,0.52)',
+                  }}
+                >
+                  Welcome
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#fff' }}
+                >
+                  {(profile.name ?? 'You').split(/\s+/)[0]}
+                </Text>
+              </View>
+            ) : null}
+          </AnimatedPressable>
+        ) : null}
+
+        {/* The rubber-band at the end of the list, so a rail that has run out of
+            rows says so rather than looking stuck (Nat 2026-08-06: "Any time we
+            cant scroll, i want to have the bounce feature, so you can tell, oh,
+            thats the end of the page, not 'is this broken?'").
+
+            `BounceScrollView` sets the real iOS and Android props and draws the
+            bounce itself in a browser, which is where the rail is nearly always
+            read and where a plain ScrollView gives nothing. */}
+        <BounceScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 14 }}
+        >
+          {/* "My HIVEs" is Home, and HIVE-Wide is the first thing under it —
+              not a second section with its own children.
+
+              Nat's call, 2026-08-03: "we just move HIVE-Wide under My HIVEs, then
+              we aren't trying to reinvent the wheel, it's just the same format as
+              all the other ones." Which is right. HIVE-Wide is not a different
+              KIND of place, it is one more place of the same kind, and the one
+              page list below serves whichever of them you're standing in. */}
+          {/* A heading, not a door (Nat 2026-08-04). It used to navigate to
+              /hive as well as label the list beneath it, which is why Home
+              appeared to be missing: a row with three indented children under it
+              reads as a section title, and nobody presses a section title to go
+              home. Home is now the first entry in the page list below, and this
+              just says what the indented rows are. */}
+          {/* The heading holds its line at every size rather than disappearing, so
+              the HIVEs beneath it stay on the same rows however wide the rail is.
+              No emoji: it names the list under it, and a heading with a picture on
+              it reads as another button (Nat 2026-08-04, and there is no beehive
+              in Unicode anyway). */}
+          {big ? (
+            <Text
+              style={{
+                fontFamily: 'Lato_700Bold',
+                fontSize: 11,
+                letterSpacing: 1,
+                textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.45)',
+                paddingHorizontal: 14,
+                paddingTop: 10,
+                paddingBottom: 6,
+                height: 27,
+              }}
+            >
+              My HIVEs
+            </Text>
+          ) : medium ? (
+            // The medium rail says it too. The two rows under this heading are the
+            // HIVE-Wide globe and your own HIVE's hexagon, and without a word
+            // above them they are two coloured shapes (2026-08-06).
+            <Text
+              style={{
+                fontFamily: 'Lato_700Bold',
+                fontSize: 8.5,
+                letterSpacing: 0.6,
+                textTransform: 'uppercase',
+                textAlign: 'center',
+                color: 'rgba(255,255,255,0.45)',
+                paddingTop: 10,
+                paddingBottom: 6,
+                height: 27,
+              }}
+            >
+              My HIVEs
+            </Text>
+          ) : (
+            <View style={{ height: 27 }} />
+          )}
+          {/* HIVE-Wide shows for EVERYONE, not only people in more than one HIVE.
+              Nearly every member is in exactly one, and the shared boards — HIVE
+              Approved, Announcements, the Favourites — are where their own
+              content now lives. Hiding this from them would have quietly deleted
+              most of OG's boards from OG's view (caught before shipping,
+              2026-08-03). */}
           <Row
-            key={m.community_id}
-            emoji="⬢"
-            label={hiveDisplayName(m.community?.name)}
+            label="HIVE-Wide"
             indented
-            active={m.community_id === communityId && !onHiveWide}
-            tint={hiveAccent(m.community)}
-            bounceKey={m.community_id}
+            world
+            active={onHiveWide}
+            tint={WIDE_BLACK}
+            bounceKey="hive-wide"
             onPress={() => {
-              if (m.community_id === communityId && !onHiveWide) playBounce(m.community_id);
-              void switchCommunity(m.community_id);
+              if (onHiveWide) playBounce('hive-wide');
+              enterWholeHive();
               foldAwayOnPhone();
             }}
           />
-        ))}
-
-        {/* The line before Home, at every size (Nat 2026-08-06): "I think we
-            need another one of those before 'Home' so you know that first you
-            select your hive & then you look at those pages within that hive,
-            otherwise it just looks confusing."
-
-            She is naming the rail's actual grammar. Everything above this line
-            answers WHICH PLACE AM I IN; everything below it answers WHAT DO I
-            LOOK AT INSIDE IT. Without the rule, HIVE-Wide, your HIVEs and the
-            eleven pages are one undifferentiated column and the two questions
-            look like one list. It matters most at small, where the names are
-            gone and the shapes are all the rail has left to group with. */}
-        {divider}
-
-        {/* One list, whichever place you picked. Pages that only mean something
-            inside a single HIVE step out at HIVE-Wide rather than showing you
-            one HIVE's answer while you're standing above all of them. */}
-        {destinations.map((item) => (
-          <Row
-            key={item.key}
-            emoji={item.emoji}
-            label={item.label}
-            shortLabel={item.shortLabel}
-            active={activeKey === item.key}
-            badge={item.badge === 'dms' ? unreadDMCount : 0}
-            bounceKey={item.key}
-            onPress={() => go(item.route, item.key)}
-          />
-        ))}
-        {/* "Swap HIVEs" is gone (Nat 2026-08-03). Your HIVEs are already listed
-            by name under My HIVEs, and tapping one swaps to it — so this was a
-            button that opened a picker for a choice already on the screen. */}
-        {/* It asks first (Nat 2026-08-04). Log out sits directly under the page
-            list, so it is one slip away from every other row in the rail — and
-            on a phone, where the big drawer is a full-height overlay, it is a
-            slip away with a thumb rather than a cursor. */}
-        <Row
-          emoji="👋"
-          label="Log out"
-          onPress={() => setConfirmingLogOut(true)}
-        />
-
-        {/* Admin is in the rail from EVERYWHERE now (Nat 2026-08-04): "i said
-            i only wanted admin from the HIVE-Wide, but i changed my mind, i
-            actually want my admin permanently in the toolbar."
-
-            The 08-03 reasoning still holds — Admin runs the whole operation
-            rather than any one HIVE, so it should never look like OG's admin —
-            and that is now handled by where it GOES rather than whether it
-            shows. Pressing it steps up to HIVE-Wide first, so you always land
-            on the one god view against the planet, whichever HIVE you set off
-            from. */}
-        {canSeeAdmin ? (
-          <>
-            {divider}
+          {memberships.map((m) => (
             <Row
-              emoji={ADMIN_DESTINATION.emoji}
-              label={ADMIN_DESTINATION.label}
-              active={activeKey === 'admin'}
-              bounceKey="admin"
+              key={m.community_id}
+              emoji="⬢"
+              label={hiveDisplayName(m.community?.name)}
+              indented
+              active={m.community_id === communityId && !onHiveWide}
+              tint={hiveAccent(m.community)}
+              bounceKey={m.community_id}
               onPress={() => {
-                if (!onHiveWide) enterWholeHive();
-                go(ADMIN_DESTINATION.route, 'admin');
+                if (m.community_id === communityId && !onHiveWide) playBounce(m.community_id);
+                void switchCommunity(m.community_id);
+                foldAwayOnPhone();
               }}
             />
-          </>
-        ) : null}
-      </BounceScrollView>
+          ))}
 
-      <ConfirmDialog
-        visible={confirmingLogOut}
-        title="Log out of the HIVE?"
-        body="You’ll need to sign in again with Google to get back in."
-        confirmLabel="Log out"
-        cancelLabel="Stay"
-        onConfirm={() => {
-          setConfirmingLogOut(false);
-          void supabase.auth.signOut({ scope: 'local' });
-        }}
-        onCancel={() => setConfirmingLogOut(false)}
-      />
-    </View>
+          {/* The line before Home, at every size (Nat 2026-08-06): "I think we
+              need another one of those before 'Home' so you know that first you
+              select your hive & then you look at those pages within that hive,
+              otherwise it just looks confusing."
+
+              She is naming the rail's actual grammar. Everything above this line
+              answers WHICH PLACE AM I IN; everything below it answers WHAT DO I
+              LOOK AT INSIDE IT. Without the rule, HIVE-Wide, your HIVEs and the
+              eleven pages are one undifferentiated column and the two questions
+              look like one list. It matters most at small, where the names are
+              gone and the shapes are all the rail has left to group with. */}
+          {divider}
+
+          {/* One list, whichever place you picked. Pages that only mean something
+              inside a single HIVE step out at HIVE-Wide rather than showing you
+              one HIVE's answer while you're standing above all of them. */}
+          {destinations.map((item) => (
+            <Row
+              key={item.key}
+              emoji={item.emoji}
+              label={item.label}
+              shortLabel={item.shortLabel}
+              active={activeKey === item.key}
+              badge={item.badge === 'dms' ? unreadDMCount : 0}
+              bounceKey={item.key}
+              onPress={() => go(item.route, item.key)}
+            />
+          ))}
+          {/* "Swap HIVEs" is gone (Nat 2026-08-03). Your HIVEs are already listed
+              by name under My HIVEs, and tapping one swaps to it — so this was a
+              button that opened a picker for a choice already on the screen. */}
+          {/* It asks first (Nat 2026-08-04). Log out sits directly under the page
+              list, so it is one slip away from every other row in the rail — and
+              on a phone, where the big drawer is a full-height overlay, it is a
+              slip away with a thumb rather than a cursor. */}
+          <Row
+            emoji="👋"
+            label="Log out"
+            onPress={() => setConfirmingLogOut(true)}
+          />
+
+          {/* Admin is in the rail from EVERYWHERE now (Nat 2026-08-04): "i said
+              i only wanted admin from the HIVE-Wide, but i changed my mind, i
+              actually want my admin permanently in the toolbar."
+
+              The 08-03 reasoning still holds — Admin runs the whole operation
+              rather than any one HIVE, so it should never look like OG's admin —
+              and that is now handled by where it GOES rather than whether it
+              shows. Pressing it steps up to HIVE-Wide first, so you always land
+              on the one god view against the planet, whichever HIVE you set off
+              from. */}
+          {canSeeAdmin ? (
+            <>
+              {divider}
+              <Row
+                emoji={ADMIN_DESTINATION.emoji}
+                label={ADMIN_DESTINATION.label}
+                active={activeKey === 'admin'}
+                bounceKey="admin"
+                onPress={() => {
+                  if (!onHiveWide) enterWholeHive();
+                  go(ADMIN_DESTINATION.route, 'admin');
+                }}
+              />
+            </>
+          ) : null}
+        </BounceScrollView>
+
+        <ConfirmDialog
+          visible={confirmingLogOut}
+          title="Log out of the HIVE?"
+          body="You’ll need to sign in again with Google to get back in."
+          confirmLabel="Log out"
+          cancelLabel="Stay"
+          onConfirm={() => {
+            setConfirmingLogOut(false);
+            void supabase.auth.signOut({ scope: 'local' });
+          }}
+          onCancel={() => setConfirmingLogOut(false)}
+        />
+      </View>
+    </>
   );
 });
 

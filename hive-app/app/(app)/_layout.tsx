@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import { Text, View, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
@@ -121,22 +121,30 @@ export default function AppLayout() {
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const restoredNativePathRef = useRef(false);
 
-  // Where the rail STARTS, on a first visit.
+  // Where the rail STARTS on a device that has never picked a size.
   //
   // The rail has three sizes as of 2026-08-06 — big, medium, small — and it owns
   // and remembers which one a person picked (`components/navigation/SideRail`).
   // This boolean is the opening offer and nothing more: true starts at big, the
-  // full drawer, and false starts at medium, the narrow rail with a small name
+  // full sidebar, and false starts at medium, the narrow rail with a small name
   // under every picture. Once somebody has chosen a size, their choice wins.
   //
   // A wide screen starts big, because icons alone are a quiz and the whole point
   // of the rail is seeing where everything is without hunting (Nat 2026-08-03).
-  // A phone starts medium, because there the big drawer covers the page rather
+  // A phone starts medium, because there the big rail covers the page rather
   // than sitting beside it, and opening onto a menu instead of the app would be
   // a worse first second. Nobody is ever STARTED at small.
-  const [railExpanded, setRailExpanded] = useState(() => (
-    Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerWidth >= 768 : false
-  ));
+  //
+  // It reads the same `useMobileLayout` every other piece of furniture here
+  // reads. It used to ask `window.innerWidth` on its own, which said the same
+  // thing in a browser and said "phone" to every iPad in the native app.
+  //
+  // The rail no longer reports back. It used to flip a state variable here every
+  // time the phone drawer opened or shut, so the whole shell — Tabs and all —
+  // re-rendered to keep a boolean truthful that only the rail ever read. The one
+  // thing the shell needed it for was dimming the page behind an open drawer,
+  // and the rail draws that itself now.
+  const railStartsBig = !useMobileLayout;
 
   // Initialize push notification listeners and state (no permission prompt on load)
   useNotifications({ autoRequestPermission: false });
@@ -225,8 +233,7 @@ export default function AppLayout() {
       <View style={{ flex: 1, flexDirection: 'row' }}>
       {!useImmersiveProfileGarden ? (
         <SideRail
-          expanded={railExpanded}
-          onToggle={() => setRailExpanded((v) => !v)}
+          startBig={railStartsBig}
           unreadDMCount={totalUnreadDMs}
         />
       ) : null}
