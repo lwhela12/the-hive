@@ -4,9 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
+import { CollapsiblePanel } from '../../components/ui/CollapsiblePanel';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
 import { SPACE_SKIN } from '../../lib/pageSkin';
@@ -114,7 +116,12 @@ export default function BuzzScreen() {
     const brewingIds = new Set(brewingRows.map((row) => row.id));
     const archive = rows.filter((row) => !brewingIds.has(row.id));
     setItems(archive);
-    setOpenId((current) => current ?? archive[0]?.id ?? null);
+    // Nothing is opened for you. Nat, 2026-08-06: *"I think the first view of
+    // the newsletter page should always start out with them all collapsed & you
+    // can expand the one you want to read."* A newsletter runs to about two
+    // thousand words, so opening the newest one made the page a wall you had to
+    // scroll past to find out what else was here. Whatever the reader has open
+    // stays open through a refresh — `openId` is left alone here on purpose.
     setLoading(false);
 
     // What this person has already put in this month, read back off the thread
@@ -168,6 +175,28 @@ export default function BuzzScreen() {
     && !!collecting
     && memberships.some((m) => m.community_id === collecting.community_id);
 
+  /**
+   * The people you can name in a shout-out.
+   *
+   * Nat typed "@n" into this box and asked: *"this 'add it' feature is really
+   * cool, but we need to make sure that the at feature works!"* It did nothing —
+   * the box was the app's shared composer with the tagging switched off, because
+   * turning it on means handing it a list of people and nobody had.
+   *
+   * It is the same list, from the same place, that board replies and room chat
+   * use, so "@n" offers the same names here as everywhere else and lands a real
+   * person's handle in the text. The list is the HIVE whose letter this is —
+   * the one you are allowed to add to — rather than whichever HIVE you last
+   * stood in.
+   *
+   * Naming a whole HIVE ("@OG HIVE, don't forget…") is a separate idea of Nat's
+   * and is parked: telling a whole community something needs its own rules about
+   * who gets told and how. Individuals only for now.
+   */
+  const { members: mentionableMembers, loading: mentionsLoading } = useMentionableMembers(
+    canAddShoutOut ? collecting?.community_id : null
+  );
+
   const submitShoutOut = async () => {
     const content = shoutOut.trim();
     if (!content || !profile || !collecting || posting) return;
@@ -214,31 +243,31 @@ export default function BuzzScreen() {
           ) : null}
 
           {/* This month, still being written. An invitation, drawn as one —
-              and answerable right here. "Add it here" now means here. */}
+              and answerable right here. "Add it here" now means here.
+
+              It opens and shuts like the letters below it. Nat spotted on
+              2026-08-06 that this was the one card on the page with no way to
+              put it away, and it grows — everything you have already added to
+              the letter is read back to you inside it. It starts OPEN, unlike
+              the archive: it is the one thing on this page you can act on, and
+              an invitation you have to go looking for is not an invitation. */}
           {!loading && collecting ? (
-            <View
-              style={{
-                borderRadius: 16,
-                borderWidth: 1,
-                borderStyle: 'dashed',
-                borderColor: 'rgba(255,226,166,0.45)',
-                backgroundColor: 'rgba(255,248,233,0.05)',
-                padding: 16,
-                marginBottom: 18,
-                gap: 6,
+            <CollapsiblePanel
+              eyebrow="Still being written"
+              title={collecting.title}
+              dashed
+              defaultOpen
+              colours={{
+                ink: skin.ink,
+                inkSoft: skin.inkSoft,
+                fill: 'rgba(255,248,233,0.05)',
+                border: 'rgba(255,226,166,0.45)',
+                accent: '#E8C77E',
+                pressed: 'rgba(255,248,233,0.09)',
               }}
+              style={{ marginBottom: 18 }}
+              bodyStyle={{ gap: 6 }}
             >
-              <Text
-                style={{
-                  fontFamily: 'Lato_700Bold', fontSize: 10.5, letterSpacing: 1.1,
-                  textTransform: 'uppercase', color: '#E8C77E',
-                }}
-              >
-                Still being written
-              </Text>
-              <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, color: skin.ink }}>
-                {collecting.title}
-              </Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, lineHeight: 20, color: skin.inkSoft }}>
                 Want a shout-out, a plug, or a reminder in it? Add it here and it goes
                 into the letter.
@@ -294,6 +323,14 @@ export default function BuzzScreen() {
                     autoFocus
                     submitOnEnterKey={false}
                     editable={!posting}
+                    // Type "@" and the same picker the boards and the rooms use
+                    // opens, so the name you choose is a real member's, spelled
+                    // the way the letter writer and the Shout-outs tab will read
+                    // it back. Nobody is pinged from here — a shout-out arrives
+                    // in the newsletter, which is the whole point of writing one.
+                    mentionMembers={mentionableMembers}
+                    mentionsLoading={mentionsLoading}
+                    currentUserId={profile?.id}
                   />
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <Pressable
@@ -355,7 +392,7 @@ export default function BuzzScreen() {
                   This one is {hiveDisplayName(collecting.community?.name)}&rsquo;s letter to write.
                 </Text>
               )}
-            </View>
+            </CollapsiblePanel>
           ) : null}
 
           {loading ? null : items.length === 0 ? (
@@ -374,9 +411,26 @@ export default function BuzzScreen() {
             const fromElsewhere = item.community_id !== communityId;
 
             return (
-              <View
+              <CollapsiblePanel
                 key={item.id}
-                style={{
+                title={item.title}
+                subtitle={
+                  formatDateLong(item.created_at)
+                  + (showWhichHive && fromElsewhere
+                    ? ` · from ${hiveDisplayName(item.community?.name)}`
+                    : '')
+                  + (item.visibility === 'public' ? ' · on the website' : '')
+                }
+                // One at a time — opening a letter shuts the one you were
+                // reading, which is what "expand the one you want to read"
+                // means when each of these is two thousand words.
+                open={open}
+                onToggle={(next) => setOpenId(next ? item.id : null)}
+                // Whose letter it is, in that HIVE's colour.
+                topAccent={accent}
+                colours={{
+                  ink: skin.ink,
+                  inkSoft: skin.inkSoft,
                   // Opaque on the dark page, not a 5% wash.
                   //
                   // A whole newsletter is a long read, and this page is a
@@ -384,59 +438,27 @@ export default function BuzzScreen() {
                   // the letter simply disappeared (Nat: "i also cant read the
                   // news letter"). A card you glance at can float; a card you
                   // READ needs ground under it.
-                  backgroundColor: skin.dark ? '#12131A' : skin.card,
-                  borderWidth: 1,
-                  borderColor: skin.border,
-                  borderRadius: 18,
-                  marginBottom: 12,
-                  overflow: 'hidden',
+                  fill: skin.dark ? '#12131A' : skin.card,
+                  border: skin.border,
+                  accent: skin.gold,
+                  pressed: skin.cardPressed,
                 }}
+                titleStyle={{ fontSize: 16, letterSpacing: 0 }}
+                style={{ borderRadius: 18, marginBottom: 12 }}
+                bodyStyle={{ paddingBottom: 18 }}
               >
-                <View style={{ height: 4, backgroundColor: accent }} />
-                <Pressable
-                  onPress={() => setOpenId(open ? null : item.id)}
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: open }}
-                  style={({ pressed }) => ({
-                    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-                    padding: 16, backgroundColor: pressed ? skin.cardPressed : 'transparent',
-                  })}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 16, color: skin.ink }}>
-                      {item.title}
-                    </Text>
-                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: skin.inkSoft, marginTop: 3 }}>
-                      {formatDateLong(item.created_at)}
-                      {showWhichHive && fromElsewhere
-                        ? ` · from ${hiveDisplayName(item.community?.name)}`
-                        : ''}
-                      {item.visibility === 'public' ? ' · on the website' : ''}
-                    </Text>
-                  </View>
-                  <Ionicons
-                    name={open ? 'chevron-up' : 'chevron-down'}
-                    size={19}
-                    color={skin.gold}
-                  />
-                </Pressable>
-
-                {open ? (
-                  <View style={{ paddingHorizontal: 16, paddingBottom: 18 }}>
-                    {/* The letters read like letters here too.
-                        Nat has asked three times. The archive imported from the
-                        old Wix site kept every paragraph break — the text really
-                        does carry its `\n\n` — but lost every mark of what a
-                        line was FOR, and this printed the whole thing into one
-                        `<Text>` at 15px. So a 6,000-character newsletter arrived
-                        as one slab. `readLetter` reads the shape back out of the
-                        plain text and `LetterProse` gives each piece its weight;
-                        this is the same component the letter screen uses, in the
-                        space skin's colours rather than paper's. */}
-                    <LetterProse text={item.content} palette={SPACE_LETTER} />
-                  </View>
-                ) : null}
-              </View>
+                {/* The letters read like letters here too.
+                    Nat has asked three times. The archive imported from the
+                    old Wix site kept every paragraph break — the text really
+                    does carry its `\n\n` — but lost every mark of what a
+                    line was FOR, and this printed the whole thing into one
+                    `<Text>` at 15px. So a 6,000-character newsletter arrived
+                    as one slab. `readLetter` reads the shape back out of the
+                    plain text and `LetterProse` gives each piece its weight;
+                    this is the same component the letter screen uses, in the
+                    space skin's colours rather than paper's. */}
+                <LetterProse text={item.content} palette={SPACE_LETTER} />
+              </CollapsiblePanel>
             );
           })}
         </View>

@@ -292,10 +292,11 @@ export default function SettingsScreen() {
   );
 
   const closeSettings = () => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
+    // Never `router.back()`. The browser's history remembers the-hive.app from
+    // before you signed in, so "back" can walk straight out of the app onto the
+    // public marketing site. Nat hit exactly that on her phone (2026-08-06):
+    // "it dropped me allllll the way out, all the way to the public site."
+    // Every exit names a room inside the app instead.
     router.replace('/profile');
   };
 

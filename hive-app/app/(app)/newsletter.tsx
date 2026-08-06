@@ -261,9 +261,11 @@ export default function NewsletterScreen() {
   const [postError, setPostError] = useState<string | null>(null);
 
   const close = () => {
+    // Never `router.back()` — see the note in `settings.tsx`. The browser's
+    // history remembers the public site from before you signed in, so the
+    // fallback has to be a room in the app, not "wherever you came from".
     if (from === 'meetings') router.replace('/meetings');
     else if (from === 'admin') router.replace('/admin');
-    else if (router.canGoBack()) router.back();
     else router.replace('/meetings');
   };
 

@@ -18,6 +18,8 @@ interface RpcChatRoomRow {
   room_description: string | null;
   room_created_by: string | null;
   room_created_at: string;
+  /** Added by migration 153. Absent from every earlier version of this call. */
+  room_reach: 'hive' | 'all_hives' | null;
   custom_title: string | null;
   custom_emoji: string | null;
   custom_image_url: string | null;
@@ -57,6 +59,12 @@ async function fetchChatRooms(
     description: row.room_description ?? undefined,
     created_by: row.room_created_by ?? undefined,
     created_at: row.room_created_at,
+    // How far the room reaches. Migration 153 added this to the function's
+    // return; before that it was simply absent, so the rule that keeps the
+    // shared room from wearing a HIVE's name ("is reach all_hives?") read
+    // undefined and the HIVE-Wide room turned up in Messages a second time,
+    // labelled OG HIVE and empty. Nat reported that twin twice.
+    reach: row.room_reach ?? undefined,
     custom_title: row.custom_title ?? undefined,
     custom_emoji: row.custom_emoji ?? undefined,
     custom_image_url: row.custom_image_url ?? undefined,

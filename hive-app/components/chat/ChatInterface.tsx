@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   View,
   useWindowDimensions,
@@ -60,6 +61,38 @@ interface ChatInterfaceProps {
 const SUPABASE_FUNCTIONS_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.functions.supabase.co');
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const STICKY_BOTTOM_SCROLL_THRESHOLD = 80;
+
+/**
+ * The rubber-band at the end of a scroll, which is how you tell "that's the
+ * bottom" from "this is broken".
+ *
+ * Nat has asked for this twice: "Any time we cant scroll, i want to have the
+ * bounce feature, so you can tell, oh, thats the end of the page, not 'is this
+ * broken?'" (2026-08-06).
+ *
+ * What these three props actually do, checked in
+ * `node_modules/react-native-web/dist/exports/ScrollView`:
+ *
+ * - **iOS (the TestFlight app)** — `bounces` and `alwaysBounceVertical` are
+ *   real. `alwaysBounceVertical` is the one that matters, because it bounces
+ *   even when the content already fits, which is the case Nat is describing.
+ * - **Android** — `overScrollMode="always"` gives the glow at the edge.
+ * - **The browser, where nearly everybody uses HIVE** — react-native-web keeps
+ *   none of them. Its ScrollView renders a plain scrolling box and drops these
+ *   three props on the floor, so they cost nothing and buy nothing there.
+ *
+ * On iOS Safari the browser gives the rubber-band itself, for free, to any box
+ * that HAS something to scroll — which is why the fix that matters on web is
+ * making these areas scroll at all. A box whose content already fits cannot be
+ * made to bounce by any CSS: there is nothing to pull against. `public/index.html`
+ * also pins the document with `body { overflow: hidden }`, so the page behind
+ * the app never bounces either.
+ */
+const BOUNCE_TO_THE_END = {
+  bounces: true,
+  alwaysBounceVertical: true,
+  overScrollMode: 'always',
+} as const;
 
 // Check if streaming is supported on this platform
 const supportsStreaming = (): boolean => {
@@ -161,8 +194,35 @@ const WelcomeState = memo(function WelcomeState({
   const { width } = useWindowDimensions();
   const isNarrow = width < 768;
 
+  // Clive's front page scrolls.
+  //
+  // It used to be one centred box that could not move, and on a phone it was
+  // wrong at both ends: the bottom row of suggestions ("Plan a HIVE meetup",
+  // "Tell me a joke") was sliced off by the message bar, and the same overflow
+  // pushed Clive's round portrait UP and out of the top of the box, where it
+  // drew straight over the word "Clive" in the gold header — "the bee is
+  // sitting on top of the title" (Nat 2026-08-06). Centring a box whose content
+  // is taller than the box spills it out of BOTH ends, and nothing was clipping
+  // the spill.
+  //
+  // `flexGrow: 1` with `justifyContent: 'center'` keeps the greeting in the
+  // middle of the screen while it fits, and lets it scroll — top edge honoured —
+  // the moment it doesn't.
   return (
-    <View className="flex-1 items-center justify-center px-5">
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{
+        flexGrow: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 24,
+      }}
+      showsVerticalScrollIndicator={false}
+      // A suggestion still fires on the first tap while the keyboard is up.
+      keyboardShouldPersistTaps="handled"
+      {...BOUNCE_TO_THE_END}
+    >
       <View className="w-full max-w-3xl items-center">
         <Image
           source={cliveIcon}
@@ -205,7 +265,7 @@ const WelcomeState = memo(function WelcomeState({
           ))}
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 });
 
@@ -988,6 +1048,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
           contentContainerClassName="p-4 pb-2"
           onScroll={handleMessageListScroll}
           scrollEventThrottle={16}
+          {...BOUNCE_TO_THE_END}
           ListHeaderComponent={
             <ListFooter isLoading={isLoading} streamingContent={streamingContent} />
           }

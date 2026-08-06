@@ -5,7 +5,7 @@ import { Breadcrumbs, type Crumb } from '../ui/Breadcrumbs';
 import { HiveMark } from '../ui/HiveMark';
 import { WorldMark } from '../ui/WorldMark';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { usePathTrail } from '../../lib/hooks/usePathTrail';
+import { usePathTrail, usePagePress } from '../../lib/hooks/usePathTrail';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { usePageSkin } from '../../lib/pageSkin';
 import { NAV_DESTINATIONS, ADMIN_DESTINATION, activeKeyForPath } from '../../lib/navigation';
@@ -45,6 +45,7 @@ export function PathFooter() {
   const router = useRouter();
   const { community, wholeHive } = useAuth();
   const deep = usePathTrail();
+  const pagePress = usePagePress();
   const skin = usePageSkin();
   /**
    * The strip sits on the bottom edge of the window, and on an iPhone added to
@@ -59,16 +60,36 @@ export function PathFooter() {
   const activeKey = activeKeyForPath(pathname);
   const page = [...NAV_DESTINATIONS, ADMIN_DESTINATION].find((d) => d.key === activeKey);
 
+  /**
+   * A step only gets a handler when it leads somewhere you are not.
+   *
+   * The HIVE's own name and the word "Home" are the same door, so on Home the
+   * first step was a button that put you back on the page you were already
+   * reading — the nothing-happens bug the rail had, moved down to the footer.
+   * Now it reads as a plain label there, which is the truth: you are in it.
+   *
+   * The same applies to a screen you are standing deep inside. Meetings stays
+   * `/meetings` while you read June's summary, so a "Meetings" button here
+   * could only push the route it is already on and change nothing on screen.
+   * The way back up out of that depth belongs to the screen holding it — it is
+   * the one that can put its own list back — and it hands it over as a crumb of
+   * its own through `useDeepTrail`.
+   */
+  const stepTo = (route: string) => (
+    pathname === route ? undefined : () => router.push(route as never)
+  );
+
+  const placeRoute = wholeHive ? '/hive-wide' : '/hive';
   const place: Crumb = wholeHive
     ? {
         label: 'HIVE-Wide',
         mark: <WorldMark size={11} />,
-        onPress: () => router.push('/hive-wide' as never),
+        onPress: stepTo(placeRoute),
       }
     : {
         label: hiveDisplayName(community?.name),
         mark: <HiveMark size={10} colour={hiveAccent(community)} />,
-        onPress: () => router.push('/hive' as never),
+        onPress: stepTo(placeRoute),
       };
 
   const items: Crumb[] = [
@@ -79,7 +100,10 @@ export function PathFooter() {
     // nav footer on home... I think we should ALWAYS have the navigation
     // footers." A status bar that is sometimes absent is worse than one that
     // occasionally states the obvious.
-    ...(page ? [{ label: page.label, onPress: () => router.push(page.route as never) }] : []),
+    // A screen holding its own depth (Boards keeps the open board and thread in
+    // state while the route stays `/board`) says what this crumb should do, so
+    // tapping "Boards" from inside a thread actually shows you the boards.
+    ...(page ? [{ label: page.label, onPress: pagePress ?? stepTo(page.route) }] : []),
     ...deep,
   ];
 

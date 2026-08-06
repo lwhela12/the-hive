@@ -82,6 +82,17 @@ export function usePrefetchAppData(
           return [];
         }
         // Transform to match useChatRoomsQuery structure (room_id -> id, etc.)
+        //
+        // This writes into the SAME cache key as `useChatRoomsQuery`, so it is
+        // the first version of a room the Messages screen ever sees. It used to
+        // drop `reach` and all five `custom_*` fields, which meant the screen
+        // opened on rooms that were missing the very things it decides with:
+        // the HIVE-Wide room arrived with no reach and was drawn a second time
+        // wearing OG HIVE's name, and anyone who had renamed a room for
+        // themselves saw it snap from the default name to theirs a beat later.
+        //
+        // Two mappings of one shape will drift again. If a third appears, make
+        // it one exported function instead.
         return (data || []).map((row: any) => ({
           id: row.room_id,
           community_id: row.room_community_id,
@@ -90,6 +101,12 @@ export function usePrefetchAppData(
           description: row.room_description ?? undefined,
           created_by: row.room_created_by ?? undefined,
           created_at: row.room_created_at,
+          reach: row.room_reach ?? undefined,
+          custom_title: row.custom_title ?? undefined,
+          custom_emoji: row.custom_emoji ?? undefined,
+          custom_image_url: row.custom_image_url ?? undefined,
+          custom_background: row.custom_background ?? undefined,
+          custom_background_image_url: row.custom_background_image_url ?? undefined,
           members: row.members || [],
           last_message: row.last_message ?? undefined,
           unread_count: Number(row.unread_count),

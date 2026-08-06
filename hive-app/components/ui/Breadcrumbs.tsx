@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, Platform, ScrollView } from 'react-native';
 
 /**
  * Where you are, and the way back out.
@@ -28,6 +28,27 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
  * it is the only one wearing full-strength ink and the only one you cannot
  * press — a "button" that returns you to the page you are on is the same
  * nothing-happens bug we fixed in the rail.
+ *
+ * ## They have to be hittable, and they have to look hittable
+ *
+ * Nat, 2026-08-06: *"i love the nav here, but i wish i could click on it to go
+ * back to where i want to go back to, like if i was all the way inside that
+ * thread & i wanted to go back to boards."* The steps already carried their
+ * handlers. What they did not carry was a target: 11.5pt text in a 5px-tall
+ * strip is around fourteen pixels of thumb room on a phone, against the 44 that
+ * a finger actually needs, so the tap landed on the gap between two words and
+ * the trail sat there looking decorative.
+ *
+ * So every step carries its own height now — eight pixels of padding above and
+ * below the words, taken out of the strip's own padding so the bar grows by
+ * about six pixels in total and stays the thin Finder-ish line Nat asked for.
+ * The room has to be real padding: a horizontal scroller clips anything hanging
+ * outside it, taps included, so a negative margin would have looked bigger and
+ * caught nothing.
+ *
+ * It says so as well as being it: a step you can press is underlined faintly all
+ * the time, and darkens with a full underline while a pointer is over it. The
+ * one you are standing on stays plain.
  *
  * ## Long names
  *
@@ -93,13 +114,19 @@ export function Breadcrumbs({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: dense ? 12 : 16,
-        paddingVertical: dense ? 5 : compact ? 7 : 9,
+        // The steps carry most of the height themselves now, so that the room a
+        // thumb needs lives inside the button rather than in the gap around it.
+        // A horizontal scroller clips whatever hangs outside it — including the
+        // taps — so the target has to be real padding, not a negative margin.
+        paddingVertical: dense ? 0 : compact ? 2 : 4,
         gap: dense ? 6 : 7,
       }}
     >
       {trail.map((item, index) => {
         const last = index === trail.length - 1;
-        const label = (
+        const goes = !last && !!item.onPress;
+
+        const label = (lit: boolean) => (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
             {item.mark}
             <Text
@@ -107,7 +134,11 @@ export function Breadcrumbs({
               style={{
                 fontFamily: last ? 'Lato_700Bold' : 'Lato_400Regular',
                 fontSize: size,
-                color: last ? here : quiet,
+                color: last || lit ? here : quiet,
+                // A faint underline all the time says "this is a way back"; the
+                // full one says "and you are on it right now".
+                textDecorationLine: goes ? 'underline' : 'none',
+                textDecorationColor: lit ? here : divider,
               }}
             >
               {item.label}
@@ -125,20 +156,35 @@ export function Breadcrumbs({
                 ›
               </Text>
             )}
-            {last || !item.onPress ? (
-              <View accessibilityRole="header" accessibilityLabel={`You are in ${item.label}`}>
-                {label}
-              </View>
-            ) : (
+            {goes ? (
               <Pressable
                 onPress={item.onPress}
                 accessibilityRole="button"
                 accessibilityLabel={`Back to ${item.label}`}
-                hitSlop={8}
-                style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}
+                // `hitSlop` is honoured on the phone and ignored by the browser,
+                // and the browser is where nearly everyone reads this — so the
+                // room is built into the box as well.
+                hitSlop={12}
+                style={({ pressed }) => ({
+                  paddingVertical: 8,
+                  paddingHorizontal: 5,
+                  marginHorizontal: -5,
+                  opacity: pressed ? 0.6 : 1,
+                  ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
+                })}
               >
-                {label}
+                {(state) => label(!!(state as { hovered?: boolean }).hovered || state.pressed)}
               </Pressable>
+            ) : (
+              // Matching padding, so the strip is the same height whether or
+              // not the page you are on has anywhere above it to go.
+              <View
+                accessibilityRole="header"
+                accessibilityLabel={`You are in ${item.label}`}
+                style={{ paddingVertical: 8 }}
+              >
+                {label(false)}
+              </View>
             )}
           </View>
         );

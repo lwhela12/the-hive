@@ -135,25 +135,35 @@ function sentWhen(iso: string) {
 }
 
 /**
- * Where each box sits on the Admin dashboard.
+ * Where each box sits on the Admin dashboard, in the order Nat reaches for them.
  *
  * Nat 2026-08-03: "meeting helpers & surveys in the first box, cos that is what
  * I use the most, 2nd would be newsletter drafter & signups & then the other
- * hives below that." The web grid lays the boxes out by these numbers, and the
- * screen writes them in the same sequence so a phone build reads the same way.
+ * hives below that."
+ *
+ * Nat 2026-08-06, from her phone: Surveys, then Newsletter, then the HIVEs.
+ * That is the same ranking she gave in August, said as a plain list, and it is
+ * what these numbers say now: 1 Surveys, 2 Newsletter, 3 onwards the HIVEs in
+ * membership order.
+ *
+ * The numbers used to skip — HIVEs on 1, 3, 5 and the tools on 2 and 4 — to
+ * satisfy a different request from the same week ("left hand side, top to bottom
+ * should go OG HIVE, Tech HIVE, Production HIVE, and on the right it should be
+ * Meeting tools and newsletter"). The dashboard wraps half-width cells
+ * left-to-right, so odd positions land in the left column and even ones in the
+ * right, and interleaving was the only way to describe a column split.
+ *
+ * A column split and a ranking are two different ideas and one sequence cannot
+ * hold both. On a phone there is one column, so the interleave read as OG HIVE,
+ * Surveys, Tech HIVE, Newsletter, Production HIVE — the ranking shredded. The
+ * ranking wins, because it is what she asked for twice. On a wide screen it now
+ * puts Surveys and Newsletter across the top row and the HIVEs underneath,
+ * which still reads top-down in importance.
  */
 export const ADMIN_PANEL_ORDER = {
-  // Nat 2026-08-03: "left hand side, top to bottom should go OG HIVE, Tech
-  // HIVE, Production HIVE, and on the right it should be Meeting tools and
-  // newsletter."
-  //
-  // The dashboard is a wrapping row of half-width cells, so odd positions land
-  // in the left column and even ones in the right. The HIVEs take 1, 3, 5 and
-  // the two tools take 2 and 4, which reads down each column the way she asked
-  // and still stacks in a sensible order on a phone.
-  hives: 1,
-  meetingTools: 2,
-  newsletter: 4,
+  surveys: 1,
+  newsletter: 2,
+  hives: 3,
 } as const;
 
 /* ------------------------------------------------------------------ colour */
@@ -925,7 +935,10 @@ export function HiveMemberPanels({
         const soleAdminId = admins.length === 1 ? admins[0].id : null;
 
         return (
-          <View key={m.community_id} style={[cellStyle, { order: orderFrom + index * 2 } as any]}>
+          // One after another, no gaps. The HIVEs used to take every other
+          // position so the two cross-HIVE boxes could sit between them in the
+          // right-hand column; they follow Surveys and Newsletter now.
+          <View key={m.community_id} style={[cellStyle, { order: orderFrom + index } as any]}>
             <Panel
               title={name}
               tabs={[

@@ -28,9 +28,9 @@ export default function ArrivalBoardScreen() {
   const router = useRouter();
   const { from } = useLocalSearchParams<{ from?: string }>();
   const closeBoard = () => {
+    // Never `router.back()` — see the note in `settings.tsx`. The browser's
+    // history remembers the public site from before you signed in.
     if (from === 'admin') router.replace('/admin');
-    else if (from === 'meetings') router.replace('/meetings');
-    else if (router.canGoBack()) router.back();
     else router.replace('/meetings');
   };
   const { width } = useWindowDimensions();

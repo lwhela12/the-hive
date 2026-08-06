@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Platform,
   Pressable,
   ScrollView,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -135,10 +136,79 @@ const WHERE_OPTIONS = [
 const FEEDBACK_COLUMNS =
   'id, kind, message, created_at, status, attachments, reply, replied_at, replied_by_name, author_name, where_in_app, platform';
 
+/**
+ * The tab row, and an arrow when there is more of it than the screen.
+ *
+ * Nat, from her iPhone (2026-08-06): "you cant see all the tabs, its cut off, we
+ * have to make it fit on an iphone screen better/easier." The row read
+ * "Say something | What you've sent (0) | E…" and stopped there — the third tab
+ * was not merely ugly, it was unreachable, and for an owner that is the tab
+ * holding every report anybody has ever sent.
+ *
+ * The tabs are shorter now (see the labels below) and fit a 375-point phone with
+ * room to spare, so this wrapper does nothing most days. It is here for the day
+ * a count reaches three digits or somebody opens the app on a smaller screen:
+ * the row slides instead of being sliced, and the arrow says so. A strip that
+ * scrolls with no sign it scrolls is what caused the confusion in the first
+ * place, so the arrow is the whole point of the wrapper — it appears only while
+ * there is genuinely something further right, and goes when you reach the end.
+ */
+function TabStrip({ children }: { children: ReactNode }) {
+  const skin = usePageSkin();
+  const [visibleWidth, setVisibleWidth] = useState(0);
+  const [rowWidth, setRowWidth] = useState(0);
+  const [scrolledBy, setScrolledBy] = useState(0);
+  // Four points of slack, so a rounding difference between the row and the
+  // window never leaves an arrow pointing at nothing.
+  const moreToTheRight = rowWidth - visibleWidth - scrolledBy > 4;
+
+  return (
+    <View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        onLayout={(event) => setVisibleWidth(event.nativeEvent.layout.width)}
+        onContentSizeChange={(width) => setRowWidth(width)}
+        onScroll={(event) => setScrolledBy(event.nativeEvent.contentOffset.x)}
+        scrollEventThrottle={16}
+      >
+        {children}
+      </ScrollView>
+      {moreToTheRight ? (
+        // Sits over the last visible tab and lets every press through to it.
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center' }}
+        >
+          <View
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 11,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: skin.card,
+              borderWidth: 1,
+              borderColor: skin.border,
+            }}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 16, color: skin.gold }}>
+              ›
+            </Text>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export default function AppFeedbackScreen() {
   const { profile, communityId } = useAuth();
   const skin = usePageSkin();
   const isOwner = profile?.is_owner === true;
+  // The app's own phone line, the one the layout and the side rail already use.
+  const { width } = useWindowDimensions();
+  const narrow = width < 768;
 
   const [tab, setTab] = useState<'say' | 'sent' | 'all'>('say');
   const [kind, setKind] = useState<Kind>('bug');
@@ -482,7 +552,10 @@ export default function AppFeedbackScreen() {
                   submitOnEnterKey={false}
                   submitting={replyingTo === item.id}
                 />
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                {/* Wrapping, because "Answer & tell them" and "Mark read" side
+                    by side are wider than a phone panel and the second one was
+                    running off the edge of the card. */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
                   <Pressable
                     onPress={() => void sendReply(item.id)}
                     disabled={!(replyDrafts[item.id] ?? '').trim() || replyingTo === item.id}
@@ -582,15 +655,29 @@ export default function AppFeedbackScreen() {
           The easiest way of all: take a screenshot, mark it up, and drop it in here. 📸
         </Text>
 
-        <HeaderTabs
-          tabs={[
-            { key: 'say', label: 'Say something' },
-            { key: 'sent', label: 'What you’ve sent', count: sent?.length },
-            ...(isOwner ? [{ key: 'all', label: 'Everyone', count: all?.length }] : []),
-          ]}
-          activeTab={tab}
-          onChange={(next) => setTab(next as 'say' | 'sent' | 'all')}
-        />
+        {/* Short words on a phone, the whole sentence where there is room.
+            The page on a phone is the screen minus the side rail minus its own
+            padding — about 280 points at 375 — and "Say something", "What
+            you've sent (0)" and "Everyone (0)" want more than 400 between them.
+            That is why the third one ran off the edge with nothing to say it
+            was there.
+
+            These are the same words shortened rather than renamed, and the set
+            lands inside 280. "Everyone" keeps its full name because it is the
+            owners' tab and the one worth being sure about; once its count runs
+            to three figures the row goes back over the line, which is what the
+            arrow above is for. */}
+        <TabStrip>
+          <HeaderTabs
+            tabs={[
+              { key: 'say', label: narrow ? 'Say it' : 'Say something' },
+              { key: 'sent', label: narrow ? 'Sent' : 'What you’ve sent', count: sent?.length },
+              ...(isOwner ? [{ key: 'all', label: 'Everyone', count: all?.length }] : []),
+            ]}
+            activeTab={tab}
+            onChange={(next) => setTab(next as 'say' | 'sent' | 'all')}
+          />
+        </TabStrip>
 
         {tab === 'say' ? (
           <View style={styles.panel}>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text } from 'react-native';
 import { HIVE_WIDE_WELCOME, SCOPE_LADDER, HIVE_WIDE_WELCOME_VERSION } from '../../lib/hiveWide';
+import { CollapsiblePanel } from './CollapsiblePanel';
 import { ScopeBadge } from './ScopeBadge';
 import type { Community } from '../../types';
 
@@ -11,6 +11,12 @@ import type { Community } from '../../types';
  * Nat's ask, 2026-08-03. It opens expanded the first time somebody lands here
  * and collapses to a single line once they've read it, because an explanation
  * you can't put away becomes furniture you stop seeing.
+ *
+ * It is the panel Nat picked out on 2026-08-06 — *"i like the 'what is hive
+ * wide'... thats a really nice feature, i like!"* — so the opening and shutting
+ * moved into `CollapsiblePanel` and every other panel on the page wears it too.
+ * The header carries both names: the question while it is away, the welcome's
+ * own title once it is open.
  *
  * The colour ladder is shown by USING it rather than describing it: the real
  * badges, in the order they travel. Somebody who skims the words still leaves
@@ -67,83 +73,51 @@ export function HiveWideWelcome({
   onDismiss: (version: string) => void;
 }) {
   const alreadySeen = seenVersion === HIVE_WIDE_WELCOME_VERSION;
-  const [open, setOpen] = useState(!alreadySeen);
-
-  if (!open) {
-    return (
-      <Pressable
-        onPress={() => setOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel="What is HIVE-Wide?"
-        style={{
-          flexDirection: 'row',
-          alignSelf: 'flex-start',
-          alignItems: 'center',
-          gap: 8,
-          paddingVertical: 10,
-          paddingHorizontal: 14,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: CARD_EDGE,
-          backgroundColor: CARD_FILL,
-        }}
-      >
-        <Ionicons name="help-circle-outline" size={17} color={GOLD_ON_SPACE} />
-        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, color: INK_SOFT }}>
-          What is HIVE-Wide?
-        </Text>
-      </Pressable>
-    );
-  }
+  /**
+   * Null until this person opens or shuts it themselves; until then it follows
+   * whether they have read it. The profile lands a moment after the page does,
+   * so a state initialised once from `seenVersion` would latch onto "not read
+   * yet" and hang open for somebody who put this away weeks ago.
+   */
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const open = chosen ?? !alreadySeen;
 
   return (
-    <View
-      style={{
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: CARD_EDGE,
-        borderLeftWidth: 4,
-        borderLeftColor: GOLD_ON_SPACE,
-        backgroundColor: CARD_FILL,
-        padding: 20,
-        gap: 16,
+    <CollapsiblePanel
+      title={HIVE_WIDE_WELCOME.title}
+      collapsedTitle="What is HIVE-Wide?"
+      icon="help-circle-outline"
+      open={open}
+      onToggle={(next) => {
+        setChosen(next);
+        // Shutting it is how you say you have read it — the same write the
+        // little X used to do, so putting it away on the phone still puts it
+        // away on the laptop. Only written the first time, because reopening it
+        // later to check something should not cost a round trip to the profile.
+        if (!next && !alreadySeen) onDismiss(HIVE_WIDE_WELCOME_VERSION);
       }}
+      colours={{
+        ink: INK,
+        inkSoft: INK_SOFT,
+        fill: CARD_FILL,
+        border: CARD_EDGE,
+        accent: GOLD_ON_SPACE,
+        pressed: 'rgba(255,248,233,0.1)',
+      }}
+      style={{ borderLeftWidth: 4, borderLeftColor: GOLD_ON_SPACE }}
+      titleStyle={{ fontSize: 19 }}
+      bodyStyle={{ gap: 16 }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <Text
-            style={{
-              fontFamily: 'LibreBaskerville_700Bold',
-              fontSize: 19,
-              color: INK,
-              marginBottom: 6,
-            }}
-          >
-            {HIVE_WIDE_WELCOME.title}
-          </Text>
-          <Text
-            style={{
-              fontFamily: 'Lato_400Regular',
-              fontSize: 14.5,
-              lineHeight: 22,
-              color: INK_SOFT,
-            }}
-          >
-            {HIVE_WIDE_WELCOME.standfirst}
-          </Text>
-        </View>
-        <Pressable
-          onPress={() => {
-            setOpen(false);
-            onDismiss(HIVE_WIDE_WELCOME_VERSION);
-          }}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Put this away"
-        >
-          <Ionicons name="close" size={20} color={INK_FAINT} />
-        </Pressable>
-      </View>
+      <Text
+        style={{
+          fontFamily: 'Lato_400Regular',
+          fontSize: 14.5,
+          lineHeight: 22,
+          color: INK_SOFT,
+        }}
+      >
+        {HIVE_WIDE_WELCOME.standfirst}
+      </Text>
 
       {HIVE_WIDE_WELCOME.panels.map((panel) => (
         <View key={panel.heading} style={{ gap: 4 }}>
@@ -226,6 +200,6 @@ export function HiveWideWelcome({
           when something has gone further than that.
         </Text>
       </View>
-    </View>
+    </CollapsiblePanel>
   );
 }

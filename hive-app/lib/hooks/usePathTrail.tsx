@@ -54,11 +54,30 @@ type Entry = {
    * at a time and navigating costs one small state change instead of a storm.
    */
   pathname: string;
+  /**
+   * What the PAGE crumb should do instead of navigating.
+   *
+   * The page crumb ("Boards") normally just goes to its own route — which does
+   * nothing when you are already standing on it. Boards keeps the open board
+   * and the open thread in its own state while the route stays `/board`, so
+   * tapping "Boards" from inside a thread moved you nowhere. Nat, 2026-08-06:
+   * "if i was all the way inside that thread & i wanted to go back to boards,
+   * that woudl be cool." A screen that holds its own depth says here how to
+   * shed it.
+   */
+  onPagePress?: () => void;
 };
 
 type TrailContext = {
   entries: Entry[];
-  contribute: (id: symbol, crumbs: Crumb[] | null, pathname: string) => void;
+  contribute: (
+    id: symbol,
+    crumbs: Crumb[] | null,
+    pathname: string,
+    onPagePress?: () => void
+  ) => void;
+  /** Set by the focused screen, read by the footer's page crumb. */
+  onPagePress?: () => void;
 };
 
 const Ctx = createContext<TrailContext>({ entries: [], contribute: () => {} });
@@ -66,21 +85,29 @@ const Ctx = createContext<TrailContext>({ entries: [], contribute: () => {} });
 export function PathTrailProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<Entry[]>([]);
 
-  const contribute = useMemo(() => (id: symbol, crumbs: Crumb[] | null, pathname: string) => {
+  const contribute = useMemo(() => (
+    id: symbol,
+    crumbs: Crumb[] | null,
+    pathname: string,
+    onPagePress?: () => void
+  ) => {
     setEntries((current) => {
       if (crumbs === null) {
         const without = current.filter((e) => e.id !== id);
         return without.length === current.length ? current : without;
       }
       const at = current.findIndex((e) => e.id === id);
-      if (at === -1) return [...current, { id, crumbs, pathname }];
+      if (at === -1) return [...current, { id, crumbs, pathname, onPagePress }];
       const next = current.slice();
-      next[at] = { id, crumbs, pathname };
+      next[at] = { id, crumbs, pathname, onPagePress };
       return next;
     });
   }, []);
 
-  const value = useMemo<TrailContext>(() => ({ entries, contribute }), [entries, contribute]);
+  const value = useMemo<TrailContext>(
+    () => ({ entries, contribute, onPagePress: entries.find((e) => e.onPagePress)?.onPagePress }),
+    [entries, contribute]
+  );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -89,6 +116,11 @@ export function PathTrailProvider({ children }: { children: ReactNode }) {
  * Everything below the page name, in the order you walked into it — from the
  * page you are actually on, and nobody else.
  */
+/** What the page crumb should do, when the focused screen has an opinion. */
+export function usePagePress(): (() => void) | undefined {
+  return useContext(Ctx).onPagePress;
+}
+
 export function usePathTrail(): Crumb[] {
   // Only the focused screen is ever in here now, so there is nothing to filter.
   return useContext(Ctx).entries.flatMap((e) => e.crumbs);
@@ -101,7 +133,7 @@ export function usePathTrail(): Crumb[] {
  * at its own top level. The comparison is on the labels, so handing over a
  * fresh array of the same names on every render costs nothing.
  */
-export function useDeepTrail(crumbs: Crumb[]) {
+export function useDeepTrail(crumbs: Crumb[], onPagePress?: () => void) {
   const { contribute } = useContext(Ctx);
   const focused = useIsFocused();
   // The route this screen belongs to, captured once. `usePathname` is global,
@@ -119,6 +151,10 @@ export function useDeepTrail(crumbs: Crumb[]) {
   // state either way.
   const latest = useRef(crumbs);
   latest.current = crumbs;
+  // Same reason as the crumb handlers: a new function every render, closing
+  // over current state, so it is held in a ref rather than compared.
+  const latestPagePress = useRef(onPagePress);
+  latestPagePress.current = onPagePress;
 
   useEffect(() => {
     const me = id.current;
@@ -127,7 +163,7 @@ export function useDeepTrail(crumbs: Crumb[]) {
       contribute(me, null, mine);
       return;
     }
-    contribute(me, latest.current, mine);
+    contribute(me, latest.current, mine, latestPagePress.current);
     return () => contribute(me, null, mine);
   }, [signature, contribute, focused]);
 }

@@ -20,6 +20,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useRoomMessagesQuery } from '../../lib/hooks/useRoomMessagesQuery';
 import { queryKeys } from '../../lib/queryClient';
 
+import { WorldMark } from '../ui/WorldMark';
 const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 import { RoomMessageItem } from './RoomMessageItem';
 import { RoomTypingIndicator } from './RoomTypingIndicator';
@@ -351,6 +352,16 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
           <Avatar name={otherMember.name} url={otherMember.avatar_url} size={size} />
         </MemberProfileLink>
       );
+    }
+
+    // The shared room is asked about FIRST. It is a `community` room by type —
+    // that is how everybody ends up in it — so without this it fell through to
+    // the HIVE crest below and the HIVE-Wide room wore the same face as your
+    // own HIVE's room. Nat, on her phone 2026-08-06: "when we're inside that
+    // one, it should have the 'hive wide' icon." The Earth is what HIVE-Wide
+    // wears in the rail, in the room list and on the scope badges.
+    if (room.reach === 'all_hives') {
+      return <WorldMark size={size} />;
     }
 
     // General wears the HIVE logo here exactly as it does in the room rail —

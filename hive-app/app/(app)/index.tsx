@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Image, Pressable, useWindowDimensions } from 'react-native';
+import { View, Platform, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
@@ -8,10 +8,28 @@ import { ConversationSidebar } from '../../components/chat/ConversationSidebar';
 import { AppHeader } from '../../components/navigation';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useConversations } from '../../lib/hooks/useConversations';
-import { getStoredItemAsync, removeStoredItemAsync, setStoredItemAsync } from '../../lib/webStorage';
 import type { Conversation } from '../../types';
 
-const cliveIcon = require('../../assets/Clive_logo.png');
+/**
+ * The conversation you were last reading, remembered for this visit and no
+ * longer — a plain module variable, so it lives as long as the browser tab or
+ * the open app does. Same idea as `lib/hiveSelection.ts` keeping which HIVE you
+ * are standing in for the tab's lifetime.
+ *
+ * It used to be written to storage, which meant OPENING Clive dropped you into
+ * an old thread. Nat, 2026-08-06: "i saw the Clive landing page for 1/2 a
+ * second, but then it brought me here, which was my last convo with Clive, but
+ * i coudlnt figure out how to get back to the main Clive screen."
+ *
+ * So: arriving at Clive starts at his front page, which is a place you can
+ * choose from. Stepping over to Members and back keeps your place, because that
+ * is the same visit and losing the thread you are mid-way through would be its
+ * own kind of broken.
+ *
+ * Keyed per HIVE and per person, because Clive is always speaking inside
+ * exactly one HIVE and two people share a screen here often.
+ */
+const conversationThisVisit = new Map<string, string>();
 
 export default function ChatScreen() {
   const { refineWish, prefill } = useLocalSearchParams<{ refineWish?: string; prefill?: string }>();
@@ -33,11 +51,11 @@ export default function ChatScreen() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const restoredConversationKeyRef = useRef<string | null>(null);
+  const hasCheckedThisVisitRef = useRef<string | null>(null);
   const shouldStartFreshFromRoute = !!refineWish || !!prefill;
-  const selectedConversationStorageKey = useMemo(() => {
+  const visitKey = useMemo(() => {
     if (!communityId || !profile?.id) return null;
-    return `the-hive:last-clive-conversation:${communityId}:${profile.id}`;
+    return `${communityId}:${profile.id}`;
   }, [communityId, profile?.id]);
 
   // Load conversations on mount
@@ -46,50 +64,46 @@ export default function ChatScreen() {
     loadProjects();
   }, [loadConversations, loadProjects]);
 
+  // Remember where you are while this visit lasts.
   useEffect(() => {
-    if (!selectedConversationStorageKey || !currentConversation?.id) return;
+    if (!visitKey || !currentConversation?.id) return;
     if (currentConversation.mode !== 'default' || currentConversation.is_active === false) return;
-    void setStoredItemAsync(selectedConversationStorageKey, currentConversation.id);
+    conversationThisVisit.set(visitKey, currentConversation.id);
   }, [
     currentConversation?.id,
     currentConversation?.is_active,
     currentConversation?.mode,
-    selectedConversationStorageKey,
+    visitKey,
   ]);
 
+  // Come back to Clive later in the same visit and you land back in the thread
+  // you were reading. Arrive at Clive fresh and you get his front page.
+  //
+  // This runs once per person-in-a-HIVE, deliberately: after it has had its go,
+  // pressing the front-page button stays pressed instead of being overruled by
+  // the next refresh of the conversation list.
   useEffect(() => {
-    if (!selectedConversationStorageKey || shouldStartFreshFromRoute) return;
+    if (!visitKey || shouldStartFreshFromRoute) return;
+    if (hasCheckedThisVisitRef.current === visitKey) return;
     if (currentConversation || conversations.length === 0) return;
-    if (restoredConversationKeyRef.current === selectedConversationStorageKey) return;
 
-    restoredConversationKeyRef.current = selectedConversationStorageKey;
-    let cancelled = false;
-    getStoredItemAsync(selectedConversationStorageKey).then((savedConversationId) => {
-      if (cancelled) return;
+    hasCheckedThisVisitRef.current = visitKey;
 
-      const savedConversation = savedConversationId
-        ? conversations.find((conversation) => conversation.id === savedConversationId && conversation.mode === 'default')
-        : null;
-      const fallbackConversation = conversations.find((conversation) => conversation.mode === 'default') ?? null;
-      const conversationToRestore = savedConversation ?? fallbackConversation;
+    const rememberedId = conversationThisVisit.get(visitKey);
+    if (!rememberedId) return;
 
-      if (conversationToRestore) {
-        setCurrentConversation(conversationToRestore);
-      } else if (savedConversationId) {
-        void removeStoredItemAsync(selectedConversationStorageKey);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      if (restoredConversationKeyRef.current === selectedConversationStorageKey) {
-        restoredConversationKeyRef.current = null;
-      }
-    };
+    // Only a real, current thread of Clive's ordinary chat. A remembered
+    // conversation that has since been deleted takes you nowhere at all rather
+    // than to somebody else's idea of a good place to land.
+    const remembered = conversations.find(
+      (conversation) => conversation.id === rememberedId && conversation.mode === 'default'
+    );
+    if (remembered) setCurrentConversation(remembered);
+    else conversationThisVisit.delete(visitKey);
   }, [
     conversations,
     currentConversation,
-    selectedConversationStorageKey,
+    visitKey,
     setCurrentConversation,
     shouldStartFreshFromRoute,
   ]);
@@ -123,14 +137,30 @@ export default function ChatScreen() {
   }, [currentConversation, setCurrentConversation, loadConversations]);
 
   const handleDeleteConversation = useCallback(async (id: string) => {
-    if (selectedConversationStorageKey) {
-      const savedConversationId = await getStoredItemAsync(selectedConversationStorageKey);
-      if (savedConversationId === id) {
-        await removeStoredItemAsync(selectedConversationStorageKey);
-      }
+    if (visitKey && conversationThisVisit.get(visitKey) === id) {
+      conversationThisVisit.delete(visitKey);
     }
     await deleteConversation(id);
-  }, [deleteConversation, selectedConversationStorageKey]);
+  }, [deleteConversation, visitKey]);
+
+  /**
+   * Back to Clive's starting screen — the "Hello Nat, how can I help?" page
+   * with the suggestions on it.
+   *
+   * Nat, 2026-08-06: "i coudlnt figure out how to get back to the main Clive
+   * screen." There was no way back: once a conversation was open, every door in
+   * Clive's header led further in.
+   *
+   * It closes the thread on screen rather than starting a new one in the
+   * database. The conversation you were reading is safe in the list, and Clive
+   * writes a new one the moment you actually say something — so tapping this
+   * five times leaves five empty rows nowhere.
+   */
+  const handleShowClivesFrontPage = useCallback(() => {
+    if (visitKey) conversationThisVisit.delete(visitKey);
+    setCurrentConversation(null);
+    setDrawerOpen(false);
+  }, [setCurrentConversation, visitKey]);
 
   const { width } = useWindowDimensions();
   // Use mobile layout for narrow screens (< 768px) regardless of platform
@@ -160,29 +190,66 @@ export default function ChatScreen() {
         {/* Main chat area */}
         <View className="flex-1">
           {/* No logos in the gold bars — all seven pages identical. Clive's
-              crest greets you at full size in the chat welcome state instead. */}
+              portrait greets you at full size on his front page instead, and as
+              of 2026-08-06 it stays there: it was spilling out of the top of a
+              page that could not scroll and drawing over the word "Clive" in
+              this bar. The fix is in `ChatInterface`'s WelcomeState, not here. */}
           {/* The ☰ opens the APP menu here, the same as on every other screen.
               It used to open Clive's conversation list instead, because this
               screen passed its own handler — and since Home is where you land,
               the app menu was unreachable from the one place everybody starts.
               That is why Nat could never find Admin (2026-08-03): it was in a
-              menu whose only button, on her screen, opened something else.
-              Clive's conversations moved to the right, where they have a mark
-              of their own. */}
-          <AppHeader
-            title="Clive"
-            rightElement={useMobileLayout ? (
-              <Pressable
-                onPress={() => setDrawerOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel="Your conversations with Clive"
-                className="w-10 h-10 items-center justify-center rounded-full active:opacity-70"
-                hitSlop={8}
+              menu whose only button, on her screen, opened something else. */}
+          <View>
+            <AppHeader
+              title="Clive"
+              /* Back to the front page. It shows once you are inside a
+                 conversation, which is the only time it has anywhere to take
+                 you — a button that is there and does nothing is the thing Nat
+                 keeps reading as broken. */
+              rightElement={currentConversation ? (
+                <Pressable
+                  onPress={handleShowClivesFrontPage}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clive's starting screen"
+                  className="w-10 h-10 items-center justify-center rounded-full active:opacity-70"
+                  hitSlop={8}
+                  {...(Platform.OS === 'web' ? ({ title: "Clive's starting screen" } as any) : {})}
+                >
+                  <Ionicons name="sparkles-outline" size={22} color="white" />
+                </Pressable>
+              ) : undefined}
+            />
+
+            {/* Clive's conversation list opens from the LEFT, because that is
+                the side it slides in from. Nat, 2026-08-06: "since the menu
+                lives on the left, i think the icon that opens that should also
+                be on the left." It sat on the right, so the drawer appeared to
+                come from the wrong place.
+
+                It is laid over the header's empty left slot rather than passed
+                into it: `AppHeader` offers a back arrow there and nothing else,
+                and giving the shared header a left slot of its own is a change
+                to a file the whole app uses, not to this one screen. The box
+                below is exactly the slot's size and position — 16px of header
+                padding, then a 40px square — so it reads as if it were in it. */}
+            {useMobileLayout ? (
+              <View
+                pointerEvents="box-none"
+                style={{ position: 'absolute', left: 16, top: 0, bottom: 0, justifyContent: 'center' }}
               >
-                <Ionicons name="chatbubbles-outline" size={23} color="white" />
-              </Pressable>
-            ) : undefined}
-          />
+                <Pressable
+                  onPress={() => setDrawerOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Your conversations with Clive"
+                  className="w-10 h-10 items-center justify-center rounded-full active:opacity-70"
+                  hitSlop={8}
+                >
+                  <Ionicons name="chatbubbles-outline" size={23} color="white" />
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
 
           {useMobileLayout && (
             <ConversationSidebar

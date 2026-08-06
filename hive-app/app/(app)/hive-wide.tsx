@@ -5,7 +5,6 @@ import {
   ScrollView,
   Pressable,
   RefreshControl,
-  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +14,7 @@ import { useRouter } from 'expo-router';
 // across the top would put you back inside a HIVE (Nat 2026-08-03). The import
 // hung around after the header came out.
 import { SpaceGlobe, SPACE_BLACK } from '../../components/ui/SpaceGlobe';
+import { CollapsiblePanel } from '../../components/ui/CollapsiblePanel';
 import { HiveMark } from '../../components/ui/HiveMark';
 import { HiveWideWelcome } from '../../components/ui/HiveWideWelcome';
 import { HIVE_WIDE_WELCOME_VERSION } from '../../lib/hiveWide';
@@ -124,10 +124,35 @@ const INK_FAINT = 'rgba(255,248,233,0.45)';
 /** The gold that reads on space — the same one the welcome panel wears. */
 const GOLD_ON_SPACE = '#E8C77E';
 
-/** One of the four boxes. Same shell for all of them so they read as a set. */
+/** This page's own colours, handed to every panel on it so they read as a set. */
+const PANEL_COLOURS = {
+  ink: INK,
+  inkSoft: INK_SOFT,
+  fill: CARD_FILL,
+  border: CARD_EDGE,
+  accent: GOLD_ON_SPACE,
+  pressed: 'rgba(255,248,233,0.1)',
+};
+
+/** One of the boxes. Same shell for all of them so they read as a set. */
 function TopBox({ label, wide, children }: { label: string; wide: boolean; children: React.ReactNode }) {
+  /**
+   * Every panel on this page opens and shuts — Nat, from her phone on
+   * 2026-08-06: *"i think all of those... all of those should be collapsible or
+   * expandable, thats a really nice feature, i like!"*
+   *
+   * They start open. The page's whole job is showing what is happening across
+   * the HIVEs, and a wall of shut drawers on arrival would say nothing is.
+   */
+  const [open, setOpen] = useState(true);
+
   return (
-    <View
+    <CollapsiblePanel
+      title={label}
+      open={open}
+      onToggle={setOpen}
+      colours={PANEL_COLOURS}
+      titleStyle={{ fontSize: 17, letterSpacing: 0.6 }}
       style={{
         // Two to a row on a wide screen, one per row on a phone.
         //
@@ -138,30 +163,19 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
         // would fight the scroll view for height.
         flexGrow: wide ? 1 : 0,
         flexBasis: wide ? '48%' : 'auto',
-        // All four the same height (Nat 2026-08-04: "why are these bottom boxes
-        // shorter than the top ones? they should all be equal"). A wrapping row
-        // sizes each ROW to its own tallest child, so a short second row sat
-        // shorter than a full first one. `alignItems: stretch` cannot fix that
-        // across a wrap — it only equalises within a row — so the boxes are
-        // given a floor instead, and the tallest content still grows past it.
-        minHeight: wide ? 270 : undefined,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: CARD_EDGE,
-        backgroundColor: CARD_FILL,
-        padding: 16,
+        // All of them the same height (Nat 2026-08-04: "why are these bottom
+        // boxes shorter than the top ones? they should all be equal"). A
+        // wrapping row sizes each ROW to its own tallest child, so a short
+        // second row sat shorter than a full first one. `alignItems: stretch`
+        // cannot fix that across a wrap — it only equalises within a row — so
+        // the boxes are given a floor instead, and the tallest content still
+        // grows past it. A shut box drops the floor, because the whole point of
+        // shutting one is to get the space back.
+        minHeight: open && wide ? 270 : undefined,
       }}
     >
-      <Text
-        style={{
-          fontFamily: 'LibreBaskerville_700Bold', fontSize: 17, letterSpacing: 0.6,
-          color: INK, marginBottom: 12,
-        }}
-      >
-        {label}
-      </Text>
       {children}
-    </View>
+    </CollapsiblePanel>
   );
 }
 
@@ -237,9 +251,11 @@ function HiveLine({ hive, event }: { hive: Community; event: HiveEvent | null })
  * doors is out of the menu on purpose (`atWholeHive: 'hidden'` in
  * lib/navigation.ts), so the page has to say where they went.
  *
- * So this is the first thing under the title: the member's HIVE, by name, in
- * its own colour, as one big button that goes there. Nat on who is reading it:
- * "we have very very very very not tech savvy people."
+ * So this is the second thing on the page, under the explainer that says what
+ * HIVE-Wide is: the member's HIVE, by name, in its own colour, as one big button
+ * that goes there. Nat on who is reading it: "we have very very very very not
+ * tech savvy people." It sat first until 2026-08-06, when Nat put the "what is
+ * HIVE-Wide" panel above it — what a place is comes before the way off it.
  */
 function WayIntoYourHive({
   memberships,
@@ -263,32 +279,28 @@ function WayIntoYourHive({
     : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 
   return (
-    <View
-      style={{
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: CARD_EDGE,
-        borderLeftWidth: 4,
-        borderLeftColor: GOLD_ON_SPACE,
+    <CollapsiblePanel
+      title={firstVisit
+        ? `Welcome${firstName ? `, ${firstName}` : ''} 🐝`
+        : many ? 'Your HIVEs' : 'Your HIVE'}
+      // It opens and shuts like everything else on the page, and it starts open
+      // every time. This is the door — somebody who accepted an invite an hour
+      // ago has to be able to see the way into their own HIVE without being told
+      // to tap something first (Nat: "we have very very very very not tech savvy
+      // people"). Nothing on this page is worth hiding this behind.
+      defaultOpen
+      colours={{
+        ...PANEL_COLOURS,
         // A little brighter than the cards below it. On a first visit this sits
-        // right above the HIVE-Wide welcome, which wears the same gold edge, and
+        // right under the HIVE-Wide welcome, which wears the same gold edge, and
         // two identical panels one on top of the other read as one long
         // paragraph. The door is the thing to look at first.
-        backgroundColor: 'rgba(255,248,233,0.09)',
-        padding: 20,
-        gap: 14,
+        fill: 'rgba(255,248,233,0.09)',
       }}
+      style={{ borderLeftWidth: 4, borderLeftColor: GOLD_ON_SPACE }}
+      titleStyle={{ fontSize: 19, letterSpacing: 0 }}
+      bodyStyle={{ gap: 14, paddingBottom: 20 }}
     >
-      <Text
-        style={{
-          fontFamily: 'LibreBaskerville_700Bold', fontSize: 19, color: INK,
-        }}
-      >
-        {firstVisit
-          ? `Welcome${firstName ? `, ${firstName}` : ''} 🐝`
-          : many ? 'Your HIVEs' : 'Your HIVE'}
-      </Text>
-
       {firstVisit ? (
         <Text
           style={{
@@ -352,7 +364,7 @@ function WayIntoYourHive({
         HIVE-Wide is here whenever you want it — it is the top of the menu on the
         left, with the little world beside it.
       </Text>
-    </View>
+    </CollapsiblePanel>
   );
 }
 
@@ -595,10 +607,30 @@ export default function HiveWideScreen() {
         }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Outside the loading branch on purpose. The door is built entirely
-            from who you are, which the app already knows the moment you sign
-            in — so a new member sees the way into their HIVE while the rest of
-            this page is still fetching, rather than after it. */}
+        {/* The welcome Nat asked for on 2026-08-03. It was built that day,
+            given a column to remember its dismissal (`hive_wide_welcome_seen`)
+            and then never put on a page — so no member has ever seen it.
+            Dismissing it follows the person rather than the device, so putting
+            it away on the phone puts it away on the laptop.
+
+            It is the FIRST thing on the page. Nat, 2026-08-06: *"i like the
+            'enter your hives here' thats nice, i think the 'what is HIVE wide'
+            should be first."* What this page is comes before the way off it.
+
+            Outside the loading branch, like the door under it. Both are built
+            from who you are, which the app knows the moment you sign in — so
+            they hold their order while the rest of the page is still fetching,
+            rather than the explainer appearing above the door a second later
+            and shoving it down. */}
+        <HiveWideWelcome
+          community={community}
+          seenVersion={loadHiveWideWelcomeSeen(profile)}
+          onDismiss={(version) => {
+            void persistHiveWideWelcomeSeen(profile, version).then(() => refreshProfile());
+          }}
+        />
+        {/* The door — a new member sees the way into their HIVE while the rest
+            of this page is still fetching, rather than after it. */}
         <WayIntoYourHive
           memberships={memberships}
           firstName={(profile?.name ?? '').trim().split(/\s+/)[0] || null}
@@ -612,21 +644,7 @@ export default function HiveWideScreen() {
           <ThinkingBee />
         ) : (
           <>
-            {/* The welcome Nat asked for on 2026-08-03. It was built that day,
-                given a column to remember its dismissal (`hive_wide_welcome_seen`)
-                and then never put on a page — so no member has ever seen it. It
-                goes first, above the boxes, which is where an explanation of a
-                page belongs. Dismissing it follows the person rather than the
-                device, so putting it away on the phone puts it away on the
-                laptop. */}
-            <HiveWideWelcome
-              community={community}
-              seenVersion={loadHiveWideWelcomeSeen(profile)}
-              onDismiss={(version) => {
-                void persistHiveWideWelcomeSeen(profile, version).then(() => refreshProfile());
-              }}
-            />
-            {/* Four boxes, two by two — the same shape as a HIVE's own home
+            {/* Boxes, two by two — the same shape as a HIVE's own home
                 page, so HIVE-Wide stops being a layout of its own (Nat
                 2026-08-03: "I love the colours and the look, but I want it to
                 have the same layout as other HIVEs").

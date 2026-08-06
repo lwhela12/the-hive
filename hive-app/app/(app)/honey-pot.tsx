@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppHeader } from '../../components/navigation';
 import { HoneyPotPaymentCard } from '../../components/hive/HoneyPotPaymentCard';
@@ -16,16 +15,32 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { HoneyPotNotSetUp } from '../../components/hive/HoneyPotNotSetUp';
 
 export default function HoneyPotScreen() {
-  const router = useRouter();
   const { communityId, communityRole, profile, community } = useAuth();
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<HoneyPotLedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const isTreasurer = communityRole === 'treasurer' || profile?.role === 'treasurer';
-  // Treasurer-only (Nat 2026-07-23): admins see the ledger, Ollie records it.
-  const canRecord = isTreasurer || isAdmin;
+  /**
+   * Who may write in the ledger: the treasurer, and Nat and Lucas.
+   *
+   * Money is one job held by one person, and until 2026-08-06 this said
+   * "treasurer or admin" — so every admin of every HIVE could record an entry.
+   * Nat, 2026-08-06: *"i think only the treasurer should be able to 'record
+   * entry'."* Admins keep the whole ledger in front of them; the writing is the
+   * treasurer's.
+   *
+   * The owners stay because a HIVE that has not appointed a treasurer yet would
+   * otherwise have a Honey Pot nobody in the app can update, and because Nat is
+   * the one who sets a pot up in the first place (`profiles.is_owner`,
+   * migration 128 — Nat and Lucas, the pair, never a community admin).
+   *
+   * The database still allows admins as well: `is_community_treasurer()` in
+   * migration 082 reads `role in ('treasurer','admin')`, and the button being
+   * gone is not the same thing as the door being locked. Closing that needs a
+   * migration.
+   */
+  const canRecord = isTreasurer || profile?.is_owner === true;
   const [showRecord, setShowRecord] = useState(false);
 
   const loadLedger = useCallback(async () => {
@@ -81,7 +96,7 @@ export default function HoneyPotScreen() {
   if (community && community.honey_pot_enabled === false) {
     return (
       <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-        <AppHeader title="Honey Pot" onBackPress={() => router.back()} />
+        <AppHeader title="Honey Pot" />
         <HoneyPotNotSetUp community={community} />
       </SafeAreaView>
     );
@@ -90,8 +105,11 @@ export default function HoneyPotScreen() {
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       {/* No icons in headers — the bar is the HIVE's colour and its name, and
-          a second mark in there is noise (Nat 2026-07-31). */}
-      <AppHeader title="Honey Pot" onBackPress={() => router.back()} />
+          a second mark in there is noise (Nat 2026-07-31). That covers the back
+          arrow too: this was the one header in the app carrying one, and the
+          strip along the bottom already says where you are and gets you back
+          (Nat 2026-08-06: "lets ditch it"). */}
+      <AppHeader title="Honey Pot" />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}

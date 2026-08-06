@@ -269,6 +269,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
             : undefined,
         }]
       : [],
+    // Nat's own example, 2026-08-06: "if i was all the way inside that thread &
+    // i wanted to go back to boards, that woudl be cool." The board and the
+    // thread are this screen's state while the route stays `/board`, so the
+    // page crumb had nowhere to navigate to and did nothing. It sheds both now.
+    selectedCategory
+      ? () => {
+          setSelectedPostId(null);
+          setSelectedCategoryId(null);
+        }
+      : undefined,
   );
 
   const canManageThread = useCallback((post: Pick<BoardPost, 'author_id'>) => {

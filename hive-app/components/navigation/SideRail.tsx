@@ -172,6 +172,37 @@ export const SideRail = memo(function SideRail({
   );
 
   /**
+   * Your own face opens your own profile, like every other face in the app.
+   *
+   * Nat, 2026-08-06: "nothing happens when you hit your own profile... should it
+   * always just open your profile if you click on your profile bubble? thats
+   * what it does everywhere else in the app, should we keep it consistent?"
+   * Yes — an avatar is a door everywhere else, and one that isn't reads as a
+   * broken one.
+   *
+   * At HIVE-Wide it steps down into your HIVE first. Profile is one of the six
+   * pages that only mean something inside a HIVE (`atWholeHive: 'hidden'` in
+   * `lib/navigation.ts`), and it is dressed for one: `app/(app)/profile.tsx`
+   * never asks whether you are standing above the HIVEs, so opening it from up
+   * there would hand you a black HIVE-Wide header and dark-mode tabs over a
+   * cream page — the exact mismatch CLAUDE.md records from 2026-08-03. Stepping
+   * down is not a silent move either: the rail goes from space-black to your
+   * HIVE's colour under your thumb as the page opens, and the header names the
+   * HIVE you have landed in.
+   *
+   * The HIVE it steps into is the one already selected underneath HIVE-Wide, so
+   * it is where you were, not whichever HIVE happens to be first in a list.
+   */
+  const openMyProfile = useCallback(async () => {
+    if (onHiveWide && communityId) {
+      // Awaited so the switch finishes its own "stay on a page that still means
+      // something" hop before we ask for Profile, rather than racing it.
+      await switchCommunity(communityId);
+    }
+    go('/profile', 'profile');
+  }, [onHiveWide, communityId, switchCommunity, go]);
+
+  /**
    * The collapsed rail on a phone shows a name under every picture, so a person
    * who has never opened the app can read where each row goes without opening
    * the menu first. `tight` is that state: narrow, stacked, and labelled.
@@ -399,14 +430,19 @@ export const SideRail = memo(function SideRail({
           and the answer changes what you are allowed to see. Every other surface
           that could have told you is one tap away instead of in front of you.
 
-          Deliberately NOT a link. Profile is hidden at HIVE-Wide (it needs a
-          HIVE), so a tap here would either dead-end or silently move you to a
-          different place than the one you're standing in. This is a label, and
-          the action you actually want when it says the wrong name — Log out —
-          is a few rows below it. */}
+          It is a door as of 2026-08-06 — see `openMyProfile` above for what it
+          does at HIVE-Wide and why. It was a label until then, on the reasoning
+          that Profile needs a HIVE; Nat's answer was that a face you can't press
+          is the odd one out in an app where every other face opens somebody. */}
       {profile ? (
-        <View
+        <AnimatedPressable
+          onPress={openMyProfile}
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel={`Your profile, ${(profile.name ?? 'You').split(/\s+/)[0]}`}
+          accessibilityState={{ selected: activeKey === 'profile' }}
           style={{
+            transform: [{ scale: bouncingKey === 'profile' ? bounceScale : 1 }],
             flexDirection: 'row',
             alignItems: 'center',
             gap: 10,
@@ -449,10 +485,26 @@ export const SideRail = memo(function SideRail({
               </Text>
             </View>
           ) : null}
-        </View>
+        </AnimatedPressable>
       ) : null}
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 14 }}>
+      {/* The rubber-band at the end of the list, so a rail that has run out of
+          rows says so rather than looking stuck (Nat 2026-08-06: "Any time we
+          cant scroll, i want to have the bounce feature, so you can tell, oh,
+          thats the end of the page, not 'is this broken?'").
+
+          `alwaysBounceVertical` is the one that bounces even when the rows
+          already fit. It is real in the iOS app and `overScrollMode` is the
+          Android glow; react-native-web keeps neither, so in a browser the
+          bounce is whatever iOS Safari gives a box that has something to
+          scroll. See the note in `components/chat/ChatInterface.tsx`. */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 14 }}
+        bounces
+        alwaysBounceVertical
+        overScrollMode="always"
+      >
         {/* "My HIVEs" is Home, and HIVE-Wide is the first thing under it —
             not a second section with its own children.
 

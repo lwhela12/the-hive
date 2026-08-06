@@ -91,6 +91,24 @@ const DEEP_PROFILE_STEPS = ['Basics', 'Now', 'Favorites', '3MIQ'] as const;
 const PROFILE_FORM_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
+ * Every room Profile can be closed back into, with the name that room goes by.
+ *
+ * A table rather than a chain of `if`s, and the same table `monthly-tuneup.tsx`
+ * keeps, so a new way IN can be given a way OUT in one line. Whatever opened
+ * this page names itself with `?from=`; anything that does not lands Home.
+ *
+ * There is deliberately no "wherever the browser thinks you were" entry here —
+ * see `closeProfile`.
+ */
+const EXITS = {
+  members: { route: '/members', label: 'Members' },
+  meetings: { route: '/meetings', label: 'Meetings' },
+  admin: { route: '/admin', label: 'Admin' },
+  hive: { route: '/hive', label: 'Home' },
+} as const;
+type ExitKey = keyof typeof EXITS;
+
+/**
  * The one mark that says whether a to-do on this page has been done.
  *
  * Nat, 2026-08-05, looking at a row reading "✅ Complete this month's check-in":
@@ -226,7 +244,7 @@ export default function ProfileScreen() {
   // Section pencils on the member card deep-link here with ?focus=, so tapping
   // the one next to your garden lands on your garden rather than the top of
   // the page (Nat 2026-07-26).
-  const { focus } = useLocalSearchParams<{ focus?: string }>();
+  const { focus, from } = useLocalSearchParams<{ focus?: string; from?: string }>();
   const handledFocusRef = useRef<string | null>(null);
   const compactProfileLandscape = screenWidth > screenHeight && screenHeight < 540;
   const immersiveSkillsGarden = compactProfileLandscape;
@@ -789,13 +807,27 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
+  /**
+   * The one door out of Profile, and the name of the room on the other side.
+   *
+   * `from` is set by whoever opened it, so closing retraces your steps.
+   * Anything that arrives without one — the rail, a link in an email, the
+   * what's-new strip, a bookmark — goes Home.
+   *
+   * This used to be `if (router.canGoBack()) router.back()`. Back hands the
+   * decision to the browser's history, and the browser's history remembers the
+   * public the-hive.app from before you ever signed in. Nat was inside a wish
+   * setting its "This HIVE only / HIVE-Wide" options on her phone, tapped the
+   * X, *"and it dropped me allllll the way out, all the way to the public site,
+   * instead of just out of that wish"* (2026-08-06). Closing something is a
+   * move to a room this app knows the name of, always.
+   *
+   * `monthly-tuneup.tsx` carries the same table for the same reason. Two
+   * screens, one shape, so neither one drifts on its own.
+   */
+  const exit = EXITS[String(from ?? '') as ExitKey] ?? EXITS.hive;
   const closeProfile = () => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-
-    router.replace('/hive');
+    router.replace(exit.route as never);
   };
 
   const performSignOut = async () => {
@@ -1238,11 +1270,38 @@ export default function ProfileScreen() {
     });
   };
 
+  /**
+   * Whether the 3MIQ already has anything in it.
+   *
+   * Read up here, above this file's `if (!profile) return null`, because the
+   * Clive button below uses it for two things at once: the words on the button
+   * and the message the button sends.
+   */
+  const hasProfileMiq = !!profile && [
+    (profile as any).miq_experiences,
+    (profile as any).miq_growth,
+    (profile as any).miq_contribution,
+  ].some(value => hasProfileText(value));
+  /** "Refine" once there is something to refine, "Find" while it is blank. */
+  const miq3ActionLabel = hasProfileMiq ? 'Refine with Clive' : 'Find with Clive';
+
+  /**
+   * Hand the 3MIQ to Clive — as a first draft or as a second one.
+   *
+   * Nat, 2026-08-06: *"if you've already filled it out, maybe this button can
+   * swap to say 'refine with clive' and if you havent done it yet, maybe it can
+   * say 'find with clive'?"* The words on the button change, and so does what
+   * Clive is asked, because opening a chat that says "help me discover" to
+   * somebody who answered all three months ago is the app not having read its
+   * own page. `miq3ActionLabel` above is the label; this is the same fork.
+   */
   const handleFind3MiqWithClive = () => {
     router.push({
       pathname: '/(app)',
       params: {
-        prefill: 'Help me discover my 3 Most Important Questions. I want one for experiences, one for growth, and one for contribution.',
+        prefill: hasProfileMiq
+          ? 'Help me refine my 3 Most Important Questions. Read back what I have for experiences, growth and contribution, and help me make each one sharper.'
+          : 'Help me discover my 3 Most Important Questions. I want one for experiences, one for growth, and one for contribution.',
       },
     });
   };
@@ -1337,7 +1396,6 @@ export default function ProfileScreen() {
     growth: (profile as any).miq_growth as string | null | undefined,
     contribution: (profile as any).miq_contribution as string | null | undefined,
   };
-  const hasProfileMiq = Object.values(profileMiq).some(value => hasProfileText(value));
   const publicWishes = wishes.filter(wish => wish.status === 'public' && wish.is_active !== false);
   const grantedWishes = wishes.filter(wish => wish.status === 'fulfilled');
   const visibleProfileWishes = wishStatusTab === 'granted'
@@ -1540,7 +1598,9 @@ export default function ProfileScreen() {
           onPress={handleFind3MiqWithClive}
           style={{ alignSelf: 'flex-start', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(222,193,129,0.72)', backgroundColor: '#fffdf7', paddingHorizontal: 14, paddingVertical: 8, marginBottom: 16 }}
         >
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>Find these with Clive</Text>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
+            {hasProfileMiq ? 'Refine these with Clive' : 'Find these with Clive'}
+          </Text>
         </Pressable>
         {renderDeepQuizField({
           label: 'Experiences',
@@ -1946,7 +2006,18 @@ export default function ProfileScreen() {
         {/* Profile Information */}
         <FadeIn delay={100}>
         <View className="mb-6">
-          <View className="flex-row items-center justify-end mb-2">
+          {/* A title on the left, the pencil on the right, one line — the shape
+              the Skills Garden below already uses.
+              Nat, 2026-08-06: the pencil "floats above and right of the section
+              title instead of sitting on the same line". It did: the row was
+              `justify-end` with nothing in it but the button, so it hung in the
+              air over "HIVErs should ask me about" with no line of its own.
+              "Your Card" is her word for this block — of a member's profile,
+              2026-08-06: "like we're pulling up their card". */}
+          <View className="flex-row items-center justify-between mb-2">
+            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
+              Your Card
+            </Text>
             {!isEditing ? (
               // The pencil, like everywhere else (Nat 2026-08-04: "all edit
               // buttons should be the same pencil"). This one said "Edit" in
@@ -1981,7 +2052,7 @@ export default function ProfileScreen() {
                 knownForPlaceholder="Add the thing HIVErs should ask you about."
                 bioPlaceholder="Add your bio here."
                 miqPlaceholder="Experiences, growth, and contribution are still open. Clive can walk you through them."
-                miqActionLabel={hasProfileMiq ? 'Find with Clive' : 'Start'}
+                miqActionLabel={miq3ActionLabel}
                 onMiqAction={handleFind3MiqWithClive}
                 showMiqWhenEmpty
               />
@@ -2185,7 +2256,7 @@ export default function ProfileScreen() {
               <View className="flex-row items-center justify-between mb-3">
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-sm text-charcoal/50">3 Most Important Questions</Text>
                 <Pressable onPress={handleFind3MiqWithClive} className="bg-gold-light px-3 py-1 rounded-full active:opacity-70">
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">Find with Clive</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">{miq3ActionLabel}</Text>
                 </Pressable>
               </View>
               {isEditing ? (

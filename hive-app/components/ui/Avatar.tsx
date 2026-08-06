@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
 import { Image } from 'expo-image';
 import { supabase } from '../../lib/supabase';
 
+/** The HIVE bee — the same mark the rail, the wish combs and the newsletter wear. */
+const hiveBee = require('../../assets/BEE ONLY IN GOLD BG.png');
+
 /**
- * A member's face, or their initials.
+ * A member's face, or a bee.
  *
  * Every one of the 33 places in the app that draws a person draws it here, and
  * that is what makes the `avatars` bucket lockable. Migration 009 created the
@@ -80,8 +83,8 @@ async function signAvatarUrl(url: string | null | undefined): Promise<string | n
  * The signed form of one stored avatar, for drawing.
  *
  * Returns an outside address straight back on the first render, so a Google
- * photo appears with no delay. One of ours shows initials for the moment it
- * takes to sign — the same placeholder a member with no photo gets, so the wait
+ * photo appears with no delay. One of ours shows the bee for the moment it
+ * takes to sign — the same stand-in a member with no photo gets, so the wait
  * reads as intentional rather than as something broken.
  */
 export function useSignedAvatar(url: string | null | undefined): string | null {
@@ -112,7 +115,7 @@ export function useSignedAvatar(url: string | null | undefined): string | null {
 /**
  * A member's photo on its own, with whatever you want drawn in its place.
  *
- * `Avatar` above always falls back to initials. Two screens draw a face with a
+ * `Avatar` above always falls back to the bee. Two screens draw a face with a
  * different stand-in — Home's daily-question strip uses a little grey
  * silhouette — and both were reaching for the stored address directly, which is
  * the one thing that stops the `avatars` bucket being closed. This exists so
@@ -151,13 +154,6 @@ interface AvatarProps {
 export function Avatar({ name, url, uri, size = 40 }: AvatarProps) {
   const source = useSignedAvatar(url ?? uri);
 
-  const initials = name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-
   if (source) {
     return (
       <Image
@@ -165,21 +161,47 @@ export function Avatar({ name, url, uri, size = 40 }: AvatarProps) {
         style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: '#e5e7eb' }}
         contentFit="cover"
         cachePolicy="memory-disk"
+        accessibilityLabel={`${name}'s photo`}
       />
     );
   }
 
+  /**
+   * No photo: a bee in a honey circle.
+   *
+   * Nat, on Infiniti's hexagon, 2026-08-06: *"what should we do if people dont
+   * have a pic associated with their account? put a bee in? one of our logos?"*
+   * An empty circle where a face goes reads as a picture that failed to load,
+   * and somebody who has simply not uploaded one yet should not look broken.
+   *
+   * This replaced two letters of initials, and it replaced them **everywhere**,
+   * on purpose. One stand-in is a decision anybody can recognise on sight; two
+   * — letters here, a bee there — is a thing you have to learn. Who the face
+   * belongs to is carried by the name drawn beside it in every place this
+   * appears, and by the label below for a screen reader, so nothing that told
+   * you who somebody was has gone.
+   *
+   * The bee is the app's own mark, the one the rail and the wish combs wear.
+   * `contentFit="contain"` keeps its wings inside the circle at 24 points and
+   * at 84.
+   *
+   * The fill is the app's soft honey rather than the `honey-100` gold the
+   * initials sat on: the bee is drawn in black and gold, and on a gold disc its
+   * stripes disappear into the background.
+   */
   return (
     <View
-      style={{ width: size, height: size, borderRadius: size / 2 }}
-      className="bg-honey-100 items-center justify-center"
+      accessible
+      accessibilityLabel={`${name} — no photo yet`}
+      style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#fdf3dc' }}
+      className="items-center justify-center"
     >
-      <Text
-        style={{ fontSize: size * 0.4 }}
-        className="text-honey-700 font-semibold"
-      >
-        {initials}
-      </Text>
+      <Image
+        source={hiveBee}
+        style={{ width: size * 0.66, height: size * 0.66 }}
+        contentFit="contain"
+        cachePolicy="memory-disk"
+      />
     </View>
   );
 }

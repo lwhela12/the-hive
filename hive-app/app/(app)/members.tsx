@@ -1,5 +1,7 @@
 import { type ReactNode, useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, Modal, ActivityIndicator, useWindowDimensions, TextInput, Alert, RefreshControl } from 'react-native';
+// No `Modal` here any more: the member card became a page on 2026-08-06 so the
+// path along the bottom of the app stays visible while you read it.
+import { View, Text, ScrollView, Pressable, ActivityIndicator, useWindowDimensions, TextInput, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -11,11 +13,23 @@ import { deleteWishById } from '../../lib/wishMutations';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { usePageSkin } from '../../lib/pageSkin';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { EditButton } from '../../components/ui/EditButton';
-import { WorldMark } from '../../components/ui/WorldMark';
-import { SWITCH_LOOK } from '../../components/ui/Switch';
+/**
+ * The shared face, not a copy of one.
+ *
+ * This screen carried its own `Avatar` — a plain `<Image src={avatar_url}>`
+ * with a grey silhouette behind it — and it was wrong twice over. It drew the
+ * stored address straight, which stopped working the day the `avatars` bucket
+ * was closed (migration 151: reading takes a signed link now), so every member
+ * with a photo turned into an empty circle. And its stand-in was a silhouette
+ * nowhere else in the app uses. `components/ui/Avatar.tsx` signs the link and
+ * draws the bee, so the directory now matches every other face in HIVE
+ * (2026-08-06).
+ */
+import { Avatar } from '../../components/ui/Avatar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 
 const memberHoneycombCell = require('../../assets/generated/member-honeycomb-cell.png');
@@ -358,34 +372,6 @@ function HoneycombCardShell({
   );
 }
 
-function SilhouetteAvatar({ size }: { size: number }) {
-  return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: '#e5e0d6', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden' }}>
-      <View style={{ width: size * 0.38, height: size * 0.38, borderRadius: size * 0.19, backgroundColor: '#c8bfb0', position: 'absolute', top: size * 0.15 }} />
-      <View style={{ width: size * 0.75, height: size * 0.42, borderTopLeftRadius: size * 0.375, borderTopRightRadius: size * 0.375, backgroundColor: '#c8bfb0' }} />
-    </View>
-  );
-}
-
-function Avatar({ uri, name, size }: { uri?: string | null; name: string; size: number }) {
-  if (uri) {
-    return (
-      <Image
-        source={{ uri }}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        contentFit="cover"
-        cachePolicy="memory-disk"
-        accessibilityLabel={`${name} profile photo`}
-      />
-    );
-  }
-  return (
-    <View accessible accessibilityLabel={`${name} profile placeholder`}>
-      <SilhouetteAvatar size={size} />
-    </View>
-  );
-}
-
 /**
  * One profile question. Every answer here is words a member writes about
  * themselves, so it is the shared composer with the mic on the text's own line
@@ -469,7 +455,29 @@ function ProfilePromptInput({
   );
 }
 
-function MemberDetailModal({
+/**
+ * A member's card — a place you stand in, not a sheet drawn over one.
+ *
+ * This was a bottom sheet in a `<Modal>`, and a modal in React Native draws
+ * above the whole app, which includes the strip along the bottom that says
+ * where you are. Nat, 2026-08-06: *"I used to like how these looked, like we're
+ * pulling up their card or whatever, but now that feature, that look,
+ * over-rides our footer navigation, which i think is more important. So id
+ * rather preserve the: OG HIVE > Members > Brit Profile & denoting if you're in
+ * public or private view. So i think we'll have to sacrifice one for the other,
+ * but i think the nav footer is more helpful, overall."*
+ *
+ * Nothing about the card itself changed — it is the same white panel with the
+ * same rounded top and the same contents. It simply fills the Members page
+ * instead of floating over it, so the footer keeps its own line and the trail
+ * can finish the sentence with this member's name. The first crumb in that
+ * trail is the HIVE's hexagon or the Earth, which is the public-or-private
+ * marker she asked to keep.
+ *
+ * The address follows too: the page is `/members?memberId=…`, which reloads and
+ * shares as this card rather than as the directory.
+ */
+function MemberDetailPage({
   member,
   onClose,
   onMemberUpdated,
@@ -489,6 +497,10 @@ function MemberDetailModal({
   const { grantWish } = useWishes();
   const currentAuthId = session?.user?.id ?? profile?.id ?? null;
   const isCurrentUser = !!currentAuthId && member.id === currentAuthId;
+  // The last step of the path along the bottom: OG HIVE › Members › Brit's
+  // Profile. First name only — the trail is one line and a full name pushes the
+  // page you came from off the left of it.
+  useDeepTrail([{ label: isCurrentUser ? 'Your Profile' : `${memberFirstName(member.name)}'s Profile` }]);
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const canManageMemberWishes = isCurrentUser || isAdmin;
   const isPhoneProfile = viewportWidth < 640;
@@ -1172,21 +1184,15 @@ function MemberDetailModal({
   })();
 
   return (
-    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Pressable
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Close member profile backdrop"
-          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
-        />
+    <View style={{ flex: 1 }}>
         <View
-          style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%', width: '100%', overflow: 'hidden', position: 'relative' }}
+          style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, flex: 1, width: '100%', overflow: 'hidden', position: 'relative' }}
         >
-          {/* Handle + close */}
-          <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4, position: 'relative' }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e5e7eb' }} />
-          </View>
+          {/* Where the grab handle was. A short bar you could not drag, on a
+              sheet that could not be swiped away — it read as an affordance and
+              was decoration. The space it held is kept, because everything below
+              was spaced against it. */}
+          <View style={{ height: 16 }} />
 
           {selectedWish && (
             <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden', zIndex: 30 }}>
@@ -1655,7 +1661,10 @@ function MemberDetailModal({
               <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 12, width: '100%' }}>
                 {isCurrentUser ? (
                   <EditButton
-                    onPress={() => { onClose(); router.push('/profile'); }}
+                    // `from` names this page, so the X on Profile brings you
+                    // back to Members rather than to whatever the browser's
+                    // history happens to remember (2026-08-06).
+                    onPress={() => { onClose(); router.push({ pathname: '/profile', params: { from: 'members' } }); }}
                     size={36}
                     accessibilityLabel="Edit your profile (opens your backstage)"
                   />
@@ -2112,7 +2121,7 @@ function MemberDetailModal({
                 </Text>
                 <EditButton
                   size={30}
-                  onPress={() => { onClose(); router.push({ pathname: '/profile', params: { focus: 'about' } }); }}
+                  onPress={() => { onClose(); router.push({ pathname: '/profile', params: { focus: 'about', from: 'members' } }); }}
                   accessibilityLabel="Edit your bio and details"
                 />
               </View>
@@ -2174,7 +2183,7 @@ function MemberDetailModal({
                 {isCurrentUser ? (
                   <EditButton
                     size={30}
-                    onPress={() => { onClose(); router.push({ pathname: '/profile', params: { focus: 'garden' } }); }}
+                    onPress={() => { onClose(); router.push({ pathname: '/profile', params: { focus: 'garden', from: 'members' } }); }}
                     accessibilityLabel="Tend your Skills Garden"
                   />
                 ) : null}
@@ -2222,13 +2231,12 @@ function MemberDetailModal({
             </Pressable>
           )}
         </View>
-      </View>
-    </Modal>
+    </View>
   );
 }
 
 export default function MembersScreen() {
-  const { communityId, profile, session, community, wholeHive, memberships: myHives, refreshProfile } = useAuth();
+  const { communityId, profile, session, community, wholeHive, memberships: myHives } = useAuth();
   // Cream inside a HIVE, space at HIVE-Wide — "instead of cream it should
   // always be the world in space look, because we want to make sure you know
   // which one you're in" (Nat 2026-08-03).
@@ -2620,56 +2628,21 @@ export default function MembersScreen() {
   }, [loadMembers]);
 
   /**
-   * Whether you are listed HIVE-Wide, changeable from right here.
+   * Whether you are listed HIVE-Wide. Read here, changed elsewhere.
    *
-   * Standing at HIVE-Wide, the rail hides both Profile and Settings — they are
-   * about the HIVE you are inside — so the only two places that carried this
-   * switch were places you could not get to. The empty state under this
-   * nonetheless told people to "turn on HIVE-Wide visibility in Settings", which
-   * is a new member's first sight of Members: nobody here, and an instruction
-   * they cannot follow (2026-08-06).
+   * The empty state below is the only thing left that asks: it tells somebody
+   * who is not listed how to get listed, and somebody who already is that the
+   * page is empty for a different reason. `profile_scope` is the one flag — the
+   * same column Profile and Settings write, and the one the database's security
+   * policy reads.
    *
-   * So the switch is on this page too. `profile_scope` is the one flag — the
-   * same column Settings and Profile write, and the one the database's security
-   * policy reads — and the value is taken from the signed-in profile, so it
-   * opens showing the truth rather than a default.
+   * The switch itself lived here for a day and went on 2026-08-06 (Nat: "i dont
+   * think this toggle needs to be on this HIVE wide page").
    */
   // Read through the type rather than around it. `visible_hive_wide` was never
   // declared on `Profile`, so every read of it needed an `as any` — which is
   // also what let a column nothing enforced live in three screens unnoticed.
   const listedHiveWide = profile?.profile_scope === 'all_hives';
-  const [savingListing, setSavingListing] = useState(false);
-  const [listingSaved, setListingSaved] = useState(false);
-
-  const toggleHiveWideListing = useCallback(async () => {
-    if (!profile?.id || savingListing) return;
-    const next = !listedHiveWide;
-    setSavingListing(true);
-    setListingSaved(false);
-    const { error } = await (supabase as any)
-      .from('profiles')
-      .update({ profile_scope: next ? 'all_hives' : 'hive' })
-      .eq('id', profile.id);
-    if (error) {
-      console.warn('[Members] HIVE-Wide listing save failed', error);
-      showAlert('That did not save', `${error.message ?? 'Your choice was not stored.'} Please try again.`);
-      setSavingListing(false);
-      return;
-    }
-    // Pull the profile fresh so the switch is drawn from what the database now
-    // holds, then reload the list so you can see yourself arrive.
-    await refreshProfile();
-    await loadMembers(true);
-    setSavingListing(false);
-    setListingSaved(true);
-  }, [profile?.id, listedHiveWide, savingListing, refreshProfile, loadMembers]);
-
-  // The "Saved" line is a receipt, so it goes once you have read it.
-  useEffect(() => {
-    if (!listingSaved) return;
-    const timer = setTimeout(() => setListingSaved(false), 4000);
-    return () => clearTimeout(timer);
-  }, [listingSaved]);
 
   useEffect(() => {
     if (routeView === 'swarm') {
@@ -2681,7 +2654,12 @@ export default function MembersScreen() {
   const openMemberProfile = useCallback((member: MemberData, showAnswers = false) => {
     setOpenAnswersOnSelect(showAnswers);
     setSelected(member);
-  }, []);
+    // Put the member in the address as well as in state, so the card is a place
+    // that survives a reload and can be sent to somebody. Links from other
+    // screens (`MemberProfileLink`) already arrive this way; tapping a hexagon
+    // used to not, so the same card had two ways of existing (2026-08-06).
+    router.setParams({ memberId: member.id });
+  }, [router]);
 
   const closeMemberProfile = useCallback(() => {
     setSelected(null);
@@ -2858,21 +2836,30 @@ export default function MembersScreen() {
   const honeycombColumns = Math.max(1, Math.min(desiredHoneycombColumns, Math.max(1, visibleMembers.length)));
   const honeycombCellCap = isPhoneHoneycomb ? 220 : 320;
   /**
-   * One hexagon, capped whatever the count.
+   * One hexagon is one size, whoever is standing in it and however many there
+   * are.
    *
-   * A single member used to skip the cap and take `min(column, 360)` instead, so
-   * one person at HIVE-Wide drew a 360-point hexagon — on Nat's iPhone, into a
-   * column with under 300 points in it. Her words, 2026-08-06: "the size of my
-   * honeycomb seems silly." It filled the screen and read as a bug rather than a
-   * member.
+   * The width comes from `desiredHoneycombColumns` — how many cells this column
+   * has room for — and never from how many members turned up. Those two used to
+   * be the same number, because the layout clamps the columns to the count so a
+   * comb of one is not drawn three cells wide. That clamp fed the sizing as
+   * well, so one member got the whole column to themselves and eleven members
+   * split it three ways: the same hexagon, drawn at 220 points on one page and
+   * 140 on the next.
    *
-   * Now every count uses the same cap, so a comb of one is a cell the size of
-   * the cells in a comb of nine. The share of the column widens as the count
-   * drops, which is the honest way for it to feel roomier with fewer people.
+   * Nat saw both in one sitting, 2026-08-06: OG HIVE's comb looked right,
+   * HIVE-Wide's single cell was "much bigger" — *"if its this size here, it
+   * should be same size there."* She is right, and it takes a whole class of
+   * surprise out: a member's cell no longer changes shape when somebody joins
+   * or leaves.
+   *
+   * `honeycombColumns` below still follows the count. That is layout — how wide
+   * the grid is and where it centres — and is a different question from how big
+   * a cell is.
    */
   const honeycombCellWidth = Math.min(
     honeycombCellCap,
-    listContentWidth / (1 + 0.75 * (honeycombColumns - 1)),
+    listContentWidth / (1 + 0.75 * (desiredHoneycombColumns - 1)),
   );
   const honeycombCardHeight = Math.round(honeycombCellWidth * 0.866);
   const honeycombStepX = honeycombCellWidth * 0.75;
@@ -2894,83 +2881,42 @@ export default function MembersScreen() {
           The tone follows the reader on its own now, so nothing is passed. */}
       <AppHeader title="Members" />
 
-      {/* Your own place in this list, decided from inside it.
-          Nat, 2026-08-04: "i want to make my profile visible hive-wide, but i
-          dont see that option anywhere." This is where she looked. */}
-      {!loading && wholeHive && (
-        <View style={{ alignItems: 'center', paddingHorizontal: 24, paddingTop: 14, paddingBottom: 4 }}>
-          <Pressable
-            onPress={() => void toggleHiveWideListing()}
-            disabled={savingListing}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: listedHiveWide }}
-            accessibilityLabel="Show me in the HIVE-Wide members list"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              alignSelf: 'center',
-              gap: 10,
-              backgroundColor: skin.card,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: skin.borderStrong,
-              paddingLeft: 14,
-              paddingRight: 8,
-              paddingVertical: 7,
-              opacity: savingListing ? 0.6 : 1,
-            }}
-          >
-            {/* The drawn Earth, the mark HIVE-Wide wears everywhere else — an
-                emoji globe beside it would be a second planet. Both marks sit in
-                one 20-wide box so the words hold still when the switch flips. */}
-            <View style={{ width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
-              {listedHiveWide ? <WorldMark size={20} /> : <Text style={{ fontSize: 15 }}>🔒</Text>}
-            </View>
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: skin.ink }}>
-              {/* The same two phrases the pill on your Profile uses — Nat
-                  settled these on 2026-08-05, and one control should not have
-                  two vocabularies. */}
-              {listedHiveWide ? 'Visible HIVE-Wide' : 'Only your HIVEs see you'}
-            </Text>
-            {/* Drawn from `SWITCH_LOOK`, the numbers `components/ui/Switch.tsx`
-                uses, so this reads as the same control as the one on Settings
-                and the one on your Profile — because it is. */}
-            <View
-              style={{
-                width: SWITCH_LOOK.trackWidth,
-                height: SWITCH_LOOK.trackHeight,
-                borderRadius: SWITCH_LOOK.trackHeight / 2,
-                padding: SWITCH_LOOK.inset,
-                backgroundColor: listedHiveWide ? skin.gold : (skin.dark ? 'rgba(255,255,255,0.18)' : 'rgba(49,49,48,0.18)'),
-                alignItems: listedHiveWide ? 'flex-end' : 'flex-start',
-              }}
-            >
-              <View style={{ width: SWITCH_LOOK.knob, height: SWITCH_LOOK.knob, borderRadius: SWITCH_LOOK.knob / 2, backgroundColor: '#fffdf5' }} />
-            </View>
-          </Pressable>
-          {listingSaved && (
-            <Text
-              style={{
-                fontFamily: 'Lato_400Regular', fontSize: 12, color: skin.inkSoft,
-                marginTop: 8, textAlign: 'center',
-              }}
-            >
-              {listedHiveWide
-                ? 'Saved. Everyone in every HIVE can find you here now.'
-                : 'Saved. You show up only inside your own HIVEs now.'}
-            </Text>
-          )}
-        </View>
-      )}
+      {/* One page, two things it can be showing: the directory, or one member's
+          card. The card takes the whole column rather than floating over it, so
+          the strip along the bottom stays visible and can name where you are
+          (Nat 2026-08-06 — see `MemberDetailPage` above). */}
+      {selected ? (
+        <MemberDetailPage
+          member={selected}
+          communityId={communityId}
+          initialShowAnswers={openAnswersOnSelect}
+          onClose={closeMemberProfile}
+          onMemberUpdated={(updatedMember) => {
+            setSelected(updatedMember);
+            setMembers(current => current.map(member => member.id === updatedMember.id ? updatedMember : member));
+          }}
+        />
+      ) : (
+      <>
+
+      {/* A "Visible HIVE-Wide" switch sat here until 2026-08-06.
+          Nat: "i dont think this toggle needs to be on this HIVE wide page,
+          right? shouldnt it just be in your profile & your settings and stuff,
+          in your HIVE?" A directory is a list of other people; the one row in it
+          you can change is a fact about you, and it belongs where the rest of
+          your facts are. Both of those homes are still there — Profile carries
+          the pill and Settings carries the row, and all of them write the one
+          column, `profiles.profile_scope`. */}
 
       {/* Nobody has opted in yet, and that is the honest answer rather than a
           failure. Says what would put a face here instead of leaving the page
           blank and letting it read as broken (Nat 2026-08-03).
 
-          The words used to send people to Settings, which the rail hides while
-          you are standing at HIVE-Wide — a first look at Members that showed
-          nobody and asked for something the reader could not do. The switch is
-          directly above this now, so the sentence points at it (2026-08-06). */}
+          It names where the switch actually is. This sentence has now pointed at
+          three different places, and each move broke it: it sent people to
+          Settings, which the rail hides while you stand at HIVE-Wide, and then
+          to a switch directly above it, which has gone. Profile is where it
+          lives, and stepping into your own HIVE is how you get there. */}
       {!loading && wholeHive && members.length === 0 && (
         <View style={{ alignItems: 'center', paddingHorizontal: 32, paddingTop: 40, paddingBottom: 64 }}>
           <Text style={{ fontSize: 34, marginBottom: 14 }}>🐝</Text>
@@ -2990,7 +2936,7 @@ export default function MembersScreen() {
           >
             {listedHiveWide
               ? 'You are listed. Everyone starts visible only inside their own HIVE, and nobody else has opened up yet.'
-              : 'Everyone starts visible only inside their own HIVE. Flip the switch above and you are the first face here.'}
+              : 'Everyone starts visible only inside their own HIVE. Step into your HIVE, turn on "Visible HIVE-Wide" on your Profile, and you are the first face here.'}
           </Text>
         </View>
       )}
@@ -3472,18 +3418,7 @@ export default function MembersScreen() {
         )}
 
       </ScrollView>
-
-      {selected && (
-        <MemberDetailModal
-          member={selected}
-          communityId={communityId}
-          initialShowAnswers={openAnswersOnSelect}
-          onClose={closeMemberProfile}
-          onMemberUpdated={(updatedMember) => {
-            setSelected(updatedMember);
-            setMembers(current => current.map(member => member.id === updatedMember.id ? updatedMember : member));
-          }}
-        />
+      </>
       )}
     </SafeAreaView>
   );

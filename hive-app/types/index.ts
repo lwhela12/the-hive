@@ -714,6 +714,12 @@ export interface ChatRoomsWithDataRow extends Record<string, unknown> {
   room_description: string | null;
   room_created_by: string | null;
   room_created_at: string;
+  /**
+   * How far the room reaches. Added to this function's return by migration 153.
+   * Its absence is what drew the HIVE-Wide room a second time under OG HIVE's
+   * name — the rule that names rooms asks this question first.
+   */
+  room_reach: 'hive' | 'all_hives' | null;
   custom_title?: string | null;
   custom_emoji?: string | null;
   custom_image_url?: string | null;

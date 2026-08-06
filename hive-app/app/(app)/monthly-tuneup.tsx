@@ -25,6 +25,7 @@ import { deleteWishById } from '../../lib/wishMutations';
 import { getCycleStart, getHalfwayDoneKey } from '../../lib/meetingCycle';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
+import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { Avatar } from '../../components/ui/Avatar';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { getMentionTargetHandle, type MentionTarget } from '../../lib/mentions';
@@ -122,6 +123,23 @@ const NEWSLETTER_KINDS = [
   { key: 'compliment', label: 'Compliment someone', prompt: '@ them and they get a little love note.' },
 ] as const;
 type NewsletterKind = (typeof NEWSLETTER_KINDS)[number]['key'];
+
+/**
+ * Every room the tune-up can be closed back into, with the name the path along
+ * the bottom calls it.
+ *
+ * A table rather than a chain of `if`s because the chain existed twice — once
+ * on the back arrow, once on the X — and the two had already drifted apart:
+ * the X had no branch for Home. One list means a new way in cannot be given a
+ * door out on one button and not the other.
+ */
+const EXITS = {
+  admin: { route: '/admin', label: 'Admin' },
+  meetings: { route: '/meetings', label: 'Meetings' },
+  profile: { route: '/profile', label: 'Profile' },
+  hive: { route: '/hive', label: 'Home' },
+} as const;
+type ExitKey = keyof typeof EXITS;
 
 type BoardTarget = { id: string; name: string };
 
@@ -967,6 +985,41 @@ export default function MonthlyTuneupScreen() {
     ? getMonthNameFromPeriod(getSurveyResponsePeriod(monthlyCheckInSurvey))
     : getMonthNameFromPeriod(null);
 
+  /**
+   * The one door out, and the name of the room on the other side of it.
+   *
+   * `from` is set by whoever opened the tune-up, so leaving retraces your steps.
+   * The same pair feeds the path along the bottom: the step above the tune-up in
+   * the trail and the step the X takes you to are the same place, said once.
+   *
+   * Anything that arrives without a `from` — a link in an email, the what's-new
+   * strip, a bookmark — goes Home. That is the whole reason there is no
+   * `router.back()` here any more: back hands the decision to the browser's
+   * history, and the browser's history remembers where you were before the app.
+   * Nat opened the tune-up on her phone, tapped the X, and landed on the public
+   * the-hive.app site — *"that was nuts, we dont want that to happen"*
+   * (2026-08-06). Closing something is a move to a room this app knows the name
+   * of.
+   */
+  const exit = EXITS[String(from ?? '') as ExitKey] ?? EXITS.hive;
+  const leaveTuneup = useCallback(() => {
+    router.replace(exit.route as never);
+  }, [exit.route, router]);
+
+  // Where you are: OG HIVE › Meetings › August Tune-up › Check-in. The tune-up
+  // has no rail entry of its own, so every step below the HIVE is named here.
+  useDeepTrail([
+    { label: exit.label, onPress: leaveTuneup },
+    {
+      label: isMidpoint ? 'Halfway Check-in' : `${monthName} Tune-up`,
+      onPress: stepIndex === 0 && !finished ? undefined : () => {
+        setFinished(false);
+        setStepIndex(0);
+      },
+    },
+    { label: finished ? 'All done' : steps[stepIndex].label },
+  ]);
+
   const liveWishes = wishes.filter((wish) => (
     (wish.status === 'public' || wish.status === 'private') && wish.is_active !== false
   ));
@@ -1785,14 +1838,10 @@ export default function MonthlyTuneupScreen() {
   });
 
   const goBack = () => {
+    // Step one has nothing behind it inside the tune-up, so back IS close —
+    // and close goes to a named room. See `leaveTuneup`.
     if (stepIndex === 0) {
-      // Retrace your steps: exits return to wherever you came from.
-      if (from === 'admin') router.replace('/admin');
-      else if (from === 'meetings') router.replace('/meetings');
-      else if (from === 'profile') router.replace('/profile' as any);
-      else if (from === 'hive') router.replace('/hive');
-      else if (router.canGoBack()) router.back();
-      else router.replace('/hive');
+      leaveTuneup();
       return;
     }
     setStepIndex((index) => Math.max(0, index - 1));
@@ -3280,8 +3329,11 @@ export default function MonthlyTuneupScreen() {
               ? 'Anything you added goes straight into the newsletter — HIVE thanks you.'
               : 'Wishes refreshed, ideas posted, calendar updated — HIVE thanks you.'}
           </Text>
+          {/* Finishing leaves the same way closing does — back to the room you
+              opened the tune-up from, named on the button so you know where the
+              tap is taking you. */}
           <Pressable
-            onPress={() => router.replace('/hive')}
+            onPress={leaveTuneup}
             style={({ pressed }) => ({
               backgroundColor: '#bd9348',
               borderRadius: 14,
@@ -3290,7 +3342,9 @@ export default function MonthlyTuneupScreen() {
               opacity: pressed ? 0.8 : 1,
             })}
           >
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>Back to Home</Text>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>
+              Back to {exit.label}
+            </Text>
           </Pressable>
           {/* Never a dead end: finishing is a milestone, not a lock. Submitting
               again just overwrites your answers, so you can keep tuning as
@@ -3379,14 +3433,9 @@ export default function MonthlyTuneupScreen() {
           )}
         </Pressable>
         <Pressable
-          onPress={() => {
-            if (from === 'admin') router.replace('/admin');
-            else if (from === 'meetings') router.replace('/meetings');
-            else if (from === 'profile') router.replace('/profile' as any);
-            else router.replace('/hive');
-          }}
+          onPress={leaveTuneup}
           accessibilityRole="button"
-          accessibilityLabel="Leave the tune-up"
+          accessibilityLabel={`Leave the tune-up and go back to ${exit.label}`}
           hitSlop={10}
           style={({ pressed }) => ({ opacity: pressed ? 0.9 : 0.4, paddingHorizontal: 6 })}
         >

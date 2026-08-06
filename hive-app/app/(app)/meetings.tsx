@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, Pressable, Alert, Linking, useWindowDimensions, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Pressable, Linking, useWindowDimensions, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { pickMultipleImages, takePhoto, getImageExtension, getContentType } from '../../lib/imagePicker';
 import { MeetingSummary } from '../../components/meetings/MeetingSummary';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
@@ -16,7 +17,7 @@ import { formatDateLong, parseAmericanDate } from '../../lib/dateUtils';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
-import { showAlert } from '../../lib/showAlert';
+import { confirmAction, showAlert } from '../../lib/showAlert';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import type { Meeting, Event } from '../../types';
 
@@ -84,6 +85,19 @@ type MeetingFormDraft<T> = {
 
 const DEFAULT_HIVE_DECK_VIEW_URL = 'https://www.canva.com/d/CQkVqOMhwuO06qe';
 const MEETING_FORM_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * What one meeting is called in the path along the bottom.
+ *
+ * The month, because that is how the HIVE talks about its meetings — "June",
+ * not "Meeting on June 12, 2026". `formatDateLong` is reused rather than a
+ * fresh `new Date()` so a date-only string keeps the day it was saved with;
+ * parsing "2026-06-01" as UTC in a US timezone hands back May.
+ */
+const meetingTrailLabel = (meeting: Meeting) => {
+  const long = formatDateLong(meeting.date);
+  return long.split(' ')[0] || long;
+};
 
 const getIsMobileWeb = () => {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
@@ -239,6 +253,30 @@ export default function MeetingsScreen() {
   const [uploadingAudioCount, setUploadingAudioCount] = useState(0);
   const [notesDropActive, setNotesDropActive] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
+
+  /**
+   * Where you are once you open a summary.
+   *
+   * A summary is not its own address — it swaps the whole page for itself while
+   * the route still says `/meetings`, so the strip along the bottom had no way
+   * to know anything had happened and kept saying `OG HIVE › Meetings` while
+   * Nat sat inside June's write-up (2026-08-06). She expects
+   * `OG HIVE › Meetings › Meeting Summaries › June`, so the two steps the route
+   * cannot see are handed over from here.
+   *
+   * "Meeting Summaries" is the heading on the list below, word for word, and
+   * pressing it puts the list back — the same thing the ← at the top of the
+   * summary does.
+   */
+  useDeepTrail(
+    selectedMeeting
+      ? [
+          { label: 'Meeting Summaries', onPress: () => setSelectedMeeting(null) },
+          { label: meetingTrailLabel(selectedMeeting) },
+        ]
+      : [],
+  );
+
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [editForm, setEditForm] = useState<EventEditForm>({
     title: '',
@@ -505,21 +543,16 @@ export default function MeetingsScreen() {
       }
     };
 
-    // Use window.confirm on web, Alert.alert on native
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Are you sure you want to delete "${displayTitle}"?`)) {
-        doDelete();
-      }
-    } else {
-      Alert.alert(
-        'Delete Meeting',
-        `Are you sure you want to delete "${displayTitle}"?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: doDelete },
-        ]
-      );
-    }
+    // One shared ask on both platforms. This used to hand-roll the web branch
+    // and then fall through to `Alert.alert`, which says nothing at all in a
+    // browser — and the browser is where nearly everyone is.
+    confirmAction({
+      title: 'Delete meeting',
+      message: `Are you sure you want to delete "${displayTitle}"?`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: doDelete,
+    });
   };
 
   const handleMarkComplete = async (meetingId: string) => {
@@ -536,20 +569,12 @@ export default function MeetingsScreen() {
       }
     };
 
-    if (Platform.OS === 'web') {
-      if (window.confirm('Mark this meeting as complete? You can add notes manually.')) {
-        doMark();
-      }
-    } else {
-      Alert.alert(
-        'Mark Complete',
-        'Mark this meeting as complete? You can add notes manually.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Mark Complete', onPress: doMark },
-        ]
-      );
-    }
+    confirmAction({
+      title: 'Mark complete',
+      message: 'Mark this meeting as complete? You can add notes manually.',
+      confirmLabel: 'Mark Complete',
+      onConfirm: doMark,
+    });
   };
 
   const handleEditEvent = (event: Event) => {
@@ -1204,11 +1229,16 @@ export default function MeetingsScreen() {
             </Pressable>
           </View>
 
-          {/* The rest of the meeting tools, for whoever runs the meeting.
+          {/* The two things a member fills in before a meeting.
               These sat in Admin, which is the wrong room: they're what you
-              reach for on meeting day, not settings. Admin-only on purpose —
-              the check-in is everyone's to answer and nobody else's to read,
-              and populating the newsletter is Nat's job (Nat 2026-08-01). */}
+              reach for on meeting day, not settings.
+
+              The heading used to read "FOR WHOEVER'S RUNNING IT", which put
+              them on an organiser's shelf. They belong to the member — Nat,
+              2026-08-06: *"those surveys are for my lil bees to fill out so i
+              can run the meeting from the meeting helper. lets assume I'm
+              always running it (natwalstead) for now."* What you write in them
+              is yours; what Nat reads is the meeting deck they feed. */}
           {isAdmin && (
             <View
               style={{
@@ -1228,7 +1258,7 @@ export default function MeetingsScreen() {
                   width: '100%', marginBottom: 8,
                 }}
               >
-                For whoever's running it
+                Fill these in before the meeting
               </Text>
               {([
                 { label: 'Monthly Tune-up', params: {} },

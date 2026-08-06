@@ -47,7 +47,7 @@ import {
   NewsletterPanel,
   hivePanelSkin,
 } from '../../components/admin/GodModePanels';
-import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { HIVE_GOLD, accentOnDark, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { SpaceGlobe } from '../../components/ui/SpaceGlobe';
 import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
@@ -840,72 +840,146 @@ function AdminPanel({
   const bodyFill = skin?.body ?? 'rgba(255,253,245,0.74)';
   const glow = skin?.shadow ?? '#bd9348';
 
-  return (
-    <View style={[{ marginBottom: 0 }, style]}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', flexShrink: 1, gap: 3 }}>
-        <View
+  /**
+   * A phone gets a different header, because a phone has not got the room.
+   *
+   * Nat, from her iPhone (2026-08-06): the tab row was "squished" against the
+   * "+ New Member" button and the first tab was clipped to a sliver. The maths
+   * says why. A box is the full screen minus the side rail minus the page
+   * padding — about 280 points at 375 — and the title tab, three tabs and the
+   * action pill want more than 500 between them on one line.
+   *
+   * So on a phone the row becomes three things stacked instead of one thing
+   * crushed:
+   *
+   *   the box's name, with its one action beside it
+   *   the tabs, wrapping onto a second line rather than running off the edge
+   *   the panel
+   *
+   * The tabs stop being folder tabs and become closed chips, and the panel gets
+   * its top-left corner back. A folder tab only means something while it is
+   * attached to the sheet below it, and a tab that has wrapped onto the line
+   * above is attached to nothing — a half-open box hanging in the air. Chips
+   * wrap honestly.
+   *
+   * The width is read here rather than passed in, the way AppHeader and
+   * HeaderTabs read the HIVE and the skin themselves: every caller of this panel
+   * would otherwise be a chance to forget the prop.
+   */
+  const { width } = useWindowDimensions();
+  const narrow = width < 768;
+  // The name is plain lettering on the star field now, so it needs ink that
+  // reads on near-black. Tech HIVE's navy as text on black is about 1.9:1.
+  const titleInk = accentOnDark(accent ?? HIVE_GOLD);
+
+  const renderTab = (t: { key: string; label: string }) => {
+    const on = t.key === activeTab;
+    return (
+      <Pressable
+        key={t.key}
+        onPress={() => onTabChange?.(t.key)}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: on }}
+        style={{
+          // An UNSELECTED tab had a transparent ground and kept the
+          // selected tab's near-black ink, so on the space-black admin
+          // page it was black text on black — Nat: "These headers
+          // disappear here, they are too black." It gets a dim ground of
+          // its own and light ink, so all three read as a row of tabs with
+          // one of them in front.
+          backgroundColor: on ? tabFill : 'rgba(255,248,233,0.07)',
+          borderColor: edge,
+          borderWidth: 1,
+          // A folder tab where there is a sheet to sit on, a closed chip where
+          // it may wrap onto a line of its own.
+          borderBottomWidth: narrow ? 1 : 0,
+          borderRadius: narrow ? 999 : 0,
+          borderTopLeftRadius: narrow ? 999 : 12,
+          borderTopRightRadius: narrow ? 999 : 12,
+          // Tighter on a phone, which is what buys the three of them one line.
+          paddingHorizontal: narrow ? 9 : 11,
+          // An inactive tab sits lower, so the active one reads as the
+          // sheet in front rather than one of a row. Chips all sit level —
+          // there is no sheet for one of them to be in front of.
+          paddingVertical: narrow ? 6 : on ? 7 : 5,
+          // Last resort, so one very long label can never push a sibling past
+          // the edge of the screen the way it used to.
+          flexShrink: 1,
+          minWidth: 0,
+        }}
+      >
+        <Text
+          numberOfLines={1}
           style={{
             flexShrink: 1,
-            backgroundColor: tabFill,
-            borderColor: edge,
-            borderWidth: 1,
-            borderBottomWidth: 0,
-            borderTopLeftRadius: 14,
-            borderTopRightRadius: 14,
-            paddingHorizontal: 14,
-            paddingVertical: 7,
+            minWidth: 0,
+            fontFamily: on ? 'Lato_700Bold' : 'Lato_400Regular',
+            fontSize: narrow ? 12 : 12.5,
+            color: on ? tabText : 'rgba(255,248,233,0.72)',
           }}
         >
-          <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: tabText }}>
-            {title}
-          </Text>
-        </View>
-        {(tabs ?? []).map((t) => {
-          const on = t.key === activeTab;
-          return (
-            <Pressable
-              key={t.key}
-              onPress={() => onTabChange?.(t.key)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: on }}
+          {t.label}
+        </Text>
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={[{ marginBottom: 0 }, style]}>
+      {narrow ? (
+        <>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Text
+              numberOfLines={1}
+              style={{ flex: 1, minWidth: 0, fontFamily: 'Lato_700Bold', fontSize: 17, color: titleInk }}
+            >
+              {title}
+            </Text>
+            {/* The action pill carries a 4-point drop so it sits on the folder
+                tabs' baseline on a wide screen. There are no folder tabs beside
+                it here, so the drop is given back and it sits level with the
+                name. */}
+            {action ? <View style={{ marginBottom: -4 }}>{action}</View> : null}
+          </View>
+          {(tabs ?? []).length > 0 ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {(tabs ?? []).map(renderTab)}
+            </View>
+          ) : null}
+        </>
+      ) : (
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', flexShrink: 1, minWidth: 0, gap: 3 }}>
+            <View
               style={{
-                // An UNSELECTED tab had a transparent ground and kept the
-                // selected tab's near-black ink, so on the space-black admin
-                // page it was black text on black — Nat: "These headers
-                // disappear here, they are too black." It gets a dim ground of
-                // its own and light ink, so all three read as a row of tabs with
-                // one of them in front.
-                backgroundColor: on ? tabFill : 'rgba(255,248,233,0.07)',
-                borderColor: edge, borderWidth: 1, borderBottomWidth: 0,
-                borderTopLeftRadius: 12, borderTopRightRadius: 12,
-                paddingHorizontal: 11,
-                // An inactive tab sits lower, so the active one reads as the
-                // sheet in front rather than one of a row.
-                paddingVertical: on ? 7 : 5,
+                flexShrink: 1,
+                minWidth: 0,
+                backgroundColor: tabFill,
+                borderColor: edge,
+                borderWidth: 1,
+                borderBottomWidth: 0,
+                borderTopLeftRadius: 14,
+                borderTopRightRadius: 14,
+                paddingHorizontal: 14,
+                paddingVertical: 7,
               }}
             >
-              <Text
-                numberOfLines={1}
-                style={{
-                  fontFamily: on ? 'Lato_700Bold' : 'Lato_400Regular',
-                  fontSize: 12.5,
-                  color: on ? tabText : 'rgba(255,248,233,0.72)',
-                }}
-              >
-                {t.label}
+              <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: tabText }}>
+                {title}
               </Text>
-            </Pressable>
-          );
-        })}
+            </View>
+            {(tabs ?? []).map(renderTab)}
+          </View>
+          {action ? <View style={{ paddingBottom: 4, marginLeft: 8, flexShrink: 0 }}>{action}</View> : null}
         </View>
-        {action ? <View style={{ paddingBottom: 4, marginLeft: 8 }}>{action}</View> : null}
-      </View>
+      )}
       <View
         style={[{
           backgroundColor: bodyFill,
           borderRadius: 20,
-          borderTopLeftRadius: 0,
+          // The square corner is where the folder tab lands. On a phone nothing
+          // lands there, so the corner comes back.
+          borderTopLeftRadius: narrow ? 20 : 0,
           borderWidth: 1,
           borderColor: edge,
           shadowColor: glow,
@@ -945,7 +1019,7 @@ function AdminHeaderAction({
         backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
       })}
     >
-      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
+      <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
         {label}
       </Text>
     </Pressable>
@@ -1921,7 +1995,11 @@ export default function AdminScreen() {
     ));
   }, []);
   const desktopPanelHeight = Math.max(320, Math.floor((height - 180) / 2));
-  const mobilePanelHeight = Math.min(430, Math.max(340, Math.floor(height * 0.46)));
+  // Forty points taller than it was, which is what the phone header now costs:
+  // the box's name and its action moved onto a line of their own so the tabs
+  // could have the width to themselves. Without this the list inside every box
+  // lost a row to make room for the fix.
+  const mobilePanelHeight = Math.min(470, Math.max(380, Math.floor(height * 0.46) + 40));
   const dashboardOuterContentStyle: ViewStyle = useMobileLayout
     ? { padding: 16 }
     : { padding: 16, paddingBottom: 10 };
@@ -1975,7 +2053,7 @@ export default function AdminScreen() {
               (Nat 2026-08-01). This room is for people. */}
 
           {isAdmin && (
-            <View style={[dashboardCellStyle, panelOrderStyle(ADMIN_PANEL_ORDER.meetingTools)]}>
+            <View style={[dashboardCellStyle, panelOrderStyle(ADMIN_PANEL_ORDER.surveys)]}>
               <AdminPanel
                 // Renamed (Nat 2026-08-04). The meeting-day tools moved INTO
                 // each HIVE's own folder as a tab above, which is where they

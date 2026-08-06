@@ -292,14 +292,21 @@ export default function MessagesScreen() {
     // database has exactly one OG room, with all 24 of its messages. It was
     // being drawn TWICE, and the second copy was wearing OG's name.
     //
-    // Why: `get_chat_rooms_with_data` does not return the `reach` column. The
-    // label rule checks `reach === 'all_hives'` FIRST precisely so the shared
-    // room never wears a HIVE's name — but with `reach` undefined that test
-    // silently failed, the room fell through to the community-room rule, and
-    // came back as "OG HIVE" with no messages in it. Filtering by id needs no
-    // migration and cannot go wrong the way a missing column did.
+    // Why it happened: `get_chat_rooms_with_data` did not return the `reach`
+    // column. The label rule checks `reach === 'all_hives'` FIRST precisely so
+    // the shared room never wears a HIVE's name — with `reach` undefined that
+    // test failed silently, the room fell through to the community-room rule,
+    // and came back as "OG HIVE" with no messages in it.
+    //
+    // Filtering by id was the first answer, and it left the twin on screen
+    // whenever that separate lookup had yet to land — which is every first
+    // paint, and is why Nat saw it again on 2026-08-06. Migration 153 makes the
+    // room list return `reach`, so the room now says what it is and the screen
+    // can believe it. The id check stays as a belt to the braces.
     const sharedRoomId = hiveWideRoom?.id;
-    const listedRooms = sharedRoomId ? rooms.filter((room) => room.id !== sharedRoomId) : rooms;
+    const listedRooms = rooms.filter(
+      (room) => room.reach !== 'all_hives' && room.id !== sharedRoomId
+    );
 
     const entries: MessagesListEntry[] = listedRooms.map((room) => ({ kind: 'room', room }));
     const ownHiveRoomIndex = listedRooms.findIndex((room) => room.room_type === 'community');

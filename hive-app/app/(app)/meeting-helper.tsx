@@ -243,9 +243,10 @@ export default function MeetingHelperScreen() {
   // These live as sibling tab screens, so router.back() can't be trusted to
   // return to the launching tab — honor an explicit `from` param instead.
   const closeDeck = () => {
+    // Never `router.back()` — see the note in `settings.tsx`. This file's own
+    // comment already said back "can't be trusted" here; it was still the
+    // fallback anyway, and the browser's history remembers the public site.
     if (from === 'admin') router.replace('/admin');
-    else if (from === 'meetings') router.replace('/meetings');
-    else if (router.canGoBack()) router.back();
     else router.replace('/meetings');
   };
   const { communityId, communityRole, profile, session } = useAuth();
