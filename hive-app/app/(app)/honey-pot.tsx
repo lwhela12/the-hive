@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppHeader } from '../../components/navigation';
 import { HoneyPotPaymentCard } from '../../components/hive/HoneyPotPaymentCard';
@@ -13,6 +13,7 @@ import {
 } from '../../lib/dues';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { HoneyPotNotSetUp } from '../../components/hive/HoneyPotNotSetUp';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 
 export default function HoneyPotScreen() {
   const { communityId, communityRole, profile, community } = useAuth();
@@ -110,7 +111,7 @@ export default function HoneyPotScreen() {
           strip along the bottom already says where you are and gets you back
           (Nat 2026-08-06: "lets ditch it"). */}
       <AppHeader title="Honey Pot" />
-      <ScrollView
+      <BounceScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -153,7 +154,7 @@ export default function HoneyPotScreen() {
             onRecordPress={() => setShowRecord(true)}
           />
         </View>
-      </ScrollView>
+      </BounceScrollView>
 
       {communityId ? (
         <RecordHoneyPotModal

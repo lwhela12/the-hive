@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, ScrollView, useWindowDimensions, Animated, Platform } from 'react-native';
+import { View, Text, Pressable, useWindowDimensions, Animated, Platform } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -14,6 +14,7 @@ import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Avatar } from '../ui/Avatar';
+import { BounceScrollView } from '../ui/BounceScrollView';
 
 /**
  * The side rail, borrowed from Jammin' Sprouts at Nat's request 2026-08-03.
@@ -673,17 +674,12 @@ export const SideRail = memo(function SideRail({
           cant scroll, i want to have the bounce feature, so you can tell, oh,
           thats the end of the page, not 'is this broken?'").
 
-          `alwaysBounceVertical` is the one that bounces even when the rows
-          already fit. It is real in the iOS app and `overScrollMode` is the
-          Android glow; react-native-web keeps neither, so in a browser the
-          bounce is whatever iOS Safari gives a box that has something to
-          scroll. See the note in `components/chat/ChatInterface.tsx`. */}
-      <ScrollView
+          `BounceScrollView` sets the real iOS and Android props and draws the
+          bounce itself in a browser, which is where the rail is nearly always
+          read and where a plain ScrollView gives nothing. */}
+      <BounceScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 14 }}
-        bounces
-        alwaysBounceVertical
-        overScrollMode="always"
       >
         {/* "My HIVEs" is Home, and HIVE-Wide is the first thing under it —
             not a second section with its own children.
@@ -844,7 +840,7 @@ export const SideRail = memo(function SideRail({
             />
           </>
         ) : null}
-      </ScrollView>
+      </BounceScrollView>
 
       <ConfirmDialog
         visible={confirmingLogOut}

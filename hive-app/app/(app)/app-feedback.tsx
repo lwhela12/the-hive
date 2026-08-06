@@ -13,6 +13,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { usePageSkin } from '../../lib/pageSkin';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
@@ -627,7 +628,7 @@ export default function AppFeedbackScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: skin.page }} edges={['bottom']}>
       <SpaceBackdrop />
       <AppHeader title="App Feedback" />
-      <ScrollView
+      <BounceScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 48, maxWidth: 760, width: '100%', alignSelf: 'center' }}
         keyboardShouldPersistTaps="handled"
       >
@@ -939,7 +940,7 @@ export default function AppFeedbackScreen() {
             )}
           </View>
         )}
-      </ScrollView>
+      </BounceScrollView>
     </SafeAreaView>
   );
 }

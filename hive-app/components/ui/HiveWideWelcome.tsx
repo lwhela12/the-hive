@@ -115,12 +115,20 @@ export function HiveWideWelcome({
         pressed: 'rgba(255,248,233,0.1)',
         scrim: SPACE_SCRIM,
       }}
-      // No gold band down the left edge. On this page that band means one
-      // thing, and this is not it — see the rule in `app/(app)/hive-wide.tsx`.
+      // No gold band down the left edge, and no panel on HIVE-Wide has one.
       // Nat, 2026-08-06: *"why do the first 2 have gold on the left hand side &
-      // the other ones dont? That feels weird and inconsistent."*
+      // the other ones dont? That feels weird and inconsistent."* The band was
+      // tried on one panel and she asked about it again — see the note in
+      // `app/(app)/hive-wide.tsx`.
+      //
+      // The title takes the panel's own size (17) rather than a bigger one of
+      // its own. Two reasons, both from 2026-08-06: every panel on this page is
+      // the same panel, and this one carries a question-mark badge, so its title
+      // has 28 fewer points to live in than its neighbours. At 19 the shut
+      // title, "What is HIVE-Wide?", wanted 215 of the 188 points a 375-point
+      // phone gives it and broke in half. At 17 it fits with room to spare, and
+      // the longer open title shrinks itself the rest of the way.
       fitTitle
-      titleStyle={{ fontSize: 19 }}
       bodyStyle={{ gap: 16 }}
     >
       <Text

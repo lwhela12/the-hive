@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, FlatList, ScrollView, Image, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, Image, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -28,6 +28,7 @@ import {
 import type { Profile } from '../../types';
 
 import { SignedImage } from '../../components/ui/SignedImage';
+import { useEndBounce } from '../../components/ui/BounceScrollView';
 const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 
 /**
@@ -144,6 +145,9 @@ export default function MessagesScreen() {
   // opening it opens the real chat view — composer, replies, reactions and all —
   // instead of the sign that used to stand in for it.
   const { data: hiveWideRoom } = useHiveWideRoom();
+  // Most people have a handful of rooms, so this list usually has nothing to
+  // scroll. The bounce is what says so.
+  const roomListBounceRef = useEndBounce();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<RoomWithData | null>(null);
   // Which pane is showing. Still screen state rather than a route, because the
@@ -407,6 +411,7 @@ export default function MessagesScreen() {
 
   const roomList = (
     <FlatList<MessagesListEntry>
+      ref={roomListBounceRef}
       data={listEntries}
       keyExtractor={(item) => (item.kind === 'room' ? item.room.id : 'hive-wide')}
       contentContainerStyle={{ paddingVertical: 8, paddingBottom: useMobileLayout ? 96 : 24 }}

@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
@@ -30,6 +29,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { getMentionTargetHandle, type MentionTarget } from '../../lib/mentions';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { HiveIcon } from '../../components/ui/HiveIcon';
 import { pickSpotlightWish } from '../../lib/wishDisplay';
 import { parseFocusAnswer, parseHangsAnswer } from '../../components/surveys/SurveyQuestionField';
@@ -3464,7 +3464,7 @@ export default function MonthlyTuneupScreen() {
       </View>
 
       <View style={{ flex: 1 }}>
-        <ScrollView
+        <BounceScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
             paddingHorizontal: showFlankArrows ? 56 : 16,
@@ -3473,7 +3473,7 @@ export default function MonthlyTuneupScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {renderStep()}
-        </ScrollView>
+        </BounceScrollView>
         {/* Flank arrows, the deck's pattern. The content gets extra side
             padding when they're up so they never sit on a field. */}
         {showFlankArrows && stepIndex > 0 ? (

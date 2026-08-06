@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { useNotifications } from '../../lib/hooks/useNotifications';
 import { AppHeader } from '../../components/navigation';
 import { LinkedLogins } from '../../components/profile/LinkedLogins';
 import { ScopeBadge } from '../../components/ui/ScopeBadge';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { Switch, SWITCH_GUTTER } from '../../components/ui/Switch';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -362,7 +363,7 @@ export default function SettingsScreen() {
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       <AppHeader title="Settings" onBackPress={closeSettings} />
 
-      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <BounceScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <View
           style={{
             alignSelf: 'center',
@@ -598,7 +599,7 @@ export default function SettingsScreen() {
             one swaps to it, and Profile is a rail entry too — Nat: "We can get
             rid of these now, because they are in the side navigation panel."
             Two doors to the same room is two things to keep in step. */}
-      </ScrollView>
+      </BounceScrollView>
     </SafeAreaView>
   );
 }

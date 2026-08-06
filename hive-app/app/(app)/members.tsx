@@ -29,7 +29,7 @@ import { EditButton } from '../../components/ui/EditButton';
  * draws the bee, so the directory now matches every other face in HIVE
  * (2026-08-06).
  */
-import { Avatar } from '../../components/ui/Avatar';
+import { Avatar, warmAvatarCache } from '../../components/ui/Avatar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 
 const memberHoneycombCell = require('../../assets/generated/member-honeycomb-cell.png');
@@ -54,10 +54,12 @@ import { WishManageModal } from '../../components/wishes/WishManageModal';
 import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { getHdWishTabLabel, pickSpotlightWish, type HdWishTabKey } from '../../lib/wishDisplay';
 import { useWishes } from '../../lib/hooks/useWishes';
+import { useMemberRosterQuery, useMemberDetailsQuery } from '../../lib/hooks/useMembersQuery';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { showAlert } from '../../lib/showAlert';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 /**
  * The padding the member list puts either side of its contents.
  *
@@ -134,14 +136,6 @@ const PROFILE_EMPTY_COPY = {
   skills: 'No skills planted yet — garden coming soon!',
 };
 
-type DailyAnswerRow = {
-  user_id: string;
-  question_index: number;
-  question_date: string;
-  answer: string;
-  created_at?: string | null;
-};
-
 type MemberDailyAnswer = {
   questionIndex: number;
   questionDate: string;
@@ -150,13 +144,6 @@ type MemberDailyAnswer = {
   questionEmoji: string;
   answer: string;
   createdAt?: string | null;
-};
-
-type DailyMatchStats = {
-  sharedCount: number;
-  similarCount: number;
-  score: number;
-  percent: number;
 };
 
 type HoneycombPlacement = {
@@ -211,36 +198,6 @@ function countPublicMemberWishes(member: MemberData) {
   return member.wishes.filter(w => w.status === 'public' && w.is_active !== false).length;
 }
 
-const ANSWER_STOP_WORDS = new Set([
-  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'for', 'i', 'im', 'in', 'is',
-  'it', 'me', 'my', 'of', 'on', 'or', 'so', 'that', 'the', 'to', 'was', 'with',
-  'would', 'you',
-]);
-
-function answerWords(answer: string) {
-  return new Set(
-    answer
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter(word => word.length > 2 && !ANSWER_STOP_WORDS.has(word))
-  );
-}
-
-function answerSimilarity(a: string, b: string) {
-  const wordsA = answerWords(a);
-  const wordsB = answerWords(b);
-  if (wordsA.size === 0 || wordsB.size === 0) {
-    return a.trim().toLowerCase() === b.trim().toLowerCase() ? 1 : 0;
-  }
-
-  let shared = 0;
-  wordsA.forEach(word => {
-    if (wordsB.has(word)) shared += 1;
-  });
-
-  return shared / Math.max(1, Math.min(wordsA.size, wordsB.size));
-}
 
 function normalizeProfileStoryText(value?: string | null) {
   return (value ?? '')
@@ -250,46 +207,6 @@ function normalizeProfileStoryText(value?: string | null) {
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-function buildDailyMatchStats(userId: string | null, answers: DailyAnswerRow[]) {
-  const stats = new Map<string, DailyMatchStats>();
-  if (!userId) return stats;
-
-  const myAnswers = new Map<string, string>();
-  answers.forEach(row => {
-    if (row.user_id === userId && row.question_date && row.answer) {
-      myAnswers.set(row.question_date, row.answer);
-    }
-  });
-
-  answers.forEach(row => {
-    if (row.user_id === userId || !row.question_date || !row.answer) return;
-    const mine = myAnswers.get(row.question_date);
-    if (!mine) return;
-
-    const existing = stats.get(row.user_id) ?? {
-      sharedCount: 0,
-      similarCount: 0,
-      score: 0,
-      percent: 0,
-    };
-    const similarity = answerSimilarity(mine, row.answer);
-    existing.sharedCount += 1;
-    existing.score += similarity;
-    if (similarity >= 0.24 || mine.trim().toLowerCase() === row.answer.trim().toLowerCase()) {
-      existing.similarCount += 1;
-    }
-    stats.set(row.user_id, existing);
-  });
-
-  stats.forEach(match => {
-    const averageSimilarity = match.score / Math.max(1, match.sharedCount);
-    const overlapStrength = match.sharedCount / Math.max(1, myAnswers.size);
-    match.percent = Math.round((overlapStrength * 0.45 + averageSimilarity * 0.55) * 100);
-  });
-
-  return stats;
 }
 
 function getDailyAnswerPrompt(questionIndex: number, deck: DailyQuestion[] = DAILY_QUESTIONS) {
@@ -1262,7 +1179,7 @@ function MemberDetailPage({
                   }}
                 />
               </View>
-              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
+              <BounceScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
                 {/* Custom / type-your-own */}
                 <View style={{ marginBottom: 20 }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: '#a09274', letterSpacing: 0.7, marginBottom: 8 }}>✍️ TYPE YOUR OWN</Text>
@@ -1323,7 +1240,7 @@ function MemberDetailPage({
                     </View>
                   );
                 })}
-              </ScrollView>
+              </BounceScrollView>
               {/* Save bar */}
               <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.3)', padding: 20, paddingBottom: 32, flexDirection: 'row', gap: 10 }}>
                 <Pressable
@@ -1365,7 +1282,7 @@ function MemberDetailPage({
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#a09274' }}>Close</Text>
                 </Pressable>
               </View>
-              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
+              <BounceScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
                 <HeaderTabs
                   activeTab={wishStatusTab}
                   onChange={setWishStatusTab}
@@ -1486,7 +1403,7 @@ function MemberDetailPage({
                     )}
                   </>
                 )}
-              </ScrollView>
+              </BounceScrollView>
             </View>
           )}
 
@@ -1558,7 +1475,7 @@ function MemberDetailPage({
                 </Pressable>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
+              <BounceScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
                 {dailyAnswers.length === 0 ? (
                   <View style={{ backgroundColor: '#fdf8ec', borderRadius: 16, padding: 22, alignItems: 'center' }}>
                     <Text style={{ fontSize: 26, marginBottom: 8 }}>✨</Text>
@@ -1599,11 +1516,11 @@ function MemberDetailPage({
                     </View>
                   ))
                 )}
-              </ScrollView>
+              </BounceScrollView>
             </View>
           )}
 
-          <ScrollView
+          <BounceScrollView
             showsVerticalScrollIndicator={true}
             contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48, alignItems: 'center' }}
           >
@@ -2222,7 +2139,7 @@ function MemberDetailPage({
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Close</Text>
             </Pressable>
             </View>
-          </ScrollView>
+          </BounceScrollView>
           {/* Hidden while an overlay sheet is up — it was floating over the
               Daily Answers header and colliding with that sheet's Close. */}
           {!selectedWish && !showDailyAnswersSheet && (
@@ -2275,11 +2192,28 @@ export default function MembersScreen() {
    * measurement arrives.
    */
   const [listColumnWidth, setListColumnWidth] = useState<number | null>(null);
-  const [members, setMembers] = useState<MemberData[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<MemberData | null>(null);
+  /**
+   * The member whose card is open, by id rather than by copy.
+   *
+   * This held a whole `MemberData` snapshot, taken the moment you tapped a
+   * hexagon. That was fine while the screen drew nothing until every last query
+   * had landed — the snapshot was always complete. It stops being fine now that
+   * the comb paints from names and faces and the wishes arrive a moment later:
+   * a card opened in that gap would have kept the empty copy forever. An id
+   * reads the live list every render, so the card fills in exactly as the
+   * directory behind it does.
+   */
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  /**
+   * A member the card has just changed, held over the top of the fetched list.
+   *
+   * The card edits a profile, saves a wish, grants one — and hands back the
+   * whole member. The list itself belongs to TanStack Query now, so it cannot be
+   * written to directly; this is the overlay, and pull-to-refresh clears it
+   * because that is somebody asking for the truth from the database.
+   */
+  const [memberEdits, setMemberEdits] = useState<Record<string, MemberData>>({});
   const [dismissedRouteMemberId, setDismissedRouteMemberId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [memberViewMode, setMemberViewMode] = useState<MemberViewMode>('directory');
@@ -2302,209 +2236,122 @@ export default function MembersScreen() {
     if (membersSortStorageKey) setStoredItem(membersSortStorageKey, key);
   };
 
-  const loadMembers = useCallback(async (isRefresh = false) => {
-    if (!communityId) return;
-    if (isRefresh) setRefreshing(true); else setLoading(true);
-    setError(null);
+  /**
+   * Which HIVEs this list is drawn from.
+   *
+   * At HIVE-Wide this is everybody you share any HIVE with, once each —
+   * somebody in two of your HIVEs is still one person (Nat 2026-08-03).
+   */
+  const scopeIds = useMemo(
+    () => (wholeHive && myHiveIds.length > 0 ? myHiveIds : communityId ? [communityId] : []),
+    [communityId, myHiveIds, wholeHive]
+  );
 
-      // At HIVE-Wide this is everybody you share any HIVE with, once each —
-      // somebody in two of your HIVEs is still one person (Nat 2026-08-03).
-      const scopeIds = wholeHive && myHiveIds.length > 0 ? myHiveIds : [communityId];
-      const { data: memberships, error: membErr } = await supabase
-        .from('community_memberships')
-        .select('user_id, role')
-        .in('community_id', scopeIds);
+  /**
+   * The faces, then everything else.
+   *
+   * `lib/hooks/useMembersQuery.ts` carries the reasoning and the queries. The
+   * short version: the roster is one round trip and the comb draws from it; the
+   * rest arrives underneath and fills in the match badges, the wish counts and
+   * the member card. Nat was watching a bee for the whole chain (2026-08-06).
+   */
+  const rosterQuery = useMemberRosterQuery({ scopeIds, wholeHive, enabled: !!communityId });
+  const roster = rosterQuery.data;
+  const rosterUserIds = useMemo(() => (roster ?? []).map(entry => entry.userId), [roster]);
 
-      if (membErr || !memberships) {
-        console.warn('[Members] memberships load failed', membErr);
-        setError('Could not load members.');
-        if (isRefresh) setRefreshing(false); else setLoading(false);
-        return;
-      }
+  // Sign every face in one request, the moment we know who is here.
+  //
+  // Each `Avatar` signs its own photo otherwise, which is one round trip per
+  // person — so a comb of twelve arrived twelve faces at a time and you watched
+  // them trickle in. Nothing waits on this: a face that lands before the batch
+  // does still signs itself, so this only ever makes the page quicker.
+  useEffect(() => {
+    if (!roster?.length) return;
+    void warmAvatarCache(roster.map(entry => entry.profile?.avatar_url));
+  }, [roster]);
 
-      // One row per person. Across several HIVEs the same member comes back
-      // once per HIVE they're in, and listing Lucas three times would be a bug
-      // that looks like a design decision. Highest role they hold anywhere wins.
-      const rank: Record<string, number> = { member: 0, treasurer: 1, admin: 2 };
-      const byUser = new Map<string, any>();
-      for (const m of (memberships as any[])) {
-        if (!m.user_id) continue;
-        const prev = byUser.get(m.user_id);
-        if (!prev || (rank[m.role] ?? 0) > (rank[prev.role] ?? 0)) byUser.set(m.user_id, m);
-      }
-      const roster = Array.from(byUser.values());
+  const detailsQuery = useMemberDetailsQuery({
+    communityId,
+    scopeIds,
+    userIds: rosterUserIds,
+    enabled: !!communityId && rosterUserIds.length > 0,
+  });
 
-      const userIds = roster.map((m: any) => m.user_id).filter(Boolean);
-      if (userIds.length === 0) {
-        setMembers([]);
-        if (isRefresh) setRefreshing(false); else setLoading(false);
-        return;
-      }
+  const loading = rosterQuery.isPending && !roster;
+  /**
+   * Whether the second fetch has landed.
+   *
+   * Wish counts, shared-answer counts and the Swarm Report's numbers all read
+   * zero before it does, and a zero is a claim. The comb draws the face, the
+   * name and the title straight away and leaves those spots empty until there is
+   * a real number to put in them.
+   */
+  const detailsReady = !!detailsQuery.data;
+  const error = rosterQuery.isError ? 'Could not load members.' : null;
 
-      let profilesQuery = supabase
-        .from('profiles')
-        .select('*')
-        .in('id', userIds);
+  /**
+   * Each answer gets labelled with ITS OWN HIVE's deck.
+   *
+   * This used to hand every answer the deck of whoever was looking, which was
+   * invisible while answers never crossed a HIVE and would have started printing
+   * a Tech member's answer under an OG question the moment they did. The slug
+   * comes from your memberships, which is where the community rows already are.
+   */
+  const slugByCommunity = useMemo(() => {
+    const slugs = new Map<string, string | null>();
+    myHives.forEach((m) => slugs.set(m.community_id, m.community?.slug ?? null));
+    return slugs;
+  }, [myHives]);
+  const deckFor = useCallback(
+    (answerCommunityId: string | null | undefined) =>
+      deckForCommunity(
+        answerCommunityId ? slugByCommunity.get(answerCommunityId) ?? null : community?.slug,
+      ),
+    [community?.slug, slugByCommunity]
+  );
 
-      // At HIVE-Wide, only the people who said yes to it.
-      //
-      // Nat 2026-08-03: "everyone's preferences default to a visibility of this
-      // HIVE only, they'd have to go in and toggle on HIVE-Wide visibility in
-      // order to populate here." Being in OG HIVE was never consent to be
-      // listed to Tech and Production, so it starts off for everybody and this
-      // list starts empty. That is correct, not broken.
-      //
-      // `profile_scope` is the flag, and the only one (2026-08-06). There were
-      // two columns for this one idea: this list filtered on
-      // `visible_hive_wide`, and the database's own security policy — the thing
-      // that decides which profile rows are readable at all — keys on
-      // `profile_scope` and has never heard of the other one. So a member had to
-      // find and turn on BOTH to appear here, and turning on either one alone
-      // did nothing visible anywhere. Nat, 2026-08-04 and again on 08-05: "I've
-      // been tryin to select 'HIVE wide' a billion times, it never reflects that
-      // anywhere." She was doing it right; the app was asking twice.
-      if (wholeHive) profilesQuery = profilesQuery.eq('profile_scope', 'all_hives');
+  /**
+   * The list the screen draws, assembled from whatever has arrived.
+   *
+   * The roster alone is a complete, drawable member — a name, a face, a role and
+   * a title. Skills, wishes, intro posts and daily answers are folded in the
+   * moment the second fetch lands, and until then they are empty rather than
+   * missing, so nothing here has to ask "has it loaded".
+   */
+  const members: MemberData[] = useMemo(() => {
+    if (!roster) return [];
 
-      const { data: profilesData, error: profilesErr } = await profilesQuery;
+    const memberList: MemberData[] = roster.map(({ userId, role, profile: memberProfile }) => ({
+      id: userId,
+      name: memberProfile?.name ?? 'Unknown member',
+      avatar_url: memberProfile?.avatar_url ?? null,
+      role,
+      birthday: memberProfile?.birthday ?? null,
+      occupation: memberProfile?.occupation ?? null,
+      profile_title: memberProfile?.profile_title ?? null,
+      bio: memberProfile?.bio ?? null,
+      current_project: memberProfile?.current_project ?? null,
+      currently_reading: memberProfile?.currently_reading ?? null,
+      hometown: memberProfile?.hometown ?? null,
+      favorite_book: memberProfile?.favorite_book ?? null,
+      favorite_food: memberProfile?.favorite_food ?? null,
+      favorite_hobby: memberProfile?.favorite_hobby ?? null,
+      known_for: memberProfile?.known_for ?? null,
+      miq_experiences: memberProfile?.miq_experiences ?? null,
+      miq_growth: memberProfile?.miq_growth ?? null,
+      miq_contribution: memberProfile?.miq_contribution ?? null,
+      fun_facts: Array.isArray(memberProfile?.fun_facts) ? memberProfile.fun_facts : null,
+      skills: [],
+      wishes: [],
+      introPost: null,
+      questionAnswerCount: 0,
+      dailyAnswers: [],
+    }));
 
-      if (profilesErr || !profilesData) {
-        console.warn('[Members] profiles load failed', profilesErr);
-        setError('Could not load members.');
-        if (isRefresh) setRefreshing(false); else setLoading(false);
-        return;
-      }
-
-      const profilesById = new Map<string, any>();
-      profilesData.forEach((p: any) => profilesById.set(p.id, p));
-
-      // Somebody who has not opted in has no profile row here, and a membership
-      // without one would render as "Unknown member" — which would leak the very
-      // fact they chose to keep quiet.
-      const listed = wholeHive ? roster.filter((m: any) => profilesById.has(m.user_id)) : roster;
-
-      const memberList: MemberData[] = listed.map((m: any) => {
-        const memberProfile = profilesById.get(m.user_id);
-        return {
-          id: m.user_id,
-          name: memberProfile?.name ?? 'Unknown member',
-          avatar_url: memberProfile?.avatar_url ?? null,
-          role: (m.role ?? memberProfile?.role ?? 'member') as UserRole,
-          birthday: memberProfile?.birthday ?? null,
-          occupation: memberProfile?.occupation ?? null,
-          profile_title: memberProfile?.profile_title ?? null,
-          bio: memberProfile?.bio ?? null,
-          current_project: memberProfile?.current_project ?? null,
-          hometown: memberProfile?.hometown ?? null,
-          favorite_book: memberProfile?.favorite_book ?? null,
-          favorite_food: memberProfile?.favorite_food ?? null,
-          favorite_hobby: memberProfile?.favorite_hobby ?? null,
-          known_for: memberProfile?.known_for ?? null,
-          miq_experiences: memberProfile?.miq_experiences ?? null,
-          miq_growth: memberProfile?.miq_growth ?? null,
-          miq_contribution: memberProfile?.miq_contribution ?? null,
-          fun_facts: Array.isArray(memberProfile?.fun_facts) ? memberProfile.fun_facts : null,
-          skills: [],
-          wishes: [],
-          introPost: null,
-          questionAnswerCount: 0,
-          dailyAnswers: [],
-        };
-      });
-
-      const [skillsRes, wishesRes, introRes, answersRes] = await Promise.all([
-        supabase
-          .from('skills')
-          .select('user_id, id, description, enthusiasm_level, display_x, display_y')
-          .eq('community_id', communityId)
-          .in('user_id', userIds),
-        supabase
-          .from('wishes')
-          // `share_scope` and `community_id` are named here — and in every other
-          // wish query on this screen — because these rows feed the wish EDITOR.
-          // Without the scope the form read "I don't know" as "This HIVE only"
-          // and saved that back, so opening a HIVE-Wide wish from a member card
-          // to fix a typo quietly demoted it. Half of why Nat's HIVE-Wide picks
-          // never stuck (2026-08-05); the other half was the picker itself.
-          .select('user_id, id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
-          .eq('community_id', communityId)
-          .in('user_id', userIds)
-          .in('status', ['public', 'fulfilled'])
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('board_posts')
-          .select('author_id, title, content, board_categories!inner(category_type)')
-          .eq('community_id', communityId)
-          .eq('board_categories.category_type', 'introductions')
-          .in('author_id', userIds),
-        supabase
-          .from('daily_question_answers')
-          // Every HIVE you are in, not just the one you are standing in.
-          //
-          // This was pinned to a single community while the member list beside
-          // it already spanned all of them, so at HIVE-Wide somebody from Tech
-          // appeared with no match data at all and nothing saying why. Widening
-          // it is only safe now that pairs are made by QUESTION rather than by
-          // date — see lib/swarmMatch.ts for what would have happened otherwise.
-          //
-          // `community_id` comes back because it says which DECK an answer
-          // belongs to, and `gist` because it is what makes the match about
-          // meaning instead of shared words.
-          .select('user_id, community_id, question_index, question_date, answer, created_at, gist')
-          .in('community_id', scopeIds)
-          .in('user_id', userIds),
-      ]);
-
-      let wishesData = (wishesRes.data ?? null) as any[] | null;
-      let wishesError = wishesRes.error;
-      if (wishesError && String(wishesError.message ?? '').includes('title')) {
-        const fallback = await supabase
-          .from('wishes')
-          .select('user_id, id, community_id, share_scope, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
-          .eq('community_id', communityId)
-          .in('user_id', userIds)
-          .in('status', ['public', 'fulfilled'])
-          .order('created_at', { ascending: false });
-        wishesData = (fallback.data ?? []).map((wish: any) => ({ ...wish, title: null }));
-        wishesError = fallback.error;
-      }
-
-      if (
-        wishesError &&
-        (String(wishesError.message ?? '').includes('wish_granters') ||
-          String(wishesError.message ?? '').includes('granter') ||
-          String(wishesError.message ?? '').includes('relationship') ||
-          String(wishesError.message ?? '').includes('schema cache'))
-      ) {
-        const fallback = await supabase
-          .from('wishes')
-          .select('user_id, id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
-          .eq('community_id', communityId)
-          .in('user_id', userIds)
-          .in('status', ['public', 'fulfilled'])
-          .order('created_at', { ascending: false });
-        wishesData = fallback.data ?? [];
-        wishesError = fallback.error;
-      }
-
-      if (wishesError && String(wishesError.message ?? '').includes('title')) {
-        const fallback = await supabase
-          .from('wishes')
-          .select('user_id, id, community_id, share_scope, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message')
-          .eq('community_id', communityId)
-          .in('user_id', userIds)
-          .in('status', ['public', 'fulfilled'])
-          .order('created_at', { ascending: false });
-        wishesData = (fallback.data ?? []).map((wish: any) => ({ ...wish, title: null }));
-        wishesError = fallback.error;
-      }
-
-      if (skillsRes.error) console.warn('[Members] skills load failed', skillsRes.error);
-      if (wishesError) console.warn('[Members] wishes load failed', wishesError);
-      if (introRes.error) console.warn('[Members] intro posts load failed', introRes.error);
-      if (answersRes.error) console.warn('[Members] daily answers load failed', answersRes.error);
-
+    const details = detailsQuery.data;
+    if (details) {
       const skillsByUser = new Map<string, MemberSkill[]>();
-      (skillsRes.data ?? []).forEach((s: any) => {
+      details.skills.forEach((s: any) => {
         if (!skillsByUser.has(s.user_id)) skillsByUser.set(s.user_id, []);
         skillsByUser.get(s.user_id)!.push({
           id: s.id,
@@ -2516,12 +2363,12 @@ export default function MembersScreen() {
       });
 
       const wishesByUser = new Map<string, MemberWish[]>();
-      (wishesData ?? []).forEach((w: any) => {
+      details.wishes.forEach((w: any) => {
         if (!wishesByUser.has(w.user_id)) wishesByUser.set(w.user_id, []);
         wishesByUser.get(w.user_id)!.push({
           id: w.id,
           // How far this wish already travels, carried through rather than
-          // dropped here. Every query above asks for `share_scope` for a stated
+          // dropped here. Every query asks for `share_scope` for a stated
           // reason — these rows feed the wish EDITOR, and a form that reads "I
           // don't know" as "This HIVE only" saves that back, so opening a
           // HIVE-Wide wish from a member card to fix a typo quietly pulled it
@@ -2541,28 +2388,14 @@ export default function MembersScreen() {
       });
 
       const introByUser = new Map<string, { title: string; content: string }>();
-      (introRes.data ?? []).forEach((p: any) => {
+      details.intros.forEach((p: any) => {
         if (!introByUser.has(p.author_id)) {
           introByUser.set(p.author_id, { title: p.title, content: p.content });
         }
       });
 
-      // Each answer gets labelled with ITS OWN HIVE's deck.
-      //
-      // This used to hand every answer the deck of whoever was looking, which
-      // was invisible while answers never crossed a HIVE and would have started
-      // printing a Tech member's answer under an OG question the moment they
-      // did. The slug comes from your memberships, which is where the community
-      // rows already are.
-      const slugByCommunity = new Map<string, string | null>();
-      myHives.forEach((m) => slugByCommunity.set(m.community_id, m.community?.slug ?? null));
-      const deckFor = (answerCommunityId: string | null | undefined) =>
-        deckForCommunity(
-          answerCommunityId ? slugByCommunity.get(answerCommunityId) ?? null : community?.slug,
-        );
-
       const answersByUser = new Map<string, MemberDailyAnswer[]>();
-      (answersRes.data ?? []).forEach((a: any) => {
+      details.answers.forEach((a: any) => {
         if (!a.user_id) return;
         const questionIndex = Number(a.question_index ?? 0);
         const question = getDailyAnswerPrompt(questionIndex, deckFor(a.community_id));
@@ -2584,9 +2417,10 @@ export default function MembersScreen() {
           return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
         });
       });
+
       // The match itself: by question, then by theme, on meaning where we have
       // it. `lib/swarmMatch.ts` carries the reasoning.
-      const swarmAnswers: SwarmAnswer[] = (answersRes.data ?? []).map((a: any) => {
+      const swarmAnswers: SwarmAnswer[] = details.answers.map((a: any) => {
         const question = getDailyAnswerPrompt(Number(a.question_index ?? 0), deckFor(a.community_id));
         return {
           userId: a.user_id,
@@ -2619,20 +2453,32 @@ export default function MembersScreen() {
           m.dailyMatchThemes = match.sharedThemes;
         }
       });
+    }
 
-      memberList.sort((a, b) => {
-        if (a.id === currentUserId) return -1;
-        if (b.id === currentUserId) return 1;
-        return a.name.localeCompare(b.name);
-      });
+    const withEdits = memberList.map(m => memberEdits[m.id] ?? m);
 
-      setMembers(memberList);
-      if (isRefresh) setRefreshing(false); else setLoading(false);
-  }, [communityId, currentUserId, wholeHive, myHiveIds]);
+    withEdits.sort((a, b) => {
+      if (a.id === currentUserId) return -1;
+      if (b.id === currentUserId) return 1;
+      return a.name.localeCompare(b.name);
+    });
 
-  useEffect(() => {
-    loadMembers();
-  }, [loadMembers]);
+    return withEdits;
+  }, [currentUserId, deckFor, detailsQuery.data, memberEdits, roster]);
+
+  /**
+   * Pull-to-refresh: go and ask again, and drop anything the card was holding
+   * over the top. Both fetches are asked together, so this is one wait, not two.
+   */
+  const refreshMembers = useCallback(async () => {
+    setRefreshing(true);
+    setMemberEdits({});
+    try {
+      await Promise.all([rosterQuery.refetch(), detailsQuery.refetch()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [detailsQuery, rosterQuery]);
 
   /**
    * Whether you are listed HIVE-Wide. Read here, changed elsewhere.
@@ -2660,7 +2506,7 @@ export default function MembersScreen() {
   const [openAnswersOnSelect, setOpenAnswersOnSelect] = useState(false);
   const openMemberProfile = useCallback((member: MemberData, showAnswers = false) => {
     setOpenAnswersOnSelect(showAnswers);
-    setSelected(member);
+    setSelectedId(member.id);
     // Put the member in the address as well as in state, so the card is a place
     // that survives a reload and can be sent to somebody. Links from other
     // screens (`MemberProfileLink`) already arrive this way; tapping a hexagon
@@ -2669,7 +2515,7 @@ export default function MembersScreen() {
   }, [router]);
 
   const closeMemberProfile = useCallback(() => {
-    setSelected(null);
+    setSelectedId(null);
     if (memberId) {
       setDismissedRouteMemberId(memberId);
       router.replace('/members');
@@ -2685,13 +2531,24 @@ export default function MembersScreen() {
   // Keep member detail synced when links navigate between profiles.
   useEffect(() => {
     if (!memberId || memberId === dismissedRouteMemberId || members.length === 0) return;
-    if (selected?.id === memberId) return;
+    if (selectedId === memberId) return;
+    // An address naming somebody who is not in this list opens nothing. At
+    // HIVE-Wide that is the privacy model doing its job: a link to a member who
+    // keeps to their own HIVE lands on the directory, not on their card.
+    if (!members.some(m => m.id === memberId)) return;
 
-    const target = members.find(m => m.id === memberId);
-    if (!target) return;
+    setSelectedId(memberId);
+  }, [dismissedRouteMemberId, memberId, members, selectedId]);
 
-    setSelected(target);
-  }, [dismissedRouteMemberId, memberId, members, selected]);
+  /**
+   * The member the card is showing, read from the list rather than copied out of
+   * it. Every change to that member — a fetch landing, a profile saved, a wish
+   * granted — reaches the open card by itself.
+   */
+  const selected = useMemo(
+    () => (selectedId ? members.find(m => m.id === selectedId) ?? null : null),
+    [members, selectedId]
+  );
 
   const filtered = useMemo(() => {
     if (!search.trim()) return members;
@@ -2899,8 +2756,7 @@ export default function MembersScreen() {
           initialShowAnswers={openAnswersOnSelect}
           onClose={closeMemberProfile}
           onMemberUpdated={(updatedMember) => {
-            setSelected(updatedMember);
-            setMembers(current => current.map(member => member.id === updatedMember.id ? updatedMember : member));
+            setMemberEdits(current => ({ ...current, [updatedMember.id]: updatedMember }));
           }}
         />
       ) : (
@@ -3080,7 +2936,7 @@ export default function MembersScreen() {
         </View>
       )}
 
-      <ScrollView
+      <BounceScrollView
         // The column measures itself here. Whatever the navigation rail is doing
         // in front of it, this is the width the contents actually get.
         onLayout={(event) => {
@@ -3088,7 +2944,7 @@ export default function MembersScreen() {
           if (measured > 0) setListColumnWidth(measured);
         }}
         contentContainerStyle={{ padding: LIST_PADDING, paddingBottom: 140 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadMembers(true)} tintColor="#bd9348" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void refreshMembers(); }} tintColor="#bd9348" />}
       >
         {loading ? (
           <View style={{ alignItems: 'center', paddingTop: 80 }}>
@@ -3138,10 +2994,14 @@ export default function MembersScreen() {
                       value: `${bestMatch.name.split(' ')[0]} · ${bestMatch.dailyMatchPercent}%`,
                     }] : []),
                     ...(busiestAnswerDay ? [{ label: 'Busiest day', value: busiestAnswerDay }] : []),
+                    // The deck is a fact about this HIVE, known without asking
+                    // the database anything. The counts below it are answers,
+                    // and they say "…" until the answers are actually here —
+                    // a zero would read as "nobody has ever played".
                     { label: 'Deck', value: `${deckForCommunity(community?.slug).length} prompts` },
-                    { label: 'HIVE answers', value: String(totalDailyAnswerCount) },
-                    { label: 'Members joined', value: String(answeredMemberCount) },
-                    { label: 'Your answers', value: String(currentMember?.questionAnswerCount ?? 0) },
+                    { label: 'HIVE answers', value: detailsReady ? String(totalDailyAnswerCount) : '…' },
+                    { label: 'Members joined', value: detailsReady ? String(answeredMemberCount) : '…' },
+                    { label: 'Your answers', value: detailsReady ? String(currentMember?.questionAnswerCount ?? 0) : '…' },
                   ].map(stat => (
                     <View
                       key={stat.label}
@@ -3245,7 +3105,12 @@ export default function MembersScreen() {
                     // is the part of the answer she can check at a glance,
                     // where a bare percentage is just a number to trust.
                     const topTheme = member.dailyMatchThemes?.[0];
-                    const visibleChips = memberViewMode === 'swarm' && topTheme
+                    // Both chips are counts, and both read zero until the second
+                    // fetch lands. An empty spot that fills in is honest; "0
+                    // wishes" under somebody with four is not.
+                    const visibleChips = !detailsReady
+                      ? []
+                      : memberViewMode === 'swarm' && topTheme
                       ? [
                           { key: 'theme', label: isCompactHoneycomb ? topTheme : `both: ${topTheme}` },
                           { key: 'wishes', label: wishChip },
@@ -3424,7 +3289,7 @@ export default function MembersScreen() {
           </>
         )}
 
-      </ScrollView>
+      </BounceScrollView>
       </>
       )}
     </SafeAreaView>

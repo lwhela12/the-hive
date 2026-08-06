@@ -22,12 +22,13 @@ import { loadHiveWideWelcomeSeen, persistHiveWideWelcomeSeen } from '../../lib/r
 import { supabase } from '../../lib/supabase';
 import { useAuth, type HiveMembership } from '../../lib/hooks/useAuth';
 import { getAppNews } from '../../lib/appNews';
-import { accentOnDark, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
 import { formatMeetingDate, getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
 import type { Community } from '../../types';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 /**
  * HIVE-Wide — the shared high street.
  *
@@ -49,7 +50,6 @@ import { ThinkingBee } from '../../components/ui/ThinkingBee';
  * which say "tbd" in their own colour. An empty line is an invitation.
  */
 
-type Focus = { title: string; body: string | null; community_id: string | null };
 /**
  * A wish somebody marked HIVE-Wide.
  *
@@ -68,13 +68,6 @@ type WideWish = {
   community: { name: string; accent_color: string | null } | null;
 };
 
-type SharedPost = {
-  id: string;
-  title: string;
-  created_at: string;
-  community: { name: string; accent_color: string | null } | null;
-  category: { name: string } | null;
-};
 type HiveEvent = {
   id: string;
   title: string;
@@ -141,19 +134,22 @@ const GOLD_ON_SPACE = '#E8C77E';
 const SPACE_SCRIM = 'rgba(5,6,11,0.62)';
 
 /**
- * The gold band down the left edge means one thing on this page: **this is the
- * way in**. Only "Your HIVEs" wears it.
+ * **No panel on this page wears a gold band down its left edge. This was tried
+ * twice and Nat said no twice. Do not put it back.**
  *
  * Nat, 2026-08-06: *"why do the first 2 have gold on the left hand side & the
- * other ones dont? That feels weird and inconsistent."* Two of five was an
- * accident of history — the welcome and the door were built on the same
- * afternoon and both got a band. One of five is a mark.
+ * other ones dont? That feels weird and inconsistent."* Two of five came off,
+ * and the band stayed on "Your HIVEs" as a deliberate mark meaning *this is the
+ * way in* — the one panel a brand-new member has to find.
  *
- * It goes to the door because the door is the one panel a brand-new member has
- * to find, and the buttons inside it got lighter the same day. What the buttons
- * gave up in weight, the panel picks up in gold.
+ * She asked about it again the same day: *"why does 'your hives' still have gold
+ * on the left hand side?"* A mark that has to be explained twice is not reading
+ * as a mark, it is reading as something somebody forgot to tidy up. Every panel
+ * on HIVE-Wide is now the same panel.
+ *
+ * What still makes the door findable while it is shut: its own name in the
+ * header, and a fill a little brighter than the panels under it.
  */
-const WAY_IN_BAND = { borderLeftWidth: 4, borderLeftColor: GOLD_ON_SPACE };
 
 /** This page's own colours, handed to every panel on it so they read as a set. */
 const PANEL_COLOURS = {
@@ -190,8 +186,12 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
       open={open}
       onToggle={setOpen}
       colours={PANEL_COLOURS}
+      // One line, always, at whatever size that takes — the panel measures its
+      // own column and shrinks to suit. "What We've Been Building" is the
+      // longest title here and the only one that needs much: it wants 252 of the
+      // 216 points a 375-point phone gives it, so on a phone it sets a little
+      // under 15 and on a laptop it sets at 17 like everything else.
       fitTitle
-      titleStyle={{ fontSize: 17, letterSpacing: 0.6 }}
       style={{
         // Two to a row on a wide screen, one per row on a phone.
         //
@@ -333,9 +333,9 @@ const TITLE_EMS = (6.27 + 9 * TITLE_TRACKING) * 1.06;
  * savvy people." It sat first until 2026-08-06, when Nat put the "what is
  * HIVE-Wide" panel above it — what a place is comes before the way off it.
  *
- * It is the only panel here wearing the gold left band (`WAY_IN_BAND`), and the
- * only one with a brighter fill. Both of those are how the door stays findable
- * now that it arrives shut like everything else.
+ * It wears the same panel as everything else on the page, with one difference:
+ * a slightly brighter fill, which is how the door stays findable now that it
+ * arrives shut like the rest.
  */
 function WayIntoYourHive({
   memberships,
@@ -370,8 +370,9 @@ function WayIntoYourHive({
       // needs it — and said all of them, so all of them it is.
       //
       // What makes the door findable while it is shut: its own name in the
-      // header, a brighter fill than the panels under it, and the gold band down
-      // its left edge, which on this page means nothing else.
+      // header, and a fill a little brighter than the panels under it. It wore a
+      // gold left band too until Nat asked about it twice — see the note above
+      // PANEL_COLOURS, and leave it off.
       defaultOpen={false}
       colours={{
         ...PANEL_COLOURS,
@@ -380,9 +381,7 @@ function WayIntoYourHive({
         // panels reads as a list rather than a way in.
         fill: 'rgba(255,248,233,0.11)',
       }}
-      style={WAY_IN_BAND}
       fitTitle
-      titleStyle={{ fontSize: 19, letterSpacing: 0 }}
       bodyStyle={{ gap: 14, paddingBottom: 20 }}
     >
       {firstVisit ? (
@@ -405,11 +404,35 @@ function WayIntoYourHive({
           49 points tall with a 14-point corner, and three of them took a screen.
 
           Lighter, not quieter. Everything that does the work stays — each HIVE's
-          own colour filled solid, its hexagon, the arrow, the full width and the
-          plain words "Go into ___" — and the bulk goes: a pill instead of a
-          slab, 38 points instead of 49, smaller type and smaller furniture. A
-          pill reads as a button at any height; a tall rounded rectangle only
-          reads as one because it is tall.
+          own colour, its hexagon, the arrow, the full width and the plain words
+          "Go into ___" — and the bulk goes: a pill instead of a slab, 38 points
+          instead of 49, smaller type and smaller furniture. A pill reads as a
+          button at any height; a tall rounded rectangle only reads as one
+          because it is tall.
+
+          ## The hexagon carries the HIVE's colour, and so the pill cannot
+
+          Nat, 2026-08-06: *"These icons dont match how they should. The hexagons
+          are black instead of colored. We need to keep continuity."* She is
+          comparing them to the rail two inches to the left, where a HIVE is a
+          filled comb in its own colour on a dark ground — and to the rest of
+          THIS page, where `HiveLine` and the wishes draw exactly that. The
+          buttons were the only place in the app drawing a HIVE's comb in black.
+
+          A comb needs somewhere dark to sit before it can be gold, blue or
+          purple: gold on gold disappears. So the colour moved off the pill and
+          onto the mark. The pill is that HIVE's colour laid thin over the night
+          sky, edged in the same colour at full strength, with the comb and the
+          arrow at full strength inside it and the words in cream. That is the
+          rail's own recipe — dark ground, coloured comb, cream name — which is
+          what "continuity" means here.
+
+          It works for all three because the edge, comb and arrow go through
+          `accentOnDark`, which lifts a colour until it can be read on black:
+          gold (#bd9348) is already light enough and passes through untouched,
+          Tech's #2f4a63 comes back a pale blue, Production's purple a pale
+          purple. The thin fill uses the raw colour, because it is doing the
+          opposite job — it only has to say which HIVE without lighting up.
 
           The type stops here rather than going smaller. On a 375-point phone the
           longest HIVE name in the app, "Go into Production HIVE", wants 160 of
@@ -419,10 +442,11 @@ function WayIntoYourHive({
       <View style={{ gap: 8 }}>
         {memberships.map((m) => {
           const name = hiveDisplayName(m.community?.name);
-          // The HIVE's own colour, lifted until it reads on the night sky, and
-          // filled rather than outlined — this is the one thing on the page
-          // that has to look like a button to somebody who has never seen it.
-          const colour = accentOnDark(hiveAccent(m.community));
+          const raw = hiveAccent(m.community);
+          // The HIVE's own colour, lifted until it reads on the night sky. The
+          // same call `HiveLine` and the wish combs on this page already make,
+          // so one HIVE is one colour everywhere you look.
+          const colour = accentOnDark(raw);
           return (
             <Pressable
               key={m.community_id}
@@ -432,25 +456,30 @@ function WayIntoYourHive({
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 8,
+                gap: 9,
                 paddingVertical: 10,
                 paddingHorizontal: 14,
                 // A pill. Anything big enough to hold the text is the radius.
                 borderRadius: 999,
-                backgroundColor: colour,
+                backgroundColor: accentWash(raw, 0.26),
+                // The edge is what says "button" at a glance now that the fill
+                // is thin. It costs 3 points of the row; "Go into Production
+                // HIVE", the longest label in the app, still has 166 for 160.
+                borderWidth: 1.5,
+                borderColor: colour,
               }}
             >
-              <HiveMark size={14} colour={SPACE_BLACK} />
+              <HiveMark size={14} colour={colour} />
               <Text
                 style={{
                   flex: 1, fontFamily: 'Lato_700Bold', fontSize: 14.5,
-                  lineHeight: 19, color: SPACE_BLACK,
+                  lineHeight: 19, color: INK,
                 }}
                 numberOfLines={2}
               >
                 Go into {name}
               </Text>
-              <Ionicons name="arrow-forward" size={16} color={SPACE_BLACK} />
+              <Ionicons name="arrow-forward" size={16} color={colour} />
             </Pressable>
           );
         })}
@@ -528,35 +557,22 @@ export default function HiveWideScreen() {
   const titleSize = Math.max(TITLE_MIN, Math.min(TITLE_MAX, titleRoom / TITLE_EMS));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [sharedFocus, setSharedFocus] = useState<Focus | null>(null);
-  const [focusByHive, setFocusByHive] = useState<Map<string, Focus>>(new Map());
   const [hives, setHives] = useState<Community[]>([]);
   const [upcoming, setUpcoming] = useState<HiveEvent[]>([]);
-  const [shared, setShared] = useState<SharedPost[]>([]);
   const [wideWishes, setWideWishes] = useState<WideWish[]>([]);
-  const [counts, setCounts] = useState<{ approved: number; announcements: number }>({
-    approved: 0,
-    announcements: 0,
-  });
 
+  /**
+   * Three things, and only three: the HIVEs, what they have coming up, and the
+   * wishes somebody sent out to everyone.
+   *
+   * It used to fetch three more — `monthly_focus`, `board_categories` and the
+   * `board_posts` behind them — for boxes that came off the page weeks ago. The
+   * rows arrived, went into state and were read by nothing. Nat asked about load
+   * times on 2026-08-06 and this was half the page's waiting. Deleted rather
+   * than left commented out: a query nobody draws is a page nobody can explain.
+   */
   const load = useCallback(async () => {
     try {
-      // The month you are actually standing in. toISOString() answers in UTC,
-      // so on the evening of the 31st in Florida it has already rolled over and
-      // the focus box would go empty hours early (2026-08-03).
-      const month = getLocalIsoDate(new Date()).slice(0, 7);
-
-      const { data: focusRows } = await supabase
-        .from('monthly_focus')
-        .select('title, body, community_id')
-        .eq('month', month);
-
-      const rows = (focusRows ?? []) as Focus[];
-      setSharedFocus(rows.find((r) => r.community_id === null) ?? null);
-      setFocusByHive(
-        new Map(rows.filter((r) => r.community_id).map((r) => [r.community_id as string, r]))
-      );
-
       // Every HIVE this person can see, oldest first — which puts OG HIVE at
       // the top of both lists without anyone hard-coding an order.
       const { data: hiveRows } = await supabase
@@ -581,11 +597,6 @@ export default function HiveWideScreen() {
         setUpcoming([]);
       }
 
-      const { data: boards } = await supabase
-        .from('board_categories')
-        .select('id, name')
-        .eq('reach', 'all_hives');
-
       // Every wish that was marked to travel. The RLS policy already decides
       // which of these this person may see, so no community filter here — that
       // is the whole point of the scope.
@@ -598,29 +609,6 @@ export default function HiveWideScreen() {
         .order('created_at', { ascending: false })
         .limit(6);
       setWideWishes((wishRows ?? []) as unknown as WideWish[]);
-
-      const boardRows = (boards ?? []) as { id: string; name: string }[];
-      if (boardRows.length > 0) {
-        const { data: posts } = await supabase
-          .from('board_posts')
-          .select('id, title, created_at, community:communities(name, accent_color), category:board_categories!category_id(name)')
-          .in('category_id', boardRows.map((b) => b.id))
-          .neq('status', 'archived')
-          .order('created_at', { ascending: false })
-          .limit(40);
-
-        const all = (posts ?? []) as unknown as SharedPost[];
-        setShared(all.slice(0, 4));
-        setCounts({
-          approved: all.filter((p) => /approved/i.test(p.category?.name ?? '')).length,
-          announcements: all.filter((p) => /announce/i.test(p.category?.name ?? '')).length,
-        });
-      } else {
-        setShared([]);
-        // The combs count what's on screen, so an empty list has to zero them
-        // too — otherwise a refresh leaves last load's numbers under them.
-        setCounts({ approved: 0, announcements: 0 });
-      }
     } catch (error) {
       // One query falling over used to leave the whole page spinning with
       // nothing on it. Keep whatever did load, say so in the log, and let a
@@ -710,7 +698,7 @@ export default function HiveWideScreen() {
       {/* The title lives in the sky rather than in a bar. There is no header on
           HIVE-Wide on purpose — "it's just part of outer space" (Nat 2026-08-03),
           and a gold bar across the top would put you back inside a HIVE. */}
-      <ScrollView
+      <BounceScrollView
         // Held to a column in the middle of the page rather than run edge to
         // edge (Nat 2026-08-04: "this feels a little too squishy to me, the
         // boxes should sit in the middle of the page please"). On a wide
@@ -953,7 +941,7 @@ export default function HiveWideScreen() {
             </View>
           </>
         )}
-      </ScrollView>
+      </BounceScrollView>
     </SafeAreaView>
   );
 }

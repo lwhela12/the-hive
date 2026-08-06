@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, RefreshControl } from 'react-native';
+import { View, Text, Pressable, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '../../components/navigation';
@@ -9,6 +9,7 @@ import { ComposerBar } from '../../components/ui/ComposerBar';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
+import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { taggableHiveFromCommunity } from '../../lib/mentionableMembers';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
@@ -34,6 +35,7 @@ const SPACE_LETTER: LetterPalette = {
 };
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 /**
  * The Buzz — every newsletter you're entitled to read, in one place.
  *
@@ -51,6 +53,85 @@ type Buzz = {
   visibility: string;
   community_id: string;
   community?: Pick<Community, 'id' | 'name' | 'accent_color'> | null;
+};
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/**
+ * A month named anywhere in a letter's title, written out or shortened, with
+ * the year beside it when the title bothers to give one.
+ */
+const MONTH_IN_TITLE =
+  /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\.?[\s,—-]*(20\d{2})?/i;
+
+/**
+ * Which month a letter is FOR.
+ *
+ * Two dates are in play and they are often different. The day the letter was
+ * posted is `created_at` — the date already on the card. The month the letter
+ * is about is the one on its masthead. In the live archive on 2026-08-06 they
+ * disagreed on half the letters:
+ *
+ * | letter | posted | about |
+ * |---|---|---|
+ * | The Buzz — June 2026 HIVE Recap | 2026-07-08 | June |
+ * | May 2026 — The Buzz | 2026-06-01 | May |
+ * | H.I.V.E. Newsletter #4, May 2026 | 2026-05-05 | May |
+ * | H.I.V.E. Newsletter #3, April 2026 | 2026-04-01 | April |
+ * | H.I.V.E. Newsletter #2, March 2026 | 2026-02-23 | March |
+ * | Our First Newsletter | 2026-02-16 | February |
+ *
+ * A recap goes out after the month it recaps, and March's letter went out in
+ * February — so the posting date alone would have put "July" along the bottom
+ * while the letter on screen said June, and "February" on two different
+ * letters. The month word in the title is a date, so it is read as one and the
+ * rest of the title is thrown away: only the month survives, which is why the
+ * three shapes ("#3, April 2026", "May 2026 — The Buzz", "— June 2026 HIVE
+ * Recap") all come out the same. A letter whose title names no month at all —
+ * "Our First Newsletter" — falls back to the day it was posted, the same date
+ * its card shows.
+ *
+ * `created_at` carries a time and a zone, so `new Date()` is safe here; the
+ * date-only trap that `parseDateString` exists for does not apply.
+ */
+function letterMonth(item: Buzz): { month: number; year: number } {
+  const posted = new Date(item.created_at);
+  const found = MONTH_IN_TITLE.exec(item.title ?? '');
+  const month = found
+    ? MONTH_NAMES.findIndex((name) => name.slice(0, 3).toLowerCase() === found[1].slice(0, 3).toLowerCase())
+    : -1;
+  if (month < 0) return { month: posted.getMonth(), year: posted.getFullYear() };
+  if (found?.[2]) return { month, year: Number(found[2]) };
+
+  // A title that names a month and no year takes the year that lands it nearest
+  // the day it went out, so a "January" letter posted in late December belongs
+  // to the January a week away rather than the one eleven months behind.
+  const postedIndex = posted.getFullYear() * 12 + posted.getMonth();
+  const distance = (year: number) => Math.abs(year * 12 + month - postedIndex);
+  const year = [posted.getFullYear() - 1, posted.getFullYear(), posted.getFullYear() + 1]
+    .reduce((best, candidate) => (distance(candidate) < distance(best) ? candidate : best));
+  return { month, year };
+}
+
+/**
+ * What one letter is called in the path along the bottom.
+ *
+ * Nat, from her phone on 2026-08-06: *"it should show The Buzz > April."* A
+ * month, the way she says it out loud, rather than the title she is already
+ * looking at at the top of the letter.
+ *
+ * The year is added once the month stops being enough to say which letter this
+ * is — a letter from any year but this one. While the archive is all 2026 and
+ * it is 2026, every crumb is a bare month; the day an April 2025 letter is
+ * still on the page, it says "April 2025" and the two cannot be confused.
+ */
+const letterTrailLabel = (item: Buzz): string => {
+  const { month, year } = letterMonth(item);
+  const name = MONTH_NAMES[month];
+  return year === new Date().getFullYear() ? name : `${name} ${year}`;
 };
 
 export default function BuzzScreen() {
@@ -71,6 +152,35 @@ export default function BuzzScreen() {
   const [shoutOutError, setShoutOutError] = useState<string | null>(null);
   /** What this person has already put in this month's letter, read back. */
   const [added, setAdded] = useState<string[]>([]);
+
+  /**
+   * Where you are once you open a letter.
+   *
+   * A letter is not its own address — it unfolds inside the archive while the
+   * route still says `/buzz`, so the strip along the bottom had no way to know
+   * anything had happened and kept saying `HIVE-Wide › The Buzz` while Nat sat
+   * inside April's letter on her phone (2026-08-06): *"when i go into different
+   * news letters, the footer nav didnt update with me: it should show The Buzz >
+   * April."*
+   *
+   * One crumb, because the archive opens one letter at a time and arrives with
+   * every card shut — so there is exactly one thing you can be inside, and it
+   * disappears the moment the letter does.
+   *
+   * The card at the top that is still collecting gets NO crumb. It is a box you
+   * add a line to rather than a letter you read; it belongs to the month you are
+   * standing in, so "The Buzz › August" would name a letter nobody has written
+   * yet. It also opens and shuts on its own, alongside an open letter, and two
+   * crumbs from two cards would describe a place you are not.
+   *
+   * "The Buzz" is the way back, the same as the boards' page crumb sheds an open
+   * thread: pressing it closes the letter and the archive is there again.
+   */
+  const openLetter = items.find((item) => item.id === openId) ?? null;
+  useDeepTrail(
+    openLetter ? [{ label: letterTrailLabel(openLetter) }] : [],
+    openLetter ? () => setOpenId(null) : undefined,
+  );
 
   const load = useCallback(async () => {
     // Row-level security already decides what comes back — this asks for every
@@ -237,7 +347,7 @@ export default function BuzzScreen() {
     <SafeAreaView className="flex-1" style={{ backgroundColor: skin.page }} edges={['top']}>
       <SpaceBackdrop />
       <AppHeader title="The Buzz" tone="wide" />
-      <ScrollView
+      <BounceScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -473,7 +583,7 @@ export default function BuzzScreen() {
             );
           })}
         </View>
-      </ScrollView>
+      </BounceScrollView>
     </SafeAreaView>
   );
 }

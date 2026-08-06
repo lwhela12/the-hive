@@ -49,6 +49,7 @@ import {
 } from '../../components/admin/GodModePanels';
 import { HIVE_GOLD, accentOnDark, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { SpaceGlobe } from '../../components/ui/SpaceGlobe';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
 import { HoneyPotLedger } from '../../components/hive/HoneyPotLedger';
 import { useSurveys } from '../../lib/hooks/useSurveys';
@@ -747,7 +748,7 @@ function SurveyTimePicker({
                 Select Time
               </Text>
             </View>
-            <ScrollView showsVerticalScrollIndicator={true}>
+            <BounceScrollView showsVerticalScrollIndicator={true}>
               {SURVEY_TIME_OPTIONS.map(option => {
                 const active = option.value === value;
                 return (
@@ -771,7 +772,7 @@ function SurveyTimePicker({
                   </Pressable>
                 );
               })}
-            </ScrollView>
+            </BounceScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1056,7 +1057,7 @@ function LockedAdminScreen({
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <SpaceGlobe />
-      <ScrollView
+      <BounceScrollView
         className="flex-1"
         contentContainerStyle={{
           flexGrow: 1,
@@ -1158,7 +1159,7 @@ function LockedAdminScreen({
             </Pressable>
           </View>
         </View>
-      </ScrollView>
+      </BounceScrollView>
     </SafeAreaView>
   );
 }
@@ -2083,10 +2084,13 @@ export default function AdminScreen() {
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <SpaceGlobe />
 
-      <ScrollView
+      {/* This used to carry `minHeight: '101%'`, which made the dashboard one
+          per cent taller than its box purely so there was something to scroll
+          and iOS would bounce. BounceScrollView draws the bounce itself, on the
+          browser too, so the page can go back to being exactly as tall as it is. */}
+      <BounceScrollView
         className="flex-1"
-        alwaysBounceVertical
-        contentContainerStyle={[dashboardOuterContentStyle, { minHeight: '101%' }] as any}
+        contentContainerStyle={dashboardOuterContentStyle}
         refreshControl={useMobileLayout ? (
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         ) : undefined}
@@ -2311,7 +2315,7 @@ export default function AdminScreen() {
             />
           )}
         </View>
-      </ScrollView>
+      </BounceScrollView>
 
       {/* Survey Create Modal */}
       <Modal visible={showSurveyModal} animationType="slide" transparent onRequestClose={() => setShowSurveyModal(false)}>
@@ -2320,7 +2324,7 @@ export default function AdminScreen() {
               this one, which is the same sheet with a date picker in it, had
               neither — so Create Survey was the button that went missing. */}
           <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: sheetMaxHeight, overflow: 'hidden' }}>
-            <ScrollView contentContainerStyle={{ padding: sheetPadding }} keyboardShouldPersistTaps="handled">
+            <BounceScrollView contentContainerStyle={{ padding: sheetPadding }} keyboardShouldPersistTaps="handled">
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 20, color: '#2d2d2d', marginBottom: 16 }}>Create Survey</Text>
             {/* A survey's name and its description are both things a person
                 writes in words, so they are the shared box with the mic inside
@@ -2370,7 +2374,7 @@ export default function AdminScreen() {
                 </Text>
               </Pressable>
             </View>
-            </ScrollView>
+            </BounceScrollView>
           </View>
         </ModalBackdrop>
       </Modal>
@@ -2390,7 +2394,7 @@ export default function AdminScreen() {
               overflow: 'hidden',
             }}
           >
-            <ScrollView
+            <BounceScrollView
               showsVerticalScrollIndicator={true}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ padding: sheetPadding, paddingBottom: 32 }}
@@ -2952,7 +2956,7 @@ export default function AdminScreen() {
                   </Text>
                 </Pressable>
               </View>
-            </ScrollView>
+            </BounceScrollView>
           </View>
         </ModalBackdrop>
       </Modal>
@@ -2964,7 +2968,7 @@ export default function AdminScreen() {
               up taller than a phone before you have typed anything, and Create
               lives underneath all of it. Ceiling on the sheet, scroll inside. */}
           <View className="bg-white rounded-t-3xl" style={{ maxHeight: sheetMaxHeight, overflow: 'hidden' }}>
-            <ScrollView contentContainerStyle={{ padding: sheetPadding }} keyboardShouldPersistTaps="handled">
+            <BounceScrollView contentContainerStyle={{ padding: sheetPadding }} keyboardShouldPersistTaps="handled">
             <Text className="text-xl font-bold text-gray-800 mb-4">
               Add Event
             </Text>
@@ -3012,7 +3016,7 @@ export default function AdminScreen() {
                 </Text>
               </Pressable>
             </View>
-            </ScrollView>
+            </BounceScrollView>
           </View>
         </ModalBackdrop>
       </Modal>

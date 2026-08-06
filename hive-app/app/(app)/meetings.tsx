@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, Pressable, Linking, useWindowDimensions, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
+import { View, Text, RefreshControl, Pressable, Linking, useWindowDimensions, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
@@ -12,6 +12,7 @@ import { MeetingSummary } from '../../components/meetings/MeetingSummary';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
 import { AppHeader } from '../../components/navigation';
 import { FadeIn } from '../../components/ui/FadeIn';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
 import { formatDateLong, parseAmericanDate } from '../../lib/dateUtils';
 import { EventDatePicker } from '../../components/ui/DatePicker';
@@ -1122,7 +1123,7 @@ export default function MeetingsScreen() {
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
       <AppHeader title="Meetings" />
 
-      <ScrollView
+      <BounceScrollView
         className="flex-1"
         contentContainerClassName="p-4"
         refreshControl={
@@ -1431,7 +1432,7 @@ export default function MeetingsScreen() {
           ))}
           </FadeIn>
         )}
-      </ScrollView>
+      </BounceScrollView>
 
       {/* Schedule Meeting Modal */}
       <ScheduleMeetingModal
@@ -1467,7 +1468,7 @@ export default function MeetingsScreen() {
             </Pressable>
           </View>
 
-          <ScrollView className="flex-1 p-4">
+          <BounceScrollView className="flex-1 p-4">
             {/* "Hive" typed anywhere in the title still becomes "HIVE", and it
                 does so for a spoken title too — the fix sits on the way in, not
                 on the keystroke. */}
@@ -1552,7 +1553,7 @@ export default function MeetingsScreen() {
                 </Text>
               </View>
             )}
-          </ScrollView>
+          </BounceScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
@@ -1572,7 +1573,7 @@ export default function MeetingsScreen() {
             {/* Three buttons today, and an admin sees all three — the ceiling
                 and the scroll are here so the fourth one somebody adds later
                 doesn't quietly fall off the end of the sheet. */}
-            <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }}>
+            <BounceScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }}>
             <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 4 }}>HIVE Slide Deck</Text>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 16, lineHeight: 18 }}>
@@ -1612,7 +1613,7 @@ export default function MeetingsScreen() {
                 </Pressable>
               )}
             </View>
-            </ScrollView>
+            </BounceScrollView>
           </Pressable>
         </View>
       </Modal>
@@ -1633,7 +1634,7 @@ export default function MeetingsScreen() {
               {/* Same rule as every other sheet: a ceiling and something to
                   scroll, so Save Link cannot end up under the bottom edge when
                   the keyboard is up on a short screen. */}
-              <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+              <BounceScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
               <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.3)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', marginBottom: 4 }}>Slide Deck URL</Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginBottom: 16, lineHeight: 18 }}>
@@ -1682,7 +1683,7 @@ export default function MeetingsScreen() {
                   </Text>
                 </Pressable>
               </View>
-              </ScrollView>
+              </BounceScrollView>
             </Pressable>
           </KeyboardAvoidingView>
         </View>

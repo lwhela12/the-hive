@@ -107,6 +107,10 @@ export interface CollapsiblePanelProps {
    *
    * Opt-in, because a page of long prose titles is better served by wrapping.
    * The Buzz names newsletters in full sentences and leaves this off.
+   *
+   * A title that still wraps with this on is a title set too big for the column
+   * it is in, and the answer is a smaller `titleStyle` — Nat, 2026-08-06: *"if
+   * it doesnt [fit], the font is too big, make it smaller."*
    */
   fitTitle?: boolean;
   /** A dashed edge — something still being written rather than finished. */
@@ -120,13 +124,35 @@ export interface CollapsiblePanelProps {
 }
 
 /**
- * How small a fitted title may go before wrapping is the kinder answer.
+ * How small a fitted title may go.
  *
- * At about three-quarters of its set size a heading still reads as a heading.
- * Below that it reads as a caption, and a title long enough to need that much
- * shrinking is better off on two comfortable lines.
+ * Nat, 2026-08-06, on "What is HIVE-Wide?" breaking across two lines: *"That
+ * should fit all in one line, if it doesnt, the font is too big, make it
+ * smaller."* That is the trade, in her words, so the floor sits low enough that
+ * nothing on a real phone reaches it — two thirds of a 17pt heading is 11.5pt,
+ * which is small, and small on one line is what she asked for.
+ *
+ * It was 0.74 and that was too high: "Welcome to HIVE-Wide" at 19pt in the
+ * HIVE-Wide welcome's column needed 0.73 and stopped one hundredth short, so the
+ * panel shrank the type AND wrapped it, which is the worst of both.
  */
-const SMALLEST_FITTED_TITLE = 0.74;
+const SMALLEST_FITTED_TITLE = 0.66;
+
+/**
+ * Whole pixels held back from the title's column before the shrink is worked out.
+ *
+ * Both numbers this maths runs on are whole pixels. On the web `onLayout`
+ * reports `offsetWidth`, which the browser rounds to the nearest integer
+ * (react-native-web's `UIManager.measure`), so a column really 187.6 points wide
+ * is reported as 188 and a title really 214.8 wide is reported as 215. Fitting
+ * the title to exactly the reported room therefore aims it at a line that is up
+ * to a point narrower than the number says — and a title one hundredth of a
+ * point too wide wraps just as hard as one that is ten points too wide.
+ *
+ * Two points covers both roundings and the sub-pixel drift of shaping the same
+ * words at a different size. It costs about one percent of the type.
+ */
+const FITTED_TITLE_SLACK = 2;
 
 export function CollapsiblePanel({
   title,
@@ -183,6 +209,15 @@ export function CollapsiblePanel({
    * There is no loop between the two: the column is `flex: 1`, so its width is
    * the row minus the icon and the chevron whatever the title does, and the
    * measuring copy is always set at the title's full size.
+   *
+   * The column is narrower than the panel by more than it looks: 16 points of
+   * padding each side, the chevron and its gap, and — where a panel has one —
+   * the icon and its gap. The HIVE-Wide welcome wears a question-mark badge, and
+   * those two pieces of furniture take 57 points off a 375-point phone before
+   * the title gets a word in.
+   *
+   * Both numbers arrive as whole pixels, which is why the shrink holds
+   * `FITTED_TITLE_SLACK` back rather than aiming at the room exactly.
    */
   const [titleRoom, setTitleRoom] = useState(0);
   const [titleWants, setTitleWants] = useState(0);
@@ -200,9 +235,10 @@ export function CollapsiblePanel({
   const baseTitleSpacing =
     typeof baseTitle.letterSpacing === 'number' ? baseTitle.letterSpacing : 0;
 
+  const titleLine = Math.max(0, titleRoom - FITTED_TITLE_SLACK);
   const titleFit =
-    fitTitle && titleRoom > 0 && titleWants > titleRoom
-      ? Math.max(SMALLEST_FITTED_TITLE, titleRoom / titleWants)
+    fitTitle && titleRoom > 0 && titleWants > titleLine
+      ? Math.max(SMALLEST_FITTED_TITLE, titleLine / titleWants)
       : 1;
 
   return (
@@ -309,6 +345,11 @@ export function CollapsiblePanel({
             </Text>
           ) : null}
           <Text
+            // A panel asked to hold its title to one line holds it to one line.
+            // The shrink above is measured and now carries slack, so this is the
+            // backstop: on a screen narrow enough to reach the floor the title
+            // trails off rather than breaking a phrase in half.
+            numberOfLines={fitTitle ? 1 : undefined}
             style={[
               baseTitle,
               titleFit < 1

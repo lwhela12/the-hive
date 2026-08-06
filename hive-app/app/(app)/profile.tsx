@@ -19,6 +19,7 @@ import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webSto
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
 import { fetchSkillWishMatches, type SkillWishMatch } from '../../lib/skillWishMatching';
 import { FadeIn } from '../../components/ui/FadeIn';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { ListSectionSkeleton } from '../../components/profile/ProfileSkeleton';
 import { BeeProgressArc } from '../../components/profile/BeeProgressArc';
 import { SkillBubbleGarden } from '../../components/profile/SkillBubbleGarden';
@@ -1696,8 +1697,11 @@ export default function ProfileScreen() {
       )}
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-      <ScrollView
+      <BounceScrollView
         ref={scrollViewRef}
+        // The skills garden takes the whole screen and handles its own drags,
+        // so scrolling is off there and the bounce goes with it.
+        enabled={!immersiveSkillsGarden}
         className="flex-1"
         contentContainerClassName={immersiveSkillsGarden ? 'p-0' : compactProfileLandscape ? 'p-1' : 'p-4'}
         contentContainerStyle={immersiveSkillsGarden ? { flexGrow: 1 } : undefined}
@@ -2650,7 +2654,7 @@ export default function ProfileScreen() {
             already see, and Sign out was a second way to do a thing the rail
             does with a confirmation. Two of everything is how a page stops
             feeling like it is about you. */}
-      </ScrollView>
+      </BounceScrollView>
       </KeyboardAvoidingView>
 
       {/* Grant Wish Modal */}
@@ -2800,7 +2804,7 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            <ScrollView
+            <BounceScrollView
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{
                 paddingHorizontal: isProfilePhone ? 18 : 26,
@@ -2808,7 +2812,7 @@ export default function ProfileScreen() {
               }}
             >
               {renderDeepQuizStep()}
-            </ScrollView>
+            </BounceScrollView>
 
             <View
               style={{

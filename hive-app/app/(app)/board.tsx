@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator, ScrollView, TextInput, Modal, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator, TextInput, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -34,6 +34,7 @@ import { confirmAction, showAlert } from '../../lib/showAlert';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { BounceScrollView, useEndBounce } from '../../components/ui/BounceScrollView';
 // Archived boards are no longer browsable (Nat 2026-07-24) — the boards-home
 // "Archive" pill is gone, so the list always shows active topics. Threads keep
 // an archive view only as a landing spot when search finds archived matches.
@@ -137,6 +138,9 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     wholeHive,
     switchCommunity,
   } = useAuth();
+  // The list of threads bounces at its ends, so a board with three posts on it
+  // reads as "that's all of them" instead of "this is stuck".
+  const threadListBounceRef = useEndBounce();
   const router = useRouter();
   const routeParams = useLocalSearchParams<{
     categoryId?: string | string[];
@@ -1727,7 +1731,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           {/* Somebody who can moderate sees five action rows under a two-line
               wish description, and Delete is the last of them. A ceiling and a
               scroll, like every other bottom sheet in the app. */}
-          <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 34 }}>
+          <BounceScrollView contentContainerStyle={{ padding: 22, paddingBottom: 34 }}>
           <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.28)', borderRadius: 2, alignSelf: 'center', marginBottom: 18 }} />
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d' }}>
             Manage Wish
@@ -1836,7 +1840,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
               <Ionicons name="chevron-forward" size={16} color="rgba(239,68,68,0.45)" />
             </Pressable>
           ) : null}
-          </ScrollView>
+          </BounceScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -2083,6 +2087,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       />
 
       <FlatList
+        ref={threadListBounceRef}
         data={visiblePosts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {

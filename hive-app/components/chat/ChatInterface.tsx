@@ -16,6 +16,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
+import { BounceScrollView } from '../ui/BounceScrollView';
 import { ChatInput, type ChatInputAttachments } from './ChatInput';
 import { SelectedImage } from '../../lib/imagePicker';
 import { uploadAttachments } from '../../lib/attachmentUpload';
@@ -63,30 +64,18 @@ const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const STICKY_BOTTOM_SCROLL_THRESHOLD = 80;
 
 /**
- * The rubber-band at the end of a scroll, which is how you tell "that's the
- * bottom" from "this is broken".
+ * The rubber-band at the end of a scroll, for the message list only.
  *
- * Nat has asked for this twice: "Any time we cant scroll, i want to have the
- * bounce feature, so you can tell, oh, thats the end of the page, not 'is this
- * broken?'" (2026-08-06).
+ * These three props are real on iOS and Android and react-native-web drops all
+ * three, so in a browser they do nothing. Everywhere else in the app that is now
+ * `components/ui/BounceScrollView.tsx`, which draws the bounce itself so the
+ * browser gets one too.
  *
- * What these three props actually do, checked in
- * `node_modules/react-native-web/dist/exports/ScrollView`:
- *
- * - **iOS (the TestFlight app)** — `bounces` and `alwaysBounceVertical` are
- *   real. `alwaysBounceVertical` is the one that matters, because it bounces
- *   even when the content already fits, which is the case Nat is describing.
- * - **Android** — `overScrollMode="always"` gives the glow at the edge.
- * - **The browser, where nearly everybody uses HIVE** — react-native-web keeps
- *   none of them. Its ScrollView renders a plain scrolling box and drops these
- *   three props on the floor, so they cost nothing and buy nothing there.
- *
- * On iOS Safari the browser gives the rubber-band itself, for free, to any box
- * that HAS something to scroll — which is why the fix that matters on web is
- * making these areas scroll at all. A box whose content already fits cannot be
- * made to bounce by any CSS: there is nothing to pull against. `public/index.html`
- * also pins the document with `body { overflow: hidden }`, so the page behind
- * the app never bounces either.
+ * The message list keeps the props instead, because it is an **inverted**
+ * FlatList: the newest message sits at the bottom, so the whole list is drawn
+ * upside down and each row is flipped back. Translating its content would send
+ * the bounce the wrong way and put "the end" at the top. `BounceScrollView`
+ * spots an upside-down list and stands aside for exactly this reason.
  */
 const BOUNCE_TO_THE_END = {
   bounces: true,
@@ -209,7 +198,7 @@ const WelcomeState = memo(function WelcomeState({
   // middle of the screen while it fits, and lets it scroll — top edge honoured —
   // the moment it doesn't.
   return (
-    <ScrollView
+    <BounceScrollView
       style={{ flex: 1 }}
       contentContainerStyle={{
         flexGrow: 1,
@@ -265,7 +254,7 @@ const WelcomeState = memo(function WelcomeState({
           ))}
         </View>
       </View>
-    </ScrollView>
+    </BounceScrollView>
   );
 });
 

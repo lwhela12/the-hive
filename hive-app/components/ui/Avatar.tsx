@@ -80,6 +80,54 @@ async function signAvatarUrl(url: string | null | undefined): Promise<string | n
 }
 
 /**
+ * Sign a whole list of faces in ONE request, before anything asks for them.
+ *
+ * `signAvatarUrl` above signs one at a time, which is right when a single face
+ * appears and wrong when a directory of them does: a comb of twelve members was
+ * twelve separate round trips, so the faces arrived one by one and Nat watched
+ * them trickle in (2026-08-06, "i wish the load times were way faster"). Supabase
+ * has a plural `createSignedUrls`, so twelve becomes one.
+ *
+ * This fills the same cache the component reads, so a screen calls it once with
+ * whatever it is about to draw and every `Avatar` underneath then resolves with
+ * no request at all. Nothing waits on it — a face that is not warmed yet still
+ * signs itself the old way, so calling this is always an optimisation and never
+ * a dependency.
+ *
+ * Outside addresses (Google account photos) are skipped: they need no signing.
+ */
+export async function warmAvatarCache(urls: (string | null | undefined)[]): Promise<void> {
+  const now = Date.now();
+  const paths = Array.from(
+    new Set(
+      urls
+        .map(avatarPathFromUrl)
+        .filter((p): p is string => {
+          if (!p) return false;
+          const hit = cache.get(p);
+          // Already good for a while, or already on its way: leave it alone.
+          return !(hit && hit.expiresAt - REFRESH_MARGIN_MS > now) && !inFlight.has(p);
+        })
+    )
+  );
+  if (paths.length === 0) return;
+
+  const { data, error } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrls(paths, TTL_SECONDS);
+  if (error || !data) {
+    console.warn('Could not batch-sign avatars', error);
+    return;
+  }
+  const expiresAt = Date.now() + TTL_SECONDS * 1000;
+  for (const row of data) {
+    // The plural call reports failures per row rather than throwing, so a single
+    // missing file cannot cost the whole directory its faces.
+    if (row.signedUrl && row.path) cache.set(row.path, { url: row.signedUrl, expiresAt });
+  }
+}
+
+/**
  * The signed form of one stored avatar, for drawing.
  *
  * Returns an outside address straight back on the first render, so a Google
