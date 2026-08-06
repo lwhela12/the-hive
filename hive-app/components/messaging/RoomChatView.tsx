@@ -30,7 +30,7 @@ import { uploadAttachments, uploadSingleImage } from '../../lib/attachmentUpload
 import { getMentionedMembers } from '../../lib/mentions';
 import { hiveDisplayName } from '../../lib/hiveBrand';
 import { getMessagesRoomLabel, getMessagesRoomSubtitle } from './hiveWideRoom';
-import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
 import { Avatar } from '../ui/Avatar';
 import { ComposerBar } from '../ui/ComposerBar';
@@ -189,14 +189,20 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
     roomMentionableMembers
   );
 
-  // "Everyone" means something different in each room: in the HIVE's own room
-  // it is the whole HIVE, and in a group chat it is the handful of people in
-  // it. This screen used to rewrite the "@all" suggestion to say which — and it
-  // cannot any more, because the suggestion list is drawn inside ComposerBar
-  // and the broadcast wording is a fixed constant in lib/mentions.ts. So the
-  // picker says "Everyone in HIVE" in a two-person chat again, which is the
-  // thing Nat spotted on 2026-08-03. Giving ComposerBar a way to name the
-  // broadcast for the room it is sitting in would put it back.
+  // "Everyone" means something different in each room, so the room says which.
+  //
+  // The HIVE's own room reaches that HIVE; the shared room reaches every HIVE;
+  // a DM or a group chat reaches the handful of people in it and nothing wider,
+  // whatever HIVE it is hosted in. That is what `closedRoom` says here, and it
+  // is why the picker stopped offering "Everyone in HIVE" in a two-person chat
+  // — the thing Nat spotted on 2026-08-03.
+  //
+  // The same object is read again when the message is sent, so the group that
+  // was offered is the group that gets notified.
+  const mentionReach = useMentionReach({
+    reach: room.reach,
+    closedRoom: room.room_type === 'community' ? null : { label: 'Everyone in this chat' },
+  });
 
   useEffect(() => {
     const customization = getRoomCustomization(room, profile?.id);
@@ -591,7 +597,8 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
         const mentionedMembers = getMentionedMembers(
           messageContent,
           activeMentionableMembers,
-          profile.id
+          profile.id,
+          mentionReach
         );
         const messagePreview = messageContent || (attachments ? 'Sent an attachment' : '');
 
@@ -1144,6 +1151,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
               }}
               mentionMembers={activeMentionableMembers}
               mentionsLoading={mentionMembersLoading}
+              mentionReach={mentionReach}
               currentUserId={profile?.id}
               header={
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mb-2">
@@ -1182,6 +1190,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
               captureDocumentDrops
               mentionMembers={activeMentionableMembers}
               mentionsLoading={mentionMembersLoading}
+              mentionReach={mentionReach}
               currentUserId={profile?.id}
             />
           </View>

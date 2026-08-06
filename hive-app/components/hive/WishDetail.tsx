@@ -16,7 +16,7 @@ import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { formatDateShort } from '../../lib/dateUtils';
 import { GrantWishModal } from './GrantWishModal';
 import { getWishDetailText, getWishQuickTitle, shouldShowWishDescription } from '../../lib/wishDisplay';
-import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { confirmAction, showAlert } from '../../lib/showAlert';
 import { LinkifiedText } from '../ui/LinkifiedText';
@@ -69,6 +69,9 @@ export function WishDetail({
   const [showGrantModal, setShowGrantModal] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
   const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
+  // A comment reaches the people who can read the wish, so the wish's own share
+  // scope is what "everyone" means in the comment box.
+  const mentionReach = useMentionReach({ reach: wish.share_scope });
 
   // Check if this is the user's own wish and can be granted
   const isOwnWish = profile?.id === wish.user_id;
@@ -166,6 +169,7 @@ export function WishDetail({
         communityId,
         content: newComment.trim(),
         members: mentionableMembers,
+        reach: mentionReach,
         wishOwnerName,
       });
       setNewComment('');
@@ -583,6 +587,7 @@ export function WishDetail({
           onFilesChange={setCommentFiles}
           mentionMembers={mentionableMembers}
           mentionsLoading={mentionMembersLoading}
+          mentionReach={mentionReach}
           currentUserId={profile?.id}
           header={replyingTo ? (
             <View className="flex-row items-center mb-2 bg-gold/10 border border-gold/25 rounded-full px-3 py-1.5 self-start">

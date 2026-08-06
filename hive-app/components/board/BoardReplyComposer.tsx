@@ -9,7 +9,7 @@ import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadAttachments } from '../../lib/attachmentUpload';
 import { getMentionedMembers, hasBroadcastMention } from '../../lib/mentions';
-import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { fetchCommunityMentionableMembers } from '../../lib/mentionableMembers';
 import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
 import { showAlert } from '../../lib/showAlert';
@@ -28,6 +28,13 @@ interface BoardReplyComposerProps {
   postId: string;
   postAuthorId?: string;
   boardName?: string;
+  /**
+   * How far the board this reply is on travels — `board_categories.reach`. A
+   * reply reaches the people who can read the thread, so the board is what
+   * tells the "@" picker who "everyone" is. Left out, the picker offers the
+   * group that cannot leak: everyone who can already see this.
+   */
+  boardReach?: 'hive' | 'all_hives' | null;
   mentionableMembers?: Pick<Profile, 'id' | 'name'>[];
   parentReplyId?: string | null;
   replyingToName?: string | null;
@@ -40,6 +47,7 @@ export function BoardReplyComposer({
   postId,
   postAuthorId,
   boardName = 'a board post',
+  boardReach = null,
   mentionableMembers = [],
   parentReplyId = null,
   replyingToName,
@@ -61,6 +69,9 @@ export function BoardReplyComposer({
     communityId,
     mentionableMembers
   );
+  // Offered from the board's own reach, and read back from it when the reply is
+  // sent, so the group the picker named is the group that gets notified.
+  const mentionReach = useMentionReach({ reach: boardReach });
 
   const hasContent = reply.trim().length > 0 || selectedImages.length > 0 || selectedFiles.length > 0;
   const inputPlaceholder = replyingToName ? 'Write your reply...' : placeholder;
@@ -124,8 +135,12 @@ export function BoardReplyComposer({
       const mentionableMembersForNotification = replyMentionsEveryone && activeMentionableMembers.length === 0
         ? await fetchCommunityMentionableMembers(communityId)
         : activeMentionableMembers;
-      const mentionedMembers = getMentionedMembers(replyText, mentionableMembersForNotification, profile.id)
-        .filter((member) => replyMentionsEveryone || member.id !== postAuthorId);
+      const mentionedMembers = getMentionedMembers(
+        replyText,
+        mentionableMembersForNotification,
+        profile.id,
+        mentionReach
+      ).filter((member) => replyMentionsEveryone || member.id !== postAuthorId);
       mentionedMembers.forEach((member) => {
         supabase.functions.invoke('notify-board-mention', {
           body: {
@@ -170,6 +185,7 @@ export function BoardReplyComposer({
       captureDocumentDrops
       mentionMembers={activeMentionableMembers}
       mentionsLoading={mentionMembersLoading}
+      mentionReach={mentionReach}
       currentUserId={profile?.id}
       header={replyingToName ? (
         <View className="flex-row items-center bg-cream/50 px-3 py-2 rounded-xl mb-2">

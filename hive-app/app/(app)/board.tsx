@@ -22,6 +22,7 @@ import { usePageSkin } from '../../lib/pageSkin';
 import { useBoardLinkedWishes, type LinkedWish } from '../../lib/hooks/useBoardLinkedWishes';
 import { getMentionedMembers } from '../../lib/mentions';
 import { fetchCommunityMentionableMembers } from '../../lib/mentionableMembers';
+import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
 import { setBoardThreadArchiveState } from '../../lib/boardThreadArchive';
 import { BOARD_HOME_EVENT } from '../../lib/boardNavigation';
@@ -241,6 +242,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const selectedCategory = selectedCategoryId
     ? categories.find((c) => c.id === selectedCategoryId) || null
     : null;
+
+  // How far a new thread on this board travels, which is how far an "@everyone"
+  // written on it travels. The composer offers from this and the notifications
+  // below are read from it, so nobody is told about a thread they cannot open.
+  const mentionReach = useMentionReach({ reach: selectedCategory?.reach });
 
   /**
    * How deep inside Boards you are, handed to the strip along the bottom.
@@ -789,7 +795,12 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       const mentionableMembers = topicMembers.length > 0
         ? topicMembers
         : await fetchCommunityMentionableMembers(communityId);
-      const mentionedMembers = getMentionedMembers(`${title} ${content}`, mentionableMembers, profile.id);
+      const mentionedMembers = getMentionedMembers(
+        `${title} ${content}`,
+        mentionableMembers,
+        profile.id,
+        mentionReach
+      );
       mentionedMembers.forEach((member) => {
         supabase.functions.invoke('notify-board-mention', {
           body: {

@@ -8,7 +8,8 @@ import { CollapsiblePanel } from '../../components/ui/CollapsiblePanel';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
+import { taggableHiveFromCommunity } from '../../lib/mentionableMembers';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
 import { SPACE_SKIN } from '../../lib/pageSkin';
@@ -189,13 +190,19 @@ export default function BuzzScreen() {
    * the one you are allowed to add to — rather than whichever HIVE you last
    * stood in.
    *
-   * Naming a whole HIVE ("@OG HIVE, don't forget…") is a separate idea of Nat's
-   * and is parked: telling a whole community something needs its own rules about
-   * who gets told and how. Individuals only for now.
+   * Naming a whole HIVE ("@OG HIVE, don't forget…") works here, and this is the
+   * one box where it is free of consequence: a shout-out is words in a letter
+   * and sends no notification to anybody. So the picker names the HIVE whose
+   * letter this is — not whichever HIVE you last stood in — and what you type
+   * is read back by the Shout-outs tab and the draft exactly as written.
    */
   const { members: mentionableMembers, loading: mentionsLoading } = useMentionableMembers(
     canAddShoutOut ? collecting?.community_id : null
   );
+  const mentionReach = useMentionReach({
+    reach: 'hive',
+    hive: taggableHiveFromCommunity(collecting?.community),
+  });
 
   const submitShoutOut = async () => {
     const content = shoutOut.trim();
@@ -245,18 +252,21 @@ export default function BuzzScreen() {
           {/* This month, still being written. An invitation, drawn as one —
               and answerable right here. "Add it here" now means here.
 
-              It opens and shuts like the letters below it. Nat spotted on
-              2026-08-06 that this was the one card on the page with no way to
-              put it away, and it grows — everything you have already added to
-              the letter is read back to you inside it. It starts OPEN, unlike
-              the archive: it is the one thing on this page you can act on, and
-              an invitation you have to go looking for is not an invitation. */}
+              It opens and shuts like the letters below it, and it arrives SHUT
+              like them too. Nat, from her phone on 2026-08-06: *"it should
+              always start out with the collapsed view, otherwise its very
+              confusing."* An earlier pass judged this one card worth leaving
+              open because it is the thing you can act on; she has overruled
+              that. Every card on the page now looks the same on arrival, so the
+              page reads as a list of things you may open rather than one open
+              thing with a list hiding under it. The eyebrow says "Still being
+              written" while it is shut, which is the invitation. */}
           {!loading && collecting ? (
             <CollapsiblePanel
               eyebrow="Still being written"
               title={collecting.title}
               dashed
-              defaultOpen
+              defaultOpen={false}
               colours={{
                 ink: skin.ink,
                 inkSoft: skin.inkSoft,
@@ -330,6 +340,7 @@ export default function BuzzScreen() {
                     // in the newsletter, which is the whole point of writing one.
                     mentionMembers={mentionableMembers}
                     mentionsLoading={mentionsLoading}
+                    mentionReach={mentionReach}
                     currentUserId={profile?.id}
                   />
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

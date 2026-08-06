@@ -5,7 +5,7 @@ import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types'
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadAttachments } from '../../lib/attachmentUpload';
-import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
@@ -47,6 +47,10 @@ export function BoardComposer({
     category?.community_id,
     mentionableMembers
   );
+  // A thread reaches exactly as far as the board it is posted to, so the board
+  // is what tells the "@" picker who "everyone" is. On this HIVE's own board
+  // that is this HIVE, by name; on a shared board it is every HIVE.
+  const mentionReach = useMentionReach({ reach: category?.reach });
 
   const isEditMode = !!existingPost;
 
@@ -236,6 +240,7 @@ export function BoardComposer({
               submitting={submitting}
               mentionMembers={activeMentionableMembers}
               mentionsLoading={mentionMembersLoading}
+              mentionReach={mentionReach}
               currentUserId={userId}
             />
 

@@ -941,8 +941,28 @@ function AdminPanel({
                 name. */}
             {action ? <View style={{ marginBottom: -4 }}>{action}</View> : null}
           </View>
+          {/* Air around the chips, because they really do wrap.
+              Nat, 2026-08-06, on the Newsletter box from her phone: Write this
+              month's / Shout-outs (11) / Signed up (0) came out on two lines
+              packed against each other and against the panel below. Three
+              labels of that length cannot share 280 points, so wrapping is the
+              right answer and the spacing was the wrong half of it: one `gap`
+              set the space between chips side to side AND line to line, and the
+              8 underneath was the same 8 the title row uses, which reads as
+              "attached to" rather than "above".
+              Line to line gets more than chip to chip, and the panel gets a
+              clear 12. */}
           {(tabs ?? []).length > 0 ? (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                columnGap: 6,
+                rowGap: 8,
+                marginTop: 2,
+                marginBottom: 12,
+              }}
+            >
               {(tabs ?? []).map(renderTab)}
             </View>
           ) : null}
@@ -2000,6 +2020,30 @@ export default function AdminScreen() {
   // could have the width to themselves. Without this the list inside every box
   // lost a row to make room for the fix.
   const mobilePanelHeight = Math.min(470, Math.max(380, Math.floor(height * 0.46) + 40));
+  /**
+   * How tall a bottom sheet on this screen may grow, in real points.
+   *
+   * Nat, from her iPhone on 2026-08-06, opening Check-in questions & responses:
+   * *"if i click 'check in and surveys' the bottom one, it opens up in a way
+   * that i cant see everything."*
+   *
+   * Every sheet here said `maxHeight: '94%'`. A percentage height only means
+   * something when the thing above it has a height of its own to take a
+   * percentage OF, and the sheet's parent — the tap-swallowing wrapper inside
+   * ModalBackdrop — is sized by its contents. So the ceiling was quietly
+   * dropped, the sheet grew as tall as the survey editor wanted (a title, a
+   * description, a date, every response, every question, and Save at the very
+   * bottom), and the ScrollView inside it never had a box small enough to need
+   * scrolling. The page could not scroll either, because a modal is not the
+   * page. Everything past the fold was simply unreachable.
+   *
+   * A number cannot be ignored. The window is measured right here, so the sheet
+   * is capped at real points on both a phone and a browser, the ScrollView gets
+   * a real box, and the Save button is always a scroll away rather than gone.
+   */
+  const sheetMaxHeight = Math.round(height * 0.92);
+  /** Sheets keep 16 points of margin on a phone, 24 where there is room. */
+  const sheetPadding = useMobileLayout ? 16 : 24;
   const dashboardOuterContentStyle: ViewStyle = useMobileLayout
     ? { padding: 16 }
     : { padding: 16, paddingBottom: 10 };
@@ -2074,7 +2118,7 @@ export default function AdminScreen() {
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={true}
                 >
-                  {/* Meeting tools — quick links to the meeting-day surfaces */}
+                  {/* Meeting tools — where they live, and the check-in behind them */}
                   <View
                     style={{
                       borderBottomWidth: 1,
@@ -2096,41 +2140,63 @@ export default function AdminScreen() {
                     >
                       Meeting tools
                     </Text>
-                    {/* The four meeting-day links (Meeting Helper, Monthly
-                        Tune-up, Newsletter Draft, Halfway Check-in) moved to the
-                        Meetings tab on 2026-08-01, at Nat's call — they are what
-                        you reach for on meeting day, not settings you configure
-                        once. What stays here is the survey machinery.
+                    {/* A sign, not a door.
+                        Nat, from her phone on 2026-08-06: *"i hate that the
+                        'meeting tools' brings you inside another HIVE, that was
+                        super annoying, because i dont want to just drop into a
+                        random meeting page on a random HIVE, right? hated it."*
 
-                        Nat, 2026-08-03: "where did all my meeting helpers go?!?!"
-                        The move was right; the signpost was not. Admin is only
-                        reachable FROM HIVE-Wide, and Meetings is hidden AT
-                        HIVE-Wide — so from this page the old one-line link
-                        pointed at a tab the rail won't take you to, and the
-                        tools read as deleted rather than moved. */}
-                    {([
-                      { label: 'Every meeting tool now sits inside its own HIVE, in the boxes above', emoji: '📅', route: '/meetings', params: {} },
-                    ] as const).map((tool) => (
-                      <Pressable
-                        key={`${tool.route}-${tool.label}`}
-                        onPress={() => router.push({ pathname: tool.route as any, params: { from: 'admin', ...tool.params } })}
-                        style={({ pressed }) => ({
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          paddingHorizontal: 14,
-                          paddingVertical: 8,
-                          backgroundColor: pressed ? '#fbf4e3' : 'transparent',
-                        })}
-                      >
-                        <Text style={{ fontSize: 15, marginRight: 8 }}>{tool.emoji}</Text>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', flex: 1 }}>
-                          {tool.label}
-                        </Text>
-                        <Ionicons name="chevron-forward" size={15} color="#bd9348" />
-                      </Pressable>
-                    ))}
+                        The four meeting-day links (Meeting Helper, Monthly
+                        Tune-up, Newsletter Draft, Halfway Check-in) moved into
+                        each HIVE's own box on 2026-08-01, at Nat's call — they
+                        are what you reach for on meeting day, and every one of
+                        them runs for exactly one HIVE. This line is how the old
+                        home tells you where they went.
+
+                        It was a Pressable that pushed you to /meetings. This
+                        screen is reached from HIVE-Wide, where you are standing
+                        above all the HIVEs and have picked none — so that tap
+                        landed you in whichever HIVE you happened to be in last,
+                        with its meetings open, under no name. A sentence that
+                        reads like a signpost and behaves like a trapdoor.
+
+                        Words, then. Not a HIVE picker either: what it points at
+                        is on this very page, a little further down — each HIVE's
+                        own box, with Meeting tools as one of its tabs — so a
+                        picker here would be a second way to choose a HIVE
+                        immediately before choosing one. Scrolling is the shorter
+                        route and it never moves you anywhere.
+
+                        "Below", not "above": the boxes were reordered on
+                        2026-08-06 to Surveys, Newsletter, then the HIVEs
+                        (ADMIN_PANEL_ORDER), which put them underneath this one. */}
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'flex-start',
+                        gap: 8,
+                        paddingHorizontal: 14,
+                        paddingTop: 4,
+                        paddingBottom: 10,
+                      }}
+                    >
+                      <Text style={{ fontSize: 15 }}>📅</Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#8a6b30', flex: 1 }}>
+                        Every meeting tool sits inside its own HIVE. Open that HIVE&rsquo;s
+                        box below and choose its Meeting tools tab.
+                      </Text>
+                    </View>
                     {/* The monthly check-in lives here as the "engine" behind the
-                        Tune-up, not as a loose survey — opens the same editor/responses. */}
+                        Tune-up, not as a loose survey — opens the same editor/responses.
+
+                        Nat asked whether this row had the same fault as the one
+                        above. It stays where you are — the editor is a sheet on
+                        this screen — so nothing moves you into another HIVE. What
+                        it did share was the silence about WHICH HIVE: this box
+                        lists the surveys of the HIVE you last stood in, so from
+                        HIVE-Wide it opened an unnamed HIVE's check-in. The HIVE's
+                        name is on the row now, so you know whose questions you
+                        are about to edit before you press it. */}
                     {(() => {
                       const checkIn = allSurveys.find((s) => /monthly\s+check-?in/i.test(s.title));
                       if (!checkIn) return null;
@@ -2138,6 +2204,8 @@ export default function AdminScreen() {
                         <Pressable
                           key="monthly-check-in"
                           onPress={() => openSurveyEditor(checkIn)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Check-in questions and responses for ${hiveDisplayName(community?.name)}`}
                           style={({ pressed }) => ({
                             flexDirection: 'row',
                             alignItems: 'center',
@@ -2147,9 +2215,14 @@ export default function AdminScreen() {
                           })}
                         >
                           <Text style={{ fontSize: 15, marginRight: 8 }}>📊</Text>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30', flex: 1 }}>
-                            Check-in questions & responses
-                          </Text>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
+                              Check-in questions & responses
+                            </Text>
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: '#9a8060', marginTop: 1 }}>
+                              {hiveDisplayName(community?.name)}
+                            </Text>
+                          </View>
                           <Ionicons name="chevron-forward" size={15} color="#bd9348" />
                         </Pressable>
                       );
@@ -2246,8 +2319,8 @@ export default function AdminScreen() {
           {/* The Survey Editor next door already had a ceiling and a scroll;
               this one, which is the same sheet with a date picker in it, had
               neither — so Create Survey was the button that went missing. */}
-          <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%', overflow: 'hidden' }}>
-            <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
+          <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: sheetMaxHeight, overflow: 'hidden' }}>
+            <ScrollView contentContainerStyle={{ padding: sheetPadding }} keyboardShouldPersistTaps="handled">
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 20, color: '#2d2d2d', marginBottom: 16 }}>Create Survey</Text>
             {/* A survey's name and its description are both things a person
                 writes in words, so they are the shared box with the mic inside
@@ -2305,10 +2378,22 @@ export default function AdminScreen() {
       {/* Survey Editor Modal */}
       <Modal visible={!!editingSurvey} animationType="slide" transparent onRequestClose={closeSurveyEditor}>
         <ModalBackdrop onClose={closeSurveyEditor} style={{ justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#fffdf5', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '94%' }}>
+          {/* The ceiling is points rather than a percentage — see sheetMaxHeight
+              above for what the percentage was doing instead. `overflow: hidden`
+              keeps the responses and questions inside the rounded top corners. */}
+          <View
+            style={{
+              backgroundColor: '#fffdf5',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              maxHeight: sheetMaxHeight,
+              overflow: 'hidden',
+            }}
+          >
             <ScrollView
               showsVerticalScrollIndicator={true}
-              contentContainerStyle={{ padding: 24, paddingBottom: 32 }}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ padding: sheetPadding, paddingBottom: 32 }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
                 <View style={{ flex: 1 }}>
@@ -2878,8 +2963,8 @@ export default function AdminScreen() {
           {/* Title, date, a growing description and the audience toggle stack
               up taller than a phone before you have typed anything, and Create
               lives underneath all of it. Ceiling on the sheet, scroll inside. */}
-          <View className="bg-white rounded-t-3xl" style={{ maxHeight: '90%', overflow: 'hidden' }}>
-            <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
+          <View className="bg-white rounded-t-3xl" style={{ maxHeight: sheetMaxHeight, overflow: 'hidden' }}>
+            <ScrollView contentContainerStyle={{ padding: sheetPadding }} keyboardShouldPersistTaps="handled">
             <Text className="text-xl font-bold text-gray-800 mb-4">
               Add Event
             </Text>

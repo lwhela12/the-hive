@@ -32,6 +32,7 @@ import { FIELD_LOOK } from '../../components/ui/Input';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import { showAlert } from '../../lib/showAlert';
 import { getMentionedMembers, hasBroadcastMention } from '../../lib/mentions';
+import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import {
   formatMeetingDate,
   getAttendance,
@@ -268,6 +269,10 @@ export default function MeetingHelperScreen() {
     lastUpdatedAt,
     refresh: refreshArrivals,
   } = useArrivalBoard({ pollingEnabled: slideIndex <= 1 });
+
+  // A meeting is one HIVE in one room, and a to-do jotted here lands on that
+  // HIVE's lists — so "@all" is this HIVE, and the picker says its name.
+  const mentionReach = useMentionReach({ reach: 'hive' });
 
   // Deck data — loaded once on mount, refreshed via the subtle refresh button.
   const [notes, setNotes] = useState<MeetingHelperNotes>({});
@@ -864,7 +869,7 @@ export default function MeetingHelperScreen() {
     // lands on everyone else's list — not the subject's own.
     const targets = hasBroadcastMention(text)
       ? members.filter((member) => member.id !== aboutMember.id)
-      : getMentionedMembers(text, members);
+      : getMentionedMembers(text, members, undefined, mentionReach);
     const assignees = targets.length > 0
       ? members.filter((member) => targets.some((target) => target.id === member.id))
       : members.filter((member) => member.id === aboutMember.id);
@@ -2375,6 +2380,7 @@ export default function MeetingHelperScreen() {
                   // No currentUserId on purpose: whoever is typing must still be
                   // able to put a to-do on their OWN list with "@their name".
                   mentionMembers={members}
+                  mentionReach={mentionReach}
                 />
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
                   <Pressable

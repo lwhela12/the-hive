@@ -490,6 +490,16 @@ export interface BoardCategory extends Record<string, unknown> {
   name: string;
   description?: string;
   category_type: BoardCategoryType;
+  /**
+   * How far this board travels. 'hive' is the boards of the HIVE that owns the
+   * row; 'all_hives' is a shared board on HIVE-Wide, read by every HIVE
+   * whichever one created it. Mirrors `chat_rooms.reach` deliberately.
+   *
+   * The column has been live since the shared boards shipped; the type had
+   * never caught up, so every screen reading it got `unknown` off the index
+   * signature and had to cast.
+   */
+  reach?: 'hive' | 'all_hives';
   topic_kind?: 'discussion' | 'hd_board' | 'helper_log' | 'newsletter' | 'compliments';
   goal_title?: string | null;
   owner_user_id?: string | null;

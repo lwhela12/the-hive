@@ -117,13 +117,19 @@ export default function AppLayout() {
   const { totalUnread: totalUnreadDMs } = useTotalUnreadDMs(communityId ?? undefined, profile?.id);
   const restoredNativePathRef = useRef(false);
 
-  // The rail starts OPEN on anything with room for it, and people collapse it
-  // if they want to (Nat 2026-08-03). Icons alone are a quiz — the whole point
-  // of the rail is that you can see where everything is without hunting.
+  // Where the rail STARTS, on a first visit.
   //
-  // A phone still starts collapsed, because there the expanded rail covers the
-  // page rather than sitting beside it, and opening onto a menu instead of the
-  // app would be a worse first second.
+  // The rail has three sizes as of 2026-08-06 — big, medium, small — and it owns
+  // and remembers which one a person picked (`components/navigation/SideRail`).
+  // This boolean is the opening offer and nothing more: true starts at big, the
+  // full drawer, and false starts at medium, the narrow rail with a small name
+  // under every picture. Once somebody has chosen a size, their choice wins.
+  //
+  // A wide screen starts big, because icons alone are a quiz and the whole point
+  // of the rail is seeing where everything is without hunting (Nat 2026-08-03).
+  // A phone starts medium, because there the big drawer covers the page rather
+  // than sitting beside it, and opening onto a menu instead of the app would be
+  // a worse first second. Nobody is ever STARTED at small.
   const [railExpanded, setRailExpanded] = useState(() => (
     Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerWidth >= 768 : false
   ));

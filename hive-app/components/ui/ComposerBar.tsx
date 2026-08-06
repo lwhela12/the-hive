@@ -9,6 +9,7 @@ import { submitOnEnter } from '../../lib/submitOnEnter';
 import { useDictation } from '../../lib/hooks/useDictation';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZone';
+import type { MentionReach } from '../../lib/mentions';
 import { FIELD_LOOK, fieldLookFor } from './Input';
 import { usePageSkin } from '../../lib/pageSkin';
 import { AttachmentPicker } from './AttachmentPicker';
@@ -134,6 +135,17 @@ export interface ComposerBarProps {
   mentionMembers?: Pick<Profile, 'id' | 'name'>[];
   mentionsLoading?: boolean;
   currentUserId?: string;
+  /**
+   * How far what is written here can travel — build it with `useMentionReach()`
+   * on the screen that knows: the room's reach, the board's reach, the wish's
+   * share scope.
+   *
+   * It decides which whole-group rows the picker offers and what the "you
+   * tagged everyone" pill says. Left out, both settle on the one group that
+   * cannot leak — everyone who can already see this — so a screen that is not
+   * sure passes nothing rather than a guess.
+   */
+  mentionReach?: MentionReach | null;
 
   containerClassName?: string;
   fieldClassName?: string;
@@ -178,6 +190,7 @@ export function ComposerBar({
   captureDocumentDrops = false,
   mentionMembers = NO_MEMBERS,
   mentionsLoading = false,
+  mentionReach = null,
   currentUserId,
   containerClassName = '',
   fieldClassName = '',
@@ -200,6 +213,7 @@ export function ComposerBar({
     onChangeText: setText,
     members: mentionMembers,
     currentUserId,
+    reach: mentionReach,
   });
   const mentionsOn = mentionMembers.length > 0 || mentionsLoading;
 
@@ -348,12 +362,19 @@ export function ComposerBar({
     </View>
   ) : null;
 
-  const taggedPills = mentionsOn && (mention.mentionsEveryone || mention.mentionedMembers.length > 0) ? (
+  // Who a whole-group tag actually reaches, in words. This pill used to read
+  // "Tagged everyone in HIVE" no matter what — which named nobody once there
+  // was more than one HIVE, and was flatly wrong in a two-person chat. The
+  // sentence now comes from the same reach the picker offered from, so the pill
+  // and the row you tapped say the same thing.
+  const groupMentionLabel = mention.groupMentionLabel;
+
+  const taggedPills = mentionsOn && (groupMentionLabel || mention.mentionedMembers.length > 0) ? (
     <View className={`flex-row flex-wrap ${isChat ? 'mb-2' : 'mt-2'}`} style={{ gap: 6 }}>
-      {mention.mentionsEveryone ? (
+      {groupMentionLabel ? (
         <View className="bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
           <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-blue-700 text-xs">
-            Tagged everyone in HIVE
+            {groupMentionLabel}
           </Text>
         </View>
       ) : (
@@ -376,6 +397,7 @@ export function ComposerBar({
       suggestions={mention.mentionSuggestions}
       onSelect={mention.selectMention}
       placement={isChat ? 'above' : 'below'}
+      reach={mentionReach}
     />
   ) : null;
 

@@ -4,6 +4,7 @@ import { SelectedFile } from '../../lib/filePicker';
 import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
 import { ComposerBar } from '../ui/ComposerBar';
+import type { MentionReach } from '../../lib/mentions';
 import type { Profile } from '../../types';
 
 const DRAFT_KEY = 'clive-message';
@@ -25,6 +26,12 @@ interface ChatInputProps {
   communityId?: string | null;
   currentUserId?: string;
   mentionableMembers?: Pick<Profile, 'id' | 'name'>[];
+  /**
+   * How far what is typed here travels, from `useMentionReach()`. It names the
+   * group rows in the "@" picker. Left out, the picker offers the group it can
+   * always be sure of — everyone who can already see this.
+   */
+  mentionReach?: MentionReach | null;
   messageMaxLength?: number;
 }
 
@@ -45,6 +52,7 @@ export const ChatInput = memo(function ChatInput({
   communityId,
   currentUserId,
   mentionableMembers = [],
+  mentionReach = null,
   messageMaxLength = DEFAULT_MESSAGE_MAX_LENGTH,
 }: ChatInputProps) {
   const [inputText, setInputText, clearInputDraft] = usePersistentTextDraft(draftKey);
@@ -91,6 +99,7 @@ export const ChatInput = memo(function ChatInput({
       captureDocumentDrops
       mentionMembers={activeMentionableMembers}
       mentionsLoading={mentionMembersLoading}
+      mentionReach={mentionReach}
       currentUserId={currentUserId}
     />
   );

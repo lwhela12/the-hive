@@ -14,7 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import { invalidateWishQueries } from '../../lib/queryClient';
-import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { notifyWishMentions } from '../../lib/wishMentions';
 import { syncWishEditToLinkedBoard } from '../../lib/wishBoardLinking';
 import { ComposerBar } from '../ui/ComposerBar';
@@ -110,6 +110,10 @@ export function AddWishModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
+  // A wish travels exactly as far as the scope picked below it, so that is what
+  // "everyone" means in this box. Move the picker from This HIVE to HIVE-Wide
+  // and the "@" rows change with it, because they read the same value.
+  const mentionReach = useMentionReach({ reach: wishScope });
   const isEditMode = !!existingWish;
   const isLinkedWish = !!linkedBoardCategory && !existingWish;
 
@@ -319,6 +323,7 @@ export function AddWishModal({
           communityId,
           content: wishText.trim(),
           members: mentionableMembers,
+          reach: mentionReach,
           wishOwnerName: wishOwnerName || (ownerUserId === userId ? undefined : 'another member'),
         });
       }
@@ -467,6 +472,7 @@ export function AddWishModal({
                   onFilesChange={setSelectedFiles}
                   mentionMembers={mentionableMembers}
                   mentionsLoading={mentionMembersLoading}
+                  mentionReach={mentionReach}
                   currentUserId={userId}
                 />
                 {/* Who can see this wish. More eyes is sometimes exactly what

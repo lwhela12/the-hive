@@ -23,7 +23,7 @@ import {
 } from '../../lib/webStorage';
 import { deleteWishById } from '../../lib/wishMutations';
 import { getCycleStart, getHalfwayDoneKey } from '../../lib/meetingCycle';
-import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { Avatar } from '../../components/ui/Avatar';
@@ -661,6 +661,9 @@ export default function MonthlyTuneupScreen() {
   const [editingProfileField, setEditingProfileField] = useState<string | null>(null);
   const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const { members: mentionableMembers, loading: mentionableMembersLoading } = useMentionableMembers(communityId);
+  // The check-in and the shout-out box are one HIVE's, so "@all" is this HIVE
+  // and the picker names it rather than saying "HIVE" at a world with several.
+  const mentionReach = useMentionReach({ reach: 'hive' });
   const { wishes, loading: wishesLoading, refresh: refreshWishes, grantWish } = useWishes();
   const {
     availableSurveys,
@@ -711,6 +714,7 @@ export default function MonthlyTuneupScreen() {
     members: mentionableMembers,
     currentUserId: profile?.id,
     suggestionLimit: 50,
+    reach: mentionReach,
   });
 
   const loadNewsletterEvents = useCallback(async () => {
@@ -2944,6 +2948,7 @@ export default function MonthlyTuneupScreen() {
               submitting={newsletterPosting}
               mentionMembers={mentionableMembers}
               mentionsLoading={mentionableMembersLoading}
+              mentionReach={mentionReach}
               currentUserId={profile?.id}
             />
             <Pressable

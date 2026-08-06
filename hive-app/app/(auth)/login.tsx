@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, Text, Pressable, Image, ActivityIndicator, Alert, Platform } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, Pressable, Image, ActivityIndicator, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { StatusBar } from 'expo-status-bar';
@@ -7,14 +7,110 @@ import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { sanitizeReturnTo } from '../../lib/authReturnTo';
+import { showAlert } from '../../lib/showAlert';
+import {
+  getStoredItemAsync,
+  setStoredItemAsync,
+  removeStoredItemAsync,
+} from '../../lib/webStorage';
 
-import { ThinkingBee } from '../../components/ui/ThinkingBee';
 WebBrowser.maybeCompleteAuthSession();
+
+/* ---------------------------------------------------------------------------
+   Naming the account you are about to sign in with.
+
+   Nat, 2026-08-06, on her phone: "This has the option to sign in with a
+   different account, but it doesn't show which account you're about to log in
+   with, so how do you know if you want to log in with a different account?"
+   She is right — "different" only means something next to a "current".
+
+   What is actually knowable here: nothing about Google. Google's own account
+   chooser opens after the tap, in Google's page, so the app cannot know who it
+   is about to be offered. What the app can know is who signed in on THIS
+   DEVICE last time. So the screen remembers that, says it on the button, and
+   falls back to plain "Continue with Google" for a device that has never seen
+   anybody.
+   --------------------------------------------------------------------------- */
+
+/** Where the hint lives. Same device, same storage the session already uses. */
+const LAST_SIGN_IN_KEY = 'hive.last-sign-in';
+
+/**
+ * Turn nat@gmail.com into na•••@gmail.com.
+ *
+ * The privacy call, made deliberately: a HIVE is invitation only, so a full
+ * address on the sign-in screen tells a borrowed or shared phone both who owns
+ * it and that they are a member. Two letters and the provider are enough to
+ * recognise your own address — which is the entire job — and are no use to a
+ * stranger reading over a shoulder. The domain stays whole because the real
+ * case for "which account" is somebody with a personal Google and a work one.
+ *
+ * The mask is a fixed three dots so it does not leak how long the address is,
+ * and the masking happens BEFORE the value is written down, so the full
+ * address is never stored anywhere on the device by this screen.
+ */
+function maskEmailForHint(email: string): string | null {
+  const trimmed = email.trim().toLowerCase();
+  const at = trimmed.lastIndexOf('@');
+  if (at < 1 || at === trimmed.length - 1) return null;
+
+  const name = trimmed.slice(0, at);
+  const domain = trimmed.slice(at + 1);
+  const shown = name.length >= 3 ? name.slice(0, 2) : name.slice(0, 1);
+  return `${shown}•••@${domain}`;
+}
+
+async function rememberSignIn(email: string | null | undefined) {
+  const hint = email ? maskEmailForHint(email) : null;
+  if (hint) await setStoredItemAsync(LAST_SIGN_IN_KEY, hint);
+}
+
+async function forgetSignIn() {
+  await removeStoredItemAsync(LAST_SIGN_IN_KEY);
+}
+
+/*
+   This listener sits outside the component on purpose.
+
+   Expo Router builds its route tree by importing every file under `app/`, so
+   this runs once when the app boots and keeps listening whichever screen is on
+   screen. That is what makes it work in a browser, where nearly everybody is:
+   the Google redirect lands back on "/" and this login screen is never
+   rendered, so a listener living inside the component would never witness the
+   sign-in it is trying to remember.
+
+   Sign-out is caught here too, which means the address is cleared without
+   reaching into the three screens that offer a Log out button.
+
+   If a future router version starts loading routes lazily, this simply stops
+   recording and the button goes back to saying "Continue with Google". The
+   screen keeps working either way.
+*/
+if (Platform.OS !== 'web' || typeof window !== 'undefined') {
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT') {
+      void forgetSignIn();
+      return;
+    }
+    void rememberSignIn(session?.user?.email);
+  });
+}
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
+  const [accountHint, setAccountHint] = useState<string | null>(null);
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const safeReturnTo = sanitizeReturnTo(returnTo);
+
+  useEffect(() => {
+    let stillHere = true;
+    void getStoredItemAsync(LAST_SIGN_IN_KEY).then((stored) => {
+      if (stillHere) setAccountHint(stored);
+    });
+    return () => {
+      stillHere = false;
+    };
+  }, []);
 
   const handleGoogleSignIn = async (forceAccountPicker = false) => {
     try {
@@ -93,11 +189,24 @@ export default function LoginScreen() {
         }
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to sign in with Google. Please try again.');
+      // Was `Alert.alert`, which does nothing at all in a browser — so a failed
+      // sign-in looked like a button that did nothing (2026-08-06).
+      showAlert('Sign-in failed', 'We could not sign you in with Google. Please try again.');
       console.error('Sign in error:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * Somebody else's turn. Forget the address first, so a person who taps this
+   * and then walks away has not left the last person's name on the screen for
+   * whoever picks the phone up next. Signing in again writes a fresh one.
+   */
+  const handleDifferentAccount = async () => {
+    setAccountHint(null);
+    await forgetSignIn();
+    await handleGoogleSignIn(true);
   };
 
   return (
@@ -106,7 +215,14 @@ export default function LoginScreen() {
     // of the same marketing (Nat 2026-08-02). Same seal, opposite world.
     <SafeAreaView style={{ flex: 1, backgroundColor: '#33271a' }}>
       <StatusBar style="light" />
-      <View className="flex-1 justify-center px-6 py-10">
+      {/* The page grew a divider and more breathing room around the join line,
+          and a 375 x 667 phone has barely enough height for all of it. A plain
+          centred View would silently crop the bottom off; this keeps the
+          content centred when it fits and lets it scroll when it doesn't. */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 }}
+      >
         <View className="w-full max-w-md mx-auto items-center">
           <Image
             source={require('../../assets/HIVE Logo Transparent  BG.png')}
@@ -133,7 +249,7 @@ export default function LoginScreen() {
             style={{
               fontFamily: 'Lato_400Regular', fontSize: 14, lineHeight: 21,
               color: 'rgba(246,244,229,0.62)', textAlign: 'center',
-              marginTop: 10, marginBottom: 30, maxWidth: 300,
+              marginTop: 10, marginBottom: 28, maxWidth: 300,
             }}
           >
             {/* Two sentences, two lines. The first says what this place is; the
@@ -150,12 +266,22 @@ export default function LoginScreen() {
               while the spinner is in there, so it doesn't collapse to a dot
               mid sign-in and snap back; maxWidth keeps it inside the column on
               a narrow phone. Vertical padding is unchanged, so it still stands
-              about 52 points tall — comfortably over the 44 a thumb needs. */}
+              about 52 points tall — comfortably over the 44 a thumb needs.
+
+              With an address on it the label is longer, so it shrinks and
+              ellipsises from the middle — the provider at the end is the half
+              you recognise yourself by, so that is the half that survives. */}
           <Pressable
             onPress={() => handleGoogleSignIn()}
             disabled={loading}
+            accessibilityRole="button"
+            accessibilityLabel={
+              accountHint
+                ? `Continue as ${accountHint}, the account that signed in on this device last`
+                : 'Continue with Google'
+            }
             style={{ minWidth: 236, maxWidth: '100%', opacity: loading ? 0.5 : 1 }}
-            className="flex-row items-center justify-center bg-white rounded-xl py-4 px-6 active:opacity-80"
+            className="flex-row items-center justify-center bg-white rounded-xl py-4 px-5 active:opacity-80"
           >
             {loading ? (
               // Charcoal, because the spinner sits on the white button. It was
@@ -167,27 +293,56 @@ export default function LoginScreen() {
                   source={{ uri: 'https://www.google.com/favicon.ico' }}
                   style={{ width: 20, height: 20, marginRight: 12 }}
                 />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-base text-charcoal">
-                  Continue with Google
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                  // minWidth 0 is what lets a long address actually shrink in a
+                  // browser; without it the flex row refuses to go under the
+                  // text's own width and the button pushes past the column.
+                  style={{ fontFamily: 'Lato_700Bold', flexShrink: 1, minWidth: 0 }}
+                  className="text-base text-charcoal"
+                >
+                  {accountHint ? `Continue as ${accountHint}` : 'Continue with Google'}
                 </Text>
               </>
             )}
           </Pressable>
 
+          {/* Without a remembered address there is no "current" account, so
+              "different" would be measuring against nothing. The wording
+              changes rather than the button disappearing — a browser can be
+              quietly signed into a Google account nobody on this screen has
+              named, and this is still the way past it. */}
           <Pressable
-            onPress={() => handleGoogleSignIn(true)}
+            onPress={() => void handleDifferentAccount()}
             disabled={loading}
-            className="mt-4 py-2 active:opacity-60"
+            accessibilityRole="button"
+            style={{ marginTop: 18, paddingVertical: 12, paddingHorizontal: 8 }}
+            className="active:opacity-60"
           >
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.5)' }}>
-              Use a different account &rarr;
+              {accountHint ? 'Use a different account' : 'Choose a Google account'} &rarr;
             </Text>
           </Pressable>
 
+          {/* Nat, 2026-08-06: "this is still too squishy, there needs to be a
+              space here." The join line used to be the same tappable box as
+              the rule above it, hanging off the hairline with 24 points of
+              padding and nothing below it at all. The rule is its own thing
+              now, with real air on both sides, and the link is its own tap
+              target with room underneath. */}
+          <View
+            style={{
+              width: '100%', height: 1, marginTop: 26,
+              backgroundColor: 'rgba(222,193,129,0.22)',
+            }}
+          />
+
           <Pressable
             onPress={() => Linking.openURL('https://the-hive.app')}
-            className="mt-7 pt-6 active:opacity-70"
-            style={{ borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.22)', width: '100%' }}
+            accessibilityRole="link"
+            style={{ marginTop: 26, paddingVertical: 12, paddingHorizontal: 8 }}
+            className="active:opacity-70"
           >
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.55)', textAlign: 'center' }}>
               {/* The explicit space matters: JSX eats the trailing one before a
@@ -198,7 +353,7 @@ export default function LoginScreen() {
           </Pressable>
         </View>
 
-        <View className="mt-8 px-2">
+        <View style={{ marginTop: 32, paddingHorizontal: 8 }}>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, lineHeight: 18, color: 'rgba(246,244,229,0.34)', textAlign: 'center' }}>
             Created by{' '}
             <Text
@@ -216,7 +371,7 @@ export default function LoginScreen() {
             Like what you see? Let&rsquo;s build your custom website or software.
           </Text>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

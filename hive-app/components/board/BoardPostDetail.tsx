@@ -692,6 +692,10 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
               postId={postId}
               postAuthorId={post.author_id}
               boardName={post.category?.name || post.title}
+              // A reply reaches the people who can read the thread, and that is
+              // the board's reach — so the board is what names "everyone" in
+              // the "@" picker.
+              boardReach={post.category?.reach ?? null}
               mentionableMembers={mentionableMembers}
               parentReplyId={replyingTo?.id || null}
               replyingToName={replyingTo?.authorName || null}

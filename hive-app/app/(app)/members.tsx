@@ -12,7 +12,7 @@ import { invalidateWishQueries } from '../../lib/queryClient';
 import { deleteWishById } from '../../lib/wishMutations';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { usePageSkin } from '../../lib/pageSkin';
-import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
+import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
@@ -563,6 +563,10 @@ function MemberDetailPage({
   // now — it tracks the "@", draws the suggestion list and the "Tagged Nat"
   // pills itself — so the composers below only have to hand it the members.
   const { members: mentionableMembers, loading: mentionMembersLoading } = useMentionableMembers(communityId);
+  // A wish written from a member card starts inside this HIVE, so that is who
+  // "everyone" is here, and the picker says the HIVE's name rather than "HIVE".
+  // The scope picker on the full wish sheet is where a wish is sent further.
+  const mentionReach = useMentionReach({ reach: 'hive' });
 
   const introContent = member.introPost?.content ?? '';
   const hasProfileBio = !!normalizeProfileStoryText(member.bio);
@@ -997,6 +1001,7 @@ function MemberDetailPage({
         communityId,
         content: desc,
         members: mentionableMembers,
+        reach: mentionReach,
         wishOwnerName: member.name,
       });
       await invalidateWishQueries(communityId, member.id);
@@ -1463,6 +1468,7 @@ function MemberDetailPage({
                           autoFocus
                           mentionMembers={mentionableMembers}
                           mentionsLoading={mentionMembersLoading}
+                          mentionReach={mentionReach}
                           currentUserId={currentAuthId ?? undefined}
                         />
                         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
@@ -2080,6 +2086,7 @@ function MemberDetailPage({
                           minHeight={80}
                           mentionMembers={mentionableMembers}
                           mentionsLoading={mentionMembersLoading}
+                          mentionReach={mentionReach}
                           currentUserId={currentAuthId ?? undefined}
                         />
                         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>

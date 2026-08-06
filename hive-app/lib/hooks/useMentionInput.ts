@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Profile } from '../../types';
 import {
   getActiveMentionQuery,
+  getGroupMentionLabel,
+  getMentionedGroups,
   getMentionedMembers,
   getMentionSuggestions,
   hasBroadcastMention,
   insertMention,
+  type MentionReach,
   type MentionTarget,
 } from '../mentions';
 
@@ -18,6 +21,17 @@ interface UseMentionInputOptions {
   members: MentionMember[];
   currentUserId?: string;
   suggestionLimit?: number;
+  /**
+   * How far the thing being written can travel. Build it with
+   * `useMentionReach()` on the screen that knows — the room's reach, the
+   * board's reach, the wish's share scope.
+   *
+   * The offer and the reading both go through this one object, so a row can
+   * never be offered that sending would then quietly drop. Left out, every
+   * answer settles on the group that cannot leak: everyone who can already see
+   * this.
+   */
+  reach?: MentionReach | null;
 }
 
 export function useMentionInput({
@@ -26,6 +40,7 @@ export function useMentionInput({
   members,
   currentUserId,
   suggestionLimit = 6,
+  reach = null,
 }: UseMentionInputOptions) {
   const [selection, setSelection] = useState<TextSelection>({ start: 0, end: 0 });
   const [selectionOverride, setSelectionOverride] = useState<TextSelection | null>(null);
@@ -37,14 +52,23 @@ export function useMentionInput({
   const mentionSuggestions = useMemo(
     () => mentionQuery === null
       ? []
-      : getMentionSuggestions(mentionQuery, members, currentUserId, suggestionLimit),
-    [currentUserId, members, mentionQuery, suggestionLimit]
+      : getMentionSuggestions(mentionQuery, members, currentUserId, suggestionLimit, reach),
+    [currentUserId, members, mentionQuery, reach, suggestionLimit]
   );
   const mentionsEveryone = useMemo(() => hasBroadcastMention(value), [value]);
   const mentionedMembers = useMemo(
-    () => getMentionedMembers(value, members, currentUserId),
-    [currentUserId, members, value]
+    () => getMentionedMembers(value, members, currentUserId, reach),
+    [currentUserId, members, reach, value]
   );
+  /**
+   * The whole groups this text tags, and the sentence that names them.
+   *
+   * A screen sends the members itself; these two say who ELSE was named, which
+   * is what the "you tagged everyone" pill has to be able to say out loud —
+   * "Everyone in HIVE" was written when there was one HIVE.
+   */
+  const mentionedGroups = useMemo(() => getMentionedGroups(value, reach), [reach, value]);
+  const groupMentionLabel = useMemo(() => getGroupMentionLabel(value, reach), [reach, value]);
 
   useEffect(() => {
     if (!selectionOverride) return;
@@ -84,6 +108,8 @@ export function useMentionInput({
     mentionSuggestions,
     mentionsEveryone,
     mentionedMembers,
+    mentionedGroups,
+    groupMentionLabel,
     resetMentionSelection,
     selectMention: handleSelectMention,
     textInputMentionProps: {

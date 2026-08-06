@@ -21,7 +21,6 @@ import { HIVE_WIDE_WELCOME_VERSION } from '../../lib/hiveWide';
 import { loadHiveWideWelcomeSeen, persistHiveWideWelcomeSeen } from '../../lib/readState';
 import { supabase } from '../../lib/supabase';
 import { useAuth, type HiveMembership } from '../../lib/hooks/useAuth';
-import { STANDING_INVITATION } from '../../lib/hiveFocus';
 import { getAppNews } from '../../lib/appNews';
 import { accentOnDark, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
@@ -115,7 +114,9 @@ function isAHang(event: HiveEvent) {
 }
 
 // See-through, so the world shows through the cards the way the studio site
-// does — a solid panel over a globe is just a globe with a lid on it.
+// does — a solid panel over a globe is just a globe with a lid on it. It rides
+// on top of SPACE_SCRIM below, which is what keeps the ink readable where the
+// planet is bright.
 const CARD_FILL = 'rgba(255,248,233,0.055)';
 const CARD_EDGE = 'rgba(255,226,166,0.22)';
 const INK = '#FFF8E9';
@@ -123,6 +124,36 @@ const INK_SOFT = 'rgba(255,248,233,0.72)';
 const INK_FAINT = 'rgba(255,248,233,0.45)';
 /** The gold that reads on space — the same one the welcome panel wears. */
 const GOLD_ON_SPACE = '#E8C77E';
+/**
+ * The dark the panels carry with them.
+ *
+ * The Earth is painted once, behind everything, and it stays put while the page
+ * scrolls over it — so a panel can be sitting on empty black one second and on
+ * the lit edge of the planet the next. Nat, on her phone 2026-08-06, could not
+ * read "What We've Been Building" for exactly that reason: cream ink had landed
+ * on the sunrise.
+ *
+ * So each panel lays `SPACE_BLACK` at 62% under its own see-through colour.
+ * Over the black of space that changes nothing you can see. Over the bright limb
+ * it knocks the glow down far enough for cream ink to read on it. The world
+ * still shows through the cards — dimmed, the way it does through a window.
+ */
+const SPACE_SCRIM = 'rgba(5,6,11,0.62)';
+
+/**
+ * The gold band down the left edge means one thing on this page: **this is the
+ * way in**. Only "Your HIVEs" wears it.
+ *
+ * Nat, 2026-08-06: *"why do the first 2 have gold on the left hand side & the
+ * other ones dont? That feels weird and inconsistent."* Two of five was an
+ * accident of history — the welcome and the door were built on the same
+ * afternoon and both got a band. One of five is a mark.
+ *
+ * It goes to the door because the door is the one panel a brand-new member has
+ * to find, and the buttons inside it got lighter the same day. What the buttons
+ * gave up in weight, the panel picks up in gold.
+ */
+const WAY_IN_BAND = { borderLeftWidth: 4, borderLeftColor: GOLD_ON_SPACE };
 
 /** This page's own colours, handed to every panel on it so they read as a set. */
 const PANEL_COLOURS = {
@@ -132,6 +163,7 @@ const PANEL_COLOURS = {
   border: CARD_EDGE,
   accent: GOLD_ON_SPACE,
   pressed: 'rgba(255,248,233,0.1)',
+  scrim: SPACE_SCRIM,
 };
 
 /** One of the boxes. Same shell for all of them so they read as a set. */
@@ -141,10 +173,16 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
    * 2026-08-06: *"i think all of those... all of those should be collapsible or
    * expandable, thats a really nice feature, i like!"*
    *
-   * They start open. The page's whole job is showing what is happening across
-   * the HIVEs, and a wall of shut drawers on arrival would say nothing is.
+   * **They all start shut.** Nat, the same day: *"deff start the screen with
+   * them all collapsed like that, easier to understand what you're looking at"*
+   * and *"I think that is the best way to introduce all my OG HIVErs to the new
+   * 'hive wide', that looks really cool."* You arrive at a contents page — every
+   * panel on the street, named, in one screen — and open the ones you want.
+   *
+   * An earlier pass had them open, arguing that a wall of shut drawers would say
+   * nothing was happening. Nat looked at both and picked shut. Leave it shut.
    */
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
 
   return (
     <CollapsiblePanel
@@ -152,6 +190,7 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
       open={open}
       onToggle={setOpen}
       colours={PANEL_COLOURS}
+      fitTitle
       titleStyle={{ fontSize: 17, letterSpacing: 0.6 }}
       style={{
         // Two to a row on a wide screen, one per row on a phone.
@@ -238,6 +277,43 @@ function HiveLine({ hive, event }: { hive: Community; event: HiveEvent | null })
   );
 }
 
+/** Air either side of the title, the same on both edges. */
+const HERO_PADDING = 20;
+/**
+ * The slice the rail takes off the window before this page sees any of it.
+ *
+ * Used for one frame only — the guess the title starts at before the real
+ * measurement arrives. A number rather than an import from the rail, because
+ * the rail's own widths are its business and this only needs a floor: it is
+ * never drawn narrower than this, so guessing it can only make the first frame
+ * a little small, never a little wrapped.
+ */
+const RAIL_AT_ITS_NARROWEST = 56;
+/** The biggest "HIVE-Wide" ever gets, which is what a laptop shows. */
+const TITLE_MAX = 46;
+/** Small enough that wrapping is the kinder answer. Nothing real hits this. */
+const TITLE_MIN = 30;
+/**
+ * How wide "HIVE-Wide" is when it is one point tall.
+ *
+ * Nat, 2026-08-06: *"I think 'HIVE-Wide' needs to fit on one line. If we do
+ * that, then it'll bump 'what we've been building' up into the dark outerspace
+ * instead of on the cusp of the planet, & it'll be easier to read."* It was
+ * breaking to `HIVE-` / `Wide` on her phone, because the rail takes 64 points
+ * off a 375-point screen before this page sees any of it, and the title needs
+ * 302 of the 271 that are left.
+ *
+ * The number is the typeface's, measured out of the font file: Libre Baskerville
+ * Bold sets these nine characters in 6.27 ems, and the spacing between letters
+ * adds another nine at 1.5/46 of the size. Six percent of slack on top covers
+ * the moment before the webfont lands and a fallback serif is standing in.
+ *
+ * A constant is safe here where it would not be in `CollapsiblePanel`, because
+ * this is one word that never changes, in one typeface, on one page.
+ */
+const TITLE_TRACKING = 1.5 / TITLE_MAX;
+const TITLE_EMS = (6.27 + 9 * TITLE_TRACKING) * 1.06;
+
 /**
  * The way down into your own HIVE.
  *
@@ -252,10 +328,14 @@ function HiveLine({ hive, event }: { hive: Community; event: HiveEvent | null })
  * lib/navigation.ts), so the page has to say where they went.
  *
  * So this is the second thing on the page, under the explainer that says what
- * HIVE-Wide is: the member's HIVE, by name, in its own colour, as one big button
- * that goes there. Nat on who is reading it: "we have very very very very not
- * tech savvy people." It sat first until 2026-08-06, when Nat put the "what is
+ * HIVE-Wide is: the member's HIVE, by name, in its own colour, on a button that
+ * goes there. Nat on who is reading it: "we have very very very very not tech
+ * savvy people." It sat first until 2026-08-06, when Nat put the "what is
  * HIVE-Wide" panel above it — what a place is comes before the way off it.
+ *
+ * It is the only panel here wearing the gold left band (`WAY_IN_BAND`), and the
+ * only one with a brighter fill. Both of those are how the door stays findable
+ * now that it arrives shut like everything else.
  */
 function WayIntoYourHive({
   memberships,
@@ -265,7 +345,7 @@ function WayIntoYourHive({
 }: {
   memberships: HiveMembership[];
   firstName: string | null;
-  /** Shown the long explanation, until they put the welcome away. */
+  /** Shown the long explanation, until they have opened the welcome once. */
   firstVisit: boolean;
   onEnter: (communityId: string) => void;
 }) {
@@ -283,21 +363,25 @@ function WayIntoYourHive({
       title={firstVisit
         ? `Welcome${firstName ? `, ${firstName}` : ''} 🐝`
         : many ? 'Your HIVEs' : 'Your HIVE'}
-      // It opens and shuts like everything else on the page, and it starts open
-      // every time. This is the door — somebody who accepted an invite an hour
-      // ago has to be able to see the way into their own HIVE without being told
-      // to tap something first (Nat: "we have very very very very not tech savvy
-      // people"). Nothing on this page is worth hiding this behind.
-      defaultOpen
+      // Shut on arrival, like every other panel here. Nat, 2026-08-06: *"deff
+      // start the screen with them all collapsed like that, easier to understand
+      // what you're looking at."* She was shown the case for keeping this one
+      // open — it is the door, and a member who accepted an invite an hour ago
+      // needs it — and said all of them, so all of them it is.
+      //
+      // What makes the door findable while it is shut: its own name in the
+      // header, a brighter fill than the panels under it, and the gold band down
+      // its left edge, which on this page means nothing else.
+      defaultOpen={false}
       colours={{
         ...PANEL_COLOURS,
-        // A little brighter than the cards below it. On a first visit this sits
-        // right under the HIVE-Wide welcome, which wears the same gold edge, and
-        // two identical panels one on top of the other read as one long
-        // paragraph. The door is the thing to look at first.
-        fill: 'rgba(255,248,233,0.09)',
+        // A little brighter than the cards below it. This sits second on the
+        // page, under the HIVE-Wide welcome, and a row of five identical shut
+        // panels reads as a list rather than a way in.
+        fill: 'rgba(255,248,233,0.11)',
       }}
-      style={{ borderLeftWidth: 4, borderLeftColor: GOLD_ON_SPACE }}
+      style={WAY_IN_BAND}
+      fitTitle
       titleStyle={{ fontSize: 19, letterSpacing: 0 }}
       bodyStyle={{ gap: 14, paddingBottom: 20 }}
     >
@@ -315,7 +399,24 @@ function WayIntoYourHive({
         </Text>
       ) : null}
 
-      <View style={{ gap: 10 }}>
+      {/* The doors themselves.
+          Nat, 2026-08-06: *"I think these are really cool nav tools, but they
+          seem too big and bulky for our sleek UI."* They were full-width slabs
+          49 points tall with a 14-point corner, and three of them took a screen.
+
+          Lighter, not quieter. Everything that does the work stays — each HIVE's
+          own colour filled solid, its hexagon, the arrow, the full width and the
+          plain words "Go into ___" — and the bulk goes: a pill instead of a
+          slab, 38 points instead of 49, smaller type and smaller furniture. A
+          pill reads as a button at any height; a tall rounded rectangle only
+          reads as one because it is tall.
+
+          The type stops here rather than going smaller. On a 375-point phone the
+          longest HIVE name in the app, "Go into Production HIVE", wants 160 of
+          the 168 points this row has for words. Any tighter and it clips, and a
+          door labelled "Go into Producti…" is not a door. It is allowed a second
+          line instead — a taller pill is still a pill. */}
+      <View style={{ gap: 8 }}>
         {memberships.map((m) => {
           const name = hiveDisplayName(m.community?.name);
           // The HIVE's own colour, lifted until it reads on the night sky, and
@@ -331,23 +432,25 @@ function WayIntoYourHive({
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 11,
-                paddingVertical: 15,
-                paddingHorizontal: 18,
-                borderRadius: 14,
+                gap: 8,
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                // A pill. Anything big enough to hold the text is the radius.
+                borderRadius: 999,
                 backgroundColor: colour,
               }}
             >
-              <HiveMark size={16} colour={SPACE_BLACK} />
+              <HiveMark size={14} colour={SPACE_BLACK} />
               <Text
                 style={{
-                  flex: 1, fontFamily: 'Lato_700Bold', fontSize: 16, color: SPACE_BLACK,
+                  flex: 1, fontFamily: 'Lato_700Bold', fontSize: 14.5,
+                  lineHeight: 19, color: SPACE_BLACK,
                 }}
                 numberOfLines={2}
               >
                 Go into {name}
               </Text>
-              <Ionicons name="arrow-forward" size={19} color={SPACE_BLACK} />
+              <Ionicons name="arrow-forward" size={16} color={SPACE_BLACK} />
             </Pressable>
           );
         })}
@@ -372,9 +475,11 @@ export default function HiveWideScreen() {
   const router = useRouter();
   const { communityId, community, profile, refreshProfile, memberships, switchCommunity } = useAuth();
 
-  // Whether this person has put the HIVE-Wide welcome away is the same question
-  // as whether they have been here before, so the door reads it rather than
-  // inventing a second "have you seen this?" flag on the profile.
+  // Whether this person has ever opened the HIVE-Wide explainer is the same
+  // question as whether they have been here before, so the door reads that flag
+  // rather than inventing a second "have you seen this?" one on the profile.
+  // (Opening it is what writes it now that every panel starts shut — see
+  // `components/ui/HiveWideWelcome.tsx`.)
   const firstVisit = loadHiveWideWelcomeSeen(profile) !== HIVE_WIDE_WELCOME_VERSION;
 
   // Read once rather than on every render — it is a constant in a file.
@@ -405,6 +510,22 @@ export default function HiveWideScreen() {
   // Three boxes need real width before they stop being three narrow columns of
   // broken words. Below this they stack, in Nat's order.
   const wide = width >= 900;
+
+  /**
+   * The room the title has, and the size that fills it without breaking.
+   *
+   * Measured rather than worked out from the window, because the rail sits
+   * beside this page and changes width when somebody opens it. Until the first
+   * measurement lands we guess low — the window less the padding and the
+   * narrowest the rail is ever drawn — so the very first frame is a title that
+   * is slightly small rather than a title that wraps.
+   */
+  const [measuredTitleRoom, setMeasuredTitleRoom] = useState(0);
+  const titleRoom = measuredTitleRoom || Math.max(
+    TITLE_MIN * TITLE_EMS,
+    width - HERO_PADDING * 2 - RAIL_AT_ITS_NARROWEST
+  );
+  const titleSize = Math.max(TITLE_MIN, Math.min(TITLE_MAX, titleRoom / TITLE_EMS));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sharedFocus, setSharedFocus] = useState<Focus | null>(null);
@@ -550,7 +671,13 @@ export default function HiveWideScreen() {
       <SpaceGlobe />
       {/* Room at the top, above the world, said the way the HIVE home pages say
           it — small line, big name, small line (Nat 2026-08-03). */}
-      <View style={{ paddingTop: 26, paddingBottom: 4, paddingHorizontal: 20 }}>
+      <View
+        style={{ paddingTop: 26, paddingBottom: 4, paddingHorizontal: HERO_PADDING }}
+        onLayout={(event) => {
+          const room = event.nativeEvent.layout.width - HERO_PADDING * 2;
+          setMeasuredTitleRoom((was) => (Math.abs(was - room) > 0.5 ? room : was));
+        }}
+      >
         <Text
           style={{
             fontFamily: 'Lato_400Regular', fontSize: 13, letterSpacing: 3,
@@ -559,9 +686,13 @@ export default function HiveWideScreen() {
         >
           See what&rsquo;s happening
         </Text>
+        {/* One line, always. The tracking rides the size so a phone's smaller
+            title has the same letter rhythm as a laptop's. */}
         <Text
           style={{
-            fontFamily: 'LibreBaskerville_700Bold', fontSize: 46, letterSpacing: 1.5,
+            fontFamily: 'LibreBaskerville_700Bold',
+            fontSize: titleSize,
+            letterSpacing: titleSize * TITLE_TRACKING,
             color: INK, textAlign: 'center', marginTop: 4,
           }}
         >

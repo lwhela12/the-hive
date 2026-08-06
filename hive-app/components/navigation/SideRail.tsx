@@ -1,5 +1,5 @@
-import { memo, useCallback, useRef, useState } from 'react';
-import { View, Text, Pressable, ScrollView, useWindowDimensions, Animated } from 'react-native';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, Pressable, ScrollView, useWindowDimensions, Animated, Platform } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -38,23 +38,126 @@ import { Avatar } from '../ui/Avatar';
 /** A Pressable that can be scaled — the rail dips a row you are already on. */
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-const RAIL_COLLAPSED = 56;
-const RAIL_EXPANDED = 212;
 /**
- * The collapsed rail on a phone, where it carries names as well as pictures.
+ * THREE SIZES (Nat 2026-08-06: "I see that the side nav bar still only has 2
+ * sizes, instead of 3, was that ignored intentionally?").
  *
- * The tab bar came out on 2026-08-03 and this rail became the only way to move
- * around. On a phone it starts collapsed, so at 375px wide the whole of
- * navigation was 🏠 👥 📋 📰 📣 👋 down the left edge — a column of pictures with
- * nothing to tell you what any of them opened. Nat's words for who is using
- * this: "we have very very very very not tech savvy people."
+ * It was parked, and she has overruled that. Her three, in her words:
  *
- * So a collapsed row on a phone puts a small name under its picture, and the
- * rail is eight pixels wider to hold one. Eight pixels is the whole price of
- * every destination being readable, and 56 pixels of unreadable pictures was
- * already the more expensive of the two.
+ *   big     the full drawer — bee, "WELCOME Nat", her face, and every HIVE and
+ *           page spelled out. What you want on day one.
+ *   medium  a narrow rail: a picture with its name underneath. "As you get more
+ *           familiar with the site, you won't need this version, which we'll
+ *           call medium."
+ *   small   "the way we had it yday, w just tiny icons & no text."
+ *
+ * Small was a problem the first time round for a reason worth keeping written
+ * down: the tab bar came out on 2026-08-03, the rail became the only way to
+ * move around, and on a phone it started as a column of unlabelled pictures —
+ * 🏠 👥 📋 📰 📣 👋 down the left edge, with nothing to say where any of them
+ * went. Nat's words for who is using this: "we have very very very very not
+ * tech savvy people."
+ *
+ * What changed is not the pictures, it is who chose them. Small is now a thing
+ * a person picks once they already know the app, never the state they are
+ * dropped into — so the starting size is still big on a wide screen and medium
+ * on a phone. Two rules follow from that and both are load-bearing:
+ *
+ *   - Small must be escapable. The one control that steps the size sits in the
+ *     same spot in all three sizes, and from small it points OUT, at the big
+ *     menu, so the way back is the button you got here with.
+ *   - Small still has names, they are just not drawn. Every row carries its
+ *     `accessibilityLabel`, and on the web it carries a hover tooltip too.
  */
-const RAIL_COLLAPSED_PHONE = 64;
+export type RailSize = 'big' | 'medium' | 'small';
+
+/** The full drawer. */
+const RAIL_BIG = 212;
+/**
+ * The middle size: a picture with a small name under it.
+ *
+ * Eight pixels wider than the icons-only rail, which is the whole price of
+ * every destination being readable. It shipped on 2026-08-06 as what a phone
+ * did when the drawer was shut; it is a size anybody can choose now.
+ */
+const RAIL_MEDIUM = 64;
+/** Pictures only. */
+const RAIL_SMALL = 56;
+
+/** One control, stepping the way familiarity goes: big → medium → small → big. */
+const NEXT_SIZE: Record<RailSize, RailSize> = {
+  big: 'medium',
+  medium: 'small',
+  small: 'big',
+};
+
+/**
+ * What the control is about to do, said in words.
+ *
+ * A screen reader reads it, and on the web a mouse hovering the button sees the
+ * same sentence — because "what happens if I press this?" is the whole question
+ * a cycling button raises, and the chevron alone can only answer half of it.
+ */
+const SIZE_STEP: Record<RailSize, string> = {
+  big: 'Menu size: big. Tap to make it medium — pictures with small names.',
+  medium: 'Menu size: medium. Tap to make it small — pictures only.',
+  small: 'Menu size: small. Tap for the big menu, with every name spelled out.',
+};
+
+/**
+ * The size a person picked, kept for them.
+ *
+ * Same shape as `lib/hiveSelection.ts`: a value in memory so it survives every
+ * screen change, with the browser's own store underneath so it survives a
+ * reload. One deliberate difference — this uses `localStorage` where the chosen
+ * HIVE uses `sessionStorage`.
+ *
+ * The reason for that difference: which HIVE you are standing in is a PLACE, and
+ * a genuinely fresh arrival should start above the HIVEs rather than wherever
+ * they were last week. How big you like the menu is not a place, it is a
+ * preference that only gets truer the longer somebody uses the app — Nat's own
+ * framing is that you outgrow medium. Forgetting it every time a tab closes
+ * would ask the same question forever, which is the thing she is asking us to
+ * stop doing.
+ *
+ * On the iOS app there is no browser store, so the value lives in memory for as
+ * long as the app is running. Nearly everybody uses HIVE in a browser, and the
+ * alternative — async storage — cannot answer before the first frame, so the
+ * rail would visibly jump from one size to another on every launch.
+ */
+const SIZE_KEY = 'hive:railSize';
+
+const isRailSize = (value: unknown): value is RailSize =>
+  value === 'big' || value === 'medium' || value === 'small';
+
+const sizeStore = (): Storage | null => {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+  try {
+    return window.localStorage;
+  } catch {
+    // Private browsing can throw on access rather than on use.
+    return null;
+  }
+};
+
+let chosenSize: RailSize | null = null;
+
+export function rememberedRailSize(): RailSize | null {
+  if (chosenSize) return chosenSize;
+  try {
+    const stored = sizeStore()?.getItem(SIZE_KEY);
+    if (isRailSize(stored)) {
+      chosenSize = stored;
+      return stored;
+    }
+  } catch { /* fall through to memory */ }
+  return null;
+}
+
+export function rememberRailSize(next: RailSize): void {
+  chosenSize = next;
+  try { sizeStore()?.setItem(SIZE_KEY, next); } catch { /* memory is enough */ }
+}
 
 /** HIVE-Wide's green — the one colour that never belongs to a single HIVE. */
 const WIDE_BLACK = '#0B0B12';
@@ -77,12 +180,21 @@ function deepen(hex: string, amount = 0.32): string {
 }
 
 export const SideRail = memo(function SideRail({
-  expanded,
+  expanded = true,
   onToggle,
   unreadDMCount = 0,
 }: {
-  expanded: boolean;
-  onToggle: () => void;
+  /**
+   * The shell's opinion of where to START — true for the big drawer, false for
+   * the narrow one. It seeds the size on the very first visit and nothing else:
+   * once a person has picked a size, their pick wins.
+   */
+  expanded?: boolean;
+  /**
+   * Told whenever the rail crosses in or out of the big drawer, so a shell
+   * holding a plain "is the drawer open?" boolean stays truthful.
+   */
+  onToggle?: () => void;
   unreadDMCount?: number;
 }) {
   const router = useRouter();
@@ -102,6 +214,49 @@ export const SideRail = memo(function SideRail({
   const insets = useSafeAreaInsets();
 
   const [confirmingLogOut, setConfirmingLogOut] = useState(false);
+
+  /**
+   * Which of the three sizes the rail is at.
+   *
+   * The rail owns this rather than the shell, because it is now a choice with
+   * three answers and the shell only ever had a yes/no to hold it in. A
+   * remembered pick wins; failing that the shell's starting opinion decides
+   * between big and medium. Nobody ever LANDS on small — see the note above.
+   */
+  const [size, setSize] = useState<RailSize>(
+    () => rememberedRailSize() ?? (expanded ? 'big' : 'medium')
+  );
+  const big = size === 'big';
+  const medium = size === 'medium';
+  const small = size === 'small';
+
+  /**
+   * Where the big drawer folds back to on a phone.
+   *
+   * On a phone the big drawer covers the page instead of sitting beside it, so
+   * picking a destination has to put it away again. It goes back to the size the
+   * person was actually at — somebody who chose small and opened the drawer to
+   * find one page gets small back, not a size they did not ask for.
+   */
+  const narrowSize = useRef<RailSize>(size === 'big' ? 'medium' : size);
+
+  const changeSize = useCallback((next: RailSize) => {
+    if (next === size) return;
+    if (next !== 'big') narrowSize.current = next;
+    rememberRailSize(next);
+    setSize(next);
+  }, [size]);
+
+  // Keep the shell's yes/no in step with the three-way size. It is a starting
+  // opinion on the way in and a report on the way out, so a shell that dims the
+  // page behind a phone's open drawer keeps working. The ref means a parent that
+  // rebuilds `onToggle` every render does not make this fire twice.
+  const shellThinksBig = useRef(expanded);
+  useEffect(() => {
+    if (shellThinksBig.current === big) return;
+    shellThinksBig.current = big;
+    onToggle?.();
+  }, [big, onToggle]);
 
   /**
    * A press that lands somewhere you already are still has to feel like a press.
@@ -147,6 +302,11 @@ export const SideRail = memo(function SideRail({
   const railColour = onHiveWide ? WIDE_BLACK : deepen(accent);
   const destinations = destinationsForPlace({ isAdmin, isOwner, wholeHive: onHiveWide });
 
+  /** Put the phone's full-height drawer away once it has been used. */
+  const foldAwayOnPhone = useCallback(() => {
+    if (isPhone && big) changeSize(narrowSize.current);
+  }, [isPhone, big, changeSize]);
+
   // Pressing the page you are already on scrolls it back to the top and
   // reloads it, rather than doing nothing.
   //
@@ -166,9 +326,9 @@ export const SideRail = memo(function SideRail({
       if (here && key) playBounce(key);
       if (here) router.replace(route as never);
       else router.push(route as never);
-      if (isPhone && expanded) onToggle();
+      foldAwayOnPhone();
     },
-    [router, pathname, isPhone, expanded, onToggle, playBounce]
+    [router, pathname, playBounce, foldAwayOnPhone]
   );
 
   /**
@@ -202,20 +362,14 @@ export const SideRail = memo(function SideRail({
     go('/profile', 'profile');
   }, [onHiveWide, communityId, switchCommunity, go]);
 
-  /**
-   * The collapsed rail on a phone shows a name under every picture, so a person
-   * who has never opened the app can read where each row goes without opening
-   * the menu first. `tight` is that state: narrow, stacked, and labelled.
-   */
-  const tight = isPhone && !expanded;
-  const railWidth = expanded ? RAIL_EXPANDED : tight ? RAIL_COLLAPSED_PHONE : RAIL_COLLAPSED;
+  const railWidth = big ? RAIL_BIG : medium ? RAIL_MEDIUM : RAIL_SMALL;
   const divider = (
     <View
       style={{
         height: 1,
         backgroundColor: 'rgba(255,255,255,0.2)',
         marginVertical: 8,
-        marginHorizontal: expanded ? 14 : 12,
+        marginHorizontal: big ? 14 : 10,
       }}
     />
   );
@@ -235,7 +389,7 @@ export const SideRail = memo(function SideRail({
     /** Left off by the rows that draw a mark instead — HIVE-Wide, and a HIVE. */
     emoji?: string;
     label: string;
-    /** A shorter name for the phone's narrow rail, when the full one is long. */
+    /** A shorter name for the narrow rail, when the full one is long. */
     shortLabel?: string;
     active?: boolean;
     onPress: () => void;
@@ -250,6 +404,10 @@ export const SideRail = memo(function SideRail({
   }) => (
     <AnimatedPressable
       onPress={onPress}
+      // At the small size the name is not drawn, so a mouse gets it on hover
+      // instead. Web only, and only where the name is missing — see the note at
+      // the top about small keeping its names even when it stops showing them.
+      {...(Platform.OS === 'web' && small ? ({ title: label } as object) : null)}
       // One thing to a screen reader, named by its label. Without this the
       // picture and the small name underneath are two separate stops on a
       // phone, and the first one is read out as "house".
@@ -259,22 +417,22 @@ export const SideRail = memo(function SideRail({
       accessibilityState={{ selected: !!active }}
       style={{
         transform: [{ scale: bounceKey && bounceKey === bouncingKey ? bounceScale : 1 }],
-        // Picture over name on the phone's narrow rail; picture beside name
-        // everywhere else.
-        flexDirection: tight ? 'column' : 'row',
+        // Picture over name at the medium size; picture beside name in the big
+        // drawer, and picture alone at small.
+        flexDirection: medium ? 'column' : 'row',
         alignItems: 'center',
         // An indented row's highlight hugs its own name instead of running the
         // full width of the rail (Nat 2026-08-03: "let's make the HIVE-Wide bar
         // very short"). A child sitting under My HIVEs is a smaller thing than
         // a page, and a full-width bar behind it claimed otherwise.
-        alignSelf: expanded && indented ? 'flex-start' : 'auto',
-        paddingRight: expanded && indented ? 16 : undefined,
-        gap: tight ? 3 : 11,
-        marginHorizontal: tight ? 3 : expanded ? 8 : 6,
-        marginLeft: expanded && indented ? 20 : undefined,
-        paddingVertical: tight ? 7 : 9,
-        paddingHorizontal: expanded ? 8 : tight ? 2 : 0,
-        justifyContent: expanded ? 'flex-start' : 'center',
+        alignSelf: big && indented ? 'flex-start' : 'auto',
+        paddingRight: big && indented ? 16 : undefined,
+        gap: medium ? 3 : 11,
+        marginHorizontal: medium ? 3 : big ? 8 : 6,
+        marginLeft: big && indented ? 20 : undefined,
+        paddingVertical: medium ? 7 : 9,
+        paddingHorizontal: big ? 8 : medium ? 2 : 0,
+        justifyContent: big ? 'flex-start' : 'center',
         borderRadius: 10,
         backgroundColor: active ? 'rgba(255,255,255,0.22)' : 'transparent',
         borderWidth: tint && !indented ? 1 : 0,
@@ -312,25 +470,27 @@ export const SideRail = memo(function SideRail({
           </View>
         ) : null}
       </View>
-      {/* The name. On a phone it shows in BOTH states — small and underneath
-          when the rail is narrow, full size beside the picture when it is open
-          — because the narrow rail is the only navigation a phone has and an
-          unnamed picture is a quiz (2026-08-06). A wide screen keeps the plain
-          icon strip: the mouse can open the rail, and there is a whole page
-          beside it that the labels would eat into. */}
-      {expanded || tight ? (
+      {/* The name. Full size beside the picture in the big drawer, small and
+          underneath at medium, and drawn nowhere at small.
+
+          Medium exists because of what happened when it didn't: the tab bar came
+          out on 2026-08-03, the rail became the only navigation a phone had, and
+          at 375px wide the whole of it was a column of pictures with nothing to
+          tell you what any of them opened. Small is the same picture strip, and
+          it is fine now for exactly one reason — a person chose it. */}
+      {big || medium ? (
         <Text
-          numberOfLines={tight ? 2 : 1}
+          numberOfLines={medium ? 2 : 1}
           style={{
-            flex: tight ? undefined : 1,
-            textAlign: tight ? 'center' : 'left',
+            flex: medium ? undefined : 1,
+            textAlign: medium ? 'center' : 'left',
             fontFamily: active ? 'Lato_700Bold' : 'Lato_400Regular',
-            fontSize: tight ? 9.5 : indented ? 12.5 : 14.5,
-            lineHeight: tight ? 11.5 : undefined,
-            color: tight ? 'rgba(255,255,255,0.92)' : '#fff',
+            fontSize: medium ? 9.5 : indented ? 12.5 : 14.5,
+            lineHeight: medium ? 11.5 : undefined,
+            color: medium ? 'rgba(255,255,255,0.92)' : '#fff',
           }}
         >
-          {tight && shortLabel ? shortLabel : label}
+          {medium && shortLabel ? shortLabel : label}
         </Text>
       ) : null}
     </AnimatedPressable>
@@ -345,28 +505,28 @@ export const SideRail = memo(function SideRail({
         width: railWidth + insets.left,
         backgroundColor: railColour,
         // Clear of the clock at the top and the home bar at the bottom. The bee
-        // and the expand button live in the first 42 pixels of this rail, which
+        // and the size button live in the first 42 pixels of this rail, which
         // is exactly where an iPhone puts the time.
         paddingTop: 12 + insets.top,
         paddingBottom: 8 + insets.bottom,
         paddingLeft: insets.left,
-        ...(isPhone && expanded
+        ...(isPhone && big
           ? { position: 'absolute', top: 0, bottom: 0, left: 0, zIndex: 40 }
           : null),
       }}
     >
-      {/* The name sits at the very top with the toggle beside it, rather than
-          underneath a button that pushed it down the page (Nat 2026-08-03). */}
+      {/* The name sits at the very top with the size button beside it, rather
+          than underneath a button that pushed it down the page (Nat 2026-08-03). */}
       <View
         style={{
           flexDirection: 'row',
           alignItems: 'flex-start',
-          paddingHorizontal: expanded ? 14 : 0,
-          justifyContent: expanded ? 'space-between' : 'center',
-          marginBottom: expanded ? 14 : 10,
+          paddingHorizontal: big ? 14 : 0,
+          justifyContent: big ? 'space-between' : 'center',
+          marginBottom: big ? 14 : 10,
         }}
       >
-        {expanded ? (
+        {big ? (
           // Just the bee (Nat 2026-08-03). The wordmark and the line about being
           // a bee were saying the name and the motto to somebody already inside
           // the app, on every screen, forever. The mark alone says it once.
@@ -404,10 +564,24 @@ export const SideRail = memo(function SideRail({
             </View>
           </View>
         ) : null}
+        {/* ONE control for three sizes, stepping big → medium → small → big.
+            It replaced a two-state open/close toggle on 2026-08-06.
+
+            Why one button and not two. The rail at its smallest is 56 pixels
+            wide, and two buttons in there would be two more unlabelled pictures
+            in the size that already has the least to go on. One button in one
+            spot, identical in all three sizes, is a single thing to learn — and
+            it is the same object Nat already knows, in the same place.
+
+            The chevron never lies about direction: pointing back means the next
+            press makes the menu smaller, pointing forward means it opens the
+            big menu. The only jump in the cycle is small → big, which is the
+            one that has to be obvious, because it is the way out. */}
         <Pressable
-          onPress={onToggle}
+          onPress={() => changeSize(NEXT_SIZE[size])}
+          {...(Platform.OS === 'web' ? ({ title: SIZE_STEP[size] } as object) : null)}
           accessibilityRole="button"
-          accessibilityLabel={expanded ? 'Collapse the menu' : 'Expand the menu'}
+          accessibilityLabel={SIZE_STEP[size]}
           hitSlop={6}
           style={{
             width: 30, height: 30, borderRadius: 15,
@@ -415,7 +589,7 @@ export const SideRail = memo(function SideRail({
             backgroundColor: 'rgba(255,255,255,0.16)',
           }}
         >
-          <Ionicons name={expanded ? 'chevron-back' : 'chevron-forward'} size={16} color="#fff" />
+          <Ionicons name={small ? 'chevron-forward' : 'chevron-back'} size={16} color="#fff" />
         </Pressable>
       </View>
 
@@ -437,6 +611,9 @@ export const SideRail = memo(function SideRail({
       {profile ? (
         <AnimatedPressable
           onPress={openMyProfile}
+          {...(Platform.OS === 'web' && small
+            ? ({ title: `Your profile, ${(profile.name ?? 'You').split(/\s+/)[0]}` } as object)
+            : null)}
           accessible
           accessibilityRole="button"
           accessibilityLabel={`Your profile, ${(profile.name ?? 'You').split(/\s+/)[0]}`}
@@ -446,24 +623,27 @@ export const SideRail = memo(function SideRail({
             flexDirection: 'row',
             alignItems: 'center',
             gap: 10,
-            paddingHorizontal: expanded ? 14 : 0,
-            justifyContent: expanded ? 'flex-start' : 'center',
-            // Fixed height, both states. Nat, 2026-08-04: the icons "shift up
-            // and down, and i'd like them to just slide horizontally." Every
+            paddingHorizontal: big ? 14 : 0,
+            justifyContent: big ? 'flex-start' : 'center',
+            // Fixed height, all three sizes. Nat, 2026-08-04: the icons "shift
+            // up and down, and i'd like them to just slide horizontally." Every
             // row below here was moving because the blocks ABOVE changed height
             // when the words disappeared — a 30px avatar became 26px, and the
             // two lines of name went from two lines to nothing. Reserving the
-            // same height in both states is what turns the collapse into a
+            // same height in every size is what turns a size change into a
             // purely horizontal move.
             height: 46,
             paddingBottom: 12,
             marginBottom: 4,
+            // The line Nat pointed at: "see how there's a little line under my
+            // profile bubble, before 'MY HIVES'?" It closes off who you are,
+            // so the block underneath can be about where you are.
             borderBottomWidth: 1,
             borderBottomColor: 'rgba(255,255,255,0.10)',
           }}
         >
           <Avatar name={profile.name ?? 'You'} url={profile.avatar_url} size={30} />
-          {expanded ? (
+          {big ? (
             <View style={{ flex: 1 }}>
               <Text
                 numberOfLines={1}
@@ -519,12 +699,12 @@ export const SideRail = memo(function SideRail({
             reads as a section title, and nobody presses a section title to go
             home. Home is now the first entry in the page list below, and this
             just says what the indented rows are. */}
-        {/* The heading holds its line when collapsed rather than disappearing,
-            so the HIVEs beneath it stay on the same rows in both states. No
-            emoji: it names the list under it, and a heading with a picture on it
-            reads as another button (Nat 2026-08-04, and there is no beehive in
-            Unicode anyway). */}
-        {expanded ? (
+        {/* The heading holds its line at every size rather than disappearing, so
+            the HIVEs beneath it stay on the same rows however wide the rail is.
+            No emoji: it names the list under it, and a heading with a picture on
+            it reads as another button (Nat 2026-08-04, and there is no beehive
+            in Unicode anyway). */}
+        {big ? (
           <Text
             style={{
               fontFamily: 'Lato_700Bold',
@@ -540,10 +720,10 @@ export const SideRail = memo(function SideRail({
           >
             My HIVEs
           </Text>
-        ) : tight ? (
-          // The phone's narrow rail says it too. The two rows under this
-          // heading are the HIVE-Wide globe and your own HIVE's hexagon, and
-          // without a word above them they are two coloured shapes (2026-08-06).
+        ) : medium ? (
+          // The medium rail says it too. The two rows under this heading are the
+          // HIVE-Wide globe and your own HIVE's hexagon, and without a word
+          // above them they are two coloured shapes (2026-08-06).
           <Text
             style={{
               fontFamily: 'Lato_700Bold',
@@ -578,7 +758,7 @@ export const SideRail = memo(function SideRail({
           onPress={() => {
             if (onHiveWide) playBounce('hive-wide');
             enterWholeHive();
-            if (isPhone && expanded) onToggle();
+            foldAwayOnPhone();
           }}
         />
         {memberships.map((m) => (
@@ -593,10 +773,23 @@ export const SideRail = memo(function SideRail({
             onPress={() => {
               if (m.community_id === communityId && !onHiveWide) playBounce(m.community_id);
               void switchCommunity(m.community_id);
-              if (isPhone && expanded) onToggle();
+              foldAwayOnPhone();
             }}
           />
         ))}
+
+        {/* The line before Home, at every size (Nat 2026-08-06): "I think we
+            need another one of those before 'Home' so you know that first you
+            select your hive & then you look at those pages within that hive,
+            otherwise it just looks confusing."
+
+            She is naming the rail's actual grammar. Everything above this line
+            answers WHICH PLACE AM I IN; everything below it answers WHAT DO I
+            LOOK AT INSIDE IT. Without the rule, HIVE-Wide, your HIVEs and the
+            eleven pages are one undifferentiated column and the two questions
+            look like one list. It matters most at small, where the names are
+            gone and the shapes are all the rail has left to group with. */}
+        {divider}
 
         {/* One list, whichever place you picked. Pages that only mean something
             inside a single HIVE step out at HIVE-Wide rather than showing you
@@ -618,8 +811,8 @@ export const SideRail = memo(function SideRail({
             button that opened a picker for a choice already on the screen. */}
         {/* It asks first (Nat 2026-08-04). Log out sits directly under the page
             list, so it is one slip away from every other row in the rail — and
-            on a phone, where the rail is a full-height overlay, it is a slip
-            away with a thumb rather than a cursor. */}
+            on a phone, where the big drawer is a full-height overlay, it is a
+            slip away with a thumb rather than a cursor. */}
         <Row
           emoji="👋"
           label="Log out"
@@ -669,9 +862,11 @@ export const SideRail = memo(function SideRail({
   );
 });
 
-export const RAIL_WIDTHS = {
-  collapsed: RAIL_COLLAPSED,
-  /** Wider, because on a phone the collapsed rail carries names too. */
-  collapsedPhone: RAIL_COLLAPSED_PHONE,
-  expanded: RAIL_EXPANDED,
+export const RAIL_WIDTHS: Record<RailSize, number> = {
+  /** The full drawer: every HIVE and page spelled out. */
+  big: RAIL_BIG,
+  /** A picture with its name underneath. */
+  medium: RAIL_MEDIUM,
+  /** Pictures only. */
+  small: RAIL_SMALL,
 };

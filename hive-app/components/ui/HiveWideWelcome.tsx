@@ -8,15 +8,26 @@ import type { Community } from '../../types';
 /**
  * "Welcome to our new landing page" — the who, what and why of HIVE-Wide.
  *
- * Nat's ask, 2026-08-03. It opens expanded the first time somebody lands here
- * and collapses to a single line once they've read it, because an explanation
- * you can't put away becomes furniture you stop seeing.
+ * Nat's ask, 2026-08-03. It is the panel she picked out on 2026-08-06 — *"i
+ * like the 'what is hive wide'... thats a really nice feature, i like!"* — so
+ * the opening and shutting moved into `CollapsiblePanel` and every other panel
+ * on the page wears it too. The header carries both names: the question while
+ * it is away, the welcome's own title once it is open.
  *
- * It is the panel Nat picked out on 2026-08-06 — *"i like the 'what is hive
- * wide'... thats a really nice feature, i like!"* — so the opening and shutting
- * moved into `CollapsiblePanel` and every other panel on the page wears it too.
- * The header carries both names: the question while it is away, the welcome's
- * own title once it is open.
+ * ## It starts shut, for everybody, every time
+ *
+ * It used to spring open on a first visit. Nat, on her phone 2026-08-06:
+ * *"deff start the screen with them all collapsed like that, easier to
+ * understand what you're looking at"* and *"I think that is the best way to
+ * introduce all my OG HIVErs to the new 'hive wide', that looks really cool."*
+ * You arrive at a contents page and open what you want.
+ *
+ * That moved when this counts as read. Shutting it used to be the signal, which
+ * no longer works — nobody shuts a panel they never opened — so **opening it is
+ * the signal now**. That flag is also how the page below knows whether to say
+ * the long hello (`firstVisit` in `app/(app)/hive-wide.tsx`), and it follows the
+ * person rather than the device, so reading it on the phone counts on the
+ * laptop.
  *
  * The colour ladder is shown by USING it rather than describing it: the real
  * badges, in the order they travel. Somebody who skims the words still leaves
@@ -38,6 +49,12 @@ const CARD_FILL = 'rgba(255,248,233,0.055)';
 const CARD_EDGE = 'rgba(255,226,166,0.22)';
 /** The gold that reads on space — the same one the page's headings use. */
 const GOLD_ON_SPACE = '#E8C77E';
+/**
+ * Space, laid under the panel's own colour so the panel dims the picture behind
+ * it. `SPACE_BLACK` at not quite two thirds — the same number the page uses, and
+ * the reasoning lives with it in `app/(app)/hive-wide.tsx`.
+ */
+const SPACE_SCRIM = 'rgba(5,6,11,0.62)';
 
 /**
  * The ladder, taught by showing the actual badges.
@@ -73,14 +90,8 @@ export function HiveWideWelcome({
   onDismiss: (version: string) => void;
 }) {
   const alreadySeen = seenVersion === HIVE_WIDE_WELCOME_VERSION;
-  /**
-   * Null until this person opens or shuts it themselves; until then it follows
-   * whether they have read it. The profile lands a moment after the page does,
-   * so a state initialised once from `seenVersion` would latch onto "not read
-   * yet" and hang open for somebody who put this away weeks ago.
-   */
-  const [chosen, setChosen] = useState<boolean | null>(null);
-  const open = chosen ?? !alreadySeen;
+  /** Shut on arrival, and open only once this person opens it. */
+  const [open, setOpen] = useState(false);
 
   return (
     <CollapsiblePanel
@@ -89,12 +100,11 @@ export function HiveWideWelcome({
       icon="help-circle-outline"
       open={open}
       onToggle={(next) => {
-        setChosen(next);
-        // Shutting it is how you say you have read it — the same write the
-        // little X used to do, so putting it away on the phone still puts it
-        // away on the laptop. Only written the first time, because reopening it
-        // later to check something should not cost a round trip to the profile.
-        if (!next && !alreadySeen) onDismiss(HIVE_WIDE_WELCOME_VERSION);
+        setOpen(next);
+        // Opening it is how you say you have read it. Written once, because
+        // coming back later to check something should not cost another round
+        // trip to the profile.
+        if (next && !alreadySeen) onDismiss(HIVE_WIDE_WELCOME_VERSION);
       }}
       colours={{
         ink: INK,
@@ -103,8 +113,13 @@ export function HiveWideWelcome({
         border: CARD_EDGE,
         accent: GOLD_ON_SPACE,
         pressed: 'rgba(255,248,233,0.1)',
+        scrim: SPACE_SCRIM,
       }}
-      style={{ borderLeftWidth: 4, borderLeftColor: GOLD_ON_SPACE }}
+      // No gold band down the left edge. On this page that band means one
+      // thing, and this is not it — see the rule in `app/(app)/hive-wide.tsx`.
+      // Nat, 2026-08-06: *"why do the first 2 have gold on the left hand side &
+      // the other ones dont? That feels weird and inconsistent."*
+      fitTitle
       titleStyle={{ fontSize: 19 }}
       bodyStyle={{ gap: 16 }}
     >
