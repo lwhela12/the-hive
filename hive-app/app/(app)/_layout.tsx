@@ -259,6 +259,25 @@ export default function AppLayout() {
           // floor to any screen that is still arriving — which is what makes
           // splitting the download per screen (app.json → asyncRoutes) safe,
           // since a route that has not landed yet draws nothing at all.
+          //
+          // AND IT STILL FLASHED — the other half, found 2026-08-06.
+          //
+          // This line was right and the colour going into it was wrong. `skin`
+          // is `usePageSkin()`, which asks `wholeHive`, and on a fresh tab
+          // `wholeHive` was false until the profile came back from Supabase. So
+          // for the whole of that wait this floor was `#faf8f3` — cream, which
+          // reads as white — and then the answer landed and the app went
+          // near-black. `wholeHive` is seeded from where the person is about to
+          // land now; see headingToHiveWide() at the top of app/_layout.tsx.
+          //
+          // Ruled out along the way, so nobody hunts them again: the lazy tab
+          // container (`MaybeScreenContainer`, flex only, no colour), the screen
+          // wrapper (`MaybeScreen`, absoluteFill only), `SafeAreaProviderCompat`
+          // (flex only), and the suspense fallback for a code-split route, which
+          // is `null` in a production build — expo-router's
+          // build/views/SuspenseFallback.js only draws its "Bundling…" toast in
+          // development. Every one of those is transparent, so this scene style
+          // and the stack's `contentStyle` really are the only two surfaces.
           // ------------------------------------------------------------------
           sceneStyle: { backgroundColor: skin.page },
           // Seven tabs at about 55px each had run out of room, and every new

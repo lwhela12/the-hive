@@ -49,7 +49,6 @@
       "bundler": "metro",
       "name": "HIVE",
       "shortName": "HIVE",
-      "themeColor": "#bd9348",
       "backgroundColor": "#bd9348"
     },
     "plugins": [

@@ -17,26 +17,58 @@ import {
 WebBrowser.maybeCompleteAuthSession();
 
 /* ---------------------------------------------------------------------------
-   Naming the account you are about to sign in with.
+   Naming the account you are about to sign in with — and then actually
+   continuing as them.
 
    Nat, 2026-08-06, on her phone: "This has the option to sign in with a
    different account, but it doesn't show which account you're about to log in
    with, so how do you know if you want to log in with a different account?"
-   She is right — "different" only means something next to a "current".
+   She is right — "different" only means something next to a "current". So the
+   screen remembers who signed in on THIS DEVICE last time and says it on the
+   button, falling back to plain "Continue with Google" for a device that has
+   never seen anybody.
 
-   What is actually knowable here: nothing about Google. Google's own account
-   chooser opens after the tap, in Google's page, so the app cannot know who it
-   is about to be offered. What the app can know is who signed in on THIS
-   DEVICE last time. So the screen remembers that, says it on the button, and
-   falls back to plain "Continue with Google" for a device that has never seen
-   anybody.
+   Later the same day, with that shipped: "This doubled up, because first it
+   pre-filled me with which email I'm logging in with, but then the very next
+   screen was like 'here, choose which one you want to sign in with'." The
+   button promised to continue as one person and then handed her a list of
+   eight accounts. A promise followed by a question is worse than either alone.
+
+   The fix is Google's `login_hint`. Hand Google an address and it signs that
+   person straight in with no chooser, so "Continue as X" continues as X.
+   Supabase passes it through `signInWithOAuth`'s `options.queryParams`.
    --------------------------------------------------------------------------- */
 
-/** Where the hint lives. Same device, same storage the session already uses. */
-const LAST_SIGN_IN_KEY = 'hive.last-sign-in';
+/**
+ * Where the address lives. Same device, same storage the session already uses.
+ *
+ * This holds the WHOLE address, because a mask cannot be a `login_hint` —
+ * Google needs the real one or the chooser comes back. The privacy reason for
+ * the mask is untouched by that: it was always about what a stranger can READ
+ * off a borrowed phone, and the screen still renders two letters and the
+ * provider (see `maskEmailForHint`). Nothing on the device shows the address.
+ *
+ * What this genuinely adds is a plaintext address in local storage. Weighed
+ * honestly: while somebody is signed in, their address is already sitting in
+ * the session token in the same storage, so the only new window is a device
+ * whose session lapsed without an explicit log out — and reading it takes
+ * developer tools, not a glance. The address also rides in the Google URL
+ * during the redirect, which is inherent to the mechanism and lands only at
+ * Google, who issued the address in the first place.
+ */
+const LAST_SIGN_IN_EMAIL_KEY = 'hive.last-sign-in-email';
 
 /**
- * Turn nat@gmail.com into na•••@gmail.com.
+ * The key this screen used for the few hours it stored a mask instead. It is
+ * cleared wherever the real one is, so no device keeps a value under a name
+ * nothing reads any more. Reading a mask as if it were an address would send
+ * "na•••@gmail.com" to Google as a login_hint and get a chooser back — the
+ * exact bug this replaced.
+ */
+const LEGACY_MASKED_KEY = 'hive.last-sign-in';
+
+/**
+ * Turn nat@gmail.com into na•••@gmail.com, for the screen only.
  *
  * The privacy call, made deliberately: a HIVE is invitation only, so a full
  * address on the sign-in screen tells a borrowed or shared phone both who owns
@@ -45,9 +77,13 @@ const LAST_SIGN_IN_KEY = 'hive.last-sign-in';
  * stranger reading over a shoulder. The domain stays whole because the real
  * case for "which account" is somebody with a personal Google and a work one.
  *
- * The mask is a fixed three dots so it does not leak how long the address is,
- * and the masking happens BEFORE the value is written down, so the full
- * address is never stored anywhere on the device by this screen.
+ * The mask is a fixed three dots so it does not leak how long the address is.
+ * It runs at render time now rather than before storage, so the button says
+ * two letters while Google gets the address it needs.
+ *
+ * Returning null is also the validity check: an address that will not mask is
+ * not one worth remembering, so nothing is stored and the button goes back to
+ * "Continue with Google".
  */
 function maskEmailForHint(email: string): string | null {
   const trimmed = email.trim().toLowerCase();
@@ -60,13 +96,21 @@ function maskEmailForHint(email: string): string | null {
   return `${shown}•••@${domain}`;
 }
 
+/** Normalised as Google will see it, or null if it is not an address. */
+function usableEmail(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const trimmed = email.trim().toLowerCase();
+  return maskEmailForHint(trimmed) ? trimmed : null;
+}
+
 async function rememberSignIn(email: string | null | undefined) {
-  const hint = email ? maskEmailForHint(email) : null;
-  if (hint) await setStoredItemAsync(LAST_SIGN_IN_KEY, hint);
+  const address = usableEmail(email);
+  if (address) await setStoredItemAsync(LAST_SIGN_IN_EMAIL_KEY, address);
 }
 
 async function forgetSignIn() {
-  await removeStoredItemAsync(LAST_SIGN_IN_KEY);
+  await removeStoredItemAsync(LAST_SIGN_IN_EMAIL_KEY);
+  await removeStoredItemAsync(LEGACY_MASKED_KEY);
 }
 
 /*
@@ -81,6 +125,11 @@ async function forgetSignIn() {
 
    Sign-out is caught here too, which means the address is cleared without
    reaching into the three screens that offer a Log out button.
+
+   Subscribing also fires INITIAL_SESSION with whatever session already exists,
+   so anybody signed in when this ships has their address recorded on their
+   next load — the button keeps its name across the change to storing the whole
+   address rather than the mask.
 
    If a future router version starts loading routes lazily, this simply stops
    recording and the button goes back to saying "Continue with Google". The
@@ -98,23 +147,54 @@ if (Platform.OS !== 'web' || typeof window !== 'undefined') {
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
-  const [accountHint, setAccountHint] = useState<string | null>(null);
+  // The whole address, held only long enough to hand to Google. The screen
+  // never shows it — `accountHint` below is what the button reads.
+  const [rememberedEmail, setRememberedEmail] = useState<string | null>(null);
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const safeReturnTo = sanitizeReturnTo(returnTo);
 
+  const accountHint = rememberedEmail ? maskEmailForHint(rememberedEmail) : null;
+
   useEffect(() => {
     let stillHere = true;
-    void getStoredItemAsync(LAST_SIGN_IN_KEY).then((stored) => {
-      if (stillHere) setAccountHint(stored);
+    void getStoredItemAsync(LAST_SIGN_IN_EMAIL_KEY).then((stored) => {
+      if (stillHere) setRememberedEmail(usableEmail(stored));
     });
+    // Sweep the old masked value off devices that still carry one. Nothing
+    // reads it any more, and a leftover under a live-looking name is how a
+    // later session talks itself into trusting it.
+    void removeStoredItemAsync(LEGACY_MASKED_KEY);
     return () => {
       stillHere = false;
     };
   }, []);
 
+  /**
+   * What Google is asked, and why it is one of exactly two things.
+   *
+   * With a remembered address: `login_hint`, which signs that person in with
+   * no chooser. That is the whole fix — the button says "Continue as X" and
+   * Google continues as X instead of asking again.
+   *
+   * On "Use a different account": `prompt=select_account`, which forces the
+   * full chooser open even when Google would happily have picked for you.
+   * Never both — a hint plus a forced chooser is the doubling all over again.
+   *
+   * Neither is a lock. If that account is not signed in on this device Google
+   * asks anyway, with the address already filled in, which is one step further
+   * along than the chooser this used to open on.
+   */
+  const googleQueryParams = (
+    forceAccountPicker: boolean
+  ): Record<string, string> | undefined => {
+    if (forceAccountPicker) return { prompt: 'select_account' };
+    return rememberedEmail ? { login_hint: rememberedEmail } : undefined;
+  };
+
   const handleGoogleSignIn = async (forceAccountPicker = false) => {
     try {
       setLoading(true);
+      const queryParams = googleQueryParams(forceAccountPicker);
 
       if (Platform.OS === 'web') {
         // For web, use simple redirect
@@ -127,7 +207,7 @@ export default function LoginScreen() {
           provider: 'google',
           options: {
             redirectTo: redirectUrl,
-            queryParams: forceAccountPicker ? { prompt: 'select_account' } : undefined,
+            queryParams,
           },
         });
         if (error) throw error;
@@ -141,7 +221,7 @@ export default function LoginScreen() {
           options: {
             redirectTo,
             skipBrowserRedirect: true,
-            queryParams: forceAccountPicker ? { prompt: 'select_account' } : undefined,
+            queryParams,
           },
         });
 
@@ -202,9 +282,13 @@ export default function LoginScreen() {
    * Somebody else's turn. Forget the address first, so a person who taps this
    * and then walks away has not left the last person's name on the screen for
    * whoever picks the phone up next. Signing in again writes a fresh one.
+   *
+   * Forgetting first is also what makes the chooser honest: with the address
+   * gone there is no `login_hint` left to send, so `prompt=select_account` is
+   * the only thing Google is told and the full list opens.
    */
   const handleDifferentAccount = async () => {
-    setAccountHint(null);
+    setRememberedEmail(null);
     await forgetSignIn();
     await handleGoogleSignIn(true);
   };
@@ -312,7 +396,13 @@ export default function LoginScreen() {
               "different" would be measuring against nothing. The wording
               changes rather than the button disappearing — a browser can be
               quietly signed into a Google account nobody on this screen has
-              named, and this is still the way past it. */}
+              named, and this is still the way past it.
+
+              It matters more now that the button above skips the chooser: this
+              line is the only remaining door to the full list, and the only
+              thing that clears a remembered address that has gone stale. It
+              stays on screen in every state. Do not hide it when a name is
+              showing — that is precisely when somebody needs it. */}
           <Pressable
             onPress={() => void handleDifferentAccount()}
             disabled={loading}

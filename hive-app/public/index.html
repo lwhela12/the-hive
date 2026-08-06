@@ -6,6 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="application-name" content="HIVE" />
     <meta name="description" content="AI-powered wish coordination for your community" />
+    <!-- The one theme-color in the app. It is the colour of the browser's own
+         furniture — the address bar on a phone, the card in the task switcher —
+         and the script at the end of this head rewrites it to HIVE-Wide's
+         near-black when that is where this person is landing.
+
+         `expo.web.themeColor` in app.json used to add a SECOND one at the bottom
+         of this head, which the script cannot reach because it runs before that
+         line is parsed. Two theme-colors is a coin toss dressed as a setting, so
+         app.json no longer sets it and the PWA colour lives where it belongs, in
+         public/manifest.json. -->
     <meta name="theme-color" content="#bd9348" />
     <meta name="background-color" content="#bd9348" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -54,17 +64,53 @@
       on cellular that is several seconds of nothing.
 
       These few lines are HTML, so they paint on the first frame the browser
-      draws, before a single byte of the app is asked for. Same gold, same bee,
-      same flight as components/ui/ThinkingBee — so when the real one takes over
-      there is nothing to see happening.
+      draws, before a single byte of the app is asked for. Same bee, same flight
+      as components/ui/ThinkingBee — so when the real one takes over there is
+      nothing to see happening.
 
-      The gold on html/body also means there is no white left anywhere: a gap
-      between screens shows HIVE's colour rather than the browser's.
+      ARRIVING IN ONE COLOUR (2026-08-06, second pass)
+
+      The first version of this splash was always gold, and that bought a new
+      problem for the price of the old one. Nat: "there was a flash of white, a
+      flash of golden and then space. Very janky travel." HIVE has two worlds —
+      cream inside a HIVE, near-black at HIVE-Wide — and everybody now lands at
+      HIVE-Wide, so a fixed gold splash guaranteed a colour change on arrival for
+      almost every member.
+
+      So the splash asks where this person is going BEFORE it paints, and paints
+      that. The browser already holds the answer: the script at the end of this
+      head reads the same two keys lib/hiveSelection.ts writes, and the saved
+      sign-in. Landing at HIVE-Wide gets near-black from the very first frame, so
+      there is one colour from the first pixel to the loaded app.
+
+      Gold stays for everyone heading into a HIVE. It is HIVE's front door, Nat
+      asked for the flying bee by name, and gold to cream is a step inside one
+      family rather than a cut from light to dark.
+
+      The handover is a dissolve as well, so on the rare visit where the guess is
+      wrong — somebody opening an invite, a sign-in that fails — the colour
+      changes by fading rather than by flashing.
     -->
     <style id="hive-boot">
+      /* Gold is HIVE's front door. Near-black is HIVE-Wide — the same #07080F
+         as SPACE_SKIN.page in lib/pageSkin.ts. The script below picks one. */
+      :root {
+        --hive-boot-bg: #bd9348;
+        color-scheme: light;
+      }
+
+      html[data-hive-boot='space'] {
+        --hive-boot-bg: #07080f;
+        /* Tells the browser to draw its own canvas, scrollbars and form
+           controls dark. Without it Chrome paints the page white for the frames
+           before our own background is resolved, which is the white Nat sees
+           first. */
+        color-scheme: dark;
+      }
+
       html,
       body {
-        background-color: #bd9348;
+        background-color: var(--hive-boot-bg);
       }
 
       #hive-boot-splash {
@@ -74,7 +120,16 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: #bd9348;
+        background-color: var(--hive-boot-bg);
+        opacity: 1;
+        transition: opacity 220ms ease-out;
+      }
+
+      /* Leaving, not gone. It stops taking taps the instant it starts to fade,
+         so the app underneath is live before the pixels finish. */
+      #hive-boot-splash.hive-boot-leaving {
+        opacity: 0;
+        pointer-events: none;
       }
 
       #hive-boot-splash span {
@@ -101,8 +156,61 @@
         #hive-boot-splash span {
           animation: none;
         }
+
+        #hive-boot-splash {
+          transition: none;
+        }
       }
     </style>
+
+    <script>
+      // Where is this person going? Answered before the first pixel.
+      //
+      // This runs in the head, so it blocks parsing and finishes before the
+      // browser paints anything at all — which is the whole point. By the time
+      // there is a frame to draw, the page already knows whether it is a HIVE or
+      // HIVE-Wide and is wearing that colour.
+      //
+      // THE RULE, and it is the same one app/_layout.tsx seeds `wholeHive` with.
+      // Both places must say the same thing or the splash and the app's first
+      // React frame will disagree, which is the flash all over again. If you
+      // change one, change the other.
+      //
+      //   1. `hive:wide` set          → they are standing at HIVE-Wide right now
+      //                                 (a reload, or the "fresh honey" refresh)
+      //   2. `hive:confirmed` set     → they picked a HIVE in this tab, so no
+      //   3. on /join                 → an invite puts you INSIDE the HIVE you
+      //                                 just joined, so no
+      //   4. a saved sign-in exists   → a fresh tab, and the app's own rule is
+      //                                 that everybody lands at HIVE-Wide
+      //   5. otherwise                → signed out, heading for the door
+      //
+      // The two session keys are written by lib/hiveSelection.ts. `the-hive-auth`
+      // is the Supabase session — on web AsyncStorage is plain localStorage under
+      // the key as written, and lib/supabase.ts names it `the-hive-auth`.
+      (function () {
+        function headingToHiveWide() {
+          try {
+            if (window.sessionStorage.getItem('hive:wide') === '1') return true;
+            if (window.sessionStorage.getItem('hive:confirmed') === '1') return false;
+            if (window.location.pathname.indexOf('/join') === 0) return false;
+            return !!window.localStorage.getItem('the-hive-auth');
+          } catch (err) {
+            // Private browsing can throw on the storage itself. Gold is the safe
+            // answer: it is what every arrival looked like before today.
+            return false;
+          }
+        }
+
+        if (!headingToHiveWide()) return;
+
+        document.documentElement.setAttribute('data-hive-boot', 'space');
+        // The browser's own furniture — the address bar on a phone, the task
+        // switcher card — reads this rather than the CSS.
+        var themeColor = document.querySelector('meta[name="theme-color"]');
+        if (themeColor) themeColor.setAttribute('content', '#07080F');
+      })();
+    </script>
   </head>
 
   <body>
@@ -130,7 +238,14 @@
         function handOver() {
           if (done) return;
           done = true;
-          if (splash.parentNode) splash.parentNode.removeChild(splash);
+          // Fade rather than cut. When the guess above was right this is
+          // invisible — same colour either side. When it was wrong it turns a
+          // flash into a dissolve, which is the difference between "janky" and
+          // "arriving". 260ms covers the 220ms transition with room to spare.
+          splash.classList.add('hive-boot-leaving');
+          window.setTimeout(function () {
+            if (splash.parentNode) splash.parentNode.removeChild(splash);
+          }, 260);
         }
 
         if (root.childNodes.length > 0) {

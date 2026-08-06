@@ -6,6 +6,9 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { HIVE_GOLD, accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateMedium } from '../../lib/dateUtils';
+// Admin is seen from the cosmos wherever the reader belongs, so the boxes in
+// here take the space skin's ink rather than asking `usePageSkin()`.
+import { SPACE_SKIN } from '../../lib/pageSkin';
 import { showAlert } from '../../lib/showAlert';
 import type { UserRole } from '../../types';
 
@@ -219,6 +222,18 @@ const veil = ({ r, g, b }: Rgb, alpha: number) => `rgba(${r},${g},${b},${alpha})
 const deepen = ({ r, g, b }: Rgb, amount: number) =>
   `#${[r, g, b].map((v) => Math.round(v * (1 - amount)).toString(16).padStart(2, '0')).join('')}`;
 
+/**
+ * The two rules a folder is ruled with, whether or not it belongs to a HIVE.
+ *
+ * A HIVE's box got these from `hivePanelSkin` and the Surveys and Newsletter
+ * boxes had their own gold-on-cream versions, which is part of why Nat read them
+ * as a different species (2026-08-06). Both kinds are dark panes now, so both
+ * take the same two lines: `HAIRLINE` between rows, `INSET` for a row being
+ * pressed or a section pushed slightly into the sheet.
+ */
+export const PANEL_HAIRLINE = 'rgba(255,255,255,0.11)';
+export const PANEL_INSET = 'rgba(255,255,255,0.07)';
+
 export type HivePanelSkin = {
   tab: string;
   tabText: string;
@@ -275,8 +290,8 @@ export function hivePanelSkin(accent: string): HivePanelSkin {
     tabText: '#fffdf5',
     body: veil(rgb, 0.19),
     border: veil(rgb, 0.48),
-    hairline: 'rgba(255,255,255,0.11)',
-    inset: 'rgba(255,255,255,0.07)',
+    hairline: PANEL_HAIRLINE,
+    inset: PANEL_INSET,
     shadow: HEX.test(accent) ? accent : HIVE_GOLD,
     // Kept so a pale accent can still be checked against, rather than silently
     // dropping the two values this function spent its time working out.
@@ -452,12 +467,19 @@ export function NewsletterPanel({
         ]}
         activeTab={tab}
         onTabChange={(key: string) => setTab(key as 'write' | 'shoutouts' | 'signed')}
+        // No action tab. This box's one "do it" is writing the draft, and Nat
+        // made that a tab on 2026-08-06 — so the folder's edge already carries
+        // it, and a gold pill saying the same word twice would be the pill she
+        // asked to get rid of, wearing a new hat.
         style={panelStyle}
         bodyStyle={bodyStyle}
       >
         <ScrollView style={scrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
           {tab === 'write' && profile?.is_owner ? (
             <View>
+              {/* Drawn like the tool rows inside a HIVE's folder — same gap, same
+                  two weights, same chevron — because it is the same kind of row:
+                  a door out of the box onto a page of its own. */}
               <Pressable
                 onPress={() => router.push({ pathname: '/newsletter', params: { from: 'admin' } } as any)}
                 style={({ pressed }) => ({
@@ -467,19 +489,19 @@ export function NewsletterPanel({
                   paddingHorizontal: 14,
                   paddingVertical: 13,
                   borderBottomWidth: 1,
-                  borderBottomColor: 'rgba(222,193,129,0.35)',
-                  backgroundColor: pressed ? '#fbf0d7' : '#fdf9ee',
+                  borderBottomColor: PANEL_HAIRLINE,
+                  backgroundColor: pressed ? PANEL_INSET : 'transparent',
                 })}
               >
-                <Ionicons name="create-outline" size={18} color="#bd9348" />
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#8a6b30', flex: 1 }}>
+                <Ionicons name="create-outline" size={18} color={SPACE_SKIN.gold} />
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: SPACE_SKIN.ink, flex: 1 }}>
                   Write this month&rsquo;s newsletter
                 </Text>
-                <Ionicons name="chevron-forward" size={15} color="#bd9348" />
+                <Ionicons name="chevron-forward" size={15} color={SPACE_SKIN.inkSoft} />
               </Pressable>
               <Text
                 style={{
-                  fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060',
+                  fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft,
                   lineHeight: 19, padding: 14,
                 }}
               >
@@ -494,7 +516,7 @@ export function NewsletterPanel({
           {tab === 'shoutouts' ? (
             <View style={{ padding: 12, gap: 8 }}>
               {shoutOuts.length === 0 ? (
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', lineHeight: 19 }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, lineHeight: 19 }}>
                   Nobody has asked for a mention yet. What members add to the
                   newsletter thread lands here, and goes into the draft.
                 </Text>
@@ -503,17 +525,17 @@ export function NewsletterPanel({
                   key={item.id}
                   style={{
                     borderWidth: 1,
-                    borderColor: 'rgba(222,193,129,0.45)',
-                    backgroundColor: '#fffdf5',
+                    borderColor: SPACE_SKIN.border,
+                    backgroundColor: SPACE_SKIN.card,
                     borderRadius: 12,
                     padding: 11,
                     gap: 3,
                   }}
                 >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#8a6b30' }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.gold }}>
                     {item.author}
                   </Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, color: '#4b4740', lineHeight: 20 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13.5, color: SPACE_SKIN.inkBody, lineHeight: 20 }}>
                     {item.content}
                   </Text>
                 </View>
@@ -556,7 +578,7 @@ export function NewsletterPanel({
           </View>
 
           {active.length === 0 ? (
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', paddingHorizontal: 14, paddingBottom: 14 }}>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, paddingHorizontal: 14, paddingBottom: 14 }}>
               Nobody outside the HIVEs is subscribed yet. Members get it automatically.
             </Text>
           ) : active.map((sub) => (
@@ -565,15 +587,15 @@ export function NewsletterPanel({
               style={{
                 flexDirection: 'row', alignItems: 'center', gap: 10,
                 paddingHorizontal: 14, paddingVertical: 10,
-                borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.25)',
+                borderTopWidth: 1, borderTopColor: PANEL_HAIRLINE,
               }}
             >
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#3f3a31' }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.ink }}>
                   {sub.email}
                 </Text>
                 {sub.name ? (
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#9a8060' }}>{sub.name}</Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: SPACE_SKIN.inkSoft }}>{sub.name}</Text>
                 ) : null}
               </View>
               <Pressable
@@ -581,7 +603,7 @@ export function NewsletterPanel({
                 hitSlop={8}
                 accessibilityLabel={`Remove ${sub.email}`}
               >
-                <Ionicons name="close-circle-outline" size={19} color="#b0a48c" />
+                <Ionicons name="close-circle-outline" size={19} color={SPACE_SKIN.inkSoft} />
               </Pressable>
             </View>
           ))}
@@ -631,11 +653,9 @@ export function HiveMemberPanels({
   bodyStyle,
   scrollStyle,
   Panel,
-  HeaderAction,
   orderFrom = ADMIN_PANEL_ORDER.hives,
   onOpenCheckIns,
 }: PanelChrome & {
-  HeaderAction: React.ComponentType<{ label: string; onPress: () => void }>;
   orderFrom?: number;
   /** Opens the check-in editor on the Admin screen, for whichever HIVE is current. */
   onOpenCheckIns?: () => void;
@@ -912,9 +932,11 @@ export function HiveMemberPanels({
           other with cream and a tiny word. Nat spotted it side by side
           ("see how these don't"). One list now, drawn once.
 
-          Nat's order, left column top to bottom: OG, Tech, Production. The grid
-          wraps left-right, so the hives take the odd positions and Meeting
-          Tools / Newsletter take the even ones. */}
+          In membership order, after Surveys and the Newsletter. The old note
+          here described the interleaved grid — HIVEs on the odd positions, the
+          cross-HIVE boxes on the even ones — which ADMIN_PANEL_ORDER retired on
+          2026-08-06; see the comment on it for why a column split and a ranking
+          could not both live in one sequence. */}
       {memberships.map((m, index) => {
         const rows = byHive[m.community_id] ?? [];
         const accent = hiveAccent(m.community);
@@ -955,16 +977,20 @@ export function HiveMemberPanels({
               // sure each one of these has the 'add new member' button"). It is
               // an action on the HIVE, and hiding it behind a tab made it look
               // as though only some HIVEs could take new people.
-              action={m.role === 'admin' ? (
-                <HeaderAction
-                  label={inviting ? 'Close Invite' : '+ New Member'}
-                  onPress={() => {
-                    setInviteEmail('');
-                    setInviteRole('member');
-                    setInviteFor(inviting ? null : m.community_id);
-                  }}
-                />
-              ) : undefined}
+              //
+              // It is a tab on the folder now rather than a cream pill floating
+              // beside it — Nat, 2026-08-06: "I think it should just be another
+              // coloured tab on the folder." The panel draws it, in the house
+              // gold every "do it" button wears, so it can never look like one of
+              // the places you can be standing.
+              action={m.role === 'admin' ? {
+                label: inviting ? 'Close Invite' : '+ New Member',
+                onPress: () => {
+                  setInviteEmail('');
+                  setInviteRole('member');
+                  setInviteFor(inviting ? null : m.community_id);
+                },
+              } : undefined}
             >
               <ScrollView style={scrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
                 {/* MEETING TOOLS, for this HIVE.
@@ -1444,9 +1470,7 @@ export function HiveMemberPanels({
 }
 
 /** Both god-mode boxes at once, in Nat's order, for anyone who wants the pair. */
-export function GodModePanels(props: PanelChrome & {
-  HeaderAction: React.ComponentType<{ label: string; onPress: () => void }>;
-}) {
+export function GodModePanels(props: PanelChrome) {
   return (
     <>
       <NewsletterPanel {...props} />

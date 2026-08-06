@@ -389,21 +389,26 @@ function WayIntoYourHive({
       // The panel's own 16 points along the bottom, like every other panel here.
       // This one asked for 20 and that extra 4 is exactly the kind of almost-
       // the-same Nat keeps spotting. `gap` stays its own number because it is
-      // the space between this panel's paragraphs and pills, which no other
-      // panel has.
+      // the space between this panel's first-visit line and its pills, which no
+      // other panel has.
       bodyStyle={{ gap: 14 }}
     >
+      {/* One sentence on a first visit: where you belong, and what is waiting
+          there. It ran to three until 2026-08-06 — Nat's standing note that day
+          was *"every opportunity to have less words, take it"* — and the two
+          that went were both already said somewhere the eye had just been. "This
+          page shows all the HIVEs at once" is the panel directly above and the
+          line under the title. "Tap the button below to go in" is the buttons
+          directly beneath, which carry an arrow. */}
       {firstVisit ? (
         <Text
           style={{
             fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 23, color: INK_SOFT,
           }}
         >
-          This page shows all the HIVEs at once. {many ? 'Yours are' : 'Yours is'}{' '}
-          <Text style={{ fontFamily: 'Lato_700Bold', color: INK }}>{nameList}</Text>, and
-          that is where the rest of the app is: your profile, the other members, the
-          daily question, your wishes, and Clive, who answers questions. Tap
-          {many ? ' one of the buttons' : ' the button'} below to go in.
+          <Text style={{ fontFamily: 'Lato_700Bold', color: INK }}>{nameList}</Text>{' '}
+          {many ? 'are' : 'is'} where the rest of the app is: your profile, the other
+          members, the daily question, your wishes, and Clive, who answers questions.
         </Text>
       ) : null}
 
@@ -413,11 +418,11 @@ function WayIntoYourHive({
           49 points tall with a 14-point corner, and three of them took a screen.
 
           Lighter, not quieter. Everything that does the work stays — each HIVE's
-          own colour, its hexagon, the arrow, the full width and the plain words
-          "Go into ___" — and the bulk goes: a pill instead of a slab, 38 points
-          instead of 49, smaller type and smaller furniture. A pill reads as a
-          button at any height; a tall rounded rectangle only reads as one
-          because it is tall.
+          own colour, its hexagon, the arrow, the full width and the HIVE's plain
+          name — and the bulk goes: a pill instead of a slab, 38 points instead
+          of 49, smaller type and smaller furniture. A pill reads as a button at
+          any height; a tall rounded rectangle only reads as one because it is
+          tall.
 
           ## The hexagon carries the HIVE's colour, and so the pill cannot
 
@@ -443,11 +448,23 @@ function WayIntoYourHive({
           purple. The thin fill uses the raw colour, because it is doing the
           opposite job — it only has to say which HIVE without lighting up.
 
-          The type stops here rather than going smaller. On a 375-point phone the
-          longest HIVE name in the app, "Go into Production HIVE", wants 160 of
-          the 168 points this row has for words. Any tighter and it clips, and a
-          door labelled "Go into Producti…" is not a door. It is allowed a second
-          line instead — a taller pill is still a pill. */}
+          ## The label is the HIVE's name and nothing else
+
+          Nat, 2026-08-06: *"These should just say OG HIVE, Tech HIVE, not 'go
+          into', it's implied with a button."* The hexagon, the arrow and the
+          pill all say what pressing it does, so the words saying it a fourth
+          time were spending room to repeat the furniture.
+
+          Room this row genuinely has: a 375-point phone leaves 166 points for
+          words once the rail, the page padding, the panel, the pill, the comb
+          and the arrow have taken theirs. "Go into Production HIVE" wanted about
+          160 of those, close enough to the edge that the longest name in the app
+          broke onto a second line. "Production HIVE" wants about 109, so all
+          three fit on one line with room to spare.
+
+          The type stops at 14.5 rather than going smaller, and the second line
+          stays allowed — a HIVE named longer than any of today's three wraps
+          rather than clipping, and a taller pill is still a pill. */}
       <View style={{ gap: 8 }}>
         {memberships.map((m) => {
           const name = hiveDisplayName(m.community?.name);
@@ -461,6 +478,9 @@ function WayIntoYourHive({
               key={m.community_id}
               onPress={() => onEnter(m.community_id)}
               accessibilityRole="button"
+              // A screen reader gets the words the pill's shape and arrow carry
+              // for everybody else, so "Go into" lives on here after coming off
+              // the visible label.
               accessibilityLabel={`Go into ${name}`}
               style={{
                 flexDirection: 'row',
@@ -472,8 +492,8 @@ function WayIntoYourHive({
                 borderRadius: 999,
                 backgroundColor: accentWash(raw, 0.26),
                 // The edge is what says "button" at a glance now that the fill
-                // is thin. It costs 3 points of the row; "Go into Production
-                // HIVE", the longest label in the app, still has 166 for 160.
+                // is thin. It costs 3 points of the row, which the labels have
+                // to spare — see the note above.
                 borderWidth: 1.5,
                 borderColor: colour,
               }}
@@ -486,7 +506,7 @@ function WayIntoYourHive({
                 }}
                 numberOfLines={2}
               >
-                Go into {name}
+                {name}
               </Text>
               <Ionicons name="arrow-forward" size={16} color={colour} />
             </Pressable>
@@ -494,17 +514,12 @@ function WayIntoYourHive({
         })}
       </View>
 
-      {/* Said once, and said the same way the rail is drawn: HIVE-Wide is the
-          first row under "My HIVEs", with the Earth on it. Somebody who goes in
-          needs to know the way back before they take it. */}
-      <Text
-        style={{
-          fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: INK_FAINT,
-        }}
-      >
-        HIVE-Wide is here whenever you want it — it is the top of the menu on the
-        left, with the little world beside it.
-      </Text>
+      {/* The buttons are the end of this panel. A line used to sit here saying
+          HIVE-Wide is waiting at the top of the menu on the left with the world
+          beside it — the reassurance that going in is not a one-way door. The
+          rail says that itself, on every screen, with HIVE-Wide at the top of
+          it, so the words were describing something already on the page. Nat,
+          2026-08-06: *"get rid of the text at the bottom explaining stuff."* */}
     </CollapsiblePanel>
   );
 }
@@ -719,16 +734,21 @@ export default function HiveWideScreen() {
           padding: 16,
           gap: 18,
           paddingBottom: 44,
-          // More air under the title (Nat 2026-08-04: "these boxes can shift
-          // down a little, so they aren't so close to the header"). The page
-          // has no header bar — the title floats in the sky — so the only thing
-          // separating a 46pt serif headline from the first card is this
-          // number, and 30 was reading as a collision rather than a gap.
-          // Eased from 84 once the welcome became the first thing here rather
-          // than the four boxes — Nat, 2026-08-05: "i'd shift it up a teeny tiny
-          // bit closer to the heading". A panel that opens with a title of its
-          // own needs less air under the headline than a row of cards does.
-          paddingTop: 62,
+          // The air under the title. The page has no header bar — the title
+          // floats in the sky — so this number plus the hero's own 4 points is
+          // the whole gap between the subtitle and the first panel.
+          //
+          // It has come down twice, each time because a panel that opens with a
+          // title of its own needs less air under the headline than the row of
+          // cards this was first measured for. 84 → 62 (Nat, 2026-08-05: "i'd
+          // shift it up a teeny tiny bit closer to the heading") → 38 (Nat,
+          // 2026-08-06: "I think we can scoot this up a teeensy bit. We want
+          // some space, but we don't need that much space").
+          //
+          // 38 leaves a 42-point gap under a 14.5pt subtitle on a 375-point
+          // phone — about two lines of that type, which reads as deliberate
+          // room. 66 was reading as a hole in the page.
+          paddingTop: 38,
           width: '100%',
           maxWidth: 1240,
           alignSelf: 'center',

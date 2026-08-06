@@ -45,9 +45,15 @@ import {
   ADMIN_PANEL_ORDER,
   HiveMemberPanels,
   NewsletterPanel,
+  PANEL_HAIRLINE,
+  PANEL_INSET,
   hivePanelSkin,
 } from '../../components/admin/GodModePanels';
-import { HIVE_GOLD, accentOnDark, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+// Admin is always seen from the cosmos, whichever HIVE you happen to belong to,
+// so its boxes take the space skin's ink and card values rather than asking
+// `usePageSkin()` where the reader is standing.
+import { SPACE_SKIN } from '../../lib/pageSkin';
 import { SpaceGlobe } from '../../components/ui/SpaceGlobe';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { ModalBackdrop } from '../../components/ui/ModalBackdrop';
@@ -780,12 +786,86 @@ function SurveyTimePicker({
   );
 }
 
+/**
+ * The folder's edge, and a small gold arrow while there is more of it than the
+ * screen can hold.
+ *
+ * Nat, comparing her laptop with her phone on 2026-08-06: *"See how the tabs are
+ * attached to the folder? That's how we want it."* The phone had stopped doing
+ * that — the tabs became free-floating chips that wrapped onto a line of their
+ * own, on the reasoning that a tab which has wrapped is attached to nothing.
+ * True, and the answer is to stop it wrapping rather than to stop it being a
+ * tab. `OG HIVE · Members (11) · Meeting tools · Check-ins · + New Member` wants
+ * about 500 points and a phone gives the box roughly 280, so the row slides
+ * sideways along the panel's top edge and stays welded to it.
+ *
+ * The arrow is the whole point of the wrapper: a strip that scrolls with no sign
+ * it scrolls is how the first tab ended up looking clipped rather than reachable.
+ * It appears only while there is genuinely something further right, and goes when
+ * you get there. Same idea as the tab row on App Feedback, which met the same
+ * wall a day earlier.
+ */
+function PanelTabStrip({ edge, children }: { edge: string; children: ReactNode }) {
+  const [visibleWidth, setVisibleWidth] = useState(0);
+  const [rowWidth, setRowWidth] = useState(0);
+  const [scrolledBy, setScrolledBy] = useState(0);
+  // Four points of slack, so a rounding difference between the row and the box
+  // never leaves an arrow pointing at nothing.
+  const moreToTheRight = rowWidth - visibleWidth - scrolledBy > 4;
+
+  return (
+    <View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        onLayout={(event) => setVisibleWidth(event.nativeEvent.layout.width)}
+        onContentSizeChange={(width) => setRowWidth(width)}
+        onScroll={(event) => setScrolledBy(event.nativeEvent.contentOffset.x)}
+        scrollEventThrottle={16}
+        // Bottoms level, whatever height each tab is, because the bottom is the
+        // edge they are all attached to.
+        contentContainerStyle={{ alignItems: 'flex-end', gap: 3 }}
+      >
+        {children}
+      </ScrollView>
+      {moreToTheRight ? (
+        // Sits over the last visible tab and lets every press through to it.
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center' }}
+        >
+          <View
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 11,
+              alignItems: 'center',
+              justifyContent: 'center',
+              // Near-opaque, because it floats over the star field as well as
+              // over a tab, and a see-through arrow on stars is a smudge.
+              backgroundColor: 'rgba(11,11,18,0.92)',
+              borderWidth: 1,
+              borderColor: edge,
+            }}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, lineHeight: 16, color: SPACE_SKIN.gold }}>
+              ›
+            </Text>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 // Panel tabs are text only — the gold header bar is the mark, an icon inside it
 // just crowds the word (Nat 2026-07-26). Icons belong in the panel body.
 //
 // Hand it a HIVE's accent colour and the whole folder — tab, wash, edge, glow —
 // comes up in that HIVE instead of the house cream (Nat 2026-08-03). Boxes that
-// belong to no single HIVE leave it off and stay cream and gold.
+// belong to no single HIVE leave it off: they keep the cream name tab and the
+// gold edge over a body in no colour at all, which is how Surveys and the
+// Newsletter say "this belongs to all of them" while wearing the same folder.
 function AdminPanel({
   title,
   tabs,
@@ -814,64 +894,79 @@ function AdminPanel({
   tabs?: { key: string; label: string }[];
   activeTab?: string;
   onTabChange?: (key: string) => void;
-  action?: ReactNode;
+  /**
+   * The one thing this box lets you DO, drawn as a tab on the same edge.
+   *
+   * Nat, 2026-08-06: *"the 'add new member' instead of being a separate pill on
+   * the far left, I think it should just be another coloured tab on the folder."*
+   * It arrives as a label and a handler rather than a finished view, so the
+   * panel can colour it against its own folder — a caller handing in a ready-made
+   * pill is how it ended up as a different object in the first place.
+   */
+  action?: { label: string; onPress: () => void };
   accent?: string;
   style?: StyleProp<ViewStyle>;
   bodyStyle?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
   const skin = accent ? hivePanelSkin(accent) : null;
-  const tabFill = skin?.tab ?? 'rgba(253,243,220,0.8)';
+  const tabFill = skin?.tab ?? 'rgba(253,243,220,0.86)';
   const tabText = skin?.tabText ?? '#2d2d2d';
   const edge = skin?.border ?? 'rgba(222,193,129,0.7)';
-  // The un-accented panels (Meeting Tools, Newsletter) sat at solid cream while
-  // the HIVE panels floated on the stars, and the two read as different
-  // materials in one frame — Nat, 2026-08-03: "these are a little bit too stark
-  // different... the cream ones should be a little more transparent." Letting a
-  // little sky through is enough to make them the same kind of object; any more
-  // and the text stops being comfortable to read on a starfield.
-  // Nat wants these as see-through as HIVE-Wide's cards (2026-08-04), and
-  // opacity alone cannot get there. HIVE-Wide's boxes sit at 0.055 because
-  // everything inside them is LIGHT ink; these hold charcoal text, so dropping
-  // the cream to anything near that turns the words into grey-on-black. The
-  // real change is to make these dark panels with light ink like the accented
-  // ones — the same page-skin pass the board components still need — rather
-  // than a number. Eased to 0.74 in the meantime, which lets the sky show at
-  // the edges without taking the text with it.
-  const bodyFill = skin?.body ?? 'rgba(255,253,245,0.74)';
+  /**
+   * The boxes that belong to no HIVE are made of the same stuff as the ones that
+   * do.
+   *
+   * Nat, 2026-08-06: *"the surveys and newsletter are aggressively different
+   * styles than the other ones, can we match them a little more?"* They were
+   * near-solid cream slabs holding charcoal text while every HIVE box was a dark
+   * pane floating on the star field — two materials in one frame, which is the
+   * same complaint she made in a milder form back on 2026-08-03 ("the cream ones
+   * should be a little more transparent"). Thinning the cream was never going to
+   * finish it: cream is a different material at every opacity.
+   *
+   * So they are dark panes now, with light ink, exactly like the accented ones.
+   * The body borrows no colour at all — HIVE-Wide's own card value — because a
+   * gold body would read as OG HIVE's box, and these two speak for every HIVE at
+   * once. What keeps them house-coloured is the cream name tab and the gold edge,
+   * which is what they already wore and what Nat recognises them by.
+   */
+  const bodyFill = skin?.body ?? SPACE_SKIN.card;
   const glow = skin?.shadow ?? '#bd9348';
 
   /**
-   * A phone gets a different header, because a phone has not got the room.
+   * One folder at every width.
    *
-   * Nat, from her iPhone (2026-08-06): the tab row was "squished" against the
-   * "+ New Member" button and the first tab was clipped to a sliver. The maths
-   * says why. A box is the full screen minus the side rail minus the page
-   * padding — about 280 points at 375 — and the title tab, three tabs and the
-   * action pill want more than 500 between them on one line.
+   * A phone had its own header for two days: the name on one line with the
+   * action beside it, then the tabs as free-floating chips wrapping underneath.
+   * Nat looked at that and at her laptop side by side (2026-08-06) — *"These look
+   * janky, their tabs are all broken. It should look more like this… See how the
+   * tabs are attached to the folder? That's how we want it."*
    *
-   * So on a phone the row becomes three things stacked instead of one thing
-   * crushed:
+   * So the phone gets the desktop folder, and the width problem is solved where
+   * it actually lives: `PanelTabStrip` slides the row sideways along the panel's
+   * top edge instead of stacking it. Two headers drawing one idea is what let
+   * them drift apart in the first place; there is one now.
    *
-   *   the box's name, with its one action beside it
-   *   the tabs, wrapping onto a second line rather than running off the edge
-   *   the panel
-   *
-   * The tabs stop being folder tabs and become closed chips, and the panel gets
-   * its top-left corner back. A folder tab only means something while it is
-   * attached to the sheet below it, and a tab that has wrapped onto the line
-   * above is attached to nothing — a half-open box hanging in the air. Chips
-   * wrap honestly.
-   *
-   * The width is read here rather than passed in, the way AppHeader and
-   * HeaderTabs read the HIVE and the skin themselves: every caller of this panel
-   * would otherwise be a chance to forget the prop.
+   * The width is still read here rather than passed in, the way AppHeader and
+   * HeaderTabs read the HIVE and the skin themselves, and it buys nothing but
+   * slightly tighter lettering on a small screen.
    */
   const { width } = useWindowDimensions();
   const narrow = width < 768;
-  // The name is plain lettering on the star field now, so it needs ink that
-  // reads on near-black. Tech HIVE's navy as text on black is about 1.9:1.
-  const titleInk = accentOnDark(accent ?? HIVE_GOLD);
+
+  /** The silhouette every tab on this edge shares: open at the bottom, onto the sheet. */
+  const tabShape = {
+    borderColor: edge,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    paddingHorizontal: narrow ? 10 : 11,
+    // Nothing shrinks: the strip scrolls, so a long label costs a slide rather
+    // than squeezing the tab beside it into a sliver.
+    flexShrink: 0,
+  } as const;
 
   const renderTab = (t: { key: string; label: string }) => {
     const on = t.key === activeTab;
@@ -882,6 +977,7 @@ function AdminPanel({
         accessibilityRole="tab"
         accessibilityState={{ selected: on }}
         style={{
+          ...tabShape,
           // An UNSELECTED tab had a transparent ground and kept the
           // selected tab's near-black ink, so on the space-black admin
           // page it was black text on black — Nat: "These headers
@@ -889,31 +985,14 @@ function AdminPanel({
           // its own and light ink, so all three read as a row of tabs with
           // one of them in front.
           backgroundColor: on ? tabFill : 'rgba(255,248,233,0.07)',
-          borderColor: edge,
-          borderWidth: 1,
-          // A folder tab where there is a sheet to sit on, a closed chip where
-          // it may wrap onto a line of its own.
-          borderBottomWidth: narrow ? 1 : 0,
-          borderRadius: narrow ? 999 : 0,
-          borderTopLeftRadius: narrow ? 999 : 12,
-          borderTopRightRadius: narrow ? 999 : 12,
-          // Tighter on a phone, which is what buys the three of them one line.
-          paddingHorizontal: narrow ? 9 : 11,
-          // An inactive tab sits lower, so the active one reads as the
-          // sheet in front rather than one of a row. Chips all sit level —
-          // there is no sheet for one of them to be in front of.
-          paddingVertical: narrow ? 6 : on ? 7 : 5,
-          // Last resort, so one very long label can never push a sibling past
-          // the edge of the screen the way it used to.
-          flexShrink: 1,
-          minWidth: 0,
+          // An inactive tab sits lower, so the active one reads as the sheet in
+          // front rather than one of a row.
+          paddingVertical: on ? 7 : 5,
         }}
       >
         <Text
           numberOfLines={1}
           style={{
-            flexShrink: 1,
-            minWidth: 0,
             fontFamily: on ? 'Lato_700Bold' : 'Lato_400Regular',
             fontSize: narrow ? 12 : 12.5,
             color: on ? tabText : 'rgba(255,248,233,0.72)',
@@ -927,80 +1006,58 @@ function AdminPanel({
 
   return (
     <View style={[{ marginBottom: 0 }, style]}>
-      {narrow ? (
-        <>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+      <PanelTabStrip edge={edge}>
+        {/* THE NAME. The tab that says whose folder this is, and the only one
+            that is not a place you can go. */}
+        <View
+          style={{
+            ...tabShape,
+            backgroundColor: tabFill,
+            borderTopLeftRadius: 14,
+            borderTopRightRadius: 14,
+            paddingHorizontal: narrow ? 12 : 14,
+            paddingVertical: 7,
+          }}
+        >
+          <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: narrow ? 15.5 : 17, color: tabText }}>
+            {title}
+          </Text>
+        </View>
+        {(tabs ?? []).map(renderTab)}
+        {/* THE ACTION, wearing the folder's shape and the house's doing-colour.
+            Solid #bd9348 is the gold on every "do it" button in HIVE — Send
+            Invite, Add, Create Survey — so it reads as something that happens
+            rather than somewhere you can be standing. It sits at the low height
+            an unselected tab sits at and never takes the raised, filled look of
+            the selected one, and it answers to `button` rather than `tab`, so
+            nothing about it can say "you are here". */}
+        {action ? (
+          <Pressable
+            onPress={action.onPress}
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+            style={({ pressed }) => ({
+              ...tabShape,
+              backgroundColor: pressed ? '#a97f3a' : '#bd9348',
+              paddingHorizontal: narrow ? 11 : 12,
+              paddingVertical: 5,
+            })}
+          >
             <Text
               numberOfLines={1}
-              style={{ flex: 1, minWidth: 0, fontFamily: 'Lato_700Bold', fontSize: 17, color: titleInk }}
+              style={{ fontFamily: 'Lato_700Bold', fontSize: narrow ? 12 : 12.5, color: '#fffdf5' }}
             >
-              {title}
+              {action.label}
             </Text>
-            {/* The action pill carries a 4-point drop so it sits on the folder
-                tabs' baseline on a wide screen. There are no folder tabs beside
-                it here, so the drop is given back and it sits level with the
-                name. */}
-            {action ? <View style={{ marginBottom: -4 }}>{action}</View> : null}
-          </View>
-          {/* Air around the chips, because they really do wrap.
-              Nat, 2026-08-06, on the Newsletter box from her phone: Write this
-              month's / Shout-outs (11) / Signed up (0) came out on two lines
-              packed against each other and against the panel below. Three
-              labels of that length cannot share 280 points, so wrapping is the
-              right answer and the spacing was the wrong half of it: one `gap`
-              set the space between chips side to side AND line to line, and the
-              8 underneath was the same 8 the title row uses, which reads as
-              "attached to" rather than "above".
-              Line to line gets more than chip to chip, and the panel gets a
-              clear 12. */}
-          {(tabs ?? []).length > 0 ? (
-            <View
-              style={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                columnGap: 6,
-                rowGap: 8,
-                marginTop: 2,
-                marginBottom: 12,
-              }}
-            >
-              {(tabs ?? []).map(renderTab)}
-            </View>
-          ) : null}
-        </>
-      ) : (
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 0 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', flexShrink: 1, minWidth: 0, gap: 3 }}>
-            <View
-              style={{
-                flexShrink: 1,
-                minWidth: 0,
-                backgroundColor: tabFill,
-                borderColor: edge,
-                borderWidth: 1,
-                borderBottomWidth: 0,
-                borderTopLeftRadius: 14,
-                borderTopRightRadius: 14,
-                paddingHorizontal: 14,
-                paddingVertical: 7,
-              }}
-            >
-              <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: tabText }}>
-                {title}
-              </Text>
-            </View>
-            {(tabs ?? []).map(renderTab)}
-          </View>
-          {action ? <View style={{ paddingBottom: 4, marginLeft: 8, flexShrink: 0 }}>{action}</View> : null}
-        </View>
-      )}
+          </Pressable>
+        ) : null}
+      </PanelTabStrip>
       <View
         style={[{
           backgroundColor: bodyFill,
           borderRadius: 20,
-          // The square corner is where the folder tab lands. On a phone nothing
-          // lands there, so the corner comes back.
-          borderTopLeftRadius: narrow ? 20 : 0,
+          // The square corner is where the name tab lands, at every width.
+          borderTopLeftRadius: 0,
           borderWidth: 1,
           borderColor: edge,
           shadowColor: glow,
@@ -1018,34 +1075,11 @@ function AdminPanel({
   );
 }
 
-function AdminHeaderAction({
-  label,
-  onPress,
-}: {
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => ({
-        flexShrink: 0,
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        marginBottom: 4,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: 'rgba(222,193,129,0.72)',
-        backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-      })}
-    >
-      <Text numberOfLines={1} style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#bd9348' }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
+// The floating cream pill that used to carry "+ New Member" and "+ Create" is
+// gone. It sat off to the side of the folder as a separate object, which is
+// exactly what Nat asked to stop (2026-08-06) — the action is a tab on the same
+// edge now, drawn by AdminPanel in the folder's own colours so it can never
+// drift from them again.
 
 function LockedAdminScreen({
   onHomePress,
@@ -1211,6 +1245,16 @@ export default function AdminScreen() {
   const [surveyResponsesLoading, setSurveyResponsesLoading] = useState(false);
   const [surveyResponsesError, setSurveyResponsesError] = useState<string | null>(null);
   const [selectedSurveyResponsePeriod, setSelectedSurveyResponsePeriod] = useState<string | null>(null);
+  /**
+   * Which view the Surveys folder is showing.
+   *
+   * It had no tabs at all — a name, a floating pill and one long scroll holding
+   * two unrelated things — which is half of why Nat called it "aggressively
+   * different" from the HIVE boxes on 2026-08-06. It holds the monthly check-in,
+   * which is the one she opens most, and every other survey; those are two jobs,
+   * so they are two tabs. It opens on the check-in.
+   */
+  const [surveyTab, setSurveyTab] = useState<'checkin' | 'others'>('checkin');
   const surveyEditorQuestionsRef = useRef<SurveyQuestion[]>([]);
   const questionLayoutsRef = useRef<Record<string, QuestionLayout>>({});
   const activeQuestionDragRef = useRef<{ id: string; startCenterY: number } | null>(null);
@@ -2016,11 +2060,11 @@ export default function AdminScreen() {
     ));
   }, []);
   const desktopPanelHeight = Math.max(320, Math.floor((height - 180) / 2));
-  // Forty points taller than it was, which is what the phone header now costs:
-  // the box's name and its action moved onto a line of their own so the tabs
-  // could have the width to themselves. Without this the list inside every box
-  // lost a row to make room for the fix.
-  const mobilePanelHeight = Math.min(470, Math.max(380, Math.floor(height * 0.46) + 40));
+  // Back to its old height, and the rows inside it come back with it. The forty
+  // points added on 2026-08-06 paid for a two-line phone header — the name and
+  // its action on one line, the tabs wrapping underneath. The header is a single
+  // sliding strip again, so the box stops buying room it no longer needs.
+  const mobilePanelHeight = Math.min(430, Math.max(340, Math.floor(height * 0.46)));
   /**
    * How tall a bottom sheet on this screen may grow, in real points.
    *
@@ -2071,6 +2115,12 @@ export default function AdminScreen() {
     marginBottom: useMobileLayout ? 18 : 36,
   };
 
+  // The monthly check-in is the one survey with a job of its own — the Tune-up
+  // runs on it — so it gets a tab of its own and everything else shares the
+  // next one. Found by title, the same way the Tune-up finds it.
+  const monthlyCheckIn = allSurveys.find((s) => /monthly\s+check-?in/i.test(s.title)) ?? null;
+  const otherSurveys = allSurveys.filter((s) => !/monthly\s+check-?in/i.test(s.title));
+
   if (!isAdmin && !isTreasurer) {
     return (
       <LockedAdminScreen
@@ -2108,54 +2158,92 @@ export default function AdminScreen() {
                 // belong — every one of them runs for exactly one HIVE. What is
                 // left in this box is the survey machinery, so it says so.
                 title="Surveys"
+                // Two jobs, two tabs, the same folder every HIVE box wears.
+                // Short labels on purpose: the strip slides when it has to, and
+                // not having to is better.
+                tabs={[
+                  { key: 'checkin', label: 'Monthly check-in' },
+                  { key: 'others', label: `Other (${otherSurveys.length})` },
+                ]}
+                activeTab={surveyTab}
+                onTabChange={(key: string) => setSurveyTab(key as 'checkin' | 'others')}
                 style={dashboardPanelStyle}
                 bodyStyle={dashboardPanelBodyStyle}
-                action={(
-                  <AdminHeaderAction
-                    label="+ Create"
-                    onPress={openSurveyCreateModal}
-                  />
-                )}
+                action={{ label: '+ Create', onPress: openSurveyCreateModal }}
               >
                 <ScrollView
                   style={panelScrollStyle}
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={true}
                 >
-                  {/* Meeting tools — where they live, and the check-in behind them */}
-                  <View
-                    style={{
-                      borderBottomWidth: 1,
-                      borderBottomColor: 'rgba(222,193,129,0.3)',
-                      paddingBottom: 4,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: 'Lato_700Bold',
-                        fontSize: 11,
-                        letterSpacing: 1,
-                        textTransform: 'uppercase',
-                        color: '#9a8060',
-                        paddingHorizontal: 14,
-                        paddingTop: 12,
-                        paddingBottom: 4,
-                      }}
-                    >
-                      Meeting tools
-                    </Text>
-                    {/* A sign, not a door.
+                  {surveyTab === 'checkin' ? (
+                  <View>
+                    {/* The monthly check-in lives here as the "engine" behind the
+                        Tune-up, not as a loose survey — opens the same editor/responses.
+
+                        Nat asked whether this row had the same fault as the one
+                        below. It stays where you are — the editor is a sheet on
+                        this screen — so nothing moves you into another HIVE. What
+                        it did share was the silence about WHICH HIVE: this box
+                        lists the surveys of the HIVE you last stood in, so from
+                        HIVE-Wide it opened an unnamed HIVE's check-in. The HIVE's
+                        name is on the row now, so you know whose questions you
+                        are about to edit before you press it.
+
+                        The row is drawn exactly like the tool rows inside a HIVE's
+                        folder — same emoji, same two lines, same chevron, same
+                        light ink — because it does the same kind of thing. */}
+                    {monthlyCheckIn ? (
+                      <Pressable
+                        key="monthly-check-in"
+                        onPress={() => openSurveyEditor(monthlyCheckIn)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Check-in questions and responses for ${hiveDisplayName(community?.name)}`}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 10,
+                          paddingHorizontal: 14,
+                          paddingVertical: 11,
+                          backgroundColor: pressed ? PANEL_INSET : 'transparent',
+                          borderBottomWidth: 1,
+                          borderBottomColor: PANEL_HAIRLINE,
+                        })}
+                      >
+                        <Text style={{ fontSize: 15 }}>📊</Text>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: SPACE_SKIN.ink }}>
+                            Check-in questions &amp; responses
+                          </Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: SPACE_SKIN.inkSoft, marginTop: 1 }}>
+                            {hiveDisplayName(community?.name)}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={15} color={SPACE_SKIN.inkSoft} />
+                      </Pressable>
+                    ) : (
+                      <Text
+                        style={{
+                          fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19,
+                          color: SPACE_SKIN.inkSoft, padding: 14,
+                        }}
+                      >
+                        {hiveDisplayName(community?.name)} has no monthly check-in yet.
+                      </Text>
+                    )}
+
+                    {/* WHERE THE MEETING TOOLS WENT — a sign, not a door.
+
                         Nat, from her phone on 2026-08-06: *"i hate that the
                         'meeting tools' brings you inside another HIVE, that was
                         super annoying, because i dont want to just drop into a
                         random meeting page on a random HIVE, right? hated it."*
 
-                        The four meeting-day links (Meeting Helper, Monthly
-                        Tune-up, Newsletter Draft, Halfway Check-in) moved into
-                        each HIVE's own box on 2026-08-01, at Nat's call — they
-                        are what you reach for on meeting day, and every one of
-                        them runs for exactly one HIVE. This line is how the old
-                        home tells you where they went.
+                        The meeting-day links (Meeting Helper, Monthly Tune-up)
+                        moved into each HIVE's own box on 2026-08-01, at Nat's
+                        call — they are what you reach for on meeting day, and
+                        every one of them runs for exactly one HIVE. These words
+                        are how the old home tells you where they went.
 
                         It was a Pressable that pushed you to /meetings. This
                         screen is reached from HIVE-Wide, where you are standing
@@ -2171,9 +2259,27 @@ export default function AdminScreen() {
                         immediately before choosing one. Scrolling is the shorter
                         route and it never moves you anywhere.
 
+                        It sits under the check-in rather than over it: this tab
+                        is called Monthly check-in, so the check-in goes first and
+                        the signpost follows.
+
                         "Below", not "above": the boxes were reordered on
                         2026-08-06 to Surveys, Newsletter, then the HIVEs
                         (ADMIN_PANEL_ORDER), which put them underneath this one. */}
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_700Bold',
+                        fontSize: 11,
+                        letterSpacing: 1,
+                        textTransform: 'uppercase',
+                        color: SPACE_SKIN.inkSoft,
+                        paddingHorizontal: 14,
+                        paddingTop: 14,
+                        paddingBottom: 4,
+                      }}
+                    >
+                      Meeting tools
+                    </Text>
                     <View
                       style={{
                         flexDirection: 'row',
@@ -2181,103 +2287,81 @@ export default function AdminScreen() {
                         gap: 8,
                         paddingHorizontal: 14,
                         paddingTop: 4,
-                        paddingBottom: 10,
+                        paddingBottom: 14,
                       }}
                     >
                       <Text style={{ fontSize: 15 }}>📅</Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#8a6b30', flex: 1 }}>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: SPACE_SKIN.inkBody, flex: 1 }}>
                         Every meeting tool sits inside its own HIVE. Open that HIVE&rsquo;s
                         box below and choose its Meeting tools tab.
                       </Text>
                     </View>
-                    {/* The monthly check-in lives here as the "engine" behind the
-                        Tune-up, not as a loose survey — opens the same editor/responses.
-
-                        Nat asked whether this row had the same fault as the one
-                        above. It stays where you are — the editor is a sheet on
-                        this screen — so nothing moves you into another HIVE. What
-                        it did share was the silence about WHICH HIVE: this box
-                        lists the surveys of the HIVE you last stood in, so from
-                        HIVE-Wide it opened an unnamed HIVE's check-in. The HIVE's
-                        name is on the row now, so you know whose questions you
-                        are about to edit before you press it. */}
-                    {(() => {
-                      const checkIn = allSurveys.find((s) => /monthly\s+check-?in/i.test(s.title));
-                      if (!checkIn) return null;
-                      return (
-                        <Pressable
-                          key="monthly-check-in"
-                          onPress={() => openSurveyEditor(checkIn)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Check-in questions and responses for ${hiveDisplayName(community?.name)}`}
-                          style={({ pressed }) => ({
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            paddingHorizontal: 14,
-                            paddingVertical: 8,
-                            backgroundColor: pressed ? '#fbf4e3' : 'transparent',
-                          })}
-                        >
-                          <Text style={{ fontSize: 15, marginRight: 8 }}>📊</Text>
-                          <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
-                              Check-in questions & responses
-                            </Text>
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: '#9a8060', marginTop: 1 }}>
-                              {hiveDisplayName(community?.name)}
-                            </Text>
-                          </View>
-                          <Ionicons name="chevron-forward" size={15} color="#bd9348" />
-                        </Pressable>
-                      );
-                    })()}
                   </View>
-                  {(() => {
-                    const otherSurveys = allSurveys.filter((s) => !/monthly\s+check-?in/i.test(s.title));
-                    if (otherSurveys.length === 0) {
-                      return (
-                        <View style={{ padding: 20, alignItems: 'center' }}>
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#9ca3af' }}>
-                            No other surveys yet.
-                          </Text>
-                        </View>
-                      );
-                    }
-                    return otherSurveys.map((survey, i) => (
+                  ) : (
+                  <View>
+                    {otherSurveys.length === 0 ? (
+                      <Text
+                        style={{
+                          fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19,
+                          color: SPACE_SKIN.inkSoft, padding: 14,
+                        }}
+                      >
+                        No other surveys yet. &ldquo;+ Create&rdquo; starts one, and Clive
+                        will help you write its questions.
+                      </Text>
+                    ) : otherSurveys.map((survey) => (
                       <Pressable key={survey.id} onPress={() => openSurveyEditor(survey)} style={({ pressed }) => ({
-                        flexDirection: 'row', alignItems: 'center', padding: 14,
-                        borderBottomWidth: i < otherSurveys.length - 1 ? 1 : 0,
-                        borderBottomColor: 'rgba(222,193,129,0.3)',
-                        backgroundColor: pressed ? '#fbf4e3' : 'transparent',
+                        flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14,
+                        borderBottomWidth: 1,
+                        borderBottomColor: PANEL_HAIRLINE,
+                        backgroundColor: pressed ? PANEL_INSET : 'transparent',
                       })}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#2d2d2d' }}>{survey.title}</Text>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: SPACE_SKIN.ink }}>{survey.title}</Text>
                           {survey.due_date && (
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: SPACE_SKIN.inkSoft, marginTop: 1 }}>
                               Due {formatSurveyDueAt(survey.due_date)}
                             </Text>
                           )}
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 2 }}>
-                            {(survey.questions ?? []).length} question{(survey.questions ?? []).length === 1 ? '' : 's'} · Tap to edit & see responses
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: SPACE_SKIN.inkSoft, marginTop: 1 }}>
+                            {(survey.questions ?? []).length} question{(survey.questions ?? []).length === 1 ? '' : 's'} · Tap to edit &amp; see responses
                           </Text>
                         </View>
+                        {/* Active / Inactive was a grey slab out of a stock UI kit —
+                            #f3f4f6 and #9ca3af appear nowhere else in HIVE, and on a
+                            dark panel it was the single loudest thing on the screen.
+                            It is a state chip now, built the same way as the
+                            pending/expired chips in a HIVE's folder: gold when it is
+                            running, an outline in no colour when it is not. */}
                         <Pressable
                           onPress={(event) => {
                             event.stopPropagation();
                             toggleSurveyActive(survey);
                           }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${survey.title} is ${survey.is_active ? 'active' : 'inactive'}. Tap to turn it ${survey.is_active ? 'off' : 'on'}.`}
+                          hitSlop={6}
                           style={({ pressed }: { pressed: boolean }) => ({
-                            backgroundColor: pressed ? (survey.is_active ? '#f5e0b0' : '#e5e7eb') : (survey.is_active ? '#fdf3dc' : '#f3f4f6'),
-                            paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10,
+                            paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
+                            borderWidth: 1,
+                            borderColor: survey.is_active ? 'rgba(224,190,118,0.55)' : 'rgba(246,244,229,0.28)',
+                            backgroundColor: survey.is_active
+                              ? (pressed ? 'rgba(224,190,118,0.34)' : 'rgba(224,190,118,0.2)')
+                              : (pressed ? 'rgba(255,255,255,0.14)' : 'transparent'),
                           })}
                         >
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: survey.is_active ? '#bd9348' : '#9ca3af' }}>
+                          <Text style={{
+                            fontFamily: 'Lato_700Bold', fontSize: 10, letterSpacing: 0.7,
+                            textTransform: 'uppercase',
+                            color: survey.is_active ? SPACE_SKIN.gold : SPACE_SKIN.inkSoft,
+                          }}>
                             {survey.is_active ? 'Active' : 'Inactive'}
                           </Text>
                         </Pressable>
                       </Pressable>
-                    ));
-                  })()}
+                    ))}
+                  </View>
+                  )}
                 </ScrollView>
               </AdminPanel>
             </View>
@@ -2311,7 +2395,6 @@ export default function AdminScreen() {
               bodyStyle={dashboardPanelBodyStyle}
               scrollStyle={panelScrollStyle}
               Panel={AdminPanel}
-              HeaderAction={AdminHeaderAction}
             />
           )}
         </View>

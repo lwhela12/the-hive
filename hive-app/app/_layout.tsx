@@ -30,6 +30,57 @@ import { HIVE_GOLD } from '../lib/hiveBrand';
 import { HIVE_SKIN, SPACE_SKIN } from '../lib/pageSkin';
 
 // ---------------------------------------------------------------------------
+// Where is this person going? Answered on the first render, before any network.
+//
+// This is the fault behind "first it was white, then it's black" (Nat
+// 2026-08-06). Every surface in the app already asks `usePageSkin()` for its
+// colour, and `usePageSkin()` asks `wholeHive`. On a genuinely fresh tab
+// `wholeHive` started FALSE — sessionStorage is empty, so nothing said
+// otherwise — and only turned true once the profile and memberships had come
+// back from Supabase. So for the whole of that wait, every one of the three
+// places that were "fixed" last pass was being handed HIVE_SKIN.page, `#faf8f3`.
+// That is a near-white cream, it filled the screen, and then the answer arrived
+// and the app snapped to near-black. The fix was correct and the colour it was
+// painting was wrong, which is why adding more background colours never helped.
+//
+// The answer is knowable before React boots, so take it. Everything below reads
+// storage the browser already holds, synchronously, with no request:
+//
+//   1. `hive:wide` set        → standing at HIVE-Wide right now (a reload)
+//   2. `hive:confirmed` set   → a HIVE was picked in this tab, so no
+//   3. on /join               → an invite lands you INSIDE the HIVE you joined
+//   4. a saved sign-in exists → fresh tab, and the app's own rule below is that
+//                               everybody lands at HIVE-Wide
+//   5. otherwise              → signed out, heading for the door
+//
+// Rules 2 and 4 are not a guess: they are exactly the `!hasConfirmedHive()`
+// branch further down this file, read a second early. If that branch ever
+// changes, this must change with it — AND SO MUST public/index.html, which runs
+// the same five lines in plain JavaScript so the very first frame the browser
+// paints is already the right colour. The two must agree or the flash comes
+// back in the gap between them.
+//
+// This only seeds the opening frame. It deliberately does not write anything
+// down; the real answer arrives a moment later and overwrites it, so a wrong
+// guess costs one fade, never a wrong place.
+// ---------------------------------------------------------------------------
+function headingToHiveWide(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+  try {
+    if (isWholeHiveSelected()) return true;
+    if (hasConfirmedHive()) return false;
+    if (window.location.pathname.startsWith('/join')) return false;
+    // The saved sign-in. On web AsyncStorage is plain localStorage under the key
+    // as written, and lib/supabase.ts names this one `the-hive-auth`.
+    return !!window.localStorage.getItem('the-hive-auth');
+  } catch {
+    // Private browsing can throw on the storage itself. A HIVE is the safe
+    // answer — it is what every arrival looked like before today.
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // The colour underneath the whole app.
 //
 // React Navigation paints a container behind every screen in the stock grey
@@ -224,12 +275,32 @@ function RootLayoutInner() {
   const [communityId, setCommunityId] = useState<string | null>(null);
   // Whole HIVE is a place you can stand, not a HIVE you belong to — see the
   // note on `wholeHive` in lib/hooks/useAuth.ts for why it is not an id.
-  // Seeded from the tab's own memory so a reload doesn't quietly move you.
-  const [wholeHive, setWholeHiveState] = useState<boolean>(() => isWholeHiveSelected());
+  // Seeded from where this person is about to land, so the first frame the app
+  // draws is already the right colour — see headingToHiveWide() at the top.
+  const [wholeHive, setWholeHiveState] = useState<boolean>(() => headingToHiveWide());
   const setWholeHive = useCallback((next: boolean) => {
     setWholeHiveSelected(next);
     setWholeHiveState(next);
   }, []);
+
+  // Keep the page itself in step with the world the member is standing in.
+  //
+  // public/index.html sets `data-hive-boot` once, from a guess made before React
+  // existed. Everything outside React's own tree hangs off it: the colour behind
+  // the page when a phone rubber-bands past the end of a list, the browser's
+  // scrollbars and form furniture (`color-scheme`), and the address bar. Left
+  // alone it would stay at whatever the guess was — so stepping down from
+  // HIVE-Wide into a HIVE would leave dark scrollbars on a cream page.
+  //
+  // `wholeHive` is the truth, so hand it over every time it changes.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const root = document.documentElement;
+    if (wholeHive) root.setAttribute('data-hive-boot', 'space');
+    else root.removeAttribute('data-hive-boot');
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.setAttribute('content', wholeHive ? '#07080F' : '#bd9348');
+  }, [wholeHive]);
   const [communityRole, setCommunityRole] = useState<UserRole | null>(null);
   const [memberships, setMemberships] = useState<MembershipWithCommunity[]>([]);
   const [hivePickerOpen, setHivePickerOpen] = useState<boolean>(false);
@@ -621,6 +692,23 @@ function RootLayoutInner() {
   ]);
   const isJoinRoute = pathname === '/join' || pathname?.startsWith('/join/');
 
+  // -------------------------------------------------------------------------
+  // The colour of arriving.
+  //
+  // The three full-screen states below — waiting for the typefaces, the closed
+  // sign's own wait, and the connection giving out — were all hard gold. Gold is
+  // the right front door for somebody walking into a HIVE, and it was the wrong
+  // one for everybody else: on a cold cache the typefaces take real seconds, so
+  // a member landing at HIVE-Wide got a full gold screen in the middle of an
+  // otherwise near-black arrival. That is the "flash of golden" in Nat's "white,
+  // then golden, then space" (2026-08-06).
+  //
+  // Same colour as public/index.html's boot splash, from the same answer, so the
+  // browser's first frame, this screen and the loaded app are one colour all the
+  // way through.
+  // -------------------------------------------------------------------------
+  const arrivalBackground = wholeHive ? SPACE_SKIN.page : HIVE_GOLD;
+
   // The door, before anything else renders.
   //
   // Nat and Lucas walk through it on their own accounts now, so we can work on
@@ -636,7 +724,7 @@ function RootLayoutInner() {
     if (!keeperIsHere) {
       if (loading) {
         return (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: HIVE_GOLD }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: arrivalBackground }}>
             <ThinkingBee />
           </View>
         );
@@ -648,7 +736,7 @@ function RootLayoutInner() {
   // Show loading screen while fonts load
   if (!fontsSettled) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: HIVE_GOLD }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: arrivalBackground }}>
         <ThinkingBee />
       </View>
     );
@@ -659,7 +747,7 @@ function RootLayoutInner() {
   // it and a button — the state it used to sit in silently, forever.
   if (startupFailed) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 28, backgroundColor: HIVE_GOLD }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 28, backgroundColor: arrivalBackground }}>
         <View style={{ maxWidth: 340, alignItems: 'center' }}>
           <Text style={{ fontSize: 44, marginBottom: 18 }}>🐝</Text>
           <Text
@@ -705,7 +793,10 @@ function RootLayoutInner() {
       />
       <AuthContext.Provider value={authContextValue}>
         <ThemeProvider value={wholeHive ? SPACE_NAV_THEME : HIVE_NAV_THEME}>
-          <StatusBar style="dark" />
+          {/* Dark lettering on a cream HIVE, light lettering on HIVE-Wide's
+              near-black. It was fixed at dark, which put a black clock and
+              black battery on top of space. */}
+          <StatusBar style={wholeHive ? 'light' : 'dark'} />
           <Stack
             screenOptions={{
               headerShown: false,

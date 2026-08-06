@@ -34,6 +34,7 @@ import { confirmAction, showAlert } from '../../lib/showAlert';
 import type { BoardCategory, BoardPost, Attachment, Profile } from '../../types';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { SkeletonRows } from '../../components/ui/SkeletonRows';
 import { BounceScrollView, useEndBounce } from '../../components/ui/BounceScrollView';
 // Archived boards are no longer browsable (Nat 2026-07-24) — the boards-home
 // "Archive" pill is gone, so the list always shows active topics. Threads keep
@@ -1772,15 +1773,18 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
                 setSelectedLinkedWish(null);
                 setEditingLinkedWish(wish);
               }}
-              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 active:opacity-75"
+              // Asked the skin instead of hard-coding a white pill. On HIVE-Wide
+              // this sheet is a dark card, and three white bars sat on it.
+              style={{ backgroundColor: skin.card, borderWidth: 1, borderColor: skin.border }}
             >
               <View className="flex-row items-center">
-                <Ionicons name="pencil-outline" size={18} color="rgba(49,49,48,0.66)" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
+                <Ionicons name="pencil-outline" size={18} color={skin.inkBody} />
+                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkBody }} className="text-sm ml-2">
                   Edit
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
+              <Ionicons name="chevron-forward" size={16} color={skin.inkFaint} />
             </Pressable>
           ) : null}
 
@@ -1791,15 +1795,18 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
                 setManagingLinkedWish(null);
                 handleUnlinkLinkedWish(wish);
               }}
-              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 active:opacity-75"
+              // Asked the skin instead of hard-coding a white pill. On HIVE-Wide
+              // this sheet is a dark card, and three white bars sat on it.
+              style={{ backgroundColor: skin.card, borderWidth: 1, borderColor: skin.border }}
             >
               <View className="flex-row items-center">
-                <Ionicons name="unlink-outline" size={18} color="rgba(49,49,48,0.66)" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
+                <Ionicons name="unlink-outline" size={18} color={skin.inkBody} />
+                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkBody }} className="text-sm ml-2">
                   Unlink from board
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
+              <Ionicons name="chevron-forward" size={16} color={skin.inkFaint} />
             </Pressable>
           ) : null}
 
@@ -1810,15 +1817,18 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
                 setManagingLinkedWish(null);
                 handleArchiveLinkedWish(wish);
               }}
-              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-charcoal/10 bg-white active:opacity-75"
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 active:opacity-75"
+              // Asked the skin instead of hard-coding a white pill. On HIVE-Wide
+              // this sheet is a dark card, and three white bars sat on it.
+              style={{ backgroundColor: skin.card, borderWidth: 1, borderColor: skin.border }}
             >
               <View className="flex-row items-center">
-                <Ionicons name="archive-outline" size={18} color="rgba(49,49,48,0.66)" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/70 text-sm ml-2">
+                <Ionicons name="archive-outline" size={18} color={skin.inkBody} />
+                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkBody }} className="text-sm ml-2">
                   Archive
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(49,49,48,0.32)" />
+              <Ionicons name="chevron-forward" size={16} color={skin.inkFaint} />
             </Pressable>
           ) : null}
 
@@ -2021,18 +2031,10 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         {boardListToolbar}
 
         {categoriesLoading && categories.length === 0 ? (
-          <View className="mt-2">
-            {[...Array(5)].map((_, i) => (
-              <View key={i} className="flex-row items-center px-4 py-4 bg-white border-b border-cream">
-                <View className="w-10 h-10 rounded-lg bg-gray-200 mr-4" />
-                <View className="flex-1">
-                  <View className="h-4 bg-gray-200 rounded w-2/5 mb-2" />
-                  <View className="h-3 bg-gray-100 rounded w-3/5" />
-                </View>
-                <View className="w-4 h-4 bg-gray-100 rounded ml-2" />
-              </View>
-            ))}
-          </View>
+          // The other half of the white flash on HIVE-Wide Boards, and this one
+          // was ours: five hard `bg-white` rows drawn over a near-black page for
+          // the whole of the first query. See components/ui/SkeletonRows.
+          <SkeletonRows />
         ) : (
           <View className="flex-1">
             <BoardCategoryList
@@ -2186,9 +2188,15 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
               <ThinkingBee />
             </View>
           ) : (
-            <View className="bg-white rounded-xl p-8 shadow-sm items-center">
+            // Wearing the reader's skin. A white card here was the same bug as
+            // the loading rows above, one moment later: a bright panel over
+            // HIVE-Wide's near-black whenever a board is empty.
+            <View
+              className="rounded-xl p-8 shadow-sm items-center"
+              style={{ backgroundColor: skin.card, borderWidth: 1, borderColor: skin.border }}
+            >
               <Text className="text-4xl mb-4">📝</Text>
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-center">
+              <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }} className="text-center">
                 {threadSearch.trim()
                   ? `No threads found for "${threadSearch.trim()}".`
                   : 'No threads in this board yet.'}

@@ -190,13 +190,23 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .cell:hover{background:var(--stroke) center/100% 100% no-repeat,linear-gradient(160deg,#fdf6e6,#e7d19c)}
 .cell:nth-child(even):hover{transform:translateY(calc(var(--hw)*.433)) scale(1.03)}
 .cell:nth-child(odd):hover{transform:scale(1.03)}
-.cell[aria-selected="true"]{background:linear-gradient(160deg,var(--gold),#a87f37);color:#fffdf5}
-.cell[aria-selected="true"] .sub{color:rgba(255,253,245,.82)}
+/* Dark gold means "you picked this one". Nothing wears it on arrival — all four
+   cells start in the light gold and the panels stay shut (Nat 2026-08-06: "they
+   should start out none deployed. Just light golden, not already selected.
+   That's what happens when you select one, it gets dark golden & drops down"). */
+.cell[aria-expanded="true"]{background:linear-gradient(160deg,var(--gold),#a87f37);color:#fffdf5}
+.cell[aria-expanded="true"] .sub{color:rgba(255,253,245,.82)}
 .cell .lab{font-family:var(--serif);font-weight:700;font-size:.98rem;line-height:1.15}
 .cell .sub{font-size:.72rem;color:#7d6a4f;line-height:1.25;text-wrap:balance}
 .cell:focus-visible{outline:none;filter:var(--edge) drop-shadow(0 0 2px var(--gold)) drop-shadow(0 0 3px var(--gold))}
 
 /* ---------- the panel under it ---------- */
+/* With every panel shut, the zigzag of cells is the last thing in the section,
+   and the hexagons end on a ragged line — the dropped ones hang a half-cell
+   below the others. The section carries its own floor so that ragged edge has
+   air under it instead of the footer's hairline rule. It reads as generosity
+   under an open panel too. */
+#involved{padding-bottom:24px}
 .panels{max-width:640px;margin:6px auto 0}
 /* The panel reads as one centred block, agreeing with the hexagon buttons
    sitting above it — the paragraph, the empty states and the gold call to
@@ -475,22 +485,30 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   <p class="eyebrow">The door&rsquo;s open</p>
   <h2 id="inv-h">Get involved</h2>
 
-  <div class="comb" role="tablist" aria-label="Ways to get involved">
-    <button class="cell" role="tab" id="t-message" aria-controls="p-message" aria-selected="true">
+  <!-- Four doors, all shut. These were marked up as a tablist until 2026-08-06,
+       when the cells stopped arriving pre-selected. A tablist promises a screen
+       reader that exactly one tab is always chosen and that the arrow keys walk
+       between them; with nothing chosen on arrival, and Tab being what has
+       always moved between these cells, that promise was false. They are what
+       they behave like: four buttons that each open a panel, each saying
+       whether its panel is open. Tab reaches all four, in the order they are
+       read, whether or not one is open. -->
+  <div class="comb" role="group" aria-label="Ways to get involved">
+    <button class="cell" type="button" id="t-message" aria-controls="p-message" aria-expanded="false">
       <span class="lab">Message us</span><span class="sub">Say hello</span></button>
-    <button class="cell" role="tab" id="t-news" aria-controls="p-news" aria-selected="false">
+    <button class="cell" type="button" id="t-news" aria-controls="p-news" aria-expanded="false">
       <span class="lab">Newsletter</span><span class="sub">Once a month</span></button>
     <!-- An Events cell sat here until 2026-08-06. See the parked-events note in
          the script at the bottom of this file for why it went and what has to
          be true before it comes back. -->
-    <button class="cell" role="tab" id="t-origin" aria-controls="p-origin" aria-selected="false">
+    <button class="cell" type="button" id="t-origin" aria-controls="p-origin" aria-expanded="false">
       <span class="lab">Backstory</span><span class="sub">Thanks, Asimov</span></button>
-    <button class="cell" role="tab" id="t-swag" aria-controls="p-swag" aria-selected="false">
+    <button class="cell" type="button" id="t-swag" aria-controls="p-swag" aria-expanded="false">
       <span class="lab">HIVE swag</span><span class="sub">Wear the bee</span></button>
   </div>
 
   <div class="panels">
-    <div class="pane on" id="p-message" role="tabpanel" aria-labelledby="t-message">
+    <div class="pane" id="p-message" role="region" aria-labelledby="t-message" hidden>
       <p>Want to help with a HIVE Help? Chip in to a Honey Pot? Join one of the HIVEs, start
         your own, work on something together, or just say hello? This is the door for all of it.</p>
       <form id="contact" novalidate>
@@ -515,7 +533,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       </form>
     </div>
 
-    <div class="pane" id="p-news" role="tabpanel" aria-labelledby="t-news" hidden>
+    <div class="pane" id="p-news" role="region" aria-labelledby="t-news" hidden>
       <!-- One sentence. The second half used to point at the Events panel next
            door, and that panel is parked (2026-08-06), so it was pointing at
            nothing. -->
@@ -538,7 +556,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     <!-- The Events panel lived here. Parked 2026-08-06, along with its cell
          above and its fetch at the bottom of this file. -->
 
-    <div class="pane" id="p-origin" role="tabpanel" aria-labelledby="t-origin" hidden>
+    <div class="pane" id="p-origin" role="region" aria-labelledby="t-origin" hidden>
       <p>The <strong>Trap Door Spiders</strong> were real: a New York dinner club that met one
         Friday a month, a dozen of them, each host bringing a guest. Asimov was elected in 1970 and
         turned them into the <strong>Black Widowers</strong> &mdash; stories where a guest arrives
@@ -547,7 +565,7 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
         between meetings, and a table open to everyone.</p>
     </div>
 
-    <div class="pane" id="p-swag" role="tabpanel" aria-labelledby="t-swag" hidden>
+    <div class="pane" id="p-swag" role="region" aria-labelledby="t-swag" hidden>
       <p>Mugs, journals, canvas totes, shirts &mdash; we put the bee on all of it and made a batch
         for everyone. It doesn&rsquo;t fund anything or mean anything. It&rsquo;s just cool. More designs
         on the way.</p>
@@ -772,12 +790,16 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
   });
 
-  /* ---------- comb tabs ---------- */
-  var cells = [].slice.call(document.querySelectorAll('.cell[role="tab"]'));
+  /* ---------- the comb: four doors, one open at a time ----------
+     The page arrives with all four shut, so this runs only on a click. One
+     open at a time: opening a cell closes whichever was open. Clicking the
+     open one leaves it open — the way out of a panel is another cell or the
+     rest of the page, so nobody taps twice and loses the form they were
+     filling in. */
+  var cells = [].slice.call(document.querySelectorAll('.comb .cell[aria-controls]'));
   function showPane(id){
     cells.forEach(function(c){
-      var on = c.getAttribute('aria-controls') === id;
-      c.setAttribute('aria-selected', on ? 'true' : 'false');
+      c.setAttribute('aria-expanded', c.getAttribute('aria-controls') === id ? 'true' : 'false');
     });
     [].forEach.call(document.querySelectorAll('.pane'), function(p){
       p.hidden = p.id !== id;
@@ -878,7 +900,8 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
           stopped asking it.
 
      Then bring back, in this order:
-       - the Events cell in the comb (see the note in the tablist above),
+       - the Events cell in the comb (see the note above the cells), copying a
+         neighbour so it carries aria-controls and aria-expanded="false",
        - the p-events panel with its <ul id="evlist"> and <p id="evnone">,
        - the `.cell:last-child{grid-column:1/-1}` phone rule, so five cells put
          the odd one across the bottom row again,

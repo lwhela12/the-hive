@@ -28,6 +28,12 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-06-one-tap-sign-in',
+    date: '2026-08-06',
+    title: 'Signing in is one tap now',
+    detail: 'The button names the account it is about to use, and then actually uses it — no list of accounts in between. "Use a different account" still opens the full list.',
+  },
+  {
     id: '2026-08-06-faster',
     date: '2026-08-06',
     title: 'HIVE opens a lot faster now',
