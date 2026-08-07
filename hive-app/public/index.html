@@ -90,10 +90,33 @@
       The handover is a dissolve as well, so on the rare visit where the guess is
       wrong — somebody opening an invite, a sign-in that fails — the colour
       changes by fading rather than by flashing.
+
+      AND IT STAYS UNTIL THERE IS A PAGE (2026-08-06, third pass)
+
+      Nat, on her iPhone: "from the public site to the 'members only site' it was
+      glitching out, flashes of different colours and quick nano flashes of the
+      bee thinking."
+
+      Recorded frame by frame, the crossing was this splash and then three more
+      things taking turns: it let go the instant React put ANYTHING in #root, so
+      the bee vanished for a couple of hundred milliseconds, the root layout drew
+      its own bee for another four hundred, that one vanished too, and then the
+      screen was empty for six hundred more while the code for the page
+      downloaded — routes are split per screen on web now, and a screen that has
+      not landed yet draws nothing at all.
+
+      Bee, gone, bee, gone, page. So this splash is now the ONLY loading surface
+      the boot has. It waits to be told the app has drawn a real screen —
+      `window.__hiveArrived()`, called from the screens themselves — and every
+      loading state underneath deliberately draws no bee while it is still here
+      (see components/ui/ThinkingBee.tsx). One bee, one colour, one flight.
     -->
     <style id="hive-boot">
-      /* Gold is HIVE's front door. Near-black is HIVE-Wide — the same #07080F
-         as SPACE_SKIN.page in lib/pageSkin.ts. The script below picks one. */
+      /* Three destinations, three colours, each the colour of the page it is
+         about to become. Gold is HIVE's front door and turns into cream. The
+         near-black is HIVE-Wide, the same #07080F as SPACE_SKIN.page in
+         lib/pageSkin.ts. The dark brown is the sign-in screen, the same #33271a
+         as app/(auth)/login.tsx. The script below picks one. */
       :root {
         --hive-boot-bg: #bd9348;
         color-scheme: light;
@@ -108,9 +131,19 @@
         color-scheme: dark;
       }
 
+      html[data-hive-boot='door'] {
+        --hive-boot-bg: #33271a;
+        color-scheme: dark;
+      }
+
       html,
       body {
         background-color: var(--hive-boot-bg);
+        /* A guess that turns out wrong changes colour by fading. The one that
+           happens for real: an invite link opens on gold, the invite has
+           already been used, and the app sends that person to the sign-in
+           screen instead — which is dark brown. */
+        transition: background-color 260ms ease;
       }
 
       #hive-boot-splash {
@@ -122,7 +155,10 @@
         justify-content: center;
         background-color: var(--hive-boot-bg);
         opacity: 1;
-        transition: opacity 220ms ease-out;
+        /* Long enough to read as a dissolve rather than a cut. The page
+           underneath is finished by the time this runs, so there is nothing to
+           gain by hurrying it. */
+        transition: opacity 320ms ease-out, background-color 260ms ease;
       }
 
       /* Leaving, not gone. It stops taking taps the instant it starts to fade,
@@ -157,6 +193,8 @@
           animation: none;
         }
 
+        html,
+        body,
         #hive-boot-splash {
           transition: none;
         }
@@ -176,39 +214,56 @@
       // React frame will disagree, which is the flash all over again. If you
       // change one, change the other.
       //
-      //   1. `hive:wide` set          → they are standing at HIVE-Wide right now
+      //   1. on /login or /callback   → the sign-in screen, whoever you are.
+      //                                 The public site's "Member log in" lands
+      //                                 here, and it stays here even for
+      //                                 somebody already signed in — so this is
+      //                                 known rather than guessed. Dark brown.
+      //   2. `hive:wide` set          → they are standing at HIVE-Wide right now
       //                                 (a reload, or the "fresh honey" refresh)
-      //   2. `hive:confirmed` set     → they picked a HIVE in this tab, so no
-      //   3. on /join                 → an invite puts you INSIDE the HIVE you
-      //                                 just joined, so no
-      //   4. a saved sign-in exists   → a fresh tab, and the app's own rule is
+      //   3. `hive:confirmed` set     → they picked a HIVE in this tab, so gold
+      //   4. on /join                 → an invite puts you INSIDE the HIVE you
+      //                                 just joined, and the join screen is
+      //                                 cream, so gold
+      //   5. a saved sign-in exists   → a fresh tab, and the app's own rule is
       //                                 that everybody lands at HIVE-Wide
-      //   5. otherwise                → signed out, heading for the door
+      //   6. otherwise                → signed out, and the only page a signed
+      //                                 out arrival can reach is the sign-in
+      //                                 screen, which is dark brown
+      //
+      // Rules 1 and 6 are new on 2026-08-06. Both used to answer gold, which
+      // meant every arrival at the sign-in screen — the single most common way
+      // into this app, straight off the public site — was a gold screen followed
+      // by a dark brown one. Gold is the colour of a HIVE, and somebody at the
+      // door is not in a HIVE yet.
       //
       // The two session keys are written by lib/hiveSelection.ts. `the-hive-auth`
       // is the Supabase session — on web AsyncStorage is plain localStorage under
       // the key as written, and lib/supabase.ts names it `the-hive-auth`.
       (function () {
-        function headingToHiveWide() {
+        function headingTo() {
+          var path = window.location.pathname;
+          if (path === '/login' || path === '/callback') return 'door';
           try {
-            if (window.sessionStorage.getItem('hive:wide') === '1') return true;
-            if (window.sessionStorage.getItem('hive:confirmed') === '1') return false;
-            if (window.location.pathname.indexOf('/join') === 0) return false;
-            return !!window.localStorage.getItem('the-hive-auth');
+            if (window.sessionStorage.getItem('hive:wide') === '1') return 'space';
+            if (window.sessionStorage.getItem('hive:confirmed') === '1') return 'hive';
+            if (path.indexOf('/join') === 0) return 'hive';
+            return window.localStorage.getItem('the-hive-auth') ? 'space' : 'door';
           } catch (err) {
             // Private browsing can throw on the storage itself. Gold is the safe
             // answer: it is what every arrival looked like before today.
-            return false;
+            return 'hive';
           }
         }
 
-        if (!headingToHiveWide()) return;
+        var going = headingTo();
+        if (going === 'hive') return;
 
-        document.documentElement.setAttribute('data-hive-boot', 'space');
+        document.documentElement.setAttribute('data-hive-boot', going);
         // The browser's own furniture — the address bar on a phone, the task
         // switcher card — reads this rather than the CSS.
         var themeColor = document.querySelector('meta[name="theme-color"]');
-        if (themeColor) themeColor.setAttribute('content', '#07080F');
+        if (themeColor) themeColor.setAttribute('content', going === 'space' ? '#07080F' : '#33271A');
       })();
     </script>
   </head>
@@ -222,52 +277,67 @@
     </div>
     <div id="root"></div>
     <script>
-      // Clear the boot splash the moment the app has drawn its own first frame.
+      // Hand over when there is a PAGE behind this, not when there is a React.
       //
-      // Watching for content in #root rather than waiting for `load`, because
-      // the point is to hand over exactly when there is something behind this to
-      // see — a timer would either uncover a blank page or sit on top of a ready
-      // one. If anything here goes wrong the splash still goes, so a member can
-      // never be left looking at a bee with the app running underneath it.
+      // The old test was "does #root have any children yet", and it was the
+      // strobe. React puts its container in #root long before there is anything
+      // worth looking at, and on web each screen's code downloads separately, so
+      // for most of a second after that there is genuinely nothing drawn. This
+      // splash was letting go into that gap, the root layout drew a second bee
+      // into it, and then that one went too.
+      //
+      // So the app says when. `window.__hiveArrived()` is called by the screens
+      // a member is meant to READ — the signed-in shell in app/(app)/_layout.tsx
+      // and the sign-in screen in app/(auth)/login.tsx — never by a loading
+      // state. app/_layout.tsx also calls it once the app has settled and
+      // stopped changing the page, which covers any screen that does not know
+      // about this (an invite at /join is the one that matters).
+      //
+      // If every one of those fails the splash still goes, because a member
+      // looking at a bee with a working app underneath it is the worst outcome
+      // available.
       (function () {
         var splash = document.getElementById('hive-boot-splash');
-        var root = document.getElementById('root');
-        if (!splash || !root) return;
+        if (!splash) return;
 
-        var done = false;
-        function handOver() {
-          if (done) return;
-          done = true;
-          // Fade rather than cut. When the guess above was right this is
+        // A loading screen that lasts a fifth of a second reads as a fault, not
+        // as loading. So once this is up it stays up for at least this long,
+        // which means a repeat visit off a warm cache gets a moment rather than
+        // a flicker.
+        var MINIMUM_ON_SCREEN_MS = 420;
+        var shownAt = Date.now();
+
+        var leaving = false;
+        function leave() {
+          if (leaving) return;
+          leaving = true;
+          // Fade rather than cut. When the colour guess above was right this is
           // invisible — same colour either side. When it was wrong it turns a
           // flash into a dissolve, which is the difference between "janky" and
-          // "arriving". 260ms covers the 220ms transition with room to spare.
+          // "arriving". 380ms covers the 320ms transition with room to spare.
           splash.classList.add('hive-boot-leaving');
           window.setTimeout(function () {
             if (splash.parentNode) splash.parentNode.removeChild(splash);
-          }, 260);
+          }, 380);
         }
 
-        if (root.childNodes.length > 0) {
-          handOver();
-          return;
+        var booked = false;
+        function handOver() {
+          if (leaving || booked) return;
+          booked = true;
+          var waited = Date.now() - shownAt;
+          if (waited < MINIMUM_ON_SCREEN_MS) {
+            window.setTimeout(leave, MINIMUM_ON_SCREEN_MS - waited);
+            return;
+          }
+          leave();
         }
 
-        try {
-          var watcher = new MutationObserver(function () {
-            if (root.childNodes.length > 0) {
-              watcher.disconnect();
-              handOver();
-            }
-          });
-          watcher.observe(root, { childList: true });
-        } catch (err) {
-          window.addEventListener('load', handOver);
-        }
+        window.__hiveArrived = handOver;
 
-        // A last resort, well past any normal start, so a browser that never
-        // fires the observer cannot strand somebody on the splash.
-        window.setTimeout(handOver, 20000);
+        // A last resort, well past any normal start, so a browser where none of
+        // the above ever runs cannot strand somebody on the splash.
+        window.setTimeout(leave, 20000);
       })();
     </script>
   </body>

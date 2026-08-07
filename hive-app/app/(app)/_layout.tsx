@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Tabs, usePathname, useRouter } from 'expo-router';
-import { Text, View, ImageSourcePropType, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { Text, View, ImageSourcePropType, Platform, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -18,7 +18,7 @@ import { currentReturnTo } from '../../lib/authReturnTo';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
-import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { ArrivalScreen, markAppArrived } from '../../components/ui/ThinkingBee';
 import { useSignedAvatar } from '../../components/ui/Avatar';
 import { usePageSkin } from '../../lib/pageSkin';
 function TabIcon({
@@ -149,6 +149,25 @@ export default function AppLayout() {
   // Initialize push notification listeners and state (no permission prompt on load)
   useNotifications({ autoRequestPermission: false });
 
+  // -------------------------------------------------------------------------
+  // "The app is here" — the moment the boot splash has been waiting for.
+  //
+  // This layout is the shell: the rail, the footer, the page's own floor. When
+  // it draws, there is something to look at, which is the whole test the splash
+  // in public/index.html applies. Everything before this — the typefaces, the
+  // saved sign-in, the download of this screen's own code — happens underneath a
+  // bee that never stops flying.
+  //
+  // One animation frame later, so the shell is genuinely painted rather than
+  // merely rendered. See markAppArrived() in components/ui/ThinkingBee.tsx.
+  // -------------------------------------------------------------------------
+  const shellIsUp = !loading && !!session && !!communityId;
+  useEffect(() => {
+    if (!shellIsUp) return;
+    const frame = requestAnimationFrame(markAppArrived);
+    return () => cancelAnimationFrame(frame);
+  }, [shellIsUp]);
+
   useEffect(() => {
     if (Platform.OS !== 'web' && !restoredNativePathRef.current) return;
 
@@ -206,13 +225,11 @@ export default function AppLayout() {
   // Wearing the reader's own skin rather than cream: this used to be a hard
   // `#faf8f3`, which is the HIVE page colour, so somebody standing at HIVE-Wide
   // got a pale card thrown over a near-black app for as long as auth took.
-  if (loading || !session || !communityId) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: skin.page }}>
-        <ThinkingBee />
-      </View>
-    );
-  }
+  //
+  // On the way in it draws no bee, because the boot splash is still on top with
+  // one. Later — switching HIVE, signing out — the splash is long gone and
+  // ArrivalScreen draws the bee itself.
+  if (!shellIsUp) return <ArrivalScreen background={skin.page} />;
 
   // "Which hive?" stands in front of the whole app rather than living at its own
   // address, because the tabs underneath belong to whichever hive you pick — and
@@ -275,7 +292,7 @@ export default function AppLayout() {
           // for the whole of that wait this floor was `#faf8f3` — cream, which
           // reads as white — and then the answer landed and the app went
           // near-black. `wholeHive` is seeded from where the person is about to
-          // land now; see headingToHiveWide() at the top of app/_layout.tsx.
+          // land now; see headingTo() at the top of app/_layout.tsx.
           //
           // Ruled out along the way, so nobody hunts them again: the lazy tab
           // container (`MaybeScreenContainer`, flex only, no colour), the screen

@@ -8,6 +8,11 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { sanitizeReturnTo } from '../../lib/authReturnTo';
 import { showAlert } from '../../lib/showAlert';
+import { markAppArrived } from '../../components/ui/ThinkingBee';
+// The dark brown behind this screen is named in app/_layout.tsx, because
+// public/index.html paints the same colour before any of this code exists —
+// the arrival has to be one colour the whole way through.
+import { DOOR_DARK } from '../_layout';
 import {
   getStoredItemAsync,
   setStoredItemAsync,
@@ -155,6 +160,15 @@ export default function LoginScreen() {
 
   const accountHint = rememberedEmail ? maskEmailForHint(rememberedEmail) : null;
 
+  // The door is a screen somebody reads, so it is one of the two places that
+  // tell the boot splash in public/index.html to come down. Everything before
+  // this — the typefaces, the saved sign-in, this screen's own code arriving —
+  // happens underneath a bee that never stops flying (2026-08-06).
+  useEffect(() => {
+    const frame = requestAnimationFrame(markAppArrived);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   useEffect(() => {
     let stillHere = true;
     void getStoredItemAsync(LAST_SIGN_IN_EMAIL_KEY).then((stored) => {
@@ -297,7 +311,7 @@ export default function LoginScreen() {
     // Behind the door it's dark. The public site is cream and says what HIVE is;
     // this page is the other side of the invitation and shouldn't read as more
     // of the same marketing (Nat 2026-08-02). Same seal, opposite world.
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#33271a' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: DOOR_DARK }}>
       <StatusBar style="light" />
       {/* The page grew a divider and more breathing room around the join line,
           and a 375 x 667 phone has barely enough height for all of it. A plain

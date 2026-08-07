@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
 import { sanitizeReturnTo } from '../../lib/authReturnTo';
-import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { ArrivalScreen } from '../../components/ui/ThinkingBee';
+import { DOOR_DARK } from '../_layout';
 // A sign-in with no particular destination goes to "/", which is the waiting
 // room: it holds until auth has actually resolved and only then forwards you
 // to HIVE-Wide. Sending people straight to /hive-wide put them behind the
@@ -67,21 +68,21 @@ export default function AuthCallbackScreen() {
     }
   }
 
+  // The same dark brown as the sign-in screen either side of it. This used to be
+  // cream, which put a near-white page in the middle of a journey that is dark
+  // at both ends — one of the "flashes of different colours" (Nat 2026-08-06).
   if (error) {
     return (
-      <View className="flex-1 bg-cream justify-center items-center px-8">
-        <Text className="text-charcoal text-center text-base">{error}</Text>
-        <Text className="text-charcoal/60 text-center text-sm mt-2">
-          Redirecting to login...
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, backgroundColor: DOOR_DARK }}>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 16, color: '#f6f4e5', textAlign: 'center' }}>{error}</Text>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: 'rgba(246,244,229,0.6)', textAlign: 'center', marginTop: 8 }}>
+          Taking you back to sign in…
         </Text>
       </View>
     );
   }
 
-  return (
-    <View className="flex-1 bg-cream justify-center items-center">
-      <ThinkingBee />
-      <Text className="text-charcoal mt-4 text-base">Signing you in...</Text>
-    </View>
-  );
+  // No words and no bee while the boot splash is still up — it is already saying
+  // this, with a bee that has been flying since the first frame.
+  return <ArrivalScreen background={DOOR_DARK} />;
 }

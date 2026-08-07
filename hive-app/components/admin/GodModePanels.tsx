@@ -144,10 +144,9 @@ function sentWhen(iso: string) {
  * I use the most, 2nd would be newsletter drafter & signups & then the other
  * hives below that."
  *
- * Nat 2026-08-06, from her phone: Surveys, then Newsletter, then the HIVEs.
- * That is the same ranking she gave in August, said as a plain list, and it is
- * what these numbers say now: 1 Surveys, 2 Newsletter, 3 onwards the HIVEs in
- * membership order.
+ * Nat 2026-08-06, from her phone: Surveys, then Newsletter, then the HIVEs —
+ * and then, later the same day, the Surveys box itself went (see admin.tsx for
+ * her words). So: 1 Newsletter, 2 onwards the HIVEs in membership order.
  *
  * The numbers used to skip — HIVEs on 1, 3, 5 and the tools on 2 and 4 — to
  * satisfy a different request from the same week ("left hand side, top to bottom
@@ -160,13 +159,12 @@ function sentWhen(iso: string) {
  * hold both. On a phone there is one column, so the interleave read as OG HIVE,
  * Surveys, Tech HIVE, Newsletter, Production HIVE — the ranking shredded. The
  * ranking wins, because it is what she asked for twice. On a wide screen it now
- * puts Surveys and Newsletter across the top row and the HIVEs underneath,
- * which still reads top-down in importance.
+ * puts the Newsletter first and the HIVEs after it, which still reads
+ * top-down in importance.
  */
 export const ADMIN_PANEL_ORDER = {
-  surveys: 1,
-  newsletter: 2,
-  hives: 3,
+  newsletter: 1,
+  hives: 2,
 } as const;
 
 /* ------------------------------------------------------------------ colour */
@@ -225,8 +223,8 @@ const deepen = ({ r, g, b }: Rgb, amount: number) =>
 /**
  * The two rules a folder is ruled with, whether or not it belongs to a HIVE.
  *
- * A HIVE's box got these from `hivePanelSkin` and the Surveys and Newsletter
- * boxes had their own gold-on-cream versions, which is part of why Nat read them
+ * A HIVE's box got these from `hivePanelSkin` and the Newsletter box had its
+ * own gold-on-cream version, which is part of why Nat read them
  * as a different species (2026-08-06). Both kinds are dark panes now, so both
  * take the same two lines: `HAIRLINE` between rows, `INSET` for a row being
  * pressed or a section pushed slightly into the sheet.
@@ -642,9 +640,47 @@ export function NewsletterPanel({
 // beside Tech's and Production's, which is the opposite of what it is.
 //
 // Everything left in this list genuinely belongs to exactly one HIVE.
+//
+// One tool, now. Nat, 2026-08-06: *"Meeting tools should only be the meeting
+// helper."* The Monthly Tune-up that sat beside it is the check-in members fill
+// in, so it was the check-ins listed under a meeting heading — and the Check-ins
+// tab next door already says when it goes out and holds every answer. The list
+// stays a list because a second meeting-day tool is a one-line addition.
 const HIVE_TOOLS: { route: string; emoji: string; label: string; hint: string }[] = [
   { route: '/meeting-helper', emoji: '🗓️', label: 'Meeting Helper', hint: 'Run the meeting, live' },
-  { route: '/monthly-tuneup', emoji: '🔧', label: 'Monthly Tune-up', hint: 'The check-in everyone fills in' },
+];
+
+/**
+ * The check-ins a HIVE runs, and when each one goes out.
+ *
+ * The two live ones are what `supabase/functions/check-in-reminder` actually
+ * fires, checked 2026-08-06:
+ *   - three days before the meeting date, with a last call on the day itself to
+ *     whoever has not answered (`REMINDER_WINDOW_DAYS = 3`, kinds `window` and
+ *     `day_of`)
+ *   - the third-to-last day of the month, so there are three days to add
+ *     something before the newsletter goes out on the 1st
+ *     (`NEWSLETTER_LEAD_DAYS = 3`, kind `midpoint`)
+ *
+ * The two send different things and their answers land in different places,
+ * which is worth knowing before anybody goes looking. The pre-meeting one files
+ * a survey response — that is what the row above opens. The month-end one walks
+ * a member through the newsletter, their to-dos and HIVE Help, and posts to the
+ * boards; its shout-outs surface in the Newsletter box, which is where Nat is
+ * standing when she needs them (`monthly-tuneup.tsx`, `isMidpoint`).
+ *
+ * The quarter and the year are Nat's, 2026-08-06: *"check-ins should show the 3
+ * days before the meeting, 3 days before the newsletter & 3 days before the end
+ * of the quarter & 3 days before the end of the year."* Nothing sends those —
+ * no survey, no cron, no table — so they are listed in italics and say so. She
+ * asked to see the shape of the year, and a line that quietly looked live would
+ * have her waiting on answers that never come.
+ */
+const CHECK_IN_SCHEDULE: { when: string; what: string; live: boolean }[] = [
+  { when: 'Three days before the meeting', what: 'and a last call on the day', live: true },
+  { when: 'The last three days of the month', what: 'shout-outs for the newsletter', live: true },
+  { when: 'Three days before the quarter ends', what: 'coming soon', live: false },
+  { when: 'Three days before the year ends', what: 'coming soon', live: false },
 ];
 
 export function HiveMemberPanels({
@@ -932,7 +968,7 @@ export function HiveMemberPanels({
           other with cream and a tiny word. Nat spotted it side by side
           ("see how these don't"). One list now, drawn once.
 
-          In membership order, after Surveys and the Newsletter. The old note
+          In membership order, after the Newsletter. The old note
           here described the interleaved grid — HIVEs on the odd positions, the
           cross-HIVE boxes on the even ones — which ADMIN_PANEL_ORDER retired on
           2026-08-06; see the comment on it for why a column split and a ranking
@@ -959,13 +995,16 @@ export function HiveMemberPanels({
         return (
           // One after another, no gaps. The HIVEs used to take every other
           // position so the two cross-HIVE boxes could sit between them in the
-          // right-hand column; they follow Surveys and Newsletter now.
+          // right-hand column; they follow the Newsletter now.
           <View key={m.community_id} style={[cellStyle, { order: orderFrom + index } as any]}>
             <Panel
               title={name}
+              // Short labels, because the whole row has to fit the folder's top
+              // edge on a phone. "Meeting tools" became "Meeting" the day the
+              // tab came down to one tool.
               tabs={[
                 { key: 'members', label: `Members (${rows.length})` },
-                { key: 'tools', label: 'Meeting tools' },
+                { key: 'tools', label: 'Meeting' },
                 { key: 'checkins', label: 'Check-ins' },
               ]}
               activeTab={tab}
@@ -1025,6 +1064,21 @@ export function HiveMemberPanels({
                     ))}
                   </View>
                 ) : tab === 'checkins' ? (
+                  /* THE CHECK-INS THIS HIVE RUNS.
+                     One door, then the shape of the year underneath it.
+
+                     Nat asked for an Answers tab too — *"we could have an
+                     'answer' tab that populates with all of those things?"*,
+                     phrased as a question, so: both sets of answers already have
+                     a door, and each door is where the answers get used. The
+                     pre-meeting check-in's are in the sheet this row opens,
+                     grouped by month with the POP readout on top. The month-end
+                     one's are shout-outs, and they are in the Newsletter box —
+                     the screen Nat is on when she writes the newsletter they
+                     were collected for. An Answers tab would be a third door
+                     onto those two rooms, on the morning whose whole job was
+                     taking doors away. So this row says "answers" out loud, and
+                     the line below names where the shout-outs go. */
                   <View style={{ paddingVertical: 6 }}>
                     <Pressable
                       onPress={() => void openCheckInsForHive(m.community_id)}
@@ -1038,23 +1092,61 @@ export function HiveMemberPanels({
                       <Text style={{ fontSize: 15 }}>📊</Text>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#F6F4E5' }}>
-                          Check-in questions &amp; responses
+                          Questions &amp; answers
                         </Text>
                         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
-                          What {name} is asked each month, and what they said
+                          The meeting check-in, and what {name} said
                         </Text>
                       </View>
                       <Ionicons name="chevron-forward" size={15} color="rgba(246,244,229,0.5)" />
                     </Pressable>
+
                     <Text
                       style={{
-                        fontFamily: 'Lato_400Regular', fontSize: 12,
-                        color: 'rgba(246,244,229,0.5)', padding: 14, lineHeight: 18,
+                        fontFamily: 'Lato_700Bold', fontSize: 10.5, letterSpacing: 0.9,
+                        textTransform: 'uppercase', color: 'rgba(246,244,229,0.6)',
+                        paddingHorizontal: 14, paddingTop: 14, paddingBottom: 6,
                       }}
                     >
-                      Each HIVE gets its own questions, so {name} can be asked something
-                      the others are not.
+                      When they go out
                     </Text>
+                    {CHECK_IN_SCHEDULE.map((step) => (
+                      <View
+                        key={step.when}
+                        style={{
+                          flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+                          paddingHorizontal: 14, paddingVertical: 5,
+                        }}
+                      >
+                        {/* A dot in the HIVE's colour for the ones that send, an
+                            outline for the ones that do not — so which is which
+                            survives being read at arm's length.
+
+                            Six points down, which is the middle of an 18-point
+                            first line. These lines wrap on a phone, and a dot
+                            centred on a two-line row floats between them. */}
+                        <View
+                          style={{
+                            width: 6, height: 6, borderRadius: 3, marginTop: 6,
+                            backgroundColor: step.live ? accentOnDark(accent) : 'transparent',
+                            borderWidth: 1,
+                            borderColor: step.live ? accentOnDark(accent) : 'rgba(246,244,229,0.34)',
+                          }}
+                        />
+                        <Text
+                          style={{
+                            flex: 1, fontSize: 12.5, lineHeight: 18,
+                            fontFamily: 'Lato_400Regular',
+                            fontStyle: step.live ? 'normal' : 'italic',
+                            color: step.live ? '#F6F4E5' : 'rgba(246,244,229,0.45)',
+                          }}
+                        >
+                          {step.when}
+                          <Text style={{ color: 'rgba(246,244,229,0.5)' }}> · {step.what}</Text>
+                        </Text>
+                      </View>
+                    ))}
+                    <View style={{ height: 10 }} />
                   </View>
                 ) : (
                 <>

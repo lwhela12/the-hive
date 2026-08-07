@@ -42,14 +42,13 @@ import { MemberProfileLink } from '../../components/ui/MemberProfileLink';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
 import {
-  ADMIN_PANEL_ORDER,
   HiveMemberPanels,
   NewsletterPanel,
   PANEL_HAIRLINE,
   PANEL_INSET,
   hivePanelSkin,
 } from '../../components/admin/GodModePanels';
-import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { HIVE_GOLD, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 // Admin is always seen from the cosmos, whichever HIVE you happen to belong to,
 // so its boxes take the space skin's ink and card values rather than asking
 // `usePageSkin()` where the reader is standing.
@@ -444,17 +443,6 @@ function getSurveyTimeInputValue(dueDate?: string | null, fallback?: Date) {
   return getTimeInputValue(parseSurveyDueAt(dueDate) ?? fallback ?? getNextSecondWednesdayDueAt());
 }
 
-function formatSurveyDueAt(dueDate?: string | null) {
-  const parsed = parseSurveyDueAt(dueDate);
-  if (!parsed) return dueDate ?? '';
-  return parsed.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
 function getSurveyResponsePeriodForSurvey(survey: Survey) {
   const label = `${survey.title} ${survey.description ?? ''}`;
   if (!MONTHLY_CHECK_IN_PATTERN.test(label)) return DEFAULT_RESPONSE_PERIOD;
@@ -795,9 +783,19 @@ function SurveyTimePicker({
  * that — the tabs became free-floating chips that wrapped onto a line of their
  * own, on the reasoning that a tab which has wrapped is attached to nothing.
  * True, and the answer is to stop it wrapping rather than to stop it being a
- * tab. `OG HIVE · Members (11) · Meeting tools · Check-ins · + New Member` wants
- * about 500 points and a phone gives the box roughly 280, so the row slides
- * sideways along the panel's top edge and stays welded to it.
+ * tab. `OG HIVE · Members (11) · Meeting · Check-ins · + New Member` wants about
+ * 440 points and a 375-point phone gives the box 343, so the row slides sideways
+ * along the panel's top edge and stays welded to it.
+ *
+ * Nat, 2026-08-06: *"I don't like having to scroll to the side to see other
+ * tabs, how do we fix that? Do we write at an angle? Stack the words on top of
+ * each other? Make the font smaller?"* Angled words are hard to read and stacked
+ * ones make a tab taller than the row it is attached to, so both trade one
+ * awkwardness for another. Fewer and shorter tabs is the fix, and it is what the
+ * rest of that morning did: the Surveys box went entirely, and Meeting tools
+ * became Meeting. The strip stays as the safety net — *"the scroll on the OG
+ * HIVE box didn't bother me"* — and a HIVE with a short name and few members
+ * now fits without it.
  *
  * The arrow is the whole point of the wrapper: a strip that scrolls with no sign
  * it scrolls is how the first tab ended up looking clipped rather than reachable.
@@ -864,8 +862,8 @@ function PanelTabStrip({ edge, children }: { edge: string; children: ReactNode }
 // Hand it a HIVE's accent colour and the whole folder — tab, wash, edge, glow —
 // comes up in that HIVE instead of the house cream (Nat 2026-08-03). Boxes that
 // belong to no single HIVE leave it off: they keep the cream name tab and the
-// gold edge over a body in no colour at all, which is how Surveys and the
-// Newsletter say "this belongs to all of them" while wearing the same folder.
+// gold edge over a body in no colour at all, which is how the Newsletter says
+// "this belongs to all of them" while wearing the same folder.
 function AdminPanel({
   title,
   tabs,
@@ -927,9 +925,12 @@ function AdminPanel({
    *
    * So they are dark panes now, with light ink, exactly like the accented ones.
    * The body borrows no colour at all — HIVE-Wide's own card value — because a
-   * gold body would read as OG HIVE's box, and these two speak for every HIVE at
-   * once. What keeps them house-coloured is the cream name tab and the gold edge,
-   * which is what they already wore and what Nat recognises them by.
+   * gold body would read as OG HIVE's box, and the Newsletter speaks for every
+   * HIVE at once. What keeps it house-coloured is the cream name tab and the gold
+   * edge, which is what it already wore and what Nat recognises it by.
+   *
+   * "The boxes", plural, was true until 2026-08-06, when the Surveys box went.
+   * The Newsletter is the only one left that belongs to no single HIVE.
    */
   const bodyFill = skin?.body ?? SPACE_SKIN.card;
   const glow = skin?.shadow ?? '#bd9348';
@@ -1024,13 +1025,30 @@ function AdminPanel({
           </Text>
         </View>
         {(tabs ?? []).map(renderTab)}
-        {/* THE ACTION, wearing the folder's shape and the house's doing-colour.
-            Solid #bd9348 is the gold on every "do it" button in HIVE — Send
-            Invite, Add, Create Survey — so it reads as something that happens
-            rather than somewhere you can be standing. It sits at the low height
-            an unselected tab sits at and never takes the raised, filled look of
-            the selected one, and it answers to `button` rather than `tab`, so
-            nothing about it can say "you are here". */}
+        {/* THE ACTION, wearing the folder's shape and the folder's OWN colour.
+            Gold for OG, blue for Tech, purple for Production.
+
+            Nat, 2026-08-06: *"why can't the + New Member match its HIVE? Gold
+            for OG, Blue for Tech & Purple for Production? I feel like I've asked
+            for that 100 times."* She has. It was solid #bd9348 on all three, on
+            the rule that gold is the doing-colour everywhere in HIVE — Send
+            Invite, Add. That rule is real and it loses to being asked three
+            times, and the tab is inside a HIVE's folder where the HIVE's colour
+            is what everything else is already wearing.
+
+            What keeps it from reading as a PLACE is everything else about it: it
+            sits at the low height an unselected tab sits at, never takes the
+            raised look of the selected one, and answers to `button` rather than
+            `tab`, so nothing about it can say "you are here". Solid also puts it
+            a step brighter than the selected tab, which is the same colour at
+            0.6 alpha.
+
+            The lettering stays cream, the way every filled tab on this edge
+            already does. `accentOnDark` is the tool for a HIVE's colour used as
+            INK on black; used on the fill here it would pale the tab out into
+            exactly the light-ground-dark-ink look that means "selected". Cream
+            on Tech's #2f4a63 measures about 8:1 — better than the cream on gold
+            this tab shipped with. */}
         {action ? (
           <Pressable
             onPress={action.onPress}
@@ -1038,7 +1056,10 @@ function AdminPanel({
             accessibilityLabel={action.label}
             style={({ pressed }) => ({
               ...tabShape,
-              backgroundColor: pressed ? '#a97f3a' : '#bd9348',
+              // Pressed is the same colour let down onto the panel behind it —
+              // one value per HIVE rather than a hand-picked darker gold that
+              // only ever matched one of them.
+              backgroundColor: pressed ? accentWash(accent ?? HIVE_GOLD, 0.72) : (accent ?? HIVE_GOLD),
               paddingHorizontal: narrow ? 11 : 12,
               paddingVertical: 5,
             })}
@@ -1220,18 +1241,13 @@ export default function AdminScreen() {
   // Modal states
   const [pendingCheckInOpen, setPendingCheckInOpen] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
-  const [showSurveyModal, setShowSurveyModal] = useState(false);
 
-  // Survey management
+  // Survey management. The create-a-survey half of this went with the Surveys
+  // box on 2026-08-06; what is left edits the check-ins that exist.
   const { allSurveys, refetch: refetchSurveys } = useSurveys(
     canEditHoneyPot ? communityId ?? undefined : undefined,
     canEditHoneyPot ? profile?.id : undefined
   );
-  const [surveyTitle, setSurveyTitle] = useState('');
-  const [surveyDescription, setSurveyDescription] = useState('');
-  const [surveyDueDate, setSurveyDueDate] = useState('');
-  const [surveyDueTime, setSurveyDueTime] = useState('');
-  const [savingSurvey, setSavingSurvey] = useState(false);
   const [editingSurvey, setEditingSurvey] = useState<Survey | null>(null);
   const [surveyEditorTitle, setSurveyEditorTitle] = useState('');
   const [surveyEditorDescription, setSurveyEditorDescription] = useState('');
@@ -1245,16 +1261,6 @@ export default function AdminScreen() {
   const [surveyResponsesLoading, setSurveyResponsesLoading] = useState(false);
   const [surveyResponsesError, setSurveyResponsesError] = useState<string | null>(null);
   const [selectedSurveyResponsePeriod, setSelectedSurveyResponsePeriod] = useState<string | null>(null);
-  /**
-   * Which view the Surveys folder is showing.
-   *
-   * It had no tabs at all — a name, a floating pill and one long scroll holding
-   * two unrelated things — which is half of why Nat called it "aggressively
-   * different" from the HIVE boxes on 2026-08-06. It holds the monthly check-in,
-   * which is the one she opens most, and every other survey; those are two jobs,
-   * so they are two tabs. It opens on the check-in.
-   */
-  const [surveyTab, setSurveyTab] = useState<'checkin' | 'others'>('checkin');
   const surveyEditorQuestionsRef = useRef<SurveyQuestion[]>([]);
   const questionLayoutsRef = useRef<Record<string, QuestionLayout>>({});
   const activeQuestionDragRef = useRef<{ id: string; startCenterY: number } | null>(null);
@@ -1527,19 +1533,7 @@ export default function AdminScreen() {
     }
   }, []);
 
-  const toggleSurveyActive = async (survey: Survey) => {
-    await supabase.from('surveys').update({ is_active: !survey.is_active }).eq('id', survey.id);
-    refetchSurveys();
-  };
-
   const getDefaultSurveyDue = () => getSurveyDefaultDueAt(nextSurveyMeeting);
-
-  const openSurveyCreateModal = () => {
-    const defaultDueAt = getDefaultSurveyDue();
-    setSurveyDueDate(toAmericanDate(defaultDueAt));
-    setSurveyDueTime(getTimeInputValue(defaultDueAt));
-    setShowSurveyModal(true);
-  };
 
   // Waits for the switched-to HIVE's surveys to load, then opens its check-in.
   // The tap happens before the fetch, so this cannot be a direct call.
@@ -1760,38 +1754,6 @@ export default function AdminScreen() {
       await refetchSurveys();
     } finally {
       setSavingSurveyEditor(false);
-    }
-  };
-
-  const createQuickSurvey = async () => {
-    if (!surveyTitle.trim() || !communityId) return;
-    const { dueDate, error: dueDateError } = normalizeSurveyDueDateInput(surveyDueDate, surveyDueTime);
-    if (dueDateError) {
-      showAlert('Due date', dueDateError);
-      return;
-    }
-
-    setSavingSurvey(true);
-    try {
-      await supabase.from('surveys').insert({
-        community_id: communityId,
-        title: surveyTitle.trim(),
-        description: surveyDescription.trim() || null,
-        due_date: dueDate,
-        questions: [],
-        is_active: true,
-        created_by: profile?.id,
-      });
-      setSurveyTitle('');
-      setSurveyDescription('');
-      setSurveyDueDate('');
-      setSurveyDueTime('');
-      setShowSurveyModal(false);
-      refetchSurveys();
-    } catch (e) {
-      showAlert('Error', 'Failed to create survey');
-    } finally {
-      setSavingSurvey(false);
     }
   };
 
@@ -2095,7 +2057,6 @@ export default function AdminScreen() {
   const dashboardPanelStyle = { height: useMobileLayout ? mobilePanelHeight : desktopPanelHeight };
   const dashboardPanelBodyStyle = { flex: 1 };
   const panelScrollStyle = { flex: 1 };
-  const panelOrderStyle = (order: number) => ({ order } as unknown as ViewStyle);
   // The HIVE you're signed into, in its own colour, so the invite form inside
   // its box belongs to the box (Nat 2026-08-03).
   const currentHiveAccent = hiveAccent(community);
@@ -2115,11 +2076,6 @@ export default function AdminScreen() {
     marginBottom: useMobileLayout ? 18 : 36,
   };
 
-  // The monthly check-in is the one survey with a job of its own — the Tune-up
-  // runs on it — so it gets a tab of its own and everything else shares the
-  // next one. Found by title, the same way the Tune-up finds it.
-  const monthlyCheckIn = allSurveys.find((s) => /monthly\s+check-?in/i.test(s.title)) ?? null;
-  const otherSurveys = allSurveys.filter((s) => !/monthly\s+check-?in/i.test(s.title));
 
   if (!isAdmin && !isTreasurer) {
     return (
@@ -2150,222 +2106,24 @@ export default function AdminScreen() {
               where the pot is, and the ledger was always public anyway
               (Nat 2026-08-01). This room is for people. */}
 
-          {isAdmin && (
-            <View style={[dashboardCellStyle, panelOrderStyle(ADMIN_PANEL_ORDER.surveys)]}>
-              <AdminPanel
-                // Renamed (Nat 2026-08-04). The meeting-day tools moved INTO
-                // each HIVE's own folder as a tab above, which is where they
-                // belong — every one of them runs for exactly one HIVE. What is
-                // left in this box is the survey machinery, so it says so.
-                title="Surveys"
-                // Two jobs, two tabs, the same folder every HIVE box wears.
-                // Short labels on purpose: the strip slides when it has to, and
-                // not having to is better.
-                tabs={[
-                  { key: 'checkin', label: 'Monthly check-in' },
-                  { key: 'others', label: `Other (${otherSurveys.length})` },
-                ]}
-                activeTab={surveyTab}
-                onTabChange={(key: string) => setSurveyTab(key as 'checkin' | 'others')}
-                style={dashboardPanelStyle}
-                bodyStyle={dashboardPanelBodyStyle}
-                action={{ label: '+ Create', onPress: openSurveyCreateModal }}
-              >
-                <ScrollView
-                  style={panelScrollStyle}
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator={true}
-                >
-                  {surveyTab === 'checkin' ? (
-                  <View>
-                    {/* The monthly check-in lives here as the "engine" behind the
-                        Tune-up, not as a loose survey — opens the same editor/responses.
+          {/* THE SURVEYS BOX IS GONE (Nat, 2026-08-06).
+              *"I guess we can get rid of the first survey box. Honestly, I
+              wouldn't use this to make one anyway — I would just message you
+              here, like this, to create one."* And: *"OG HIVE is the only one
+              that has any surveys, because we need to make different ones for
+              different HIVEs."*
 
-                        Nat asked whether this row had the same fault as the one
-                        below. It stays where you are — the editor is a sheet on
-                        this screen — so nothing moves you into another HIVE. What
-                        it did share was the silence about WHICH HIVE: this box
-                        lists the surveys of the HIVE you last stood in, so from
-                        HIVE-Wide it opened an unnamed HIVE's check-in. The HIVE's
-                        name is on the row now, so you know whose questions you
-                        are about to edit before you press it.
+              It was a HIVE-Wide shelf holding something that only ever belongs
+              to one HIVE, so it had to guess whose surveys to show and picked
+              whichever HIVE you last stood in. Its one useful row — Check-in
+              questions & responses — already sits inside every HIVE's own
+              folder, under that HIVE's name.
 
-                        The row is drawn exactly like the tool rows inside a HIVE's
-                        folder — same emoji, same two lines, same chevron, same
-                        light ink — because it does the same kind of thing. */}
-                    {monthlyCheckIn ? (
-                      <Pressable
-                        key="monthly-check-in"
-                        onPress={() => openSurveyEditor(monthlyCheckIn)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Check-in questions and responses for ${hiveDisplayName(community?.name)}`}
-                        style={({ pressed }) => ({
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 10,
-                          paddingHorizontal: 14,
-                          paddingVertical: 11,
-                          backgroundColor: pressed ? PANEL_INSET : 'transparent',
-                          borderBottomWidth: 1,
-                          borderBottomColor: PANEL_HAIRLINE,
-                        })}
-                      >
-                        <Text style={{ fontSize: 15 }}>📊</Text>
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: SPACE_SKIN.ink }}>
-                            Check-in questions &amp; responses
-                          </Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: SPACE_SKIN.inkSoft, marginTop: 1 }}>
-                            {hiveDisplayName(community?.name)}
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={15} color={SPACE_SKIN.inkSoft} />
-                      </Pressable>
-                    ) : (
-                      <Text
-                        style={{
-                          fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19,
-                          color: SPACE_SKIN.inkSoft, padding: 14,
-                        }}
-                      >
-                        {hiveDisplayName(community?.name)} has no monthly check-in yet.
-                      </Text>
-                    )}
-
-                    {/* WHERE THE MEETING TOOLS WENT — a sign, not a door.
-
-                        Nat, from her phone on 2026-08-06: *"i hate that the
-                        'meeting tools' brings you inside another HIVE, that was
-                        super annoying, because i dont want to just drop into a
-                        random meeting page on a random HIVE, right? hated it."*
-
-                        The meeting-day links (Meeting Helper, Monthly Tune-up)
-                        moved into each HIVE's own box on 2026-08-01, at Nat's
-                        call — they are what you reach for on meeting day, and
-                        every one of them runs for exactly one HIVE. These words
-                        are how the old home tells you where they went.
-
-                        It was a Pressable that pushed you to /meetings. This
-                        screen is reached from HIVE-Wide, where you are standing
-                        above all the HIVEs and have picked none — so that tap
-                        landed you in whichever HIVE you happened to be in last,
-                        with its meetings open, under no name. A sentence that
-                        reads like a signpost and behaves like a trapdoor.
-
-                        Words, then. Not a HIVE picker either: what it points at
-                        is on this very page, a little further down — each HIVE's
-                        own box, with Meeting tools as one of its tabs — so a
-                        picker here would be a second way to choose a HIVE
-                        immediately before choosing one. Scrolling is the shorter
-                        route and it never moves you anywhere.
-
-                        It sits under the check-in rather than over it: this tab
-                        is called Monthly check-in, so the check-in goes first and
-                        the signpost follows.
-
-                        "Below", not "above": the boxes were reordered on
-                        2026-08-06 to Surveys, Newsletter, then the HIVEs
-                        (ADMIN_PANEL_ORDER), which put them underneath this one. */}
-                    <Text
-                      style={{
-                        fontFamily: 'Lato_700Bold',
-                        fontSize: 11,
-                        letterSpacing: 1,
-                        textTransform: 'uppercase',
-                        color: SPACE_SKIN.inkSoft,
-                        paddingHorizontal: 14,
-                        paddingTop: 14,
-                        paddingBottom: 4,
-                      }}
-                    >
-                      Meeting tools
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'flex-start',
-                        gap: 8,
-                        paddingHorizontal: 14,
-                        paddingTop: 4,
-                        paddingBottom: 14,
-                      }}
-                    >
-                      <Text style={{ fontSize: 15 }}>📅</Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: SPACE_SKIN.inkBody, flex: 1 }}>
-                        Every meeting tool sits inside its own HIVE. Open that HIVE&rsquo;s
-                        box below and choose its Meeting tools tab.
-                      </Text>
-                    </View>
-                  </View>
-                  ) : (
-                  <View>
-                    {otherSurveys.length === 0 ? (
-                      <Text
-                        style={{
-                          fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19,
-                          color: SPACE_SKIN.inkSoft, padding: 14,
-                        }}
-                      >
-                        No other surveys yet. &ldquo;+ Create&rdquo; starts one, and Clive
-                        will help you write its questions.
-                      </Text>
-                    ) : otherSurveys.map((survey) => (
-                      <Pressable key={survey.id} onPress={() => openSurveyEditor(survey)} style={({ pressed }) => ({
-                        flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14,
-                        borderBottomWidth: 1,
-                        borderBottomColor: PANEL_HAIRLINE,
-                        backgroundColor: pressed ? PANEL_INSET : 'transparent',
-                      })}>
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: SPACE_SKIN.ink }}>{survey.title}</Text>
-                          {survey.due_date && (
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: SPACE_SKIN.inkSoft, marginTop: 1 }}>
-                              Due {formatSurveyDueAt(survey.due_date)}
-                            </Text>
-                          )}
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: SPACE_SKIN.inkSoft, marginTop: 1 }}>
-                            {(survey.questions ?? []).length} question{(survey.questions ?? []).length === 1 ? '' : 's'} · Tap to edit &amp; see responses
-                          </Text>
-                        </View>
-                        {/* Active / Inactive was a grey slab out of a stock UI kit —
-                            #f3f4f6 and #9ca3af appear nowhere else in HIVE, and on a
-                            dark panel it was the single loudest thing on the screen.
-                            It is a state chip now, built the same way as the
-                            pending/expired chips in a HIVE's folder: gold when it is
-                            running, an outline in no colour when it is not. */}
-                        <Pressable
-                          onPress={(event) => {
-                            event.stopPropagation();
-                            toggleSurveyActive(survey);
-                          }}
-                          accessibilityRole="button"
-                          accessibilityLabel={`${survey.title} is ${survey.is_active ? 'active' : 'inactive'}. Tap to turn it ${survey.is_active ? 'off' : 'on'}.`}
-                          hitSlop={6}
-                          style={({ pressed }: { pressed: boolean }) => ({
-                            paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
-                            borderWidth: 1,
-                            borderColor: survey.is_active ? 'rgba(224,190,118,0.55)' : 'rgba(246,244,229,0.28)',
-                            backgroundColor: survey.is_active
-                              ? (pressed ? 'rgba(224,190,118,0.34)' : 'rgba(224,190,118,0.2)')
-                              : (pressed ? 'rgba(255,255,255,0.14)' : 'transparent'),
-                          })}
-                        >
-                          <Text style={{
-                            fontFamily: 'Lato_700Bold', fontSize: 10, letterSpacing: 0.7,
-                            textTransform: 'uppercase',
-                            color: survey.is_active ? SPACE_SKIN.gold : SPACE_SKIN.inkSoft,
-                          }}>
-                            {survey.is_active ? 'Active' : 'Inactive'}
-                          </Text>
-                        </Pressable>
-                      </Pressable>
-                    ))}
-                  </View>
-                  )}
-                </ScrollView>
-              </AdminPanel>
-            </View>
-          )}
+              Going with it: the "+ Create" survey builder, which Nat says she
+              would never use, and the Meeting tools paragraph, which explained
+              where the meeting tools are on a screen that shows them a little
+              further down. The survey EDITOR is untouched — each HIVE's
+              Check-ins tab opens it. */}
 
           {/* The newsletter goes out past every HIVE, so its box wears the house
               cream rather than any one HIVE's colour. Nat's draft opens from
@@ -2400,67 +2158,12 @@ export default function AdminScreen() {
         </View>
       </BounceScrollView>
 
-      {/* Survey Create Modal */}
-      <Modal visible={showSurveyModal} animationType="slide" transparent onRequestClose={() => setShowSurveyModal(false)}>
-        <ModalBackdrop onClose={() => setShowSurveyModal(false)} style={{ justifyContent: 'flex-end' }}>
-          {/* The Survey Editor next door already had a ceiling and a scroll;
-              this one, which is the same sheet with a date picker in it, had
-              neither — so Create Survey was the button that went missing. */}
-          <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: sheetMaxHeight, overflow: 'hidden' }}>
-            <BounceScrollView contentContainerStyle={{ padding: sheetPadding }} keyboardShouldPersistTaps="handled">
-            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 20, color: '#2d2d2d', marginBottom: 16 }}>Create Survey</Text>
-            {/* A survey's name and its description are both things a person
-                writes in words, so they are the shared box with the mic inside
-                it rather than a field with a mic welded underneath. */}
-            <ComposerBar
-              variant="form"
-              containerClassName="mb-3"
-              label="Survey title"
-              value={surveyTitle}
-              onChangeText={setSurveyTitle}
-              multiline={false}
-            />
-            <ComposerBar
-              variant="form"
-              containerClassName="mb-3"
-              label="Description (optional)"
-              value={surveyDescription}
-              onChangeText={setSurveyDescription}
-              minHeight={72}
-            />
-            <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 16 }}>
-              <View style={{ flex: 2, minWidth: 180 }}>
-                <EventDatePicker
-                  value={surveyDueDate}
-                  onChange={setSurveyDueDate}
-                />
-              </View>
-              <SurveyTimePicker
-                value={surveyDueTime}
-                onChange={setSurveyDueTime}
-              />
-            </View>
-            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9ca3af', marginBottom: 16 }}>
-              💡 After creating, ask Clive to help you build questions for this survey.
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Pressable onPress={() => setShowSurveyModal(false)} style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={createQuickSurvey}
-                disabled={!surveyTitle.trim() || savingSurvey}
-                style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: surveyTitle.trim() && !savingSurvey ? 1 : 0.4 }}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white', textAlign: 'center' }}>
-                  {savingSurvey ? 'Creating...' : 'Create Survey'}
-                </Text>
-              </Pressable>
-            </View>
-            </BounceScrollView>
-          </View>
-        </ModalBackdrop>
-      </Modal>
+      {/* THE CREATE-SURVEY SHEET IS GONE, with the box that opened it.
+          Nothing else in the app could reach it, and a builder nobody can open
+          is the "retired feature that is still callable" shape CLAUDE.md warns
+          about. Surveys still get made — Nat asks a person, which is exactly
+          what she said she would do. The editor next door still edits every
+          question of every check-in that exists. */}
 
       {/* Survey Editor Modal */}
       <Modal visible={!!editingSurvey} animationType="slide" transparent onRequestClose={closeSurveyEditor}>

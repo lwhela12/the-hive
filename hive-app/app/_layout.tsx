@@ -22,6 +22,7 @@ import { clearBoardNavigationState } from '../lib/boardNavigation';
 import { HIVE_WIDE_ROUTE } from '../lib/navigation';
 import { resetHomeNavigationState } from '../lib/homeNavigation';
 import type { Profile, Community, UserRole } from '../types';
+import { ArrivalScreen, markAppArrived } from '../components/ui/ThinkingBee';
 import { MaintenanceScreen } from '../components/ui/MaintenanceScreen';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { routeAfterHiveSwitch } from '../lib/hiveSwitchRoute';
@@ -46,17 +47,20 @@ import { HIVE_SKIN, SPACE_SKIN } from '../lib/pageSkin';
 // The answer is knowable before React boots, so take it. Everything below reads
 // storage the browser already holds, synchronously, with no request:
 //
-//   1. `hive:wide` set        → standing at HIVE-Wide right now (a reload)
-//   2. `hive:confirmed` set   → a HIVE was picked in this tab, so no
-//   3. on /join               → an invite lands you INSIDE the HIVE you joined
-//   4. a saved sign-in exists → fresh tab, and the app's own rule below is that
+//   1. on /login or /callback → the sign-in screen, whoever you are, and it is
+//                               dark brown
+//   2. `hive:wide` set        → standing at HIVE-Wide right now (a reload)
+//   3. `hive:confirmed` set   → a HIVE was picked in this tab, so a HIVE
+//   4. on /join               → an invite lands you INSIDE the HIVE you joined,
+//                               and the join screen is cream, so a HIVE
+//   5. a saved sign-in exists → fresh tab, and the app's own rule below is that
 //                               everybody lands at HIVE-Wide
-//   5. otherwise              → signed out, heading for the door
+//   6. otherwise              → signed out, so the door
 //
-// Rules 2 and 4 are not a guess: they are exactly the `!hasConfirmedHive()`
+// Rules 3 and 5 are not a guess: they are exactly the `!hasConfirmedHive()`
 // branch further down this file, read a second early. If that branch ever
 // changes, this must change with it — AND SO MUST public/index.html, which runs
-// the same five lines in plain JavaScript so the very first frame the browser
+// the same six lines in plain JavaScript so the very first frame the browser
 // paints is already the right colour. The two must agree or the flash comes
 // back in the gap between them.
 //
@@ -64,21 +68,36 @@ import { HIVE_SKIN, SPACE_SKIN } from '../lib/pageSkin';
 // down; the real answer arrives a moment later and overwrites it, so a wrong
 // guess costs one fade, never a wrong place.
 // ---------------------------------------------------------------------------
-function headingToHiveWide(): boolean {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+type Arriving = 'space' | 'door' | 'hive';
+
+function headingTo(): Arriving {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return 'hive';
+  const path = window.location.pathname;
+  if (path === '/login' || path === '/callback') return 'door';
   try {
-    if (isWholeHiveSelected()) return true;
-    if (hasConfirmedHive()) return false;
-    if (window.location.pathname.startsWith('/join')) return false;
+    if (isWholeHiveSelected()) return 'space';
+    if (hasConfirmedHive()) return 'hive';
+    if (path.startsWith('/join')) return 'hive';
     // The saved sign-in. On web AsyncStorage is plain localStorage under the key
     // as written, and lib/supabase.ts names this one `the-hive-auth`.
-    return !!window.localStorage.getItem('the-hive-auth');
+    return window.localStorage.getItem('the-hive-auth') ? 'space' : 'door';
   } catch {
     // Private browsing can throw on the storage itself. A HIVE is the safe
     // answer — it is what every arrival looked like before today.
-    return false;
+    return 'hive';
   }
 }
+
+/**
+ * The dark brown behind the sign-in screen.
+ *
+ * Named here, next to the two page worlds, because three surfaces have to agree
+ * on it now: this file's arrival screen, app/(auth)/login.tsx, and the plain
+ * CSS in public/index.html which paints it before any of this exists. It is not
+ * in lib/pageSkin.ts on purpose — that is the palette for pages INSIDE HIVE,
+ * and the door is the outside of the building.
+ */
+export const DOOR_DARK = '#33271a';
 
 // ---------------------------------------------------------------------------
 // The colour underneath the whole app.
@@ -108,7 +127,6 @@ const SPACE_NAV_THEME = {
 // Sprouts' and so the list of who still has a key sits next to the switch.
 // ---------------------------------------------------------------------------
 import { useFonts } from 'expo-font';
-import { ThinkingBee } from '../components/ui/ThinkingBee';
 // Four weights, asked for by name.
 //
 // Reaching into '@expo-google-fonts/libre-baskerville' takes its index, which
@@ -276,31 +294,16 @@ function RootLayoutInner() {
   // Whole HIVE is a place you can stand, not a HIVE you belong to — see the
   // note on `wholeHive` in lib/hooks/useAuth.ts for why it is not an id.
   // Seeded from where this person is about to land, so the first frame the app
-  // draws is already the right colour — see headingToHiveWide() at the top.
-  const [wholeHive, setWholeHiveState] = useState<boolean>(() => headingToHiveWide());
+  // draws is already the right colour — see headingTo() at the top.
+  // The reading public/index.html made before React existed, kept so the app's
+  // own arrival screen can wear the same colour the splash is already wearing.
+  const [bootGuess] = useState<Arriving>(() => headingTo());
+  const [wholeHive, setWholeHiveState] = useState<boolean>(() => bootGuess === 'space');
   const setWholeHive = useCallback((next: boolean) => {
     setWholeHiveSelected(next);
     setWholeHiveState(next);
   }, []);
 
-  // Keep the page itself in step with the world the member is standing in.
-  //
-  // public/index.html sets `data-hive-boot` once, from a guess made before React
-  // existed. Everything outside React's own tree hangs off it: the colour behind
-  // the page when a phone rubber-bands past the end of a list, the browser's
-  // scrollbars and form furniture (`color-scheme`), and the address bar. Left
-  // alone it would stay at whatever the guess was — so stepping down from
-  // HIVE-Wide into a HIVE would leave dark scrollbars on a cream page.
-  //
-  // `wholeHive` is the truth, so hand it over every time it changes.
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-    const root = document.documentElement;
-    if (wholeHive) root.setAttribute('data-hive-boot', 'space');
-    else root.removeAttribute('data-hive-boot');
-    const themeColor = document.querySelector('meta[name="theme-color"]');
-    if (themeColor) themeColor.setAttribute('content', wholeHive ? '#07080F' : '#bd9348');
-  }, [wholeHive]);
   const [communityRole, setCommunityRole] = useState<UserRole | null>(null);
   const [memberships, setMemberships] = useState<MembershipWithCommunity[]>([]);
   const [hivePickerOpen, setHivePickerOpen] = useState<boolean>(false);
@@ -336,6 +339,83 @@ function RootLayoutInner() {
     }
   }, [fontError]);
   const fontsSettled = fontsLoaded || !!fontError || fontWaitOver;
+
+  const atTheDoor = pathname === '/login' || pathname === '/callback';
+
+  // -------------------------------------------------------------------------
+  // The last one out turns the splash off.
+  //
+  // The screens a member actually reads say "I am here" themselves — see
+  // markAppArrived() in components/ui/ThinkingBee.tsx, called by
+  // app/(app)/_layout.tsx and app/(auth)/login.tsx. This is the net underneath
+  // them, and it exists for the screens that do not know about any of this: an
+  // invite at /join is the one that matters, and it is somebody's very first
+  // sight of HIVE.
+  //
+  // What it waits for is the app to stop CHANGING the page. Once the typefaces
+  // and the saved sign-in are both settled, it watches for content appearing
+  // inside #root and then hands over as soon as nothing new has appeared for a
+  // beat. Waiting for the first change matters as much as the quiet: without it
+  // this would fire in the middle of a screen's code still downloading, which is
+  // precisely the empty gap the splash is there to cover.
+  //
+  // It watches only for elements arriving and leaving, never for style changes,
+  // so a bee flying underneath does not read as the app still working.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    if (!fontsSettled || loading) return;
+    const root = document.getElementById('root');
+    if (!root) return;
+
+    const QUIET_MS = 600;
+    let quiet: ReturnType<typeof setTimeout> | undefined;
+    const watcher = new MutationObserver(() => {
+      if (quiet) clearTimeout(quiet);
+      quiet = setTimeout(markAppArrived, QUIET_MS);
+    });
+    watcher.observe(root, { childList: true, subtree: true });
+
+    return () => {
+      watcher.disconnect();
+      if (quiet) clearTimeout(quiet);
+    };
+  }, [fontsSettled, loading]);
+
+  // Keep the page itself in step with the world the member is standing in.
+  //
+  // public/index.html sets `data-hive-boot` once, from a guess made before React
+  // existed. Everything outside React's own tree hangs off it: the colour behind
+  // the page when a phone rubber-bands past the end of a list, the browser's
+  // scrollbars and form furniture (`color-scheme`), and the address bar. Left
+  // alone it would stay at whatever the guess was — so stepping down from
+  // HIVE-Wide into a HIVE would leave dark scrollbars on a cream page.
+  //
+  // It waits for `loading` to finish before saying anything. While the saved
+  // sign-in is still being read the app knows less than the guess did — `session`
+  // is null for everybody, signed in or not — so correcting the guess at that
+  // point would repaint a right answer with a wrong one, which is the flash all
+  // over again. Once auth has settled the app knows more, and takes over.
+  //
+  // The door comes first, because standing at the sign-in screen is a fact about
+  // which page is on screen rather than about which world you belong to. A
+  // member who is already signed in and taps "Member log in" on the public site
+  // lands here, and this screen is dark brown for them too.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    if (loading) return;
+    const standing: Arriving = atTheDoor ? 'door' : wholeHive ? 'space' : 'hive';
+    const root = document.documentElement;
+    if (standing === 'hive') root.removeAttribute('data-hive-boot');
+    else root.setAttribute('data-hive-boot', standing);
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) {
+      themeColor.setAttribute(
+        'content',
+        standing === 'space' ? '#07080F' : standing === 'door' ? '#33271A' : '#bd9348'
+      );
+    }
+  }, [wholeHive, loading, session, atTheDoor]);
 
   // Guard same-user duplicate loads while still allowing account switches to win.
   const initializingRef = useRef(false);
@@ -706,8 +786,15 @@ function RootLayoutInner() {
   // Same colour as public/index.html's boot splash, from the same answer, so the
   // browser's first frame, this screen and the loaded app are one colour all the
   // way through.
+  //
+  // The door is the third answer, added 2026-08-06. Somebody signed out can only
+  // be on their way to the sign-in screen, and that screen is dark brown, so a
+  // gold wait in front of it was a colour change nobody needed. `bootGuess` is
+  // read once, on the first render, because it is the same reading the splash
+  // made — and the whole point is that the two agree.
   // -------------------------------------------------------------------------
-  const arrivalBackground = wholeHive ? SPACE_SKIN.page : HIVE_GOLD;
+  const arrivalBackground =
+    bootGuess === 'door' ? DOOR_DARK : wholeHive ? SPACE_SKIN.page : HIVE_GOLD;
 
   // The door, before anything else renders.
   //
@@ -722,25 +809,19 @@ function RootLayoutInner() {
   if (HIVE_CLOSED && !hasBypassTicket()) {
     const keeperIsHere = isHiveKeeper(session?.user?.email);
     if (!keeperIsHere) {
-      if (loading) {
-        return (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: arrivalBackground }}>
-            <ThinkingBee />
-          </View>
-        );
-      }
+      if (loading) return <ArrivalScreen background={arrivalBackground} />;
       if (fontsSettled) return <MaintenanceScreen />;
     }
   }
 
-  // Show loading screen while fonts load
-  if (!fontsSettled) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: arrivalBackground }}>
-        <ThinkingBee />
-      </View>
-    );
-  }
+  // Waiting for the typefaces.
+  //
+  // In a browser this draws the colour and NOT a bee, because the boot splash in
+  // public/index.html is still on top with a bee already flying. Drawing a
+  // second one underneath is how the handover became visible: the splash faded,
+  // this one appeared in its place, and the flight restarted. On iOS there is no
+  // HTML splash, so ArrivalScreen draws the bee there. (2026-08-06)
+  if (!fontsSettled) return <ArrivalScreen background={arrivalBackground} />;
 
   // The connection gave out before HIVE could read who is signed in. This is
   // the same gold splash the member was already looking at, now with words on

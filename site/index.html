@@ -7,6 +7,17 @@
 <meta name="description" content="A HIVE is a small group built on high-definition wishing: work out what you actually want, say it out loud, and let the people around you grant it. The first one meets in Las Vegas; there are more of them now.">
 <meta name="theme-color" content="#f6f4e5">
 <link rel="canonical" href="https://the-hive.app/">
+<!-- Member log in crosses to a different site, so the browser has to look up a
+     new name and open a new secure connection before it can ask for a single
+     byte. On a phone that is most of the pause between the tap and anything
+     happening, and it is all dead time — this page just sits there.
+
+     These two lines get that work done while somebody is still reading, so the
+     tap starts with the connection already open. Nothing is downloaded and
+     nothing is faked: the cream page stays exactly as it is until the members'
+     app has a screen of its own to show. (2026-08-06) -->
+<link rel="dns-prefetch" href="https://app.the-hive.app">
+<link rel="preconnect" href="https://app.the-hive.app">
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" href="/favicon.png" sizes="48x48" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -73,6 +84,10 @@ a{color:inherit}
 .login{flex:none;text-decoration:none;font-size:.85rem;font-weight:700;padding:9px 18px;border-radius:999px;
   background:var(--gold);color:#fffdf5;white-space:nowrap;transition:transform .16s,box-shadow .16s}
 .login:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(189,147,72,.36)}
+/* A phone never hovers, so on a phone this button had no way of showing that
+   the tap landed — and the next site takes a moment to arrive, so the page just
+   sat there looking untouched. This says "yes, heard you" and nothing more. */
+.login:active{transform:translateY(0) scale(.97);background:var(--deepgold)}
 .menubtn,.drawer{display:none}
 
 /* ---------- type ---------- */
