@@ -686,8 +686,8 @@ export function HiveMemberPanels({
   onOpenCheckIns,
 }: PanelChrome & {
   orderFrom?: number;
-  /** Opens the check-in editor on the Admin screen, for whichever HIVE is current. */
-  onOpenCheckIns?: () => void;
+  /** Opens the check-in editor for this exact HIVE on the Admin screen. */
+  onOpenCheckIns?: (communityId: string) => void;
 }) {
   const { memberships, communityId, switchCommunity, profile, refreshProfile } = useAuth();
   const router = useRouter();
@@ -708,10 +708,10 @@ export function HiveMemberPanels({
   // nothing at all when Nat pressed them (2026-08-04). The editor also only ever
   // holds one HIVE's surveys, which is the real reason the old panel told you to
   // "pick a HIVE in the rail first". So: switch into the HIVE, then hand Admin a
-  // flag it acts on once that HIVE's surveys have loaded.
+  // target it can verify before opening any survey.
   const openCheckInsForHive = useCallback(async (targetId: string) => {
     if (targetId !== communityId) await switchCommunity(targetId);
-    onOpenCheckIns?.();
+    onOpenCheckIns?.(targetId);
   }, [communityId, switchCommunity, onOpenCheckIns]);
   const [byHive, setByHive] = useState<Record<string, Row[]>>({});
   const [loading, setLoading] = useState(true);

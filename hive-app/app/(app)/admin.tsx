@@ -1239,7 +1239,11 @@ export default function AdminScreen() {
   const [pendingInvites, setPendingInvites] = useState<InviteRow[]>([]);
 
   // Modal states
-  const [pendingCheckInOpen, setPendingCheckInOpen] = useState(false);
+  const checkInOpenRequestIdRef = useRef(0);
+  const [pendingCheckInOpen, setPendingCheckInOpen] = useState<{
+    communityId: string;
+    requestId: number;
+  } | null>(null);
   const [showEventModal, setShowEventModal] = useState(false);
 
   // Survey management. The create-a-survey half of this went with the Surveys
@@ -1536,15 +1540,49 @@ export default function AdminScreen() {
 
   const getDefaultSurveyDue = () => getSurveyDefaultDueAt(nextSurveyMeeting);
 
-  // Waits for the switched-to HIVE's surveys to load, then opens its check-in.
-  // The tap happens before the fetch, so this cannot be a direct call.
+  // Load the requested HIVE's survey directly before opening it. `useSurveys`
+  // intentionally keeps the previous HIVE's rows while the next fetch starts;
+  // reading that cache here could put OG answers under Tech's heading.
   useEffect(() => {
     if (!pendingCheckInOpen) return;
-    const checkIn = allSurveys.find((s) => /monthly\s+check-?in/i.test(s.title));
-    if (!checkIn) return;
-    setPendingCheckInOpen(false);
-    openSurveyEditor(checkIn);
-  }, [pendingCheckInOpen, allSurveys]);
+    if (communityId !== pendingCheckInOpen.communityId) return;
+
+    let cancelled = false;
+    const target = pendingCheckInOpen;
+
+    void (async () => {
+      const { data, error } = await supabase
+        .from('surveys')
+        .select('*')
+        .eq('community_id', target.communityId)
+        .order('created_at', { ascending: false });
+
+      if (cancelled) return;
+      setPendingCheckInOpen((current) => (
+        current?.requestId === target.requestId ? null : current
+      ));
+
+      if (error) {
+        showAlert('Could not open check-in', 'Please try Questions & answers again.');
+        return;
+      }
+
+      const checkIn = ((data ?? []) as Survey[]).find((survey) => (
+        survey.community_id === target.communityId
+        && /monthly\s+check-?in/i.test(survey.title)
+      ));
+      if (!checkIn) {
+        showAlert('No monthly check-in yet', 'This HIVE does not have a monthly check-in to review.');
+        return;
+      }
+
+      openSurveyEditor(checkIn);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingCheckInOpen, communityId]);
 
   const openSurveyEditor = (survey: Survey) => {
     const defaultDueAt = getDefaultSurveyDue();
@@ -2150,7 +2188,13 @@ export default function AdminScreen() {
           {/* Every HIVE you're in, each one in its own colour. */}
           {isAdmin && (
             <HiveMemberPanels
-              onOpenCheckIns={() => setPendingCheckInOpen(true)}
+              onOpenCheckIns={(targetCommunityId) => {
+                checkInOpenRequestIdRef.current += 1;
+                setPendingCheckInOpen({
+                  communityId: targetCommunityId,
+                  requestId: checkInOpenRequestIdRef.current,
+                });
+              }}
               cellStyle={dashboardCellStyle}
               panelStyle={dashboardPanelStyle}
               bodyStyle={dashboardPanelBodyStyle}
