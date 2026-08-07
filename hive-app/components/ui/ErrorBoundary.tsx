@@ -2,6 +2,7 @@ import { Component, type ReactNode } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { HIVE_SKIN } from '../../lib/pageSkin';
 import { HIVE_GOLD } from '../../lib/hiveBrand';
+import { isStaleBundleError, recoverFromStaleBundle } from '../../lib/staleBundle';
 
 /**
  * The net under the whole app.
@@ -26,16 +27,30 @@ type Props = {
 
 type State = {
   error: Error | null;
+  recovering: boolean;
 };
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
+  state: State = { error: null, recovering: false };
 
   static getDerivedStateFromError(error: Error): State {
-    return { error };
+    // A piece of the app arriving from an older build is not a fault the member
+    // can do anything about, and it is the commonest thing to land here the
+    // morning after a deploy. Say nothing and fetch the new app instead — see
+    // lib/staleBundle.ts. Deciding it here rather than in componentDidCatch
+    // keeps the error screen from flashing up for the frame before the reload.
+    return { error, recovering: isStaleBundleError(error) };
   }
 
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
+    if (this.state.recovering) {
+      if (recoverFromStaleBundle('a screen was from an older build')) return;
+      // A reload already happened and it did not help, so this is a real fault
+      // wearing a stale-bundle message. Show the member the screen rather than
+      // sitting on a blank page waiting for a reload that will not come.
+      this.setState({ recovering: false });
+    }
+
     // The console is the only record we have. Keep the component stack with it:
     // the message alone rarely says which screen went down.
     console.error('[HIVE] A screen stopped drawing:', error, info?.componentStack);
@@ -50,12 +65,19 @@ export class ErrorBoundary extends Component<Props, State> {
       window.location.reload();
       return;
     }
-    this.setState({ error: null });
+    this.setState({ error: null, recovering: false });
   };
 
   render() {
-    const { error } = this.state;
+    const { error, recovering } = this.state;
     if (!error) return this.props.children;
+
+    // Mid-recovery: the new app is on its way and this page is about to be
+    // replaced. Hold the page's own colour so the last thing the member sees is
+    // HIVE rather than a warning about something they cannot fix.
+    if (recovering) {
+      return <View style={{ flex: 1, backgroundColor: HIVE_SKIN.page }} />;
+    }
 
     return (
       <View

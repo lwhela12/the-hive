@@ -25,6 +25,7 @@ import type { Profile, Community, UserRole } from '../types';
 import { ArrivalScreen, markAppArrived } from '../components/ui/ThinkingBee';
 import { MaintenanceScreen } from '../components/ui/MaintenanceScreen';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
+import { watchForStaleBundle } from '../lib/staleBundle';
 import { routeAfterHiveSwitch } from '../lib/hiveSwitchRoute';
 import { HIVE_CLOSED, isHiveKeeper, hasBypassTicket } from '../lib/maintenance';
 import { HIVE_GOLD } from '../lib/hiveBrand';
@@ -233,6 +234,12 @@ const isLocalWeb =
   Platform.OS === 'web' &&
   typeof window !== 'undefined' &&
   ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+// Listen before anything renders. A route's piece failing to arrive rejects a
+// promise outside the render tree, so the error boundary never hears it and the
+// app just stops on the splash — which is what Nat sat in front of on
+// 2026-08-07. See lib/staleBundle.ts.
+watchForStaleBundle();
 
 // Register service worker for PWA home screen caching (web only).
 // Local development should always use fresh bundles, so clear any old dev worker.

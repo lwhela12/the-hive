@@ -1,8 +1,14 @@
 // Cache names: bump these when a deployed app shell must replace old clients.
-const APP_CACHE = 'hive-app-v39-broadcast-mentions';
-const STATIC_CACHE = 'hive-static-v39-broadcast-mentions';
+//
+// v40 exists to throw away what v39 had swallowed. Until 2026-08-07 a missing
+// file came back from the server as `200` with an HTML page in it, and the
+// static branch below cached anything with an ok status — so members were
+// carrying an HTML page filed under a .js address, cache-first, for good. A
+// deploy alone could never have shifted it; only a new cache name can.
+const APP_CACHE = 'hive-app-v40-honest-404';
+const STATIC_CACHE = 'hive-static-v40-honest-404';
 const REFRESH_PARAM = 'hive_refresh';
-const REFRESH_TOKEN = 'broadcast-mentions-v39';
+const REFRESH_TOKEN = 'honest-404-v40';
 
 // ─── Install ────────────────────────────────────────────────────────────────
 // Pre-cache the app shell HTML so the next launch is instant
@@ -74,7 +80,14 @@ self.addEventListener('fetch', (event) => {
         const cached = await cache.match(request);
         if (cached) return cached;                        // instant on repeat visits
         const response = await fetch(request);
-        if (response.ok) cache.put(request, response.clone());
+
+        // An ok status is not proof the right thing came back. A single-page
+        // app rewrites unknown paths to index.html, so a file this build no
+        // longer ships answers 200 with HTML — and caching that forever, under
+        // a .js address, is how one bad morning becomes permanent. Store only
+        // what is not a web page.
+        const isHtml = (response.headers.get('content-type') || '').includes('text/html');
+        if (response.ok && !isHtml) cache.put(request, response.clone());
         return response;
       })
     );
