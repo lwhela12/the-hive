@@ -28,6 +28,12 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-07-fetches-itself-again',
+    date: '2026-08-07',
+    title: 'If HIVE ever stops on the bee, it now goes and gets itself again',
+    detail: 'It used to sit there, and then tell you something had tripped up. It fetches the newest version and carries on instead.',
+  },
+  {
     id: '2026-08-06-one-tap-sign-in',
     date: '2026-08-06',
     title: 'Signing in is one tap now',
