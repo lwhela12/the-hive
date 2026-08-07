@@ -57,6 +57,7 @@ import { GrantWishModal } from '../../components/hive/GrantWishModal';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { parseAmericanDate } from '../../lib/dateUtils';
 import type { Profile, Wish } from '../../types';
+import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns } from '../../lib/checkIns';
 
 import { confirmAction, showAlert } from '../../lib/showAlert';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -657,7 +658,7 @@ export default function MonthlyTuneupScreen() {
   // The halfway nudge deep-links here with mode=midpoint.
   const isMidpoint = mode === 'midpoint';
   const steps = isMidpoint ? MIDPOINT_STEPS : STEPS;
-  const { profile, communityId } = useAuth();
+  const { profile, community, communityId } = useAuth();
 
   // Reading + the quarterly profile pass both write to `profiles`, so they
   // share one dirty flag and one save that runs when the tune-up finishes.
@@ -3338,6 +3339,61 @@ export default function MonthlyTuneupScreen() {
         return null;
     }
   };
+
+  // This deck is OG HIVE's operating rhythm, not a generic template. Keep the
+  // route boundary here as well as in Admin so a bookmarked/deep-linked URL
+  // cannot open OG questions while somebody is standing in Tech or Production.
+  if (!hasTailoredCheckIns(community)) {
+    return (
+      <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Ionicons name="time-outline" size={34} color="#8a6b30" style={{ marginBottom: 14 }} />
+          <Text
+            accessibilityRole="header"
+            style={{
+              fontFamily: 'LibreBaskerville_700Bold',
+              fontSize: 22,
+              color: '#2d2d2d',
+              textAlign: 'center',
+              marginBottom: 10,
+            }}
+          >
+            Check-ins
+          </Text>
+          <Text
+            accessibilityRole="text"
+            style={{
+              maxWidth: 420,
+              fontFamily: 'Lato_400Regular',
+              fontSize: 16,
+              lineHeight: 24,
+              color: '#7d715f',
+              textAlign: 'center',
+              marginBottom: 26,
+            }}
+          >
+            {CHECK_INS_COMING_SOON_MESSAGE}
+          </Text>
+          <Pressable
+            onPress={leaveTuneup}
+            accessibilityRole="button"
+            accessibilityLabel={`Back to ${exit.label}`}
+            style={({ pressed }) => ({
+              backgroundColor: '#bd9348',
+              borderRadius: 14,
+              paddingHorizontal: 28,
+              paddingVertical: 13,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>
+              Back to {exit.label}
+            </Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (finished) {
     return (

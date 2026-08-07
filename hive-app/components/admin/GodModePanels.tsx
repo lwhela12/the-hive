@@ -10,6 +10,7 @@ import { formatDateMedium } from '../../lib/dateUtils';
 // here take the space skin's ink rather than asking `usePageSkin()`.
 import { SPACE_SKIN } from '../../lib/pageSkin';
 import { showAlert } from '../../lib/showAlert';
+import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns } from '../../lib/checkIns';
 import type { UserRole } from '../../types';
 
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -696,6 +697,8 @@ export function HiveMemberPanels({
   // named on this folder before opening them. This restores the old ability to
   // walk/test the real flow without making a second admin-only survey preview.
   const openMemberCheckIn = useCallback(async (targetId: string, mode?: 'midpoint') => {
+    const target = memberships.find((membership) => membership.community_id === targetId)?.community;
+    if (!hasTailoredCheckIns(target)) return;
     // `switchCommunity` also leaves HIVE-Wide. Do it even when this HIVE was
     // already selected, or a cream check-in can inherit the space palette from
     // Admin and draw cream text on cream fields.
@@ -704,7 +707,7 @@ export function HiveMemberPanels({
       pathname: '/monthly-tuneup',
       params: { from: 'admin', ...(mode ? { mode } : {}) },
     } as any);
-  }, [switchCommunity, router]);
+  }, [memberships, switchCommunity, router]);
 
   // Check-in questions live in a modal on this very screen, so there is nowhere
   // to navigate TO — routing to /admin from /admin is why both of these rows did
@@ -713,9 +716,11 @@ export function HiveMemberPanels({
   // "pick a HIVE in the rail first". So: switch into the HIVE, then hand Admin a
   // target it can verify before opening any survey.
   const openCheckInsForHive = useCallback(async (targetId: string) => {
+    const target = memberships.find((membership) => membership.community_id === targetId)?.community;
+    if (!hasTailoredCheckIns(target)) return;
     if (targetId !== communityId) await switchCommunity(targetId);
     onOpenCheckIns?.(targetId);
-  }, [communityId, switchCommunity, onOpenCheckIns]);
+  }, [memberships, communityId, switchCommunity, onOpenCheckIns]);
   const [byHive, setByHive] = useState<Record<string, Row[]>>({});
   const [loading, setLoading] = useState(true);
   const [inviteFor, setInviteFor] = useState<string | null>(null);
@@ -1038,6 +1043,7 @@ export function HiveMemberPanels({
             >
               <ScrollView style={scrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
                 {tab === 'checkins' ? (
+                  hasTailoredCheckIns(m.community) ? (
                   /* THE CHECK-INS THIS HIVE RUNS.
                      One door, then the shape of the year underneath it.
 
@@ -1147,6 +1153,39 @@ export function HiveMemberPanels({
                         })}
                     <View style={{ height: 10 }} />
                   </View>
+                  ) : (
+                    <View
+                      accessible
+                      accessibilityRole="text"
+                      accessibilityLabel={CHECK_INS_COMING_SOON_MESSAGE}
+                      style={{
+                        minHeight: 150,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingHorizontal: 24,
+                        paddingVertical: 30,
+                      }}
+                    >
+                      <Ionicons
+                        name="time-outline"
+                        size={24}
+                        color={accentOnDark(accent)}
+                        style={{ marginBottom: 10 }}
+                      />
+                      <Text
+                        style={{
+                          maxWidth: 360,
+                          fontFamily: 'Lato_700Bold',
+                          fontSize: 14,
+                          lineHeight: 21,
+                          color: '#F6F4E5',
+                          textAlign: 'center',
+                        }}
+                      >
+                        {CHECK_INS_COMING_SOON_MESSAGE}
+                      </Text>
+                    </View>
+                  )
                 ) : (
                 <>
                 {inviting ? (
