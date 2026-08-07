@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "doctor": "npx expo-doctor",
     "export:ios": "expo export --platform ios --output-dir .expo-export/ios",
+    "verify:web-export": "node scripts/verify-web-export.mjs dist",
     "release:check": "npm run typecheck && npm run doctor"
   },
   "dependencies": {

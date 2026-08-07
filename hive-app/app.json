@@ -52,15 +52,7 @@
       "backgroundColor": "#bd9348"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "asyncRoutes": {
-            "web": "production",
-            "default": false
-          }
-        }
-      ],
+      "expo-router",
       "expo-secure-store",
       [
         "expo-av",
