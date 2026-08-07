@@ -457,10 +457,10 @@ export function NewsletterPanel({
       <Panel
         title="Newsletter"
         tabs={[
+          { key: 'shoutouts', label: `Shout-outs (${shoutOuts.length})` },
           // The draft quotes members before Nat has chosen what stays in, so
           // the tab itself is hers alone. Anyone else never sees the door.
           ...(profile?.is_owner ? [{ key: 'write', label: 'Write this month’s' }] : []),
-          { key: 'shoutouts', label: `Shout-outs (${shoutOuts.length})` },
           { key: 'signed', label: `Signed up (${active.length})` },
         ]}
         activeTab={tab}
@@ -622,34 +622,10 @@ export function NewsletterPanel({
  * names (Nat 2026-08-03).
  */
 /**
- * The meeting-day surfaces, which all belong to exactly one HIVE.
- *
- * They were moved off Admin onto the Meetings tab on 2026-08-01 because they
- * are what you reach for on meeting day rather than settings you configure —
- * and then Admin could only point at them with a sentence, because Admin is
- * reached from HIVE-Wide and Meetings is hidden at HIVE-Wide. Naming the HIVE
- * first, as a tab, is what makes them linkable again.
+ * Admin owns people and check-in configuration. Meeting Helper deliberately
+ * stays in each HIVE's Meetings navigation instead of being duplicated here
+ * (Nat 2026-08-07).
  */
-// The newsletter is NOT in here (Nat 2026-08-04: "we only want it in one spot,
-// the newsletter box").
-//
-// It was duplicated — once here and once in the Newsletter panel — and the copy
-// here was the wrong one on the merits as well. There is ONE Buzz across all the
-// HIVEs; that is why The Buzz lives at HIVE-Wide and nowhere else. Hanging a
-// "Newsletter draft" inside OG's folder said OG has a newsletter of its own,
-// beside Tech's and Production's, which is the opposite of what it is.
-//
-// Everything left in this list genuinely belongs to exactly one HIVE.
-//
-// One tool, now. Nat, 2026-08-06: *"Meeting tools should only be the meeting
-// helper."* The Monthly Tune-up that sat beside it is the check-in members fill
-// in, so it was the check-ins listed under a meeting heading — and the Check-ins
-// tab next door already says when it goes out and holds every answer. The list
-// stays a list because a second meeting-day tool is a one-line addition.
-const HIVE_TOOLS: { route: string; emoji: string; label: string; hint: string }[] = [
-  { route: '/meeting-helper', emoji: '🗓️', label: 'Meeting Helper', hint: 'Run the meeting, live' },
-];
-
 /**
  * The check-ins a HIVE runs, and when each one goes out.
  *
@@ -676,9 +652,26 @@ const HIVE_TOOLS: { route: string; emoji: string; label: string; hint: string }[
  * asked to see the shape of the year, and a line that quietly looked live would
  * have her waiting on answers that never come.
  */
-const CHECK_IN_SCHEDULE: { when: string; what: string; live: boolean }[] = [
-  { when: 'Three days before the meeting', what: 'and a last call on the day', live: true },
-  { when: 'The last three days of the month', what: 'shout-outs for the newsletter', live: true },
+const CHECK_IN_SCHEDULE: {
+  when: string;
+  what: string;
+  live: boolean;
+  actionLabel?: string;
+  mode?: 'midpoint';
+}[] = [
+  {
+    when: 'Three days before the meeting',
+    what: 'open the monthly tune-up',
+    live: true,
+    actionLabel: 'Test or fill out the monthly check-in',
+  },
+  {
+    when: 'The last three days of the month',
+    what: 'shout-outs for the newsletter',
+    live: true,
+    actionLabel: 'Test or fill out the halfway check-in',
+    mode: 'midpoint',
+  },
   { when: 'Three days before the quarter ends', what: 'coming soon', live: false },
   { when: 'Three days before the year ends', what: 'coming soon', live: false },
 ];
@@ -699,13 +692,15 @@ export function HiveMemberPanels({
   const { memberships, communityId, switchCommunity, profile, refreshProfile } = useAuth();
   const router = useRouter();
 
-  // Every tool link switches into the HIVE first, then opens the page. Without
-  // the switch you would land on whichever HIVE you were last in and see its
-  // numbers under another HIVE's name — the exact confusion the tabs exist to
-  // remove.
-  const openToolInHive = useCallback(async (targetId: string, route: string) => {
+  // The member-facing check-ins are shared routes, so switch into the HIVE
+  // named on this folder before opening them. This restores the old ability to
+  // walk/test the real flow without making a second admin-only survey preview.
+  const openMemberCheckIn = useCallback(async (targetId: string, mode?: 'midpoint') => {
     if (targetId !== communityId) await switchCommunity(targetId);
-    router.push({ pathname: route as any, params: { from: 'admin' } });
+    router.push({
+      pathname: '/monthly-tuneup',
+      params: { from: 'admin', ...(mode ? { mode } : {}) },
+    } as any);
   }, [communityId, switchCommunity, router]);
 
   // Check-in questions live in a modal on this very screen, so there is nowhere
@@ -1000,11 +995,10 @@ export function HiveMemberPanels({
             <Panel
               title={name}
               // Short labels, because the whole row has to fit the folder's top
-              // edge on a phone. "Meeting tools" became "Meeting" the day the
-              // tab came down to one tool.
+              // edge on a phone. Meeting Helper lives in the HIVE's Meetings
+              // navigation, not on this Admin folder.
               tabs={[
                 { key: 'members', label: `Members (${rows.length})` },
-                { key: 'tools', label: 'Meeting' },
                 { key: 'checkins', label: 'Check-ins' },
               ]}
               activeTab={tab}
@@ -1027,43 +1021,20 @@ export function HiveMemberPanels({
                 onPress: () => {
                   setInviteEmail('');
                   setInviteRole('member');
-                  setInviteFor(inviting ? null : m.community_id);
+                  if (inviting) {
+                    setInviteFor(null);
+                    return;
+                  }
+                  // The form lives in Members. Moving there in the same press
+                  // makes the action visibly answer instead of changing hidden
+                  // state while Check-ins is still on screen.
+                  setTabFor((prev) => ({ ...prev, [m.community_id]: 'members' }));
+                  setInviteFor(m.community_id);
                 },
               } : undefined}
             >
               <ScrollView style={scrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
-                {/* MEETING TOOLS, for this HIVE.
-                    They used to live in a panel of their own that could not name
-                    a HIVE — so it said "pick a HIVE in the rail first", from a
-                    page the rail cannot reach a HIVE from. Here the HIVE is
-                    already chosen: every link switches into it on the way. */}
-                {tab === 'tools' ? (
-                  <View style={{ paddingVertical: 6 }}>
-                    {HIVE_TOOLS.map((tool) => (
-                      <Pressable
-                        key={tool.route}
-                        onPress={() => void openToolInHive(m.community_id, tool.route)}
-                        style={({ pressed }) => ({
-                          flexDirection: 'row', alignItems: 'center', gap: 10,
-                          paddingHorizontal: 14, paddingVertical: 11,
-                          backgroundColor: pressed ? skin.inset : 'transparent',
-                          borderBottomWidth: 1, borderBottomColor: skin.hairline,
-                        })}
-                      >
-                        <Text style={{ fontSize: 15 }}>{tool.emoji}</Text>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#F6F4E5' }}>
-                            {tool.label}
-                          </Text>
-                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
-                            {tool.hint}
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={15} color="rgba(246,244,229,0.5)" />
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : tab === 'checkins' ? (
+                {tab === 'checkins' ? (
                   /* THE CHECK-INS THIS HIVE RUNS.
                      One door, then the shape of the year underneath it.
 
@@ -1110,42 +1081,67 @@ export function HiveMemberPanels({
                     >
                       When they go out
                     </Text>
-                    {CHECK_IN_SCHEDULE.map((step) => (
-                      <View
-                        key={step.when}
-                        style={{
-                          flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-                          paddingHorizontal: 14, paddingVertical: 5,
-                        }}
-                      >
-                        {/* A dot in the HIVE's colour for the ones that send, an
-                            outline for the ones that do not — so which is which
-                            survives being read at arm's length.
+                    {CHECK_IN_SCHEDULE.map((step) => {
+                          const content = (
+                            <>
+                              <View
+                                style={{
+                                  width: 6, height: 6, borderRadius: 3, marginTop: 5,
+                                  backgroundColor: step.live ? accent : 'transparent',
+                                  borderWidth: step.live ? 0 : 1,
+                                  borderColor: 'rgba(246,244,229,0.45)',
+                                }}
+                              />
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={{
+                                    fontFamily: step.live ? 'Lato_700Bold' : 'Lato_400Regular',
+                                    fontSize: 12, lineHeight: 17,
+                                    fontStyle: step.live ? 'normal' : 'italic',
+                                    color: step.live ? '#F6F4E5' : 'rgba(246,244,229,0.45)',
+                                  }}
+                                >
+                                  {step.when}
+                                  <Text style={{ color: 'rgba(246,244,229,0.5)' }}> · {step.what}</Text>
+                                </Text>
+                                {step.actionLabel ? (
+                                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 10.5, color: 'rgba(246,244,229,0.55)', marginTop: 1 }}>
+                                    {step.actionLabel}
+                                  </Text>
+                                ) : null}
+                              </View>
+                              {step.actionLabel ? (
+                                <Ionicons name="chevron-forward" size={14} color="rgba(246,244,229,0.5)" />
+                              ) : null}
+                            </>
+                          );
 
-                            Six points down, which is the middle of an 18-point
-                            first line. These lines wrap on a phone, and a dot
-                            centred on a two-line row floats between them. */}
-                        <View
-                          style={{
-                            width: 6, height: 6, borderRadius: 3, marginTop: 6,
-                            backgroundColor: step.live ? accentOnDark(accent) : 'transparent',
-                            borderWidth: 1,
-                            borderColor: step.live ? accentOnDark(accent) : 'rgba(246,244,229,0.34)',
-                          }}
-                        />
-                        <Text
-                          style={{
-                            flex: 1, fontSize: 12.5, lineHeight: 18,
-                            fontFamily: 'Lato_400Regular',
-                            fontStyle: step.live ? 'normal' : 'italic',
-                            color: step.live ? '#F6F4E5' : 'rgba(246,244,229,0.45)',
-                          }}
-                        >
-                          {step.when}
-                          <Text style={{ color: 'rgba(246,244,229,0.5)' }}> · {step.what}</Text>
-                        </Text>
-                      </View>
-                    ))}
+                          return step.actionLabel ? (
+                            <Pressable
+                              key={step.when}
+                              onPress={() => void openMemberCheckIn(m.community_id, step.mode)}
+                              accessibilityRole="button"
+                              accessibilityLabel={step.actionLabel}
+                              style={({ pressed }) => ({
+                                flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+                                paddingHorizontal: 14, paddingVertical: 9,
+                                backgroundColor: pressed ? skin.inset : 'transparent',
+                              })}
+                            >
+                              {content}
+                            </Pressable>
+                          ) : (
+                            <View
+                              key={step.when}
+                              style={{
+                                flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+                                paddingHorizontal: 14, paddingVertical: 5,
+                              }}
+                            >
+                              {content}
+                            </View>
+                          );
+                        })}
                     <View style={{ height: 10 }} />
                   </View>
                 ) : (

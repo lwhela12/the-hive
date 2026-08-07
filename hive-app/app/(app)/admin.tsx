@@ -1249,6 +1249,7 @@ export default function AdminScreen() {
     canEditHoneyPot ? profile?.id : undefined
   );
   const [editingSurvey, setEditingSurvey] = useState<Survey | null>(null);
+  const [surveyEditorMode, setSurveyEditorMode] = useState<'responses' | 'settings'>('responses');
   const [surveyEditorTitle, setSurveyEditorTitle] = useState('');
   const [surveyEditorDescription, setSurveyEditorDescription] = useState('');
   const [surveyEditorDueDate, setSurveyEditorDueDate] = useState('');
@@ -1548,6 +1549,7 @@ export default function AdminScreen() {
   const openSurveyEditor = (survey: Survey) => {
     const defaultDueAt = getDefaultSurveyDue();
     questionLayoutsRef.current = {};
+    setSurveyEditorMode('responses');
     setEditingSurvey(survey);
     setSurveyResponses([]);
     setSurveyResponsesError(null);
@@ -1568,6 +1570,7 @@ export default function AdminScreen() {
     questionLayoutsRef.current = {};
     activeQuestionDragRef.current = null;
     setDraggingQuestionId(null);
+    setSurveyEditorMode('responses');
     setEditingSurvey(null);
     setSurveyEditorTitle('');
     setSurveyEditorDescription('');
@@ -2167,15 +2170,26 @@ export default function AdminScreen() {
 
       {/* Survey Editor Modal */}
       <Modal visible={!!editingSurvey} animationType="slide" transparent onRequestClose={closeSurveyEditor}>
-        <ModalBackdrop onClose={closeSurveyEditor} style={{ justifyContent: 'flex-end' }}>
+        <ModalBackdrop
+          onClose={closeSurveyEditor}
+          style={{
+            justifyContent: useMobileLayout ? 'flex-end' : 'center',
+            alignItems: 'center',
+            paddingHorizontal: useMobileLayout ? 0 : 24,
+            paddingVertical: useMobileLayout ? 0 : 24,
+          }}
+          sheetStyle={{ width: '100%', maxWidth: 1040 }}
+        >
           {/* The ceiling is points rather than a percentage — see sheetMaxHeight
               above for what the percentage was doing instead. `overflow: hidden`
               keeps the responses and questions inside the rounded top corners. */}
           <View
             style={{
+              width: '100%',
               backgroundColor: '#fffdf5',
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
+              borderRadius: 24,
+              borderBottomLeftRadius: useMobileLayout ? 0 : 24,
+              borderBottomRightRadius: useMobileLayout ? 0 : 24,
               maxHeight: sheetMaxHeight,
               overflow: 'hidden',
             }}
@@ -2188,10 +2202,10 @@ export default function AdminScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 20, color: '#2d2d2d' }}>
-                    Survey Settings
+                    Questions &amp; answers
                   </Text>
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a8060', marginTop: 4 }}>
-                    {(surveyEditorQuestions ?? []).length} question{surveyEditorQuestions.length === 1 ? '' : 's'}
+                    {editingSurvey?.title ?? 'Check-in'} · {(surveyEditorQuestions ?? []).length} question{surveyEditorQuestions.length === 1 ? '' : 's'}
                   </Text>
                 </View>
                 <Pressable
@@ -2203,7 +2217,39 @@ export default function AdminScreen() {
                 </Pressable>
               </View>
 
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                {([
+                  { key: 'responses' as const, label: 'Responses' },
+                  { key: 'settings' as const, label: 'Edit questions & schedule' },
+                ]).map((option) => {
+                  const active = surveyEditorMode === option.key;
+                  return (
+                    <Pressable
+                      key={option.key}
+                      onPress={() => setSurveyEditorMode(option.key)}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: active }}
+                      style={({ pressed }) => ({
+                        backgroundColor: active ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
+                        borderColor: active ? '#bd9348' : 'rgba(222,193,129,0.55)',
+                        borderWidth: 1,
+                        borderRadius: 999,
+                        paddingHorizontal: 13,
+                        paddingVertical: 8,
+                      })}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: active ? 'white' : '#8a6b30' }}>
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {surveyEditorMode === 'settings' ? (
+                <>
               <ComposerBar
+                tone="light"
                 variant="form"
                 containerClassName="mb-3"
                 label="Survey title"
@@ -2212,6 +2258,7 @@ export default function AdminScreen() {
                 multiline={false}
               />
               <ComposerBar
+                tone="light"
                 variant="form"
                 containerClassName="mb-3"
                 label="Description"
@@ -2248,17 +2295,20 @@ export default function AdminScreen() {
                   📅 Sync to next HIVE meeting
                 </Text>
               </Pressable>
+                </>
+              ) : null}
 
-              <View
-                style={{
+              {surveyEditorMode === 'responses' ? (
+                <View
+                  style={{
                   borderWidth: 1,
                   borderColor: 'rgba(222,193,129,0.55)',
                   borderRadius: 16,
                   backgroundColor: '#faf8f3',
                   padding: 14,
                   marginBottom: 16,
-                }}
-              >
+                  }}
+                >
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d' }}>
@@ -2520,8 +2570,11 @@ export default function AdminScreen() {
                     )}
                   </View>
                 )}
-              </View>
+                </View>
+              ) : null}
 
+              {surveyEditorMode === 'settings' ? (
+                <>
               <Pressable
                 onPress={applyMonthlyCheckInTemplate}
                 style={({ pressed }) => ({
@@ -2633,6 +2686,7 @@ export default function AdminScreen() {
                         unwraps both shapes the box can hand back: a plain
                         string when you type, an updater when you talk. */}
                     <ComposerBar
+                      tone="light"
                       variant="form"
                       containerClassName="mb-3"
                       value={question.text}
@@ -2688,6 +2742,7 @@ export default function AdminScreen() {
                       // box takes the mic as well. One choice per line: speaking
                       // adds to the line you are on, so start a new line first.
                       <ComposerBar
+                        tone="light"
                         variant="form"
                         value={(question.options ?? []).join('\n')}
                         onChangeText={(next) => updateSurveyQuestion(index, (current) => {
@@ -2742,6 +2797,8 @@ export default function AdminScreen() {
                   </Text>
                 </Pressable>
               </View>
+                </>
+              ) : null}
             </BounceScrollView>
           </View>
         </ModalBackdrop>
