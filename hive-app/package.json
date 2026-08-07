@@ -11,6 +11,7 @@
     "doctor": "npx expo-doctor",
     "export:ios": "expo export --platform ios --output-dir .expo-export/ios",
     "verify:web-export": "node scripts/verify-web-export.mjs dist",
+    "build:web": "expo export --platform web && npm run verify:web-export && node scripts/write-web-version.mjs",
     "release:check": "npm run typecheck && npm run doctor"
   },
   "dependencies": {
