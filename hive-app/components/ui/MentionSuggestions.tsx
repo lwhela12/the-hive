@@ -7,7 +7,7 @@ import {
   type MentionTarget,
 } from '../../lib/mentions';
 import { accentOnDark, HIVE_GOLD } from '../../lib/hiveBrand';
-import { usePageSkin } from '../../lib/pageSkin';
+import { HIVE_SKIN, SPACE_SKIN, usePageSkin } from '../../lib/pageSkin';
 import { HiveMark } from './HiveMark';
 import { WorldMark } from './WorldMark';
 
@@ -35,6 +35,11 @@ interface MentionSuggestionsProps {
   query?: string | null;
   loading?: boolean;
   /**
+   * A light sheet can be open while the reader is standing in HIVE-Wide.
+   * In that case the sheet, not the page behind it, owns the contrast.
+   */
+  tone?: 'light' | 'dark';
+  /**
    * How far this composer's writing travels, and which HIVEs it may name.
    * Build it with `useMentionReach()`. Left out, the picker offers the one
    * group it can be sure of — everyone who can already see this.
@@ -50,8 +55,10 @@ export function MentionSuggestions({
   query = null,
   loading = false,
   reach = null,
+  tone,
 }: MentionSuggestionsProps) {
-  const skin = usePageSkin();
+  const pageSkin = usePageSkin();
+  const skin = tone === 'light' ? HIVE_SKIN : tone === 'dark' ? SPACE_SKIN : pageSkin;
 
   // The group rows are derived here when a composer has told us its reach, so
   // the labels are right even for screens that hand their suggestions in from a
@@ -94,10 +101,10 @@ export function MentionSuggestions({
           <Ionicons
             name={loading ? 'hourglass-outline' : 'person-add-outline'}
             size={17}
-            color={skin.gold}
+            color={skin.dark ? skin.gold : '#8a6b30'}
           />
           <Text
-            style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: skin.inkSoft, marginLeft: 8 }}
+            style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: skin.dark ? skin.inkSoft : '#7f715f', marginLeft: 8 }}
           >
             {emptyLabel}
           </Text>
@@ -116,7 +123,7 @@ export function MentionSuggestions({
                 fontFamily: 'Lato_700Bold',
                 fontSize: 11,
                 textTransform: 'uppercase',
-                color: skin.gold,
+                color: skin.dark ? skin.gold : '#8a6b30',
               }}
             >
               Tag someone, or a whole HIVE
@@ -186,7 +193,7 @@ export function MentionSuggestions({
                     </Text>
                     {member.description && (
                       <Text
-                        style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: skin.inkSoft }}
+                        style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: skin.dark ? skin.inkSoft : '#7f715f' }}
                       >
                         {member.description}
                       </Text>
@@ -197,7 +204,9 @@ export function MentionSuggestions({
                       fontFamily: 'Lato_400Regular',
                       fontSize: 13,
                       marginLeft: 8,
-                      color: member.group === 'hive' ? markColour : skin.gold,
+                      color: skin.dark
+                        ? member.group === 'hive' ? markColour : skin.gold
+                        : '#8a6b30',
                     }}
                   >
                     @{handle}

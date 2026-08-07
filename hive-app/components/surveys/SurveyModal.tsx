@@ -295,6 +295,7 @@ export function SurveyModal({
                     behaves like every other box you write in — mic inside the
                     box's own border rather than on a strip welded underneath. */}
                 <ComposerBar
+                  tone="light"
                   variant="form"
                   value={response?.note ?? ''}
                   onChangeText={(next) => updateCarryForwardItem(item, {
@@ -352,8 +353,8 @@ export function SurveyModal({
               <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 22, color: '#2d2d2d', textAlign: 'center', marginBottom: 10 }}>All done!</Text>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
                 {isEditingResponse
-                  ? 'Your updated answers are saved. Clive and HIVE will be working from the latest version.'
-                  : 'Your answers are saved. Clive and HIVE will be better prepared for the meeting.'}
+                  ? 'Your updated answers are saved. HIVE will be working from the latest version.'
+                  : 'Your answers are saved for the meeting.'}
               </Text>
               <Pressable onPress={onClose} style={{ backgroundColor: '#bd9348', borderRadius: 14, paddingHorizontal: 32, paddingVertical: 14 }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>Back to HIVE</Text>

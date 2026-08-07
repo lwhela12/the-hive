@@ -266,6 +266,7 @@ export function ComposerBar({
   const micNode = (
     <VoiceMicButton
       size={20}
+      tone={tone}
       onTranscript={dictation.onTranscript}
       onInterimTranscript={dictation.onInterimTranscript}
     />
@@ -398,6 +399,7 @@ export function ComposerBar({
       onSelect={mention.selectMention}
       placement={isChat ? 'above' : 'below'}
       reach={mentionReach}
+      tone={tone}
     />
   ) : null;
 
@@ -456,6 +458,7 @@ export function ComposerBar({
           </Pressable>
           <VoiceMicButton
             size={20}
+            tone={tone}
             style={{ marginLeft: 6 }}
             onTranscript={dictation.onTranscript}
             onInterimTranscript={dictation.onInterimTranscript}

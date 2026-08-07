@@ -331,7 +331,7 @@ export function getGroupMentionSuggestions(
     if (matchesHandles(query, handles)) {
       rows.push({
         id: GROUP_ID_WIDE,
-        name: 'Everyone in every HIVE',
+        name: 'Everyone HIVE-Wide',
         handle: 'wide',
         isBroadcast: true,
         group: 'hive_wide',
@@ -530,7 +530,7 @@ export function getGroupMentionLabel(
   if (groups.length === 0) return null;
 
   const parts = groups.map((group) => {
-    if (group.kind === 'hive_wide') return 'everyone in every HIVE';
+    if (group.kind === 'hive_wide') return 'everyone HIVE-Wide';
     if (group.kind === 'room') return 'everyone in this chat';
     if (group.kind === 'here') return 'everyone who can see this';
     return `everyone in ${group.name}`;

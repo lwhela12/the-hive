@@ -696,12 +696,15 @@ export function HiveMemberPanels({
   // named on this folder before opening them. This restores the old ability to
   // walk/test the real flow without making a second admin-only survey preview.
   const openMemberCheckIn = useCallback(async (targetId: string, mode?: 'midpoint') => {
-    if (targetId !== communityId) await switchCommunity(targetId);
+    // `switchCommunity` also leaves HIVE-Wide. Do it even when this HIVE was
+    // already selected, or a cream check-in can inherit the space palette from
+    // Admin and draw cream text on cream fields.
+    await switchCommunity(targetId);
     router.push({
       pathname: '/monthly-tuneup',
       params: { from: 'admin', ...(mode ? { mode } : {}) },
     } as any);
-  }, [communityId, switchCommunity, router]);
+  }, [switchCommunity, router]);
 
   // Check-in questions live in a modal on this very screen, so there is nowhere
   // to navigate TO — routing to /admin from /admin is why both of these rows did

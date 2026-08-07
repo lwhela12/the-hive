@@ -27,7 +27,11 @@ import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { Avatar } from '../../components/ui/Avatar';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
-import { getMentionTargetHandle, type MentionTarget } from '../../lib/mentions';
+import {
+  getGroupMentionSuggestions,
+  getMentionTargetHandle,
+  type MentionTarget,
+} from '../../lib/mentions';
 import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { HiveIcon } from '../../components/ui/HiveIcon';
@@ -483,6 +487,7 @@ function HangsRecapCard({
       <View>
         <BoxHeading>{question.text}</BoxHeading>
         <ComposerBar
+          tone="light"
           variant="form"
           value={value}
           onChangeText={(next) => onChange(typeof next === 'function' ? next(value) : next)}
@@ -577,6 +582,7 @@ function HangsRecapCard({
                   </View>
                   <View style={{ paddingLeft: 26 }}>
                     <ComposerBar
+          tone="light"
                       variant="form"
                       value={byTitle[hang.title] ?? ''}
                       onChangeText={(next) => setNote(
@@ -594,6 +600,7 @@ function HangsRecapCard({
         })}
         {hasLooseNote ? (
           <ComposerBar
+          tone="light"
             variant="form"
             value={leftover}
             onChangeText={(next) => onChange(composeHangsAnswer(
@@ -664,6 +671,15 @@ export default function MonthlyTuneupScreen() {
   // The check-in and the shout-out box are one HIVE's, so "@all" is this HIVE
   // and the picker names it rather than saying "HIVE" at a world with several.
   const mentionReach = useMentionReach({ reach: 'hive' });
+  const hiveBroadcastTarget = getGroupMentionSuggestions(null, mentionReach)
+    .find((target) => target.group === 'hive') ?? {
+      id: '__broadcast_hive__',
+      name: 'Everyone in this HIVE',
+      handle: 'all',
+      isBroadcast: true,
+      group: 'hive' as const,
+    };
+  const hiveAudienceLabel = hiveBroadcastTarget.name;
   const { wishes, loading: wishesLoading, refresh: refreshWishes, grantWish } = useWishes();
   const {
     availableSurveys,
@@ -1181,7 +1197,7 @@ export default function MonthlyTuneupScreen() {
     if (!content || !profile || !communityId || newsletterPosting) return;
     const hasRecipient = newsletterMentionsEveryone || newsletterMentionedMembers.length > 0;
     if (newsletterKind === 'compliment' && !hasRecipient) {
-      setNewsletterError('Pick someone, choose Everyone, or type @ and select a name first.');
+      setNewsletterError(`Pick someone, choose ${hiveAudienceLabel}, or type @ and select a name first.`);
       return;
     }
     setNewsletterPosting(true);
@@ -2180,6 +2196,7 @@ export default function MonthlyTuneupScreen() {
           </Text>
         ) : null}
         <ComposerBar
+          tone="light"
           variant="form"
           value={hangTitle}
           onChangeText={setHangTitle}
@@ -2187,6 +2204,7 @@ export default function MonthlyTuneupScreen() {
           multiline={false}
         />
         <ComposerBar
+          tone="light"
           variant="form"
           value={hangContent}
           onChangeText={setHangContent}
@@ -2227,7 +2245,7 @@ export default function MonthlyTuneupScreen() {
       <StepHeader
         title="Calendar"
         icon={<Text style={{ fontSize: 20 }}>🗓️</Text>}
-        subtitle="Upcoming events to add? Out of town at all? Anything you add shows up in Upcoming Events for everyone."
+        subtitle="Upcoming events to add? Out of town at all? Anything you add shows up in Upcoming Events. Choose who can see it below."
       />
       <View style={[cardStyle, { gap: 10 }]}>
         <BoxHeading style={{ marginBottom: 0 }}>Add an event</BoxHeading>
@@ -2250,6 +2268,7 @@ export default function MonthlyTuneupScreen() {
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>I'm out of town</Text>
         </Pressable>
         <ComposerBar
+          tone="light"
           variant="form"
           value={eventTitle}
           onChangeText={setEventTitle}
@@ -2294,6 +2313,7 @@ export default function MonthlyTuneupScreen() {
           />
         )}
         <ComposerBar
+          tone="light"
           variant="form"
           value={eventLocation}
           onChangeText={setEventLocation}
@@ -2452,6 +2472,7 @@ export default function MonthlyTuneupScreen() {
           {wantsLog ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <ComposerBar
+          tone="light"
                 variant="form"
                 containerClassName="flex-1"
                 value={halfwayHelpLog}
@@ -2595,6 +2616,7 @@ export default function MonthlyTuneupScreen() {
         ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <ComposerBar
+          tone="light"
             variant="form"
             containerClassName="flex-1"
             value={helpIdeaContent}
@@ -2643,10 +2665,12 @@ export default function MonthlyTuneupScreen() {
     const newsletterRecipients: (MentionTarget & { avatar_url?: string | null })[] = [
       ...mentionableMembers.filter((member) => member.id !== profile?.id),
       {
+        ...hiveBroadcastTarget,
+        // This face has always inserted @all. Keep that stable so tapping it
+        // again can remove the same token, while the visible name comes from
+        // the real scoped audience target above.
         id: '__broadcast_hive__',
-        name: 'Everyone in HIVE',
         handle: 'all',
-        isBroadcast: true,
         avatar_url: null,
       },
     ];
@@ -2738,7 +2762,7 @@ export default function MonthlyTuneupScreen() {
                 {newsletterKind === 'reminder' ? 'Who should see it?' : "Who's it for?"}
               </BoxHeading>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
-                Tap one or more faces, choose Everyone, or type @ below. They all work.
+                Tap one or more faces, choose {hiveAudienceLabel}, or type @ below. They all work.
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                 {newsletterRecipients.map((member) => {
@@ -2750,7 +2774,7 @@ export default function MonthlyTuneupScreen() {
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
                       accessibilityLabel={`${selected ? 'Remove' : 'Add'} ${member.name}`}
-                      style={{ alignItems: 'center', width: 62, gap: 4 }}
+                      style={{ alignItems: 'center', width: member.isBroadcast ? 96 : 62, gap: 4 }}
                     >
                       <View
                         style={{
@@ -2772,14 +2796,16 @@ export default function MonthlyTuneupScreen() {
                         )}
                       </View>
                       <Text
-                        numberOfLines={1}
+                        numberOfLines={member.isBroadcast ? 2 : 1}
                         style={{
                           fontFamily: selected ? 'Lato_700Bold' : 'Lato_400Regular',
                           fontSize: 12,
+                          lineHeight: 15,
+                          textAlign: 'center',
                           color: selected ? '#8a6b30' : '#6b7280',
                         }}
                       >
-                        {member.isBroadcast ? 'Everyone' : member.name.trim().split(/\s+/)[0]}
+                        {member.isBroadcast ? member.name : member.name.trim().split(/\s+/)[0]}
                       </Text>
                     </Pressable>
                   );
@@ -2855,6 +2881,7 @@ export default function MonthlyTuneupScreen() {
               {showNewsletterEventComposer ? (
                 <View style={{ gap: 9, borderTopWidth: 1, borderTopColor: 'rgba(222,193,129,0.35)', paddingTop: 10 }}>
                   <ComposerBar
+          tone="light"
                     variant="form"
                     value={eventTitle}
                     onChangeText={setEventTitle}
@@ -2896,6 +2923,7 @@ export default function MonthlyTuneupScreen() {
                     />
                   ) : null}
                   <ComposerBar
+          tone="light"
                     variant="form"
                     value={eventLocation}
                     onChangeText={setEventLocation}
@@ -2937,6 +2965,7 @@ export default function MonthlyTuneupScreen() {
                 bubbles above and typing "@" here are still two doors into the
                 same mention. */}
             <ComposerBar
+          tone="light"
               variant="form"
               containerClassName="flex-1"
               value={newsletterText}
@@ -3005,6 +3034,7 @@ export default function MonthlyTuneupScreen() {
         their fellow readers.
       </Text>
       <ComposerBar
+          tone="light"
         variant="form"
         value={readingDraft}
         onChangeText={(next) => {
@@ -3059,6 +3089,7 @@ export default function MonthlyTuneupScreen() {
                 // with its own Done button, so the mic and the button that puts
                 // the field away sit inside the same border.
                 <ComposerBar
+          tone="light"
                   variant="inlineEdit"
                   value={profileDrafts[field.column] ?? ''}
                   onChangeText={(next) => {
@@ -3157,6 +3188,7 @@ export default function MonthlyTuneupScreen() {
         )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
           <ComposerBar
+          tone="light"
             variant="form"
             containerClassName="flex-1"
             value={newTodoText}

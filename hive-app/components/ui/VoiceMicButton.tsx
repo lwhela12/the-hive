@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Pressable, StyleProp, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useVoiceInput } from '../../lib/hooks/useVoiceInput';
-import { usePageSkin } from '../../lib/pageSkin';
+import { HIVE_SKIN, SPACE_SKIN, usePageSkin } from '../../lib/pageSkin';
 import { showAlert } from '../../lib/showAlert';
 
 interface Props {
@@ -14,6 +14,8 @@ interface Props {
   onListeningChange?: (listening: boolean) => void;
   size?: number;
   style?: StyleProp<ViewStyle>;
+  /** The surface the mic is physically sitting on, when it differs from the page behind it. */
+  tone?: 'light' | 'dark';
 }
 
 /**
@@ -30,8 +32,9 @@ interface Props {
  * anything that is not a browser. On a phone keyboard there is already a
  * dictation mic an inch below, so an inert button would be the worse answer.
  */
-export function VoiceMicButton({ onTranscript, onInterimTranscript, onListeningChange, size = 22, style }: Props) {
-  const skin = usePageSkin();
+export function VoiceMicButton({ onTranscript, onInterimTranscript, onListeningChange, size = 22, style, tone }: Props) {
+  const pageSkin = usePageSkin();
+  const skin = tone === 'light' ? HIVE_SKIN : tone === 'dark' ? SPACE_SKIN : pageSkin;
   // Every one of these messages was unreachable. The handler used `Alert.alert`,
   // which does nothing on web — and this button ONLY renders on web, because
   // speech recognition exists nowhere else. So "microphone access is blocked"

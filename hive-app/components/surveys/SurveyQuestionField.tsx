@@ -93,6 +93,7 @@ export function VoiceTextInput({
 }) {
   return (
     <ComposerBar
+      tone="light"
       variant="form"
       containerClassName="mt-2"
       value={value}
