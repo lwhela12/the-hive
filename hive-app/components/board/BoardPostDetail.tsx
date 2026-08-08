@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, RefreshControl, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, RefreshControl, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { EditButton } from '../ui/EditButton';
@@ -574,6 +574,12 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
       </View>
 
 
+      {/* The reply bar floats at the bottom of this KeyboardAvoidingView, not the
+          screen, so opening the keyboard lifts the bar (and the "@" picker
+          above it) clear of it instead of the keyboard covering both
+          (Nat: "squishy on the phone" — nothing here moved for the keyboard
+          before, 2026-08-08). */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
       <ScrollView
         className="flex-1"
         contentContainerClassName="pb-24"
@@ -708,6 +714,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
           </View>
         </View>
       )}
+      </KeyboardAvoidingView>
 
       {/* Edit post modal */}
       <BoardComposer
