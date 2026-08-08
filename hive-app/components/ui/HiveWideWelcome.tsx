@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
-import { HIVE_WIDE_WELCOME, SCOPE_LADDER, HIVE_WIDE_WELCOME_VERSION } from '../../lib/hiveWide';
+import { HIVE_WIDE_WELCOME, HIVE_WIDE_WELCOME_VERSION } from '../../lib/hiveWide';
 import { CollapsiblePanel, type CollapsiblePanelColours } from './CollapsiblePanel';
-import { ScopeBadge } from './ScopeBadge';
-import type { Community } from '../../types';
 
 /**
  * "Welcome to our new landing page" — the who, what and why of HIVE-Wide.
@@ -31,10 +29,6 @@ import type { Community } from '../../types';
  * person rather than the device, so reading it on the phone counts on the
  * laptop.
  *
- * The colour ladder is shown by USING it rather than describing it: the real
- * badges, in the order they travel. Somebody who skims the words still leaves
- * knowing that the hexagon is home and the world is further.
- *
  * ## It is drawn for space, and only for space
  *
  * This lives on the HIVE-Wide page, which is a photograph of the Earth at
@@ -56,45 +50,17 @@ import type { Community } from '../../types';
  * and a panel that cannot quietly drift away from its neighbours.
  */
 
-/**
- * The ladder, taught by showing the actual badges.
- *
- * This used to draw its own pills — outlined in the HIVE's colour, filled in
- * green — which meant the welcome page taught a vocabulary the rest of the app
- * never spoke. Somebody learned it here and then met a padlock and a bee
- * everywhere else. It now renders the real `ScopeBadge`, so the lesson cannot
- * drift from the thing it is a lesson about (Nat 2026-08-05).
- */
-export function ScopeBadgeSample({
-  rung,
-  community,
-}: {
-  rung: (typeof SCOPE_LADDER)[number];
-  community?: Community | null;
-}) {
-  return (
-    <View style={{ alignSelf: 'flex-start' }}>
-      <ScopeBadge scope={rung.key} community={community} compact tone="dark" />
-    </View>
-  );
-}
-
 export function HiveWideWelcome({
-  community,
   colours,
-  inkFaint,
   defaultOpen = false,
   seenVersion,
   onDismiss,
 }: {
-  community: Community | null;
   /**
    * The one palette HIVE-Wide gives every panel on it. Required rather than
    * optional, so this panel is drawn in the page's colours or not at all.
    */
   colours: CollapsiblePanelColours;
-  /** The page's quietest ink, for the footnote under the ladder. */
-  inkFaint: string;
   /**
    * A phone still lands shut — there isn't the room, and Nat wants the arrival
    * screen to read as a contents page there. A wide screen has the room to
@@ -159,6 +125,17 @@ export function HiveWideWelcome({
       fitTitle
       bodyStyle={{ gap: 16 }}
     >
+      <Text
+        style={{
+          fontFamily: 'Lato_400Regular',
+          fontSize: 14.5,
+          lineHeight: 22,
+          color: inkSoft,
+        }}
+      >
+        {HIVE_WIDE_WELCOME.announcement}
+      </Text>
+
       {HIVE_WIDE_WELCOME.panels.map((panel) => (
         <View key={panel.heading} style={{ gap: 4 }}>
           <Text
@@ -185,63 +162,6 @@ export function HiveWideWelcome({
         </View>
       ))}
 
-      {/* The colours, taught by wearing them. */}
-      <View
-        style={{
-          gap: 10,
-          paddingTop: 14,
-          borderTopWidth: 1,
-          // The page's one edge colour, the same hairline that draws the panel
-          // itself. It was a cream 12% of its own, which read as a second kind
-          // of line inside a panel drawn with the first kind.
-          borderTopColor: colours.border,
-        }}
-      >
-        <Text
-          style={{
-            fontFamily: 'Lato_700Bold',
-            fontSize: 11,
-            letterSpacing: 1.1,
-            textTransform: 'uppercase',
-            color: gold,
-          }}
-        >
-          How far something travels
-        </Text>
-        {SCOPE_LADDER.map((rung) => (
-          <View
-            key={rung.key}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 11, flexWrap: 'wrap' }}
-          >
-            <View style={{ width: 172 }}>
-              <ScopeBadgeSample rung={rung} community={community} />
-            </View>
-            <Text
-              style={{
-                flex: 1,
-                minWidth: 180,
-                fontFamily: 'Lato_400Regular',
-                fontSize: 13.5,
-                lineHeight: 19,
-                color: inkSoft,
-              }}
-            >
-              {rung.meaning}
-            </Text>
-          </View>
-        ))}
-        <Text
-          style={{
-            fontFamily: 'Lato_400Regular',
-            fontSize: 13,
-            lineHeight: 19,
-            color: inkFaint,
-            marginTop: 2,
-          }}
-        >
-          The hexagon is your HIVE. The world means it&rsquo;s gone further.
-        </Text>
-      </View>
     </CollapsiblePanel>
   );
 }

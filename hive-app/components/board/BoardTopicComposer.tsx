@@ -7,7 +7,8 @@ import { getMemberBoardDisplayName, getMemberHdBoardName } from '../../lib/board
 import { HiveIcon, type HiveIconName } from '../ui/HiveIcon';
 import type { BoardCategory, Profile } from '../../types';
 import { ComposerBar } from '../ui/ComposerBar';
-import { FIELD_LOOK } from '../ui/Input';
+import { fieldLookFor } from '../ui/Input';
+import { usePageSkin } from '../../lib/pageSkin';
 
 const BOARD_DRAFT_KEY = 'board-topic-draft';
 const NAME_MAX_LENGTH = 90;
@@ -302,6 +303,10 @@ export function BoardTopicComposer({
         : [...current, memberId]
     ));
   };
+  // Same reasoning as BoardComposer.tsx: a fixed cream sheet read as "you're
+  // in a HIVE now" when opened from HIVE-Wide's dark page (Nat, 2026-08-08).
+  const skin = usePageSkin();
+  const look = fieldLookFor(skin.dark ? 'dark' : 'light');
   const selectOwner = (memberId: string) => {
     setTopicKind('hd_board');
     setAudience('members');
@@ -312,23 +317,32 @@ export function BoardTopicComposer({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
-      <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: skin.page }} edges={['top']}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
 
           {/* Header */}
-          <View className="flex-row items-center justify-between px-4 py-3 border-b border-cream bg-white">
+          <View
+            className="flex-row items-center justify-between px-4 py-3 border-b"
+            style={{ backgroundColor: skin.card, borderBottomColor: skin.border }}
+          >
             <Pressable onPress={handleClose} className="active:opacity-60">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">Cancel</Text>
+              <Text style={{ fontFamily: 'Lato_400Regular', color: skin.ink }}>Cancel</Text>
             </Pressable>
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg">
+            <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-lg">
               {isEditMode ? 'Edit Board' : 'New Board'}
             </Text>
             <Pressable
               onPress={handleSubmit}
               disabled={!isValid || submitting}
-              className={`px-4 py-2 rounded-lg ${isValid && !submitting ? 'bg-gold' : 'bg-cream'}`}
+              className="px-4 py-2 rounded-lg"
+              style={{ backgroundColor: isValid && !submitting ? skin.gold : skin.card }}
             >
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className={isValid && !submitting ? 'text-white' : 'text-charcoal/30'}>
+              <Text
+                style={{
+                  fontFamily: 'Lato_700Bold',
+                  color: isValid && !submitting ? '#fffdf5' : skin.inkFaint,
+                }}
+              >
                 {submitting ? (isEditMode ? 'Saving...' : 'Creating...') : (isEditMode ? 'Save' : 'Create')}
               </Text>
             </Pressable>
@@ -337,13 +351,16 @@ export function BoardTopicComposer({
           <ScrollView className="flex-1 p-4" keyboardShouldPersistTaps="handled">
             {/* Preview */}
             <View className="items-center mb-6">
-              <View className="flex-row items-center px-4 py-2 bg-gold rounded-full" style={{ gap: 6 }}>
+              <View
+                className="flex-row items-center px-4 py-2 rounded-full"
+                style={{ gap: 6, backgroundColor: skin.gold }}
+              >
                 <Text className="text-lg">{selectedEmoji}</Text>
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white">
+                <Text style={{ fontFamily: 'Lato_700Bold', color: '#fffdf5' }}>
                   {name || 'Board Name'}
                 </Text>
               </View>
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs mt-2">
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: skin.inkFaint }} className="mt-2">
                 Preview
               </Text>
             </View>
@@ -361,8 +378,8 @@ export function BoardTopicComposer({
 
             {topicKind === 'hd_board' && (
               <View className="mb-4">
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Whose HD Board?</Text>
-                <View className="bg-white rounded-xl p-3">
+                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="mb-2">Whose HD Board?</Text>
+                <View className="rounded-xl p-3" style={{ backgroundColor: skin.card }}>
                   <View className="flex-row flex-wrap">
                     {members.map((member) => {
                       const selected = ownerUserId === member.id;
@@ -370,13 +387,14 @@ export function BoardTopicComposer({
                         <Pressable
                           key={member.id}
                           onPress={() => selectOwner(member.id)}
-                          className={`px-4 py-2.5 rounded-full mr-2 mb-2 border ${
-                            selected ? 'bg-gold border-gold' : 'bg-cream border-gold/20'
-                          }`}
+                          className="px-4 py-2.5 rounded-full mr-2 mb-2 border"
+                          style={{
+                            backgroundColor: selected ? skin.gold : skin.field,
+                            borderColor: selected ? skin.gold : skin.border,
+                          }}
                         >
                           <Text
-                            style={{ fontFamily: 'Lato_700Bold' }}
-                            className={selected ? 'text-white' : 'text-charcoal'}
+                            style={{ fontFamily: 'Lato_700Bold', color: selected ? '#fffdf5' : skin.ink }}
                             numberOfLines={1}
                           >
                             {member.name.split(' ')[0]}
@@ -386,7 +404,7 @@ export function BoardTopicComposer({
                     })}
                   </View>
                   {!!suggestedHdName && (
-                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs mt-2">
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: skin.inkFaint }} className="mt-2">
                       Will create: {suggestedHdName}
                     </Text>
                   )}
@@ -400,8 +418,8 @@ export function BoardTopicComposer({
                 says emoji belong. The family marks stay available via
                 "hive:<name>" if a board ever wants one. */}
             <View className="mb-4">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">Choose an Icon</Text>
-              <View className="bg-white rounded-xl overflow-hidden">
+              <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="mb-2">Choose an Icon</Text>
+              <View style={{ backgroundColor: skin.card, borderRadius: 12, overflow: 'hidden' }}>
                 {/* "Type any emoji" row */}
                 <Pressable
                   onPress={() => customInputRef.current?.focus()}
@@ -411,12 +429,12 @@ export function BoardTopicComposer({
                     paddingHorizontal: 14,
                     paddingVertical: 10,
                     borderBottomWidth: 1,
-                    borderBottomColor: 'rgba(222,193,129,0.2)',
+                    borderBottomColor: skin.border,
                     gap: 10,
                   }}
                 >
-                  <Ionicons name="happy-outline" size={18} color="#bd9348" />
-                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8e7a5e', flex: 1 }}>
+                  <Ionicons name="happy-outline" size={18} color={skin.gold} />
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.inkSoft, flex: 1 }}>
                     Type or paste any emoji →
                   </Text>
                   {/* An emoji is not words, so no microphone. It wears the one
@@ -435,17 +453,17 @@ export function BoardTopicComposer({
                       height: 44,
                       textAlign: 'center',
                       borderWidth: 1,
-                      borderColor: customEmoji ? '#bd9348' : FIELD_LOOK.border,
-                      borderRadius: FIELD_LOOK.radius,
-                      backgroundColor: customEmoji ? '#fdf3dc' : FIELD_LOOK.fill,
-                      color: FIELD_LOOK.ink,
+                      borderColor: customEmoji ? skin.gold : look.border,
+                      borderRadius: look.radius,
+                      backgroundColor: customEmoji ? skin.cardPressed : look.fill,
+                      color: look.ink,
                     }}
                     maxLength={8}
                     autoCorrect={false}
                     autoCapitalize="none"
                     placeholder="🐝"
-                    placeholderTextColor={FIELD_LOOK.placeholder}
-                    selectionColor={FIELD_LOOK.ink}
+                    placeholderTextColor={look.placeholder}
+                    selectionColor={look.ink}
                   />
                 </Pressable>
 
@@ -453,7 +471,7 @@ export function BoardTopicComposer({
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.2)' }}
+                  style={{ borderBottomWidth: 1, borderBottomColor: skin.border }}
                   contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 6, gap: 4 }}
                 >
                   {EMOJI_CATEGORIES.map((cat, i) => (
@@ -464,9 +482,9 @@ export function BoardTopicComposer({
                         paddingHorizontal: 10,
                         paddingVertical: 5,
                         borderRadius: 20,
-                        backgroundColor: activeCategory === i ? '#fdf3dc' : 'transparent',
+                        backgroundColor: activeCategory === i ? skin.cardPressed : 'transparent',
                         borderWidth: 1,
-                        borderColor: activeCategory === i ? '#bd9348' : 'transparent',
+                        borderColor: activeCategory === i ? skin.gold : 'transparent',
                       }}
                     >
                       <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
@@ -487,9 +505,9 @@ export function BoardTopicComposer({
                         justifyContent: 'center',
                         borderRadius: 10,
                         margin: 3,
-                        backgroundColor: selectedEmoji === emoji ? '#fdf3dc' : 'transparent',
+                        backgroundColor: selectedEmoji === emoji ? skin.cardPressed : 'transparent',
                         borderWidth: selectedEmoji === emoji ? 1.5 : 0,
-                        borderColor: '#bd9348',
+                        borderColor: skin.gold,
                       }}
                     >
                       <Text style={{ fontSize: 22 }}>{emoji}</Text>
@@ -506,7 +524,6 @@ export function BoardTopicComposer({
             {/* Name input */}
             <ComposerBar
               variant="form"
-              tone="light"
               containerClassName="mb-4"
               label={topicKind === 'hd_board' ? 'Board Name' : 'Board Name *'}
               value={name}
@@ -527,7 +544,6 @@ export function BoardTopicComposer({
             {/* Description input */}
             <ComposerBar
               variant="form"
-              tone="light"
               containerClassName="mb-4"
               label="Description"
               value={description}
@@ -541,8 +557,11 @@ export function BoardTopicComposer({
             />
 
             {/* Info note */}
-            <View className="bg-gold/10 rounded-xl p-4 mb-4">
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/70 text-sm">
+            <View
+              className="rounded-xl p-4 mb-4"
+              style={{ backgroundColor: skin.dark ? 'rgba(224,190,118,0.12)' : 'rgba(189,147,72,0.10)' }}
+            >
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.inkSoft }}>
                 Use top-level boards for big containers. Put the specific asks, recommendations, recipes, or project threads inside the board.
               </Text>
             </View>

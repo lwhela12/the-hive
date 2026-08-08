@@ -59,6 +59,17 @@ export type WelcomePanel = { heading: string; body: string };
  */
 export const HIVE_WIDE_WELCOME = {
   title: 'Welcome to HIVE-Wide',
+  // The transitional note, not the FAQ — it says why you're standing here for
+  // the first time rather than what this place permanently is. Nat, 2026-08-08:
+  // "we're excited to announce that we now have multiple HIVEs so this is the
+  // default landing page, but don't worry, your individual HIVEs are only a
+  // click away." Unlike the panels below, this one is worth retiring once
+  // everybody has actually met the new arrangement — it's an announcement, not
+  // a fact about the app.
+  announcement:
+    'HIVE grew — there are three HIVEs now, so this is the front door '
+    + 'everyone lands on first. Your own HIVE is still one click away, in the '
+    + 'list on the left. Look around, and tell us what you think in App Feedback.',
   panels: [
     {
       heading: 'Visibility',

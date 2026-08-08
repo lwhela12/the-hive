@@ -9,7 +9,6 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { queryKeys } from '../../lib/queryClient';
 import { formatDateMedium } from '../../lib/dateUtils';
-import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
 import { setBoardThreadArchiveState } from '../../lib/boardThreadArchive';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { attachReactionUsers } from '../../lib/reactionUsers';
@@ -125,10 +124,6 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const isBoardOwner = !!post?.category?.owner_user_id && post.category.owner_user_id === profile?.id;
   const canManagePost = !!post && (isAuthor || isAdmin || isBoardOwner);
-  const canCompletePost = !!post
-    && post.status !== 'completed'
-    && !post.archived_at
-    && (isAdmin || (post.category?.owner_user_id ? post.category.owner_user_id === profile?.id : isAuthor));
   const postAuthorId = post?.author?.id ?? post?.author_id ?? null;
   const postAuthorName = post?.author?.name || 'Unknown';
 
@@ -450,28 +445,6 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     }
   };
 
-  const handleCompletePost = async (onDone?: () => void) => {
-    if (!post || !profile || !communityId || !canCompletePost) return;
-
-    confirmBoardAction({
-      title: 'HD Wish Granted',
-      message: `Mark "${post.title}" as HD Granted? It will show as HD Granted here and be added to HD Granted wishes.`,
-      confirmLabel: 'Mark HD Granted',
-      onConfirm: async () => {
-        await markBoardThreadGranted({
-          post,
-          category: post.category || null,
-          communityId,
-          completedBy: profile.id,
-          completionNote: `Granted from ${post.category?.name || 'Boards'}.`,
-        });
-        await fetchPost();
-        invalidateBoardSearchIndex();
-        onDone?.();
-      },
-    });
-  };
-
   const handleArchivePost = async (onDone?: () => void) => {
     if (!post || !profile || !communityId || !canManagePost) {
       showBoardAlert('Not allowed', 'You do not have permission to archive this thread.');
@@ -732,18 +705,6 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         mentionableMembers={mentionableMembers}
         managementActions={(
           <>
-            {canCompletePost && (
-              <Pressable
-                onPress={() => handleCompletePost(handleCloseEditComposer)}
-                className="flex-row items-center border rounded-full px-3 py-2 active:opacity-75"
-                style={{ backgroundColor: goldWash, borderColor: skin.borderStrong }}
-              >
-                <Ionicons name="checkmark-circle-outline" size={16} color={skin.gold} />
-                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.gold }} className="text-xs ml-1">
-                  HD Granted
-                </Text>
-              </Pressable>
-            )}
             {canManagePost && (
               <Pressable
                 onPress={() => handleArchivePost(handleCloseEditComposer)}

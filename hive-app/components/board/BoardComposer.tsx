@@ -10,6 +10,7 @@ import { useWebAttachmentDropZone } from '../../lib/hooks/useWebAttachmentDropZo
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import { AttachmentPicker } from '../ui/AttachmentPicker';
 import { ComposerBar } from '../ui/ComposerBar';
+import { usePageSkin } from '../../lib/pageSkin';
 
 const TITLE_MAX_LENGTH = 150;
 
@@ -149,6 +150,13 @@ export function BoardComposer({
 
   const isValid = title.trim().length > 0 && content.trim().length > 0;
 
+  // Nat, 2026-08-08, editing a HIVE-Wide thread from HIVE-Wide: fixed cream
+  // read as "you're in OG HIVE now" — this panel used to always wear the
+  // light look no matter where it was opened from. It follows the page
+  // you're actually standing on instead, the same skin every other screen
+  // here uses.
+  const skin = usePageSkin();
+
   const { dragDropProps, isDragActive } = useWebAttachmentDropZone({
     selectedImages,
     selectedFiles,
@@ -160,29 +168,35 @@ export function BoardComposer({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
-      <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: skin.page }} edges={['top']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
         >
           {/* Header */}
-          <View className="flex-row items-center justify-between px-4 py-3 border-b border-cream bg-white">
+          <View
+            className="flex-row items-center justify-between px-4 py-3 border-b"
+            style={{ backgroundColor: skin.card, borderBottomColor: skin.border }}
+          >
             <Pressable onPress={handleClose}>
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
+              <Text style={{ fontFamily: 'Lato_400Regular', color: skin.ink }}>
                 Cancel
               </Text>
             </Pressable>
-            <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg">
+            <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-lg">
               {isEditMode ? 'Edit Thread' : 'New Thread'}
             </Text>
             <Pressable
               onPress={handleSubmit}
               disabled={!isValid || submitting}
-              className={`px-4 py-2 rounded-lg ${isValid && !submitting ? 'bg-gold' : 'bg-cream'}`}
+              className="px-4 py-2 rounded-lg"
+              style={{ backgroundColor: isValid && !submitting ? skin.gold : skin.card }}
             >
               <Text
-                style={{ fontFamily: 'Lato_700Bold' }}
-                className={isValid && !submitting ? 'text-white' : 'text-charcoal/30'}
+                style={{
+                  fontFamily: 'Lato_700Bold',
+                  color: isValid && !submitting ? '#fffdf5' : skin.inkFaint,
+                }}
               >
                 {uploadStatus || (submitting ? (isEditMode ? 'Saving...' : 'Posting...') : (isEditMode ? 'Save' : 'Post'))}
               </Text>
@@ -193,11 +207,14 @@ export function BoardComposer({
             {/* Category badge */}
             {category && (
               <View className="flex-row items-center mb-4">
-                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-sm">
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: skin.inkSoft }}>
                   {isEditMode ? 'Editing in:' : 'Posting to:'}
                 </Text>
-                <View className="ml-2 px-3 py-1 bg-gold/10 rounded-full">
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+                <View
+                  className="ml-2 px-3 py-1 rounded-full"
+                  style={{ backgroundColor: skin.dark ? 'rgba(224,190,118,0.12)' : 'rgba(189,147,72,0.10)' }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: skin.gold }}>
                     {category.name}
                   </Text>
                 </View>
@@ -214,7 +231,6 @@ export function BoardComposer({
                 photograph to a title, so there is no clip on this one. */}
             <ComposerBar
               variant="form"
-              tone="light"
               containerClassName="mb-4"
               label="Title"
               value={title}
@@ -230,7 +246,6 @@ export function BoardComposer({
             {/* The post itself. */}
             <ComposerBar
               variant="form"
-              tone="light"
               containerClassName="mb-4"
               label="Content"
               value={content}
@@ -248,16 +263,20 @@ export function BoardComposer({
 
             {/* Attachments */}
             <View
-              className={`mb-4 rounded-2xl border p-3 ${
-                isDragActive ? 'border-gold bg-gold/10' : 'border-transparent'
-              }`}
+              className="mb-4 rounded-2xl border p-3"
+              style={{
+                borderColor: isDragActive ? skin.gold : 'transparent',
+                backgroundColor: isDragActive
+                  ? (skin.dark ? 'rgba(224,190,118,0.12)' : 'rgba(189,147,72,0.10)')
+                  : 'transparent',
+              }}
               {...dragDropProps}
             >
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal mb-2">
+              <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="mb-2">
                 Attachments
               </Text>
               {isDragActive && (
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm mb-2">
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: skin.gold }} className="mb-2">
                   Drop photos, videos, or files to attach
                 </Text>
               )}

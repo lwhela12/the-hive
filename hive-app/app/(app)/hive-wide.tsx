@@ -771,12 +771,10 @@ export default function HiveWideScreen() {
             rather than the explainer appearing above the door a second later
             and shoving it down. */}
         <HiveWideWelcome
-          community={community}
           // The same object every other panel here gets. It used to keep its own
           // copy of these colours and the copy had drifted a couple of percent
           // (Nat, 2026-08-06: "Only thing missing is continuity").
           colours={PANEL_COLOURS}
-          inkFaint={INK_FAINT}
           // Phone still lands with everything shut (Nat, 2026-08-06 — see the
           // note in this panel's own file). A computer has the room to show it,
           // and Nat pointed at exactly this open on a desktop screenshot and
