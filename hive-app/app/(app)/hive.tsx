@@ -2574,7 +2574,11 @@ export default function HiveScreen() {
   const dashboardSectionStyle = useMobileLayout
     ? { width: '100%' as const }
     : { flexBasis: '47%' as const, flexGrow: 1, minWidth: 320 };
-  const dashboardPanelHeight = useMobileLayout ? 310 : 316;
+  // Desktop trimmed from 316 (Nat, 2026-08-08: laptop Home was just barely
+  // too tall for one view — "so close it just feels like an oversight").
+  // Every panel already scrolls its own content, so this only changes how
+  // much shows before that, not what's reachable.
+  const dashboardPanelHeight = useMobileLayout ? 310 : 292;
   const todoPanelMaxHeight = dashboardPanelHeight;
   const wishPanelHeight = dashboardPanelHeight;
 
@@ -3726,7 +3730,9 @@ export default function HiveScreen() {
             HOME_SECTION_META[group[0]].layout === 'panel' ? (
               <View
                 key={group.join('-')}
-                style={{ flexDirection: useMobileLayout ? 'column' : 'row', flexWrap: useMobileLayout ? undefined : 'wrap', gap: useMobileLayout ? 20 : 36, marginBottom: useMobileLayout ? 20 : 36, maxWidth: 1380, width: '100%', alignSelf: 'center' }}
+                // marginBottom trimmed on desktop (Nat, 2026-08-08 — see the
+                // panel-height note above; same fix, same reason).
+                style={{ flexDirection: useMobileLayout ? 'column' : 'row', flexWrap: useMobileLayout ? undefined : 'wrap', gap: useMobileLayout ? 20 : 36, marginBottom: useMobileLayout ? 20 : 18, maxWidth: 1380, width: '100%', alignSelf: 'center' }}
               >
                 {group.map((sectionKey) => (
                   <View key={sectionKey} style={dashboardSectionStyle}>
