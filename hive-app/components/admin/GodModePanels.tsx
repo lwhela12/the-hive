@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { HIVE_GOLD, accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
@@ -342,6 +342,8 @@ export function NewsletterPanel({
   const [subs, setSubs] = useState<Subscriber[]>([]);
   const [newEmail, setNewEmail] = useState('');
   const [adding, setAdding] = useState(false);
+  const [confirmRemoveSub, setConfirmRemoveSub] = useState<Subscriber | null>(null);
+  const [removingSub, setRemovingSub] = useState(false);
   /**
    * Three jobs, three tabs.
    *
@@ -411,7 +413,13 @@ export function NewsletterPanel({
     })).filter((r) => r.content.length > 0));
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  // A plain `useEffect` only fires once, on mount — so if this box was
+  // already open in a tab when somebody subscribed from the public site, it
+  // kept showing the old count until a hard reload. `useFocusEffect` reruns
+  // `load()` every time the tab is actually looked at (Nat, 2026-08-07: signed
+  // up on the-hive.app, saw "registered", then found "Signed up (0)" here —
+  // the row was in the database the whole time).
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const addSubscriber = async () => {
     const email = newEmail.trim();
@@ -433,11 +441,15 @@ export function NewsletterPanel({
     }
   };
 
-  const removeSubscriber = async (sub: Subscriber) => {
+  const removeSubscriber = async () => {
+    if (!confirmRemoveSub || removingSub) return;
+    setRemovingSub(true);
     const { error } = await supabase
       .from('newsletter_subscribers')
       .update({ unsubscribed_at: new Date().toISOString() })
-      .eq('id', sub.id);
+      .eq('id', confirmRemoveSub.id);
+    setRemovingSub(false);
+    setConfirmRemoveSub(null);
     if (error) {
       showAlert('Could not remove that', 'Try again in a moment.');
       return;
@@ -598,7 +610,7 @@ export function NewsletterPanel({
                 ) : null}
               </View>
               <Pressable
-                onPress={() => removeSubscriber(sub)}
+                onPress={() => setConfirmRemoveSub(sub)}
                 hitSlop={8}
                 accessibilityLabel={`Remove ${sub.email}`}
               >
@@ -610,6 +622,15 @@ export function NewsletterPanel({
           ) : null}
         </ScrollView>
       </Panel>
+      <ConfirmDialog
+        visible={!!confirmRemoveSub}
+        title={confirmRemoveSub ? `Remove ${confirmRemoveSub.email}?` : ''}
+        body="They will stop getting the newsletter. You can add them back any time."
+        confirmLabel={removingSub ? 'Removing…' : 'Remove them'}
+        destructive
+        onConfirm={() => { void removeSubscriber(); }}
+        onCancel={() => { if (!removingSub) setConfirmRemoveSub(null); }}
+      />
     </View>
   );
 }
