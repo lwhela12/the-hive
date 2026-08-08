@@ -1,0 +1,12 @@
+-- Migration 123 created newsletter_subscribers and granted `authenticated`
+-- permission to EXECUTE the subscribe/unsubscribe functions, never to SELECT
+-- or UPDATE the table itself. Migration 147 added RLS policies restricting
+-- both to is_hive_owner() -- but a passing RLS policy is meaningless without
+-- the base table grant underneath it; Postgres checks both, and denies the
+-- query before RLS is ever evaluated if the grant is missing. So the
+-- Newsletter admin box has been permission-denied on every read since the
+-- day it shipped, and the client code swallows that error and shows an
+-- empty list instead -- indistinguishable from "nobody has subscribed yet."
+-- (Nat, 2026-08-08: signed up on the public site three times, the row was
+-- in the database every time, the admin box always said 0.)
+grant select, update on public.newsletter_subscribers to authenticated;

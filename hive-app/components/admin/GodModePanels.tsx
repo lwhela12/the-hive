@@ -374,10 +374,13 @@ export function NewsletterPanel({
   >([]);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('newsletter_subscribers')
       .select('id, email, name, unsubscribed_at')
       .order('created_at', { ascending: true });
+    // A permission error here reads exactly like "nobody has subscribed" if
+    // it is thrown away -- that silence is what hid this bug for months.
+    if (error) console.error('newsletter_subscribers load failed', error);
     setSubs((data ?? []) as Subscriber[]);
 
     // What members have actually asked to have mentioned — the replies on the
