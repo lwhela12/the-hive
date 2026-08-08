@@ -79,10 +79,6 @@ export const HIVE_WIDE_WELCOME = {
         + 'you can change your mind later. Your name and photo travel only if '
         + 'your profile allows it; otherwise a bee stands in for you.',
     },
-    {
-      heading: 'Your own HIVE',
-      body: 'Boards, wishes, the Honey Pot and your check-ins are still one tap away.',
-    },
   ] as WelcomePanel[],
 };
 
