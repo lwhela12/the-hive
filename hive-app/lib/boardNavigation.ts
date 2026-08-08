@@ -1,4 +1,4 @@
-import { removeStoredItem } from './webStorage';
+import { removeSessionItem } from './webStorage';
 
 export const BOARD_HOME_EVENT = 'the-hive:boards-home';
 
@@ -11,7 +11,7 @@ export function clearBoardNavigationState(communityId?: string | null) {
       `the-hive:last-board-post:${communityId}`,
       `the-hive:board-composer-open:${communityId}`,
       `the-hive:board-direct-open:${communityId}`,
-    ].forEach(removeStoredItem);
+    ].forEach(removeSessionItem);
   }
 
   if (typeof window.dispatchEvent === 'function') {

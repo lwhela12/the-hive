@@ -26,7 +26,10 @@ import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
 import { setBoardThreadArchiveState } from '../../lib/boardThreadArchive';
 import { BOARD_HOME_EVENT } from '../../lib/boardNavigation';
-import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
+// Which board and which thread were open is remembered for this sitting only
+// (session-scoped), not forever — the same lifetime `lib/hiveSelection.ts`
+// uses for which HIVE you're in, and for the same reason (Nat 2026-08-08).
+import { getSessionItem as getStoredItem, removeSessionItem as removeStoredItem, setSessionItem as setStoredItem } from '../../lib/webStorage';
 import { linkThreadToCommunityWish, unlinkWishFromBoard } from '../../lib/wishBoardLinking';
 import { deleteWishById } from '../../lib/wishMutations';
 import { matchesMemberSearchText } from '../../lib/memberAliases';
