@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -416,10 +416,20 @@ export function NewsletterPanel({
   // A plain `useEffect` only fires once, on mount — so if this box was
   // already open in a tab when somebody subscribed from the public site, it
   // kept showing the old count until a hard reload. `useFocusEffect` reruns
-  // `load()` every time the tab is actually looked at (Nat, 2026-08-07: signed
-  // up on the-hive.app, saw "registered", then found "Signed up (0)" here —
-  // the row was in the database the whole time).
+  // `load()` on in-app navigation, but nearly everybody uses HIVE in a
+  // browser and testing this means alt-tabbing to the public site and back —
+  // that never blurs the route, only the window, so `useFocusEffect` alone
+  // still missed it (Nat, 2026-08-07/08: signed up twice, saw "registered"
+  // both times, still found "Signed up (0)" here — the row was in the
+  // database the whole time). Same fix `useArrivalBoard.ts` already uses for
+  // the TV case: also refetch when the browser window itself regains focus.
   useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onFocus = () => { void load(); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [load]);
 
   const addSubscriber = async () => {
     const email = newEmail.trim();
