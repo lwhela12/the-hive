@@ -370,7 +370,13 @@ export const SideRail = memo(function SideRail({
   // press is answered.
   const go = useCallback(
     (route: string, key?: string) => {
-      if (route === '/board') clearBoardNavigationState();
+      // Boards has a HIVE-Wide door too (`/hive-wide-boards`), and pressing
+      // "Boards" from inside a thread there was a silent no-op: the check here
+      // used to read the route literally, so from the wide door it never
+      // matched and the open thread's state never cleared — same route,
+      // `router.replace` re-runs the screen, but nothing told it to forget
+      // which post was open (Nat 2026-08-08: "it just did the little bounce").
+      if (route === '/board' || route === '/hive-wide-boards') clearBoardNavigationState(communityId);
       if (route === '/hive') resetHomeNavigationState();
       const here = activeKeyForPath(pathname) === activeKeyForPath(route);
       // The reload is real but invisible when the page reloads into the same
@@ -380,7 +386,7 @@ export const SideRail = memo(function SideRail({
       else router.push(route as never);
       foldAwayOnPhone();
     },
-    [router, pathname, playBounce, foldAwayOnPhone]
+    [router, pathname, playBounce, foldAwayOnPhone, communityId]
   );
 
   /**
