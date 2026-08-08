@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import { HIVE_WIDE_WELCOME, SCOPE_LADDER, HIVE_WIDE_WELCOME_VERSION } from '../../lib/hiveWide';
 import { CollapsiblePanel, type CollapsiblePanelColours } from './CollapsiblePanel';
@@ -14,13 +14,15 @@ import type { Community } from '../../types';
  * on the page wears it too. The header carries both names: the question while
  * it is away, the welcome's own title once it is open.
  *
- * ## It starts shut, for everybody, every time
+ * ## It starts shut on a phone, open on a computer
  *
- * It used to spring open on a first visit. Nat, on her phone 2026-08-06:
- * *"deff start the screen with them all collapsed like that, easier to
- * understand what you're looking at"* and *"I think that is the best way to
- * introduce all my OG HIVErs to the new 'hive wide', that looks really cool."*
- * You arrive at a contents page and open what you want.
+ * It used to spring open on a first visit, then start shut everywhere (Nat, on
+ * her phone, 2026-08-06: *"deff start the screen with them all collapsed like
+ * that, easier to understand what you're looking at"*). A computer has the
+ * room a phone doesn't, and Nat pointed at exactly this panel open in a
+ * desktop screenshot and said it should land that way (2026-08-08) — so
+ * `defaultOpen` is `true` only past the same width the three boxes lower on
+ * the page use to go from stacked to side-by-side.
  *
  * That moved when this counts as read. Shutting it used to be the signal, which
  * no longer works — nobody shuts a panel they never opened — so **opening it is
@@ -81,6 +83,7 @@ export function HiveWideWelcome({
   community,
   colours,
   inkFaint,
+  defaultOpen = false,
   seenVersion,
   onDismiss,
 }: {
@@ -92,13 +95,30 @@ export function HiveWideWelcome({
   colours: CollapsiblePanelColours;
   /** The page's quietest ink, for the footnote under the ladder. */
   inkFaint: string;
+  /**
+   * A phone still lands shut — there isn't the room, and Nat wants the arrival
+   * screen to read as a contents page there. A wide screen has the room to
+   * show the answer straight away (Nat, 2026-08-08). Screens too narrow for
+   * this never pass `true`, so the shut-by-default behaviour is unchanged for
+   * them.
+   */
+  defaultOpen?: boolean;
   /** What this person has already put away, from their profile. */
   seenVersion: string | null;
   onDismiss: (version: string) => void;
 }) {
   const alreadySeen = seenVersion === HIVE_WIDE_WELCOME_VERSION;
-  /** Shut on arrival, and open only once this person opens it. */
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+
+  // Opening it is how you say you have read it (below, on a manual toggle).
+  // Landing on a wide screen with it already open is the same thing by
+  // another door — nobody taps a panel that greeted them already open — so it
+  // marks itself read the same way, once, rather than leaving `firstVisit`
+  // stuck true for every desktop visit after this.
+  useEffect(() => {
+    if (defaultOpen && !alreadySeen) onDismiss(HIVE_WIDE_WELCOME_VERSION);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The body's own type takes the same ink and the same gold as the header, so
   // an open panel is the shut panel with more of it rather than a second design.
@@ -139,17 +159,6 @@ export function HiveWideWelcome({
       fitTitle
       bodyStyle={{ gap: 16 }}
     >
-      <Text
-        style={{
-          fontFamily: 'Lato_400Regular',
-          fontSize: 14.5,
-          lineHeight: 22,
-          color: inkSoft,
-        }}
-      >
-        {HIVE_WIDE_WELCOME.standfirst}
-      </Text>
-
       {HIVE_WIDE_WELCOME.panels.map((panel) => (
         <View key={panel.heading} style={{ gap: 4 }}>
           <Text
@@ -230,8 +239,7 @@ export function HiveWideWelcome({
             marginTop: 2,
           }}
         >
-          The hexagon is your HIVE, in your HIVE&rsquo;s colour. The world appears
-          when something has gone further than that.
+          The hexagon is your HIVE. The world means it&rsquo;s gone further.
         </Text>
       </View>
     </CollapsiblePanel>

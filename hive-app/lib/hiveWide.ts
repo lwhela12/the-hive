@@ -45,55 +45,32 @@ export const SCOPE_LADDER: ScopeRung[] = [
 export type WelcomePanel = { heading: string; body: string };
 
 /**
- * The welcome on the HIVE-Wide page. Deliberately answers the questions in the
- * order somebody actually asks them: what am I looking at, why does it exist,
- * and what does it mean for me.
+ * The welcome on the HIVE-Wide page.
+ *
+ * Used to answer what-am-I-looking-at, why-does-this-exist and what-does-it-
+ * mean-for-me in four panels and a standfirst. Nat, 2026-08-08, looking at it
+ * on her phone: "the explanation is in the title" — HIVE-Wide already says
+ * what it is, so the first two panels were the page explaining itself to
+ * itself. Cut to the one thing people actually want to know standing here:
+ * what's visible, by default, and how do I change that.
+ *
+ * HIVE_WIDE_WELCOME_VERSION was deliberately NOT bumped for this rewrite —
+ * see that constant below for why.
  */
 export const HIVE_WIDE_WELCOME = {
   title: 'Welcome to HIVE-Wide',
-  standfirst:
-    'The HIVEs share a high street, and this is it. Everything on this page is '
-    + 'here because somebody chose to share it with all the HIVEs.',
   panels: [
     {
-      heading: 'What you are looking at',
-      // This used to promise "the boards we all share — HIVE Approved and
-      // Announcements". Migration 142 sent every board home to the HIVE that
-      // made it, so the Boards screen up here correctly says nothing is shared
-      // yet — and this paragraph was standing next to it saying the opposite.
-      // Nat spotted the contradiction on 2026-08-06.
-      //
-      // Do NOT bump HIVE_WIDE_WELCOME_VERSION for this: that re-opens the panel
-      // for everyone who has already put it away, and the shorter rewrite Nat
-      // wants is deliberately parked until the rest is built and tested.
+      heading: 'Visibility',
       body:
-        'The month’s HIVE Focus, The Buzz, what’s new in the app, and a '
-        + 'calendar with every HIVE’s meetings on it. Plus anything a member has '
-        + 'opened up: a wish, a thread, a kindness they logged. Boards live '
-        + 'inside the HIVE that made them, and appear here as each one is shared.',
+        'Everything you write stays in your own HIVE by default. You choose '
+        + 'when something goes further — one wish, one thread at a time — and '
+        + 'you can change your mind later. Your name and photo travel only if '
+        + 'your profile allows it; otherwise a bee stands in for you.',
     },
     {
-      heading: 'Why it exists',
-      body:
-        'HIVE began as one group in Las Vegas. There are three now, and there '
-        + 'will be more. HIVE-Wide is how they get to know each other while '
-        + 'everybody keeps the room they joined for. Break down on Route 66 and a '
-        + 'HIVEr lives nearby — that only works if the HIVEs can see one another.',
-    },
-    {
-      heading: 'You are in control of all of it',
-      body:
-        'Everything you write starts in your own HIVE and stays there. When you '
-        + 'want something to reach further you say so, one thing at a time, and '
-        + 'you can change your mind. Your name and your face travel only if your '
-        + 'profile says they can — keep it close and your recommendation still '
-        + 'counts, with a little bee standing in for you.',
-    },
-    {
-      heading: 'Your own HIVE is a tap away',
-      body:
-        'Boards, wishes, the Honey Pot, Compliment Corner, your meetings and your '
-        + 'check-ins all live inside your HIVE, exactly where they were.',
+      heading: 'Your own HIVE',
+      body: 'Boards, wishes, the Honey Pot and your check-ins are still one tap away.',
     },
   ] as WelcomePanel[],
 };
@@ -124,5 +101,11 @@ export const PARDON_OUR_DUST: string[] = [
  * Stored per person (profiles.hive_wide_welcome_seen), so dismissing it on the
  * phone dismisses it on the laptop — read state follows the person, not the
  * device (migration 127).
+ *
+ * NOT bumped for the 2026-08-08 rewrite (shorter, visibility-first). Bumping
+ * it does two things at once, and only one was wanted: it re-opens `firstVisit`
+ * on `WayIntoYourHive` (the long hello) for every member who already arrived
+ * once, not just re-flagging this one panel as unread. Cutting the word count
+ * doesn't warrant greeting everybody like a stranger again.
  */
 export const HIVE_WIDE_WELCOME_VERSION = '2026-08-03';

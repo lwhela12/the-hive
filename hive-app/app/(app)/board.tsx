@@ -2122,8 +2122,13 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         ListHeaderComponent={
           <View>
             {selectedCategory.description ? (
+              // Fixed charcoal-at-60% used to sit under this header regardless
+              // of the page it was drawn on — near-invisible on HIVE-Wide's
+              // night sky (Nat, 2026-08-08: "the font there is too hard to
+              // read"). `skin.inkSoft` is the same quiet ink the rest of this
+              // screen already uses, so it reads on both.
               <View className="mb-4">
-                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic' }} className="text-charcoal/60 text-sm">
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: skin.inkSoft }}>
                   {selectedCategory.description}
                 </Text>
               </View>

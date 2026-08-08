@@ -777,6 +777,12 @@ export default function HiveWideScreen() {
           // (Nat, 2026-08-06: "Only thing missing is continuity").
           colours={PANEL_COLOURS}
           inkFaint={INK_FAINT}
+          // Phone still lands with everything shut (Nat, 2026-08-06 — see the
+          // note in this panel's own file). A computer has the room to show it,
+          // and Nat pointed at exactly this open on a desktop screenshot and
+          // said "should land with this open, like that" (2026-08-08) — so
+          // `wide`, the same threshold the three boxes below use, decides it.
+          defaultOpen={wide}
           seenVersion={loadHiveWideWelcomeSeen(profile)}
           onDismiss={(version) => {
             void persistHiveWideWelcomeSeen(profile, version).then(() => refreshProfile());
