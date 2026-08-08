@@ -214,6 +214,7 @@ export function BoardComposer({
                 photograph to a title, so there is no clip on this one. */}
             <ComposerBar
               variant="form"
+              tone="light"
               containerClassName="mb-4"
               label="Title"
               value={title}
@@ -229,6 +230,7 @@ export function BoardComposer({
             {/* The post itself. */}
             <ComposerBar
               variant="form"
+              tone="light"
               containerClassName="mb-4"
               label="Content"
               value={content}

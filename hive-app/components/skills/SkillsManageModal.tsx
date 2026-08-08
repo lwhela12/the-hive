@@ -335,6 +335,7 @@ export function SkillsManageModal({
                     loud instead of typing it. */}
                 <ComposerBar
                   variant="inlineEdit"
+                  tone="light"
                   value={customInput}
                   onChangeText={setCustomInput}
                   placeholder="Type your skill..."

@@ -574,6 +574,7 @@ export function WishDetail({
             The "Replying to Nat" chip rides above it as the bar's header. */}
         <ComposerBar
           variant="chat"
+          tone="light"
           containerClassName="mb-3"
           value={newComment}
           onChangeText={setNewComment}

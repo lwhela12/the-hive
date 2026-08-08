@@ -308,6 +308,7 @@ export function GrantWishModal({
                     wish without writing one. */}
                 <ComposerBar
                   variant="form"
+                  tone="light"
                   value={thankYouMessage}
                   onChangeText={setThankYouMessage}
                   placeholder="Thank you so much for helping me with..."

@@ -430,6 +430,7 @@ export function AddWishModal({
                 {/* A title is words too — short ones. Same box, one line. */}
                 <ComposerBar
                   variant="form"
+                  tone="light"
                   containerClassName="mb-4"
                   label="Quick glance title"
                   value={wishTitle}
@@ -457,6 +458,7 @@ export function AddWishModal({
                     they moved into the bar instead of living out here. */}
                 <ComposerBar
                   variant="form"
+                  tone="light"
                   value={wishText}
                   onChangeText={handleWishTextChange}
                   placeholder="I want help learning to cook healthier meals..."

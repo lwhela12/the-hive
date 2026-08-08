@@ -166,6 +166,7 @@ export function RecordHoneyPotModal({
               {/* A person's name is words — you should be able to say it. */}
               <ComposerBar
                 variant="form"
+                tone="light"
                 value={fromWhom}
                 onChangeText={setFromWhom}
                 placeholder="Optional"
@@ -182,6 +183,7 @@ export function RecordHoneyPotModal({
                   border now, on the same footer as everywhere else. */}
               <ComposerBar
                 variant="form"
+                tone="light"
                 value={note}
                 onChangeText={setNote}
                 placeholder="Shelter donation, Q3 dues, pizza…"

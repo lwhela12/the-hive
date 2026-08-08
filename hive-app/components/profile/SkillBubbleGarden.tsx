@@ -2583,6 +2583,7 @@ function CustomSeedButton({
             got wider to make room for that footer. */}
         <ComposerBar
           variant="inlineEdit"
+          tone="light"
           value={draft}
           onChangeText={setDraft}
           placeholder="New skill"

@@ -506,6 +506,7 @@ export function BoardTopicComposer({
             {/* Name input */}
             <ComposerBar
               variant="form"
+              tone="light"
               containerClassName="mb-4"
               label={topicKind === 'hd_board' ? 'Board Name' : 'Board Name *'}
               value={name}
@@ -526,6 +527,7 @@ export function BoardTopicComposer({
             {/* Description input */}
             <ComposerBar
               variant="form"
+              tone="light"
               containerClassName="mb-4"
               label="Description"
               value={description}

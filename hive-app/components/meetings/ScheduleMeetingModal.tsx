@@ -298,6 +298,7 @@ export function ScheduleMeetingModal({
                 pickers and no microphone. */}
             <ComposerBar
               variant="form"
+              tone="light"
               containerClassName="mb-4"
               label="Meeting Title"
               value={title}
@@ -317,6 +318,7 @@ export function ScheduleMeetingModal({
 
             <ComposerBar
               variant="form"
+              tone="light"
               containerClassName="mb-4"
               label="Description (optional)"
               value={description}
@@ -329,6 +331,7 @@ export function ScheduleMeetingModal({
 
             <ComposerBar
               variant="form"
+              tone="light"
               containerClassName="mb-4"
               label="Location (optional)"
               value={location}

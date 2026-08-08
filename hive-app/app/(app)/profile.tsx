@@ -1429,6 +1429,7 @@ export default function ProfileScreen() {
         {label}
       </Text>
       <ComposerBar
+        tone="light"
         variant="form"
         value={value}
         // The shared bar hands back either the new text or a function that
@@ -2068,6 +2069,7 @@ export default function ProfileScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Name</Text>
               {isEditing ? (
                 <ComposerBar
+                  tone="light"
                   variant="form"
                   value={editName}
                   onChangeText={setEditName}
@@ -2143,6 +2145,7 @@ export default function ProfileScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Self-appointed title</Text>
               {isEditing ? (
                 <ComposerBar
+                  tone="light"
                   variant="form"
                   value={editProfileTitle}
                   onChangeText={setEditProfileTitle}
@@ -2162,6 +2165,7 @@ export default function ProfileScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Occupation</Text>
               {isEditing ? (
                 <ComposerBar
+                  tone="light"
                   variant="form"
                   value={editOccupation}
                   onChangeText={setEditOccupation}
@@ -2181,6 +2185,7 @@ export default function ProfileScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">About me</Text>
               {isEditing ? (
                 <ComposerBar
+                  tone="light"
                   variant="form"
                   value={editBio}
                   onChangeText={setEditBio}
@@ -2203,6 +2208,7 @@ export default function ProfileScreen() {
                 // field. The two editors write the same column and used to
                 // disagree about whether it was one line or several.
                 <ComposerBar
+                  tone="light"
                   variant="form"
                   value={editCurrentProject}
                   onChangeText={setEditCurrentProject}
@@ -2222,6 +2228,7 @@ export default function ProfileScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Hometown</Text>
               {isEditing ? (
                 <ComposerBar
+                  tone="light"
                   variant="form"
                   value={editHometown}
                   onChangeText={setEditHometown}
@@ -2241,6 +2248,7 @@ export default function ProfileScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">HIVErs should ask me about</Text>
               {isEditing ? (
                 <ComposerBar
+                  tone="light"
                   variant="form"
                   value={editKnownFor}
                   onChangeText={setEditKnownFor}
@@ -2267,6 +2275,7 @@ export default function ProfileScreen() {
                 <View>
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">Experiences I want to have</Text>
                   <ComposerBar
+                    tone="light"
                     variant="form"
                     containerClassName="mb-4"
                     value={editMiqExperiences}
@@ -2277,6 +2286,7 @@ export default function ProfileScreen() {
                   />
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">Ways I want to grow</Text>
                   <ComposerBar
+                    tone="light"
                     variant="form"
                     containerClassName="mb-4"
                     value={editMiqGrowth}
@@ -2287,6 +2297,7 @@ export default function ProfileScreen() {
                   />
                   <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">How I want to contribute</Text>
                   <ComposerBar
+                    tone="light"
                     variant="form"
                     value={editMiqContribution}
                     onChangeText={setEditMiqContribution}
@@ -2325,6 +2336,7 @@ export default function ProfileScreen() {
                     <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-xs text-charcoal/40 mb-1">{labels[idx]}</Text>
                     {isEditing ? (
                       <ComposerBar
+                        tone="light"
                         variant="form"
                         value={values[idx]}
                         onChangeText={setters[idx]}
@@ -2348,6 +2360,7 @@ export default function ProfileScreen() {
               {isEditing ? (
                 editFunFacts.map((fact, idx) => (
                   <ComposerBar
+                    tone="light"
                     key={idx}
                     variant="form"
                     containerClassName="mb-3"

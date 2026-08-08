@@ -97,6 +97,7 @@ export function WishCommentItem({
                other place in the app you write something. */
             <ComposerBar
               variant="inlineEdit"
+              tone="light"
               containerClassName="mb-2"
               value={editContent}
               onChangeText={setEditContent}

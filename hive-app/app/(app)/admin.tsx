@@ -2862,6 +2862,7 @@ export default function AdminScreen() {
 
             <ComposerBar
               variant="form"
+              tone="light"
               containerClassName="mb-3"
               label="Event title"
               value={eventTitle}
@@ -2876,6 +2877,7 @@ export default function AdminScreen() {
             </View>
             <ComposerBar
               variant="form"
+              tone="light"
               containerClassName="mb-4"
               label="Description (optional)"
               value={eventDescription}

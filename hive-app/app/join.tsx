@@ -803,6 +803,7 @@ export default function JoinScreen() {
                 they are holding one-handed. */}
             <ComposerBar
               variant="form"
+              tone="light"
               containerClassName="mb-4"
               label="Your Name"
               value={waitlistName}
@@ -816,6 +817,7 @@ export default function JoinScreen() {
 
             <ComposerBar
               variant="form"
+              tone="light"
               containerClassName="mb-4"
               label="Message (optional)"
               value={waitlistMessage}
