@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -60,6 +61,16 @@ export function MentionSuggestions({
   const pageSkin = usePageSkin();
   const skin = tone === 'light' ? HIVE_SKIN : tone === 'dark' ? SPACE_SKIN : pageSkin;
 
+  // Nat: "a little arrow to collapse this whole thing" — the list can run to
+  // 240px right above the input, and on a phone that's most of the visible
+  // room. Reopens on its own each time a fresh "@" is typed (`active` going
+  // false-to-true), so collapsing once does not stick for the rest of the
+  // conversation — only for this one lookup (2026-08-08).
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    if (active) setOpen(true);
+  }, [active]);
+
   // The group rows are derived here when a composer has told us its reach, so
   // the labels are right even for screens that hand their suggestions in from a
   // hook that never heard about HIVEs. One function makes them either way.
@@ -111,8 +122,15 @@ export function MentionSuggestions({
         </View>
       ) : (
         <>
-          <View
+          <Pressable
+            onPress={() => setOpen((current) => !current)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: open }}
+            accessibilityLabel={open ? 'Tag someone, or a whole HIVE, open' : 'Tag someone, or a whole HIVE, shut'}
             style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               paddingHorizontal: 12,
               paddingVertical: 6,
               backgroundColor: skin.dark ? 'rgba(255,255,255,0.06)' : 'rgba(189,147,72,0.1)',
@@ -128,7 +146,13 @@ export function MentionSuggestions({
             >
               Tag someone, or a whole HIVE
             </Text>
-          </View>
+            <Ionicons
+              name={open ? 'chevron-up' : 'chevron-down'}
+              size={15}
+              color={skin.dark ? skin.gold : '#8a6b30'}
+            />
+          </Pressable>
+          {open && (
           <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
             {visibleSuggestions.map((member, index) => {
               const handle = getMentionTargetHandle(member);
@@ -215,6 +239,7 @@ export function MentionSuggestions({
               );
             })}
           </ScrollView>
+          )}
         </>
       )}
     </View>

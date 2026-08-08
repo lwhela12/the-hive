@@ -563,10 +563,14 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         </Pressable>
         {/* It said "Thread" here, which names the KIND of thing you are looking
             at rather than where it sits — no use at all to somebody who does not
-            already carry the structure in their head (Nat 2026-08-05). The trail
-            below says where you are; the header stops pretending to. */}
+            already carry the structure in their head (Nat 2026-08-05). It was
+            changed to the post's own title, but the title is also the big serif
+            headline right below this bar — on a post literally called "Welcome
+            to HIVE-Wide" that reads as the same line stacked twice. The board
+            name says where you are without repeating what you're about to read
+            (Nat 2026-08-08). */}
         <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-lg flex-1">
-          {post.title || 'Thread'}
+          {post.category?.name || 'Thread'}
         </Text>
         {canManagePost && (
           <EditButton onPress={handleOpenEditComposer} accessibilityLabel="Edit thread" />
