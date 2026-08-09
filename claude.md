@@ -361,8 +361,18 @@ The mic rule, from the 2026-08-04 sweep of 100 text inputs:
 | kind of field | gets |
 |---|---|
 | prose (multiline: replies, posts, wishes, bios, notes) | clip **and** mic |
-| short words (titles, skills, fun facts, search) | mic only |
-| structured (time, money, email, phone, URL, emoji, month) | neither |
+| short words (titles, skills, fun facts) | mic only |
+| structured (time, money, email, phone, URL, emoji, month) **and search** | neither |
+
+Search moved out of "short words" after this table was written — four
+separate files (`board.tsx`, `members.tsx` twice, `MemberPicker.tsx`) each
+independently landed on "finding a word in a list is not writing one," with
+matching comments. Consistent enough across enough places that it reads as
+the real rule now, not an oversight; the table above is what the code
+actually does as of 2026-08-09. **Verified same night: every text input in
+the app now matches this table** — zero raw `TextInput`s left that should
+be `ComposerBar` and aren't; every one still plain has an explicit comment
+saying why. Closes the "Clive's message bar everywhere" item.
 
 ---
 
