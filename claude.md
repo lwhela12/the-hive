@@ -169,11 +169,21 @@ budget entry, a stale line in the board-activity summarizer prompt, the
 example. `types/index.ts` also lost `MonthlyHighlight` (zero importers,
 discovered while tracing `queen_bee_id`'s only other reference).
 
-**Left alone, on purpose:** the `queen_bees` / `queen_bee_updates` database
-tables (4 rows, all historical, none current) — dropping live tables is a
-bigger decision than deleting app code, NAT'S CALL. Also left alone:
+**The tables are gone too, as of the same night.** Nat, asked directly: "we
+dont want any queen bee anything anywhere... not from our history, but from
+our current playbooks." Migration `160_no_queen_bee_anywhere.sql` dropped
+`queen_bees`, `queen_bee_updates`, `monthly_highlights`, and
+`events.related_queen_bee_id` (zero rows ever used that column). The actual
+history — Charlee ran Feb 2026 ("Act Submission Time"), Izzy ran March
+("Artist Space Optimization"), Lucas ran a second March-dated one ("Claude
+Code for Beginners"), Infiniti's April was logged "upcoming" and never
+filled in, no January row exists at all — is written into
+`Receipts/2026-08-09_dead-code-deletion.md` in Nat's brain folder, not the
+live schema. If a session ever needs the history again, that receipt is
+where it lives now, not a query. Left alone:
 `apply-meeting-notes/index.ts`'s defensive `delete summaryBase.queen_bee_highlights`
-(harmless, still protects old stored summaries).
+(harmless, still protects old stored summaries from a field that no longer
+exists anywhere upstream).
 
 **New finding, not yet acted on:** `supabase/functions/chat/context/summarizers.ts`
 and its `summarizeBoardActivity` function have zero callers anywhere in the
