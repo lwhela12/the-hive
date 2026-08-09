@@ -52,6 +52,29 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: false, reason: 'write_failed' });
     }
 
+    // The hello half. Awaited — this is a Node serverless function, not an
+    // Edge one, so nothing unawaited is guaranteed to finish once a response
+    // goes out; a fire-and-forget call here could just as often fire and
+    // never send. Awaited but never fatal: a slow or failed welcome email is
+    // not a reason to tell someone their sign-up didn't work, since the
+    // subscribe write above already succeeded.
+    try {
+      const welcomeRes = await fetch(`${url.replace(/\/$/, '')}/functions/v1/subscribe-welcome`, {
+        method: 'POST',
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, name: name || undefined }),
+      });
+      if (!welcomeRes.ok) {
+        console.error('welcome email failed', welcomeRes.status, (await welcomeRes.text().catch(() => '')).slice(0, 300));
+      }
+    } catch (err) {
+      console.error('welcome email threw', err);
+    }
+
     return res.status(200).json({ ok: true, subscribed: true });
   } catch (err) {
     console.error('subscribe threw', err);
