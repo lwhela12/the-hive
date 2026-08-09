@@ -40,6 +40,9 @@ import { parseFocusAnswer, parseHangsAnswer } from '../../components/surveys/Sur
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
+import { usePrivacyChoices } from '../../lib/hooks/usePrivacyChoices';
+import { Switch, SWITCH_GUTTER } from '../../components/ui/Switch';
+import { ScopeBadge } from '../../components/ui/ScopeBadge';
 import {
   getSurveyResponsePeriod,
   isMonthlyCheckInSurvey,
@@ -71,7 +74,7 @@ const hiveBeeMark = require('../../assets/BEE ONLY IN GOLD BG.png');
 // same wherever you pick it.
 const hiveCrest = require('../../assets/HIVE Logo Transparent  BG.png');
 
-type StepKey = 'wishes' | 'hangs' | 'calendar' | 'helpers' | 'todos' | 'checkin' | 'newsletter' | 'reading' | 'profile';
+type StepKey = 'wishes' | 'hangs' | 'calendar' | 'helpers' | 'todos' | 'checkin' | 'newsletter' | 'reading' | 'profile' | 'privacy';
 type Step = { key: StepKey; label: string };
 
 const STEPS: Step[] = [
@@ -89,6 +92,11 @@ const STEPS: Step[] = [
   // (Nat 2026-07-26, after walking it). Nobody edits their profile
   // unprompted; people DO answer a link that arrives, so it comes to them.
   { key: 'profile', label: 'Your profile' },
+  // Nat's idea, and the only realistic way anyone but her ever turns
+  // HIVE-Wide visibility on — surfacing the two Settings switches here, where
+  // people already are, instead of leaving them to be found on a page nobody
+  // goes looking for (2026-08-09).
+  { key: 'privacy', label: 'Your settings' },
   { key: 'checkin', label: 'Check-in' },
 ];
 
@@ -659,6 +667,7 @@ export default function MonthlyTuneupScreen() {
   const isMidpoint = mode === 'midpoint';
   const steps = isMidpoint ? MIDPOINT_STEPS : STEPS;
   const { profile, community, communityId } = useAuth();
+  const privacyChoices = usePrivacyChoices();
 
   // Reading + the quarterly profile pass both write to `profiles`, so they
   // share one dirty flag and one save that runs when the tune-up finishes.
@@ -3160,6 +3169,130 @@ export default function MonthlyTuneupScreen() {
     </View>
   );
 
+  // Nat's idea, and the only realistic way anyone but her ever turns
+  // HIVE-Wide visibility on (2026-08-09) — these are the same two switches on
+  // Settings, brought here instead of left on a page nobody goes looking for.
+  // Logic (the column-existence probe, the pending/saved pill state) lives
+  // once in `usePrivacyChoices`; this just draws it in the tune-up's own
+  // card style instead of Settings' Panel.
+  const renderPrivacyStep = () => {
+    const {
+      community: privacyCommunity,
+      checkedColumn,
+      hasDefaultShareColumn,
+      canDefaultWide,
+      canSendFurther,
+      travelOn,
+      defaultWide,
+      busyKey: privacyBusyKey,
+      savedKey: privacySavedKey,
+      saveProfileScope,
+      saveDefaultShareScope,
+    } = privacyChoices;
+
+    return (
+      <View>
+        <StepHeader
+          title="Who sees you, HIVE-Wide"
+          icon={<Text style={{ fontSize: 20 }}>🌍</Text>}
+          subtitle="Same two switches that live in Settings — just easier to find here. Change either any time."
+        />
+        <View style={cardStyle}>
+          <Switch
+            on={travelOn}
+            busy={privacyBusyKey === 'profile_scope'}
+            label="Show me HIVE-Wide"
+            hint={
+              travelOn
+                ? 'Anyone in any HIVE can find you in the HIVE-Wide members list, and open your profile from anything you share.'
+                : 'Only the people who share a HIVE with you can find you or open your profile.'
+            }
+            onToggle={(next) => void saveProfileScope(next)}
+          />
+          {privacySavedKey === 'profile_scope' && (
+            <Text
+              style={{
+                fontFamily: 'Lato_400Regular',
+                fontSize: 12,
+                color: '#9a8060',
+                marginLeft: SWITCH_GUTTER,
+                marginTop: -6,
+                marginBottom: 6,
+              }}
+            >
+              {travelOn
+                ? 'Saved. You are in the HIVE-Wide members list now.'
+                : 'Saved. You show up only inside your own HIVEs now.'}
+            </Text>
+          )}
+
+          <View style={{ height: 1, backgroundColor: 'rgba(222,193,129,0.4)', marginLeft: SWITCH_GUTTER }} />
+
+          {!checkedColumn ? (
+            <View style={{ paddingVertical: 18, alignItems: 'center' }}>
+              <ThinkingBee />
+            </View>
+          ) : hasDefaultShareColumn && canDefaultWide ? (
+            <>
+              <Switch
+                on={defaultWide}
+                busy={privacyBusyKey === 'default_share_scope'}
+                label={defaultWide ? 'New things go out HIVE-Wide' : 'New things start in your HIVE'}
+                hint={
+                  defaultWide
+                    ? 'New wishes and threads go out to every HIVE. You can pull any single one back when you share it.'
+                    : canSendFurther
+                      ? 'New wishes and threads start here, with your HIVE. You can send any single one further when you share it.'
+                      : 'New wishes and threads start here, with your HIVE.'
+                }
+                trailing={
+                  <ScopeBadge
+                    scope={defaultWide ? 'all_hives' : 'hive'}
+                    community={privacyCommunity}
+                    size="sm"
+                  />
+                }
+                onToggle={(next) => void saveDefaultShareScope(next)}
+              />
+              {privacySavedKey === 'default_share_scope' && (
+                <Text
+                  style={{
+                    fontFamily: 'Lato_400Regular',
+                    fontSize: 12,
+                    color: '#9a8060',
+                    marginLeft: SWITCH_GUTTER,
+                    marginTop: -6,
+                  }}
+                >
+                  {defaultWide
+                    ? 'Saved. New wishes and threads will start HIVE-Wide.'
+                    : 'Saved. New wishes and threads will start in your HIVE.'}
+                </Text>
+              )}
+            </>
+          ) : (
+            <Text
+              style={{
+                fontFamily: 'Lato_400Regular',
+                fontSize: 13,
+                lineHeight: 20,
+                color: '#2d2d2d',
+                paddingVertical: 12,
+              }}
+            >
+              {canSendFurther
+                ? 'New wishes and threads start in your HIVE. You can send any one of them further when you share it.'
+                : 'New wishes and threads start in your HIVE, with the people here.'}
+            </Text>
+          )}
+        </View>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
+          Both save the moment you flip them — nothing to submit here.
+        </Text>
+      </View>
+    );
+  };
+
   const renderTodosStep = () => (
     <View>
       <StepHeader
@@ -3335,6 +3468,8 @@ export default function MonthlyTuneupScreen() {
         return renderReadingStep();
       case 'profile':
         return renderProfileReviewStep();
+      case 'privacy':
+        return renderPrivacyStep();
       default:
         return null;
     }

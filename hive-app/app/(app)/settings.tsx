@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Linking, Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import { showAlert } from '../../lib/showAlert';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
+import { usePrivacyChoices } from '../../lib/hooks/usePrivacyChoices';
 import { AppHeader } from '../../components/navigation';
 import { LinkedLogins } from '../../components/profile/LinkedLogins';
 import { ScopeBadge } from '../../components/ui/ScopeBadge';
@@ -44,10 +45,6 @@ const CHARCOAL = '#313130';
 const MUTED = '#8e7f6b';
 // The gold used to live here too, for the radio dots and the On buttons. Both
 // are gone; the switch carries the gold now, out of `components/ui/Switch.tsx`.
-
-type Scope = 'hive' | 'all_hives';
-
-const SCOPE_RANK: Record<string, number> = { hive: 0, all_hives: 1, public: 2 };
 
 /**
  * One switch per email the HIVE actually sends. Two, because two is how many
@@ -189,82 +186,38 @@ function RowDivider() {
 }
 
 export default function SettingsScreen() {
-  const { profile, community, memberships, refreshProfile, openHivePicker } = useAuth();
+  const { profile, memberships, refreshProfile, openHivePicker } = useAuth();
   const { permissionStatus, requestPermissions } = useNotifications({ enableListeners: false });
   const isNotificationEnabled =
     permissionStatus === 'granted' || permissionStatus === 'provisional';
 
-  // Your default sharing wants a column that may not have been added yet, and
-  // this screen is not allowed to add it. So it asks the database once and
-  // shows the picker only if it can genuinely save the answer (2026-08-03).
-  const [checkedColumn, setCheckedColumn] = useState(false);
-  const [hasDefaultShareColumn, setHasDefaultShareColumn] = useState(false);
-  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const {
+    community,
+    checkedColumn,
+    hasDefaultShareColumn,
+    canDefaultWide,
+    canSendFurther,
+    travelOn,
+    defaultWide,
+    busyKey: privacyBusyKey,
+    savedKey: privacySavedKey,
+    saveProfileScope,
+    saveDefaultShareScope,
+  } = usePrivacyChoices();
 
-  /**
-   * The answer you just gave, held until the profile catches up.
-   *
-   * A switch has to move under your finger. What these draw comes from the
-   * profile, and the profile only changes once the save has been round-tripped,
-   * so without this the pill sits still for half a second and reads as a
-   * control that doesn't work. The radio cards did exactly that.
-   *
-   * Keyed by column so two saves in flight can't wear each other's answer, and
-   * dropped the moment the save settles — successfully, so the profile now says
-   * the same thing, or badly, so the switch slides back on its own.
-   */
-  const [pending, setPending] = useState<Record<string, boolean>>({});
+  // Emails are a separate kind of preference from the two above — same switch
+  // component, same busy/pending state so a save can't take another tap
+  // mid-flight, but their own state so an email save can never be mistaken
+  // for a privacy one. (No "Saved" receipt here — there never was one; the
+  // pill's own movement is the only feedback, same as before this split.)
+  const [emailBusyKey, setEmailBusyKey] = useState<string | null>(null);
+  const [emailPending, setEmailPending] = useState<Record<string, boolean>>({});
 
-  /**
-   * Which switch has just been saved, so the page can say so.
-   *
-   * A switch that slides under your finger looks the same whether or not
-   * anything reached the database — which is exactly how "I've been tryin to
-   * select HIVE wide a billion times" happened. A short line under the control
-   * says the save landed, and it goes on its own once you have read it
-   * (2026-08-06).
-   */
-  const [savedKey, setSavedKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!savedKey) return;
-    const timer = setTimeout(() => setSavedKey(null), 4000);
-    return () => clearTimeout(timer);
-  }, [savedKey]);
-
-  const userId = profile?.id;
-
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-
-    void (async () => {
-      const { error } = await (supabase as any)
-        .from('profiles')
-        .select('default_share_scope')
-        .eq('id', userId)
-        .limit(1);
-      if (cancelled) return;
-      setHasDefaultShareColumn(!error);
-      setCheckedColumn(true);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  /**
-   * Save one switch. `key` is the column it lives in and `next` is where the
-   * switch has just been put, which is only ever used to draw it — what is
-   * stored is `patch`, exactly as the caller wrote it.
-   */
-  const savePatch = useCallback(
+  const saveEmailPatch = useCallback(
     async (key: string, next: boolean, patch: Record<string, unknown>, failureMessage: string) => {
       if (!profile) return;
-      setBusyKey(key);
-      setSavedKey(null);
-      setPending((held) => ({ ...held, [key]: next }));
+      setEmailBusyKey(key);
+      setEmailPending((held) => ({ ...held, [key]: next }));
       try {
         const { error } = await (supabase as any)
           .from('profiles')
@@ -276,13 +229,10 @@ export default function SettingsScreen() {
           showAlert('Sorry', `${failureMessage} (${error.message})`);
           return;
         }
-        // Awaited all the way, so by the time we let go of `pending` below the
-        // profile is already carrying this answer and nothing flickers.
         await refreshProfile();
-        setSavedKey(key);
       } finally {
-        setBusyKey(null);
-        setPending((held) => {
+        setEmailBusyKey(null);
+        setEmailPending((held) => {
           const rest = { ...held };
           delete rest[key];
           return rest;
@@ -316,42 +266,12 @@ export default function SettingsScreen() {
     );
   }
 
-  const profileScope: Scope =
-    profile.profile_scope === 'all_hives' ? 'all_hives' : 'hive';
-
-  // How far you travel is worth asking everyone, even somebody in a single
-  // HIVE: the shared noticeboards reach every HIVE, so their post can be read
-  // by people they've never met whether or not they belong to a second HIVE.
-
-  // Your default only offers what your HIVE allows and what you could actually
-  // pick on a wish — the same rule WishScopePicker follows, so a default can
-  // never disagree with the picker you meet later.
-  const ceiling = (community?.max_share_scope as string | undefined) ?? 'hive';
-  // Belonging to one HIVE no longer hides the HIVE-Wide rung — see the note in
-  // ScopePicker for why that rule was retired on 2026-08-06. This mirror has to
-  // move with it, or a default here would promise something the picker refuses.
-  const canDefaultWide = SCOPE_RANK[ceiling] >= SCOPE_RANK.all_hives;
-  const defaultShare: Scope =
-    (profile as any).default_share_scope === 'all_hives' ? 'all_hives' : 'hive';
-
-  // Whether the picker they meet on a wish will offer them a second rung at
-  // all, worked out exactly the way WishScopePicker works it out. Someone whose
-  // HIVE stops at its own edge should not be promised they can send things
-  // further, because they can't.
-  const canSendFurther =
-    ['hive', 'all_hives', 'public'].filter(
-      (rung) => SCOPE_RANK[rung] <= (SCOPE_RANK[ceiling] ?? 0)
-    ).length > 1;
-
-  // Where each switch is drawn: the answer you just gave if one is in flight,
-  // otherwise what the profile says. Emails count a missing column as on.
-  const travelOn = pending.profile_scope ?? profileScope === 'all_hives';
-  const defaultWide = pending.default_share_scope ?? defaultShare === 'all_hives';
+  // Emails count a missing column as on.
   const emailIsOn = (setting: EmailSetting) =>
-    pending[setting.column] ?? (profile as any)[setting.column] !== false;
+    emailPending[setting.column] ?? (profile as any)[setting.column] !== false;
 
   const setEmail = (setting: EmailSetting, next: boolean) => {
-    void savePatch(
+    void saveEmailPatch(
       setting.column,
       next,
       { [setting.column]: next },
@@ -431,7 +351,7 @@ export default function SettingsScreen() {
           <Panel>
             <Switch
               on={travelOn}
-              busy={busyKey === 'profile_scope'}
+              busy={privacyBusyKey === 'profile_scope'}
               // "Card" appears nowhere else in the app — Nat: "Whats a 'card'?
               // we dont use that anywhere, what are you referring to?" It meant
               // your profile, so it says profile.
@@ -441,17 +361,10 @@ export default function SettingsScreen() {
                   ? 'Anyone in any HIVE can find you in the HIVE-Wide members list, and open your profile from anything you share.'
                   : 'Only the people who share a HIVE with you can find you or open your profile.'
               }
-              onToggle={(next) =>
-                void savePatch(
-                  'profile_scope',
-                  next,
-                  { profile_scope: next ? 'all_hives' : 'hive' },
-                  'That setting did not save. Please try again.'
-                )
-              }
+              onToggle={(next) => void saveProfileScope(next)}
             />
           </Panel>
-          {savedKey === 'profile_scope' && (
+          {privacySavedKey === 'profile_scope' && (
             <SavedNote>
               {travelOn
                 ? 'Saved. You are in the HIVE-Wide members list now.'
@@ -479,7 +392,7 @@ export default function SettingsScreen() {
                   what it looks like."* The setting shows you its own result. */}
               <Switch
                 on={defaultWide}
-                busy={busyKey === 'default_share_scope'}
+                busy={privacyBusyKey === 'default_share_scope'}
                 // The label used to read "Start new things HIVE-Wide" whether
                 // the switch was on or off, so an OFF switch sat under a
                 // sentence describing the ON state and the badge beside it said
@@ -499,16 +412,9 @@ export default function SettingsScreen() {
                     size="sm"
                   />
                 }
-                onToggle={(next) =>
-                  void savePatch(
-                    'default_share_scope',
-                    next,
-                    { default_share_scope: next ? 'all_hives' : 'hive' },
-                    'That setting did not save. Please try again.'
-                  )
-                }
+                onToggle={(next) => void saveDefaultShareScope(next)}
               />
-              {savedKey === 'default_share_scope' && (
+              {privacySavedKey === 'default_share_scope' && (
                 <SavedNote>
                   {defaultWide
                     ? 'Saved. New wishes and threads will start HIVE-Wide.'
@@ -544,7 +450,7 @@ export default function SettingsScreen() {
                   {index > 0 ? <RowDivider /> : null}
                   <Switch
                     on={on}
-                    busy={busyKey === setting.column}
+                    busy={emailBusyKey === setting.column}
                     label={setting.label}
                     hint={on ? setting.onHint : setting.offHint}
                     onToggle={(next) => setEmail(setting, next)}
