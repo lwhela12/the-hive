@@ -149,25 +149,44 @@ shared act of kindness each month.
 > assistant, because he was still perfectly able to use them. Do not
 > reintroduce them. Do not add a tool for anything the product no longer does.
 
-### Queen Bee leftovers still in the tree
+### Queen Bee leftovers — cleaned up 2026-08-09
 
-These are dead or near-dead and should not be built on. Deleting them is welcome
-work; adding to them is not.
+The app-layer surface is gone: `lib/claude.ts`, `app/onboarding/*`, the admin
+"Set Queen Bee" modal, and `components/hive/QueenBeeCard.tsx` were already
+deleted by earlier sessions (this list had gone stale — none of them were
+still in the tree when checked). `lib/newsletterHeaders.ts`'s banner-matching
+bug was already fixed too. What was still real and got removed this session:
+`types/index.ts`'s `QueenBee`/`QueenBeeStatus`/`QueenBeePreference`/
+`QueenBeeUpdate` types and the `queen_bee`/`queen_bee_update` union members;
+and — the one that mattered — **Clive's context builder
+(`supabase/functions/chat/context/index.ts`) was still live-querying
+`queen_bees` for the current month and would have injected a "Current Queen
+Bee" section into his prompt if any row ever matched it.** Dormant (no
+current-month row existed), but a real gap in "Queen Bee is retired," not
+cosmetic. Removed the query, its types in `context/types.ts`, the token
+budget entry, a stale line in the board-activity summarizer prompt, the
+`notify` function's `queen_bee_update` message type, and a title-generator
+example. `types/index.ts` also lost `MonthlyHighlight` (zero importers,
+discovered while tracing `queen_bee_id`'s only other reference).
 
-- `hive-app/lib/claude.ts` — **imported by nothing.** It still defines
-  `get_current_queen_bee` and `add_queen_bee_update`. It is the file the old
-  version of this document was copied from. Dead code.
-- `app/onboarding/welcome.tsx` — a reachable URL selling a 12-person community
-  and Queen Bee Month. Nothing links to it, but in Expo Router a file existing
-  means the URL exists.
-- `lib/newsletterHeaders.ts` — matches the generic words "spotlight" and "member
-  of the month" and stamps a gold **"Our Current Queen Bee"** banner on the
-  section. Delete before the next newsletter draft.
-- `app/(app)/admin.tsx` still has a "Set Queen Bee" modal writing to a
-  `queen_bees` table; `components/hive/QueenBeeCard.tsx` and its skeletons exist;
-  `types/index.ts` still exports `QueenBee`, `QueenBeeStatus`,
-  `QueenBeePreference`, and `queen_bee` appears in `EventType`,
-  `BoardCategoryType` and `NotificationType`.
+**Left alone, on purpose:** the `queen_bees` / `queen_bee_updates` database
+tables (4 rows, all historical, none current) — dropping live tables is a
+bigger decision than deleting app code, NAT'S CALL. Also left alone:
+`apply-meeting-notes/index.ts`'s defensive `delete summaryBase.queen_bee_highlights`
+(harmless, still protects old stored summaries).
+
+**New finding, not yet acted on:** `supabase/functions/chat/context/summarizers.ts`
+and its `summarizeBoardActivity` function have zero callers anywhere in the
+function's own import graph — the deploy bundler doesn't even upload the
+file. Possibly a second orphaned module; wants its own look before deleting
+(check whether `CommunityContextSummaryType`'s `'board_activity'` value and
+the cached-summary expiry logic still mean anything without it).
+
+Five hooks were also fully orphaned and deleted the same session (zero real
+importers, all superseded by `use*Query.ts` equivalents):
+`lib/hooks/useChat.ts`, `useHiveOnlyScreen.ts`, `useRoomMessages.ts`,
+`useTypingIndicators.ts`, `useUser.ts`. `lib/google-calendar.ts` (unused,
+zero importers) was deleted too.
 
 ---
 
@@ -205,7 +224,6 @@ the-HIVE/
     ├── app/
     │   ├── (auth)/          login, OAuth callback
     │   ├── (app)/           the signed-in app (see below)
-    │   ├── onboarding/      welcome + chat (welcome is stale, see above)
     │   ├── join.tsx         invite acceptance
     │   └── _layout.tsx      root layout — this is where `wholeHive` lives
     ├── components/
@@ -326,7 +344,6 @@ because the same thing was hand-written three or four times and drifted.
 | `lib/navigation.ts` | every destination in the app, once |
 | `lib/appNews.ts` | "what's new" — read by Home's strip, the newsletter draft and the meeting deck |
 | `lib/hiveWide.ts` | what HIVE-Wide is, said once, for three surfaces |
-| ~~`lib/hooks/useHiveOnlyScreen.ts`~~ | **imported by nothing.** See the gotcha below before reaching for it |
 | `lib/maintenance.ts` | the door. `HIVE_CLOSED = true` shuts the app to everyone but the keepers |
 
 The mic rule, from the 2026-08-04 sweep of 100 text inputs:
@@ -486,10 +503,12 @@ eas build --platform ios   # iOS build via EAS
   **`hive.tsx` reads `wholeHive` itself now** (`:694`, and the redirect at
   `:714`), which is what actually fixes it.
   > A previous version of this file said "`lib/hooks/useHiveOnlyScreen.ts` is
-  > the referee now." **That hook is imported by nothing** — checked 2026-08-06.
-  > It was written for this bug and never wired into a single screen, so for a
-  > while the file said fixed while the fix sat on a shelf. Either wire it up
-  > everywhere or delete it; do not cite it as the answer again.
+  > the referee now." That hook was imported by nothing — checked 2026-08-06,
+  > written for this bug, never wired into a single screen — so for a while
+  > the file said fixed while the fix sat on a shelf. **Deleted 2026-08-09**
+  > rather than left as a citation nobody could act on. The lesson generalises:
+  > when a comment names a file as "the fix," check that the file is actually
+  > imported before trusting the comment.
 
 - **Never build the web bundle in CI from pulled environment variables.**
   Supabase keys are marked sensitive, so `vercel env pull` returns them empty,
