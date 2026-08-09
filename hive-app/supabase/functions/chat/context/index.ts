@@ -159,24 +159,17 @@ async function fetchUserContext(
 }
 
 /**
- * Fetch community-wide context (Queen Bee, events, honey pot, public wishes, skills)
+ * Fetch community-wide context (events, honey pot, public wishes, skills)
  */
 async function fetchCommunityContext(
   supabase: SupabaseClient,
   userId: string,
   communityId: string
 ): Promise<CommunityContextData> {
-  const currentMonth = new Date().toISOString().slice(0, 7);
   const nextWeek = new Date();
   nextWeek.setDate(nextWeek.getDate() + 7);
 
-  const [queenBeeResult, honeyPotResult, eventsResult, publicWishesResult, skillsResult] = await Promise.all([
-    supabase
-      .from('queen_bees')
-      .select('month, project_title, project_description, status, user:profiles(name)')
-      .eq('month', currentMonth)
-      .eq('community_id', communityId)
-      .single(),
+  const [honeyPotResult, eventsResult, publicWishesResult, skillsResult] = await Promise.all([
     supabase.from('honey_pot').select('balance').eq('community_id', communityId).single(),
     supabase
       .from('events')
@@ -209,15 +202,6 @@ async function fetchCommunityContext(
   }
 
   return {
-    queenBee: queenBeeResult.data
-      ? {
-          userName: (queenBeeResult.data.user as any)?.name || 'Unknown',
-          month: queenBeeResult.data.month,
-          projectTitle: queenBeeResult.data.project_title,
-          projectDescription: queenBeeResult.data.project_description,
-          status: queenBeeResult.data.status,
-        }
-      : null,
     honeyPot: honeyPotResult.data?.balance || 0,
     upcomingEvents: eventsResult.data || [],
     publicWishes: (publicWishesResult.data || []).map((w: any) => ({
@@ -466,15 +450,6 @@ ${actionItems}`);
 
   // Community Context (skip for onboarding)
   if (data.mode === 'default') {
-    // Queen Bee
-    if (data.communityContext.queenBee) {
-      const qb = data.communityContext.queenBee;
-      sections.push(`## Current Queen Bee (${qb.month}): ${qb.userName}
-**Project:** ${qb.projectTitle}
-${qb.projectDescription || ''}
-Status: ${qb.status}`);
-    }
-
     // Public wishes (including user's own)
     if (data.communityContext.publicWishes.length > 0) {
       const wishes = data.communityContext.publicWishes

@@ -163,9 +163,6 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       case 'meeting_summary':
         router.push('/meetings');
         break;
-      case 'queen_bee_update':
-        router.push('/hive');
-        break;
       case 'action_item':
         router.push('/meetings');
         break;

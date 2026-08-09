@@ -483,9 +483,9 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
    * back out of a thread on 2026-08-06 and landed on OG HIVE's "Favorite
    * Books!" wearing HIVE-Wide's black-and-globe, with the trail underneath
    * calling it a shared board. It was never shared; the page was the wrong page
-   * to be on. This is `lib/hooks/useHiveOnlyScreen.ts`'s job, written out here
-   * because /hive-wide-boards is this same component and genuinely belongs up
-   * there.
+   * to be on. `lib/hooks/useHiveOnlyScreen.ts` was written for this exact job
+   * and never wired up anywhere — deleted 2026-08-09 rather than left as a
+   * shelf nobody reaches for. The effect below is the actual fix.
    *
    * A link still on its way down into a HIVE is left alone — it is about to
    * bring you into one, and bouncing it would beat it to the punch.

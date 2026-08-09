@@ -46,7 +46,6 @@ export interface UserContextData {
 
 // Community context data
 export interface CommunityContextData {
-  queenBee: QueenBeeData | null;
   honeyPot: number;
   upcomingEvents: EventData[];
   publicWishes: PublicWishData[];
@@ -74,14 +73,6 @@ export interface ActionItemData {
   description: string;
   due_date?: string;
   completed: boolean;
-}
-
-export interface QueenBeeData {
-  userName: string;
-  month: string;
-  projectTitle: string;
-  projectDescription?: string;
-  status: string;
 }
 
 export interface EventData {
@@ -129,7 +120,6 @@ export interface CachedSummary {
 export interface TokenBudget {
   systemPrompt: number;
   userContext: number;
-  queenBee: number;
   publicWishesAndSkills: number;
   eventsAndHoneyPot: number;
   boardPostIndex: number;
@@ -143,7 +133,6 @@ export interface TokenBudget {
 export const DEFAULT_TOKEN_BUDGET: TokenBudget = {
   systemPrompt: 800,
   userContext: 400,
-  queenBee: 150,
   publicWishesAndSkills: 400,
   eventsAndHoneyPot: 150,
   boardPostIndex: 300,

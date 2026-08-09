@@ -4,7 +4,6 @@ export type UserRole = 'member' | 'treasurer' | 'admin';
 export type BoardCategoryType =
   | 'announcements'
   | 'general'
-  | 'queen_bee'
   | 'resources'
   | 'introductions'
   | 'custom';
@@ -12,19 +11,12 @@ export type BoardCategoryType =
 // Chat types
 export type ChatRoomType = 'community' | 'dm' | 'group_dm';
 export type WishStatus = 'private' | 'public' | 'fulfilled' | 'replaced';
-export type QueenBeeStatus = 'upcoming' | 'active' | 'completed';
 export type BoardPostStatus = 'active' | 'completed' | 'archived';
 
-export interface QueenBeePreference extends Record<string, unknown> {
-  preferred_month?: string;
-  reason?: string;
-  timeframe?: string;
-}
-export type EventType = 'meeting' | 'queen_bee' | 'birthday' | 'custom';
+export type EventType = 'meeting' | 'birthday' | 'custom';
 export type NotificationType =
   | 'wish_match'
   | 'meeting_summary'
-  | 'queen_bee_update'
   | 'action_item'
   | 'general'
   | 'board_reply'
@@ -173,8 +165,6 @@ export interface Profile extends Record<string, unknown> {
    * world, or reads across HIVEs, asks this (migration 128).
    */
   is_owner?: boolean | null;
-  queen_bee_month?: string;
-  queen_bee_preference?: QueenBeePreference;
   google_calendar_id?: string;
   google_refresh_token?: string;
   avatar_url?: string;
@@ -286,42 +276,6 @@ export interface WishGranter extends Record<string, unknown> {
   granter?: Profile;
 }
 
-export interface QueenBee extends Record<string, unknown> {
-  id: string;
-  user_id: string;
-  community_id: string;
-  month: string;
-  project_title: string;
-  project_description?: string;
-  status: QueenBeeStatus;
-  display_order?: number;
-  created_at: string;
-  updated_at: string;
-  user?: Profile;
-}
-
-export interface QueenBeeUpdate extends Record<string, unknown> {
-  id: string;
-  queen_bee_id: string;
-  user_id: string;
-  community_id: string;
-  content: string;
-  created_at: string;
-  user?: Profile;
-}
-
-export interface MonthlyHighlight extends Record<string, unknown> {
-  id: string;
-  queen_bee_id: string;
-  meeting_id?: string;
-  community_id: string;
-  highlight: string;
-  display_order: number;
-  created_by?: string;
-  created_at: string;
-  creator?: Profile;
-}
-
 export interface Meeting extends Record<string, unknown> {
   id: string;
   community_id: string;
@@ -394,7 +348,6 @@ export interface Event extends Record<string, unknown> {
   location?: string;
   status?: EventStatus;
   related_user_id?: string;
-  related_queen_bee_id?: string;
   created_by?: string;
   created_at: string;
 }
@@ -827,28 +780,10 @@ export interface Database {
         Update: Partial<Omit<WishGranter, 'id' | 'created_at'>>;
         Relationships: [];
       };
-      queen_bees: {
-        Row: QueenBee;
-        Insert: Omit<QueenBee, 'id' | 'created_at' | 'updated_at'>;
-        Update: Partial<Omit<QueenBee, 'id' | 'created_at'>>;
-        Relationships: [];
-      };
-      queen_bee_updates: {
-        Row: QueenBeeUpdate;
-        Insert: Omit<QueenBeeUpdate, 'id' | 'created_at'>;
-        Update: Partial<Omit<QueenBeeUpdate, 'id' | 'created_at'>>;
-        Relationships: [];
-      };
       meetings: {
         Row: Meeting;
         Insert: Omit<Meeting, 'id' | 'created_at'>;
         Update: Partial<Omit<Meeting, 'id' | 'created_at'>>;
-        Relationships: [];
-      };
-      monthly_highlights: {
-        Row: MonthlyHighlight;
-        Insert: Omit<MonthlyHighlight, 'id' | 'created_at'>;
-        Update: Partial<Omit<MonthlyHighlight, 'id' | 'created_at'>>;
         Relationships: [];
       };
       action_items: {

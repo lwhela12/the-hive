@@ -118,9 +118,8 @@ export async function summarizeBoardActivity(
 Include:
 1. Hot topics being discussed
 2. Any announcements (especially pinned posts)
-3. Queen Bee project updates
-4. Questions that might need answers
-5. Resources shared
+3. Questions that might need answers
+4. Resources shared
 
 Keep summary under 150 words. Be concise.
 

@@ -99,7 +99,7 @@ Rules:
 
 Good examples:
 - Community Profile Help
-- Queen Bee Schedule
+- HIVE-Wide Visibility
 - Google Calendar Sync
 - Landing Page Copy
 - Board Post Ideas

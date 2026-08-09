@@ -33,7 +33,6 @@ const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@yourdomain.com>
 const NOTIFICATION_TYPES = [
   'wish_match',
   'meeting_summary',
-  'queen_bee_update',
   'action_item',
   'general',
 ] as const;
@@ -191,18 +190,6 @@ serve(async (req) => {
           <h2>Meeting Summary - ${escapeHtml(meeting?.date)}</h2>
           <p>${escapeHtml(meeting?.summary)}</p>
           <p>Open HIVE to see action items and full details.</p>
-        `;
-        break;
-      }
-
-      case 'queen_bee_update': {
-        const { queenBee, update } = data as { queenBee?: { name?: string; project?: string }; update?: string };
-        title = `Update from ${asText(queenBee?.name)}`;
-        content = asText(update);
-        emailSubject = `Queen Bee Update: ${asText(queenBee?.project)}`;
-        emailBody = `
-          <h2>${escapeHtml(queenBee?.name)}'s Project Update</h2>
-          <p>${escapeHtml(update)}</p>
         `;
         break;
       }
