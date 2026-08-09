@@ -3193,9 +3193,9 @@ export default function MonthlyTuneupScreen() {
     return (
       <View>
         <StepHeader
-          title="Who sees you, HIVE-Wide"
+          title="HIVE grew — here's your part of it"
           icon={<Text style={{ fontSize: 20 }}>🌍</Text>}
-          subtitle="Same two switches that live in Settings — just easier to find here. Change either any time."
+          subtitle="Three HIVEs now, and a shared space above them all. These two switches say how far you show up in it — change either any time."
         />
         <View style={cardStyle}>
           <Switch
