@@ -15,7 +15,6 @@
     "release:check": "npm run typecheck && npm run doctor"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.71.2",
     "@expo-google-fonts/lato": "^0.4.1",
     "@expo-google-fonts/libre-baskerville": "^0.4.3",
     "@expo/vector-icons": "^15.1.1",
