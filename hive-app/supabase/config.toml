@@ -146,3 +146,10 @@ verify_jwt = false
 # the author's name trustworthy.
 [functions.app-feedback]
 verify_jwt = false
+
+# Sends the newsletter sign-up confirmation, called server-to-server from the
+# public site's own subscribe endpoint (no browser ever calls this directly,
+# so no user JWT to check). Only sends one fixed template with a looked-up
+# unsubscribe token — never arbitrary caller-supplied content.
+[functions.subscribe-welcome]
+verify_jwt = false
