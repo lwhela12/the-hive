@@ -294,7 +294,7 @@ serve(async (req) => {
 
               <p style="font-size: 15px;">We are so glad you're here.</p>
 
-              <p style="font-size: 15px;">The HIVE is a small group of people who help each other get things done. Everyone shares what they're working on and what they could use a hand with — and the rest of us go "oh, I can help with that." That's the whole idea.</p>
+              <p style="font-size: 15px;">The HIVE is a small group of people who help each other get things done. Everyone shares what they're working on and what they could use a hand with — and the rest of us go "oh, I can help with that."</p>
 
               <p style="font-size: 15px;">Stuck on anything once you're in? Ask <strong>Clive</strong> — the HIVE's helper, behind the sparkles in the app. And ${inviterName || 'whoever invited you'} is a text away. 💛</p>
 
