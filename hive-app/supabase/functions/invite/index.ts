@@ -279,50 +279,38 @@ serve(async (req) => {
           from: FROM_EMAIL,
           to: email,
           subject: `🍯 You're invited to ${communityName}`,
+          // Nat, 2026-08-11: the button was so high everyone would click it
+          // before reading, and the app-walkthrough sections below it were
+          // describing what the app itself should show you. ~60% fewer words,
+          // the button moved to the BOTTOM so the reading comes first, the
+          // "first thing you'll see" / "once you're in" / profile-checklist
+          // sections deleted, and "meet you in person" dropped — not every
+          // HIVE meets in person.
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
               <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🐝</span></div>
               <h1 style="color: ${headingColour}; font-size: 22px; text-align: center; margin: 8px 0 4px;">Welcome to the HIVE</h1>
               <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 22px;">${inviterName ? `${inviterName} invited you` : "You've been invited"} to join ${communityName}</p>
 
-              <p style="font-size: 15px;">We are so glad you're here, and we can't wait to meet you in person.</p>
+              <p style="font-size: 15px;">We are so glad you're here.</p>
 
               <p style="font-size: 15px;">The HIVE is a small group of people who help each other get things done. Everyone shares what they're working on and what they could use a hand with — and the rest of us go "oh, I can help with that." That's the whole idea.</p>
 
-              <p style="font-size: 15px;">This link is your way into the members' side:</p>
-
-              <div style="text-align: center; margin: 22px 0;">
-                <a href="${inviteUrl}" style="background: ${accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Come on in</a>
-              </div>
+              <p style="font-size: 15px;">Stuck on anything once you're in? Ask <strong>Clive</strong> — the HIVE's helper, behind the sparkles in the app. And ${inviterName || 'whoever invited you'} is a text away. 💛</p>
 
               <div style="background: ${tint(accent, 0.09)}; border: 1px solid ${tint(accent, 0.45)}; border-radius: 12px; padding: 14px 16px; margin: 22px 0;">
-                <p style="font-size: 14px; margin: 0;"><strong>Finding your way back later:</strong> go to <a href="https://www.the-hive.app" style="color: ${headingColour};">the-hive.app</a> and click <strong>Member Log In</strong>. Or bookmark <a href="https://app.the-hive.app" style="color: ${headingColour};">app.the-hive.app</a> and go straight there. No need to dig up this email again.</p>
+                <p style="font-size: 14px; margin: 0;"><strong>Finding your way back later:</strong> bookmark <a href="https://app.the-hive.app" style="color: ${headingColour};">app.the-hive.app</a>. No need to dig up this email again.</p>
               </div>
 
-              <h2 style="color: ${headingColour}; font-size: 15px; margin: 26px 0 8px;">The first thing you'll see</h2>
-              <p style="font-size: 15px; margin: 0 0 12px;">You'll land on <strong>HIVE-Wide</strong> — a page with a picture of the Earth on it, showing every HIVE at once. Yours is <strong>${communityName}</strong>, and that's where everything below lives. Tap the big <strong>Go into ${communityName}</strong> button to step in. HIVE-Wide stays at the top of the menu on the left, with the little world beside it, whenever you want to look around again.</p>
-
-              <h2 style="color: ${headingColour}; font-size: 15px; margin: 26px 0 8px;">Once you're in</h2>
-              <p style="font-size: 15px; margin: 0 0 12px;">No rush, and nothing has to be perfect. Click around — you can't break anything.</p>
-              <p style="font-size: 15px; margin: 0 0 12px;"><strong>Your profile keeps score for you.</strong> It shows how far along you are and what's still blank, so you can do a bit whenever you've got a minute rather than all of it now. This list is just what's on it:</p>
-              <ol style="font-size: 15px; padding-left: 20px; margin: 0;">
-                <li style="margin-bottom: 8px;"><strong>Fill out your profile.</strong> A photo and a birthday go a long way — we like cake. It'll nudge you through the rest a bit at a time.</li>
-                <li style="margin-bottom: 8px;"><strong>Meet everyone.</strong> Have a read through the other members' profiles — it's a lovely head start on knowing who you're walking into a room with.</li>
-                <li style="margin-bottom: 8px;"><strong>Answer the daily question.</strong> One little question a day. It's the easiest way to start feeling like part of the group before you've even met us.</li>
-                <li style="margin-bottom: 8px;"><strong>Add a few things you're good at.</strong> Anything counts: sourdough, spreadsheets, knowing a guy. This is how someone's wish finds its way to you.</li>
-                <li style="margin-bottom: 8px;"><strong>Post one wish.</strong> Something you'd genuinely love help with. Start small — "I want someone to teach me three easy weeknight dinners" beats "I want to be healthier."</li>
-              </ol>
-
-              <h2 style="color: ${headingColour}; font-size: 15px; margin: 26px 0 8px;">Stuck? Ask Clive</h2>
-              <p style="font-size: 15px; margin: 0 0 12px;">Clive is the HIVE's helper, and he lives in the app — tap the sparkles. He can explain how anything works, help you put a fuzzy wish into words, tell you what happened at a meeting you missed, or just chat. He's the fastest way to get unstuck, and he doesn't mind daft questions.</p>
-
-              <p style="font-size: 15px;">And if all else fails, ${inviterName || 'whoever invited you'} is a text away — ask away, no question is too small. 💛</p>
-
-              <p style="font-size: 15px; margin-top: 22px;">${nextMeetingLabel
+              <p style="font-size: 15px;">${nextMeetingLabel
                 ? `See you at the next meeting on <strong>${nextMeetingLabel}</strong>! 🐝`
                 : `See you at the next meeting! 🐝`}</p>
 
-              <p style="font-size: 13px; color: #9a9a9a; text-align: center; margin-top: 26px;">Your link works for the next 7 days. See you in there. 🍯</p>
+              <div style="text-align: center; margin: 26px 0 8px;">
+                <a href="${inviteUrl}" style="background: ${accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Come on in</a>
+              </div>
+
+              <p style="font-size: 13px; color: #9a9a9a; text-align: center; margin-top: 18px;">Your link works for the next 7 days. 🍯</p>
               <p style="font-size: 12px; color: #c0c0c0; text-align: center; word-break: break-all;">${inviteUrl}</p>
             </div>
           `
