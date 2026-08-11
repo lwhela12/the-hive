@@ -212,7 +212,20 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                   right-aligned, which is her "upper right hand corner maybe"
                   on every width. */}
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 6 }}>
-                <ScopeBadge scope={item.reach ?? 'hive'} communityId={item.community_id} size="sm" />
+                {/* `hideHive` on shared boards: a HIVE-Wide board wears the
+                    world mark and NOTHING else. The badge used to add the
+                    owning HIVE's hexagon beside it at HIVE-Wide ("whose it
+                    is"), but a row has to belong to some HIVE for the
+                    database's sake, and naming that HIVE on the card read as
+                    a contradiction, not information. Nat, 2026-08-11: "This
+                    board, that is for HIVE wide is marked as OG HIVE? ...
+                    it should be HIVE wide across the board." */}
+                <ScopeBadge
+                  scope={item.reach ?? 'hive'}
+                  communityId={item.community_id}
+                  size="sm"
+                  hideHive={item.reach === 'all_hives'}
+                />
               </View>
 
               {/* Emoji only (Nat 2026-08-04). Checked before deleting: ZERO

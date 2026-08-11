@@ -36,15 +36,18 @@ async function fetchCategories(communityId: string | undefined, reach: BoardReac
     .select('*, member_tags:board_category_member_tags(*, member:profiles!board_category_member_tags_tagged_user_id_fkey(id, name, avatar_url))');
 
   if (reach === 'all_hives') {
-    // The shared boards — HIVE Approved, Announcements, the Favorites, HIVE
-    // Helpers, Compliment Corner. Scoped by reach rather than by community, so
-    // that a Tech member sees them even though OG owns the rows (Nat 2026-08-03).
+    // The shared boards, scoped by reach rather than by community, so that a
+    // Tech member sees them even though OG owns the rows (Nat 2026-08-03).
     q = q.eq('reach', 'all_hives');
   } else {
-    // Only this HIVE's OWN boards. "What's ours" and "what's everybody's" are
-    // two different screens now, rather than one long list you have to know how
-    // to read (Nat 2026-08-03).
-    q = q.eq('community_id', communityId ?? '').eq('reach', 'hive');
+    // This HIVE's own boards PLUS the shared HIVE-Wide ones. The shared boards
+    // used to live only behind HIVE-Wide's door (the 2026-08-03 split of
+    // "what's ours" and "what's everybody's") — Nat reversed that on
+    // 2026-08-11 when the shared board vanished from OG's Boards page:
+    // "since it is HIVE wide, it should also populate in our boards view."
+    // The card's badge says which kind each one is, so the mixed list stays
+    // readable in a way the pre-split single list wasn't.
+    q = q.or(`and(community_id.eq.${communityId ?? ''},reach.eq.hive),reach.eq.all_hives`);
   }
 
   const { data, error } = await q
