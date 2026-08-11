@@ -1118,7 +1118,16 @@ export function HiveMemberPanels({
                 { key: 'checkins', label: 'Check-ins' },
               ]}
               activeTab={tab}
-              onTabChange={(key: string) => setTabFor((prev) => ({ ...prev, [m.community_id]: key }))}
+              onTabChange={(key: string) => {
+                setTabFor((prev) => ({ ...prev, [m.community_id]: key }));
+                // Walking to another tab closes the invite form by itself.
+                // Nat, 2026-08-11: "If i clicked 'add new member' and now i
+                // want to do something else, i cant until i click 'close
+                // invite' — which feels weird." The form is a thing you were
+                // doing, not a place you are; going somewhere else IS
+                // closing it.
+                setInviteFor((prev) => (prev === m.community_id ? null : prev));
+              }}
               accent={accent}
               style={panelStyle}
               bodyStyle={bodyStyle}

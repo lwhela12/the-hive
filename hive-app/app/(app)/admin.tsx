@@ -48,7 +48,7 @@ import {
   PANEL_INSET,
   hivePanelSkin,
 } from '../../components/admin/GodModePanels';
-import { HIVE_GOLD, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { HIVE_GOLD, accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 // Admin is always seen from the cosmos, whichever HIVE you happen to belong to,
 // so its boxes take the space skin's ink and card values rather than asking
 // `usePageSkin()` where the reader is standing.
@@ -940,7 +940,17 @@ function AdminPanel({
           // disappear here, they are too black." It gets a dim ground of
           // its own and light ink, so all three read as a row of tabs with
           // one of them in front.
-          backgroundColor: on ? tabFill : 'rgba(255,248,233,0.07)',
+          //
+          // 2026-08-11, Nat again: with the name tab, the selected tab AND
+          // the action tab all carrying fill, "your eyes think that maybe
+          // you're in the check in tab, not the member tab... its too hard
+          // to tell which tab you have selected, unless you make them all
+          // clear & the colored one is the one you've selected." So
+          // selection now owns the solid: the selected tab is the OPAQUE
+          // accent (`washedTab`, a step brighter than the name tab's 0.6
+          // veil), every unselected tab stays a clear ghost, and the action
+          // tab became an outline (below) so nothing competes.
+          backgroundColor: on ? (skin?.washedTab ?? tabFill) : 'rgba(255,248,233,0.07)',
           // An inactive tab sits lower, so the active one reads as the sheet in
           // front rather than one of a row.
           paddingVertical: on ? 7 : 5,
@@ -1011,17 +1021,20 @@ function AdminPanel({
             accessibilityLabel={action.label}
             style={({ pressed }) => ({
               ...tabShape,
-              // Pressed is the same colour let down onto the panel behind it —
-              // one value per HIVE rather than a hand-picked darker gold that
-              // only ever matched one of them.
-              backgroundColor: pressed ? accentWash(accent ?? HIVE_GOLD, 0.72) : (accent ?? HIVE_GOLD),
+              // An OUTLINE in the HIVE's colour, not a fill (2026-08-11).
+              // Solid was Nat's own earlier ask ("gold for OG, blue for
+              // Tech") — but a solid action beside a solid selected tab is
+              // what made selection unreadable, and selection owns the solid
+              // now. The colour-per-HIVE survives in the border and ink.
+              backgroundColor: pressed ? accentWash(accent ?? HIVE_GOLD, 0.25) : 'transparent',
+              borderColor: accent ?? HIVE_GOLD,
               paddingHorizontal: narrow ? 11 : 12,
               paddingVertical: 5,
             })}
           >
             <Text
               numberOfLines={1}
-              style={{ fontFamily: 'Lato_700Bold', fontSize: narrow ? 12 : 12.5, color: '#fffdf5' }}
+              style={{ fontFamily: 'Lato_700Bold', fontSize: narrow ? 12 : 12.5, color: accentOnDark(accent ?? HIVE_GOLD) }}
             >
               {action.label}
             </Text>
