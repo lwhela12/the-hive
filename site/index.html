@@ -205,7 +205,7 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .cell:hover{background:var(--stroke) center/100% 100% no-repeat,linear-gradient(160deg,#fdf6e6,#e7d19c)}
 .cell:nth-child(even):hover{transform:translateY(calc(var(--hw)*.433)) scale(1.03)}
 .cell:nth-child(odd):hover{transform:scale(1.03)}
-/* Dark gold means "this one is open". Nothing wears it on arrival — all four
+/* Dark gold means "this one is open". Nothing wears it on arrival — all five
    cells start in the light gold and the panels stay shut (Nat 2026-08-06: "they
    should start out none deployed. Just light golden, not already selected.
    That's what happens when you select one, it gets dark golden & drops down").
@@ -253,10 +253,7 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;color:var(--charcoal);margi
 .pane .cash a:hover{border-color:var(--deepgold)}
 .pane .btn{margin-top:4px}
 .pane p.none{color:var(--label);font-style:italic;font-size:.9rem}
-/* Upcoming public events, pulled live from the members' app. The panel these
-   style is parked (2026-08-06) — the rules stay so bringing it back is putting
-   the markup and the fetch back, and nothing else. See the parked-events note
-   in the script at the bottom of this file. */
+/* Upcoming public events, pulled live from the members' app. */
 .evlist{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
 .evlist li{background:rgba(189,147,72,.07);border:1px solid rgba(189,147,72,.2);
   border-radius:14px;padding:12px 16px}
@@ -293,10 +290,9 @@ footer p.alone{font-family:var(--serif);font-style:italic;font-size:1.02rem;colo
   .cell:focus-visible{filter:none;box-shadow:0 0 0 3px var(--gold)}
   .cell+.cell{margin-left:0}
   .cell:nth-child(even),.cell:nth-child(even):hover,.cell:nth-child(odd):hover{transform:none}
-  /* Four cells fill two rows of two. There used to be a fifth (Events, parked
-     2026-08-06) and a `.cell:last-child{grid-column:1/-1}` rule to stretch the
-     odd one across the bottom; with an even count that rule stranded cell three
-     on its own. Bring both back together if Events ever returns. */
+  /* Five cells: two rows of two plus one odd cell left over, so the last one
+     stretches across the bottom rather than sitting alone in a half-empty row. */
+  .cell:last-child{grid-column:1/-1}
   .row2{grid-template-columns:1fr}
 }
 
@@ -503,13 +499,13 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
   <p class="eyebrow">The door&rsquo;s open</p>
   <h2 id="inv-h">Get involved</h2>
 
-  <!-- Four doors, all shut. These were marked up as a tablist until 2026-08-06,
+  <!-- Five doors, all shut. These were marked up as a tablist until 2026-08-06,
        when the cells stopped arriving pre-selected. A tablist promises a screen
        reader that exactly one tab is always chosen and that the arrow keys walk
        between them; with nothing chosen on arrival, and Tab being what has
        always moved between these cells, that promise was false. They are what
-       they behave like: four buttons that each open a panel, each saying
-       whether its panel is open. Tab reaches all four, in the order they are
+       they behave like: five buttons that each open a panel, each saying
+       whether its panel is open. Tab reaches all five, in the order they are
        read, whether or not one is open — and pressing the open one shuts it,
        which a tablist has no way to express. -->
   <div class="comb" role="group" aria-label="Ways to get involved">
@@ -517,9 +513,8 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       <span class="lab">Message us</span><span class="sub">Say hello</span></button>
     <button class="cell" type="button" id="t-news" aria-controls="p-news" aria-expanded="false">
       <span class="lab">Newsletter</span><span class="sub">Once a month</span></button>
-    <!-- An Events cell sat here until 2026-08-06. See the parked-events note in
-         the script at the bottom of this file for why it went and what has to
-         be true before it comes back. -->
+    <button class="cell" type="button" id="t-events" aria-controls="p-events" aria-expanded="false">
+      <span class="lab">Events</span><span class="sub">What&rsquo;s coming up</span></button>
     <button class="cell" type="button" id="t-origin" aria-controls="p-origin" aria-expanded="false">
       <span class="lab">Backstory</span><span class="sub">Thanks, Asimov</span></button>
     <button class="cell" type="button" id="t-swag" aria-controls="p-swag" aria-expanded="false">
@@ -553,9 +548,6 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     </div>
 
     <div class="pane" id="p-news" role="region" aria-labelledby="t-news" hidden>
-      <!-- One sentence. The second half used to point at the Events panel next
-           door, and that panel is parked (2026-08-06), so it was pointing at
-           nothing. -->
       <p>Once a month: what we worked on and what got granted.</p>
       <form id="subscribe" novalidate>
         <label class="sr" for="email">Your email</label>
@@ -572,8 +564,10 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
       <p class="none" id="buzznone" hidden></p>
     </div>
 
-    <!-- The Events panel lived here. Parked 2026-08-06, along with its cell
-         above and its fetch at the bottom of this file. -->
+    <div class="pane" id="p-events" role="region" aria-labelledby="t-events" hidden>
+      <ul class="evlist" id="evlist" hidden></ul>
+      <p class="none" id="evnone"></p>
+    </div>
 
     <div class="pane" id="p-origin" role="region" aria-labelledby="t-origin" hidden>
       <p>The <strong>Trap Door Spiders</strong> were real: a New York dinner club that met one
@@ -957,43 +951,10 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
      whatever happens to the events block below. */
   var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  /* ---------- events: parked, 2026-08-06 ----------
-
-     Everything between here and the end of this comment is the working code
-     that drew the Events panel. It stays on the shelf, whole, so bringing the
-     panel back is uncommenting rather than rewriting.
-
-     Why it went: the one thing the public feed returned was the August OG HIVE
-     meeting. The public_events view lists anything with visibility = 'public',
-     which means "a stranger may see this"; the separate flag invited_scope
-     says who may actually come, and on that meeting it says OG HIVE. So the
-     site was advertising a room a visitor would be turned away from, and that
-     is a worse first impression than a quiet page. Nat pushed the whole idea
-     to a later phase: "we park the 'events' on the Public facing site, i say
-     we push that out of MVP and over into a later phase."
-
-     What has to be true before it comes back:
-       1. At least one event in the members' app carries
-          invited_scope = 'public' — anyone may come.
-       2. Somebody has called /api/events by hand and seen that event in the
-          reply. The route is still live and still deployed; this page simply
-          stopped asking it.
-
-     Then bring back, in this order:
-       - the Events cell in the comb (see the note above the cells), copying a
-         neighbour so it carries aria-controls and aria-expanded="false",
-       - the p-events panel with its <ul id="evlist"> and <p id="evnone">,
-       - the `.cell:last-child{grid-column:1/-1}` phone rule, so five cells put
-         the odd one across the bottom row again,
-       - this block, by deleting the two comment markers around it.
-
-     The .evlist / .evwhen / .evwhat / .evwhere / .evnote styles are still in
-     the stylesheet, untouched and waiting.
-
-     One thing worth keeping when you do: dates arrive as plain YYYY-MM-DD and
-     get split by hand, because handing that string to new Date() reads it as
-     UTC midnight and shows the day before.
-
+  /* Upcoming public events, pulled live from the members' app via
+     /api/events. Dates arrive as plain YYYY-MM-DD and get split by hand,
+     because handing that string to new Date() reads it as UTC midnight and
+     shows the day before. */
   var DAY = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
   function asDate(s) {
@@ -1063,8 +1024,6 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     .catch(function () {
       evNone.textContent = 'The calendar is having a moment — the newsletter has these too.';
     });
-
-  ---------- end of the parked events block ---------- */
 
   /* The Buzz — past newsletters, so a stranger can read one before deciding
      whether they want them arriving by email. */

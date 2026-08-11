@@ -21,6 +21,7 @@ import { ChatInput, type ChatInputAttachments } from './ChatInput';
 import { SelectedImage } from '../../lib/imagePicker';
 import { uploadAttachments } from '../../lib/attachmentUpload';
 import { showAlert } from '../../lib/showAlert';
+import type { MentionReach } from '../../lib/mentions';
 import type { ChatMessage, Conversation, ConversationMode, Attachment } from '../../types';
 
 const cliveIcon = require('../../assets/Clive_logo.png');
@@ -300,6 +301,14 @@ export function ChatInterface({
   initialPrompt,
 }: ChatInterfaceProps) {
   const { session, profile, communityId, community } = useAuth();
+  // Clive is a private 1:1 — `conversations` is row-locked to its one
+  // `user_id` and nothing notifies anyone else about it (checked: there is no
+  // notify-clive-mention function, unlike DMs and board replies). So there is
+  // no "everyone" a whole-HIVE tag could ever reach here. `noGroups` turns off
+  // the group rows in the "@" picker (Task raised by Nat, 2026-08-11) while
+  // leaving @-mentioning a person alone — that still gives Clive useful
+  // context even though it can't push a notification either.
+  const mentionReach = useMemo<MentionReach>(() => ({ noGroups: true }), []);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [skillsCount, setSkillsCount] = useState(0);
@@ -1056,6 +1065,7 @@ Before we dive in, when's your birthday? We love celebrating our members!`;
         placeholder="Message Clive..."
         communityId={communityId}
         currentUserId={session?.user?.id}
+        mentionReach={mentionReach}
       />
     </KeyboardAvoidingView>
   );

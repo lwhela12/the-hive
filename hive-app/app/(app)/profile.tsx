@@ -41,6 +41,7 @@ import { WishManageModal } from '../../components/wishes/WishManageModal';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import type { Skill, Wish, UserInsights, Profile } from '../../types';
+import { EventScopeFields, type EventAudience } from '../../components/events/EventAudienceToggle';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
@@ -298,6 +299,12 @@ export default function ProfileScreen() {
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editBirthday, setEditBirthday] = useState('');
+  // How far a birthday travels (migration 164 — `profiles.birthday_visibility`
+  // / `birthday_invited_scope`, the same 'members' | 'all_hives' | 'public'
+  // ladder events use). Defaults to 'members' so a birthday never travels past
+  // your own HIVE until you say so — matching the column's own DB default.
+  const [editBirthdayVisibility, setEditBirthdayVisibility] = useState<EventAudience>('members');
+  const [editBirthdayInvitedScope, setEditBirthdayInvitedScope] = useState<EventAudience>('members');
   const [editOccupation, setEditOccupation] = useState('');
   const [editProfileTitle, setEditProfileTitle] = useState('');
   const [editPreferredContact, setEditPreferredContact] = useState('email');
@@ -399,6 +406,8 @@ export default function ProfileScreen() {
       setEditPhone(formatPhoneNumber(profile.phone || ''));
       // Convert ISO date to American format for editing
       setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
+      setEditBirthdayVisibility((((profile as any).birthday_visibility as EventAudience) || 'members'));
+      setEditBirthdayInvitedScope((((profile as any).birthday_invited_scope as EventAudience) || 'members'));
       setEditOccupation(profile.occupation || '');
       setEditProfileTitle((profile as any).profile_title || '');
       setEditPreferredContact(profile.preferred_contact || 'email');
@@ -421,6 +430,8 @@ export default function ProfileScreen() {
       setEditName(profile.name || '');
       setEditPhone(formatPhoneNumber(profile.phone || ''));
       setEditBirthday(profile.birthday ? isoToAmerican(profile.birthday) : '');
+      setEditBirthdayVisibility((((profile as any).birthday_visibility as EventAudience) || 'members'));
+      setEditBirthdayInvitedScope((((profile as any).birthday_invited_scope as EventAudience) || 'members'));
       setEditOccupation(profile.occupation || '');
       setEditProfileTitle((profile as any).profile_title || '');
       setEditPreferredContact(profile.preferred_contact || 'email');
@@ -657,6 +668,8 @@ export default function ProfileScreen() {
         name: editName.trim(),
         phone: editPhone.trim() || null,
         birthday: birthdayIso,
+        birthday_visibility: editBirthdayVisibility,
+        birthday_invited_scope: editBirthdayInvitedScope,
         occupation: editOccupation.trim() || null,
         profile_title: editProfileTitle.trim() || null,
         preferred_contact: editPreferredContact,
@@ -2129,10 +2142,29 @@ export default function ProfileScreen() {
             <View className="p-4 border-b border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-sm text-charcoal/50 mb-1">Birthday</Text>
               {isEditing ? (
-                <BirthdayPicker
-                  value={editBirthday}
-                  onChange={setEditBirthday}
-                />
+                <>
+                  <BirthdayPicker
+                    value={editBirthday}
+                    onChange={setEditBirthday}
+                  />
+                  {/* Who gets to see it, and who it's for — the same ladder
+                      events use (migration 164). Only shows once there's a
+                      birthday to set it for. Nat, 2026-08-11: "I friggin love
+                      my bday" — she wants hers travelling HIVE-Wide and
+                      public, which used to be impossible; everyone else stays
+                      on 'This HIVE only' until they say otherwise. Nobody but
+                      the owner of this profile can ever reach this control. */}
+                  {editBirthday.trim() ? (
+                    <View style={{ marginTop: 14 }}>
+                      <EventScopeFields
+                        visibility={editBirthdayVisibility}
+                        onVisibilityChange={setEditBirthdayVisibility}
+                        invited={editBirthdayInvitedScope}
+                        onInvitedChange={setEditBirthdayInvitedScope}
+                      />
+                    </View>
+                  ) : null}
+                </>
               ) : (
                 <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal">
                   {formatBirthdayForDisplay(profile.birthday) || 'Not set'}

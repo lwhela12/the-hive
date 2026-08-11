@@ -64,7 +64,11 @@ export function usePrefetchAppData(
       queryFn: async () => {
         const { data } = await supabase
           .from('wishes')
-          .select('*, user:profiles!user_id(*)')
+          // Narrowed to the 3 fields WishCard/WishDetail actually read — this
+          // used to ship every profile column (bio, hometown, 3MIQ answers)
+          // per wish author on every cold load. Matches useHiveDataQuery.ts's
+          // identical fix, 2026-08-11.
+          .select('*, user:profiles!user_id(id, name, avatar_url)')
           .eq('status', 'public')
           .or('is_active.is.true,is_active.is.null')
           .eq('community_id', communityId)

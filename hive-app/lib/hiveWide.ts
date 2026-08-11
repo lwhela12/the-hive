@@ -67,7 +67,7 @@ export const HIVE_WIDE_WELCOME = {
   // everybody has actually met the new arrangement — it's an announcement, not
   // a fact about the app.
   announcement:
-    'HIVE grew — there are three HIVEs now, so this is the front door '
+    'HIVE grew — there are multiple HIVEs now, so this is the front door '
     + 'everyone lands on first. Your own HIVE is still one click away, in the '
     + 'list on the left. Look around, and tell us what you think in App Feedback.',
   panels: [
@@ -92,7 +92,7 @@ export const HIVE_WIDE_WELCOME = {
  * voice like everything else, so it never reads as a bolted-on notice.
  */
 export const PARDON_OUR_DUST: string[] = [
-  'HIVE is expanding. There are three HIVEs now where there was one, and the app '
+  'HIVE is expanding. There are multiple HIVEs now where there was one, and the app '
     + 'grew a shared high street called HIVE-Wide to match.',
   'What that means if you like your privacy: nothing you have written has moved, '
     + 'and nothing moves on its own. Everything starts in your own HIVE and stays '

@@ -24,7 +24,7 @@ import { useAuth, type HiveMembership } from '../../lib/hooks/useAuth';
 import { getAppNews } from '../../lib/appNews';
 import { accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
-import { formatMeetingDate, getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
+import { getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
 import type { Community } from '../../types';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -88,11 +88,6 @@ type HiveEvent = {
    */
   visibility: string | null;
 };
-
-/** Did whoever made this say it could leave their HIVE? */
-function travelsOutward(event: HiveEvent) {
-  return event.visibility === 'all_hives' || event.visibility === 'public';
-}
 
 /**
  * A hang is somewhere you can turn up. A date range on the calendar is almost
@@ -158,9 +153,8 @@ const SPACE_SCRIM = 'rgba(5,6,11,0.62)';
 
 /**
  * This page's one palette. Every panel on the page is handed this exact object —
- * the welcome, the door, and all three boxes — so no panel can drift a few
- * percent away from its neighbours without somebody changing it here for all of
- * them.
+ * the welcome, the door, and both boxes — so no panel can drift a few percent
+ * away from its neighbours without somebody changing it here for all of them.
  */
 const PANEL_COLOURS = {
   ink: INK,
@@ -225,65 +219,6 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
     >
       {children}
     </CollapsiblePanel>
-  );
-}
-
-/** A HIVE and the one thing it has coming up. The hexagon carries the colour,
- *  which is how you know whose line you're reading before you read the name. */
-function HiveLine({ hive, event }: { hive: Community; event: HiveEvent | null }) {
-  // Lifted for space: Tech's #2f4a63 on this page is about 1.9:1, i.e. a HIVE
-  // name nobody can read. accentOnDark keeps the hue and raises it (2026-08-03).
-  const colour = accentOnDark(hiveAccent(hive));
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-      <View style={{ paddingTop: 4 }}>
-        <HiveMark size={12} colour={colour} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: INK }}>
-          {hiveDisplayName(hive.name)}
-        </Text>
-        {event ? (
-          <>
-            <Text
-              style={{
-                fontFamily: 'Lato_400Regular', fontSize: 13.5, lineHeight: 19,
-                color: INK_SOFT, marginTop: 1,
-              }}
-              numberOfLines={2}
-            >
-              {event.title}
-            </Text>
-            {/* The when, only if it was cleared to leave its HIVE. Same words
-                and same order as the meeting helper when it does show, so a date
-                reads the same everywhere in the app. */}
-            {travelsOutward(event) ? (
-              <Text
-                style={{
-                  fontFamily: 'Lato_400Regular', fontSize: 11.5,
-                  color: INK_FAINT, marginTop: 1,
-                }}
-              >
-                {formatMeetingDate(event)}
-              </Text>
-            ) : (
-              <Text
-                style={{
-                  fontFamily: 'Lato_400Regular', fontSize: 11,
-                  color: 'rgba(255,248,233,0.3)', marginTop: 2,
-                }}
-              >
-                details inside {hiveDisplayName(hive.name)}
-              </Text>
-            )}
-          </>
-        ) : (
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: colour, marginTop: 1 }}>
-            tbd
-          </Text>
-        )}
-      </View>
-    </View>
   );
 }
 
@@ -430,8 +365,8 @@ function WayIntoYourHive({
           are black instead of colored. We need to keep continuity."* She is
           comparing them to the rail two inches to the left, where a HIVE is a
           filled comb in its own colour on a dark ground — and to the rest of
-          THIS page, where `HiveLine` and the wishes draw exactly that. The
-          buttons were the only place in the app drawing a HIVE's comb in black.
+          THIS page, where the wishes draw exactly that. The buttons were the
+          only place in the app drawing a HIVE's comb in black.
 
           A comb needs somewhere dark to sit before it can be gold, blue or
           purple: gold on gold disappears. So the colour moved off the pill and
@@ -470,8 +405,8 @@ function WayIntoYourHive({
           const name = hiveDisplayName(m.community?.name);
           const raw = hiveAccent(m.community);
           // The HIVE's own colour, lifted until it reads on the night sky. The
-          // same call `HiveLine` and the wish combs on this page already make,
-          // so one HIVE is one colour everywhere you look.
+          // same call the wish combs on this page already make, so one HIVE is
+          // one colour everywhere you look.
           const colour = accentOnDark(raw);
           return (
             <Pressable
@@ -560,7 +495,7 @@ export default function HiveWideScreen() {
     ? allAppNews[allAppNews.length - 1].date
     : new Date().toISOString().slice(0, 10);
   const { width } = useWindowDimensions();
-  // Three boxes need real width before they stop being three narrow columns of
+  // These boxes need real width before they stop being narrow columns of
   // broken words. Below this they stack, in Nat's order.
   const wide = width >= 900;
 
@@ -659,15 +594,6 @@ export default function HiveWideScreen() {
     const byHive = new Map<string, HiveEvent>();
     upcoming.forEach((event) => {
       if (!isAHang(event)) return;
-      if (!byHive.has(event.community_id)) byHive.set(event.community_id, event);
-    });
-    return byHive;
-  }, [upcoming]);
-
-  const nextMeetingByHive = useMemo(() => {
-    const byHive = new Map<string, HiveEvent>();
-    upcoming.forEach((event) => {
-      if (event.event_type !== 'meeting') return;
       if (!byHive.has(event.community_id)) byHive.set(event.community_id, event);
     });
     return byHive;
@@ -825,24 +751,6 @@ export default function HiveWideScreen() {
                 columnGap: 12,
               }}
             >
-              <TopBox label="Meetings" wide={wide}>
-                {hives.length > 0 ? (
-                  <View style={{ gap: 11 }}>
-                    {hives.map((hive) => (
-                      <HiveLine key={hive.id} hive={hive} event={nextMeetingByHive.get(hive.id) ?? null} />
-                    ))}
-                  </View>
-                ) : (
-                  <Text
-                    style={{
-                      fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 14,
-                      lineHeight: 21, color: INK_SOFT,
-                    }}
-                  >
-                    Each HIVE's next sit-down shows up here once it's on the books.
-                  </Text>
-                )}
-              </TopBox>
               {/* The wishes that travel — the home they never had.
                   Marking a wish HIVE-Wide worked all along and then it went
                   nowhere visible, so the setting read as broken because its

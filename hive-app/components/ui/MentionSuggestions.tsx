@@ -19,9 +19,12 @@ import { WorldMark } from './WorldMark';
  *
  * 1. **Every group row names who it reaches.** "Everyone in HIVE" was written
  *    when there was one HIVE and now means two things at once (Nat, 2026-08-06).
- *    Rows say "Everyone in OG HIVE" or "Everyone in every HIVE", and which rows
- *    appear at all comes from `reach` — how far the thing being written can
- *    actually travel. `lib/mentions.ts` holds that reasoning.
+ *    Rows say "Everyone in OG HIVE" or "Everyone HIVE-Wide", and there are only
+ *    ever the two of them — this HIVE, and every HIVE. `lib/mentions.ts` holds
+ *    that reasoning. "Everyone HIVE-Wide" always shows up, even where this
+ *    thing cannot actually travel that far, but greyed out and unpressable —
+ *    `member.disabled` — with `description` explaining why instead of the row
+ *    quietly doing nothing (Nat, 2026-08-11).
  * 2. **It wears the page's colours.** This was a hard-coded white panel with
  *    charcoal text, which on HIVE-Wide's night sky was a bright white slab
  *    sitting on black. Same trap as the cream composer pill: the ink followed
@@ -161,12 +164,21 @@ export function MentionSuggestions({
               // colour is lifted before it is used as ink or a mark on dark.
               const accent = member.accent || HIVE_GOLD;
               const markColour = skin.dark ? accentOnDark(accent) : accent;
+              // "Everyone HIVE-Wide" shows up even where this thing can't
+              // actually reach that far — Nat, 2026-08-11, wanted it greyed
+              // out rather than hidden, with a reason in place of the row's
+              // normal description, so tapping it does nothing instead of
+              // quietly sending nobody a notification.
+              const disabled = !!member.disabled;
+              const dimOpacity = disabled ? 0.45 : 1;
 
               return (
                 <Pressable
                   key={member.id}
-                  onPress={() => onSelect(member)}
+                  onPress={disabled ? undefined : () => onSelect(member)}
+                  disabled={disabled}
                   accessibilityRole="button"
+                  accessibilityState={{ disabled }}
                   accessibilityLabel={
                     member.description ? `${member.name}. ${member.description}` : member.name
                   }
@@ -175,7 +187,7 @@ export function MentionSuggestions({
                     alignItems: 'center',
                     paddingHorizontal: 12,
                     paddingVertical: 8,
-                    backgroundColor: pressed ? skin.cardPressed : 'transparent',
+                    backgroundColor: !disabled && pressed ? skin.cardPressed : 'transparent',
                     borderBottomWidth: isLast ? 0 : 1,
                     borderBottomColor: skin.border,
                   })}
@@ -189,6 +201,7 @@ export function MentionSuggestions({
                       alignItems: 'center',
                       justifyContent: 'center',
                       overflow: 'hidden',
+                      opacity: dimOpacity,
                       backgroundColor:
                         member.group === 'hive_wide'
                           ? 'transparent'
@@ -211,7 +224,7 @@ export function MentionSuggestions({
                       </Text>
                     )}
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, opacity: dimOpacity }}>
                     <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: skin.ink }}>
                       {member.name}
                     </Text>
@@ -223,18 +236,20 @@ export function MentionSuggestions({
                       </Text>
                     )}
                   </View>
-                  <Text
-                    style={{
-                      fontFamily: 'Lato_400Regular',
-                      fontSize: 13,
-                      marginLeft: 8,
-                      color: skin.dark
-                        ? member.group === 'hive' ? markColour : skin.gold
-                        : '#8a6b30',
-                    }}
-                  >
-                    @{handle}
-                  </Text>
+                  {!disabled && (
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_400Regular',
+                        fontSize: 13,
+                        marginLeft: 8,
+                        color: skin.dark
+                          ? member.group === 'hive' ? markColour : skin.gold
+                          : '#8a6b30',
+                      }}
+                    >
+                      @{handle}
+                    </Text>
+                  )}
                 </Pressable>
               );
             })}

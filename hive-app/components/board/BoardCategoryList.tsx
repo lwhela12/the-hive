@@ -3,6 +3,7 @@ import { FlatList, Pressable, Text, View, useWindowDimensions } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { HiveIcon, type HiveIconName } from '../ui/HiveIcon';
 import { HIVE_ICON_PREFIX } from './BoardTopicComposer';
+import { ScopeBadge } from '../ui/ScopeBadge';
 import { usePageSkin } from '../../lib/pageSkin';
 import type { BoardCategory } from '../../types';
 
@@ -190,6 +191,17 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                 elevation: skin.dark ? 0 : 2,
               }}
             >
+              {/* Whose board it is, and how far it goes — a HIVE's own gold
+                  hexagon for the boards that stay home, the near-black world
+                  mark for the ones shared HIVE-Wide. Nat, viewing OG's boards:
+                  "since these are all og HIVE, they should just have the amber
+                  colored honey comb that denotes this group & should say 'OG
+                  HIVE'." Corner badge because the card layout below has no row
+                  left to put it in. */}
+              <View style={{ position: 'absolute', top: 10, right: 10, zIndex: 1 }}>
+                <ScopeBadge scope={item.reach ?? 'hive'} communityId={item.community_id} size="sm" />
+              </View>
+
               {/* Emoji only (Nat 2026-08-04). Checked before deleting: ZERO
                   boards store the old `hive:<name>` form, so nothing falls
                   through to render the literal text "hive:board". The picker

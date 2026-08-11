@@ -48,9 +48,10 @@ export function BoardComposer({
     category?.community_id,
     mentionableMembers
   );
-  // A thread reaches exactly as far as the board it is posted to, so the board
-  // is what tells the "@" picker who "everyone" is. On this HIVE's own board
-  // that is this HIVE, by name; on a shared board it is every HIVE.
+  // "@all"/"@everyone" always mean HIVE-Wide now (lib/mentions.ts) — what the
+  // board's own reach decides is whether that row is tappable. A thread on a
+  // HIVE-only board still offers "Everyone HIVE-Wide", just greyed out, since
+  // this board has not been set to travel that far.
   const mentionReach = useMentionReach({ reach: category?.reach });
 
   const isEditMode = !!existingPost;

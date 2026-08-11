@@ -7,11 +7,17 @@ import type {
   WishGranter,
   Event,
   Profile,
-  Skill,
-  Meeting,
 } from '../../types';
 
-type BirthdayMember = Pick<Profile, 'id' | 'name' | 'birthday'>;
+// `Profile` carries a string index signature (it `extends Record<string,
+// unknown>`), so `Pick<Profile, ...>` can only reach fields the interface
+// actually declares — and `birthday_visibility`/`birthday_invited_scope`
+// (migration 164) aren't declared there yet. Intersecting instead of picking
+// sidesteps that without having to touch a file this session doesn't own.
+type BirthdayMember = Pick<Profile, 'id' | 'name' | 'birthday'> & {
+  birthday_visibility?: string | null;
+  birthday_invited_scope?: string | null;
+};
 
 /**
  * Everything Home needs, fetched in parallel.
@@ -21,6 +27,17 @@ type BirthdayMember = Pick<Profile, 'id' | 'name' | 'birthday'>;
  * handed back as `queenBees`, and read by nothing. Queen Bee was dissolved in
  * April 2026 and replaced by the Hummdinger session, so Home was paying for a
  * fetch it threw away.
+ *
+ * Four more of exactly that shape were still here as of 2026-08-11:
+ * `fallbackAdmin`, `meetings`, `nextMeeting` and `userSkills` were all fetched
+ * on every Home load and none of the four was ever read — `hive.tsx`'s one
+ * call site destructures only `publicWishes`, `grantedWishes`, `upcomingEvents`,
+ * `honeyPotBalance`, `isLoading`, `loading` and `refetch`. Worse than idle: the
+ * blanket `isLoading` this hook returns (which gates Home's spinner and pull-
+ * to-refresh) waited on all nine queries finishing, so a slow, useless fetch
+ * could keep the real data hidden behind a spinner. Removed rather than left
+ * wired up "for later" — the lesson from Queen Bee was that an unread query is
+ * never actually free, and CLAUDE.md already tells this exact story once.
  */
 export function useHiveDataQuery(communityId?: string, userId?: string) {
   // Use local date to avoid timezone issues (toISOString uses UTC which can be wrong date)
@@ -50,6 +67,17 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
       event_type: 'birthday',
       related_user_id: member.id,
       created_at: member.birthday,
+      // Carried straight onto the synthetic event as the same field names a
+      // real event uses (migration 148's `events.visibility`/`invited_scope`),
+      // so every place that already reads those two fields off an `Event` —
+      // `ScopeBadge`, `isInvitedToEvent`, the event card in `hive.tsx` — works
+      // on a birthday without knowing it's synthetic. Nat, 2026-08-11: "I
+      // friggin love my bday" — she wants hers to travel further than her own
+      // HIVE, which migration 164's `profiles.birthday_visibility` /
+      // `birthday_invited_scope` now make possible, per-member, defaulting to
+      // `members` so nobody's birthday travels without them choosing it.
+      visibility: member.birthday_visibility ?? 'members',
+      invited_scope: member.birthday_invited_scope ?? member.birthday_visibility ?? 'members',
     };
   };
 
@@ -60,9 +88,14 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
       {
         queryKey: queryKeys.publicWishes(communityId || ''),
         queryFn: async () => {
+          // `user:profiles!user_id(*)` used to hand back every column on the
+          // author's profile — bio, hometown, all three 3MIQ answers, fun
+          // facts — for a card that only ever draws a name and an avatar
+          // (`WishCard`/`WishDetail`, checked 2026-08-11). Narrowed to the
+          // three fields actually read; same fix below for granters.
           let { data, error } = await (supabase as any)
             .from('wishes')
-            .select('*, user:profiles!user_id(*), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status)')
+            .select('*, user:profiles!user_id(id, name, avatar_url), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status)')
             .eq('status', 'public')
             .or('is_active.is.true,is_active.is.null')
             .eq('community_id', communityId!)
@@ -74,7 +107,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
           ) {
             const fallback = await (supabase as any)
               .from('wishes')
-              .select('*, user:profiles!user_id(*)')
+              .select('*, user:profiles!user_id(id, name, avatar_url)')
               .eq('status', 'public')
               .or('is_active.is.true,is_active.is.null')
               .eq('community_id', communityId!)
@@ -97,7 +130,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
           let { data, error } = await (supabase as any)
             .from('wishes')
             .select(
-              '*, user:profiles!user_id(*), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status), granters:wish_granters(*, granter:profiles!granter_id(*))'
+              '*, user:profiles!user_id(id, name, avatar_url), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))'
             )
             .eq('status', 'fulfilled')
             .eq('community_id', communityId!)
@@ -111,7 +144,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
             const fallback = await (supabase as any)
               .from('wishes')
               .select(
-                '*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))'
+                '*, user:profiles!user_id(id, name, avatar_url), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))'
               )
               .eq('status', 'fulfilled')
               .eq('community_id', communityId!)
@@ -158,7 +191,7 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         queryFn: async () => {
           const { data, error } = (await supabase
             .from('community_memberships')
-            .select('profiles!user_id(id, name, birthday)')
+            .select('profiles!user_id(id, name, birthday, birthday_visibility, birthday_invited_scope)')
             .eq('community_id', communityId!)) as {
               data: { profiles: BirthdayMember | null }[] | null;
               error: { message?: string } | null;
@@ -186,70 +219,6 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
         enabled: !!communityId,
         staleTime: 60 * 1000,
       },
-      // Recent meetings
-      {
-        queryKey: queryKeys.meetings(communityId || ''),
-        queryFn: async () => {
-          const { data } = (await supabase
-            .from('meetings')
-            .select('*')
-            .eq('community_id', communityId!)
-            .order('date', { ascending: false })
-            .limit(5)) as { data: Meeting[] | null };
-          return data || [];
-        },
-        enabled: !!communityId,
-        staleTime: 5 * 60 * 1000,
-      },
-      // Fallback admin
-      {
-        queryKey: queryKeys.fallbackAdmin(communityId || ''),
-        queryFn: async () => {
-          const { data } = (await supabase
-            .from('community_memberships')
-            .select('user:profiles(*)')
-            .eq('community_id', communityId!)
-            .eq('role', 'admin')
-            .limit(1)
-            .single()) as { data: { user: Profile } | null };
-          return data?.user || null;
-        },
-        enabled: !!communityId,
-        staleTime: 30 * 60 * 1000, // Admin changes rarely
-      },
-      // Next meeting (for "Next Month" section and display)
-      // Excludes completed meetings
-      {
-        queryKey: ['nextMeeting', communityId],
-        queryFn: async () => {
-          const { data } = (await supabase
-            .from('events')
-            .select('event_date, event_time, title')
-            .gte('event_date', today)
-            .eq('community_id', communityId!)
-            .eq('event_type', 'meeting')
-            .or('status.is.null,status.eq.scheduled')
-            .order('event_date', { ascending: true })
-            .limit(1)) as { data: { event_date: string; event_time: string | null; title: string }[] | null };
-          return data?.[0] || null;
-        },
-        enabled: !!communityId,
-        staleTime: 10 * 60 * 1000,
-      },
-      // User skills (for matching wishes)
-      {
-        queryKey: queryKeys.userSkills(communityId || '', userId || ''),
-        queryFn: async () => {
-          const { data } = await supabase
-            .from('skills')
-            .select('*')
-            .eq('user_id', userId!)
-            .eq('community_id', communityId!);
-          return (data as Skill[]) || [];
-        },
-        enabled: !!communityId && !!userId,
-        staleTime: 10 * 60 * 1000,
-      },
     ],
   });
 
@@ -259,17 +228,12 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
     eventsResult,
     birthdayEventsResult,
     honeyPotResult,
-    meetingsResult,
-    adminResult,
-    nextMeetingResult,
-    userSkillsResult,
   ] = results;
 
   const isLoading = results.some((r) => r.isLoading);
   const isRefetching = results.some((r) => r.isRefetching);
 
   return {
-    fallbackAdmin: adminResult.data || null,
     publicWishes: wishesResult.data || [],
     grantedWishes: grantedWishesResult.data || [],
     upcomingEvents: [
@@ -281,9 +245,6 @@ export function useHiveDataQuery(communityId?: string, userId?: string) {
       return (a.event_time || '').localeCompare(b.event_time || '');
     }),
     honeyPotBalance: honeyPotResult.data || 0,
-    meetings: meetingsResult.data || [],
-    nextMeeting: nextMeetingResult.data || null,
-    userSkills: userSkillsResult.data || [],
     isLoading,
     isRefetching,
     // Per-query loading states for skeleton UI

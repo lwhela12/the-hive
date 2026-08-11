@@ -11,57 +11,77 @@ import {
 /**
  * Who "@everyone" reaches, now that there is more than one HIVE.
  *
- * Nat, 2026-08-06: *"we need to update this in a big way: because @all
- * @everyone (and maybe one more that i'm forgetting) used to tag everyone in OG
- * HIVE... but that has a different meaning now that there are more HIVEs."*
+ * Nat, 2026-08-11: *"We dont want those commands to behave differently
+ * depending on which HIVE you're in. I say at all, everyone or wide should
+ * ALWAYS be HIVE wide."* That replaces the rule this file ran on until today —
+ * "everyone" used to mean the furthest a room/board/wish could travel, so the
+ * same word reached a different group depending on where it was typed: OG
+ * HIVE's `@all` meant OG, Production's `@all` meant Production. Nat's point is
+ * that a member should be able to trust the word means the same thing every
+ * time they read it.
  *
- * ## The one rule
+ * ## The one rule now
  *
- * **An @ tag reaches the people who can already see the thing it is written
- * on.** The picker names them out loud, every time — "Everyone in OG HIVE",
- * "Everyone in every HIVE" — so the word "everyone" never has to be guessed at.
- *
- * That rule is what keeps this safe. A notification is a copy of the thing:
- * it carries a preview and a link. Sending one to somebody who cannot open the
- * thing either leaks what it says or hands them a door that is locked. So the
- * options this file offers are derived from how far the writing can actually
- * travel — `chat_rooms.reach`, `board_categories.reach`, `wishes.share_scope`,
- * narrowed by the host HIVE's ceiling `communities.max_share_scope` — and never
- * from what the writer happens to type.
- *
- * In a HIVE-only room the furthest "everyone" can mean is that HIVE, so that is
- * the only group row on offer, and the everyone words land on it. In a room
- * that already reaches HIVE-Wide, the furthest is every HIVE, so that is what
- * the everyone words land on, and each HIVE is offered separately underneath.
+ * **The everyone words — `@all`, `@everyone`, `@wide`, `@hive` and the rest of
+ * `BROADCAST_MENTION_HANDLES` — always mean HIVE-Wide.** Not "the furthest
+ * this particular thing happens to reach" — always literally every HIVE. To
+ * tag one HIVE specifically, its own name is what you type: `@og`, `@tech`,
+ * `@production`. Those keep meaning exactly what they always meant, that HIVE
+ * and nothing wider.
  *
  * ## What the words do
  *
  * | you type | you get |
  * |---|---|
- * | `@all` `@everyone` `@everybody` `@wide` | the furthest row this writing can reach |
- * | `@hive` | the HIVEs on offer, to pick one |
+ * | `@all` `@everyone` `@everybody` `@wide` `@hive` | Everyone HIVE-Wide — every member of every HIVE |
  * | `@og` `@tech` `@production` | that HIVE, by its own name |
  *
- * ## Existing `@all` text does not change meaning
+ * ## The picker shows two rows, not a directory of every HIVE
  *
- * Every `@all`, `@everyone` and `@hive` already sitting in a message, a board
- * reply or a wish comment was typed inside one HIVE, on something whose reach
- * is `hive`. Meaning is read from where the writing sits, not from the word —
- * so those tags resolve today to exactly the group they resolved to when they
- * were typed: that HIVE. Nothing was rewritten, nothing widened, and no old
- * notification can suddenly reach a HIVE that was not there at the time.
+ * Composing inside OG HIVE offers exactly "Everyone HIVE-Wide" and "Everyone
+ * in OG HIVE" — never Tech's or Production's handle, even from a screen (the
+ * HIVE-Wide board, say) that happens to know every HIVE the writer belongs to.
+ * `getGroupMentionSuggestions` only ever names the HIVE the writing is
+ * actually hosted in, plus the one HIVE-Wide row.
  *
- * The only way an everyone word reaches further is if it is typed on something
- * that already travels, and then the picker said so in the row that was picked.
+ * ## A tag still cannot outrun what can be seen
  *
- * ## Resolution stays inside the caller's list
+ * A notification is a copy of the thing: it carries a preview and a link.
+ * Sending one to somebody who cannot open the thing either leaks what it says
+ * or hands them a door that is locked. So even though the everyone words now
+ * always MEAN HIVE-Wide, what actually gets reported for notifying people
+ * (`getMentionedGroups`) still cannot travel further than `reach` —
+ * `chat_rooms.reach`, `board_categories.reach`, `wishes.share_scope`, narrowed
+ * by the host HIVE's ceiling `communities.max_share_scope` — allows. Typed
+ * somewhere that has not been set to travel HIVE-Wide, the everyone words
+ * still land on the one HIVE that IS reachable, same as they always have.
  *
- * `getMentionedMembers` has always expanded an everyone word to the member list
- * the calling screen handed it — that screen's room, that screen's HIVE. It
- * still does, and it will never invent a recipient that was not in that list.
- * Reaching a HIVE the writer is not standing in is reported as a group by
- * `getMentionedGroups` and fanned out server-side, where row-level security can
- * still referee it.
+ * That is also why the "Everyone HIVE-Wide" picker row greys out instead of
+ * just working, when the room/board/wish it is offered on has not been set to
+ * travel that far (Nat, 2026-08-11: *"can that option be grayed out if the
+ * board or convo or whatever isnt shared? Like 'change visibility settings to
+ * HIVE wide in order to tag someone HIVE wide'?"*). Tagging people who cannot
+ * see the content would be exactly the leak this file exists to prevent, so
+ * the row says why instead of pretending the tap would work.
+ *
+ * ## A closed room stays closed
+ *
+ * `getMentionedMembers` has always expanded an everyone word to the member
+ * list the calling screen handed it, and never further. A DM or group chat
+ * sets `closedRoom` on its `MentionReach`, and that stays the whole answer —
+ * "everyone" there is the handful of people in the chat, never HIVE-Wide,
+ * whatever anyone types. `getMentionedGroups` reports that as `{ kind: 'room'
+ * }`, never `hive_wide`, so a closed room can never fan out past its own
+ * members even server-side.
+ *
+ * A private 1:1 with Clive goes one step further: nobody else can ever read
+ * it (`conversations` is row-locked to its one `user_id`, and there is no
+ * function that notifies anyone about it), so there is no group to tag at
+ * all. `ChatInterface.tsx` marks its `MentionReach` with `noGroups: true`, and
+ * every function below returns nothing rather than offering a picker row that
+ * would be a promise the app cannot keep. Naming one *person* still works
+ * there — that is just useful context for Clive to read — only the whole-HIVE
+ * rows are turned off.
  */
 
 export type MentionGroupKind = 'hive' | 'hive_wide' | 'room';
@@ -77,6 +97,12 @@ export type MentionTarget = Pick<Profile, 'id' | 'name'> & {
   communityId?: string;
   /** For a `hive` row: that HIVE's colour, so it can wear its own hexagon. */
   accent?: string;
+  /**
+   * True when this row is shown but cannot be tapped — right now only the
+   * HIVE-Wide row, when the thing being written on has not been set to travel
+   * that far. `description` carries the reason so the picker can show it.
+   */
+  disabled?: boolean;
 };
 
 /** One HIVE, small enough to hand to a picker. */
@@ -88,7 +114,7 @@ export type TaggableHive = {
 };
 
 /**
- * How far the thing being written can travel, and which HIVEs are on offer.
+ * How far the thing being written can travel, and which HIVE it may name.
  *
  * A screen builds one of these and hands it to the picker. Everything the
  * picker offers comes out of it, which is the point: the offer and the
@@ -101,7 +127,9 @@ export type MentionReach = {
   /**
    * The rung the writing itself sits on — `chat_rooms.reach`,
    * `board_categories.reach`, `wishes.share_scope`. Anything unrecognised is
-   * read as `hive`, the rung that travels least.
+   * read as `hive`, the rung that travels least. This is what decides whether
+   * the HIVE-Wide row is tappable or greyed out — it no longer decides what
+   * the everyone words MEAN, only how far a tag of them can actually go.
    */
   reach?: string | null;
   /**
@@ -112,8 +140,11 @@ export type MentionReach = {
    */
   ceiling?: string | null;
   /**
-   * Other HIVEs this writer can actually reach — normally the rest of their own
-   * memberships. Offered only when the writing already travels HIVE-Wide.
+   * Other HIVEs this writer belongs to. No longer read by anything in this
+   * file — the picker offers only the HIVE hosting the writing, never a list
+   * of every HIVE the writer happens to also be in (Nat, 2026-08-11). Kept on
+   * the type because `useMentionReach()` still fills it in for callers that
+   * read it directly.
    */
   otherHives?: TaggableHive[];
   /**
@@ -122,6 +153,13 @@ export type MentionReach = {
    * offered, whatever HIVE it is hosted in.
    */
   closedRoom?: { label: string; description?: string } | null;
+  /**
+   * True where nobody else could ever read a group tag at all — a private 1:1
+   * with Clive. Naming a person is still fine; there is simply no "everyone"
+   * for a whole-group row to mean, so every group row and every whole-group
+   * resolution is left off rather than offering a broadcast that goes nowhere.
+   */
+  noGroups?: boolean;
 };
 
 /** What resolution and the picker both work from. */
@@ -136,17 +174,12 @@ type SettledReach = {
 const GROUP_ID_WIDE = '__mention_group_hive_wide__';
 const GROUP_ID_ROOM = '__mention_group_room__';
 const GROUP_ID_HIVE_PREFIX = '__mention_group_hive__:';
-/** The unnamed group, for a screen that has not said which HIVE it is in. */
-const GROUP_ID_HERE = '__mention_group_here__';
 
 /**
- * The words that have always meant "everybody who can read this".
- *
- * `hive` is deliberately in here as well as in the HIVE row's own handles: it
- * meant everyone for the app's whole life so far, and every old message that
- * says `@hive` has to keep meaning what it meant. Typing it fresh now offers
- * the HIVEs to pick from, which is the change Nat asked for; reading it back
- * out of old text still reaches the group that could always see it.
+ * The words that have always meant "everybody who can read this" — and, as of
+ * 2026-08-11, always mean HIVE-Wide specifically, never "whichever HIVE this
+ * happens to be typed in." `hive` sits in here on equal footing with the rest
+ * now: asking for "the HIVE" and asking for "everyone" are the same request.
  */
 const BROADCAST_MENTION_HANDLES = new Set([
   'hive',
@@ -163,12 +196,7 @@ const BROADCAST_MENTION_HANDLES = new Set([
   'allhives',
 ]);
 
-/** The everyone words, without `hive` — those are the ones that point furthest. */
-const FURTHEST_WORDS = new Set(
-  Array.from(BROADCAST_MENTION_HANDLES).filter((word) => word !== 'hive')
-);
-
-/** Typing this asks for a HIVE by name, so the picker lists the ones on offer. */
+/** Typing this asks for a HIVE by name, kept only for the display-name trim below. */
 const HIVE_WORD = 'hive';
 
 /** Extra words that reach the handful of people in a DM or group chat. */
@@ -245,12 +273,11 @@ const RUNG_RANK: Record<ScopeKey, number> = { hive: 0, all_hives: 1, public: 2 }
 
 /**
  * Turn what a screen knows into the two facts the picker needs: how far this
- * can go, and which HIVEs it may name.
+ * can go, and which HIVE it may name.
  *
- * With nothing passed, this settles on the rung that travels least and a single
- * unnamed group. That is on purpose — a screen that has not said how far its
- * writing goes gets the answer that cannot leak, and the label says "this HIVE"
- * rather than naming a HIVE it is only guessing at.
+ * With nothing passed, this settles on the rung that travels least and no
+ * named HIVE. That is on purpose — a screen that has not said how far its
+ * writing goes gets the answer that cannot leak.
  */
 function settleReach(reach?: MentionReach | null): SettledReach {
   const closedRoom = reach?.closedRoom ?? null;
@@ -266,52 +293,37 @@ function settleReach(reach?: MentionReach | null): SettledReach {
     return { rung: 'hive', wide: false, hives: [], closedRoom };
   }
 
-  const seen = new Set<string>();
-  const hives: TaggableHive[] = [];
-  const add = (hive?: TaggableHive | null) => {
-    if (!hive?.id || seen.has(hive.id)) return;
-    seen.add(hive.id);
-    hives.push(hive);
-  };
-
-  add(reach?.hive);
-  // Other HIVEs are only worth naming once the writing already reaches every
-  // HIVE. Inside one HIVE's room, tagging a different HIVE would send a
-  // notification about something its members cannot open.
-  if (wide) (reach?.otherHives ?? []).forEach(add);
+  // Only the HIVE hosting this writing is ever named — see the file's own
+  // doc comment. `otherHives` (every other HIVE the writer belongs to) used to
+  // be added here whenever the writing already reached HIVE-Wide, which is
+  // exactly the multi-row picker Nat asked to have removed (2026-08-11).
+  const hives: TaggableHive[] = reach?.hive ? [reach.hive] : [];
 
   return { rung, wide, hives, closedRoom: null };
 }
 
-/** Every handle that lands on a given HIVE row. */
-function hiveRowHandles(hive: TaggableHive, settled: SettledReach): string[] {
-  const own = getHiveMentionHandles(hive.name);
-  const handles = [...own, HIVE_WORD];
-
-  // Inside one HIVE, that HIVE IS the furthest anything goes, so the everyone
-  // words belong to it. This is the line that keeps every old `@all` pointing
-  // exactly where it always pointed.
-  if (!settled.wide) handles.push(...Array.from(FURTHEST_WORDS));
-
-  return Array.from(new Set(handles));
-}
-
 /**
- * The group rows on offer for what is being written, in reach order: the
- * furthest first, then each HIVE by name.
+ * The group rows on offer for what is being written, in reach order: HIVE-Wide
+ * first, then the HIVE this is hosted in.
  *
- * Every label names who it reaches. That is the whole fix — "Everyone in HIVE"
- * meant one thing when there was one HIVE and means two things now.
+ * Every label names who it reaches. "Everyone HIVE-Wide" always means every
+ * HIVE now (Nat, 2026-08-11) — it shows up even where the writing cannot
+ * actually travel that far, but greyed out and saying why, rather than being
+ * left off or silently working when it should not.
  */
 export function getGroupMentionSuggestions(
   query: string | null | undefined,
   reach?: MentionReach | null
 ): MentionTarget[] {
+  // A private 1:1 with Clive has nobody else who could ever read a group tag —
+  // see the file's own doc comment.
+  if (reach?.noGroups) return [];
+
   const settled = settleReach(reach);
   const rows: MentionTarget[] = [];
 
   if (settled.closedRoom) {
-    const handles = [...Array.from(FURTHEST_WORDS), ...Array.from(ROOM_WORDS)];
+    const handles = [...Array.from(BROADCAST_MENTION_HANDLES), ...Array.from(ROOM_WORDS)];
     if (matchesHandles(query, handles)) {
       rows.push({
         id: GROUP_ID_ROOM,
@@ -326,67 +338,38 @@ export function getGroupMentionSuggestions(
     return rows;
   }
 
-  if (settled.wide) {
-    const handles = [...Array.from(FURTHEST_WORDS), 'hives'];
-    if (matchesHandles(query, handles)) {
-      rows.push({
-        id: GROUP_ID_WIDE,
-        name: 'Everyone HIVE-Wide',
-        handle: 'wide',
-        isBroadcast: true,
-        group: 'hive_wide',
-        description: 'Every member of every HIVE — @all, @everyone and @wide',
-      });
-    }
+  const homeHive = settled.hives[0] ?? null;
+  const homeHiveName = homeHive ? hiveDisplayName(homeHive.name) : null;
+
+  if (matchesHandles(query, Array.from(BROADCAST_MENTION_HANDLES))) {
+    rows.push({
+      id: GROUP_ID_WIDE,
+      name: 'Everyone HIVE-Wide',
+      handle: 'wide',
+      isBroadcast: true,
+      group: 'hive_wide',
+      disabled: !settled.wide,
+      description: settled.wide
+        ? 'Every member of every HIVE — @all, @everyone and @wide'
+        : `Change ${homeHiveName ?? 'this'}'s visibility to HIVE-Wide to tag everyone`,
+    });
   }
 
-  // Where the HIVE rows go. Furthest-first is the right default — hit "@" with
-  // nothing typed and the widest thing you can do is at the top. But Nat asked
-  // for one specific behaviour by name: *"typing @hive should offer the HIVEs
-  // you are in, so you can pick one."* So asking for a HIVE puts the HIVEs
-  // first, and "everyone in every HIVE" waits underneath rather than being the
-  // thing your thumb lands on.
-  const askedForAHive = settled.hives.length > 0 && matchesHandles(query, [HIVE_WORD])
-    && normalizeMentionHandle(query).length > 0;
-  const hiveRows: MentionTarget[] = [];
-
-  settled.hives.forEach((hive) => {
-    if (!matchesHandles(query, hiveRowHandles(hive, settled))) return;
-    const handle = getHiveMentionHandle(hive.name);
-    const name = hiveDisplayName(hive.name);
-    hiveRows.push({
-      id: `${GROUP_ID_HIVE_PREFIX}${hive.id}`,
-      name: `Everyone in ${name}`,
+  if (homeHive && matchesHandles(query, getHiveMentionHandles(homeHive.name))) {
+    const handle = getHiveMentionHandle(homeHive.name);
+    rows.push({
+      id: `${GROUP_ID_HIVE_PREFIX}${homeHive.id}`,
+      name: `Everyone in ${homeHiveName}`,
       handle,
       isBroadcast: true,
       group: 'hive',
-      communityId: hive.id,
-      accent: hive.accent || HIVE_GOLD,
-      description: settled.wide
-        ? `Just ${name} — @${handle}`
-        : `Everyone who can see this — @${handle}, @all and @everyone`,
+      communityId: homeHive.id,
+      accent: homeHive.accent || HIVE_GOLD,
+      description: `Just ${homeHiveName} — @${handle}`,
     });
-  });
-
-  const ordered = askedForAHive ? [...hiveRows, ...rows] : [...rows, ...hiveRows];
-
-  // A screen that has not said how far its writing goes still needs an
-  // "everyone" to offer, and it has to be the one that cannot leak.
-  if (ordered.length === 0 && !settled.wide) {
-    const handles = [...Array.from(FURTHEST_WORDS), HIVE_WORD];
-    if (matchesHandles(query, handles)) {
-      ordered.push({
-        id: GROUP_ID_HERE,
-        name: 'Everyone in this HIVE',
-        handle: 'all',
-        isBroadcast: true,
-        group: 'hive',
-        description: 'Everyone who can see this (@all, @everyone and @hive)',
-      });
-    }
   }
 
-  return ordered;
+  return rows;
 }
 
 /**
@@ -404,12 +387,12 @@ export function getBroadcastMentionSuggestion(
 /**
  * Did the writer tag a whole group with one of the everyone words?
  *
- * Deliberately narrow: only the words that have always meant everybody, plus
- * Nat's `@wide`. A HIVE's own name — `@og`, `@tech` — is NOT counted here,
- * because the screens that call this expand a true answer to the member list
- * they are holding, and that list is one HIVE's. `@tech` typed in OG HIVE would
- * then notify OG. Named HIVEs go through `getMentionedGroups` instead, which
- * says which HIVE it was.
+ * Deliberately narrow: only the words that have always meant everybody. A
+ * HIVE's own name — `@og`, `@tech` — is NOT counted here, because the screens
+ * that call this expand a true answer to the member list they are holding,
+ * and that list is one HIVE's. `@tech` typed in OG HIVE would then notify OG.
+ * Named HIVEs go through `getMentionedGroups` instead, which says which HIVE
+ * it was.
  */
 export function hasBroadcastMention(content: string): boolean {
   const mentionHandles = getMentionHandles(content);
@@ -432,42 +415,45 @@ export type MentionedGroup =
 /**
  * Which whole-group tags are in this text, and who each one reaches.
  *
- * Read against the same `MentionReach` the picker was given, so a tag means the
- * same thing when it is sent as it did when it was offered. An everyone word
- * lands on the furthest row this writing reaches; a HIVE's name lands on that
- * HIVE.
+ * The everyone words always MEAN HIVE-Wide now, but this is also the function
+ * a notification fan-out reads, so it still will not report `hive_wide`
+ * unless the writing itself can actually travel that far (`settled.wide`).
+ * Typed somewhere that cannot, the everyone words fall back to the one HIVE
+ * that IS reachable — the same group the greyed-out picker row would have
+ * named, had it been tappable. See the file's own doc comment.
  */
 export function getMentionedGroups(
   content: string,
   reach?: MentionReach | null
 ): MentionedGroup[] {
+  if (reach?.noGroups) return [];
+
   const settled = settleReach(reach);
   const handles = getMentionHandles(content);
   if (handles.size === 0) return [];
 
   const groups: MentionedGroup[] = [];
-  const saidFurthest = Array.from(handles).some(
-    (handle) => FURTHEST_WORDS.has(handle) || (!settled.wide && handle === HIVE_WORD)
-  );
+  const saidEveryone = Array.from(handles).some((handle) => BROADCAST_MENTION_HANDLES.has(handle));
 
   if (settled.closedRoom) {
-    const saidRoom = saidFurthest || Array.from(handles).some((handle) => ROOM_WORDS.has(handle));
+    const saidRoom = saidEveryone || Array.from(handles).some((handle) => ROOM_WORDS.has(handle));
     return saidRoom ? [{ kind: 'room' }] : [];
   }
 
-  if (settled.wide && saidFurthest) groups.push({ kind: 'hive_wide' });
+  if (settled.wide && saidEveryone) groups.push({ kind: 'hive_wide' });
 
   settled.hives.forEach((hive) => {
     const own = getHiveMentionHandles(hive.name);
     const named = own.some((handle) => handles.has(handle));
-    // Inside one HIVE the everyone words are that HIVE's, so they name it too.
-    const reachedByEveryone = !settled.wide && saidFurthest;
+    // Can't reach HIVE-Wide from here, so the everyone words land on the one
+    // HIVE that IS reachable instead — same as they always have.
+    const reachedByEveryone = !settled.wide && saidEveryone;
     if (named || reachedByEveryone) {
       groups.push({ kind: 'hive', id: hive.id, name: hiveDisplayName(hive.name) });
     }
   });
 
-  if (groups.length === 0 && saidFurthest) groups.push({ kind: 'here' });
+  if (groups.length === 0 && saidEveryone) groups.push({ kind: 'here' });
 
   return groups;
 }
@@ -480,6 +466,11 @@ export function getMentionedGroups(
  * (`reach.hive`). Tagging a different HIVE returns nobody here on purpose —
  * `getMentionedGroups` reports it and the fan-out belongs server-side, where
  * row-level security can still referee who is allowed to hear about it.
+ *
+ * `reach.noGroups` (a private Clive chat) turns off both of those group
+ * expansions — there is no "everyone" to reach — while still matching a named
+ * person by hand, since naming someone is just useful context, not a promise
+ * of a notification.
  */
 export function getMentionedMembers(
   content: string,
@@ -491,12 +482,14 @@ export function getMentionedMembers(
 
   if (mentionHandles.size === 0) return [];
 
-  const everyone = Array.from(mentionHandles).some((handle) =>
+  const groupsAllowed = !reach?.noGroups;
+
+  const everyone = groupsAllowed && Array.from(mentionHandles).some((handle) =>
     BROADCAST_MENTION_HANDLES.has(handle)
   );
 
   const homeHive = reach?.hive;
-  const namedHomeHive = !!homeHive
+  const namedHomeHive = groupsAllowed && !!homeHive
     && getHiveMentionHandles(homeHive.name).some((handle) => mentionHandles.has(handle));
 
   if (everyone || namedHomeHive) {

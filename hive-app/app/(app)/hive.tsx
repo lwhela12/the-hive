@@ -384,7 +384,18 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
   const myCommunityIds = memberships.map((m) => m.community_id);
   return (
     <View className="bg-white rounded-xl shadow-sm overflow-hidden">
-      {events.map((event, index) => (
+      {events.map((event, index) => {
+        // Who can see it, and who's invited — worked out once so the two
+        // badge rows and the "differ" check below all agree. Birthdays carry
+        // these now too: `getNextBirthdayEvent` in `useHiveDataQuery` copies
+        // `profiles.birthday_visibility` / `birthday_invited_scope`
+        // (migration 164) onto the synthetic event as `visibility` /
+        // `invited_scope` — the exact fields a real event uses — so this one
+        // check reads both without needing to know which kind of event it is.
+        const seenScope = (event as any).visibility ?? 'members';
+        const invitedScope = (event as any).invited_scope ?? seenScope;
+        const scopesDiffer = seenScope !== invitedScope;
+        return (
         <Pressable
           key={event.id}
           onPress={() => {
@@ -447,7 +458,24 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
               )}
             </View>
           </View>
-          {/* Action buttons — Meet and Calendar inline on one row */}
+          {/* Three separate rows instead of one wrapping one (Nat, 2026-08-11:
+              she wanted seen-by, invited and the buttons each on their own
+              line rather than wrapping together). Row 1 is who can see it.
+              Row 2 is who's invited, shown only when it differs from row 1 —
+              most events have one answer to both questions, so most cards
+              show one badge.
+
+              Nat, 2026-08-05, looking at a lone black "Public" pill: "when i
+              see these, i think 'oh no, i invited the whole public' and thats
+              not what i did, i just toggled the visibility settings." She was
+              right to be alarmed: the card was showing the visibility and
+              saying nothing about the invitation, so the widest of the two
+              rungs spoke for both. When they disagree now, each gets a word
+              in front of it saying which question it answers.
+
+              Birthdays get row 1/2 too, same as real events — they carry
+              their own visibility now (migration 164), computed above as
+              seenScope/invitedScope. Row 3 is the actions. */}
           <View className="flex-row flex-wrap gap-2 mt-3">
             {/* Whose it is and how far it goes, right on the row. You can't
                 respect a boundary you can't see — and "everyone's invited" is
@@ -455,40 +483,23 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
                 obvious at a glance (Nat 2026-07-25). The hexagon is the HIVE's
                 own colour, so on a calendar carrying three HIVEs' meetings you
                 can tell whose August meeting this is without reading the title
-                (Nat 2026-08-05). Birthdays are nobody's business but ours. */}
-            {event.event_type !== 'birthday' && (() => {
-              // Two questions, so two answers — but only when they differ.
-              //
-              // Nat, 2026-08-05, looking at a lone black "Public" pill: "when i
-              // see these, i think 'oh no, i invited the whole public' and thats
-              // not what i did, i just toggled the visibility settings." She was
-              // right to be alarmed: the card was showing the visibility and
-              // saying nothing about the invitation, so the widest of the two
-              // rungs spoke for both.
-              //
-              // When they agree there is nothing to disambiguate and one badge
-              // stays one badge, which is most events. When they disagree, each
-              // gets a word in front of it saying which question it answers.
-              const seen = (event as any).visibility ?? 'members';
-              const invited = (event as any).invited_scope ?? seen;
-              const differ = seen !== invited;
-              return (
-                <>
-                  <ScopeBadge
-                    scope={seen}
-                    communityId={(event as any).community_id}
-                    caption={differ ? 'Seen by' : undefined}
-                  />
-                  {differ && (
-                    <ScopeBadge
-                      scope={invited}
-                      communityId={(event as any).community_id}
-                      caption="Invited"
-                    />
-                  )}
-                </>
-              );
-            })()}
+                (Nat 2026-08-05). */}
+            <ScopeBadge
+              scope={seenScope}
+              communityId={(event as any).community_id}
+              caption={scopesDiffer ? 'Seen by' : undefined}
+            />
+          </View>
+          {scopesDiffer && (
+            <View className="flex-row flex-wrap gap-2 mt-2">
+              <ScopeBadge
+                scope={invitedScope}
+                communityId={(event as any).community_id}
+                caption="Invited"
+              />
+            </View>
+          )}
+          <View className="flex-row flex-wrap gap-2 mt-2">
             {/* The joining details belong to the people who were invited. An
                 event can be visible to every HIVE while its link stays with the
                 HIVE whose meeting it is (Nat 2026-08-05). */}
@@ -520,7 +531,8 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
             </Pressable>
           </View>
         </Pressable>
-      ))}
+        );
+      })}
     </View>
   );
 }

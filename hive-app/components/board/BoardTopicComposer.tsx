@@ -9,6 +9,9 @@ import type { BoardCategory, Profile } from '../../types';
 import { ComposerBar } from '../ui/ComposerBar';
 import { fieldLookFor } from '../ui/Input';
 import { usePageSkin } from '../../lib/pageSkin';
+import { useAuth } from '../../lib/hooks/useAuth';
+import { ScopePicker, type ScopeOption } from '../ui/ScopePicker';
+import { ScopeBadge } from '../ui/ScopeBadge';
 
 const BOARD_DRAFT_KEY = 'board-topic-draft';
 const NAME_MAX_LENGTH = 90;
@@ -19,12 +22,28 @@ const NAME_MAX_LENGTH = 90;
 const DESCRIPTION_MAX_LENGTH = 1000;
 export type BoardTopicAudience = 'community' | 'members';
 export type BoardTopicKind = 'discussion' | 'hd_board' | 'helper_log';
+/** Mirrors `board_categories.reach` — see `types/index.ts`. */
+export type BoardTopicReach = 'hive' | 'all_hives';
 
 export interface BoardTopicMetadata {
   topicKind: BoardTopicKind;
   ownerUserId: string | null;
   goalTitle: string | null;
+  /**
+   * How far this board travels. Was write-only until now — creation decided it
+   * from where you were standing (`isWide` in board.tsx) and nothing ever let
+   * you change your mind afterward. Nat: "in the 'edit' portion, we shoudl be
+   * able to toggle that." The toggle only shows in Edit Board (see the render
+   * below); a new board still gets its starting reach from where it was made.
+   */
+  reach: BoardTopicReach;
 }
+
+/** Same two rungs `board_categories.reach` supports — no `public` for boards. */
+const REACH_OPTIONS: ScopeOption<BoardTopicReach>[] = [
+  { key: 'hive', rung: 'hive', label: 'This HIVE only', hint: 'Just the people in this HIVE.' },
+  { key: 'all_hives', rung: 'all_hives', label: 'HIVE-Wide', hint: 'Every HIVE can see and post to this board.' },
+];
 
 interface BoardTopicComposerProps {
   visible: boolean;
@@ -134,6 +153,7 @@ export function BoardTopicComposer({
   const [customEmoji, setCustomEmoji] = useState('');
   const [topicKind, setTopicKind] = useState<BoardTopicKind>('discussion');
   const [audience, setAudience] = useState<BoardTopicAudience>('community');
+  const [reach, setReach] = useState<BoardTopicReach>('hive');
   const [taggedMemberIds, setTaggedMemberIds] = useState<string[]>([]);
   const [ownerUserId, setOwnerUserId] = useState('');
   const [goalTitle, setGoalTitle] = useState('');
@@ -162,6 +182,7 @@ export function BoardTopicComposer({
         ? existingCategory.topic_kind
         : 'discussion');
       setAudience(existingCategory.audience === 'members' ? 'members' : 'community');
+      setReach(existingCategory.reach === 'all_hives' ? 'all_hives' : 'hive');
       setTaggedMemberIds((existingCategory.member_tags ?? []).map((tag) => tag.tagged_user_id));
       setOwnerUserId(existingCategory.owner_user_id ?? existingCategory.member_tags?.[0]?.tagged_user_id ?? '');
       setGoalTitle(existingCategory.goal_title ?? '');
@@ -189,6 +210,10 @@ export function BoardTopicComposer({
       setCustomEmoji('');
       setActiveCategory(0);
       setAudience('community');
+      // A new board's starting reach is decided by where you made it
+      // (board.tsx's `isWide`), not by this composer — the toggle below only
+      // shows up once there is a real board to edit.
+      setReach('hive');
       setTaggedMemberIds([]);
     }
   }, [visible, existingCategory]);
@@ -258,6 +283,7 @@ export function BoardTopicComposer({
           topicKind,
           ownerUserId: finalOwnerUserId,
           goalTitle: finalGoalTitle,
+          reach,
         }
       );
       if (success) {
@@ -268,6 +294,7 @@ export function BoardTopicComposer({
         setCustomEmoji('');
         setTopicKind('discussion');
         setAudience('community');
+        setReach('hive');
         setTaggedMemberIds([]);
         setOwnerUserId('');
         setGoalTitle('');
@@ -287,6 +314,7 @@ export function BoardTopicComposer({
     setCustomEmoji('');
     setTopicKind('discussion');
     setAudience('community');
+    setReach('hive');
     setTaggedMemberIds([]);
     setOwnerUserId('');
     setGoalTitle('');
@@ -306,6 +334,7 @@ export function BoardTopicComposer({
   // Same reasoning as BoardComposer.tsx: a fixed cream sheet read as "you're
   // in a HIVE now" when opened from HIVE-Wide's dark page (Nat, 2026-08-08).
   const skin = usePageSkin();
+  const { community } = useAuth();
   const look = fieldLookFor(skin.dark ? 'dark' : 'light');
   const selectOwner = (memberId: string) => {
     setTopicKind('hd_board');
@@ -364,6 +393,30 @@ export function BoardTopicComposer({
                 Preview
               </Text>
             </View>
+
+            {/* Reach toggle — Nat: "in the 'edit' portion, we shoudl be able
+                to toggle that." A new board's reach comes from where it was
+                made (board.tsx's `isWide`); this is where you can change your
+                mind about an existing one. The badge underneath is the exact
+                badge the board card wears (BoardCategoryList), so the choice
+                is "obviously" visible rather than a setting you take on
+                faith. */}
+            {isEditMode && (
+              <View className="mb-4" style={{ gap: 8 }}>
+                <ScopePicker
+                  value={reach}
+                  onChange={setReach}
+                  label="Where does this board live?"
+                  options={REACH_OPTIONS}
+                />
+                <View className="flex-row items-center" style={{ gap: 6 }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: skin.inkFaint }}>
+                    Shows on the board card as
+                  </Text>
+                  <ScopeBadge scope={reach} community={community} size="sm" />
+                </View>
+              </View>
+            )}
 
             {isEditMode && managementActions && (
               <View className="flex-row flex-wrap mb-4" style={{ gap: 8 }}>
@@ -442,15 +495,23 @@ export function BoardTopicComposer({
                       the other two emoji boxes in the app (HiveReactions and
                       a room's icon), and only lights up gold once it holds
                       something. This box had its own grey placeholder and its
-                      own corner until the 2026-08-05 sweep. */}
+                      own corner until the 2026-08-05 sweep.
+
+                      Sized to match the row it sits in, not to be the biggest
+                      icon in the form. Nat, looking at this row: "why is
+                      there a giant bumble bee here on the right hand side?
+                      whats he for & why is he so big." It was 44×44 at
+                      fontSize 28 — bigger than the emoji-grid buttons below it
+                      and the "Preview" pill up top combined. Same 28px box the
+                      Ionicons glyph three cells to its left sits in. */}
                   <TextInput
                     ref={customInputRef}
                     value={customEmoji}
                     onChangeText={handleCustomEmojiChange}
                     style={{
-                      fontSize: 28,
-                      width: 44,
-                      height: 44,
+                      fontSize: 16,
+                      width: 28,
+                      height: 28,
                       textAlign: 'center',
                       borderWidth: 1,
                       borderColor: customEmoji ? skin.gold : look.border,

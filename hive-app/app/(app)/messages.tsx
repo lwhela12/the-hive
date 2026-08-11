@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, FlatList, Image, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -20,7 +20,8 @@ import { HiveWideRoomView } from '../../components/messaging/HiveWideRoomView';
 import { useHiveWideRoom } from '../../lib/hooks/useHiveWideRoom';
 import { usePageSkin } from '../../lib/pageSkin';
 import { getMessagesRoomLabel } from '../../components/messaging/hiveWideRoom';
-import { hiveDisplayName } from '../../lib/hiveBrand';
+import { hiveDisplayName, hiveAccent, accentWash } from '../../lib/hiveBrand';
+import { HiveMark } from '../../components/ui/HiveMark';
 import {
   getOtherRoomMembers,
   getRoomCustomization,
@@ -29,7 +30,6 @@ import type { Profile } from '../../types';
 
 import { SignedImage } from '../../components/ui/SignedImage';
 import { useEndBounce } from '../../components/ui/BounceScrollView';
-const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 
 /**
  * The message list holds your rooms and one thing that has no room: HIVE-Wide.
@@ -55,6 +55,8 @@ function RoomBubble({
   isActive: boolean;
   onPress: () => void;
 }) {
+  const { community } = useAuth();
+  const roomAccent = hiveAccent(community);
   const customization = getRoomCustomization(room, currentUserId);
   const roomName = getMessagesRoomLabel(room, currentUserId, hiveName);
   const otherMember = getOtherRoomMembers(room, currentUserId)[0];
@@ -67,7 +69,26 @@ function RoomBubble({
       <Text style={{ fontSize: 26, lineHeight: 32 }}>{customization.emoji}</Text>
     </View>
   ) : room.room_type === 'community' ? (
-    <Image source={hiveLogo} style={{ width: 54, height: 54, borderRadius: 27 }} resizeMode="cover" />
+    // Your HIVE's own room, wearing your HIVE's colour — same pairing as
+    // `ChatRoomItem`. This used to be one fixed ornate logo image for every
+    // HIVE's own-community bubble, so OG's and Tech's rooms looked identical
+    // here. HIVE-Wide keeps its own distinct mark (`HiveWideBubble`'s
+    // `WorldMark`) — this only covers a HIVE's own room.
+    <View
+      style={{
+        width: 54,
+        height: 54,
+        borderRadius: 27,
+        overflow: 'hidden',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: accentWash(roomAccent, 0.14),
+        borderWidth: 1,
+        borderColor: accentWash(roomAccent, 0.35),
+      }}
+    >
+      <HiveMark size={26} colour={roomAccent} />
+    </View>
   ) : (
     <Avatar name={otherMember?.name || roomName} url={otherMember?.avatar_url} size={54} />
   );
@@ -504,7 +525,17 @@ export default function MessagesScreen() {
 
   // Desktop: Mac-Messages-style split — the rail + your conversations on the
   // left, the open one filling the right.
-  const communityRoom = rooms.find((room) => room.room_type === 'community') ?? null;
+  //
+  // The shared HIVE-Wide room is ALSO `room_type === 'community'` — that's how
+  // it gets its everyone-in-it membership — so without the same `reach` and id
+  // exclusion `listEntries` already applies above, `.find()` could grab it
+  // instead of the HIVE's own room whenever it happened to sort first. That
+  // fed `RoomBubble` the HIVE-Wide room, which then labelled itself
+  // "HIVE-Wide" (see `getMessagesRoomLabel`) right next to the real
+  // `HiveWideBubble` — two bubbles side by side both saying "HIVE-Wide".
+  const communityRoom = rooms.find(
+    (room) => room.room_type === 'community' && room.reach !== 'all_hives' && room.id !== hiveWideRoom?.id
+  ) ?? null;
   const activeDmMemberId = selectedRoom && selectedRoom.room_type !== 'community'
     ? getOtherRoomMembers(selectedRoom, profile?.id)[0]?.id ?? null
     : null;

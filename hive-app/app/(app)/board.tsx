@@ -1032,6 +1032,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           description: description || null,
           icon,
           audience,
+          // The Edit HIVE Board modal's "This HIVE only / HIVE-Wide" toggle
+          // (BoardTopicComposer) writes here now too — this used to only ever
+          // set `reach` when a board was first created, so flipping the
+          // toggle on an existing board silently did nothing.
+          reach: metadata.reach,
           topic_kind: metadata.topicKind,
           owner_user_id: metadata.ownerUserId,
           goal_title: metadata.goalTitle,

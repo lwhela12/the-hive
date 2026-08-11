@@ -41,8 +41,8 @@ import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { usePrivacyChoices } from '../../lib/hooks/usePrivacyChoices';
-import { Switch, SWITCH_GUTTER } from '../../components/ui/Switch';
-import { ScopeBadge } from '../../components/ui/ScopeBadge';
+import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
+import { WhoCanSeeYouToggle } from '../../components/ui/WhoCanSeeYouToggle';
 import {
   getSurveyResponsePeriod,
   isMonthlyCheckInSurvey,
@@ -1191,7 +1191,7 @@ export default function MonthlyTuneupScreen() {
       : `${month} Compliment Corner 💐`;
     const content = kind === 'newsletter'
       ? "The newsletter's brewing! 🗞️ Want a shout-out, a plug, or a reminder in it — \"come to my lemonade stand Tuesday!\"-style? Drop it in this thread and it goes straight into the newsletter."
-      : 'Want to compliment anyone this month? 💐 Drop it here — big, small, silly, sincere. @ them and they get a little love note the moment you post it. Compliments also get read out in the newsletter and at the meeting. No act of niceness too tiny.';
+      : 'Want to compliment anyone this month? 💐 Drop it here — big, small, silly, sincere. @ them and they get a little love note the moment you post it. Compliments also get read out in the newsletter and at the meeting. No compliment too small.';
 
     const { data: created, error } = await (supabase as any)
       .from('board_posts')
@@ -3170,44 +3170,45 @@ export default function MonthlyTuneupScreen() {
   );
 
   // Nat's idea, and the only realistic way anyone but her ever turns
-  // HIVE-Wide visibility on (2026-08-09) — these are the same two switches on
-  // Settings, brought here instead of left on a page nobody goes looking for.
-  // Logic (the column-existence probe, the pending/saved pill state) lives
-  // once in `usePrivacyChoices`; this just draws it in the tune-up's own
-  // card style instead of Settings' Panel.
+  // HIVE-Wide visibility on (2026-08-09) — the same choice as Settings,
+  // brought here instead of left on a page nobody goes looking for. Logic
+  // (the pending/saved pill state) lives once in `usePrivacyChoices`; this
+  // just draws it in the tune-up's own card style instead of Settings' Panel.
+  //
+  // 2026-08-11: this step used to carry a second switch, "Your default
+  // sharing" (`profiles.default_share_scope`). Nothing downstream ever read
+  // that column as a starting value for a new wish or thread — a new wish
+  // starts in your HIVE regardless, and you send it further per-item when you
+  // share it — so the switch was pure decoration. Removed here and on
+  // Settings both. The remaining switch also became the same two-way
+  // `WhoCanSeeYouToggle` Settings uses (shared component now, not a copy),
+  // and "Three HIVEs now" became "Multiple HIVEs now" so this subtitle never
+  // needs another edit when a HIVE gets added — same fix as
+  // `lib/hiveWide.ts`'s welcome copy.
   const renderPrivacyStep = () => {
     const {
-      community: privacyCommunity,
-      checkedColumn,
-      hasDefaultShareColumn,
-      canDefaultWide,
-      canSendFurther,
+      community,
       travelOn,
-      defaultWide,
       busyKey: privacyBusyKey,
       savedKey: privacySavedKey,
       saveProfileScope,
-      saveDefaultShareScope,
     } = privacyChoices;
+    const hiveName = hiveDisplayName(community?.name);
 
     return (
       <View>
         <StepHeader
           title="HIVE grew — here's your part of it"
           icon={<Text style={{ fontSize: 20 }}>🌍</Text>}
-          subtitle="Three HIVEs now, and a shared space above them all. These two switches say how far you show up in it — change either any time."
+          subtitle="Multiple HIVEs now, and a shared space above them all. This choice says how far you show up in it — change it any time."
         />
         <View style={cardStyle}>
-          <Switch
-            on={travelOn}
+          <WhoCanSeeYouToggle
+            wide={travelOn}
+            hiveName={hiveName}
+            hiveColour={hiveAccent(community)}
             busy={privacyBusyKey === 'profile_scope'}
-            label="Show me HIVE-Wide"
-            hint={
-              travelOn
-                ? 'Anyone in any HIVE can find you in the HIVE-Wide members list, and open your profile from anything you share.'
-                : 'Only the people who share a HIVE with you can find you or open your profile.'
-            }
-            onToggle={(next) => void saveProfileScope(next)}
+            onChange={(next) => void saveProfileScope(next)}
           />
           {privacySavedKey === 'profile_scope' && (
             <Text
@@ -3215,79 +3216,17 @@ export default function MonthlyTuneupScreen() {
                 fontFamily: 'Lato_400Regular',
                 fontSize: 12,
                 color: '#9a8060',
-                marginLeft: SWITCH_GUTTER,
-                marginTop: -6,
-                marginBottom: 6,
+                marginTop: 6,
               }}
             >
               {travelOn
                 ? 'Saved. You are in the HIVE-Wide members list now.'
-                : 'Saved. You show up only inside your own HIVEs now.'}
-            </Text>
-          )}
-
-          <View style={{ height: 1, backgroundColor: 'rgba(222,193,129,0.4)', marginLeft: SWITCH_GUTTER }} />
-
-          {!checkedColumn ? (
-            <View style={{ paddingVertical: 18, alignItems: 'center' }}>
-              <ThinkingBee />
-            </View>
-          ) : hasDefaultShareColumn && canDefaultWide ? (
-            <>
-              <Switch
-                on={defaultWide}
-                busy={privacyBusyKey === 'default_share_scope'}
-                label={defaultWide ? 'New things go out HIVE-Wide' : 'New things start in your HIVE'}
-                hint={
-                  defaultWide
-                    ? 'New wishes and threads go out to every HIVE. You can pull any single one back when you share it.'
-                    : canSendFurther
-                      ? 'New wishes and threads start here, with your HIVE. You can send any single one further when you share it.'
-                      : 'New wishes and threads start here, with your HIVE.'
-                }
-                trailing={
-                  <ScopeBadge
-                    scope={defaultWide ? 'all_hives' : 'hive'}
-                    community={privacyCommunity}
-                    size="sm"
-                  />
-                }
-                onToggle={(next) => void saveDefaultShareScope(next)}
-              />
-              {privacySavedKey === 'default_share_scope' && (
-                <Text
-                  style={{
-                    fontFamily: 'Lato_400Regular',
-                    fontSize: 12,
-                    color: '#9a8060',
-                    marginLeft: SWITCH_GUTTER,
-                    marginTop: -6,
-                  }}
-                >
-                  {defaultWide
-                    ? 'Saved. New wishes and threads will start HIVE-Wide.'
-                    : 'Saved. New wishes and threads will start in your HIVE.'}
-                </Text>
-              )}
-            </>
-          ) : (
-            <Text
-              style={{
-                fontFamily: 'Lato_400Regular',
-                fontSize: 13,
-                lineHeight: 20,
-                color: '#2d2d2d',
-                paddingVertical: 12,
-              }}
-            >
-              {canSendFurther
-                ? 'New wishes and threads start in your HIVE. You can send any one of them further when you share it.'
-                : 'New wishes and threads start in your HIVE, with the people here.'}
+                : `Saved. You show up only inside ${hiveName} now.`}
             </Text>
           )}
         </View>
         <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
-          Both save the moment you flip them — nothing to submit here.
+          Saves the moment you flip it — nothing to submit here.
         </Text>
       </View>
     );

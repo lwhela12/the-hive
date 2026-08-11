@@ -55,6 +55,7 @@ import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { getHdWishTabLabel, pickSpotlightWish, type HdWishTabKey } from '../../lib/wishDisplay';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { useMemberRosterQuery, useMemberDetailsQuery } from '../../lib/hooks/useMembersQuery';
+import { EventScopeFields, type EventAudience } from '../../components/events/EventAudienceToggle';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { showAlert } from '../../lib/showAlert';
@@ -95,6 +96,16 @@ interface MemberData {
   miq_contribution?: string | null;
   fun_facts?: string[] | null;
   birthday?: string | null;
+  /**
+   * How far this member's birthday travels — `profiles.birthday_visibility` /
+   * `birthday_invited_scope` (migration 164), same ladder events use. The
+   * roster fetch (`lib/hooks/useMembersQuery.ts`) doesn't select these two
+   * columns, so they only ever arrive here for your OWN card, fetched
+   * directly by `MemberDetailPage`'s birthday-scope effect — not from the
+   * roster. Undefined for anyone you're viewing whose card isn't yours.
+   */
+  birthday_visibility?: string | null;
+  birthday_invited_scope?: string | null;
   skills: MemberSkill[];
   wishes: MemberWish[];
   introPost?: { title: string; content: string } | null;
@@ -444,6 +455,15 @@ function MemberDetailPage({
   const [draftOccupation, setDraftOccupation] = useState(member.occupation ?? '');
   const [draftProfileTitle, setDraftProfileTitle] = useState(member.profile_title ?? '');
   const [draftBirthday, setDraftBirthday] = useState(member.birthday ? isoToAmerican(member.birthday) : '');
+  // How far the birthday travels (migration 164). Defaults from `member`,
+  // then corrected the moment the direct fetch below lands — see that effect
+  // for why the roster alone can't be trusted for these two fields.
+  const [draftBirthdayVisibility, setDraftBirthdayVisibility] = useState<EventAudience>(
+    (member.birthday_visibility as EventAudience) || 'members'
+  );
+  const [draftBirthdayInvitedScope, setDraftBirthdayInvitedScope] = useState<EventAudience>(
+    (member.birthday_invited_scope as EventAudience) || 'members'
+  );
   const [draftBio, setDraftBio] = useState(member.bio ?? '');
   const [draftCurrentProject, setDraftCurrentProject] = useState(member.current_project ?? '');
   const [draftHometown, setDraftHometown] = useState(member.hometown ?? '');
@@ -529,6 +549,8 @@ function MemberDetailPage({
     setDraftOccupation(member.occupation ?? '');
     setDraftProfileTitle(member.profile_title ?? '');
     setDraftBirthday(member.birthday ? isoToAmerican(member.birthday) : '');
+    setDraftBirthdayVisibility((member.birthday_visibility as EventAudience) || 'members');
+    setDraftBirthdayInvitedScope((member.birthday_invited_scope as EventAudience) || 'members');
     setDraftBio(member.bio ?? '');
     setDraftCurrentProject(member.current_project ?? '');
     setDraftHometown(member.hometown ?? '');
@@ -555,6 +577,33 @@ function MemberDetailPage({
     setWishStatusTab('public');
     setMyWishes(isCurrentUser ? allVisibleMemberWishes : []);
   }, [member]);
+
+  // Your own birthday's visibility, fetched directly.
+  //
+  // `lib/hooks/useMembersQuery.ts` selects an explicit allowlist of profile
+  // columns for the whole roster (a deliberate privacy fix, per its own
+  // comment: `select('*')` used to hand every member's row to every other
+  // member) and `birthday_visibility`/`birthday_invited_scope` aren't on that
+  // list. Without this, the picker below would always open on "This HIVE
+  // only" and a save with the picker left untouched would silently write that
+  // default over whatever you'd actually chosen last time. Runs only for your
+  // own card, since nobody else can edit this anyway (isCurrentUser gate,
+  // same as the rest of the edit block).
+  useEffect(() => {
+    if (!isCurrentUser) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('birthday_visibility, birthday_invited_scope')
+        .eq('id', member.id)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+      setDraftBirthdayVisibility(((data as any).birthday_visibility as EventAudience) || 'members');
+      setDraftBirthdayInvitedScope(((data as any).birthday_invited_scope as EventAudience) || 'members');
+    })();
+    return () => { cancelled = true; };
+  }, [isCurrentUser, member.id]);
 
   // Fetch current user's own visible wishes when modal opens. Seed from
   // member.wishes first so this section never blanks out if the refresh query
@@ -1015,6 +1064,8 @@ function MemberDetailPage({
         occupation: draftOccupation.trim() || null,
         profile_title: draftProfileTitle.trim() || null,
         birthday: birthdayIso,
+        birthday_visibility: draftBirthdayVisibility,
+        birthday_invited_scope: draftBirthdayInvitedScope,
         bio: draftBio.trim() || null,
         current_project: draftCurrentProject.trim() || null,
         hometown: draftHometown.trim() || null,
@@ -1653,6 +1704,23 @@ function MemberDetailPage({
                       structured
                       keyboardType="numbers-and-punctuation"
                     />
+                    {/* Who gets to see it, and who it's for — the same ladder
+                        events use (migration 164). This block only ever
+                        renders inside the isCurrentUser-gated edit panel
+                        above, so nobody but the birthday's owner can reach
+                        it. Nat, 2026-08-11: "I friggin love my bday" — she
+                        wants hers travelling HIVE-Wide and public, which used
+                        to be impossible. */}
+                    {draftBirthday.trim() ? (
+                      <View style={{ marginTop: -4, marginBottom: 16 }}>
+                        <EventScopeFields
+                          visibility={draftBirthdayVisibility}
+                          onVisibilityChange={setDraftBirthdayVisibility}
+                          invited={draftBirthdayInvitedScope}
+                          onInvitedChange={setDraftBirthdayInvitedScope}
+                        />
+                      </View>
+                    ) : null}
                     <ProfilePromptInput
                       label="Tiny bio"
                       placeholder="A few sentences about who you are..."

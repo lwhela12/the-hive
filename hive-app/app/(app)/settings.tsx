@@ -8,9 +8,10 @@ import { showAlert } from '../../lib/showAlert';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useNotifications } from '../../lib/hooks/useNotifications';
 import { usePrivacyChoices } from '../../lib/hooks/usePrivacyChoices';
+import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { AppHeader } from '../../components/navigation';
 import { LinkedLogins } from '../../components/profile/LinkedLogins';
-import { ScopeBadge } from '../../components/ui/ScopeBadge';
+import { WhoCanSeeYouToggle } from '../../components/ui/WhoCanSeeYouToggle';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { Switch, SWITCH_GUTTER } from '../../components/ui/Switch';
 
@@ -27,16 +28,19 @@ import { ThinkingBee } from '../../components/ui/ThinkingBee';
  * of Profile and the side rail — because people already know where to find it
  * and moving it is its own decision, not a side effect of this one.
  *
- * 2026-08-05: every preference on this page is now the same control.
+ * 2026-08-05: every yes/no preference on this page became the same control,
+ * `components/ui/Switch.tsx` — it had grown four different shapes (radio
+ * cards, a sliding pill, a gold button per email) for four instances of one
+ * kind of question. Nat: *"We need one style & one alignment throughout."*
  *
- * It had grown four — radio cards for how far you travel, the same cards again
- * for your default sharing, a sliding pill for who can see you, and a gold
- * button per email — which is four ways of asking one kind of question. Nat:
- * *"We need one style & one alignment throughout."* They are all
- * `components/ui/Switch.tsx` now, so every pill sits in the same column and
- * every label starts at the same x. What each one saves, and where, did not
- * change: a switch that quietly moved somebody's sharing default would be far
- * worse than four mismatched controls.
+ * 2026-08-11: two follow-on cuts. "Your default sharing" is gone — nothing
+ * downstream ever read `profiles.default_share_scope` as a starting value,
+ * so the switch was pure decoration (see `components/ui/WhoCanSeeYouToggle.tsx`
+ * for what replaced its neighbour, now shared with the monthly tune-up's own
+ * copy of the same choice). And every section's explanatory blurb, plus each
+ * switch's own on/off hint, came out — Nat: *"each bolded header is self
+ * explanatory enough, we dont need to explain it, thats just too many
+ * words."* What each remaining control saves, and where, did not change.
  */
 
 const PANEL = '#fffdf6';
@@ -66,30 +70,11 @@ type EmailSetting = {
   /** The boolean column on profiles that carries this. */
   column: string;
   label: string;
-  onHint: string;
-  offHint: string;
 };
 
 const EMAIL_SETTINGS: EmailSetting[] = [
-  {
-    column: 'email_meeting_checkin_enabled',
-    label: 'Before a meeting',
-    // The pill already says on or off, so the words stopped repeating it and
-    // spend themselves on what actually lands in the inbox (2026-08-05).
-    onHint: 'Your check-in link arrives three days before we meet.',
-    offHint: "You'll still find the check-in waiting on Home.",
-  },
-  {
-    column: 'email_midpoint_checkin_enabled',
-    label: 'The month-end check-in',
-    // Not "add something to the newsletter". Nat, 2026-08-05: "no one cares
-    // about the newsletter but me. I'd pitch it as more of an 'end of the month
-    // check-in'." The check-in is the thing a member does; the newsletter is
-    // one of the places their answers end up, and leading with it made a
-    // two-minute reflection sound like an errand for somebody else.
-    onHint: 'Two minutes at the end of the month — how it went, what is next.',
-    offHint: "You'll still find the check-in waiting on Home.",
-  },
+  { column: 'email_meeting_checkin_enabled', label: 'Before a meeting' },
+  { column: 'email_midpoint_checkin_enabled', label: 'The month-end check-in' },
 ];
 
 /** The one card shape this page uses. */
@@ -112,11 +97,9 @@ function Panel({ children }: { children: React.ReactNode }) {
 
 function Section({
   title,
-  blurb,
   children,
 }: {
   title: string;
-  blurb?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -124,22 +107,7 @@ function Section({
       <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: 18, color: CHARCOAL }}>
         {title}
       </Text>
-      {blurb ? (
-        <Text
-          style={{
-            fontFamily: 'Lato_400Regular',
-            fontSize: 13,
-            lineHeight: 19,
-            color: MUTED,
-            marginTop: 4,
-            marginBottom: 10,
-          }}
-        >
-          {blurb}
-        </Text>
-      ) : (
-        <View style={{ height: 10 }} />
-      )}
+      <View style={{ height: 10 }} />
       {children}
     </View>
   );
@@ -193,16 +161,10 @@ export default function SettingsScreen() {
 
   const {
     community,
-    checkedColumn,
-    hasDefaultShareColumn,
-    canDefaultWide,
-    canSendFurther,
     travelOn,
-    defaultWide,
     busyKey: privacyBusyKey,
     savedKey: privacySavedKey,
     saveProfileScope,
-    saveDefaultShareScope,
   } = usePrivacyChoices();
 
   // Emails are a separate kind of preference from the two above — same switch
@@ -343,105 +305,34 @@ export default function SettingsScreen() {
             Migration 135 promises "a little bee stands in for you" when your
             profile stays home. That bee has not been built — BoardPostCard and
             BoardReplyItem still fall back to the word "Unknown" — so the words
-            here stop at what is true today (2026-08-03). */}
-        <Section
-          title="Who can see you"
-          blurb="Your HIVEs always see you. HIVE-Wide is your call."
-        >
+            here stop at what is true today (2026-08-03).
+
+            2026-08-11: the single "Show me HIVE-Wide" switch became this
+            two-way toggle. Nat: *"It should be an easy toggle of 'HIVE Wide or
+            this HIVE only' ... with easy colors & icons so your choice is
+            visible and easy."* The explanatory paragraphs above and below the
+            old switch are gone too — the two options now say the whole thing
+            themselves. Still the one flag, `profiles.profile_scope`. */}
+        <Section title="Who can see you">
           <Panel>
-            <Switch
-              on={travelOn}
+            <WhoCanSeeYouToggle
+              wide={travelOn}
+              hiveName={hiveDisplayName(community?.name)}
+              hiveColour={hiveAccent(community)}
               busy={privacyBusyKey === 'profile_scope'}
-              // "Card" appears nowhere else in the app — Nat: "Whats a 'card'?
-              // we dont use that anywhere, what are you referring to?" It meant
-              // your profile, so it says profile.
-              label="Show me HIVE-Wide"
-              hint={
-                travelOn
-                  ? 'Anyone in any HIVE can find you in the HIVE-Wide members list, and open your profile from anything you share.'
-                  : 'Only the people who share a HIVE with you can find you or open your profile.'
-              }
-              onToggle={(next) => void saveProfileScope(next)}
+              onChange={(next) => void saveProfileScope(next)}
             />
           </Panel>
           {privacySavedKey === 'profile_scope' && (
             <SavedNote>
               {travelOn
                 ? 'Saved. You are in the HIVE-Wide members list now.'
-                : 'Saved. You show up only inside your own HIVEs now.'}
+                : `Saved. You show up only inside ${hiveDisplayName(community?.name)} now.`}
             </SavedNote>
           )}
         </Section>
 
-        <Section
-          title="Your default sharing"
-          blurb="Where a new wish or thread starts out."
-        >
-          {!checkedColumn ? (
-            <Panel>
-              <View style={{ paddingVertical: 18, alignItems: 'center' }}>
-                <ThinkingBee />
-              </View>
-            </Panel>
-          ) : hasDefaultShareColumn && canDefaultWide ? (
-            <Panel>
-              {/* The badge beside the label is the one your next wish will
-                  actually wear, and it changes as you flip the switch. Nat,
-                  2026-08-05: *"that just shows what things look like if they are
-                  shared, so you're toggling on and off your choice & on and off
-                  what it looks like."* The setting shows you its own result. */}
-              <Switch
-                on={defaultWide}
-                busy={privacyBusyKey === 'default_share_scope'}
-                // The label used to read "Start new things HIVE-Wide" whether
-                // the switch was on or off, so an OFF switch sat under a
-                // sentence describing the ON state and the badge beside it said
-                // something different again (Nat: "this doesnt match up").
-                label={defaultWide ? 'New things go out HIVE-Wide' : 'New things start in your HIVE'}
-                hint={
-                  defaultWide
-                    ? 'New wishes and threads go out to every HIVE. You can pull any single one back when you share it.'
-                    : canSendFurther
-                      ? 'New wishes and threads start here, with your HIVE. You can send any single one further when you share it.'
-                      : 'New wishes and threads start here, with your HIVE.'
-                }
-                trailing={
-                  <ScopeBadge
-                    scope={defaultWide ? 'all_hives' : 'hive'}
-                    community={community}
-                    size="sm"
-                  />
-                }
-                onToggle={(next) => void saveDefaultShareScope(next)}
-              />
-              {privacySavedKey === 'default_share_scope' && (
-                <SavedNote>
-                  {defaultWide
-                    ? 'Saved. New wishes and threads will start HIVE-Wide.'
-                    : 'Saved. New wishes and threads will start in your HIVE.'}
-                </SavedNote>
-              )}
-            </Panel>
-          ) : (
-            <Panel>
-              <Text
-                style={{
-                  fontFamily: 'Lato_400Regular',
-                  fontSize: 13,
-                  lineHeight: 20,
-                  color: CHARCOAL,
-                  paddingVertical: 14,
-                }}
-              >
-                {canSendFurther
-                  ? 'New wishes and threads start in your HIVE. You can send any one of them further when you share it.'
-                  : 'New wishes and threads start in your HIVE, with the people here.'}
-              </Text>
-            </Panel>
-          )}
-        </Section>
-
-        <Section title="Emails" blurb="One switch per email. Keep the ones you want.">
+        <Section title="Emails">
           <Panel>
             {EMAIL_SETTINGS.map((setting, index) => {
               const on = emailIsOn(setting);
@@ -452,7 +343,6 @@ export default function SettingsScreen() {
                     on={on}
                     busy={emailBusyKey === setting.column}
                     label={setting.label}
-                    hint={on ? setting.onHint : setting.offHint}
                     onToggle={(next) => setEmail(setting, next)}
                   />
                 </View>
@@ -463,27 +353,17 @@ export default function SettingsScreen() {
 
         {/* Push permission is an iOS/Android thing — the browser has its own. */}
         {Platform.OS !== 'web' && (
-          <Section
-            title="Notifications"
-            blurb="Nudges on your phone: a reply to something you posted, or your name coming up."
-          >
+          <Section title="Notifications">
             {/* This one is the phone's answer, not ours — nothing here is saved
                 to a profile. It wears the same switch so the column holds, and
                 it does exactly what the gold button used to do: ask the phone
                 the first time, and send you to the phone's own settings once
                 the phone has an opinion. That is the only place these can be
-                turned back off, which is what the words say. */}
+                turned back off. */}
             <Panel>
               <Switch
                 on={isNotificationEnabled}
                 label="Push notifications"
-                hint={
-                  isNotificationEnabled
-                    ? "Your phone will let you know. Turn them off in your phone's settings."
-                    : permissionStatus === 'denied'
-                      ? "Your phone is holding these back — open its settings to let them through."
-                      : 'Off for now. Turn this on and your phone will ask you to allow it.'
-                }
                 onToggle={async () => {
                   if (isNotificationEnabled || permissionStatus === 'denied') {
                     Linking.openSettings();
