@@ -60,15 +60,16 @@ export type NavDestination = {
    *            list rather than showing you one HIVE's answer while you are
    *            standing above all of them.
    *
-   *            Six rows sit here — Clive, Messages, Meetings, Honey Pot,
-   *            Profile, Settings — and together they are most of what a new
-   *            member's invite email tells them to go and do. HIVE-Wide stays
-   *            the page everybody lands on (Nat 2026-08-06: "otherwise you
-   *            might never go there"), so the landing page carries the way
-   *            down instead: `app/(app)/hive-wide.tsx` opens with a named
-   *            door into the member's own HIVE, where all six live. Hiding a
-   *            row costs nothing as long as something on the page says where
-   *            it went.
+   *            Five rows sit here — Clive, Meetings, Honey Pot, Profile,
+   *            Settings — and together they are most of what a new member's
+   *            invite email tells them to go and do. Messages was the sixth
+   *            until Nat reversed that call on 2026-08-11 (below). HIVE-Wide
+   *            stays the page everybody lands on (Nat 2026-08-06: "otherwise
+   *            you might never go there"), so the landing page carries the
+   *            way down instead: `app/(app)/hive-wide.tsx` opens with a named
+   *            door into the member's own HIVE, where the rest still live.
+   *            Hiding a row costs nothing as long as something on the page
+   *            says where it went.
    * 'only'   — the reverse: it lives at HIVE-Wide and nowhere else, so it is
    *            absent from every HIVE's page list. The Buzz is the one, and it
    *            always was one newsletter across all of them.
@@ -129,14 +130,12 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   // COULD have a boards button on the HIVE-Wide nav side & just say 'nothing
   // here yet' ... the better move is to ask my HIVErs at the meeting."
   { key: 'boards', label: 'Boards', emoji: '📋', route: '/board', gate: 'everyone', atWholeHive: 'wide', wideRoute: '/hive-wide-boards' },
-  // Out of HIVE-Wide for now, at Nat's call (2026-08-03): "if you want to
-  // message HIVE-Wide, you can just do so from your regular message spot for
-  // now." Standing above the HIVEs, the list could only ever hold one entry —
-  // every other room and DM belongs to a single HIVE — so the page was a room
-  // list with one room in it, wrapped in a split view built for many. The
-  // shared room itself is untouched: it still sits in each HIVE's Messages
-  // list, one tap from where you already read your messages.
-  { key: 'messages', label: 'Messages', emoji: '💌', route: '/messages', gate: 'everyone', badge: 'dms', atWholeHive: 'hidden' },
+  // Back into HIVE-Wide (Nat reversed her own 2026-08-03 call, 2026-08-11).
+  // Standing above the HIVEs the room list can only ever hold one entry — the
+  // shared HIVE-Wide room (migration 139) — since every other room and DM
+  // belongs to a single HIVE, but `messages.tsx` already knew how to show
+  // exactly that one room and nothing else, so no `wideRoute` is needed.
+  { key: 'messages', label: 'Messages', emoji: '💌', route: '/messages', gate: 'everyone', badge: 'dms', atWholeHive: 'wide' },
   // Every HIVE's next meeting is already on the Whole HIVE page itself, and the
   // meetings screen is where you CREATE one — which has no all-HIVEs meaning.
   { key: 'meetings', label: 'Meetings', emoji: '🗓️', route: '/meetings', gate: 'everyone', atWholeHive: 'hidden' },

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator, TextInput, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -251,6 +251,36 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     ? categories.find((c) => c.id === selectedCategoryId) || null
     : null;
 
+  // A newsletter board is deliberately left out of `categories` (Nat,
+  // 2026-08-03: "it just stops being a board you browse. The Buzz has its
+  // own door... and that is the only one") — but a direct link (the new
+  // "newsletter released" Recent Activity entry, or an old share) still
+  // opens the thread itself via `BoardPostDetail`, which fetches its own
+  // post and category independently. Only the trail below was left blank
+  // for that one case, since it reads `selectedCategory.name` and this is
+  // the one kind of thread that will never be in the filtered list. This
+  // fetches just the name, for display — it deliberately does not feed
+  // `selectedCategory` itself, so nothing that gates on category ownership
+  // or `reach` (archiving, mention scope, etc.) treats a newsletter thread
+  // as a manageable board by accident.
+  const [deepLinkCategoryName, setDeepLinkCategoryName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!selectedCategoryId || selectedCategory || categoriesLoading) {
+      setDeepLinkCategoryName(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('board_categories')
+      .select('name')
+      .eq('id', selectedCategoryId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setDeepLinkCategoryName((data as { name?: string } | null)?.name ?? null);
+      });
+    return () => { cancelled = true; };
+  }, [selectedCategoryId, selectedCategory, categoriesLoading]);
+
   // How far a new thread on this board travels, which is how far an "@everyone"
   // written on it travels. The composer offers from this and the notifications
   // below are read from it, so nobody is told about a thread they cannot open.
@@ -274,11 +304,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
    * never been on it (Nat 2026-08-06).
    */
   const placingRoutePost = resolvesRoutePost && !routePostReady;
+  const trailCategoryName = selectedCategory?.name ?? deepLinkCategoryName;
   useDeepTrail(
-    selectedCategory && !placingRoutePost
+    trailCategoryName && !placingRoutePost
       ? [{
-          label: selectedCategory.name,
-          onPress: selectedPostId
+          label: trailCategoryName,
+          // A newsletter board has no browsable "back to this board" screen
+          // (deliberately — see `deepLinkCategoryName` above), so its trail
+          // segment names the thread's home without pretending there's
+          // somewhere to step back to.
+          onPress: selectedCategory && selectedPostId
             ? () => setSelectedPostId(null)
             : undefined,
         }]
@@ -495,21 +530,40 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     router.replace('/hive-wide' as never);
   }, [isWide, resolvesRoutePost, router, wholeHive]);
 
+  // Which post id we've already asked the database about (or are mid-asking).
+  //
+  // This used to be read off `landing.postId` (state), and that state was
+  // also in this very effect's own dependency list. The moment the effect
+  // called `setLanding({ state: 'looking' })`, that dependency changed —
+  // `landing.postId` went from unset to the post id — so React reran the
+  // effect immediately: cleanup fired first (cancelling the fetch that had
+  // just started), and the rerun's "already answered?" guard read the
+  // 'looking' state it had just set and quietly skipped starting a
+  // replacement. Nothing was left to ever resolve it. The thread link would
+  // sit on the loading bee forever — Nat's "blank Boards page with a small
+  // floating bee" report, 2026-08-11, reproduced on every single link because
+  // it needed no race with anything else: the effect was cancelling itself.
+  // A ref sidesteps this — updating it doesn't schedule a rerender, so
+  // setting it can't retrigger the effect that reads it.
+  const askedAboutPostIdRef = useRef<string | null>(null);
+
   // Where does this thread actually live? Ask the row, then go there.
   useEffect(() => {
     if (!resolvesRoutePost || !routePostId) {
       setLanding(null);
+      askedAboutPostIdRef.current = null;
       return;
     }
-    // Already answered for this link. Without this the effect would re-ask on
-    // every render, because switching HIVEs changes the values it reads.
-    if (landing?.postId === routePostId) return;
+    // Already answered for this link, or already asking. Without this the
+    // effect would re-ask on every unrelated rerender.
+    if (askedAboutPostIdRef.current === routePostId) return;
     // Which HIVEs this person belongs to lands a moment after the screen does,
     // and it is the fact that decides whether we can step into one. Deciding
     // without it would answer "no" to everybody who arrived by link, which is
     // the bug this whole effect exists to end.
     if (memberships.length === 0) return;
 
+    askedAboutPostIdRef.current = routePostId;
     let cancelled = false;
     setLanding({ postId: routePostId, state: 'looking' });
 
@@ -536,28 +590,37 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         communityId: row.community_id,
         categoryId: row.category_id,
       });
-
-      // Standing above the HIVEs, or standing in a different one: come down
-      // into the one that owns this thread so the page, the header, the trail
-      // and the way back all agree about where you are. Somebody who can read
-      // the thread without belonging to its HIVE — a board shared HIVE-Wide —
-      // stays exactly where they are, because there is nowhere to step into.
-      const belongsHere = memberships.some((m) => m.community_id === row.community_id);
-      if (belongsHere && (wholeHive || row.community_id !== myCommunityId)) {
-        await switchCommunity(row.community_id);
-      }
     })();
 
     return () => { cancelled = true; };
-  }, [
-    landing?.postId,
-    memberships,
-    myCommunityId,
-    resolvesRoutePost,
-    routePostId,
-    switchCommunity,
-    wholeHive,
-  ]);
+  }, [memberships.length, resolvesRoutePost, routePostId]);
+
+  // Which landed thread we've already stepped into a HIVE for — a ref for the
+  // same reason as above: this effect's own job (moving into a HIVE) must
+  // never be what causes it to be cancelled and skipped.
+  const switchedForPostIdRef = useRef<string | null>(null);
+
+  // Standing above the HIVEs, or standing in a different one: come down into
+  // the one that owns this thread so the page, the header, the trail and the
+  // way back all agree about where you are. Somebody who can read the thread
+  // without belonging to its HIVE — a board shared HIVE-Wide — stays exactly
+  // where they are, because there is nowhere to step into.
+  //
+  // Split out from the lookup effect above on purpose: `switchCommunity`'s
+  // identity moves whenever `memberships`, `communityId` or the profile id
+  // change, and having that effect also depend on it meant any of those
+  // shifting mid-fetch could cancel the database lookup itself. Moving the
+  // HIVE-switch is safe to redo; the lookup is not.
+  useEffect(() => {
+    if (!landedHere || landedHere.state !== 'found') return;
+    if (switchedForPostIdRef.current === landedHere.postId) return;
+
+    const belongsHere = memberships.some((m) => m.community_id === landedHere.communityId);
+    if (belongsHere && (wholeHive || landedHere.communityId !== myCommunityId)) {
+      switchedForPostIdRef.current = landedHere.postId;
+      switchCommunity(landedHere.communityId);
+    }
+  }, [landedHere, memberships, myCommunityId, switchCommunity, wholeHive]);
 
   useEffect(() => {
     if (!communityId || !hasRouteTarget) return;

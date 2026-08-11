@@ -9,7 +9,7 @@ import {
 
 export interface ActivityItem {
   id: string;
-  type: 'wish_posted' | 'wish_granted' | 'event_added' | 'board_post' | 'board_reply' | 'chat_message' | 'member_joined' | 'app_update' | 'survey_open' | 'mention';
+  type: 'wish_posted' | 'wish_granted' | 'event_added' | 'board_post' | 'board_reply' | 'chat_message' | 'member_joined' | 'app_update' | 'survey_open' | 'mention' | 'newsletter_released';
   emoji: string;
   text: string;
   timestamp: string; // ISO string
@@ -60,7 +60,7 @@ async function fetchBoardReplyActivity(communityId: string, since: string) {
   const { data, error } = await supabase
     .from('board_replies')
     .select(
-      'id, post_id, parent_reply_id, content, created_at, author_id, author:profiles!board_replies_author_id_fkey(name), post:board_posts!board_replies_post_id_fkey(id, title, category_id, category:board_categories!board_posts_category_id_fkey(name))'
+      'id, post_id, parent_reply_id, content, created_at, author_id, author:profiles!board_replies_author_id_fkey(name), post:board_posts!board_replies_post_id_fkey(id, title, category_id, category:board_categories!board_posts_category_id_fkey(name, topic_kind))'
     )
     .eq('community_id', communityId)
     .gte('created_at', since)
@@ -72,7 +72,17 @@ async function fetchBoardReplyActivity(communityId: string, since: string) {
     return [];
   }
 
-  return data ?? [];
+  // The HIVE Newsletter board (topic_kind 'newsletter') is where members
+  // collaboratively draft each issue — real threads, but drafting noise, not
+  // community activity. Nat: "Newsletter was a board at one point, now it's
+  // not. Nothing about the newsletter should populate in recent activity
+  // except for 'newsletter is released.'" The release itself gets its own
+  // item — see fetchNewsletterReleases below.
+  return (data ?? []).filter((r: any) => {
+    const post = firstRelation(r.post);
+    const category = firstRelation((post as any)?.category);
+    return (category as any)?.topic_kind !== 'newsletter';
+  });
 }
 
 async function fetchGeneralDiscussionActivity(communityId: string, since: string) {
@@ -103,10 +113,48 @@ function firstRelation<T = any>(value: T | T[] | null | undefined): T | null {
   return value ?? null;
 }
 
+// A newsletter issue is "released" the moment its board post goes visibility
+// 'public' — that is what the public_newsletters view (migration 126) and
+// the-hive.app read. There is no dedicated "sent at" column, so this uses
+// edited_at when the flip to public bumped it, falling back to created_at
+// (which is what every published issue so far has, some backfilled to match
+// when it actually went out). Looked up by topic_kind rather than a hardcoded
+// board id, same as newsletter.tsx's own board lookup, so this keeps working
+// if the board is ever recreated or another HIVE gets its own.
+async function fetchNewsletterReleases(communityId: string, since: string) {
+  const { data: boards, error: boardsError } = await supabase
+    .from('board_categories')
+    .select('id')
+    .eq('community_id', communityId)
+    .eq('topic_kind', 'newsletter');
+
+  if (boardsError || !boards || boards.length === 0) return [];
+  const boardIds = boards.map((b: any) => b.id);
+
+  const { data, error } = await supabase
+    .from('board_posts')
+    .select('id, title, category_id, created_at, edited_at, status')
+    .in('category_id', boardIds)
+    .eq('community_id', communityId)
+    .eq('visibility', 'public')
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.warn('Activity newsletter releases error:', error);
+    return [];
+  }
+
+  return (data ?? [])
+    .filter((row: any) => row.status !== 'archived')
+    .map((row: any) => ({ ...row, releasedAt: row.edited_at ?? row.created_at }))
+    .filter((row: any) => row.releasedAt >= since);
+}
+
 async function fetchActivityItems(communityId: string, userId?: string): Promise<ActivityItem[]> {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [wishesRes, grantedRes, eventsRes, postsRes, boardReplies, generalMessages, membersRes, mentionNotifications, surveysRes] = await Promise.all([
+  const [wishesRes, grantedRes, eventsRes, postsRes, boardReplies, generalMessages, membersRes, mentionNotifications, surveysRes, newsletterReleases] = await Promise.all([
     // New public wishes
     supabase
       .from('wishes')
@@ -143,7 +191,7 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
     supabase
       .from('board_posts')
       .select(
-        'id, title, category_id, created_at, author_id, author:profiles!author_id(name), category:board_categories!category_id(name)'
+        'id, title, category_id, created_at, author_id, author:profiles!author_id(name), category:board_categories!category_id(name, topic_kind)'
       )
       .eq('community_id', communityId)
       .gte('created_at', thirtyDaysAgo)
@@ -172,6 +220,8 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       .eq('community_id', communityId)
       .eq('is_active', true)
       .order('created_at', { ascending: false }),
+
+    fetchNewsletterReleases(communityId, thirtyDaysAgo),
   ]);
 
   const items: ActivityItem[] = [];
@@ -275,8 +325,11 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
     });
   }
 
-  // Board posts
+  // Board posts. The HIVE Newsletter board is drafting space, not community
+  // activity (see the note in fetchBoardReplyActivity) — it gets its own
+  // "released" item below instead of showing up as generic posting noise.
   for (const p of postsRes.data ?? []) {
+    if ((p as any).category?.topic_kind === 'newsletter') continue;
     const authorName: string = (p as any).author?.name ?? 'Someone';
     const categoryName: string = (p as any).category?.name ?? 'the board';
     const isIntro = categoryName.toLowerCase().includes('intro');
@@ -290,6 +343,22 @@ async function fetchActivityItems(communityId: string, userId?: string): Promise
       categoryId: (p as any).category_id,
       navigatesTo: 'board',
       involvesUserIds: (p as any).author_id ? [(p as any).author_id] : undefined,
+    });
+  }
+
+  // Newsletter releases. This replaces the drafting noise filtered out of
+  // board_post/board_reply above with the one thing Nat actually wants to see:
+  // the moment an issue goes out, deep-linking to the published post itself.
+  for (const n of newsletterReleases ?? []) {
+    items.push({
+      id: `newsletter_released_${(n as any).id}`,
+      type: 'newsletter_released',
+      emoji: '📰',
+      text: `${truncate((n as any).title, 55)} was released`,
+      timestamp: (n as any).releasedAt,
+      sourceId: (n as any).id,
+      categoryId: (n as any).category_id,
+      navigatesTo: 'board',
     });
   }
 

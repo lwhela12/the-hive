@@ -508,14 +508,20 @@ export default function MessagesScreen() {
           >
             Messages
           </Text>
-          <Pressable
-            onPress={() => setShowMemberPicker(true)}
-            className="w-10 h-10 rounded-full items-center justify-center active:opacity-80"
-            style={{ backgroundColor: skin.gold }}
-            hitSlop={8}
-          >
-            <Ionicons name="add" size={25} color="white" />
-          </Pressable>
+          {/* Starting a new message means picking a HIVE's members, and there is
+              no one HIVE to ask up here — so the door to start one closes at
+              HIVE-Wide, the same call already made for the room list and the
+              face rail below (Nat's reversal, 2026-08-11). */}
+          {!wholeHive && (
+            <Pressable
+              onPress={() => setShowMemberPicker(true)}
+              className="w-10 h-10 rounded-full items-center justify-center active:opacity-80"
+              style={{ backgroundColor: skin.gold }}
+              hitSlop={8}
+            >
+              <Ionicons name="add" size={25} color="white" />
+            </Pressable>
+          )}
         </View>
         {roomList}
         {memberPicker}
@@ -546,14 +552,19 @@ export default function MessagesScreen() {
       <AppHeader
         title="Messages"
         tone={wholeHive ? 'wide' : 'hive'}
+        // No + at HIVE-Wide, same reasoning as the mobile header above: starting
+        // a message means picking one HIVE's members, and there isn't one HIVE
+        // to offer from up here.
         rightElement={
-          <Pressable
-            onPress={() => setShowMemberPicker(true)}
-            className="w-10 h-10 items-center justify-center active:opacity-70"
-            accessibilityLabel="New message"
-          >
-            <Text className="text-white text-xl">+</Text>
-          </Pressable>
+          wholeHive ? undefined : (
+            <Pressable
+              onPress={() => setShowMemberPicker(true)}
+              className="w-10 h-10 items-center justify-center active:opacity-70"
+              accessibilityLabel="New message"
+            >
+              <Text className="text-white text-xl">+</Text>
+            </Pressable>
+          )
         }
       />
       <View className="flex-1 flex-row">
