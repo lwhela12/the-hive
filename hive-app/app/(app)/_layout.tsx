@@ -256,6 +256,13 @@ export default function AppLayout() {
         />
       ) : null}
       <View style={{ flex: 1 }}>
+      {/* The welcome tour for a just-joined member, worn as a HEADER — Nat
+          tried it as a bottom bar on her laptop first and asked for it up
+          top (2026-08-11). Mounted once in the shell, above the tabs, so it
+          survives the navigation its own Next button does. For everybody who
+          is not mid-tour (almost everybody, almost always) it renders
+          nothing. See lib/hooks/useTourMarks.ts for when it starts. */}
+      <HiveTourBar />
       <Tabs
         initialRouteName={getLastAppTabName()}
         screenOptions={{
@@ -555,12 +562,6 @@ export default function AppLayout() {
           }}
         />
       </Tabs>
-      {/* The welcome tour for a just-joined member, riding above the breadcrumb
-          strip. Mounted once in the shell — the same reason the footer lives
-          here — so it survives the navigation its own Next button does. For
-          everybody who is not mid-tour (almost everybody, almost always) it
-          renders nothing. See lib/hooks/useTourMarks.ts for when it starts. */}
-      <HiveTourBar />
       {/* Finder's status bar, for the app. It belongs to the shell rather than
           to any page, so it is the same height everywhere, appears on screens
           nobody thought to add it to, and gives the composer at the bottom of
