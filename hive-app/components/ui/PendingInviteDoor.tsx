@@ -6,6 +6,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { formatDateLong } from '../../lib/dateUtils';
 import { showAlert } from '../../lib/showAlert';
+import { startHiveTour } from '../../lib/hooks/useTourMarks';
 import { HiveMark } from './HiveMark';
 import type { Community, CommunityInvite, Profile } from '../../types';
 
@@ -272,6 +273,10 @@ export function PendingInviteDoor({
 
       if (result.outcome === 'joined' || result.outcome === 'already-member') {
         setInvites((current) => current.filter((i) => i.id !== invite.id));
+        // A genuinely fresh join gets the welcome tour — same signal the
+        // email-link door sends (see lib/hooks/useTourMarks.ts). Someone who
+        // was already a member is not brand new, so no tour for them.
+        if (result.outcome === 'joined') startHiveTour(invite.community_id);
         await onJoined(invite.community_id);
         return;
       }

@@ -12,6 +12,7 @@ import { ComposerBar } from '../components/ui/ComposerBar';
 // The joining itself lives with the in-app invitation card, and both doors —
 // this email-link screen and the card on HIVE-Wide — call the same function.
 import { acceptCommunityInvite } from '../components/ui/PendingInviteDoor';
+import { startHiveTour } from '../lib/hooks/useTourMarks';
 import { confirmAction, showAlert } from '../lib/showAlert';
 import { ThinkingBee } from '../components/ui/ThinkingBee';
 type InviteWithDetails = CommunityInvite & {
@@ -460,6 +461,11 @@ export default function JoinScreen() {
       // HIVE-Wide is where every visit after this one starts (Nat 2026-08-06).
       // The rule lives in app/_layout.tsx next to markJustJoinedHive.
       markJustJoinedHive(invite.community_id);
+
+      // Their first minutes inside get the welcome tour — the invite email's
+      // "Come on in" leads straight to it. A genuinely fresh join is the ONLY
+      // moment the tour ever starts (see lib/hooks/useTourMarks.ts).
+      startHiveTour(invite.community_id);
 
       // Refresh profile to get new community context
       await refreshProfile();

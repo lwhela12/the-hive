@@ -19,6 +19,7 @@ import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { resetHomeNavigationState } from '../../lib/homeNavigation';
 
 import { ArrivalScreen, markAppArrived } from '../../components/ui/ThinkingBee';
+import { HiveTourBar } from '../../components/onboarding/HiveTourBar';
 import { useSignedAvatar } from '../../components/ui/Avatar';
 import { usePageSkin } from '../../lib/pageSkin';
 function TabIcon({
@@ -554,6 +555,12 @@ export default function AppLayout() {
           }}
         />
       </Tabs>
+      {/* The welcome tour for a just-joined member, riding above the breadcrumb
+          strip. Mounted once in the shell — the same reason the footer lives
+          here — so it survives the navigation its own Next button does. For
+          everybody who is not mid-tour (almost everybody, almost always) it
+          renders nothing. See lib/hooks/useTourMarks.ts for when it starts. */}
+      <HiveTourBar />
       {/* Finder's status bar, for the app. It belongs to the shell rather than
           to any page, so it is the same height everywhere, appears on screens
           nobody thought to add it to, and gives the composer at the bottom of

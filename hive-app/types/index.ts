@@ -723,9 +723,26 @@ export interface SurveyResponse extends Record<string, unknown> {
   submitted_at: string;
 }
 
+/**
+ * One row = this member has seen (or skipped) this HIVE's onboarding tour,
+ * so it never shows again on any device (migration 167).
+ */
+export interface TourMark extends Record<string, unknown> {
+  user_id: string;
+  community_id: string;
+  completed_at: string;
+  outcome: 'finished' | 'skipped';
+}
+
 export interface Database {
   public: {
     Tables: {
+      tour_marks: {
+        Row: TourMark;
+        Insert: Omit<TourMark, 'completed_at'>;
+        Update: Partial<Omit<TourMark, 'completed_at'>>;
+        Relationships: [];
+      };
       communities: {
         Row: Community;
         Insert: Omit<Community, 'id' | 'created_at'>;
