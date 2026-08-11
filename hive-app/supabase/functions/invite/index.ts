@@ -296,6 +296,8 @@ serve(async (req) => {
 
               <p style="font-size: 15px;">The HIVE is a small group of people who help each other get things done. Everyone shares what they're working on and what they could use a hand with — and the rest of us go "oh, I can help with that."</p>
 
+              <p style="font-size: 15px;">H.I.V.E. stands for <strong>Human, Insight, Vision, Execution</strong>. There are multiple HIVEs now, each with its own people and its own rhythm — and you've been invited to <strong>${communityName}</strong>.</p>
+
               <p style="font-size: 15px;">Stuck on anything once you're in? Ask <strong>Clive</strong> — the HIVE's helper, behind the sparkles in the app. And ${inviterName || 'whoever invited you'} is a text away. 💛</p>
 
               <div style="background: ${tint(accent, 0.09)}; border: 1px solid ${tint(accent, 0.45)}; border-radius: 12px; padding: 14px 16px; margin: 22px 0;">

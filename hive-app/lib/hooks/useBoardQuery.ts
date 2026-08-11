@@ -30,7 +30,13 @@ type BoardSearchPostRow = Omit<BoardSearchThreadMatch, 'replies'>;
  */
 export type BoardReach = 'hive' | 'all_hives';
 
-async function fetchCategories(communityId: string | undefined, reach: BoardReach): Promise<BoardCategory[]> {
+// Exported for usePrefetchAppData, which warms the same cache key at launch —
+// it used to carry its own hand-rolled copy of this query, and when this one
+// learned to include the shared HIVE-Wide boards (2026-08-11) the copy didn't,
+// so the prefetched cache quietly served the old answer for its whole
+// staleTime. Nat found it on her phone: Tech HIVE's Boards was missing the
+// HIVE-Wide board that the fixed query returns. One function, one truth.
+export async function fetchCategories(communityId: string | undefined, reach: BoardReach): Promise<BoardCategory[]> {
   let q = supabase
     .from('board_categories')
     .select('*, member_tags:board_category_member_tags(*, member:profiles!board_category_member_tags_tagged_user_id_fkey(id, name, avatar_url))');

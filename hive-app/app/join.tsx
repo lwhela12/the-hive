@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/hooks/useAuth';
-import { hiveDisplayName } from '../lib/hiveBrand';
+import { hiveDisplayName, hiveAccent } from '../lib/hiveBrand';
 import type { CommunityInvite, Community, Profile } from '../types';
 
 import { markJustJoinedHive } from './_layout';
@@ -145,7 +145,10 @@ export default function JoinScreen() {
           // <name>", "join <name>"). Narrowed 2026-08-11 — was pulling every
           // profile column (bio, hometown, all three "3 most interesting
           // questions" answers) for a line of text that reads a name.
-          .select('*, community:communities(id, name), inviter:profiles!community_invites_invited_by_fkey(id, name)')
+          // `accent_color` rides along so this page can wear the invited
+          // HIVE's own color — without it, hiveAccent() falls back to gold
+          // and Tech's invite renders amber (Nat's phone, 2026-08-11).
+          .select('*, community:communities(id, name, accent_color), inviter:profiles!community_invites_invited_by_fkey(id, name)')
           .eq('token', inviteToken)
           .limit(1);
 
@@ -243,6 +246,21 @@ export default function JoinScreen() {
           return;
         }
 
+        // The wrong-account bar goes up NOW, not at the Accept tap. Nat,
+        // testing on her phone (2026-08-11): signed in with a different email
+        // than the invite's, she got the whole invitation card and only the
+        // buried check in handleAcceptInvite would ever have said no. The
+        // page says so up front instead — same block, earlier.
+        if (normalizedUserEmail && normalizeEmail(tokenInvite.email) !== normalizedUserEmail) {
+          setInviteBlock({
+            title: 'Use the invited account',
+            message: 'This invite is for a different email than the one currently signed in.',
+            detail: `Signed in as: ${userEmail}. Invited: ${tokenInvite.email}. Sign out, then come back through the invite link with the invited account.`,
+            action: 'switch-account',
+          });
+          return;
+        }
+
         setInvite(tokenInvite);
         return;
       }
@@ -262,7 +280,7 @@ export default function JoinScreen() {
         .from('community_invites')
         // Same narrowed join as the token lookup above — only a name is
         // ever rendered from either side of it.
-        .select('*, community:communities(id, name), inviter:profiles!community_invites_invited_by_fkey(id, name)')
+        .select('*, community:communities(id, name, accent_color), inviter:profiles!community_invites_invited_by_fkey(id, name)')
         .eq('email', normalizedUserEmail)
         .is('accepted_at', null)
         .gt('expires_at', new Date().toISOString())
@@ -546,6 +564,10 @@ export default function JoinScreen() {
 
   // Show invite acceptance screen
   if (invite) {
+    // The invited HIVE's own color, everywhere this page says its name —
+    // Tech's blue, Production's purple, OG's gold. Nat, on her phone
+    // (2026-08-11): "this tech hive being amber is wrong colors."
+    const inviteAccent = hiveAccent(invite.community);
     return (
       <SafeAreaView className="flex-1 bg-cream">
         <ScrollView className="flex-1" contentContainerClassName="p-6">
@@ -560,7 +582,7 @@ export default function JoinScreen() {
             <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-center mb-2">
               You're invited to join
             </Text>
-            <Text style={{ fontFamily: 'LibreBaskerville_700Bold' }} className="text-2xl text-gold text-center mb-4">
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', color: inviteAccent }} className="text-2xl text-center mb-4">
               {normalizeHiveBrandName(invite.community?.name)}
             </Text>
 
@@ -572,7 +594,7 @@ export default function JoinScreen() {
 
             <View className="mt-4 pt-4 border-t border-cream">
               <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-center text-sm">
-                You'll join as: <Text className="text-gold font-bold">{invite.role}</Text>
+                You'll join as: <Text style={{ color: inviteAccent }} className="font-bold">{invite.role}</Text>
               </Text>
             </View>
           </View>
@@ -580,7 +602,8 @@ export default function JoinScreen() {
           <Pressable
             onPress={handleAcceptInvite}
             disabled={submitting}
-            className={`py-4 rounded-xl items-center mb-3 ${submitting ? 'bg-gold/50' : 'bg-gold active:opacity-80'}`}
+            style={{ backgroundColor: inviteAccent, opacity: submitting ? 0.5 : 1 }}
+            className="py-4 rounded-xl items-center mb-3 active:opacity-80"
           >
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-lg">
               {submitting ? 'Joining...' : 'Accept & Join'}

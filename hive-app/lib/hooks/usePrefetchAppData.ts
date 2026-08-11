@@ -5,6 +5,7 @@ import { supabase } from '../supabase';
 import { queryKeys } from '../queryClient';
 import { fetchHoneyPotBalance } from '../honeyPot';
 import { memberRosterQueryOptions } from './useMembersQuery';
+import { fetchCategories } from './useBoardQuery';
 import type { Event, Wish, Profile, BoardCategory } from '../../types';
 
 /**
@@ -141,18 +142,12 @@ export function usePrefetchAppData(
       staleTime: 2 * 60 * 1000,
     });
 
-    // 4. Board categories for Board page
+    // 4. Board categories for Board page. The REAL query, not a copy — a
+    // hand-rolled twin here served a stale shape from cache after the real
+    // one learned to include shared HIVE-Wide boards (2026-08-11).
     queryClient.prefetchQuery({
       queryKey: queryKeys.boardCategories(communityId),
-      queryFn: async () => {
-        const { data } = await supabase
-          .from('board_categories')
-          .select('*')
-          .eq('community_id', communityId)
-          .or('requires_approval.eq.false,approved_at.not.is.null')
-          .order('display_order', { ascending: true });
-        return (data as BoardCategory[]) || [];
-      },
+      queryFn: () => fetchCategories(communityId, 'hive'),
       staleTime: 10 * 60 * 1000,
     });
 
