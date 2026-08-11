@@ -1,5 +1,7 @@
 import { View, Text } from 'react-native';
 import { ScopePicker, type ScopeOption } from '../ui/ScopePicker';
+import { supabase } from '../../lib/supabase';
+import { queryClient } from '../../lib/queryClient';
 
 export type EventAudience = 'members' | 'all_hives' | 'public';
 
@@ -126,4 +128,52 @@ export function EventAudienceToggle({
   label?: string;
 }) {
   return <ScopePicker value={value} onChange={onChange} label={label} options={INVITED} />;
+}
+
+/**
+ * How far a birthday travels lives on `profiles.birthday_visibility` /
+ * `birthday_invited_scope` (migration 164) — the two columns three separate
+ * screens can now edit: the profile form, a member's card in `members.tsx`,
+ * and (2026-08-11) the birthday's own event card in `hive.tsx`. Nat: "where
+ * you change one, it also changes in the other." That's automatically true
+ * once every write lands on these same two columns; the part that actually
+ * needed doing was giving all three screens one write to share so they can't
+ * drift, and one place to invalidate the cached list of birthdays
+ * (`['memberBirthdays', communityId]` in `useHiveDataQuery.ts`) so a change
+ * made on one screen shows up on the others without a hard refresh.
+ *
+ * `profile.tsx` and `members.tsx` fold these two columns into a much bigger
+ * profile-form save (name, bio, occupation, …) rather than calling this
+ * directly — that's still one write, same as before, just with this same
+ * cache invalidated afterwards. The card's inline editor in `hive.tsx` is the
+ * one place that only ever touches these two columns, so it calls this.
+ */
+export async function saveBirthdayScope({
+  profileId,
+  visibility,
+  invitedScope,
+  communityId,
+}: {
+  profileId: string;
+  visibility: EventAudience;
+  invitedScope: EventAudience;
+  communityId?: string | null;
+}): Promise<{ error: { message?: string } | null }> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      birthday_visibility: visibility,
+      birthday_invited_scope: invitedScope,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', profileId);
+
+  if (!error) await invalidateBirthdayQueries(communityId);
+  return { error };
+}
+
+/** The half of `saveBirthdayScope` that a bigger profile-form save also needs. */
+export async function invalidateBirthdayQueries(communityId?: string | null) {
+  if (!communityId) return;
+  await queryClient.invalidateQueries({ queryKey: ['memberBirthdays', communityId] });
 }

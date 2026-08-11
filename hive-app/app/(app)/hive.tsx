@@ -43,6 +43,7 @@ import {
 import { AppHeader } from '../../components/navigation';
 import { hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
 import { ScopeBadge } from '../../components/ui/ScopeBadge';
+import { EventScopeFields, saveBirthdayScope, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { SignedAvatarImage } from '../../components/ui/Avatar';
 import { DAILY_QUESTIONS, deckForCommunity, getQuestionForDate, getTodayQuestion } from '../../lib/dailyQuestions';
 import type { DailyQuestion } from '../../lib/dailyQuestions';
@@ -52,7 +53,6 @@ import { ConfettiBurst } from '../../components/ui/ConfettiBurst';
 import { getStoredItem, getStoredItemAsync, removeStoredItem, setStoredItem, setStoredItemAsync } from '../../lib/webStorage';
 import { getAppNewsSeenKey, getUnseenAppNews, type AppNewsEntry } from '../../lib/appNews';
 import { loadActivityRead, persistActivityRead, loadAppNewsSeen, persistAppNewsSeen } from '../../lib/readState';
-import { EventScopeFields, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { clearBoardNavigationState } from '../../lib/boardNavigation';
 import { addHomeResetListener } from '../../lib/homeNavigation';
 import { getHdWishTabLabel, type HdWishTabKey } from '../../lib/wishDisplay';
@@ -380,21 +380,59 @@ const openAddToCalendar = (event: Event) => {
 function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (event: Event) => void }) {
   // Who you are, so an event you can only SEE does not hand you the address and
   // the joining link (migration 148).
-  const { memberships } = useAuth();
+  const { memberships, profile, refreshProfile } = useAuth();
   const myCommunityIds = memberships.map((m) => m.community_id);
+
+  // The birthday whose "who sees this" editor is open, plus its draft values.
+  // Only the birthday's own owner ever sees the control that opens this
+  // (`isOwnBirthday`, checked per-card below), so there is never more than one
+  // person's edit in flight against this shared bit of state.
+  const [editingBirthdayId, setEditingBirthdayId] = useState<string | null>(null);
+  const [draftBirthdaySeen, setDraftBirthdaySeen] = useState<EventAudience>('members');
+  const [draftBirthdayInvited, setDraftBirthdayInvited] = useState<EventAudience>('members');
+  const [savingBirthdayScope, setSavingBirthdayScope] = useState(false);
+
+  const startEditingBirthday = (event: Event) => {
+    setEditingBirthdayId(event.id);
+    setDraftBirthdaySeen((((event as any).visibility as EventAudience) ?? 'members'));
+    setDraftBirthdayInvited((((event as any).invited_scope as EventAudience) ?? 'members'));
+  };
+
+  const saveBirthdayEdit = async (event: Event) => {
+    if (!event.related_user_id) return;
+    setSavingBirthdayScope(true);
+    const { error } = await saveBirthdayScope({
+      profileId: event.related_user_id,
+      visibility: draftBirthdaySeen,
+      invitedScope: draftBirthdayInvited,
+      communityId: event.community_id,
+    });
+    setSavingBirthdayScope(false);
+    if (error) {
+      showAlert('Could not save', 'Your birthday visibility did not save. Please try again.');
+      return;
+    }
+    setEditingBirthdayId(null);
+    // Editing here only ever happens on your own birthday (isOwnBirthday gate
+    // below), so this is always you — refresh the profile context too, or
+    // `profile.tsx` would keep showing what you had before until its own
+    // fetch happened to run again.
+    await refreshProfile();
+  };
+
   return (
     <View className="bg-white rounded-xl shadow-sm overflow-hidden">
       {events.map((event, index) => {
-        // Who can see it, and who's invited — worked out once so the two
-        // badge rows and the "differ" check below all agree. Birthdays carry
-        // these now too: `getNextBirthdayEvent` in `useHiveDataQuery` copies
+        // Who can see it, and who's invited. Birthdays carry these too:
+        // `getNextBirthdayEvent` in `useHiveDataQuery` copies
         // `profiles.birthday_visibility` / `birthday_invited_scope`
         // (migration 164) onto the synthetic event as `visibility` /
         // `invited_scope` — the exact fields a real event uses — so this one
         // check reads both without needing to know which kind of event it is.
         const seenScope = (event as any).visibility ?? 'members';
         const invitedScope = (event as any).invited_scope ?? seenScope;
-        const scopesDiffer = seenScope !== invitedScope;
+        const isOwnBirthday = event.event_type === 'birthday' && !!profile?.id && event.related_user_id === profile.id;
+        const isEditingThisBirthday = editingBirthdayId === event.id;
         return (
         <Pressable
           key={event.id}
@@ -460,22 +498,26 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
           </View>
           {/* Three separate rows instead of one wrapping one (Nat, 2026-08-11:
               she wanted seen-by, invited and the buttons each on their own
-              line rather than wrapping together). Row 1 is who can see it.
-              Row 2 is who's invited, shown only when it differs from row 1 —
-              most events have one answer to both questions, so most cards
-              show one badge.
+              line rather than wrapping together). Row 1 is who can see it,
+              row 2 is who's invited, row 3 is the actions — always all three,
+              on every card, whatever kind of event it is. This used to
+              collapse rows 1 and 2 into one bare, unlabelled badge whenever
+              they matched (the common case), which read fine right up until
+              a card's two answers actually differed and a lone black
+              "Public" pill showed up with no word saying which question it
+              answered. Nat, 2026-08-05, on exactly that: "when i see these, i
+              think 'oh no, i invited the whole public' and thats not what i
+              did, i just toggled the visibility settings." Nat, 2026-08-11,
+              after a fresh walkthrough of the collapsed version on a
+              different card: "Every single one needs to have the same info:
+              Seen by ... Invited ... We need to make sure that they all
+              function the same way." Two cards behaving differently was the
+              actual bug — a viewer can't learn "no label means they match"
+              from one card and then trust it on the next, so the label and
+              the row are never conditional now.
 
-              Nat, 2026-08-05, looking at a lone black "Public" pill: "when i
-              see these, i think 'oh no, i invited the whole public' and thats
-              not what i did, i just toggled the visibility settings." She was
-              right to be alarmed: the card was showing the visibility and
-              saying nothing about the invitation, so the widest of the two
-              rungs spoke for both. When they disagree now, each gets a word
-              in front of it saying which question it answers.
-
-              Birthdays get row 1/2 too, same as real events — they carry
-              their own visibility now (migration 164), computed above as
-              seenScope/invitedScope. Row 3 is the actions. */}
+              Birthdays carry their own visibility (migration 164), computed
+              above as seenScope/invitedScope, same as a real event. */}
           <View className="flex-row flex-wrap gap-2 mt-3">
             {/* Whose it is and how far it goes, right on the row. You can't
                 respect a boundary you can't see — and "everyone's invited" is
@@ -487,49 +529,103 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
             <ScopeBadge
               scope={seenScope}
               communityId={(event as any).community_id}
-              caption={scopesDiffer ? 'Seen by' : undefined}
+              caption="Seen by"
             />
           </View>
-          {scopesDiffer && (
-            <View className="flex-row flex-wrap gap-2 mt-2">
-              <ScopeBadge
-                scope={invitedScope}
-                communityId={(event as any).community_id}
-                caption="Invited"
-              />
-            </View>
-          )}
           <View className="flex-row flex-wrap gap-2 mt-2">
-            {/* The joining details belong to the people who were invited. An
-                event can be visible to every HIVE while its link stays with the
-                HIVE whose meeting it is (Nat 2026-08-05). */}
-            {event.meet_link && isInvitedToEvent(event as never, myCommunityIds) && (
+            <ScopeBadge
+              scope={invitedScope}
+              communityId={(event as any).community_id}
+              caption="Invited"
+            />
+          </View>
+          {isEditingThisBirthday ? (
+            // Third edit surface for a birthday's own visibility (Nat,
+            // 2026-08-11: "that should be toggle-able ... on the 'upcoming
+            // events' page & where you change one, it also changes in the
+            // other"). `saveBirthdayScope` is the same write `profile.tsx`
+            // and `members.tsx` make, so there is one save behind all three
+            // screens rather than three that could drift.
+            <View style={{ marginTop: 10, gap: 12 }}>
+              <EventScopeFields
+                visibility={draftBirthdaySeen}
+                onVisibilityChange={setDraftBirthdaySeen}
+                invited={draftBirthdayInvited}
+                onInvitedChange={setDraftBirthdayInvited}
+              />
+              <View className="flex-row gap-2">
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setEditingBirthdayId(null);
+                  }}
+                  className="bg-gray-200 py-1.5 px-3 rounded-full"
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-xs">
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    void saveBirthdayEdit(event);
+                  }}
+                  disabled={savingBirthdayScope}
+                  className={`bg-gold py-1.5 px-3 rounded-full ${savingBirthdayScope ? 'opacity-50' : 'active:bg-gold/80'}`}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-xs">
+                    {savingBirthdayScope ? 'Saving…' : 'Save'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <View className="flex-row flex-wrap gap-2 mt-2">
+              {/* The joining details belong to the people who were invited. An
+                  event can be visible to every HIVE while its link stays with the
+                  HIVE whose meeting it is (Nat 2026-08-05). */}
+              {event.meet_link && isInvitedToEvent(event as never, myCommunityIds) && (
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    Linking.openURL(event.meet_link!);
+                  }}
+                  className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10"
+                >
+                  <Text className="text-xs mr-1.5">📹</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
+                    Join Google Meet
+                  </Text>
+                </Pressable>
+              )}
               <Pressable
                 onPress={(e) => {
                   e.stopPropagation();
-                  Linking.openURL(event.meet_link!);
+                  openAddToCalendar(event);
                 }}
                 className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10"
               >
-                <Text className="text-xs mr-1.5">📹</Text>
+                <Text className="text-xs mr-1.5">📅</Text>
                 <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                  Join Google Meet
+                  Add to Calendar
                 </Text>
               </Pressable>
-            )}
-            <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                openAddToCalendar(event);
-              }}
-              className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10"
-            >
-              <Text className="text-xs mr-1.5">📅</Text>
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                Add to Calendar
-              </Text>
-            </Pressable>
-          </View>
+              {isOwnBirthday && (
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    startEditingBirthday(event);
+                  }}
+                  className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10"
+                >
+                  <Text className="text-xs mr-1.5">🔒</Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
+                    Edit who sees this
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          )}
         </Pressable>
         );
       })}
@@ -1653,7 +1749,7 @@ export default function HiveScreen() {
     try {
       let { data, error } = await (supabase as any)
         .from('wishes')
-        .select('*, user:profiles!user_id(*), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status), granters:wish_granters(*, granter:profiles!granter_id(*))')
+        .select('*, user:profiles!user_id(id, name, avatar_url), board_category:board_categories!wishes_board_category_id_fkey(id, name, topic_kind, status), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))')
         .eq('id', wishId)
         .eq('community_id', communityId)
         .in('status', ['public', 'fulfilled'])
@@ -1666,7 +1762,7 @@ export default function HiveScreen() {
       ) {
         const fallback = await (supabase as any)
           .from('wishes')
-          .select('*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))')
+          .select('*, user:profiles!user_id(id, name, avatar_url), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))')
           .eq('id', wishId)
           .eq('community_id', communityId)
           .in('status', ['public', 'fulfilled'])

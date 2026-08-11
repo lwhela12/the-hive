@@ -9,7 +9,12 @@ export type LinkedWish = Wish & {
   granters?: (WishGranter & { granter?: Profile })[];
 };
 
-const linkedWishSelect = '*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))';
+// A linked wish only ever opens into WishDetail (components/hive/WishDetail.tsx),
+// which reads `wish.user` and `granters[].granter` for an avatar + name each
+// (owner card header, "Granted by" chips) — never bio, hometown, or any of
+// the "3 most interesting questions" fields. Narrowed 2026-08-11, same fix
+// as lib/hooks/useHiveDataQuery.ts and usePrefetchAppData.ts.
+const linkedWishSelect = '*, user:profiles!user_id(id, name, avatar_url), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))';
 const sharedLinkedWishStatuses: WishStatus[] = ['public', 'fulfilled'];
 
 function sortLinkedWishes(wishes: LinkedWish[]) {

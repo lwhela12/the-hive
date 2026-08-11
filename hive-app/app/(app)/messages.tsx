@@ -576,6 +576,15 @@ export default function MessagesScreen() {
                   rowGap: 8,
                 }}
               >
+                {/* HIVE-Wide rides first, your own HIVE right beside it, so the
+                    two doors are the first two things in the rail. Nat,
+                    2026-08-11, after the same swap in Settings'
+                    WhoCanSeeYouToggle: it goes big (HIVE-Wide) to medium
+                    (the HIVE you're in) to small (individual members) —
+                    HIVE-Wide is always first. */}
+                <View style={{ width: '25%', alignItems: 'center' }}>
+                  <HiveWideBubble isActive={showHiveWide} onPress={openHiveWide} />
+                </View>
                 {communityRoom ? (
                   <View key={communityRoom.id} style={{ width: '25%', alignItems: 'center' }}>
                     <RoomBubble
@@ -587,11 +596,6 @@ export default function MessagesScreen() {
                     />
                   </View>
                 ) : null}
-                {/* HIVE-Wide rides second, right beside your own HIVE, so the
-                    two doors are the first two things in the rail. */}
-                <View style={{ width: '25%', alignItems: 'center' }}>
-                  <HiveWideBubble isActive={showHiveWide} onPress={openHiveWide} />
-                </View>
                 {railMembers.map((member) => (
                   <View key={member.id} style={{ width: '25%', alignItems: 'center' }}>
                     <MemberBubble

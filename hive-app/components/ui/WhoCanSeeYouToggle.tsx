@@ -95,20 +95,27 @@ export function WhoCanSeeYouToggle({
   const world = reachChipLook('all_hives', 'light');
   return (
     <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 14 }}>
-      <ScopeSegment
-        selected={!wide}
-        label={`${hiveName} only`}
-        icon={<HiveMark size={17} colour={hive.accent} />}
-        look={hive}
-        onPress={() => onChange(false)}
-        disabled={busy}
-      />
+      {/* Nat, 2026-08-11: "it (subconsciously) goes from big (HIVE wide
+          first), to medium (your whole HIVE), to small (individual
+          humans)... HIVE wide is always first, than the HIVE you're in,
+          then individual members." Same ordering the mention picker
+          already used (getGroupMentionSuggestions puts the wide row
+          before the HIVE row) — this toggle was the one place still
+          reading small-to-big. */}
       <ScopeSegment
         selected={wide}
         label="HIVE-Wide"
         icon={<WorldMark size={22} />}
         look={world}
         onPress={() => onChange(true)}
+        disabled={busy}
+      />
+      <ScopeSegment
+        selected={!wide}
+        label={`${hiveName} only`}
+        icon={<HiveMark size={17} colour={hive.accent} />}
+        look={hive}
+        onPress={() => onChange(false)}
         disabled={busy}
       />
     </View>

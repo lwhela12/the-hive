@@ -93,7 +93,11 @@ export function WishDetail({
     try {
       const { data, error } = await supabase
         .from('wish_comments')
-        .select('*, user:profiles!user_id(*), reactions:wish_comment_reactions(*, user:profiles!user_id(id, name, avatar_url))')
+        // Comment author only ever renders as an avatar + name here and in
+        // WishCommentItem (id/name/avatar_url) — narrowed 2026-08-11, same
+        // fix as the reaction author join right beside it, which already had
+        // this shape.
+        .select('*, user:profiles!user_id(id, name, avatar_url), reactions:wish_comment_reactions(*, user:profiles!user_id(id, name, avatar_url))')
         .eq('wish_id', wish.id)
         .order('created_at', { ascending: true });
 
@@ -157,7 +161,9 @@ export function WishDetail({
           parent_comment_id: replyingTo?.id ?? null,
           attachments: attachments ?? null,
         })
-        .select('*, user:profiles!user_id(*)')
+        // Same narrowing as the fetch above — this comment's own author only
+        // ever renders as an avatar + name.
+        .select('*, user:profiles!user_id(id, name, avatar_url)')
         .single();
 
       if (error) throw error;

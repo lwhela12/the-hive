@@ -55,7 +55,7 @@ import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { getHdWishTabLabel, pickSpotlightWish, type HdWishTabKey } from '../../lib/wishDisplay';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { useMemberRosterQuery, useMemberDetailsQuery } from '../../lib/hooks/useMembersQuery';
-import { EventScopeFields, type EventAudience } from '../../components/events/EventAudienceToggle';
+import { EventScopeFields, invalidateBirthdayQueries, type EventAudience } from '../../components/events/EventAudienceToggle';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { showAlert } from '../../lib/showAlert';
@@ -616,7 +616,7 @@ function MemberDetailPage({
     const fetchVisibleWishes = async () => {
       let { data, error } = await (supabase as any)
         .from('wishes')
-        .select('id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+        .select('id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))')
         .eq('user_id', member.id)
         .eq('community_id', communityId)
         .in('status', ['public', 'fulfilled'])
@@ -625,7 +625,7 @@ function MemberDetailPage({
       if (error && String(error.message ?? '').includes('title')) {
         const fallback = await (supabase as any)
           .from('wishes')
-          .select('id, community_id, share_scope, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+          .select('id, community_id, share_scope, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))')
           .eq('user_id', member.id)
           .eq('community_id', communityId)
           .in('status', ['public', 'fulfilled'])
@@ -797,7 +797,7 @@ function MemberDetailPage({
 
     let { data, error } = await (supabase as any)
       .from('wishes')
-      .select('id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(*))')
+      .select('id, community_id, share_scope, title, description, status, is_active, is_spotlight, created_at, fulfilled_at, thank_you_message, granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))')
       .eq('user_id', member.id)
       .eq('community_id', communityId)
       .in('status', ['public', 'fulfilled'])
@@ -1085,6 +1085,14 @@ function MemberDetailPage({
         .eq('id', member.id);
 
       if (error) throw error;
+
+      // `updates` includes birthday_visibility/birthday_invited_scope
+      // (migration 164). `hive.tsx`'s birthday event card and `profile.tsx`
+      // both read those two columns through the `['memberBirthdays',
+      // communityId]` query — invalidate it so a birthday edited here shows
+      // up there without a hard refresh (Nat: "where you change one, it
+      // also changes in the other").
+      await invalidateBirthdayQueries(communityId);
 
       if (communityId) {
         const nextSkillLookup = new Set(skillDescriptions.map(description => description.toLowerCase()));

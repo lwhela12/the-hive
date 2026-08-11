@@ -41,7 +41,7 @@ import { WishManageModal } from '../../components/wishes/WishManageModal';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDateLong, formatDateShort, isoToAmerican, parseAmericanDate } from '../../lib/dateUtils';
 import type { Skill, Wish, UserInsights, Profile } from '../../types';
-import { EventScopeFields, type EventAudience } from '../../components/events/EventAudienceToggle';
+import { EventScopeFields, invalidateBirthdayQueries, type EventAudience } from '../../components/events/EventAudienceToggle';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
@@ -340,7 +340,7 @@ export default function ProfileScreen() {
         .order('created_at', { ascending: true }),
       supabase
         .from('wishes')
-        .select('*, board_category:board_categories(id,name,topic_kind), granters:wish_granters(*, granter:profiles!granter_id(*))')
+        .select('*, board_category:board_categories(id,name,topic_kind), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))')
         .eq('user_id', profile.id)
         .eq('community_id', communityId)
         .order('created_at', { ascending: false }),
@@ -711,6 +711,13 @@ export default function ProfileScreen() {
       }
 
       await refreshProfile();
+      // This payload includes birthday_visibility/birthday_invited_scope
+      // (migration 164). `members.tsx`'s member card and the birthday's own
+      // event card in `hive.tsx` both read those two columns through the
+      // `['memberBirthdays', communityId]` query — invalidate it so a
+      // birthday edited here shows up there without a hard refresh (Nat:
+      // "where you change one, it also changes in the other").
+      await invalidateBirthdayQueries(communityId);
       return true;
     } finally {
       setIsSaving(false);

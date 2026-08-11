@@ -163,7 +163,13 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
   const fetchPost = useCallback(async () => {
     const { data, error } = await supabase
       .from('board_posts')
-      .select('*, author:profiles!board_posts_author_id_fkey(*), category:board_categories!board_posts_category_id_fkey(*)')
+      // `author` only ever renders as an avatar + name on this screen
+      // (postAuthorId/Name below, both id/name/avatar_url). `category` is
+      // read for owner_user_id (permission check), name, reach and
+      // community_id (passed on to BoardComposer / BoardReplyComposer) —
+      // never anything else off either join. Narrowed 2026-08-11, same fix
+      // as lib/hooks/useHiveDataQuery.ts.
+      .select('*, author:profiles!board_posts_author_id_fkey(id, name, avatar_url), category:board_categories!board_posts_category_id_fkey(id, name, reach, owner_user_id, community_id)')
       .eq('id', postId)
       .single();
 
@@ -183,7 +189,8 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
     // Fetch all replies for this post
     const { data: allReplies, error } = await supabase
       .from('board_replies')
-      .select('*, author:profiles!board_replies_author_id_fkey(*)')
+      // BoardReplyItem only ever reads id/name/avatar_url off `author`.
+      .select('*, author:profiles!board_replies_author_id_fkey(id, name, avatar_url)')
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
 

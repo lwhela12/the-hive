@@ -254,26 +254,33 @@ const fetchLedgerBalance = async (communityId: string) => {
 };
 
 export const fetchHoneyPotBalance = async (communityId: string) => {
-  const { data, error } = await supabase
-    .from('honey_pot')
-    .select('balance')
-    .eq('community_id', communityId)
-    .maybeSingle();
+  // Nat, 2026-08-11: these two reads used to run one after the other even
+  // though neither depends on the other's result — the stored balance and
+  // the ledger sum are both checked on every single call, purely to compare
+  // them for drift. Running them together halves the wait for the common
+  // case (both succeed) without changing any of the fallback behaviour below.
+  const [storedResult, ledgerResult] = await Promise.allSettled([
+    supabase.from('honey_pot').select('balance').eq('community_id', communityId).maybeSingle(),
+    fetchLedgerBalance(communityId),
+  ]);
 
-  if (error) {
-    return fetchLedgerBalance(communityId);
+  if (storedResult.status === 'rejected' || storedResult.value.error) {
+    if (ledgerResult.status === 'fulfilled') return ledgerResult.value;
+    throw ledgerResult.reason;
   }
 
-  const storedBalance = data ? Number(data.balance ?? 0) : null;
+  const storedBalance = storedResult.value.data
+    ? Number(storedResult.value.data.balance ?? 0)
+    : null;
 
-  try {
-    const ledgerBalance = await fetchLedgerBalance(communityId);
-    if (storedBalance === null || Math.abs(storedBalance - ledgerBalance) >= 0.005) {
-      return ledgerBalance;
-    }
-  } catch (ledgerError) {
+  if (ledgerResult.status === 'rejected') {
     if (storedBalance !== null) return storedBalance;
-    throw ledgerError;
+    throw ledgerResult.reason;
+  }
+
+  const ledgerBalance = ledgerResult.value;
+  if (storedBalance === null || Math.abs(storedBalance - ledgerBalance) >= 0.005) {
+    return ledgerBalance;
   }
 
   return storedBalance ?? 0;

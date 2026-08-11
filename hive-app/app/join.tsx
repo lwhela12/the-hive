@@ -137,7 +137,11 @@ export default function JoinScreen() {
         // and answered honestly.
         const { data: invites, error } = await supabase
           .from('community_invites')
-          .select('*, community:communities(*), inviter:profiles!community_invites_invited_by_fkey(*)')
+          // Both joins only ever render a name on this screen ("Invited by
+          // <name>", "join <name>"). Narrowed 2026-08-11 — was pulling every
+          // profile column (bio, hometown, all three "3 most interesting
+          // questions" answers) for a line of text that reads a name.
+          .select('*, community:communities(id, name), inviter:profiles!community_invites_invited_by_fkey(id, name)')
           .eq('token', inviteToken)
           .limit(1);
 
@@ -252,7 +256,9 @@ export default function JoinScreen() {
       // Not genesis - proceed with normal invite/waitlist flow
       const { data: invites, error } = await supabase
         .from('community_invites')
-        .select('*, community:communities(*), inviter:profiles!community_invites_invited_by_fkey(*)')
+        // Same narrowed join as the token lookup above — only a name is
+        // ever rendered from either side of it.
+        .select('*, community:communities(id, name), inviter:profiles!community_invites_invited_by_fkey(id, name)')
         .eq('email', normalizedUserEmail)
         .is('accepted_at', null)
         .gt('expires_at', new Date().toISOString())

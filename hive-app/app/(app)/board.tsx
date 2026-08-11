@@ -892,7 +892,10 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
 
     const { data, error } = await (supabase as any)
       .from('wishes')
-      .select('*, user:profiles!user_id(*), granters:wish_granters(*, granter:profiles!granter_id(*))')
+      // Same narrowing as lib/hooks/useBoardLinkedWishes.ts's linkedWishSelect
+      // — this feeds the same WishDetail view, which only ever reads id/name/
+      // avatar_url off `user` and `granters[].granter`.
+      .select('*, user:profiles!user_id(id, name, avatar_url), granters:wish_granters(*, granter:profiles!granter_id(id, name, avatar_url))')
       .eq('id', wishId)
       .eq('community_id', communityId)
       .in('status', ['public', 'fulfilled'])

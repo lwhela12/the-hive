@@ -181,9 +181,11 @@ async function fetchPosts(
   categoryId: string
 ): Promise<PostWithAuthor[]> {
   // Join reactions in the same query to avoid a sequential round-trip
+  // BoardPostCard (the list this feeds) only ever reads id/name/avatar_url
+  // off `author` — narrowed 2026-08-11, same fix as lib/hooks/useHiveDataQuery.ts.
   const { data, error } = await supabase
     .from('board_posts')
-    .select('*, author:profiles!board_posts_author_id_fkey(*), reactions:board_reactions(*)')
+    .select('*, author:profiles!board_posts_author_id_fkey(id, name, avatar_url), reactions:board_reactions(*)')
     .eq('community_id', communityId)
     .eq('category_id', categoryId)
     .limit(50);
