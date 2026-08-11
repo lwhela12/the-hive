@@ -7,7 +7,6 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
-  Image,
   ScrollView,
   Modal,
   ActivityIndicator,
@@ -21,14 +20,14 @@ import { useRoomMessagesQuery } from '../../lib/hooks/useRoomMessagesQuery';
 import { queryKeys } from '../../lib/queryClient';
 
 import { WorldMark } from '../ui/WorldMark';
-const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 import { RoomMessageItem } from './RoomMessageItem';
 import { RoomTypingIndicator } from './RoomTypingIndicator';
 import { SelectedImage, pickSingleImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadAttachments, uploadSingleImage } from '../../lib/attachmentUpload';
 import { getMentionedMembers } from '../../lib/mentions';
-import { hiveDisplayName } from '../../lib/hiveBrand';
+import { hiveDisplayName, hiveAccent, accentWash } from '../../lib/hiveBrand';
+import { HiveMark } from '../ui/HiveMark';
 import { SPACE_SKIN } from '../../lib/pageSkin';
 import { getMessagesRoomLabel, getMessagesRoomSubtitle } from './hiveWideRoom';
 import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
@@ -388,16 +387,30 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
       return <WorldMark size={size} />;
     }
 
-    // General wears the HIVE logo here exactly as it does in the room rail —
-    // the two sit side by side, so a generic people glyph in one and the crest
-    // in the other read as two different rooms (Nat 2026-07-24).
+    // The HIVE's own room wears its plain colored hexagon — the SAME face the
+    // rail bubble and the room-list card wear, because all three name one
+    // room and Nat reads a different icon as a different room. This was the
+    // ornate circular bee-logo image until 2026-08-11: the rail and list had
+    // both moved to the hexagon that morning and this header was the one
+    // spot left behind ("this 'OG HIVE' is different, it should be the same
+    // in all 3 places").
     if (room.room_type === 'community') {
+      const accent = hiveAccent(community);
       return (
-        <Image
-          source={hiveLogo}
-          style={{ width: size, height: size, borderRadius: size / 2 }}
-          resizeMode="cover"
-        />
+        <View
+          style={{
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: accentWash(accent, 0.14),
+            borderWidth: 1,
+            borderColor: accentWash(accent, 0.35),
+          }}
+        >
+          <HiveMark size={size * 0.48} colour={accent} />
+        </View>
       );
     }
 
