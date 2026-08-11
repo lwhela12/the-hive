@@ -7,6 +7,18 @@ import {
   HONEY_POT_CASH_APP_URL,
 } from '../../lib/honeyPotPayment';
 
+/**
+ * The "pay your dues" card on the Honey Pot screen.
+ *
+ * The numbers and the handle it shows — $25 a quarter, $100 a year, the
+ * $HiveLV Cash App — are OG HIVE's own rules (`lib/dues.ts`,
+ * `lib/honeyPotPayment.ts`), the one HIVE that runs a pot. Each HIVE sets its
+ * own rules around dues and treasurers (Nat, 2026-08-11), so per-HIVE amounts
+ * and cashtags are real future scope that starts whenever a second HIVE turns
+ * dues on. Until then this card is safe as-is: it only renders behind
+ * `honey-pot.tsx`'s `community.honey_pot_enabled` check (migration 140), so a
+ * HIVE that never established dues never sees it.
+ */
 export function HoneyPotPaymentCard() {
   const openCashApp = async () => {
     try {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -312,6 +313,55 @@ async function functionErrorMessage(error: unknown, fallback: string) {
   } catch {
     return fallback;
   }
+}
+
+/** What the invite function answers with since 2026-08-11. */
+type InviteFunctionResult = {
+  reusedInvite?: boolean;
+  /** Whether the email service actually accepted the send. */
+  emailSent?: boolean;
+  /** Why it did not, in words an admin can act on. */
+  emailError?: string | null;
+  /** The join link itself, so a failed email still hands the admin the way in. */
+  inviteUrl?: string;
+};
+
+/**
+ * Say what actually happened to the invite email.
+ *
+ * The invite function used to answer "success" without ever reading the email
+ * service's reply, so a refused send looked exactly like a delivered one — and
+ * on 2026-08-04 a real invite silently never arrived. It reports the send
+ * honestly now. When the email failed, the invite row and its link are still
+ * real, so this puts the link on the admin's clipboard and says to pass it on
+ * by hand.
+ */
+async function announceInviteOutcome(data: InviteFunctionResult | null, email: string, hiveName: string) {
+  if (data && data.emailSent === false) {
+    if (data.inviteUrl) {
+      try {
+        await Clipboard.setStringAsync(data.inviteUrl);
+      } catch {
+        // The link is in the message either way — the clipboard is a courtesy.
+      }
+    }
+    showAlert(
+      'Invite created, but the email could not be sent',
+      `${email} has a live invite to ${hiveName} — the invite email is what failed.`
+        + (data.emailError ? `\n\nWhy: ${data.emailError}` : '')
+        + (data.inviteUrl
+          ? `\n\nTheir invite link is copied to your clipboard, so you can send it to them yourself:\n${data.inviteUrl}`
+          : ''),
+    );
+    return;
+  }
+
+  showAlert(
+    data?.reusedInvite ? 'Invite refreshed' : 'Invite sent',
+    data?.reusedInvite
+      ? `${email} already had an invite waiting for ${hiveName}, so we gave the same link a fresh seven days and emailed it again.`
+      : `${email} will get an invite to ${hiveName}.`,
+  );
 }
 
 type PanelChrome = {
@@ -770,6 +820,8 @@ export function HiveMemberPanels({
   const [invitesByHive, setInvitesByHive] = useState<Record<string, PendingInvite[]>>({});
   const [confirmRevoke, setConfirmRevoke] = useState<{ invite: PendingInvite; hiveName: string } | null>(null);
   const [revoking, setRevoking] = useState(false);
+  /** Which pending invite is being re-sent right now, so one press means one send. */
+  const [resendingId, setResendingId] = useState<string | null>(null);
   /**
    * Managing somebody who has already walked in.
    *
@@ -855,7 +907,7 @@ export function HiveMemberPanels({
 
     setSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke<{ reusedInvite?: boolean }>('invite', {
+      const { data, error } = await supabase.functions.invoke<InviteFunctionResult>('invite', {
         body: { email, role: inviteRole, community_id: targetId },
       });
       if (error) throw new Error(await functionErrorMessage(error, 'Could not send that invite.'));
@@ -864,16 +916,38 @@ export function HiveMemberPanels({
       setInviteRole('member');
       setInviteFor(null);
       await load();
-      showAlert(
-        data?.reusedInvite ? 'Invite refreshed' : 'Invite sent',
-        data?.reusedInvite
-          ? `${email} already had an invite waiting for ${hiveName}, so we sent the link again.`
-          : `${email} will get an invite to ${hiveName}.`
-      );
+      await announceInviteOutcome(data, email, hiveName);
     } catch (err) {
       showAlert('Could not send that invite', err instanceof Error ? err.message : 'Try again in a moment.');
     } finally {
       setSending(false);
+    }
+  };
+
+  /**
+   * Send the same invitation again, from the row it is already sitting in.
+   *
+   * The function treats an email with a pending invite as a refresh: same
+   * token, same link, a fresh seven days on `expires_at`, and the email goes
+   * out again. So this is both "they never got the email" and "their link
+   * expired" fixed with one press — which is exactly the pair that stranded
+   * Lucas's Aug 4 invite to Tech HIVE.
+   */
+  const resendInvite = async (invite: PendingInvite, hiveName: string) => {
+    if (resendingId) return;
+    setResendingId(invite.id);
+    try {
+      const { data, error } = await supabase.functions.invoke<InviteFunctionResult>('invite', {
+        body: { email: invite.email, role: invite.role as UserRole, community_id: invite.community_id },
+      });
+      if (error) throw new Error(await functionErrorMessage(error, 'Could not resend that invite.'));
+
+      await load();
+      await announceInviteOutcome(data, invite.email, hiveName);
+    } catch (err) {
+      showAlert('Could not resend that invite', err instanceof Error ? err.message : 'Try again in a moment.');
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -1551,6 +1625,27 @@ export function HiveMemberPanels({
                             </Text>
                           </View>
 
+                          {/* Send the same invitation again. One press covers
+                              both "the email never arrived" and "the link
+                              expired": the function refreshes the same link
+                              with a fresh seven days and emails it again. */}
+                          <Pressable
+                            onPress={() => { void resendInvite(invite, name); }}
+                            disabled={!!resendingId}
+                            hitSlop={6}
+                            accessibilityLabel={`Resend the invite for ${invite.email}`}
+                            style={({ pressed }) => ({
+                              paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
+                              borderWidth: 1, borderColor: 'rgba(246,244,229,0.28)',
+                              backgroundColor: pressed ? 'rgba(255,255,255,0.14)' : 'transparent',
+                              opacity: resendingId && resendingId !== invite.id ? 0.5 : 1,
+                            })}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, color: 'rgba(246,244,229,0.8)' }}>
+                              {resendingId === invite.id ? 'Sending…' : 'Resend'}
+                            </Text>
+                          </Pressable>
+
                           <Pressable
                             onPress={() => setConfirmRevoke({ invite, hiveName: name })}
                             hitSlop={6}
@@ -1576,8 +1671,8 @@ export function HiveMemberPanels({
                           color: 'rgba(246,244,229,0.5)', paddingHorizontal: 14, paddingVertical: 10,
                         }}
                       >
-                        An expired link no longer works. Send that person a new invite with
-                        &ldquo;+ New Member&rdquo; — it refreshes the one they already have.
+                        An expired link no longer works. Press Resend and the same link
+                        comes back to life for another seven days.
                       </Text>
                     ) : null}
                   </View>

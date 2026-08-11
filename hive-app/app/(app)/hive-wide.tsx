@@ -16,6 +16,8 @@ import { SpaceGlobe, SPACE_BLACK } from '../../components/ui/SpaceGlobe';
 import { CollapsiblePanel } from '../../components/ui/CollapsiblePanel';
 import { HiveMark } from '../../components/ui/HiveMark';
 import { HiveWideWelcome } from '../../components/ui/HiveWideWelcome';
+import { PendingInviteDoor } from '../../components/ui/PendingInviteDoor';
+import { markJustJoinedHive } from '../_layout';
 import { HIVE_WIDE_WELCOME_VERSION } from '../../lib/hiveWide';
 import { loadHiveWideWelcomeSeen, persistHiveWideWelcomeSeen } from '../../lib/readState';
 import { supabase } from '../../lib/supabase';
@@ -695,6 +697,24 @@ export default function HiveWideScreen() {
             they hold their order while the rest of the page is still fetching,
             rather than the explainer appearing above the door a second later
             and shoving it down. */}
+        {/* A pending invitation to another HIVE, if one is waiting for this
+            person's email. FIRST on the page and never collapsed, on purpose:
+            on 2026-08-04 Lucas was invited to Tech HIVE, the invite email
+            silently failed to send, and when he came looking in the app there
+            was nowhere that showed him the invitation at all. Everybody lands
+            here, so here is where the invitation stands. For everyone without
+            one waiting — almost everyone, almost always — it renders nothing. */}
+        <PendingInviteDoor
+          colours={PANEL_COLOURS}
+          onJoined={async (id) => {
+            // The same landing the email-link join gives: say they just
+            // joined, reload who they are, and walk them into the HIVE they
+            // accepted — not leave them looking at the Earth.
+            markJustJoinedHive(id);
+            await refreshProfile();
+            await switchCommunity(id);
+          }}
+        />
         <HiveWideWelcome
           // The same object every other panel here gets. It used to keep its own
           // copy of these colours and the copy had drifted a couple of percent

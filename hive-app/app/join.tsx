@@ -9,6 +9,9 @@ import type { CommunityInvite, Community, Profile } from '../types';
 
 import { markJustJoinedHive } from './_layout';
 import { ComposerBar } from '../components/ui/ComposerBar';
+// The joining itself lives with the in-app invitation card, and both doors —
+// this email-link screen and the card on HIVE-Wide — call the same function.
+import { acceptCommunityInvite } from '../components/ui/PendingInviteDoor';
 import { confirmAction, showAlert } from '../lib/showAlert';
 import { ThinkingBee } from '../components/ui/ThinkingBee';
 type InviteWithDetails = CommunityInvite & {
@@ -298,34 +301,9 @@ export default function JoinScreen() {
     }
   };
 
-  const ensureProfile = async () => {
-    if (profile) return profile;
-    if (!session?.user) return null;
-
-    const { data: existingProfile, error: fetchError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .maybeSingle();
-
-    if (existingProfile) return existingProfile as Profile;
-    if (fetchError) console.warn('Could not fetch profile before accepting invite:', fetchError.message);
-
-    const { data: createdProfile, error: createError } = await supabase
-      .from('profiles')
-      .insert({
-        id: session.user.id,
-        name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'New Member',
-        email: session.user.email || '',
-        avatar_url: session.user.user_metadata?.avatar_url || null,
-        role: 'member',
-      })
-      .select()
-      .single();
-
-    if (createError) throw createError;
-    return createdProfile as Profile;
-  };
+  // `ensureProfile` moved into `components/ui/PendingInviteDoor.tsx` with the
+  // rest of the acceptance on 2026-08-11 — the in-app invitation card runs the
+  // same join as this screen, out of one shared function.
 
   const bootstrapGenesisCommunity = async () => {
     if (!profile) return;
@@ -437,24 +415,20 @@ export default function JoinScreen() {
 
     setSubmitting(true);
     try {
-      const activeProfile = await ensureProfile();
+      // The join itself — profile, membership, invite stamp, welcome
+      // conversation — is `acceptCommunityInvite`, shared with the in-app
+      // invitation card. This screen keeps its own words for each outcome.
+      const result = await acceptCommunityInvite({ invite, profile, session });
 
-      if (!activeProfile) {
+      if (result.outcome === 'no-profile') {
         showAlert('Your profile has not loaded yet', 'Refresh the page and try again.');
         return;
       }
 
-      const { data: existingMembership } = await supabase
-        .from('community_memberships')
-        .select('id')
-        .eq('community_id', invite.community_id)
-        .eq('user_id', activeProfile.id)
-        .maybeSingle();
-
-      if (existingMembership) {
+      if (result.outcome === 'already-member') {
         setInviteBlock({
           title: "You're already in",
-          message: `${activeProfile.name || userEmail} is a member of ${normalizeHiveBrandName(invite.community?.name)}, so this link has done its job.`,
+          message: `${profile?.name || userEmail} is a member of ${normalizeHiveBrandName(invite.community?.name)}, so this link has done its job.`,
           detail: 'Your HIVE is one tap away.',
           action: 'go-home',
           emoji: '🐝',
@@ -463,93 +437,21 @@ export default function JoinScreen() {
         return;
       }
 
-      // Create membership.
-      //
-      // No role goes up from here. This used to send `role: invite.role`, which
-      // had the page telling the database what standing its own member holds —
-      // and the database only checked THAT you hold a valid invite, never WHAT
-      // it grants, so an invited member could have joined as an admin. Leaving
-      // it out lands you as a member, which is the column's own default, and
-      // the database decides what the invite actually granted.
-      const { error: membershipError } = await supabase
-        .from('community_memberships')
-        .insert({
-          community_id: invite.community_id,
-          user_id: activeProfile.id,
+      if (result.outcome === 'closed') {
+        // The database said this invite no longer opens the door — used,
+        // expired, or withdrawn while this page sat open. Say that in words
+        // somebody can act on rather than the generic "try again", because
+        // trying again gets the same refusal every time.
+        const inviterName = invite.inviter?.name?.trim();
+        setInviteBlock({
+          title: 'This invite has closed',
+          message: 'HIVE checked the invite as you joined, and it has already been used or has run out. Each link opens once, within seven days.',
+          detail: `Ask ${inviterName || 'whoever invited you'} to send a fresh invite to ${userEmail}.`,
+          action: escapeAction,
+          emoji: '⏳',
         });
-
-      if (membershipError) {
-        // A refusal here is the database saying this invite no longer opens the
-        // door — used, expired, or withdrawn while this page sat open. Say that
-        // in words somebody can act on rather than the generic "try again",
-        // because trying again gets the same refusal every time.
-        const refused =
-          membershipError.code === '42501' ||
-          /row-level security|violates row-level/i.test(membershipError.message || '');
-
-        if (refused) {
-          const inviterName = invite.inviter?.name?.trim();
-          setInviteBlock({
-            title: 'This invite has closed',
-            message: 'HIVE checked the invite as you joined, and it has already been used or has run out. Each link opens once, within seven days.',
-            detail: `Ask ${inviterName || 'whoever invited you'} to send a fresh invite to ${userEmail}.`,
-            action: escapeAction,
-            emoji: '⏳',
-          });
-          setInvite(null);
-          return;
-        }
-
-        throw membershipError;
-      }
-
-      // Update profile with current community
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ current_community_id: invite.community_id })
-        .eq('id', activeProfile.id);
-
-      if (profileError) throw profileError;
-
-      // Mark invite as accepted (try update first, then delete if that fails)
-      const { error: inviteError } = await supabase
-        .from('community_invites')
-        .update({ accepted_at: new Date().toISOString() })
-        .eq('id', invite.id);
-
-      if (inviteError) {
-        console.error('Failed to mark invite as accepted:', inviteError);
-        // Try deleting the invite instead
-        await supabase
-          .from('community_invites')
-          .delete()
-          .eq('id', invite.id);
-      }
-
-      // Create the welcome conversation with initial greeting
-      const { data: welcomeConv } = await supabase
-        .from('conversations')
-        .insert({
-          user_id: activeProfile.id,
-          community_id: invite.community_id,
-          title: 'Welcome to HIVE!',
-          mode: 'default',
-          is_active: true,
-        } as any)
-        .select()
-        .single();
-
-      // Add the welcome message to the conversation
-      if (welcomeConv) {
-        const welcomeMessage = `Welcome to HIVE! Feel free to look around! You can see what's going on with the group on HIVE, add topics for discussion on the Board, chat with other members in the messages, or fill out your profile. When you're ready I'd love to chat with you about your goals and the skills you bring to the group!`;
-
-        await supabase.from('chat_messages').insert({
-          user_id: activeProfile.id,
-          community_id: invite.community_id,
-          conversation_id: (welcomeConv as any).id,
-          role: 'assistant',
-          content: welcomeMessage,
-        } as any);
+        setInvite(null);
+        return;
       }
 
       // Say out loud that this person has just joined, so the load below lands

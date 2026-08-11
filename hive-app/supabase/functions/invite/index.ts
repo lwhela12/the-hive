@@ -251,9 +251,25 @@ serve(async (req) => {
     console.error('Could not look up the next meeting for the invite email:', meetingLookupError);
   }
 
-  if (RESEND_API_KEY) {
+  // Send the email — and tell the truth about whether it went.
+  //
+  // Until 2026-08-11 this was a fire-and-forget fetch that never read Resend's
+  // answer, so a refused send (unverified domain, dead key, bad FROM_EMAIL)
+  // still came back to Admin as "Invite sent". That is exactly how Lucas's
+  // Aug 4 invite to Tech HIVE vanished: the row was real, the email never
+  // existed, and nobody was told. The invite row and its link are created
+  // either way — an email failure never cancels the invitation — but the
+  // response now says whether the email actually went, and the failure reason
+  // lands in the function logs so the next session can read WHY.
+  let emailSent = false;
+  let emailError: string | null = null;
+
+  if (!RESEND_API_KEY) {
+    emailError = 'The RESEND_API_KEY secret is not set on this function, so HIVE cannot send invite emails at all.';
+    console.error('Invite email not sent:', emailError);
+  } else {
     try {
-      await fetch('https://api.resend.com/emails', {
+      const resendResponse = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${RESEND_API_KEY}`,
@@ -312,11 +328,46 @@ serve(async (req) => {
           `
         })
       });
-    } catch (emailError) {
-      console.error('Failed to send invite email:', emailError);
-      // Don't fail the request if email fails - invite is still created
+
+      if (resendResponse.ok) {
+        emailSent = true;
+      } else {
+        // The whole body goes to the logs — that is the observability this
+        // function was missing. The response carries a shorter version for the
+        // admin's screen.
+        const responseBody = await resendResponse.text();
+        console.error(`Resend refused the invite email (HTTP ${resendResponse.status}):`, responseBody);
+
+        let resendSaid = '';
+        try {
+          const parsed = JSON.parse(responseBody) as { message?: string };
+          if (parsed?.message) resendSaid = ` Resend said: ${parsed.message}`;
+        } catch {
+          // Not JSON — the raw body is already in the logs above.
+        }
+        emailError = `The email service refused the send (HTTP ${resendResponse.status}).${resendSaid}`;
+
+        // The fallback FROM_EMAIL is a placeholder domain no email service will
+        // accept, so when the secret is missing, say so — that alone explains
+        // the refusal.
+        if (!Deno.env.get('FROM_EMAIL')) {
+          emailError += ' The FROM_EMAIL secret is not set, so the send used a placeholder address, which is enough on its own for the refusal.';
+        }
+      }
+    } catch (emailSendError) {
+      console.error('Failed to send invite email:', emailSendError);
+      emailError = 'The request to the email service failed before it could answer.';
     }
   }
 
-  return jsonResponse({ success: true, reusedInvite });
+  // `inviteUrl` rides along so Admin can hand the link over by hand when the
+  // email did not go — the link works whether or not any email was delivered.
+  return jsonResponse({
+    success: true,
+    reusedInvite,
+    inviteUrl,
+    expiresAt,
+    emailSent,
+    emailError,
+  });
 });

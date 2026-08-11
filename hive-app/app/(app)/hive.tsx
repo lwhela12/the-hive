@@ -384,8 +384,8 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
   const myCommunityIds = memberships.map((m) => m.community_id);
 
   // The birthday whose "who sees this" editor is open, plus its draft values.
-  // Only the birthday's own owner ever sees the control that opens this
-  // (`isOwnBirthday`, checked per-card below), so there is never more than one
+  // Only tapping your OWN birthday's card ever opens this (`isOwnBirthday`,
+  // checked in the card's onPress below), so there is never more than one
   // person's edit in flight against this shared bit of state.
   const [editingBirthdayId, setEditingBirthdayId] = useState<string | null>(null);
   const [draftBirthdaySeen, setDraftBirthdaySeen] = useState<EventAudience>('members');
@@ -437,7 +437,21 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
         <Pressable
           key={event.id}
           onPress={() => {
-            if (event.event_type !== 'birthday') onEditEvent(event);
+            // One rule for every editable card: tap anywhere on it to edit it
+            // (Nat, 2026-08-11, comparing cards: "we want the way you edit an
+            // event to always be the same, not sometimes click wherever in it
+            // & sometimes here"). A regular event opens the event editor; your
+            // own birthday opens its "who sees this" editor inline — the same
+            // one an "Edit who sees this" pill used to open, which is gone
+            // now. Someone else's birthday has nothing you can edit, so it
+            // stays inert. While the birthday editor is open, taps on the card
+            // do nothing, so a stray tap around the toggles never resets an
+            // in-progress draft.
+            if (event.event_type === 'birthday') {
+              if (isOwnBirthday && !isEditingThisBirthday) startEditingBirthday(event);
+              return;
+            }
+            onEditEvent(event);
           }}
           className={`p-4 active:bg-gray-50 ${index < events.length - 1 ? 'border-b border-cream' : ''}`}
         >
@@ -610,20 +624,11 @@ function EventsList({ events, onEditEvent }: { events: Event[]; onEditEvent: (ev
                   Add to Calendar
                 </Text>
               </Pressable>
-              {isOwnBirthday && (
-                <Pressable
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    startEditingBirthday(event);
-                  }}
-                  className="bg-cream border border-gold/20 py-1.5 px-3 rounded-full flex-row items-center active:bg-gold/10"
-                >
-                  <Text className="text-xs mr-1.5">🔒</Text>
-                  <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs">
-                    Edit who sees this
-                  </Text>
-                </Pressable>
-              )}
+              {/* Your own birthday used to carry an "Edit who sees this" pill
+                  here — the one card whose editor opened from a button instead
+                  of the card itself. Tapping the card opens that editor now
+                  (see the card's onPress), so the pill is gone and every card
+                  edits the same way. */}
             </View>
           )}
         </Pressable>
@@ -828,6 +833,17 @@ export default function HiveScreen() {
   const currentUserId = session?.user?.id ?? profile?.id ?? null;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
   const canManageDues = isAdmin || communityRole === 'treasurer' || profile?.role === 'treasurer';
+  // Dues exist only where the HIVE chose to run a Honey Pot (migration 140:
+  // `communities.honey_pot_enabled`, false by default, true for OG only). Nat,
+  // 2026-08-11, seeing OG's dues reminder on Tech HIVE's Home: "Tech HIVE
+  // doesnt have dues established yet... Each HIVE will have its own rules
+  // around dues and treasurers, so it shouldnt just roll over." Everything
+  // dues-shaped on this screen — the auto to-do, the status fetch behind it,
+  // the Honey Pot balance sublabel — checks this flag first. The specifics the
+  // reminder quotes ($25/quarter, the $HiveLV cashtag in `lib/dues.ts` /
+  // `lib/honeyPotPayment.ts`) are OG HIVE's own rules; per-HIVE dues config is
+  // real future scope that starts whenever a second HIVE turns its pot on.
+  const duesEnabled = community?.honey_pot_enabled === true;
   const canSwapHives = memberships.length > 1;
   const activeSurveyStorageKey = profile?.id && communityId
     ? `the-hive:home-active-survey:${communityId}:${profile.id}`
@@ -1286,7 +1302,10 @@ export default function HiveScreen() {
   useEffect(() => { fetchMyActionItems(); }, [fetchMyActionItems]);
 
   const fetchMyDuesStatus = useCallback(async () => {
-    if (!profile?.id || !communityId) {
+    // A HIVE with no Honey Pot has no dues to check — skip the transactions
+    // query entirely rather than reading an empty ledger to learn nothing.
+    // `duesStatusChecked` stays false, which also keeps the dues to-do away.
+    if (!profile?.id || !communityId || !duesEnabled) {
       setDuesStatusLoading(false);
       setDuesStatusChecked(false);
       return;
@@ -1323,7 +1342,7 @@ export default function HiveScreen() {
     }
     setDuesStatusChecked(true);
     setDuesStatusLoading(false);
-  }, [profile, communityId]);
+  }, [profile, communityId, duesEnabled]);
 
   useEffect(() => { fetchMyDuesStatus(); }, [fetchMyDuesStatus]);
 
@@ -2643,6 +2662,10 @@ export default function HiveScreen() {
       };
     }),
     ...(() => {
+      // Only a HIVE that runs a Honey Pot has dues at all (migration 140).
+      // Without this, OG's reminder — its $25 quarter and its $HiveLV cashtag —
+      // rolled over onto every HIVE's Home (Nat caught it on Tech, 2026-08-11).
+      if (!duesEnabled) return [];
       const today = new Date();
       const { year, quarter } = getCurrentDuesPeriod(today);
       const period = { year, quarter };
@@ -3606,7 +3629,12 @@ export default function HiveScreen() {
                         icon={HOME_SHORTCUT_META[shortcutKey].icon}
                         label={HOME_SHORTCUT_META[shortcutKey].label}
                         sublabel={
-                          shortcutKey === 'honey_pot'
+                          // The dollar figure only exists where the HIVE runs a
+                          // pot — a "$0" under the hex in a HIVE that never
+                          // chose one reads as an abandoned fund, the exact
+                          // look migration 140 exists to prevent. The shortcut
+                          // itself stays: /honey-pot explains itself there.
+                          shortcutKey === 'honey_pot' && duesEnabled
                             ? (loading.honeyPot ? '...' : `$${honeyPotBalance?.toFixed(0) ?? '0'}`)
                             : undefined
                         }

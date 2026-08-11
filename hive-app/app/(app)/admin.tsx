@@ -67,7 +67,7 @@ import {
 import type { Survey, SurveyAnswers, SurveyQuestion, SurveyResponse } from '../../lib/hooks/useSurveys';
 import { parseAmericanDate } from '../../lib/dateUtils';
 import { getWishQuickTitle } from '../../lib/wishDisplay';
-import type { Profile, UserRole, CommunityInvite, Event, Wish } from '../../types';
+import type { Profile, UserRole, Event, Wish } from '../../types';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -109,15 +109,6 @@ type SurveyPopPreview = {
   hasContent: boolean;
 };
 
-type InviteRow = CommunityInvite & {
-  inviter: Pick<Profile, 'name'> | null;
-};
-
-type InviteFunctionResponse = {
-  success?: boolean;
-  reusedInvite?: boolean;
-};
-
 // The three roles and their labels moved out with the member editor above —
 // they live as `ROLES` in `components/admin/GodModePanels.tsx` now, beside the
 // buttons that set them, with a line each saying what the role actually does.
@@ -138,48 +129,12 @@ const getDuesAmountLabel = (amount: number) =>
     maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
   }).format(amount);
 
-const getInviteKey = (invite: InviteRow) => `${invite.community_id}:${invite.email.trim().toLowerCase()}`;
-const getInviteTime = (invite: InviteRow) => new Date(invite.created_at).getTime() || 0;
-
-const dedupePendingInvites = (invites: InviteRow[]) => {
-  const byEmail = new Map<string, InviteRow>();
-
-  invites.forEach((invite) => {
-    const key = getInviteKey(invite);
-    const existing = byEmail.get(key);
-    if (!existing || getInviteTime(invite) > getInviteTime(existing)) {
-      byEmail.set(key, invite);
-    }
-  });
-
-  return Array.from(byEmail.values()).sort((a, b) => getInviteTime(b) - getInviteTime(a));
-};
-
-const readFunctionErrorMessage = async (error: unknown, fallback: string) => {
-  try {
-    const maybeError = error as {
-      context?: {
-        clone?: () => { json: () => Promise<unknown> };
-        json?: () => Promise<unknown>;
-      };
-      message?: string;
-    };
-    const context = maybeError.context;
-    const body = context?.clone
-      ? await context.clone().json()
-      : context?.json
-        ? await context.json()
-        : null;
-
-    if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string') {
-      return body.error;
-    }
-
-    return maybeError.message || fallback;
-  } catch {
-    return fallback;
-  }
-};
+// The invite machinery that used to sit here — pending-invite types, the
+// dedupe helpers, `sendInvite` and `revokeInvite` — was dead code: defined,
+// fetched into state, and rendered by nothing since the per-HIVE members panel
+// moved to `components/admin/GodModePanels.tsx` on 2026-08-03. The live invite
+// list, with its Resend and Revoke buttons, is in that file. Removed 2026-08-11
+// so nobody hunts for the invite UI here again.
 
 type HoneyPotFeedback = {
   tone: 'success' | 'error' | 'info';
@@ -1236,7 +1191,6 @@ export default function AdminScreen() {
   const canEditHoneyPot = isTreasurer || isAdmin;
   const [refreshing, setRefreshing] = useState(false);
   const [members, setMembers] = useState<MemberRow[]>([]);
-  const [pendingInvites, setPendingInvites] = useState<InviteRow[]>([]);
 
   // Modal states
   const checkInOpenRequestIdRef = useRef(0);
@@ -1276,10 +1230,6 @@ export default function AdminScreen() {
   const [eventAudience, setEventAudience] = useState<EventAudience>('members');
   const [eventDate, setEventDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<UserRole>('member');
-  const [showInviteMember, setShowInviteMember] = useState(false);
-  const [sendingInvite, setSendingInvite] = useState(false);
 
   // Honey Pot state
   const [honeyPotBalance, setHoneyPotBalance] = useState<number>(0);
@@ -1313,20 +1263,6 @@ export default function AdminScreen() {
       .order('created_at', { ascending: true });
     const memberRows = (membersData || []) as unknown as MemberRow[];
     if (membersData) setMembers(memberRows);
-
-    // Fetch pending invites
-    const { data: invitesData } = await supabase
-      .from('community_invites')
-      .select('*, inviter:profiles!community_invites_invited_by_fkey(name)')
-      .eq('community_id', communityId)
-      .is('accepted_at', null)
-      .order('created_at', { ascending: false });
-    if (invitesData) {
-      const memberEmails = new Set(memberRows.map((member) => member.profiles.email.trim().toLowerCase()));
-      const visibleInvites = dedupePendingInvites(invitesData as InviteRow[])
-        .filter((invite) => !memberEmails.has(invite.email.trim().toLowerCase()));
-      setPendingInvites(visibleInvites);
-    }
 
     const today = getLocalIsoDate(new Date());
     const { data: nextMeetingData } = await supabase
@@ -1847,88 +1783,6 @@ export default function AdminScreen() {
       setEventDate('');
       setEventDescription('');
       setEventAudience('members');
-      await fetchData();
-    }
-  };
-
-  const sendInvite = async () => {
-    const trimmedEmail = inviteEmail.trim();
-
-    if (!trimmedEmail || !communityId) {
-      showAlert('Error', 'Please enter an email');
-      return;
-    }
-
-    if (sendingInvite) return;
-
-    setSendingInvite(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke<InviteFunctionResponse>('invite', {
-        body: {
-          email: trimmedEmail,
-          role: inviteRole,
-          community_id: communityId,
-        },
-      });
-
-      if (error) {
-        throw new Error(await readFunctionErrorMessage(error, 'Failed to send invite'));
-      }
-
-      await fetchData();
-      showAlert(
-        data?.reusedInvite ? 'Invite refreshed' : 'Invite sent',
-        data?.reusedInvite
-          ? `${trimmedEmail} already had a pending invite, so we refreshed it and sent the link again.`
-          : `${trimmedEmail} will receive an invite to join.`
-      );
-      setInviteEmail('');
-      setInviteRole('member');
-      setShowInviteMember(false);
-    } catch (error) {
-      console.error('Invite send error:', error);
-      showAlert('Error', error instanceof Error ? error.message : 'Failed to send invite');
-    } finally {
-      setSendingInvite(false);
-    }
-  };
-
-  const revokeInvite = async (inviteId: string, email: string) => {
-    // Use window.confirm on web, Alert.alert on native
-    const confirmed = typeof window !== 'undefined' && window.confirm
-      ? window.confirm(`Are you sure you want to revoke the invite for ${email}?`)
-      : await new Promise<boolean>((resolve) => {
-          Alert.alert(
-            'Revoke Invite',
-            `Are you sure you want to revoke the invite for ${email}?`,
-            [
-              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-              { text: 'Revoke', style: 'destructive', onPress: () => resolve(true) },
-            ]
-          );
-        });
-
-    if (!confirmed) return;
-
-    if (!communityId) {
-      showAlert('Error', 'No community context. Please refresh and try again.');
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('community_invites')
-      .delete()
-      .eq('id', inviteId)
-      .eq('community_id', communityId)
-      .select();
-
-    if (error) {
-      console.error('Revoke invite error:', error);
-      alert(`Failed to revoke invite: ${error.message}`);
-    } else if (!data || data.length === 0) {
-      alert('No invite was deleted. You may not have permission or the invite no longer exists.');
-    } else {
       await fetchData();
     }
   };

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, FlatList, RefreshControl, Pressable, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -19,6 +19,7 @@ import { HiveWideRoomCard, HiveWideBubble } from '../../components/messaging/Hiv
 import { HiveWideRoomView } from '../../components/messaging/HiveWideRoomView';
 import { useHiveWideRoom } from '../../lib/hooks/useHiveWideRoom';
 import { usePageSkin } from '../../lib/pageSkin';
+import { showAlert } from '../../lib/showAlert';
 import { getMessagesRoomLabel } from '../../components/messaging/hiveWideRoom';
 import { hiveDisplayName, hiveAccent, accentWash } from '../../lib/hiveBrand';
 import { HiveMark } from '../../components/ui/HiveMark';
@@ -387,9 +388,20 @@ export default function MessagesScreen() {
     // room list return `reach`, so the room now says what it is and the screen
     // can believe it. The id check stays as a belt to the braces.
     const sharedRoomId = hiveWideRoom?.id;
-    const listedRooms = rooms.filter(
-      (room) => room.reach !== 'all_hives' && room.id !== sharedRoomId
-    );
+    const listedRooms = rooms.filter((room) => {
+      if (room.reach === 'all_hives' || room.id === sharedRoomId) return false;
+      // On desktop, the HIVE's own room joins this list only once somebody has
+      // said something in it. Until then its card duplicated the rail bubble
+      // directly above — in Tech HIVE the whole list was one empty room wearing
+      // the HIVE's name. Nat, 2026-08-11: "No message chains should be
+      // autopopulated here though, they are all just waiting for their first
+      // message, so this part should be empty." Same rule the HIVE-Wide card
+      // follows (removed from the desktop list earlier the same day): the rail
+      // bubble is the door until the conversation exists. On a phone there is
+      // no rail, so the card stays as the only door.
+      if (!useMobileLayout && room.room_type === 'community' && !room.last_message) return false;
+      return true;
+    });
 
     const entries: MessagesListEntry[] = listedRooms.map((room) => ({ kind: 'room', room }));
 
@@ -408,7 +420,7 @@ export default function MessagesScreen() {
     return entries;
   }, [loading, rooms, wholeHive, hiveWideRoom?.id, useMobileLayout]);
 
-  // Everyone in the HIVE except you — the rail's cast.
+  // The other members of the HIVE. Your own bubble joins them below.
   useEffect(() => {
     if (!communityId || !profile) return;
     let cancelled = false;
@@ -430,9 +442,25 @@ export default function MessagesScreen() {
     return () => { cancelled = true; };
   }, [communityId, profile]);
 
+  // The rail's cast: everyone in the HIVE, yourself included, one alphabetical
+  // order. Your own face used to be left out, so in Tech HIVE — where Nat is so
+  // far the only member — the rail was two doors and then nothing. Nat,
+  // 2026-08-11: "The two icons at the top are correct, but then should also
+  // show Nat Walstead profile bubble because i'm in the Tech Hive." Your bubble
+  // sorts by the same rule as everyone else's rather than taking a place of
+  // honour — the doors go big (HIVE-Wide) to medium (your HIVE) to small
+  // (individual people), and you are one of the people.
+  const railPeople = useMemo(() => {
+    if (!profile) return railMembers;
+    return [...railMembers, profile].sort((a, b) => a.name.localeCompare(b.name));
+  }, [railMembers, profile]);
+
   const handleStartDM = async (member: Profile) => {
     if (!profile || !communityId) return;
 
+    // Yourself included: migration 166 taught `get_or_create_dm_room` the
+    // one-person case, so tapping your own bubble opens your notes-to-self
+    // room through the exact same path as any other chat.
     try {
       const roomWithData = await getOrCreateDMRoom(member.id);
       if (roomWithData) {
@@ -440,7 +468,10 @@ export default function MessagesScreen() {
       }
     } catch (error) {
       console.error('Error creating DM:', error);
-      Alert.alert('Error', 'Failed to start conversation.');
+      // showAlert, never Alert.alert — react-native-web's Alert is an empty
+      // class, so on the web (where nearly everyone is) the old message
+      // vanished without a trace.
+      showAlert('That conversation could not start', 'Give it another try in a moment.');
     }
   };
 
@@ -454,7 +485,7 @@ export default function MessagesScreen() {
       }
     } catch (error) {
       console.error('Error creating group DM:', error);
-      Alert.alert('Error', 'Failed to start group conversation.');
+      showAlert('That conversation could not start', 'Give it another try in a moment.');
     }
   };
 
@@ -643,7 +674,7 @@ export default function MessagesScreen() {
         >
           {/* The face row starts a DM, and a DM started from here would be an
               OG conversation. It stays inside OG (Nat 2026-08-03). */}
-          {!wholeHive && (communityRoom || railMembers.length > 0) && (
+          {!wholeHive && (communityRoom || railPeople.length > 0) && (
             <View style={{ borderBottomWidth: 1, borderBottomColor: skin.border }}>
               {/* Wrapped rows, four across — one row ran the bubbles off the
                   edge ("Infiniti E…") and wasted the column's width. */}
@@ -677,7 +708,9 @@ export default function MessagesScreen() {
                     />
                   </View>
                 ) : null}
-                {railMembers.map((member) => (
+                {/* Every member of the HIVE, you included — `handleStartDM`
+                    knows what to do with your own face. */}
+                {railPeople.map((member) => (
                   <View key={member.id} style={{ width: '25%', alignItems: 'center' }}>
                     <MemberBubble
                       member={member}

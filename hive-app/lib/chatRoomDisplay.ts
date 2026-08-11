@@ -234,6 +234,10 @@ export function getRoomDefaultName(room: RoomWithMembers, currentUserId?: string
     return otherMembers.map((member) => member.name.split(' ')[0]).join(', ');
   }
 
+  // A dm room whose only member is you is your notes-to-self space
+  // (migration 166) — "Direct Message" would read as a bug there.
+  if (otherMembers.length === 0) return 'Just you';
+
   return otherMembers[0]?.name || 'Direct Message';
 }
 
@@ -255,6 +259,12 @@ export function getRoomSubtitle(room: RoomWithMembers, currentUserId?: string): 
 
   if (room.room_type === 'group_dm') {
     return `${room.members?.length || 0} members`;
+  }
+
+  // The notes-to-self room says what it is, in the same register the shared
+  // room's "Every HIVE, in one room" uses.
+  if (getOtherRoomMembers(room, currentUserId).length === 0) {
+    return 'Notes, links, things to remember';
   }
 
   return null;
