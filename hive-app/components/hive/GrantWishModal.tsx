@@ -14,6 +14,7 @@ import { Avatar } from '../ui/Avatar';
 import { supabase } from '../../lib/supabase';
 import { ComposerBar } from '../ui/ComposerBar';
 import type { Wish, Profile } from '../../types';
+import { BounceScrollView } from '../ui/BounceScrollView';
 
 
 /**
@@ -151,7 +152,7 @@ export function GrantWishModal({
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
         >
-          <ScrollView className="flex-1">
+          <BounceScrollView className="flex-1">
             <View className="p-6">
               {/* Header */}
               <View className="flex-row justify-between items-center mb-6">
@@ -357,7 +358,7 @@ export function GrantWishModal({
                 disabled={loading}
               />
             </View>
-          </ScrollView>
+          </BounceScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>

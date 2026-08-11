@@ -11,6 +11,7 @@ import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webSto
 import { AttachmentPicker } from '../ui/AttachmentPicker';
 import { ComposerBar } from '../ui/ComposerBar';
 import { usePageSkin } from '../../lib/pageSkin';
+import { BounceScrollView } from '../ui/BounceScrollView';
 
 const TITLE_MAX_LENGTH = 150;
 
@@ -204,7 +205,7 @@ export function BoardComposer({
             </Pressable>
           </View>
 
-          <ScrollView className="flex-1 p-4">
+          <BounceScrollView className="flex-1 p-4">
             {/* Category badge */}
             {category && (
               <View className="flex-row items-center mb-4">
@@ -289,7 +290,7 @@ export function BoardComposer({
                 disabled={submitting}
               />
             </View>
-          </ScrollView>
+          </BounceScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>

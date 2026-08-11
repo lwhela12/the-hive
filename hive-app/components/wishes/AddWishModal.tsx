@@ -24,6 +24,7 @@ import type { SelectedImage } from '../../lib/imagePicker';
 import type { SelectedFile } from '../../lib/filePicker';
 import { WishScopePicker, type WishScope } from '../ui/WishScopePicker';
 import type { BoardCategory, Wish } from '../../types';
+import { BounceScrollView } from '../ui/BounceScrollView';
 
 const WISH_DRAFT_KEY = 'add-wish-draft';
 const WISH_TITLE_DRAFT_KEY = 'add-wish-title-draft';
@@ -381,7 +382,7 @@ export function AddWishModal({
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
         >
-          <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+          <BounceScrollView className="flex-1" keyboardShouldPersistTaps="handled">
             <View className="p-6">
               {/* Header */}
               <View className="flex-row justify-between items-center mb-6">
@@ -580,7 +581,7 @@ export function AddWishModal({
                 </Pressable>
               )}
             </View>
-          </ScrollView>
+          </BounceScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>

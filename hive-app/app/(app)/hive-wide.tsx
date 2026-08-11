@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   Pressable,
   RefreshControl,
   useWindowDimensions,
@@ -838,9 +837,12 @@ export default function HiveWideScreen() {
                 >
                   {allAppNews.length} changes since {formatDateLong(oldestAppNews)}
                 </Text>
-                <ScrollView
+                <BounceScrollView
                   // Taller now that it is a history with dates in it rather
                   // than a handful of lines — 208px showed about two days.
+                  // The shared bounce, same as the page behind it — every
+                  // scrollable says "that's the end" the same way (Nat's
+                  // standing rule, 2026-08-06).
                   style={{ maxHeight: wide ? 340 : 380 }}
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={false}
@@ -890,7 +892,7 @@ export default function HiveWideScreen() {
                     </View>
                   ))}
                 </View>
-                </ScrollView>
+                </BounceScrollView>
               </TopBox>
             </View>
           </>

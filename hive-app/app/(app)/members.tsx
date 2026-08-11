@@ -1,7 +1,7 @@
 import { type ReactNode, useState, useEffect, useCallback, useMemo } from 'react';
 // No `Modal` here any more: the member card became a page on 2026-08-06 so the
 // path along the bottom of the app stays visible while you read it.
-import { View, Text, ScrollView, Pressable, ActivityIndicator, useWindowDimensions, TextInput, Alert, RefreshControl } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, useWindowDimensions, TextInput, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -1393,7 +1393,7 @@ function MemberDetailPage({
                       maxHeight: memberWishPanelMaxHeight,
                       overflow: 'hidden',
                     }}>
-                      <ScrollView
+                      <BounceScrollView
                         nestedScrollEnabled
                         showsVerticalScrollIndicator={true}
                         contentContainerStyle={{
@@ -1425,7 +1425,7 @@ function MemberDetailPage({
                             />
                           ))
                         )}
-                      </ScrollView>
+                      </BounceScrollView>
                     </View>
 
                     {addingWish && (
@@ -1947,7 +1947,7 @@ function MemberDetailPage({
                       is only capped, flex would give it a height of zero and
                       the wishes would vanish. Left alone it is as tall as the
                       cards and shrinks to the cap when there are many. */}
-                  <ScrollView
+                  <BounceScrollView
                     nestedScrollEnabled
                     showsVerticalScrollIndicator={true}
                     contentContainerStyle={{
@@ -1980,7 +1980,7 @@ function MemberDetailPage({
                         />
                       ))
                     )}
-                  </ScrollView>
+                  </BounceScrollView>
                 </View>
               </View>
             )}
@@ -2030,7 +2030,7 @@ function MemberDetailPage({
                       <ThinkingBee />
                     </View>
                   ) : (
-                    <ScrollView
+                    <BounceScrollView
                       nestedScrollEnabled
                       showsVerticalScrollIndicator={true}
                       contentContainerStyle={{
@@ -2062,7 +2062,7 @@ function MemberDetailPage({
                           />
                         ))
                       )}
-                    </ScrollView>
+                    </BounceScrollView>
                   )}
                 </View>
 

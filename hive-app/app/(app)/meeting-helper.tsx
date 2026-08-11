@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   useWindowDimensions,
@@ -30,6 +28,7 @@ import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingM
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { showAlert } from '../../lib/showAlert';
 import { getMentionedMembers, hasBroadcastMention } from '../../lib/mentions';
 import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
@@ -2242,7 +2241,9 @@ export default function MeetingHelperScreen() {
                 </Text>
               </Pressable>
             </View>
-            <ScrollView contentContainerStyle={{ paddingHorizontal: sz(28, 16), paddingVertical: sz(20, 12), gap: sz(16, 10) }}>
+            {/* The spotlight sheet's scroller — BounceScrollView so a member's
+                story bounces at both ends like every other sheet in the app. */}
+            <BounceScrollView contentContainerStyle={{ paddingHorizontal: sz(28, 16), paddingVertical: sz(20, 12), gap: sz(16, 10) }}>
               {!topWish?.description
                 && grantedThisCycle.length === 0
                 && detailSections.length === 0
@@ -2419,7 +2420,7 @@ export default function MeetingHelperScreen() {
                   </View>
                 ))}
               </View>
-            </ScrollView>
+            </BounceScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -2729,7 +2730,9 @@ export default function MeetingHelperScreen() {
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), letterSpacing: 2, textTransform: 'uppercase', color: GOLD, marginBottom: sz(10, 7) }}>
           Tonight
         </Text>
-        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+        {/* A long roster can outgrow the rail, so it scrolls — and bounces at
+            its ends like every other scroller, so a full list says so. */}
+        <BounceScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
           {AGENDA.map((item, agendaIndex) => {
             const slidePosition = slides.findIndex((slide) => slide.key === item.key);
             const isActive = activeKey === item.key;
@@ -2799,7 +2802,7 @@ export default function MeetingHelperScreen() {
               </View>
             );
           })}
-        </ScrollView>
+        </BounceScrollView>
       </View>
     );
   };
@@ -2823,8 +2826,11 @@ export default function MeetingHelperScreen() {
           pointerEvents="none"
         />
 
-        {/* Slide content */}
-        <ScrollView
+        {/* Slide content. BounceScrollView, because most slides fit the screen
+            and a page that fits is exactly the case Nat named: a scroll that
+            refuses to move reads as broken unless it bounces to say "that's
+            all". */}
+        <BounceScrollView
           key={activeSlide.key}
           style={{ flex: 1 }}
           contentContainerStyle={{
@@ -2836,7 +2842,7 @@ export default function MeetingHelperScreen() {
           }}
         >
           {activeSlide.render()}
-        </ScrollView>
+        </BounceScrollView>
 
         {/* Edge navigation: tap zones with quiet chevrons */}
         {clampedIndex > 0 ? (

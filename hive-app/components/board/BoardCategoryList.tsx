@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { HiveIcon, type HiveIconName } from '../ui/HiveIcon';
 import { HIVE_ICON_PREFIX } from './BoardTopicComposer';
 import { ScopeBadge } from '../ui/ScopeBadge';
+import { useEndBounce } from '../ui/BounceScrollView';
 import { usePageSkin } from '../../lib/pageSkin';
 import type { BoardCategory } from '../../types';
 
@@ -68,6 +69,10 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   // chosen together — a card that reads its background here and its text from a
   // constant is how you end up with grey words on black.
   const skin = usePageSkin();
+  // The grid bounces at both ends, so a screen of boards that all fit reads as
+  // "that's all of them" instead of "this is stuck" — the standing app-wide
+  // rule (see BounceScrollView.tsx, Nat 2026-08-06).
+  const gridBounceRef = useEndBounce();
   // Boards render as actual boards — a grid of pinned bulletin cards
   // (mirrors the Boards nav icon). Column count follows the window, and the
   // cards stretch so the grid fills the screen instead of leaving dead space.
@@ -100,6 +105,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
   const THREAD_ROW_HEIGHT = 21;
   const headerHeight =
     32                    // card padding, top + bottom
+    + 27                  // the scope badge row (sm chip ≈ 21) plus its margin
     + iconSize + 4        // the emoji
     + 8 + (titleSize + 5) * 2   // title, up to two lines
     + 4 + 18 * descLines  // description
@@ -118,6 +124,7 @@ export const BoardCategoryList = memo(function BoardCategoryList({
       }}
     >
     <FlatList
+      ref={gridBounceRef}
       key={numColumns}
       numColumns={numColumns}
       data={categories}
@@ -196,9 +203,15 @@ export const BoardCategoryList = memo(function BoardCategoryList({
                   mark for the ones shared HIVE-Wide. Nat, viewing OG's boards:
                   "since these are all og HIVE, they should just have the amber
                   colored honey comb that denotes this group & should say 'OG
-                  HIVE'." Corner badge because the card layout below has no row
-                  left to put it in. */}
-              <View style={{ position: 'absolute', top: 10, right: 10, zIndex: 1 }}>
+                  HIVE'." This floated in an absolute top-right corner until
+                  2026-08-11, when Nat's iPhone showed a shared board wearing
+                  BOTH chips ("OG HIVE" + "HIVE-Wide") — on a narrow card they
+                  wrapped inside that floating box and landed on the emoji and
+                  each other, one unreadable pile. A real row in the card's
+                  flow pushes the content down instead of covering it; kept
+                  right-aligned, which is her "upper right hand corner maybe"
+                  on every width. */}
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 6 }}>
                 <ScopeBadge scope={item.reach ?? 'hive'} communityId={item.community_id} size="sm" />
               </View>
 

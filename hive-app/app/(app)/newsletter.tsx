@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -14,6 +14,7 @@ import { NEWSLETTER_MASTHEAD, readLetter } from '../../lib/newsletterHeaders';
 import { LinkifiedText } from '../../components/ui/LinkifiedText';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 /** The month a recap covers: the one before the month it goes out in. */
 function lastMonth(): string {
   const now = new Date();
@@ -514,10 +515,14 @@ export default function NewsletterScreen() {
         </Pressable>
       </View>
 
-      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+      {/* The page's one scroller — BounceScrollView so it bounces at both
+          ends on every platform, Nat's standing rule for every page. */}
+      <BounceScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
         {loading ? (
           <View style={{ paddingVertical: 60, alignItems: 'center', gap: 12 }}>
-            <ActivityIndicator size="small" color="#fffdf5" />
+            {/* Was an ActivityIndicator painted #fffdf5 — cream on the cream
+                page, an invisible spinner. The bee is the app's loading state. */}
+            <ThinkingBee />
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#9a7c42' }}>
               Gathering the cycle…
             </Text>
@@ -670,7 +675,7 @@ export default function NewsletterScreen() {
             </Text>
           </>
         )}
-      </ScrollView>
+      </BounceScrollView>
     </SafeAreaView>
   );
 }

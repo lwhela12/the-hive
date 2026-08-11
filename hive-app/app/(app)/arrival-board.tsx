@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
-  ScrollView,
   Text,
   useWindowDimensions,
   View,
@@ -20,6 +18,7 @@ import {
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
+import { BounceScrollView } from '../../components/ui/BounceScrollView';
 // The plain bee mark, not the crest — the crest's sunburst ring turns to mush
 // at header size (see monthly-tuneup for the full note).
 const hiveBee = require('../../assets/BEE ONLY IN GOLD BG.png');
@@ -70,7 +69,9 @@ export default function ArrivalBoardScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-honey-50" edges={['top']}>
-      <ScrollView
+      {/* The page's one scroller — BounceScrollView so it bounces at both
+          ends on every platform, Nat's standing rule for every page. */}
+      <BounceScrollView
         className="flex-1"
         contentContainerStyle={{
           paddingHorizontal: isTV ? 36 : 16,
@@ -174,7 +175,7 @@ export default function ArrivalBoardScreen() {
             ))}
           </View>
         )}
-      </ScrollView>
+      </BounceScrollView>
     </SafeAreaView>
   );
 }

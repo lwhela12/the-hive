@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, RefreshControl, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, Pressable, Alert, RefreshControl, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { EditButton } from '../ui/EditButton';
@@ -21,6 +21,7 @@ import { MarkdownContent } from '../chat/MarkdownContent';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
 import { SpaceBackdrop } from '../ui/SpaceBackdrop';
+import { BounceScrollView } from '../ui/BounceScrollView';
 import { usePageSkin } from '../../lib/pageSkin';
 import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment, BoardCategory } from '../../types';
 
@@ -572,7 +573,14 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
           (Nat: "squishy on the phone" — nothing here moved for the keyboard
           before, 2026-08-08). */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-      <ScrollView
+      {/* Nat hit this exact screen on her phone with a thread that fit the
+          window: "I noticed that i couldnt scroll any more up or down, but i
+          assumed the app was slow or broken, not that there wasnt more to
+          see." (2026-08-11). The bounce is the answer the app promised her —
+          see BounceScrollView.tsx. RefreshControl keeps working on iOS; on
+          the web it never did anything, so the bounce owning the downward
+          pull there takes nothing away. */}
+      <BounceScrollView
         className="flex-1"
         contentContainerClassName="pb-24"
         refreshControl={
@@ -675,7 +683,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
             ))
           )}
         </View>
-      </ScrollView>
+      </BounceScrollView>
 
       {/* Reply input. This bar floats OVER the thread, so it has to be opaque —
           the see-through card fill would let replies scroll through it. The

@@ -132,6 +132,41 @@ function getRouteParam(value: string | string[] | undefined) {
   return value ?? null;
 }
 
+/**
+ * A long board name, broken onto two lines so it fits a phone header.
+ *
+ * AppHeader's title sits between two fixed side slots, and React Native rows
+ * never shrink their children — so "HIVE-Wide General Discussion" ran clean
+ * off the right edge of Nat's iPhone (2026-08-11). Her call: "i'd either cut
+ * 'hive wide' & just have 'general discussion' or stack them on the phone
+ * view." Cutting words out of a board's real name changes its meaning on any
+ * board that doesn't happen to start with "HIVE-Wide", so this stacks — the
+ * same two-line look the thread view already gives this exact name.
+ *
+ * The break lands on a space, at the earliest point where everything after it
+ * fits on one line — so the second line is a whole phrase ("HIVE-Wide /
+ * General Discussion"), never a leftover word.
+ */
+function stackHeaderTitle(name: string, headerWidth: number): string {
+  // The serif title runs ~11px a glyph at 19pt, plus 1.2 letter-spacing.
+  const budget = Math.max(10, Math.floor(headerWidth / 12));
+  if (name.length <= budget || !name.includes(' ')) return name;
+
+  const spaceAt: number[] = [];
+  for (let i = 0; i < name.length; i += 1) {
+    if (name[i] === ' ') spaceAt.push(i);
+  }
+
+  let breakAt = spaceAt.find((i) => i <= budget && name.length - i - 1 <= budget);
+  if (breakAt === undefined) {
+    // Nothing fits cleanly; the most even split overflows the least.
+    breakAt = spaceAt.reduce((best, i) => (
+      Math.max(i, name.length - i - 1) < Math.max(best, name.length - best - 1) ? i : best
+    ));
+  }
+  return `${name.slice(0, breakAt)}\n${name.slice(breakAt + 1)}`;
+}
+
 export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } = {}) {
   const {
     profile,
@@ -2200,9 +2235,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
           from starfield to flat black at the first tap (Nat 2026-08-11:
           missing "inside boards"). Inside a HIVE it renders nothing. */}
       <SpaceBackdrop />
-      {/* Posts view header with back button */}
+      {/* Posts view header with back button. On a phone a long board name is
+          stacked onto two lines (see stackHeaderTitle above) — 112 is the two
+          40pt side slots plus the header's horizontal padding. */}
       <AppHeader
-        title={selectedCategory.name}
+        title={useMobileLayout ? stackHeaderTitle(selectedCategory.name, width - 112) : selectedCategory.name}
         onBackPress={handleBack}
         tone={isWide ? 'wide' : 'hive'}
         rightElement={

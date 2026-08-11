@@ -2548,7 +2548,7 @@ export default function ProfileScreen() {
                   maxHeight: profileWishPanelHeight,
                   overflow: 'hidden',
                 }}>
-                  <ScrollView
+                  <BounceScrollView
                     nestedScrollEnabled
                     showsVerticalScrollIndicator={true}
                     contentContainerStyle={{
@@ -2567,7 +2567,7 @@ export default function ProfileScreen() {
                         {visibleProfileWishes.map(renderWishCard)}
                       </View>
                     )}
-                  </ScrollView>
+                  </BounceScrollView>
                 </View>
               </View>
             )}

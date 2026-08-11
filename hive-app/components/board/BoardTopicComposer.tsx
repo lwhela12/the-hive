@@ -12,6 +12,7 @@ import { usePageSkin } from '../../lib/pageSkin';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { ScopePicker, type ScopeOption } from '../ui/ScopePicker';
 import { ScopeBadge } from '../ui/ScopeBadge';
+import { BounceScrollView } from '../ui/BounceScrollView';
 
 const BOARD_DRAFT_KEY = 'board-topic-draft';
 const NAME_MAX_LENGTH = 90;
@@ -377,7 +378,7 @@ export function BoardTopicComposer({
             </Pressable>
           </View>
 
-          <ScrollView className="flex-1 p-4" keyboardShouldPersistTaps="handled">
+          <BounceScrollView className="flex-1 p-4" keyboardShouldPersistTaps="handled">
             {/* Preview */}
             <View className="items-center mb-6">
               <View
@@ -626,7 +627,7 @@ export function BoardTopicComposer({
                 Use top-level boards for big containers. Put the specific asks, recommendations, recipes, or project threads inside the board.
               </Text>
             </View>
-          </ScrollView>
+          </BounceScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>

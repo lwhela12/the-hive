@@ -3219,8 +3219,12 @@ export default function HiveScreen() {
           </View>
         )}
 
-        {/* Refresh / Add to Home / Customize — one compact pill row */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        {/* Refresh / Add to Home / Customize — one compact pill row.
+            It wraps: on a 375–393 point phone the three pills (four in
+            customize mode) want more room than the column has, and each pill
+            is flexShrink: 0 with a one-line label — so without the wrap the
+            outer pills ran off both edges of the screen. */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           {customizeMode && (
             <Pressable
               onPress={() => { void persistHomeLayout(null, null); }}
@@ -3312,7 +3316,10 @@ export default function HiveScreen() {
                           </Text>
                         </View>
                       ) : (
-                        <ScrollView
+                        // The shared bounce on the panel's own scroller, so the
+                        // end of the activity list says so instead of just
+                        // refusing to move (Nat's standing rule, 2026-08-06).
+                        <BounceScrollView
                           nestedScrollEnabled
                           showsVerticalScrollIndicator={true}
                           onScroll={handleActivityScroll}
@@ -3378,7 +3385,7 @@ export default function HiveScreen() {
                               </Pressable>
                             );
                           })}
-                        </ScrollView>
+                        </BounceScrollView>
                       )}
                     </View>
                   </>
@@ -3439,9 +3446,9 @@ export default function HiveScreen() {
                           </Text>
                         </View>
                       ) : (
-                        <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true} style={{ maxHeight: todoPanelMaxHeight }}>
+                        <BounceScrollView nestedScrollEnabled showsVerticalScrollIndicator={true} style={{ maxHeight: todoPanelMaxHeight }}>
                           {renderTodoList()}
-                        </ScrollView>
+                        </BounceScrollView>
                       )}
                     </View>
                   </>
@@ -3519,7 +3526,7 @@ export default function HiveScreen() {
                       {loading.events ? (
                         <View style={{ padding: 16 }}><EventsListSkeleton /></View>
                       ) : (
-                        <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true} style={{ flex: 1 }}>
+                        <BounceScrollView nestedScrollEnabled showsVerticalScrollIndicator={true} style={{ flex: 1 }}>
                           {pastMonthsShown > 0 && (
                             <>
                               <View style={{ opacity: 0.82 }}>
@@ -3572,7 +3579,7 @@ export default function HiveScreen() {
                               </Text>
                             </View>
                           )}
-                        </ScrollView>
+                        </BounceScrollView>
                       )}
                     </View>
                   </>
@@ -3667,7 +3674,7 @@ export default function HiveScreen() {
                         height: wishPanelHeight,
                         overflow: 'hidden',
                       }}>
-                        <ScrollView
+                        <BounceScrollView
                           nestedScrollEnabled
                           showsVerticalScrollIndicator={true}
                           style={{ flex: 1 }}
@@ -3696,7 +3703,7 @@ export default function HiveScreen() {
                               />
                             ))
                           )}
-                        </ScrollView>
+                        </BounceScrollView>
                       </View>
                     )}
                   </View>
@@ -4305,11 +4312,11 @@ export default function HiveScreen() {
                   </Pressable>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator style={{ maxHeight: useMobileLayout ? 260 : 220, marginBottom: 18 }}>
+                <BounceScrollView showsVerticalScrollIndicator style={{ maxHeight: useMobileLayout ? 260 : 220, marginBottom: 18 }}>
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 17, color: '#2d2d2d', lineHeight: 24 }}>
                     {selectedActionItem.description}
                   </Text>
-                </ScrollView>
+                </BounceScrollView>
 
                 <View style={{ gap: 10 }}>
                   {(() => {
@@ -4491,7 +4498,7 @@ export default function HiveScreen() {
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: '#8e7a5e', lineHeight: 20, marginBottom: 14 }}>
                 Answer the questions you missed, or peek at the days you already joined.
               </Text>
-              <ScrollView
+              <BounceScrollView
                 nestedScrollEnabled
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={true}
@@ -4572,7 +4579,7 @@ export default function HiveScreen() {
                     </Text>
                   </Pressable>
                 ) : null}
-              </ScrollView>
+              </BounceScrollView>
               <Pressable
                 onPress={closeCatchUpModal}
                 style={{ backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14, marginTop: 6 }}

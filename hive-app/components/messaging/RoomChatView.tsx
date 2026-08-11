@@ -49,6 +49,7 @@ import type { ChatRoom, ChatRoomMember, Profile, TypingIndicator, Attachment } f
 import { confirmAction, showAlert } from '../../lib/showAlert';
 import { SignedImage } from '../ui/SignedImage';
 import { ThinkingBee } from '../ui/ThinkingBee';
+import { BounceScrollView } from '../ui/BounceScrollView';
 interface RoomChatViewProps {
   room: ChatRoom & { members?: Array<ChatRoomMember & { user?: Profile }> };
   onBack: () => void;
@@ -923,7 +924,9 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                 </Pressable>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 16 }}>
+              {/* The sheet's own scroller, so it bounces at both ends like
+                  every other sheet — Nat's standing rule (BounceScrollView). */}
+              <BounceScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 16 }}>
                 {/* Naming a chat is naming a thing, so it is words and gets
                     the mic — same box you write a message into. */}
                 <ComposerBar
@@ -1061,7 +1064,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                     );
                   })}
                 </View>
-              </ScrollView>
+              </BounceScrollView>
 
               <View className="flex-row gap-3 pt-2">
                 <Pressable
@@ -1133,6 +1136,21 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
             ref={flatListRef}
             data={invertedMessages}
             inverted
+            // The end-of-scroll bounce, for a list drawn upside down.
+            //
+            // Every other scroller in the app gets it from BounceScrollView /
+            // useEndBounce, but an inverted list is flipped with scaleY(-1) and
+            // the shared hook deliberately stands aside for those — translating
+            // the flipped content would bounce the wrong way (see the note in
+            // BounceScrollView.tsx). So the native props go on directly, which
+            // is exactly what that note says to do: iOS and Android draw their
+            // own rubber-band at both ends, even when a young room's few
+            // messages already fit on one screen (`alwaysBounceVertical`). In
+            // a browser, iOS Safari already rubber-bands a scrollable chat at
+            // its ends on its own.
+            bounces
+            alwaysBounceVertical
+            overScrollMode="always"
             keyExtractor={(item) => item.id}
             renderItem={renderMessageItem}
             onEndReached={handleEndReached}

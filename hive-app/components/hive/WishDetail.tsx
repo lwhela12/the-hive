@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { usePageSkin } from '../../lib/pageSkin';
 import { SpaceBackdrop } from '../ui/SpaceBackdrop';
+import { BounceScrollView } from '../ui/BounceScrollView';
 import {
   View,
   Text,
@@ -350,7 +351,7 @@ export function WishDetail({
 
       {/* Reading-width frame — without it the wish sprawls edge-to-edge on
           wide screens and the whole page feels unmoored. */}
-      <ScrollView
+      <BounceScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, maxWidth: 840, width: '100%', alignSelf: 'center' }}
       >
@@ -560,7 +561,7 @@ export function WishDetail({
             />
           ))
         )}
-      </ScrollView>
+      </BounceScrollView>
 
       {/* Mark as HD Granted Button (for own public wishes) */}
       {canGrant && (
