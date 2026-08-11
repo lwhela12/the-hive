@@ -105,7 +105,7 @@ export async function acceptCommunityInvite({
   profile,
   session,
 }: {
-  invite: Pick<CommunityInvite, 'id' | 'community_id'>;
+  invite: Pick<CommunityInvite, 'id' | 'community_id' | 'role'>;
   profile: Profile | null;
   session: Session | null;
 }): Promise<AcceptInviteResult> {
@@ -121,12 +121,21 @@ export async function acceptCommunityInvite({
 
   if (existingMembership) return { outcome: 'already-member' };
 
-  // Create the membership. No role goes up from here — see the note above.
+  // The invite's role goes up WITH the insert now. "No role from the
+  // browser" was the original rule — the database trigger copies it off the
+  // invite — but the trigger deliberately stands aside for app owners
+  // ("already runs this HIVE, or owns all of them"), assuming an owner's
+  // insert chose its role on purpose. This path chooses nothing on purpose,
+  // so Lucas accepted an ADMIN invite to Tech HIVE and landed as member
+  // (2026-08-11, found live). For a normal invitee the trigger still
+  // overrides whatever is sent with the invite row's own role, so nothing
+  // here lets a browser grant itself a seat the invite didn't.
   const { error: membershipError } = await supabase
     .from('community_memberships')
     .insert({
       community_id: invite.community_id,
       user_id: activeProfile.id,
+      role: invite.role ?? 'member',
     });
 
   if (membershipError) {

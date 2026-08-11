@@ -961,7 +961,12 @@ function AdminPanel({
           style={{
             fontFamily: on ? 'Lato_700Bold' : 'Lato_400Regular',
             fontSize: narrow ? 12 : 12.5,
-            color: on ? tabText : 'rgba(255,248,233,0.72)',
+            // The selected tab's ground is `washedTab` — the accent lifted
+            // nearly to pastel — so its ink is charcoal, the exact pairing
+            // the Newsletter tab (cream fill, dark ink) already had. Nat,
+            // 2026-08-11: cream-on-pastel was "too hard to read... but the
+            // newsletter one worked great."
+            color: on ? (skin ? '#2d2d2d' : tabText) : 'rgba(255,248,233,0.72)',
           }}
         >
           {t.label}
