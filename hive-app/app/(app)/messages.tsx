@@ -32,10 +32,12 @@ import { SignedImage } from '../../components/ui/SignedImage';
 import { useEndBounce } from '../../components/ui/BounceScrollView';
 
 /**
- * The message list holds your rooms and one thing that has no room: HIVE-Wide.
- * Keeping it in the same list — rather than pinning it above in its own strip —
- * is the whole point Nat made on 2026-08-03: your HIVE and HIVE-Wide are two
- * doors side by side, and you pick one.
+ * The message list holds your rooms — and on a phone, one thing that has no
+ * room of its own in it: HIVE-Wide. On a phone the list is the only surface,
+ * so the HIVE-Wide card is the door to the shared room there. On desktop the
+ * rail above the list carries that door (`HiveWideBubble`), so the list card
+ * came out on 2026-08-11 — Nat, twice: it duplicated the rail bubble and the
+ * shared room hasn't been used yet.
  */
 type MessagesListEntry =
   | { kind: 'room'; room: RoomWithData }
@@ -187,6 +189,61 @@ export default function MessagesScreen() {
     profile?.id
   );
 
+  // Where you were standing the last time this effect looked. Seeded with the
+  // first render's answer, so it never fires on arrival — only on a real swap.
+  const prevStandingRef = useRef({ wholeHive, communityId });
+
+  // Swapping where you stand — up to HIVE-Wide, back down into your HIVE, or
+  // across to another HIVE — happens WITHOUT this screen unmounting:
+  // `enterWholeHive` and `switchCommunity` stay on /messages on purpose
+  // (`routeAfterHiveSwitch`), and stepping up to HIVE-Wide flips `wholeHive`
+  // alone while `communityId` stays put underneath (see lib/hooks/useAuth.ts).
+  // So until 2026-08-11 an open OG room simply STAYED open through the swap,
+  // sitting under HIVE-Wide's black header. Nat, seeing it live: "We dont want
+  // that stuff to bleed over, it looks like its broken... the fact that this
+  // bleeds kills their faith."
+  //
+  // The rule now: after any swap, this screen shows exactly what it would show
+  // if you had just arrived. Entering HIVE-Wide that means the shared room —
+  // the restore effect below already opens it for a fresh arrival, so opening
+  // it here directly is the same destination without the flash in between, and
+  // it means the one room that legitimately exists in both places (the shared
+  // HIVE-Wide room, if you had it open) stays open rather than blinking shut.
+  // Stepping down means the list, never a HIVE-Wide leftover.
+  useEffect(() => {
+    const prev = prevStandingRef.current;
+    const swappedMode = prev.wholeHive !== wholeHive;
+    // `communityId` is null while the saved sign-in is still loading; only a
+    // move between two real HIVEs is a swap. Null -> first id is arrival, and
+    // resetting on arrival would wipe the last-room restore below.
+    const swappedHive =
+      prev.communityId !== communityId && prev.communityId !== null && communityId !== null;
+    prevStandingRef.current = { wholeHive, communityId };
+    if (!swappedMode && !swappedHive) return;
+
+    setSelectedRoom(null);
+    setCustomizeRoomOnOpen(false);
+    setShowMemberPicker(false);
+    setShowHiveWide(wholeHive);
+    // A new HIVE means a new set of rooms worth warming up.
+    if (swappedHive) hasPrefetchedRef.current = false;
+    // A ?roomId left in the address belongs to where you were standing; the
+    // restore effect would obediently reopen that room here. Same discard as
+    // handleBackFromRoom.
+    if (roomId) {
+      ignoredDirectRoomIdRef.current = roomId;
+      router.replace('/messages');
+    }
+    // Entering HIVE-Wide forgets the HIVE room you were reading, exactly as
+    // `openHiveWide` does — stepping back down should land on the list, never
+    // shove you into the room you left behind. A HIVE-to-HIVE swap keeps the
+    // NEW HIVE's memory, because restoring its last room is precisely what a
+    // fresh arrival there does.
+    if (swappedMode && wholeHive && selectedRoomStorageKey) {
+      void removeStoredItemAsync(selectedRoomStorageKey);
+    }
+  }, [wholeHive, communityId, roomId, router, selectedRoomStorageKey]);
+
   // Prefetch messages for top 7 rooms when room list loads
   useEffect(() => {
     if (rooms.length > 0 && !hasPrefetchedRef.current) {
@@ -293,9 +350,10 @@ export default function MessagesScreen() {
     setRefreshing(false);
   };
 
-  // Your own HIVE first, HIVE-Wide directly under it, then everyone you talk
-  // to. While the rooms are still loading the list stays empty so the skeleton
-  // has the screen to itself.
+  // Your own HIVE first, then everyone you talk to — with HIVE-Wide slotted
+  // directly under your HIVE's room on a phone, where the list is its only
+  // door. While the rooms are still loading the list stays empty so the
+  // skeleton has the screen to itself.
   const listEntries = useMemo<MessagesListEntry[]>(() => {
     // Standing at HIVE-Wide, the only conversation that belongs here is the
     // HIVE-Wide one. Every other room and DM in this list is OG's — they were
@@ -334,10 +392,21 @@ export default function MessagesScreen() {
     );
 
     const entries: MessagesListEntry[] = listedRooms.map((room) => ({ kind: 'room', room }));
-    const ownHiveRoomIndex = listedRooms.findIndex((room) => room.room_type === 'community');
-    entries.splice(ownHiveRoomIndex + 1, 0, { kind: 'hive-wide' });
+
+    // The pinned HIVE-Wide card rides in the list ONLY on a phone. On desktop
+    // the rail above this list already holds the `HiveWideBubble`, so the card
+    // was the same door drawn twice — and the room under it has no messages
+    // yet, so the duplicate bought nothing. Nat asked for it gone twice, the
+    // second time on 2026-08-11: "we already talked about getting rid of this
+    // from the messages, because it hasnt been used yet." The phone layout
+    // renders no rail at all, so there the card stays as the only door to the
+    // shared room.
+    if (useMobileLayout) {
+      const ownHiveRoomIndex = listedRooms.findIndex((room) => room.room_type === 'community');
+      entries.splice(ownHiveRoomIndex + 1, 0, { kind: 'hive-wide' });
+    }
     return entries;
-  }, [loading, rooms, wholeHive, hiveWideRoom?.id]);
+  }, [loading, rooms, wholeHive, hiveWideRoom?.id, useMobileLayout]);
 
   // Everyone in the HIVE except you — the rail's cast.
   useEffect(() => {
@@ -468,9 +537,10 @@ export default function MessagesScreen() {
           </View>
         ) : null
       }
-      // HIVE-Wide is always in the list, so the list is never empty and the old
-      // "no conversations yet" panel would never have shown again. The nudge to
-      // start one moved down here, where it still lands.
+      // On a phone HIVE-Wide is always in the list, so the list is never empty
+      // there and the old "no conversations yet" panel would never have shown.
+      // The nudge to start one lives down here, where it lands on both
+      // layouts.
       ListFooterComponent={
         !loading && rooms.length === 0 ? (
           <View className="items-center py-8 px-8">

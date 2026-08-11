@@ -20,6 +20,7 @@ import { AttachmentGallery } from '../ui/AttachmentGallery';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { Avatar } from '../ui/Avatar';
 import { MemberProfileLink } from '../ui/MemberProfileLink';
+import { SpaceBackdrop } from '../ui/SpaceBackdrop';
 import { usePageSkin } from '../../lib/pageSkin';
 import type { BoardPost, BoardReply, BoardReaction, Profile, Attachment, BoardCategory } from '../../types';
 
@@ -524,6 +525,7 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
         edges={['top']}
         style={{ backgroundColor: skin.page }}
       >
+        <SpaceBackdrop />
         <Text style={{ fontFamily: 'Lato_400Regular', color: skin.inkSoft }}>
           Loading...
         </Text>
@@ -533,6 +535,12 @@ export function BoardPostDetail({ postId, onBack }: BoardPostDetailProps) {
 
   return (
     <SafeAreaView className="flex-1" edges={['top']} style={{ backgroundColor: skin.page }}>
+      {/* The same sky as the boards grid and thread list behind it — a thread
+          read at HIVE-Wide used to sit on flat black because only the grid
+          mounted the backdrop (Nat 2026-08-11). The panels below wear the
+          translucent `skin.card`, so the stars read through them. Inside a
+          HIVE this renders nothing and the page stays cream. */}
+      <SpaceBackdrop />
       {/* Header */}
       <View
         className="flex-row items-center px-4 py-3 border-b"

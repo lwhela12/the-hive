@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
+import { usePageSkin } from '../../lib/pageSkin';
+import { SpaceBackdrop } from '../ui/SpaceBackdrop';
 import {
   View,
   Text,
@@ -60,6 +62,7 @@ export function WishDetail({
   onBeforeProfileNavigate,
 }: WishDetailProps) {
   const { profile, communityId } = useAuth();
+  const skin = usePageSkin();
   const [comments, setComments] = useState<WishCommentWithUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
@@ -315,18 +318,27 @@ export function WishDetail({
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-white"
+      // `bg-white` until 2026-08-11 — this is a full-page view (it replaces
+      // the whole board screen, not a floating sheet), so at HIVE-Wide it was
+      // an unbroken white page in the middle of the space theme. The page now
+      // wears the skin and the sky; the wish's own cards below deliberately
+      // stay light — readable panels floating on space, same as the wide
+      // layout's cards — rather than getting the full dark re-skin Nat has
+      // explicitly parked as an open decision for the fixed-light modals.
+      className="flex-1"
+      style={{ backgroundColor: skin.page }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <SpaceBackdrop />
       {/* Header */}
       <View
         className="flex-row items-center justify-between px-4 py-3 border-b"
         style={{ borderBottomColor: 'rgba(222,193,129,0.5)' }}
       >
         <Pressable onPress={onClose} className="p-2 -ml-2">
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={skin.ink} />
         </Pressable>
-        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal">
+        <Text style={{ fontFamily: 'Lato_700Bold', color: skin.ink }} className="text-lg">
           Wish Details
         </Text>
         {canManage && onManage ? (

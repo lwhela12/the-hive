@@ -173,6 +173,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   // twice, and she was right both times: the shared boards were wearing OG's
   // cream while the rail beside them was black (2026-08-03).
   const skin = usePageSkin();
+  // Shades the palette doesn't carry, for the little management pills that sit
+  // on a skinned modal card. Same trio BoardPostDetail already uses, so the
+  // Edit sheet reads the same whichever door you came in through — the old
+  // charcoal-on-assumed-cream pills simply vanished on HIVE-Wide's dark card.
+  const chipFill = skin.dark ? 'rgba(255,255,255,0.08)' : '#faf8f3';
+  const dangerInk = skin.dark ? '#ff9a9a' : '#ef4444';
+  const dangerWash = skin.dark ? 'rgba(255,154,154,0.10)' : '#fef2f2';
+  const dangerEdge = skin.dark ? 'rgba(255,154,154,0.28)' : '#fee2e2';
+  const goldWash = skin.dark ? 'rgba(224,190,118,0.12)' : 'rgba(189,147,72,0.10)';
+  const publicInk = skin.dark ? '#86efac' : '#16a34a';
 
   const {
     data: categories = [],
@@ -231,10 +241,18 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   const [linkedWishToGrant, setLinkedWishToGrant] = useState<LinkedWish | null>(null);
   const [grantThreadContext, setGrantThreadContext] = useState<GrantThreadContext | null>(null);
   const [topicMembers, setTopicMembers] = useState<Pick<Profile, 'id' | 'name' | 'avatar_url'>[]>([]);
-  const boardCategoryStorageKey = communityId ? `the-hive:last-board-category:${communityId}` : null;
-  const boardComposerStorageKey = communityId ? `the-hive:board-composer-open:${communityId}` : null;
-  const boardPostStorageKey = communityId ? `the-hive:last-board-post:${communityId}` : null;
-  const boardDirectOpenStorageKey = communityId ? `the-hive:board-direct-open:${communityId}` : null;
+  // HIVE-Wide is a mode, not a community — the shared boards carry the id of
+  // the HIVE that first made them (OG), so keying these on `communityId` alone
+  // made /board and /hive-wide-boards read and write the SAME remembered board
+  // and thread. That is how a board Nat was reading in OG HIVE followed her up
+  // to HIVE-Wide (2026-08-11). The wide screen remembers under its own name.
+  // A bonus: the wide keys exist before the first query answers, instead of
+  // waiting on `categories[0]` to say whose boards these are.
+  const storageScope = isWide ? 'hive-wide' : communityId;
+  const boardCategoryStorageKey = storageScope ? `the-hive:last-board-category:${storageScope}` : null;
+  const boardComposerStorageKey = storageScope ? `the-hive:board-composer-open:${storageScope}` : null;
+  const boardPostStorageKey = storageScope ? `the-hive:last-board-post:${storageScope}` : null;
+  const boardDirectOpenStorageKey = storageScope ? `the-hive:board-direct-open:${storageScope}` : null;
   const boardDraftStorageKey = selectedCategoryId ? `the-hive:board-draft:${selectedCategoryId}` : null;
 
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
@@ -478,6 +496,32 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
     window.addEventListener(BOARD_HOME_EVENT, handleBoardsHome);
     return () => window.removeEventListener(BOARD_HOME_EVENT, handleBoardsHome);
   }, [resetBoardToList]);
+
+  // Crossing between a HIVE and HIVE-Wide starts Boards over, in both
+  // directions.
+  //
+  // Stepping into HIVE-Wide does not change `communityId` — `wholeHive` is its
+  // own switch and the HIVE selection underneath stays put — so every reset
+  // this screen keys on the community changing sleeps straight through the
+  // toggle. `switchCommunity` has the same blind spot: it only clears board
+  // state when the community id actually changes, and OG → HIVE-Wide → OG
+  // never changes it. Nat watched an OG board ride up to HIVE-Wide with her
+  // on 2026-08-11 ("that also happened when i was looking at the board").
+  // Both doors to Boards stay mounted once opened, so each instance hears the
+  // flip and puts itself back at the grid.
+  //
+  // A link that is mid-arrival names its own board and thread, so it is left
+  // alone — the route-target effect below owns that landing.
+  const prevWholeHiveRef = useRef(wholeHive);
+  useEffect(() => {
+    if (prevWholeHiveRef.current === wholeHive) return;
+    prevWholeHiveRef.current = wholeHive;
+    if (hasRouteTarget) return;
+
+    setBoardSearch('');
+    setThreadListView('active');
+    resetBoardToList();
+  }, [hasRouteTarget, resetBoardToList, wholeHive]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1748,10 +1792,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       {isCompletableHdAsk(editingTopic) && editingTopic.status === 'active' && canArchiveCategory(editingTopic) && (
         <Pressable
           onPress={() => handleCompleteTopic(editingTopic, closeTopicComposer)}
-          className="flex-row items-center bg-gold/10 border border-gold/20 rounded-full px-3 py-2 active:opacity-75"
+          className="flex-row items-center border rounded-full px-3 py-2 active:opacity-75"
+          style={{ backgroundColor: goldWash, borderColor: skin.borderStrong }}
         >
-          <Ionicons name="checkmark-circle-outline" size={16} color="#bd9348" />
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
+          <Ionicons name="checkmark-circle-outline" size={16} color={skin.gold} />
+          <Text style={{ fontFamily: 'Lato_700Bold', color: skin.gold }} className="text-xs ml-1">
             Granted
           </Text>
         </Pressable>
@@ -1759,14 +1804,15 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       {canArchiveCategory(editingTopic) && (
         <Pressable
           onPress={() => handleArchiveTopic(editingTopic, closeTopicComposer)}
-          className="flex-row items-center bg-charcoal/5 border border-charcoal/10 rounded-full px-3 py-2 active:opacity-75"
+          className="flex-row items-center border rounded-full px-3 py-2 active:opacity-75"
+          style={{ backgroundColor: chipFill, borderColor: skin.border }}
         >
           <Ionicons
             name={isArchivedCategory(editingTopic) ? 'arrow-undo-outline' : 'archive-outline'}
             size={16}
-            color="rgba(49,49,48,0.62)"
+            color={skin.inkSoft}
           />
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60 text-xs ml-1">
+          <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkSoft }} className="text-xs ml-1">
             {isArchivedCategory(editingTopic) ? 'Restore' : 'Archive'}
           </Text>
         </Pressable>
@@ -1774,10 +1820,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       {canManageCategory(editingTopic) && (
         <Pressable
           onPress={() => handleDeleteTopic(editingTopic, closeTopicComposer)}
-          className="flex-row items-center bg-red-50 border border-red-100 rounded-full px-3 py-2 active:opacity-75"
+          className="flex-row items-center border rounded-full px-3 py-2 active:opacity-75"
+          style={{ backgroundColor: dangerWash, borderColor: dangerEdge }}
         >
-          <Ionicons name="trash-outline" size={16} color="#ef4444" />
-          <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-500 text-xs ml-1">
+          <Ionicons name="trash-outline" size={16} color={dangerInk} />
+          <Text style={{ fontFamily: 'Lato_700Bold', color: dangerInk }} className="text-xs ml-1">
             Delete
           </Text>
         </Pressable>
@@ -1808,13 +1855,15 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
               scroll, like every other bottom sheet in the app. */}
           <BounceScrollView contentContainerStyle={{ padding: 22, paddingBottom: 34 }}>
           <View style={{ width: 36, height: 4, backgroundColor: 'rgba(189,147,72,0.28)', borderRadius: 2, alignSelf: 'center', marginBottom: 18 }} />
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: '#2d2d2d' }}>
+          {/* Same reason as the pills below: this sheet is a dark card on
+              HIVE-Wide, and fixed charcoal words disappeared into it. */}
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 18, color: skin.ink }}>
             Manage Wish
           </Text>
           {managingLinkedWish ? (
             <Text
               numberOfLines={2}
-              style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 18, color: '#8a7760', marginTop: 4, marginBottom: 10 }}
+              style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 18, color: skin.inkSoft, marginTop: 4, marginBottom: 10 }}
             >
               {managingLinkedWish.description}
             </Text>
@@ -1827,15 +1876,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
                 setManagingLinkedWish(null);
                 setLinkedWishToGrant(wish);
               }}
-              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-gold/25 bg-gold/10 active:opacity-75"
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 active:opacity-75"
+              style={{ backgroundColor: goldWash, borderWidth: 1, borderColor: skin.borderStrong }}
             >
               <View className="flex-row items-center">
-                <Ionicons name="checkmark-circle-outline" size={18} color="#bd9348" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm ml-2">
+                <Ionicons name="checkmark-circle-outline" size={18} color={skin.gold} />
+                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.gold }} className="text-sm ml-2">
                   Granted
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(189,147,72,0.55)" />
+              <Ionicons name="chevron-forward" size={16} color={skin.inkFaint} />
             </Pressable>
           ) : null}
 
@@ -1913,15 +1963,16 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
                 setManagingLinkedWish(null);
                 handleDeleteLinkedWish(wish);
               }}
-              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 border border-red-100 bg-red-50 active:opacity-75"
+              className="flex-row items-center justify-between rounded-xl px-4 py-3 mt-2 active:opacity-75"
+              style={{ backgroundColor: dangerWash, borderWidth: 1, borderColor: dangerEdge }}
             >
               <View className="flex-row items-center">
-                <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-500 text-sm ml-2">
+                <Ionicons name="trash-outline" size={18} color={dangerInk} />
+                <Text style={{ fontFamily: 'Lato_700Bold', color: dangerInk }} className="text-sm ml-2">
                   Delete
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(239,68,68,0.45)" />
+              <Ionicons name="chevron-forward" size={16} color={dangerInk} />
             </Pressable>
           ) : null}
           </BounceScrollView>
@@ -2144,6 +2195,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
   // Posts view
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: skin.page }} edges={['top']}>
+      {/* The same sky the boards grid stands under. Stepping into a board used
+          to drop it — this view never mounted the backdrop, so HIVE-Wide went
+          from starfield to flat black at the first tap (Nat 2026-08-11:
+          missing "inside boards"). Inside a HIVE it renders nothing. */}
+      <SpaceBackdrop />
       {/* Posts view header with back button */}
       <AppHeader
         title={selectedCategory.name}
@@ -2185,7 +2241,7 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
         }}
         contentContainerStyle={{ padding: 16 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#bd9348" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={skin.gold} />
         }
         initialNumToRender={5}
         maxToRenderPerBatch={5}
@@ -2249,10 +2305,12 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
                     <Ionicons
                       name="arrow-back-outline"
                       size={15}
-                      color="rgba(49,49,48,0.48)"
+                      // Charcoal-on-assumed-cream, invisible on the night sky —
+                      // and search CAN land you on this archive view HIVE-Wide.
+                      color={skin.inkSoft}
                       style={{ marginRight: 4 }}
                     />
-                    <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/50 text-xs">
+                    <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkSoft }} className="text-xs">
                       Threads
                     </Text>
                   </Pressable>
@@ -2315,20 +2373,25 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
             {selectedCategory?.topic_kind === 'helper_log' && canManageThread(editingPost) && (
               <Pressable
                 onPress={() => handleToggleHelpFocusPublic(editingPost, handleCloseComposer)}
-                className={`flex-row items-center rounded-full px-3 py-2 border active:opacity-75 ${
-                  editingPost.visibility === 'public'
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-charcoal/5 border-charcoal/10'
-                }`}
+                className="flex-row items-center rounded-full px-3 py-2 border active:opacity-75"
+                style={editingPost.visibility === 'public'
+                  ? {
+                      backgroundColor: skin.dark ? 'rgba(134,239,172,0.12)' : '#f0fdf4',
+                      borderColor: skin.dark ? 'rgba(134,239,172,0.30)' : '#bbf7d0',
+                    }
+                  : { backgroundColor: chipFill, borderColor: skin.border }}
               >
                 <Ionicons
                   name={editingPost.visibility === 'public' ? 'megaphone-outline' : 'lock-closed-outline'}
                   size={16}
-                  color={editingPost.visibility === 'public' ? '#16a34a' : 'rgba(49,49,48,0.62)'}
+                  color={editingPost.visibility === 'public' ? publicInk : skin.inkSoft}
                 />
                 <Text
-                  style={{ fontFamily: 'Lato_700Bold' }}
-                  className={`text-xs ml-1 ${editingPost.visibility === 'public' ? 'text-green-700' : 'text-charcoal/60'}`}
+                  style={{
+                    fontFamily: 'Lato_700Bold',
+                    color: editingPost.visibility === 'public' ? publicInk : skin.inkSoft,
+                  }}
+                  className="text-xs ml-1"
                 >
                   {editingPost.visibility === 'public' ? 'On the public site' : 'HIVErs only'}
                 </Text>
@@ -2337,10 +2400,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
             {canCompleteThread(editingPost) && (
               <Pressable
                 onPress={() => handlePrepareGrantThread(editingPost, handleCloseComposer)}
-                className="flex-row items-center bg-gold/10 border border-gold/20 rounded-full px-3 py-2 active:opacity-75"
+                className="flex-row items-center border rounded-full px-3 py-2 active:opacity-75"
+                style={{ backgroundColor: goldWash, borderColor: skin.borderStrong }}
               >
-                <Ionicons name="checkmark-circle-outline" size={16} color="#bd9348" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-xs ml-1">
+                <Ionicons name="checkmark-circle-outline" size={16} color={skin.gold} />
+                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.gold }} className="text-xs ml-1">
                   Granted
                 </Text>
               </Pressable>
@@ -2348,14 +2412,15 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
             {canManageThread(editingPost) && (
               <Pressable
                 onPress={() => handleArchiveThread(editingPost, handleCloseComposer)}
-                className="flex-row items-center bg-charcoal/5 border border-charcoal/10 rounded-full px-3 py-2 active:opacity-75"
+                className="flex-row items-center border rounded-full px-3 py-2 active:opacity-75"
+                style={{ backgroundColor: chipFill, borderColor: skin.border }}
               >
                 <Ionicons
                   name={editingPost.archived_at ? 'arrow-undo-outline' : 'archive-outline'}
                   size={16}
-                  color="rgba(49,49,48,0.62)"
+                  color={skin.inkSoft}
                 />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60 text-xs ml-1">
+                <Text style={{ fontFamily: 'Lato_700Bold', color: skin.inkSoft }} className="text-xs ml-1">
                   {editingPost.archived_at ? 'Restore' : 'Archive'}
                 </Text>
               </Pressable>
@@ -2363,10 +2428,11 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
             {canManageThread(editingPost) && (
               <Pressable
                 onPress={() => handleDeleteThread(editingPost, handleCloseComposer)}
-                className="flex-row items-center bg-red-50 border border-red-100 rounded-full px-3 py-2 active:opacity-75"
+                className="flex-row items-center border rounded-full px-3 py-2 active:opacity-75"
+                style={{ backgroundColor: dangerWash, borderColor: dangerEdge }}
               >
-                <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-red-500 text-xs ml-1">
+                <Ionicons name="trash-outline" size={16} color={dangerInk} />
+                <Text style={{ fontFamily: 'Lato_700Bold', color: dangerInk }} className="text-xs ml-1">
                   Delete
                 </Text>
               </Pressable>

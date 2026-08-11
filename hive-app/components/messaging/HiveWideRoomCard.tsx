@@ -11,13 +11,22 @@ import { usePageSkin } from '../../lib/pageSkin';
 
 import { WorldMark } from '../ui/WorldMark';
 /**
- * HIVE-Wide in the message list, and again in the desktop rail.
+ * HIVE-Wide as a message-list card (`HiveWideRoomCard`) and as a rail bubble
+ * (`HiveWideBubble`).
  *
- * Nat, 2026-08-03: your own HIVE and HIVE-Wide should both be sitting there
- * when you open Messages. It is built to ChatRoomItem's exact shape so the two
- * read as one list, and marked with a globe in HIVE-Wide's black so the reach is
- * legible before you read the name. It was green until 2026-08-03; the rail and
- * header had already moved to space-black and this was the last green left.
+ * Where each one shows, as of 2026-08-11: the bubble is desktop's door to the
+ * shared room, first in the face rail. The card is the phone's door — the
+ * phone layout has no rail — and it is also the one entry the list holds while
+ * you are standing at HIVE-Wide, where the rail is hidden. Inside a HIVE on
+ * desktop the card no longer renders: Nat asked twice for it gone from the
+ * list there, because the bubble directly above it was the same door twice and
+ * the shared room hasn't been used yet. (Nat 2026-08-03 originally had both
+ * sitting in the list everywhere; 2026-08-11 is the reversal.)
+ *
+ * The card is built to ChatRoomItem's exact shape so it reads as part of the
+ * list, and marked with a globe in HIVE-Wide's black so the reach is legible
+ * before you read the name. It was green until 2026-08-03; the rail and header
+ * had already moved to space-black and this was the last green left.
  *
  * It takes its surface from the page skin, so standing at HIVE-Wide the card is
  * dark like the page under it instead of a cream tile on a starfield.
