@@ -29,6 +29,7 @@ import { SelectedFile } from '../../lib/filePicker';
 import { uploadAttachments, uploadSingleImage } from '../../lib/attachmentUpload';
 import { getMentionedMembers } from '../../lib/mentions';
 import { hiveDisplayName } from '../../lib/hiveBrand';
+import { SPACE_SKIN } from '../../lib/pageSkin';
 import { getMessagesRoomLabel, getMessagesRoomSubtitle } from './hiveWideRoom';
 import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
@@ -100,7 +101,7 @@ function getFirstGrapheme(value: string): string {
 }
 
 export function RoomChatView({ room, onBack, startCustomizing = false, hideBackButton = false }: RoomChatViewProps) {
-  const { profile, communityId, community } = useAuth();
+  const { profile, communityId, community, wholeHive } = useAuth();
   // The HIVE you are signed into, by name. It titles the room everyone shares
   // and it names who @all is about to reach (Nat 2026-08-03).
   const hiveName = hiveDisplayName(community?.name);
@@ -165,9 +166,26 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
     () => getOtherRoomMembers(roomWithCustomization, profile?.id),
     [profile?.id, roomWithCustomization]
   );
+  // Standing at HIVE-Wide, every surface wears the same black sky — Home,
+  // Admin, Members, Boards, The Buzz, and the room list beside this panel all
+  // do (`usePageSkin()`). This panel used to be the one holdout: it always
+  // wore whichever theme the room itself was set to, and the only room
+  // reachable from HIVE-Wide Messages is the shared HIVE-Wide room, so
+  // whatever cream/pastel theme that room happened to default to (2026-08-04's
+  // "it's a room like any other room now") sat there as a jarring light square
+  // in an otherwise dark screen (found 2026-08-11).
+  //
+  // `wholeHive` is what fixes it without undoing that 08-04 change: the room's
+  // OWN stored theme (`getChatRoomTheme`) is exactly what still shows when the
+  // same shared room is opened from inside a HIVE via the HiveWideBubble,
+  // where the page around it is cream and a black panel would be the seam
+  // Nat asked to remove. Only while actually standing at HIVE-Wide does this
+  // panel borrow `midnight` — the one theme already built to match
+  // `SPACE_SKIN` exactly (see `lib/chatRoomDisplay.ts`) — regardless of what
+  // the room is set to.
   const roomTheme = useMemo(
-    () => getChatRoomTheme(roomWithCustomization, profile?.id),
-    [profile?.id, roomWithCustomization]
+    () => (wholeHive ? CHAT_ROOM_THEMES.midnight : getChatRoomTheme(roomWithCustomization, profile?.id)),
+    [wholeHive, profile?.id, roomWithCustomization]
   );
   const roomTitle = useMemo(
     () => getMessagesRoomLabel(roomWithCustomization, profile?.id, hiveName),
@@ -806,7 +824,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
         >
           {!hideBackButton && (
             <Pressable onPress={onBack} className="mr-3 w-9 h-9 rounded-full items-center justify-center">
-              <Ionicons name="chevron-back" size={28} color="#313130" />
+              <Ionicons name="chevron-back" size={28} color={wholeHive ? SPACE_SKIN.ink : '#313130'} />
             </Pressable>
           )}
           <View className="mr-3">{renderRoomIcon(42)}</View>
@@ -815,12 +833,25 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
             className="flex-1"
           >
             <View className="flex-row items-center">
-              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal text-lg flex-1" numberOfLines={1}>
+              {/* `text-charcoal` is the fallback for every HIVE's own room,
+                  where this header stays cream; `wholeHive` overrides it to
+                  match the near-black `midnight` background set above — the
+                  same fixed-dark-text-on-forced-dark-background bug that
+                  would otherwise make the room's own name unreadable the
+                  instant this panel is opened at HIVE-Wide. */}
+              <Text
+                style={{ fontFamily: 'Lato_700Bold', color: wholeHive ? SPACE_SKIN.ink : undefined }}
+                className="text-charcoal text-lg flex-1"
+                numberOfLines={1}
+              >
                 {roomTitle}
               </Text>
             </View>
             {roomSubtitle && (
-              <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm">
+              <Text
+                style={{ fontFamily: 'Lato_400Regular', color: wholeHive ? SPACE_SKIN.inkSoft : undefined }}
+                className="text-charcoal/50 text-sm"
+              >
                 {roomSubtitle}
               </Text>
             )}
@@ -1098,7 +1129,10 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
               loadingOlder ? (
                 <View className="items-center py-3">
                   <ThinkingBee />
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-xs mt-1">
+                  <Text
+                    style={{ fontFamily: 'Lato_400Regular', color: wholeHive ? SPACE_SKIN.inkSoft : undefined }}
+                    className="text-charcoal/50 text-xs mt-1"
+                  >
                     Loading older messages...
                   </Text>
                 </View>
@@ -1114,7 +1148,10 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
                   {/* A room's own emoji is member-chosen and always wins; when
                       nobody has picked one, a speech bubble stands in. */}
                   <Text className="text-4xl mb-2">{currentCustomEmoji || '💬'}</Text>
-                  <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50">
+                  <Text
+                    style={{ fontFamily: 'Lato_400Regular', color: wholeHive ? SPACE_SKIN.inkSoft : undefined }}
+                    className="text-charcoal/50"
+                  >
                     No messages yet. Start the conversation!
                   </Text>
                 </View>
@@ -1128,7 +1165,7 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
         </View>
 
         {/* Typing indicator */}
-        <RoomTypingIndicator typingUsers={typingUsers} currentUserId={profile?.id} />
+        <RoomTypingIndicator typingUsers={typingUsers} currentUserId={profile?.id} dark={wholeHive} />
 
         {/* Editing a message you already sent. ComposerBar's inlineEdit
             variant is exactly this shape: the box, the mic inside its own
@@ -1154,7 +1191,10 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
               mentionReach={mentionReach}
               currentUserId={profile?.id}
               header={
-                <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mb-2">
+                <Text
+                  style={{ fontFamily: 'Lato_400Regular', color: wholeHive ? SPACE_SKIN.inkSoft : undefined }}
+                  className="text-charcoal/50 text-sm mb-2"
+                >
                   Editing message
                 </Text>
               }

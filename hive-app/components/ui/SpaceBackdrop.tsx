@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { SpaceGlobe } from './SpaceGlobe';
 
@@ -19,47 +19,33 @@ import { SpaceGlobe } from './SpaceGlobe';
  */
 
 /**
- * One sky at a time.
+ * One sky at a time — by asking who is actually on screen, not who mounted first.
  *
- * The backdrop fills its parent edge to edge, so a second one stacked on the
- * first is an identical picture painted twice — two canvases, two animation
- * loops, double the drawing for a screen that looks exactly the same. Boards
- * has had two of them side by side since 2026-08-06 (`board.tsx`, the pair at
- * the top of the wide layout), which made the slowest HIVE-Wide screen the one
- * doing the most work.
+ * This used to hand out a ticket on MOUNT and only take it back on UNMOUNT, on
+ * the theory that leaving a HIVE-Wide screen means leaving its component. It
+ * doesn't: `app/(app)/_layout.tsx` puts every screen inside a `Tabs` navigator,
+ * and React Navigation's tab screens stay mounted once you've opened them —
+ * just hidden — so switching back to one doesn't lose its scroll position or
+ * re-run its data fetch. That is also exactly why the ticket broke: it only
+ * ever got handed to whichever HIVE-Wide screen was opened FIRST in a session,
+ * and nothing ever gave it back, because nothing ever actually unmounted.
+ * Every screen opened after that asked the queue for the sky and was told no,
+ * forever — even while it was the one actually in front. That is why Members,
+ * Boards, The Buzz and Messages went solid black (found 2026-08-11) while Home
+ * and Admin, which never asked the queue at all and just always draw their own
+ * copy of the globe, kept working.
  *
- * Every backdrop takes a ticket on mount and the earliest one holds the sky.
- * When it leaves, the next in line picks it up, so removing a duplicate at the
- * call site later changes nothing.
+ * `useIsFocused` — the same check `SpaceGlobe` already uses to stop scheduling
+ * its shooting star the moment a screen isn't the one in front — answers the
+ * real question directly: React Navigation only ever calls one screen in a
+ * navigator "focused" at a time, so gating on focus instead of mount order
+ * gives "one sky at a time" for free, with no ticket to hand back and nothing
+ * that can get stuck holding it.
  */
-const queue: symbol[] = [];
-const watchers = new Set<() => void>();
-
 export function SpaceBackdrop() {
   const { wholeHive } = useAuth();
+  const focused = useIsFocused();
 
-  const ticket = useRef<symbol | null>(null);
-  if (ticket.current === null) ticket.current = Symbol('space-backdrop');
-  const id = ticket.current;
-
-  // Starts true so a lone backdrop paints on its very first frame; a duplicate
-  // corrects itself the moment the effects run.
-  const [holding, setHolding] = useState(true);
-
-  useEffect(() => {
-    if (!wholeHive) return;
-    const check = () => setHolding(queue[0] === id);
-    watchers.add(check);
-    queue.push(id);
-    watchers.forEach((w) => w());
-    return () => {
-      const at = queue.indexOf(id);
-      if (at >= 0) queue.splice(at, 1);
-      watchers.delete(check);
-      watchers.forEach((w) => w());
-    };
-  }, [wholeHive, id]);
-
-  if (!wholeHive || !holding) return null;
+  if (!wholeHive || !focused) return null;
   return <SpaceGlobe />;
 }

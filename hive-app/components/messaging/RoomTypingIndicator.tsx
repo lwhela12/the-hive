@@ -1,13 +1,21 @@
 import { View, Text, Animated } from 'react-native';
 import { useEffect, useRef } from 'react';
+import { SPACE_SKIN } from '../../lib/pageSkin';
 import type { TypingIndicator, Profile } from '../../types';
 
 interface RoomTypingIndicatorProps {
   typingUsers: Array<TypingIndicator & { user?: Profile }>;
   currentUserId?: string;
+  /**
+   * `RoomChatView` sits its one caller on a forced near-black background while
+   * standing at HIVE-Wide (see the `roomTheme` note there) — the fixed
+   * charcoal text and dots below would be unreadable on it, the same bug that
+   * was just fixed on the header and message list above this component.
+   */
+  dark?: boolean;
 }
 
-export function RoomTypingIndicator({ typingUsers, currentUserId }: RoomTypingIndicatorProps) {
+export function RoomTypingIndicator({ typingUsers, currentUserId, dark = false }: RoomTypingIndicatorProps) {
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
   const dot3 = useRef(new Animated.Value(0)).current;
@@ -57,7 +65,10 @@ export function RoomTypingIndicator({ typingUsers, currentUserId }: RoomTypingIn
 
   return (
     <View className="px-4 py-2 flex-row items-center">
-      <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/50 text-sm mr-2">
+      <Text
+        style={{ fontFamily: 'Lato_400Regular', color: dark ? SPACE_SKIN.inkSoft : undefined }}
+        className="text-charcoal/50 text-sm mr-2"
+      >
         {text}
       </Text>
       <View className="flex-row items-center">
@@ -66,6 +77,7 @@ export function RoomTypingIndicator({ typingUsers, currentUserId }: RoomTypingIn
             key={index}
             style={{
               opacity: dot,
+              backgroundColor: dark ? SPACE_SKIN.inkFaint : undefined,
               transform: [
                 {
                   translateY: dot.interpolate({
