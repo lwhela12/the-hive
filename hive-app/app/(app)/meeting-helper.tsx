@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns } from '../../lib/checkIns';
 import { fetchHoneyPotLedger } from '../../lib/honeyPot';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
@@ -249,7 +250,7 @@ export default function MeetingHelperScreen() {
     if (from === 'admin') router.replace('/admin');
     else router.replace('/meetings');
   };
-  const { communityId, communityRole, profile, session } = useAuth();
+  const { communityId, communityRole, profile, session, community } = useAuth();
   const { width, height } = useWindowDimensions();
   const isTV = width >= 1400;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
@@ -2806,6 +2807,70 @@ export default function MeetingHelperScreen() {
       </View>
     );
   };
+
+  // Until auth has loaded, nobody is anywhere — same guard monthly-tuneup.tsx
+  // uses, so OG never flashes the coming-soon screen while `community` is
+  // still on its way in.
+  if (!profile) return null;
+
+  // This deck is OG HIVE's meeting night, not a generic template — the agenda
+  // itself is hardcoded (News from Nat, Treasurer, Plan the Meet Ups,
+  // HummDinger Sesh) and the Room slide shows check-in answers. Same route
+  // boundary as monthly-tuneup.tsx, so a bookmarked or typed /meeting-helper
+  // URL cannot open OG's deck while somebody is standing in Tech or Production
+  // (the 2026-08-07 decision covered Admin; this door was missed until
+  // 2026-08-11).
+  if (!hasTailoredCheckIns(community)) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: PAPER }} edges={['top']}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Ionicons name="time-outline" size={34} color={GOLD_DEEP} style={{ marginBottom: 14 }} />
+          <Text
+            accessibilityRole="header"
+            style={{
+              fontFamily: 'LibreBaskerville_700Bold',
+              fontSize: 22,
+              color: '#2d2d2d',
+              textAlign: 'center',
+              marginBottom: 10,
+            }}
+          >
+            Meeting Helper
+          </Text>
+          <Text
+            accessibilityRole="text"
+            style={{
+              maxWidth: 420,
+              fontFamily: 'Lato_400Regular',
+              fontSize: 16,
+              lineHeight: 24,
+              color: '#7d715f',
+              textAlign: 'center',
+              marginBottom: 26,
+            }}
+          >
+            {CHECK_INS_COMING_SOON_MESSAGE}
+          </Text>
+          <Pressable
+            onPress={closeDeck}
+            accessibilityRole="button"
+            accessibilityLabel={`Back to ${from === 'admin' ? 'Admin' : 'Meetings'}`}
+            style={({ pressed }) => ({
+              backgroundColor: GOLD,
+              borderRadius: 14,
+              paddingHorizontal: 28,
+              paddingVertical: 13,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white' }}>
+              Back to {from === 'admin' ? 'Admin' : 'Meetings'}
+            </Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: PAPER }} edges={['top']}>

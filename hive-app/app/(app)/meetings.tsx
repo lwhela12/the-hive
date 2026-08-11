@@ -19,6 +19,7 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { confirmAction, showAlert } from '../../lib/showAlert';
+import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns } from '../../lib/checkIns';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import type { Meeting, Event } from '../../types';
 
@@ -168,6 +169,12 @@ export default function MeetingsScreen() {
   const { width } = useWindowDimensions();
   const useCompactActions = width < 640;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+  // The 2026-08-07 decision gated the check-ins in Admin and on the direct
+  // tune-up route, but this screen kept offering OG's tune-up pills and the
+  // Meeting Helper deck inside Tech and Production as if they were theirs
+  // (Nat, 2026-08-11: "I dont want these blindly brought over from OG hive").
+  // Same rule, same shared string, applied to every door on this screen.
+  const tailoredCheckIns = hasTailoredCheckIns(community);
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -1172,12 +1179,21 @@ export default function MeetingsScreen() {
 
             {/* Meeting Helper — the live deck. Cast it to the TV or follow
                 along from any seat (replaced the legacy Canva Slide Deck tile;
-                long-press still reaches the old deck-link editor for admins). */}
+                long-press still reaches the old deck-link editor for admins).
+
+                Outside OG the whole tile fails closed — press AND long-press,
+                because the long-press sheet is the only door to the Arrival
+                Board, which shows check-in answers. The deck's agenda is OG's
+                night (News from Nat, Treasurer, HummDinger), not a template. */}
             <Pressable
-              onPress={() => router.push({ pathname: '/meeting-helper', params: { from: 'meetings' } })}
-              onLongPress={() => {
-                if (isAdmin) setShowDeckActions(true);
+              onPress={() => {
+                if (!tailoredCheckIns) return;
+                router.push({ pathname: '/meeting-helper', params: { from: 'meetings' } });
               }}
+              onLongPress={() => {
+                if (tailoredCheckIns && isAdmin) setShowDeckActions(true);
+              }}
+              disabled={!tailoredCheckIns}
               style={({ pressed }) => ({
                 flex: useCompactActions ? undefined : 1,
                 width: useCompactActions ? '48%' : undefined,
@@ -1189,11 +1205,11 @@ export default function MeetingsScreen() {
               })}
             >
               <Text style={{ fontSize: 22, marginBottom: 4 }}>🎞️</Text>
-              <Text style={{ fontFamily: 'Lato_700Bold', color: '#fff', fontSize: 13 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: tailoredCheckIns ? '#fff' : 'rgba(255,255,255,0.35)', fontSize: 13 }}>
                 Meeting Helper
               </Text>
               <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 2 }}>
-                follow the deck live
+                {tailoredCheckIns ? 'follow the deck live' : 'coming soon'}
               </Text>
             </Pressable>
 
@@ -1240,7 +1256,7 @@ export default function MeetingsScreen() {
               can run the meeting from the meeting helper. lets assume I'm
               always running it (natwalstead) for now."* What you write in them
               is yours; what Nat reads is the meeting deck they feed. */}
-          {isAdmin && (
+          {(isAdmin || !tailoredCheckIns) && (
             <View
               style={{
                 marginTop: 16,
@@ -1252,38 +1268,57 @@ export default function MeetingsScreen() {
                 gap: 8,
               }}
             >
-              <Text
-                style={{
-                  fontFamily: 'Lato_700Bold', fontSize: 10, letterSpacing: 1.4,
-                  textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)',
-                  width: '100%', marginBottom: 8,
-                }}
-              >
-                Fill these in before the meeting
-              </Text>
-              {([
-                { label: 'Monthly Tune-up', params: {} },
-                { label: 'Halfway Check-in', params: { mode: 'midpoint' } },
-              ] as const).map((tool) => (
-                <Pressable
-                  key={tool.label}
-                  onPress={() => router.push({
-                    pathname: '/monthly-tuneup' as any,
-                    params: { from: 'meetings', ...tool.params },
-                  })}
-                  style={({ pressed }) => ({
-                    backgroundColor: 'rgba(255,255,255,0.08)',
-                    borderRadius: 999,
-                    paddingHorizontal: 14,
-                    paddingVertical: 9,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
-                    {tool.label}
+              {tailoredCheckIns ? (
+                <>
+                  <Text
+                    style={{
+                      fontFamily: 'Lato_700Bold', fontSize: 10, letterSpacing: 1.4,
+                      textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)',
+                      width: '100%', marginBottom: 8,
+                    }}
+                  >
+                    Fill these in before the meeting
                   </Text>
-                </Pressable>
-              ))}
+                  {([
+                    { label: 'Monthly Tune-up', params: {} },
+                    { label: 'Halfway Check-in', params: { mode: 'midpoint' } },
+                  ] as const).map((tool) => (
+                    <Pressable
+                      key={tool.label}
+                      onPress={() => router.push({
+                        pathname: '/monthly-tuneup' as any,
+                        params: { from: 'meetings', ...tool.params },
+                      })}
+                      style={({ pressed }) => ({
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                        borderRadius: 999,
+                        paddingHorizontal: 14,
+                        paddingVertical: 9,
+                        opacity: pressed ? 0.7 : 1,
+                      })}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
+                        {tool.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </>
+              ) : (
+                // Not a button — the same sentence Admin shows, sitting where
+                // OG's pills sit, so a Tech or Production member learns the
+                // plan instead of borrowing OG's rituals.
+                <Text
+                  style={{
+                    fontFamily: 'Lato_400Regular',
+                    fontSize: 13,
+                    lineHeight: 19,
+                    color: 'rgba(255,255,255,0.55)',
+                    width: '100%',
+                  }}
+                >
+                  {CHECK_INS_COMING_SOON_MESSAGE}
+                </Text>
+              )}
             </View>
           )}
 
