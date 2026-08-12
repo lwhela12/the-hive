@@ -10,7 +10,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { APP_NEWS } from '../../lib/appNews';
 import { PARDON_OUR_DUST } from '../../lib/hiveWide';
 import { SummarySections, type SummarySection } from '../../components/meetings/SummarySections';
-import { NEWSLETTER_MASTHEAD, readLetter } from '../../lib/newsletterHeaders';
+import { readLetter } from '../../lib/newsletterHeaders';
 import { LinkifiedText } from '../../components/ui/LinkifiedText';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
@@ -716,21 +716,31 @@ export default function NewsletterScreen() {
               </View>
             ) : null}
 
-            {/* The cover. Nat's own masthead, so the draft opens looking like the
-                newsletter people used to get rather than like a preview pane. */}
+            {/* The cover — the SAME header the email wears: the round logo on
+                its white tile, then the issue title in the amber caps line.
+                It wore the old Wix-era "H.I.V.E. MONTHLY NEWSLETTER" masthead
+                until 2026-08-12; Nat, once the page's job clicked for her:
+                "this is just the editors screen. i want to make sure it
+                matches how it is in the email." One look, three surfaces. */}
             <View
               className="mb-4 bg-paper rounded-2xl border border-gold/20"
-              style={{ alignItems: 'center', overflow: 'hidden', paddingVertical: 10 }}
+              style={{ alignItems: 'center', overflow: 'hidden', paddingVertical: 26, gap: 10 }}
             >
               <Image
-                source={NEWSLETTER_MASTHEAD.source}
-                accessibilityLabel={NEWSLETTER_MASTHEAD.alt}
-                style={{
-                  width: Math.min(width - 88, 420),
-                  height: Math.min(width - 88, 420) / NEWSLETTER_MASTHEAD.ratio,
-                }}
+                source={require('../../assets/hive-logo.png')}
+                accessibilityLabel="H.I.V.E. — Human, Insight, Vision, Execution"
+                style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: '#ffffff' }}
                 resizeMode="contain"
               />
+              <Text
+                style={{
+                  fontFamily: 'Lato_700Bold', fontSize: 12, letterSpacing: 3,
+                  textTransform: 'uppercase', color: '#8a6a2f', textAlign: 'center',
+                  paddingHorizontal: 20,
+                }}
+              >
+                {recapTitle ?? 'The Buzz'}
+              </Text>
             </View>
 
             {view === 'letter' && prose ? (

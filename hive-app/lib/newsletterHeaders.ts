@@ -93,12 +93,6 @@ export const NEWSLETTER_HEADERS: NewsletterHeader[] = [
 ];
 
 /** The cover, for the top of a newsletter rather than over a section. */
-export const NEWSLETTER_MASTHEAD = {
-  source: require('../assets/newsletter/masthead.png'),
-  ratio: 900 / 684,
-  alt: 'H.I.V.E. Monthly Newsletter',
-};
-
 /**
  * The art for a section title, or null to draw the heading instead.
  *
