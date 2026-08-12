@@ -486,6 +486,10 @@ export function NewsletterPanel({
         .from('board_posts')
         .select('id, title, visibility, created_at')
         .in('category_id', boardIds)
+        // Archived is gone, not "earlier" — without this the July collecting
+        // thread Nat archived came back as a phantom draft the moment the
+        // real letter was sent (2026-08-12, minutes after the first send).
+        .is('archived_at', null)
         .order('created_at', { ascending: false })
         .limit(12),
       supabase
@@ -783,6 +787,11 @@ export function NewsletterPanel({
                         ? 'Published — never emailed'
                         : 'Draft — publish it before you send'}
                   </Text>
+                  {issue.sentAt ? (
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 12, color: SPACE_SKIN.inkSoft }}>
+                      Done and dusted 🐝
+                    </Text>
+                  ) : (
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <Pressable
                       onPress={() => { void sendIssue(issue, 'test'); }}
@@ -811,6 +820,7 @@ export function NewsletterPanel({
                       </Text>
                     </Pressable>
                   </View>
+                  )}
                 </View>
               ))}
 
