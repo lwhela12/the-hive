@@ -23,8 +23,8 @@ import { loadHiveWideWelcomeSeen, persistHiveWideWelcomeSeen } from '../../lib/r
 import { supabase } from '../../lib/supabase';
 import { useAuth, type HiveMembership } from '../../lib/hooks/useAuth';
 import { getAppNews } from '../../lib/appNews';
-import { accentOnDark, accentWash, hiveAccent, hiveDisplayName } from '../../lib/hiveBrand';
-import { formatDateLong } from '../../lib/dateUtils';
+import { accentOnDark, accentWash, hiveAccent, hiveDisplayName, normalizeHiveBrandText } from '../../lib/hiveBrand';
+import { formatDateLong, formatTime } from '../../lib/dateUtils';
 import { getLocalIsoDate } from '../../lib/hooks/useArrivalBoard';
 import type { Community } from '../../types';
 
@@ -600,6 +600,27 @@ export default function HiveWideScreen() {
     return byHive;
   }, [upcoming]);
 
+  /**
+   * Every meeting you personally have to be at, across all of them.
+   *
+   * Nat, 2026-08-12: *"so if you're in multiple hives you can see all of your
+   * meetings in one place."* Which is the one job HIVE-Wide has — Meetings is
+   * `hidden` up here (`lib/navigation.ts`), because a meeting belongs to one
+   * HIVE, so without this box somebody in three HIVEs has to walk into all
+   * three to find out when they are next expected anywhere.
+   *
+   * YOUR meetings, not every meeting: filtered to the HIVEs you actually
+   * belong to. `upcoming` covers every HIVE you can SEE, which is a wider net
+   * than the ones you are in, and a Production HIVE meeting is not on Nat's
+   * calendar just because she can see it exists.
+   */
+  const myMeetings = useMemo(() => {
+    const mine = new Set(memberships.map((m) => m.community_id));
+    return upcoming
+      .filter((event) => event.event_type === 'meeting' && mine.has(event.community_id))
+      .slice(0, 5);
+  }, [upcoming, memberships]);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: SPACE_BLACK }} edges={['top']}>
       {/* The hero IS the header here. A pale wash behind a cream page was
@@ -776,6 +797,65 @@ export default function HiveWideScreen() {
                   RESULT was missing. HIVE Help and HIVE Hangs came out to make
                   room: both were three lines of "tbd" repeated per HIVE, and
                   neither is a thing you can act on from up here. */}
+              {/* Your meetings, wherever they are. Tapping one steps you into
+                  that HIVE and opens its Meetings page, because that is where
+                  the deck, the notes and the check-in for it live. */}
+              <TopBox label="Your Meetings" wide={wide}>
+                {myMeetings.length > 0 ? (
+                  <View style={{ gap: 9 }}>
+                    {myMeetings.map((event) => {
+                      const hive = hives.find((h) => h.id === event.community_id);
+                      return (
+                        <Pressable
+                          key={event.id}
+                          onPress={() => {
+                            void switchCommunity(event.community_id);
+                            router.push('/meetings' as never);
+                          }}
+                          style={{
+                            flexDirection: 'row', alignItems: 'flex-start', gap: 9,
+                            paddingVertical: 10, paddingHorizontal: 12,
+                            borderRadius: 12, borderWidth: 1,
+                            borderColor: CARD_EDGE, backgroundColor: CARD_FILL,
+                          }}
+                        >
+                          <View style={{ paddingTop: 3 }}>
+                            <HiveMark size={12} colour={accentOnDark(hiveAccent(hive))} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: INK, lineHeight: 19 }}
+                              numberOfLines={2}
+                            >
+                              {normalizeHiveBrandText(event.title)}
+                            </Text>
+                            <Text
+                              style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: INK_FAINT, marginTop: 2 }}
+                            >
+                              {[
+                                formatDateLong(event.event_date),
+                                event.event_time ? formatTime(event.event_time) : null,
+                                hive?.name ? hiveDisplayName(hive.name) : null,
+                              ].filter(Boolean).join(' · ')}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text
+                    style={{
+                      fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 14,
+                      lineHeight: 21, color: INK_SOFT,
+                    }}
+                  >
+                    Nothing on the books yet. When a HIVE you&rsquo;re in schedules its next
+                    meeting, it turns up here.
+                  </Text>
+                )}
+              </TopBox>
+
               <TopBox label="HIVE-Wide Wishes" wide={wide}>
                 {wideWishes.length > 0 ? (
                   <View style={{ gap: 9 }}>

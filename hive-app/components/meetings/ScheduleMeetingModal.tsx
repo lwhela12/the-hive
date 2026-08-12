@@ -13,10 +13,9 @@ import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import type { Profile } from '../../types';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { hiveDisplayName } from '../../lib/hiveBrand';
+import { hiveDisplayName, normalizeHiveBrandText } from '../../lib/hiveBrand';
 
 const DEFAULT_MEETING_DURATION_MINUTES = '150';
-const normalizeHiveBrandText = (text: string) => text.replace(/\bHive\b/g, 'HIVE');
 
 // Only import DateTimePicker on native platforms
 let DateTimePicker: typeof import('@react-native-community/datetimepicker').default | null = null;

@@ -15,6 +15,7 @@ import { FadeIn } from '../../components/ui/FadeIn';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
 import { formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
+import { normalizeHiveBrandText } from '../../lib/hiveBrand';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
@@ -149,7 +150,6 @@ const getTodayIsoDate = () => {
   return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
 };
 
-const normalizeHiveBrandText = (text?: string | null) => (text ?? '').replace(/\bHive\b/g, 'HIVE');
 
 const getImportTitle = (event?: Event | null) => normalizeHiveBrandText(event?.title).trim() || 'HIVE Meeting';
 

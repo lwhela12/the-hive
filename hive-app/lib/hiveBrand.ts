@@ -77,3 +77,18 @@ export function accentOnDark(hex: string): string {
   const lift = (c: number) => Math.round(c + (255 - c) * 0.55);
   return luminance(hex) > 0.45 ? hex : `rgb(${lift(r)},${lift(g)},${lift(b)})`;
 }
+
+/**
+ * "Hive" → "HIVE", anywhere a person typed a meeting title.
+ *
+ * The house rule is "HIVE" in product copy, never "the Hive" or a mixed-case
+ * variant — and a meeting title is one of the few places a member types the
+ * brand themselves, so it is the one place it drifts.
+ *
+ * Lived as an identical private const in `meetings.tsx` and
+ * `ScheduleMeetingModal.tsx`, and HIVE-Wide's meetings box needed a third
+ * copy on 2026-08-12. Three is a shared function; it belongs beside
+ * `hiveDisplayName`, which is the same job for a HIVE's own name.
+ */
+export const normalizeHiveBrandText = (text?: string | null) =>
+  (text ?? '').replace(/\bHive\b/g, 'HIVE');
