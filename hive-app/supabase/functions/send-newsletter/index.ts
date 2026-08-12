@@ -343,6 +343,11 @@ serve(async (req) => {
     const batch = recipients.slice(i, i + BATCH_SIZE);
     const payload = batch.map((recipient) => ({
       from: FROM_EMAIL,
+      // Replies land with Nat. hello@the-hive.app sends and receives nothing
+      // (the real inbox is still an open Phase 2 item), and the unsubscribe
+      // page's fallback literally says "reply to the newsletter" — found in
+      // the post-send audit, 2026-08-12.
+      reply_to: Deno.env.get('NEWSLETTER_REPLY_TO') || 'Nat <natwalstead@gmail.com>',
       to: recipient.email,
       subject,
       html: issueHtml(title, content, footerFor(recipient), recipient),
