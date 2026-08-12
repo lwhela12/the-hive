@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../supabase';
 import {
   getSurveyAvailableAt,
@@ -18,6 +18,11 @@ export interface ActivityItem {
   navigatesTo?: 'board' | 'event' | 'members' | 'wish' | 'messages' | 'tuneup'; // screens that can be navigated to
   involvesUserIds?: string[]; // member ids involved in this item — used by the "Mentions me" filter
 }
+
+// One shared empty array rather than a fresh `[]` each render. `hive.tsx`
+// lists `activityItems` in effect and memo dependencies, and a new array
+// identity every render would re-run all of them while the feed loads.
+const EMPTY_ITEMS: ActivityItem[] = [];
 
 function truncate(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) + '…' : text;
@@ -121,20 +126,19 @@ function firstRelation<T = any>(value: T | T[] | null | undefined): T | null {
 // when it actually went out). Looked up by topic_kind rather than a hardcoded
 // board id, same as newsletter.tsx's own board lookup, so this keeps working
 // if the board is ever recreated or another HIVE gets its own.
+// The board lookup and the post fetch used to be two awaits back to back,
+// which made this the only two-deep leg inside the Promise.all below — every
+// other branch is one round trip, so the whole feed waited on this one's
+// second hop. An `!inner` embed asks Postgres the same question in a single
+// trip: give me the public posts whose board is a newsletter board. Still
+// looked up by `topic_kind` rather than a hardcoded board id, same as
+// newsletter.tsx, so it keeps working if a board is recreated or another
+// HIVE gets its own.
 async function fetchNewsletterReleases(communityId: string, since: string) {
-  const { data: boards, error: boardsError } = await supabase
-    .from('board_categories')
-    .select('id')
-    .eq('community_id', communityId)
-    .eq('topic_kind', 'newsletter');
-
-  if (boardsError || !boards || boards.length === 0) return [];
-  const boardIds = boards.map((b: any) => b.id);
-
   const { data, error } = await supabase
     .from('board_posts')
-    .select('id, title, category_id, created_at, edited_at, status')
-    .in('category_id', boardIds)
+    .select('id, title, category_id, created_at, edited_at, status, category:board_categories!inner(topic_kind)')
+    .eq('category.topic_kind', 'newsletter')
     .eq('community_id', communityId)
     .eq('visibility', 'public')
     .order('created_at', { ascending: false })
@@ -470,28 +474,33 @@ function formatTime(timeStr: string): string {
   return min === '00' ? `${h}${ampm}` : `${h}:${min}${ampm}`;
 }
 
+/**
+ * Recent Activity.
+ *
+ * This was a hand-rolled `useState` + `useEffect` until 2026-08-12, which
+ * meant the ten round trips above ran again, in full, every single time Home
+ * mounted — stepping into a HIVE, coming back from Members, switching tabs.
+ * Nothing was remembered between visits. It was the heaviest of Home's five
+ * data hooks and the only one of the four uncached ones that fetched double
+ * figures, so it set the floor on how fast Home could ever feel.
+ *
+ * On TanStack Query now, like `useHiveDataQuery` beside it. Two minutes of
+ * stale time: long enough that walking around the app and coming back is
+ * free, short enough that a member who posts something sees it near enough
+ * to straight away. `refetch` still forces a fresh read, which is what
+ * pull-to-refresh calls.
+ */
 export function useActivityFeed(communityId?: string, userId?: string) {
-  const [items, setItems] = useState<ActivityItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['activityFeed', communityId ?? '', userId ?? ''],
+    queryFn: () => fetchActivityItems(communityId!, userId),
+    enabled: !!communityId,
+    staleTime: 2 * 60 * 1000,
+  });
 
-  const fetch = useCallback(async () => {
-    if (!communityId) return;
-    setLoading(true);
-    try {
-      const data = await fetchActivityItems(communityId, userId);
-      setItems(data);
-      return data;
-    } catch (e) {
-      console.error('Activity feed error:', e);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, [communityId, userId]);
-
-  useEffect(() => {
-    fetch();
-  }, [fetch]);
-
-  return { items, loading, refetch: fetch };
+  return {
+    items: data ?? EMPTY_ITEMS,
+    loading: isLoading,
+    refetch,
+  };
 }

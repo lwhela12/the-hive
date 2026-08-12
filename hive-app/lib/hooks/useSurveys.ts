@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../supabase';
+import { queryClient } from '../queryClient';
 
 export interface SurveyQuestion {
   id: string;
@@ -154,67 +155,84 @@ function isSurveyPendingForMember(survey: Survey, response?: SurveyResponse) {
   return submittedAt < availableAt;
 }
 
+type SurveysSnapshot = {
+  surveys: Survey[];
+  responses: Map<string, SurveyResponse>;
+};
+
+const EMPTY_SNAPSHOT: SurveysSnapshot = { surveys: [], responses: new Map() };
+
+const surveysQueryKey = (communityId?: string, userId?: string) =>
+  ['surveys', communityId ?? '', userId ?? ''] as const;
+
+async function fetchSurveys(communityId: string, userId?: string): Promise<SurveysSnapshot> {
+    const surveysQuery = supabase
+      .from('surveys')
+      .select('*')
+      .eq('community_id', communityId)
+      .order('created_at', { ascending: false });
+
+    const responsesQuery = userId
+      ? supabase
+          .from('survey_responses')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('community_id', communityId)
+      : Promise.resolve({ data: [] });
+
+    const [surveysRes, responsesRes] = await Promise.all([surveysQuery, responsesQuery]);
+
+    const surveys = (surveysRes.data ?? []) as Survey[];
+
+    const responsesByPeriod = new Map<string, SurveyResponse>();
+    const latestResponseBySurvey = new Map<string, SurveyResponse>();
+    ((responsesRes as any).data ?? []).forEach((r: any) => {
+      const response = r as SurveyResponse;
+      const responsePeriod = response.response_period ?? DEFAULT_RESPONSE_PERIOD;
+      responsesByPeriod.set(getSurveyResponseKey(response.survey_id, responsePeriod), response);
+
+      const existing = latestResponseBySurvey.get(response.survey_id);
+      if (!existing || response.submitted_at > existing.submitted_at) {
+        latestResponseBySurvey.set(response.survey_id, response);
+      }
+    });
+
+    const currentResponses = new Map<string, SurveyResponse>();
+    surveys.forEach((survey) => {
+      const responsePeriod = getSurveyResponsePeriod(survey);
+      const periodResponse = responsesByPeriod.get(getSurveyResponseKey(survey.id, responsePeriod));
+      const latestResponse = latestResponseBySurvey.get(survey.id);
+      if (periodResponse || latestResponse) {
+        currentResponses.set(survey.id, periodResponse ?? latestResponse!);
+      }
+    });
+    return { surveys, responses: currentResponses };
+}
+
+/**
+ * The HIVE's surveys, and which of them this member has already answered.
+ *
+ * Cached since 2026-08-12. Like `useActivityFeed` and
+ * `useCarryForwardContext`, this ran its two round trips on every mount with
+ * nothing remembered in between — and it mounts on Home, Profile,
+ * monthly-tuneup and Admin, so the same two queries were being re-asked as a
+ * member moved between them. Ten minutes of stale time: a survey's shape and
+ * due date barely move within a session, and the one thing that does change
+ * mid-session — this member answering — is written straight into the cache by
+ * `submitResponse` below rather than waited for.
+ */
 export function useSurveys(communityId?: string, userId?: string) {
-  const [allSurveys, setAllSurveys] = useState<Survey[]>([]);
-  const [myResponses, setMyResponses] = useState<Map<string, SurveyResponse>>(new Map());
-  const [loading, setLoading] = useState(true);
+  const queryKey = surveysQueryKey(communityId, userId);
 
-  const load = useCallback(async () => {
-    if (!communityId) return;
-    setLoading(true);
-    try {
-      const surveysQuery = supabase
-        .from('surveys')
-        .select('*')
-        .eq('community_id', communityId)
-        .order('created_at', { ascending: false });
+  const { data, isLoading, refetch } = useQuery({
+    queryKey,
+    queryFn: () => fetchSurveys(communityId!, userId),
+    enabled: !!communityId,
+    staleTime: 10 * 60 * 1000,
+  });
 
-      const responsesQuery = userId
-        ? supabase
-            .from('survey_responses')
-            .select('*')
-            .eq('user_id', userId)
-            .eq('community_id', communityId)
-        : Promise.resolve({ data: [] });
-
-      const [surveysRes, responsesRes] = await Promise.all([surveysQuery, responsesQuery]);
-
-      const surveys = (surveysRes.data ?? []) as Survey[];
-      setAllSurveys(surveys);
-
-      const responsesByPeriod = new Map<string, SurveyResponse>();
-      const latestResponseBySurvey = new Map<string, SurveyResponse>();
-      ((responsesRes as any).data ?? []).forEach((r: any) => {
-        const response = r as SurveyResponse;
-        const responsePeriod = response.response_period ?? DEFAULT_RESPONSE_PERIOD;
-        responsesByPeriod.set(getSurveyResponseKey(response.survey_id, responsePeriod), response);
-
-        const existing = latestResponseBySurvey.get(response.survey_id);
-        if (!existing || response.submitted_at > existing.submitted_at) {
-          latestResponseBySurvey.set(response.survey_id, response);
-        }
-      });
-
-      const currentResponses = new Map<string, SurveyResponse>();
-      surveys.forEach((survey) => {
-        const responsePeriod = getSurveyResponsePeriod(survey);
-        const periodResponse = responsesByPeriod.get(getSurveyResponseKey(survey.id, responsePeriod));
-        const latestResponse = latestResponseBySurvey.get(survey.id);
-        if (periodResponse || latestResponse) {
-          currentResponses.set(survey.id, periodResponse ?? latestResponse!);
-        }
-      });
-      setMyResponses(currentResponses);
-    } catch (e) {
-      console.error('[useSurveys] load error', e);
-    } finally {
-      setLoading(false);
-    }
-  }, [communityId, userId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { surveys: allSurveys, responses: myResponses } = data ?? EMPTY_SNAPSHOT;
+  const loading = !!communityId && isLoading;
 
   const activeSurveys = allSurveys.filter(s => s.is_active && !isRetiredSurvey(s));
   const availableSurveys = activeSurveys.filter(isSurveyAvailableToMembers);
@@ -256,10 +274,20 @@ export function useSurveys(communityId?: string, userId?: string) {
     const { data, error } = result;
 
     if (!error && data) {
-      setMyResponses(prev => new Map(prev).set(surveyId, data as SurveyResponse));
+      // Straight into the cache, the same shape the fetch builds. Every
+      // screen holding this key — Home, Profile, the tune-up, Admin — sees
+      // the answer land without a refetch, which is what the old local
+      // `setMyResponses` did for one screen only.
+      queryClient.setQueryData<SurveysSnapshot>(queryKey, (previous) => {
+        const base = previous ?? EMPTY_SNAPSHOT;
+        return {
+          surveys: base.surveys,
+          responses: new Map(base.responses).set(surveyId, data as SurveyResponse),
+        };
+      });
     }
     return { error };
   };
 
-  return { allSurveys, activeSurveys, availableSurveys, pendingSurveys, myResponses, loading, refetch: load, submitResponse };
+  return { allSurveys, activeSurveys, availableSurveys, pendingSurveys, myResponses, loading, refetch, submitResponse };
 }

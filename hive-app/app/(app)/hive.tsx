@@ -1987,8 +1987,11 @@ export default function HiveScreen() {
     spin.start();
 
     try {
+      // `useActivityFeed` moved onto TanStack Query (2026-08-12), so `refetch`
+      // hands back a query result rather than the array itself. The freshly
+      // fetched items live on `.data`.
       const refreshed = await refetchActivity();
-      const nextItems = refreshed ?? [];
+      const nextItems = refreshed.data ?? [];
       const nextTop = nextItems[0];
       const hasNewActivity = !!nextTop && (
         !previousTop ||

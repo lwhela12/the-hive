@@ -736,7 +736,8 @@ export default function MonthlyTuneupScreen() {
       group: 'hive' as const,
     };
   const hiveAudienceLabel = hiveBroadcastTarget.name;
-  const { wishes, loading: wishesLoading, refresh: refreshWishes, grantWish } = useWishes();
+  // The one screen that reads the list, so the one that asks for it.
+  const { wishes, loading: wishesLoading, refresh: refreshWishes, grantWish } = useWishes({ loadWishes: true });
   const {
     availableSurveys,
     pendingSurveys,

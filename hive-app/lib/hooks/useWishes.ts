@@ -3,45 +3,55 @@ import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
 import { invalidateWishQueries } from '../queryClient';
 import { celebrateWishGranted } from '../celebration';
-import type { Wish, Profile } from '../../types';
+import type { Wish } from '../../types';
 
-export function useWishes() {
+/**
+ * Wish reading and the four wish mutations.
+ *
+ * `loadWishes` is opt-in on purpose. Three of this hook's four call sites —
+ * `hive.tsx:2188`, `members.tsx:425`, `profile.tsx:179` — destructure only
+ * `grantWish`, but until 2026-08-12 the hook fetched on mount regardless, so
+ * every visit to Home, Members and Profile paid for two round trips nothing
+ * ever read. Only `monthly-tuneup.tsx` wants the list, and it asks.
+ *
+ * A second query went with them: a `publicWishes` fetch selecting
+ * `user:profiles(*)`. Two foreign keys run from `wishes` to `profiles`
+ * (`user_id` and `fulfilled_by`), so the embed was ambiguous and PostgREST
+ * had been answering it with a 400 (`PGRST201`) since the day it was
+ * written. The hook only checked the data, never the error, so the failure
+ * was swallowed in silence — and no screen read `publicWishes` anyway.
+ * Home's real public-wish list comes from `useHiveDataQuery`, which is
+ * cached and asks for the three profile fields a wish card actually draws.
+ *
+ * This is the fourth unread query found in this app (Queen Bee, then the
+ * four in `useHiveDataQuery`, now these). An unread query is never free:
+ * it costs a round trip, and a broken one hides its own breakage.
+ */
+export function useWishes({ loadWishes = false }: { loadWishes?: boolean } = {}) {
   const { profile, communityId, communityRole } = useAuth();
   const [wishes, setWishes] = useState<Wish[]>([]);
-  const [publicWishes, setPublicWishes] = useState<(Wish & { user: Profile })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(loadWishes);
 
   const fetchWishes = useCallback(async () => {
-    if (!profile || !communityId) {
+    if (!profile || !communityId || !loadWishes) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
 
-    // Fetch user's wishes
-    const { data: userWishes } = await supabase
+    const { data: userWishes, error } = await supabase
       .from('wishes')
       .select('*')
       .eq('user_id', profile.id)
       .eq('community_id', communityId)
       .order('created_at', { ascending: false });
 
+    if (error) console.error('Error fetching wishes:', error);
     if (userWishes) setWishes(userWishes);
 
-    // Fetch all public wishes in the community so Home mirrors member profiles.
-    const { data: communityWishes } = await supabase
-      .from('wishes')
-      .select('*, user:profiles(*)')
-      .eq('status', 'public')
-      .or('is_active.is.true,is_active.is.null')
-      .eq('community_id', communityId)
-      .order('created_at', { ascending: false });
-
-    if (communityWishes) setPublicWishes(communityWishes as (Wish & { user: Profile })[]);
-
     setLoading(false);
-  }, [profile?.id, communityId]);
+  }, [profile?.id, communityId, loadWishes]);
 
   useEffect(() => {
     fetchWishes();
@@ -199,7 +209,6 @@ export function useWishes() {
 
   return {
     wishes,
-    publicWishes,
     loading,
     refresh: fetchWishes,
     publishWish,

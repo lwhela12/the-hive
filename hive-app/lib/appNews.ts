@@ -28,6 +28,12 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-12-home-remembers',
+    date: '2026-08-12',
+    title: 'Coming back to Home is quick now',
+    detail: 'Home used to ask for everything again from scratch every single time you landed on it, even if you had only stepped away to Members for a second. It remembers now. Pull down when you want it to go and look again.',
+  },
+  {
     id: '2026-08-07-fetches-itself-again',
     date: '2026-08-07',
     title: 'If HIVE ever stops on the bee, it now goes and gets itself again',

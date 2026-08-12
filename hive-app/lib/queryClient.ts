@@ -23,7 +23,6 @@ export const queryKeys = {
   roomMessages: (roomId: string) => ['roomMessages', roomId] as const,
 
   // HIVE data
-  queenBees: (communityId: string) => ['queenBees', communityId] as const,
   publicWishes: (communityId: string) => ['publicWishes', communityId] as const,
   grantedWishes: (communityId: string) => ['grantedWishes', communityId] as const,
   userWishes: (communityId: string, userId: string) =>
@@ -65,6 +64,11 @@ export async function invalidateWishQueries(
     queryClient.invalidateQueries({ queryKey: queryKeys.publicWishes(communityId) }),
     queryClient.invalidateQueries({ queryKey: queryKeys.grantedWishes(communityId) }),
     queryClient.invalidateQueries({ queryKey: ['boardLinkedWishes', communityId] }),
+    // Posting or granting a wish is one of the things Recent Activity reports,
+    // and that feed started caching on 2026-08-12. Without this, a member
+    // could grant a wish and go back to Home to find their own good deed
+    // missing for a couple of minutes.
+    queryClient.invalidateQueries({ queryKey: ['activityFeed', communityId] }),
   ];
 
   if (userId) {
