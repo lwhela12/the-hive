@@ -42,21 +42,28 @@ interface ScheduleMeetingModalProps {
   }) => Promise<void>;
 }
 
-// "Aug OG HIVE Meeting" rather than "Aug HIVE Meeting" — with three of them, a
-// meeting has to say whose it is (Nat 2026-08-02). Still editable; this is only
-// what the field starts as.
+// "OG HIVE — Aug" rather than "Aug OG HIVE Meeting". Whose it is comes first,
+// then when. Nat, 2026-08-12, looking at a list of them: *"I think reverse the
+// way the titles are? Start with what, then when."*
 //
-// A HIVE that meets weekly gets the date instead of the month, because four
-// "Aug Tech HIVE Meeting"s in a row tell you nothing about which one you're
-// looking at.
+// It reads better in a list, which is where these actually get seen — every
+// line starting with a different month sorted the eye by the wrong thing,
+// while a column of "OG HIVE —" / "OG HIVE —" / "Tech HIVE —" groups itself.
+// The word "Meeting" went with the reversal: in a box headed "Your Meetings",
+// on a page of meetings, it was the least useful word in the line.
+//
+// With three HIVEs a meeting has to say whose it is (Nat 2026-08-02), and a
+// HIVE that meets weekly gets the date rather than the month, because four
+// "Tech HIVE — Aug"s in a row tell you nothing about which one you are looking
+// at. Still editable; this is only what the field starts as.
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const defaultMeetingTitle = (
   hiveName: string,
   when: Date = new Date(),
   cadence: 'monthly' | 'weekly' = 'monthly'
 ) => cadence === 'weekly'
-  ? `${MONTH_SHORT[when.getMonth()]} ${when.getDate()} ${hiveName} Meeting`
-  : `${MONTH_SHORT[when.getMonth()]} ${hiveName} Meeting`;
+  ? `${hiveName} — ${MONTH_SHORT[when.getMonth()]} ${when.getDate()}`
+  : `${hiveName} — ${MONTH_SHORT[when.getMonth()]}`;
 
 export function ScheduleMeetingModal({
   visible,
