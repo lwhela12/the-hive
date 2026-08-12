@@ -131,8 +131,10 @@ const MIDPOINT_STEPS: Step[] = [
 ];
 
 /**
- * Tech HIVE's pre-meeting flow — Nat designed it 2026-08-11: monthly on the
- * first Thursday evening, remote-friendly, work-focused. It keeps the steps
+ * Tech HIVE's pre-meeting flow — Nat designed it 2026-08-11: monthly,
+ * evening, remote-friendly, work-focused. (The day moved from the first
+ * Thursday to the second on 2026-08-12, to sit right after OG's second
+ * Wednesday.) It keeps the steps
  * that are the heart of HIVE (the HD wish) or genuinely generic (check-in,
  * to-dos, profile, privacy) and drops OG's social rituals: hang ideas, the
  * calendar-of-hangs, HIVE Help, the reading/mingle-fodder step. The check-in

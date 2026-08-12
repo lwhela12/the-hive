@@ -11,7 +11,9 @@ export const CHECK_INS_COMING_SOON_MESSAGE =
 /**
  * OG HIVE keeps the original database slug from before multi-HIVE existed.
  * Tech HIVE joined the list on 2026-08-11, when Nat designed its own rhythm
- * out loud: monthly on the first Thursday evening, POP-centred check-ins,
+ * out loud: monthly on the second Thursday evening (moved off the first
+ * Thursday on 2026-08-12 so Tech lands right after OG's second Wednesday —
+ * one HIVE week instead of two scattered ones), POP-centred check-ins,
  * networking instead of hangs, and the treasurer slide kept deliberately as
  * the place to talk about WHETHER Tech wants dues at all. Production still
  * waits for its own design.
@@ -29,12 +31,15 @@ export function hasTailoredCheckIns(
  * window rides the CALENDAR — the last five days of the month — and the copy
  * talks about the newsletter. That was the only shape until 2026-08-12.
  *
- * **Tech meets on the FIRST Thursday**, which makes the end of the month just
- * about the worst possible moment to call something "halfway": the nudge
- * would land three or four days before the meeting, not midway between two.
- * And Tech's halfway has no newsletter step at all (pulse and shout-outs
- * only), so OG's copy promised Tech members something that isn't in their
- * flow. Tech's window is measured from its next meeting instead.
+ * **Tech doesn't meet on a rhythm the calendar month describes.** When Tech
+ * sat on the first Thursday, the end of the month was about the worst
+ * possible moment to call something "halfway" — the nudge landed three or
+ * four days before the meeting, not midway between two. Tech has since moved
+ * to the second Thursday, which shifts the problem rather than removing it.
+ * So Tech's window is measured from its own next meeting, whatever date that
+ * turns out to be, and it keeps working if the day moves again. Tech's
+ * halfway also has no newsletter step at all (pulse and shout-outs only), so
+ * OG's copy promised Tech members something that isn't in their flow.
  *
  * A third HIVE is a third entry here, the same way the deck and the check-in
  * flows are third lists rather than third slug checks.

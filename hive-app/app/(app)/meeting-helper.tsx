@@ -223,7 +223,7 @@ const DECKS: Record<'default' | 'tech', DeckDefinition> = {
       kicker: 'Ways we gather · on the calendar',
       title: 'Plan',
       cards: [
-        { key: 'meeting', title: 'HIVE Meeting', blurb: 'First Thursday evening, monthly — built to fit around work.' },
+        { key: 'meeting', title: 'HIVE Meeting', blurb: 'Second Thursday evening, monthly — built to fit around work.' },
         { key: 'help', title: 'HIVE Help', blurb: 'A small shared kindness some HIVEs take on each month.' },
         { key: 'hang', title: 'HIVE Networking', blurb: 'Get the crew in a room with new faces — schedule one right here.' },
       ],
@@ -244,7 +244,7 @@ const DECKS: Record<'default' | 'tech', DeckDefinition> = {
       },
     },
     wrapupReminders: [
-      'Next meeting — first Thursday of the month',
+      'Next meeting — second Thursday of the month',
       'Monthly check-in — POP + what you learned, before we meet',
     ],
   },
