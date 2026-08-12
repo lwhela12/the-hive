@@ -1078,7 +1078,30 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
 
         var body = document.createElement('p');
         body.className = 'buzzbody';
-        body.textContent = n.content || '';
+        /* A line reading [[BUTTON:tech]] is a join button, not prose — the
+           same marker the email and the app render. Text stays textContent
+           (never innerHTML); only the known markers become anchors. */
+        var BUZZ_BUTTONS = {
+          tech: { label: "I'm interested in Tech HIVE", colour: '#2f4a63', hive: 'tech' },
+          og: { label: 'Add me to the OG HIVE waitlist', colour: '#bd9348', hive: 'default' }
+        };
+        (n.content || '').split(/\n(\[\[BUTTON:[a-z]+\]\])\n/).forEach(function (piece) {
+          var m = /^\[\[BUTTON:([a-z]+)\]\]$/.exec(piece.trim());
+          var btn = m && BUZZ_BUTTONS[m[1]];
+          if (btn) {
+            var wrap = document.createElement('span');
+            wrap.style.cssText = 'display:block;text-align:center;padding:14px 0 6px;';
+            var a = document.createElement('a');
+            a.href = '/api/interested?hive=' + encodeURIComponent(btn.hive);
+            a.textContent = btn.label + ' \u2192';
+            a.style.cssText = 'display:inline-block;background:' + btn.colour +
+              ';color:#fffdf5;font-weight:700;text-decoration:none;border-radius:999px;padding:12px 24px;';
+            wrap.appendChild(a);
+            body.appendChild(wrap);
+          } else if (piece) {
+            body.appendChild(document.createTextNode(piece));
+          }
+        });
 
         det.appendChild(sum);
         det.appendChild(body);

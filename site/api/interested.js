@@ -61,12 +61,39 @@ export default async function handler(req, res) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_ANON_KEY;
 
+  // No address on the link means they came from the public site's copy of
+  // the letter (the email version always carries one). Ask for it — one
+  // field, then the same two-tap confirm as everyone else.
   if (!EMAIL.test(email) || email.length > 254) {
+    if (req.method === 'POST') {
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(200).json({ ok: false });
+    }
+    const hiveLabelAsk = hive === 'tech' ? 'Tech HIVE' : 'HIVE';
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(PAGE('Tech HIVE', `
-      <h1>We couldn't read that link</h1>
-      <p>Some email apps break long links in half. Just reply to the newsletter
-      and Nat will add you by hand.</p>`));
+    return res.status(200).send(PAGE(hiveLabelAsk, `
+      <h1>Want in on ${escapeHtml(hiveLabelAsk)}?</h1>
+      <p>Pop your email in and we'll let Nat know you're interested.</p>
+      <input id="em" type="email" placeholder="you@example.com" autocomplete="email"
+        style="margin-top:14px;width:100%;max-width:20rem;padding:12px 14px;border:1px solid rgba(189,147,72,.4);border-radius:12px;font-size:1rem;" />
+      <div><button id="go" type="button">Yes, I'm interested</button></div>
+      <p id="out" style="margin-top:16px"></p>
+      <script>
+        var go = document.getElementById('go'), out = document.getElementById('out'), em = document.getElementById('em');
+        go.addEventListener('click', function () {
+          var v = (em.value || '').trim();
+          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { out.textContent = 'That email looks off — check it and try again.'; return; }
+          go.disabled = true; out.textContent = 'One moment…';
+          var qs = new URLSearchParams(window.location.search); qs.set('email', v);
+          fetch(window.location.pathname + '?' + qs.toString(), { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              if (d && d.ok) { go.style.display = 'none'; em.style.display = 'none'; out.innerHTML = "You're on the list \u{1F41D} Nat will be in touch."; }
+              else { go.disabled = false; out.textContent = 'That did not go through. Try once more.'; }
+            })
+            .catch(function () { go.disabled = false; out.textContent = 'That did not go through. Try once more.'; });
+        });
+      </script>`));
   }
 
   // The yes.

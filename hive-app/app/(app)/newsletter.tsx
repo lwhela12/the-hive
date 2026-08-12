@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { Linking, Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -76,6 +76,12 @@ export const PAPER_LETTER: LetterPalette = {
  * `<LetterProse text={item.content} palette={...} />` with the space skin's
  * colours is the whole fix there.
  */
+/** The letter's join buttons — same keys, labels and colours as the email. */
+const LETTER_BUTTONS: Record<string, { label: string; colour: string; slug: string }> = {
+  tech: { label: "I'm interested in Tech HIVE", colour: '#2f4a63', slug: 'tech' },
+  og: { label: 'Add me to the OG HIVE waitlist', colour: '#bd9348', slug: 'default' },
+};
+
 export function LetterProse({
   text,
   palette = PAPER_LETTER,
@@ -83,6 +89,8 @@ export function LetterProse({
   text: string;
   palette?: LetterPalette;
 }) {
+  const { profile } = useAuth();
+  const viewerEmail = (profile?.email ?? '').trim().toLowerCase();
   const blocks = useMemo(() => readLetter(text), [text]);
   const body = {
     fontFamily: 'Lato_400Regular',
@@ -96,6 +104,42 @@ export function LetterProse({
     <View>
       {blocks.map((block, i) => {
         const first = i === 0;
+
+        // `[[BUTTON:tech]]` on its own line is a join button, everywhere the
+        // letter renders — Nat found the marker printing as raw text in the
+        // app (2026-08-12: "the buttons dont work in this page"). Tapping
+        // opens the same interested page the email version points at, with
+        // your own address already on it.
+        if (block.kind === 'paragraph') {
+          const marker = /^\[\[BUTTON:([a-z]+)\]\]$/.exec(block.text.trim());
+          if (marker) {
+            const button = LETTER_BUTTONS[marker[1]];
+            if (!button) return null;
+            return (
+              <Pressable
+                key={i}
+                onPress={() => {
+                  const params = new URLSearchParams({ hive: button.slug });
+                  if (viewerEmail) params.set('email', viewerEmail);
+                  void Linking.openURL(`https://the-hive.app/api/interested?${params.toString()}`);
+                }}
+                style={({ pressed }) => ({
+                  alignSelf: 'center',
+                  backgroundColor: button.colour,
+                  borderRadius: 999,
+                  paddingHorizontal: 22,
+                  paddingVertical: 12,
+                  marginVertical: 12,
+                  opacity: pressed ? 0.75 : 1,
+                })}
+              >
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#fffdf5' }}>
+                  {button.label} →
+                </Text>
+              </Pressable>
+            );
+          }
+        }
 
         switch (block.kind) {
           case 'heading':
@@ -580,23 +624,7 @@ export default function NewsletterScreen() {
         >
           <Ionicons name="refresh" size={20} color="#bd9348" />
         </Pressable>
-        <Pressable
-          onPress={() => void copyAll()}
-          hitSlop={10}
-          disabled={loading || sections.length === 0}
-          accessibilityLabel="Copy the whole draft"
-          style={({ pressed }) => ({
-            backgroundColor: copied ? '#7a9a6b' : '#bd9348',
-            paddingHorizontal: 14,
-            paddingVertical: 7,
-            borderRadius: 999,
-            opacity: pressed || loading || sections.length === 0 ? 0.6 : 1,
-          })}
-        >
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#fff' }}>
-            {copied ? 'Copied' : 'Copy'}
-          </Text>
-        </Pressable>
+
       </View>
 
       {/* The page's one scroller — BounceScrollView so it bounces at both
@@ -714,6 +742,12 @@ export default function NewsletterScreen() {
               // renders the same component without it — see SummarySections.
               <SummarySections sections={sections} art />
             )}
+            {existingDraft ? (
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18, color: '#8a7a5e', textAlign: 'center', marginTop: 6, marginBottom: 10 }}>
+                This is the letter in progress — it is already saved. When it is
+                ready, send it from Admin → Newsletter → Test & send.
+              </Text>
+            ) : (
             <Pressable
               onPress={() => void postToBoard()}
               disabled={posting}
@@ -731,9 +765,10 @@ export default function NewsletterScreen() {
               })}
             >
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
-                {posting ? 'Posting…' : '📰 Post to the Newsletter board'}
+                {posting ? 'Posting…' : '📰 Save to The Buzz'}
               </Text>
             </Pressable>
+            )}
             {postedTo ? (
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7a9a6b', textAlign: 'center', marginBottom: 8 }}>
                 Posted — {postedTo}. Edit it there to match what actually went out.
