@@ -96,6 +96,17 @@ function RoleChip({ accent, role }: { accent: string; role: string }) {
   );
 }
 
+/** Somebody who asked to be told when a HIVE opens (migration 168). */
+type WaitlistRow = {
+  id: string;
+  email: string;
+  name: string | null;
+  message: string | null;
+  interested_in: string | null;
+  status: string;
+  created_at: string;
+};
+
 /* --------------------------------------------------- invited, not joined yet */
 
 /** An invite that is still waiting: a row with no `accepted_at` on it. */
@@ -991,6 +1002,18 @@ export function HiveMemberPanels({
   // for the same reason: this panel draws every HIVE at once, so nothing here
   // can hang off "the HIVE you're currently in".
   const [invitesByHive, setInvitesByHive] = useState<Record<string, PendingInvite[]>>({});
+  /**
+   * The stop before "invited": people who put their hand up.
+   *
+   * Nat's own shape, 2026-08-12 — *"people kind of 'move up the totem pole'"*.
+   * Interested → invited → member, and somebody stands at exactly ONE of
+   * those at a time, which is why `load()` drops a waitlist row the moment
+   * that person has an invite or a membership. That also answers her
+   * question: an invite moves them out of Waiting and into Invited, rather
+   * than leaving them in two lists to be chased twice.
+   */
+  const [waitingByHive, setWaitingByHive] = useState<Record<string, WaitlistRow[]>>({});
+  const isOwner = !!profile?.is_owner;
   const [confirmRevoke, setConfirmRevoke] = useState<{ invite: PendingInvite; hiveName: string } | null>(null);
   const [revoking, setRevoking] = useState(false);
   /** Which pending invite is being re-sent right now, so one press means one send. */
@@ -1063,8 +1086,49 @@ export function HiveMemberPanels({
     }
 
     setInvitesByHive(nextInvites);
+
+    // And the stop before that one: people who put their hand up and have not
+    // been invited yet. Owners only — the waitlist spans every HIVE and names
+    // people who have joined nothing, which is the `is_owner` line.
+    //
+    // Matched to a HIVE by slug (migration 168) because whoever wrote the row
+    // may have had no account at all, so there was nothing to resolve an id
+    // against. A row with no slug means "any HIVE, not sure" and shows up
+    // under every HIVE you keep, since it is an offer to whoever wants it.
+    if (isOwner) {
+      const { data } = await supabase
+        .from('waitlist')
+        .select('id, email, name, message, interested_in, status, created_at')
+        .eq('status', 'new')
+        .order('created_at', { ascending: false });
+
+      const nextWaiting: Record<string, WaitlistRow[]> = {};
+      memberships.forEach((m) => { nextWaiting[m.community_id] = []; });
+      const slugFor = new Map(
+        memberships.map((m) => [String((m.community as { slug?: string } | undefined)?.slug ?? ''), m.community_id])
+      );
+
+      ((data ?? []) as WaitlistRow[]).forEach((row) => {
+        const already = (email: string, id: string) =>
+          (next[id] ?? []).some((r) => r.email.trim().toLowerCase() === email.trim().toLowerCase())
+          || (nextInvites[id] ?? []).some((i) => i.email.trim().toLowerCase() === email.trim().toLowerCase());
+
+        const targets = row.interested_in
+          ? [slugFor.get(row.interested_in)].filter(Boolean) as string[]
+          : memberships.map((m) => m.community_id);
+
+        targets.forEach((id) => {
+          // Somebody already invited or already in has moved up the totem
+          // pole. Listing them here too would ask Nat to chase a person she
+          // has already chased.
+          if (!already(row.email, id)) nextWaiting[id]?.push(row);
+        });
+      });
+      setWaitingByHive(nextWaiting);
+    }
+
     setLoading(false);
-  }, [memberships]);
+  }, [memberships, isOwner]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -1265,6 +1329,10 @@ export function HiveMemberPanels({
         const inviting = inviteFor === m.community_id;
         const tab = tabFor[m.community_id] ?? 'members';
         const invites = invitesByHive[m.community_id] ?? [];
+        const waiting = waitingByHive[m.community_id] ?? [];
+        // Both stops on the totem pole, counted together — the tab's number is
+        // "how many people are part-way in", which is the question being asked.
+        const waitingCount = invites.length + waiting.length;
         // Who is allowed to change what people are here. An admin of this HIVE,
         // and Nat and Lucas anywhere — which is exactly what the database's own
         // rule says, so the buttons and the rules agree rather than one of them
@@ -1286,8 +1354,24 @@ export function HiveMemberPanels({
               // Short labels, because the whole row has to fit the folder's top
               // edge on a phone. Meeting Helper lives in the HIVE's Meetings
               // navigation, not on this Admin folder.
+              /**
+               * Waiting is its own tab rather than a third section stacked
+               * under the member list.
+               *
+               * Nat asked for both shapes in one breath and then found the
+               * problem with the first herself (2026-08-12): *"I would notice
+               * them right away in tech or prod. but i wouldnt notice on OG
+               * HIVE, cos i'd have to scroll a bunch. So that could also be
+               * another tab?"* A count on the folder's edge is visible without
+               * scrolling past eleven members, so the tab wins — and it keeps
+               * the whole pipeline in one place instead of splitting invited
+               * from interested across two views.
+               */
               tabs={[
                 { key: 'members', label: `Members (${rows.length})` },
+                ...(m.role === 'admin' && waitingCount > 0
+                  ? [{ key: 'waiting', label: `Waiting (${waitingCount})` }]
+                  : m.role === 'admin' ? [{ key: 'waiting', label: 'Waiting' }] : []),
                 { key: 'checkins', label: 'Check-ins' },
               ]}
               activeTab={tab}
@@ -1562,7 +1646,8 @@ export function HiveMemberPanels({
                   </View>
                 ) : null}
 
-                {loading && rows.length === 0 ? (
+                {tab === 'members' ? (
+                loading && rows.length === 0 ? (
                   <ActivityIndicator size="small" color="#fffdf5" />
                 ) : rows.length === 0 ? (
                   <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: 'rgba(246,244,229,0.55)', padding: 16 }}>
@@ -1729,14 +1814,18 @@ export function HiveMemberPanels({
                   ) : null}
                   </View>
                   );
-                })}
+                })
+                ) : null}
 
                 {/* INVITED, NOT JOINED YET.
                     Nat 2026-08-04: "I want to see who I've already invited &
                     just see that their membership is pending" — and be able to
                     take one back from this same box. Admins only, because only
-                    an admin is allowed to read this table at all. */}
-                {m.role === 'admin' && !loading ? (
+                    an admin is allowed to read this table at all.
+
+                    Moved onto the Waiting tab 2026-08-12, next to the people
+                    who have not been invited yet — the two are one pipeline. */}
+                {tab === 'waiting' && m.role === 'admin' && !loading ? (
                   <View style={{ borderTopWidth: 1, borderTopColor: skin.border, marginTop: 4 }}>
                     <Text
                       style={{
@@ -1857,6 +1946,85 @@ export function HiveMemberPanels({
                         comes back to life for another seven days.
                       </Text>
                     ) : null}
+                  </View>
+                ) : null}
+
+                {/* INTERESTED, NOT INVITED YET — the stop before an invite.
+                    Nat's totem pole, 2026-08-12. Owners only, because the
+                    waitlist reads across every HIVE and names people who have
+                    joined nothing.
+
+                    "Invite them" fills the invite form at the top of this
+                    folder rather than sending anything on the spot: who gets
+                    in is a decision, and OG is closed to new members right
+                    now even though it still collects names. */}
+                {tab === 'waiting' && isOwner && !loading ? (
+                  <View style={{ borderTopWidth: 1, borderTopColor: skin.border, marginTop: 4 }}>
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 1,
+                        textTransform: 'uppercase', color: 'rgba(246,244,229,0.65)',
+                        paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4,
+                      }}
+                    >
+                      Interested, not invited yet{waiting.length > 0 ? ` (${waiting.length})` : ''}
+                    </Text>
+
+                    {waiting.length === 0 ? (
+                      <Text
+                        style={{
+                          fontFamily: 'Lato_400Regular', fontSize: 12,
+                          color: 'rgba(246,244,229,0.5)', paddingHorizontal: 14, paddingBottom: 14,
+                        }}
+                      >
+                        Nobody has put their hand up for {name} yet.
+                      </Text>
+                    ) : waiting.map((person) => (
+                      <View
+                        key={`${m.community_id}:${person.id}`}
+                        style={{
+                          flexDirection: 'row', alignItems: 'center', gap: 10,
+                          paddingHorizontal: 14, paddingVertical: 10,
+                          borderTopWidth: 1, borderTopColor: skin.hairline,
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#F6F4E5' }}>
+                            {person.name?.trim() || person.email}
+                          </Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
+                            {person.name?.trim() ? `${person.email} · ` : ''}
+                            asked {sentWhen(person.created_at)}
+                            {person.interested_in ? '' : ' · any HIVE'}
+                          </Text>
+                          {person.message?.trim() ? (
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, lineHeight: 17, color: 'rgba(246,244,229,0.7)', paddingTop: 3 }}>
+                              “{person.message.trim()}”
+                            </Text>
+                          ) : null}
+                        </View>
+                        {m.role === 'admin' ? (
+                          <Pressable
+                            onPress={() => {
+                              setInviteEmail(person.email);
+                              setInviteRole('member');
+                              setInviteFor(m.community_id);
+                              setTabFor((prev) => ({ ...prev, [m.community_id]: 'members' }));
+                            }}
+                            hitSlop={8}
+                            accessibilityLabel={`Invite ${person.email} to ${name}`}
+                            style={({ pressed }) => ({
+                              borderWidth: 1, borderColor: skin.border, borderRadius: 999,
+                              paddingHorizontal: 11, paddingVertical: 6, opacity: pressed ? 0.6 : 1,
+                            })}
+                          >
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#F6F4E5' }}>
+                              Invite them
+                            </Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
+                    ))}
                   </View>
                 ) : null}
                 </>
