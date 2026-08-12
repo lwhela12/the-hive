@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { corsHeaders, handleCors, errorResponse } from '../_shared/cors.ts';
+import { recordAssistantUsage } from '../_shared/metering.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -35,10 +36,12 @@ serve(async (req) => {
       return errorResponse('conversation_id is required', 400);
     }
 
-    // Check if conversation already has a title
+    // Check if conversation already has a title.
+    // community_id comes along so the metering row below knows whose HIVE
+    // this title was generated for (migration 175).
     const { data: conversation, error: convError } = await supabaseClient
       .from('conversations')
-      .select('title')
+      .select('title, community_id')
       .eq('id', conversation_id)
       .eq('user_id', userId)
       .single();
@@ -110,6 +113,14 @@ Good examples:
 Conversation:
 ${conversationContext}`
       }]
+    });
+
+    // Clive keeps receipts (migration 175): fire-and-forget, never blocks.
+    recordAssistantUsage({
+      functionName: 'generate-title',
+      model: 'claude-haiku-4-5',
+      usage: response.usage,
+      communityId: conversation?.community_id ?? null,
     });
 
     const textBlock = response.content.find(

@@ -16,6 +16,7 @@ import Svg, { Circle, Ellipse, G, Line, Path, Text as SvgText, TSpan } from 'rea
 import { ComposerBar } from '../ui/ComposerBar';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import type { MatchedWish, SkillWishMatch } from '../../lib/skillWishMatching';
+import { joinGiverNames, type SkillFlowerSummary } from '../../lib/hooks/useSkillFlowers';
 import type { Skill } from '../../types';
 
 type GardenSkill = Pick<Skill, 'id' | 'description'> & Partial<Skill>;
@@ -39,6 +40,19 @@ type SkillBubbleGardenProps = {
   draftKey?: string | null;
   wishMatches?: SkillWishMatch[];
   onOpenWish?: (wishId: string) => void;
+  /**
+   * Garden visits (2026-08-12): the sunflowers visitors left, keyed by skill
+   * id. Purely additive — a garden given neither flower prop draws exactly
+   * as it always did.
+   */
+  skillFlowers?: Record<string, SkillFlowerSummary>;
+  /**
+   * Present ONLY when the viewer is standing in someone ELSE's garden — it is
+   * what puts the "Leave a 🌻" offer on a bloom. Leave it out for the owner's
+   * own garden, where blooms keep their tending taps and the 🌻 badge shows
+   * who visited instead.
+   */
+  onToggleSkillFlower?: (skillId: string, leaveIt: boolean) => void;
 };
 
 type SkillCategoryDef = {
@@ -1684,6 +1698,9 @@ function SkillPlant({
   layoutOverride,
   beeWishes,
   onBeePress,
+  flowerSummary,
+  onFlowerPress,
+  visitorCanFlower,
 }: SkillBubbleGardenProps & {
   skill: GardenSkill;
   index: number;
@@ -1706,6 +1723,12 @@ function SkillPlant({
   layoutOverride?: BouquetPlantLayout;
   beeWishes?: MatchedWish[];
   onBeePress?: (skill: GardenSkill, slotIndex: number) => void;
+  /** Sunflowers this bloom is wearing, if any (garden visits, 2026-08-12). */
+  flowerSummary?: SkillFlowerSummary;
+  /** Opens the sunflower popover for this bloom. */
+  onFlowerPress?: (skill: GardenSkill, slotIndex: number) => void;
+  /** True when the viewer may leave a 🌻 here — i.e. this is somebody else's garden. */
+  visitorCanFlower?: boolean;
 }) {
   const level = getLevel(skill);
   const bloomStep = getBloomStep(level);
@@ -1855,6 +1878,13 @@ function SkillPlant({
 
   const cycleLevel = () => {
     onSelect(skill.id);
+    // Visiting someone else's garden: a tap on a bloom used to do nothing at
+    // all (the Pressable was disabled), so the sunflower offer steals nothing —
+    // it gives the tap its first meaning (garden visits, 2026-08-12).
+    if (!editable && visitorCanFlower && onFlowerPress) {
+      onFlowerPress(skill, index);
+      return;
+    }
     if (!editable || !onUpdateSkill) return;
     if (didDrag.current) {
       didDrag.current = false;
@@ -2071,7 +2101,7 @@ function SkillPlant({
         transformOrigin: '50% 100%',
         ...(Platform.OS === 'web'
           ? ({
-              cursor: editable ? 'pointer' : 'default',
+              cursor: editable || (visitorCanFlower && onFlowerPress) ? 'pointer' : 'default',
               userSelect: 'none',
               WebkitUserSelect: 'none',
               touchAction: 'manipulation',
@@ -2089,9 +2119,13 @@ function SkillPlant({
         delayLongPress={620}
         onHoverIn={showHoverControls}
         onHoverOut={hideHoverControls}
-        disabled={!editable || isReseeding}
-        accessibilityRole={editable ? 'button' : undefined}
-        accessibilityLabel={`${skill.description}, ${stage.label}`}
+        disabled={(!editable && !(visitorCanFlower && onFlowerPress)) || isReseeding}
+        accessibilityRole={editable || (visitorCanFlower && onFlowerPress) ? 'button' : undefined}
+        accessibilityLabel={
+          !editable && visitorCanFlower && onFlowerPress
+            ? `${skill.description}, ${stage.label}. Leave a sunflower`
+            : `${skill.description}, ${stage.label}`
+        }
         style={{
           width: plantWidth,
           height: plantHeight,
@@ -2210,6 +2244,62 @@ function SkillPlant({
             onPress={() => onBeePress(skill, index)}
           />
         </View>
+      )}
+      {/* Sunflowers visitors left (garden visits, 2026-08-12). Tucked on the
+          lower-left edge: the bee owns the top-left, and the reseed and water
+          buttons own the right side of an editable garden, so this corner is
+          free in every mode and the bubble layout stays untouched. */}
+      {flowerSummary && flowerSummary.count > 0 && !isReseeding && (
+        <Pressable
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onFlowerPress?.(skill, index);
+          }}
+          disabled={!onFlowerPress}
+          hitSlop={6}
+          accessibilityRole={onFlowerPress ? 'button' : undefined}
+          accessibilityLabel={`${skill.description} has ${flowerSummary.count} ${flowerSummary.count === 1 ? 'sunflower' : 'sunflowers'} from garden visitors`}
+          style={{
+            position: 'absolute',
+            left: Math.max(4, plantWidth * 0.12),
+            bottom: showLabel ? LABEL_HEIGHT + 4 : 8,
+            minWidth: 26,
+            height: 26,
+            borderRadius: 999,
+            backgroundColor: 'rgba(255,253,247,0.92)',
+            borderWidth: 1,
+            borderColor: 'rgba(201,135,31,0.32)',
+            paddingHorizontal: 5,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+            shadowColor: '#4d3a22',
+            shadowOpacity: 0.14,
+            shadowRadius: 6,
+            shadowOffset: { width: 0, height: 2 },
+            ...(Platform.OS === 'web'
+              ? ({
+                  cursor: onFlowerPress ? 'pointer' : 'default',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  outlineStyle: 'none',
+                } as any)
+              : {}),
+          }}
+        >
+          <Text selectable={false} style={{ fontSize: 12, lineHeight: 15 }}>
+            🌻
+          </Text>
+          {flowerSummary.count > 1 && (
+            <Text
+              selectable={false}
+              style={{ fontFamily: 'Lato_700Bold', color: '#8a5a16', fontSize: 10.5, lineHeight: 13 }}
+            >
+              {flowerSummary.count}
+            </Text>
+          )}
+        </Pressable>
       )}
       {showReseedButton && (
         <Pressable
@@ -3310,6 +3400,8 @@ export function SkillBubbleGarden({
   draftKey,
   wishMatches,
   onOpenWish,
+  skillFlowers,
+  onToggleSkillFlower,
 }: SkillBubbleGardenProps) {
   useWildflowerStyles();
 
@@ -3369,6 +3461,17 @@ export function SkillBubbleGarden({
       return wishes && wishes.length > 0 ? { skill, slotIndex, wishes } : null;
     });
   }, [beeWishesBySkillId]);
+  // The sunflower popover (garden visits, 2026-08-12) — same open/close shape
+  // as the bee popover: tap opens it on that bloom, tap again closes it.
+  const [flowerPopover, setFlowerPopover] = useState<{
+    skill: GardenSkill;
+    slotIndex: number;
+  } | null>(null);
+  const handleFlowerPress = useCallback((skill: GardenSkill, slotIndex: number) => {
+    setFlowerPopover((current) => (
+      current?.skill.id === skill.id ? null : { skill, slotIndex }
+    ));
+  }, []);
   const plantedNames = useMemo(
     () => new Set(displaySkills.map((skill) => normalizeSkillName(skill.description))),
     [displaySkills]
@@ -3481,6 +3584,7 @@ export function SkillBubbleGarden({
     const normalizedSkill = normalizeSkillName(skill.description);
     setSelectedSkillId(null);
     setBeePopover((current) => (current?.skill.id === skill.id ? null : current));
+    setFlowerPopover((current) => (current?.skill.id === skill.id ? null : current));
     setFlowerSlotPins((current) => {
       const { [normalizedSkill]: _removed, ...next } = current;
       return next;
@@ -3701,6 +3805,9 @@ export function SkillBubbleGarden({
             skills={skills}
             beeWishes={beeWishesBySkillId.get(skill.id)}
             onBeePress={onOpenWish ? handleBeePress : undefined}
+            flowerSummary={skillFlowers?.[skill.id]}
+            onFlowerPress={skillFlowers || onToggleSkillFlower ? handleFlowerPress : undefined}
+            visitorCanFlower={Boolean(onToggleSkillFlower)}
           />
         ))}
 
@@ -3811,6 +3918,133 @@ export function SkillBubbleGarden({
                     </Text>
                   </Pressable>
                 ))}
+              </View>
+            </>
+          );
+        })()}
+
+        {/* The sunflower card (garden visits, 2026-08-12). Anchored with the
+            same math as the bee popover above, so it sits on its bloom at
+            whatever size the meadow decided that bloom should be. Visiting
+            someone else's garden it offers "Leave a 🌻" / "Take your 🌻 back";
+            on your own it says who left them. */}
+        {flowerPopover && width > 0 && (() => {
+          const summary = skillFlowers?.[flowerPopover.skill.id];
+          const mine = summary?.mine ?? false;
+          const flowerCount = summary?.count ?? 0;
+          const giverLine = joinGiverNames(summary?.giverNames ?? []);
+          const cardWidth = Math.min(272, Math.max(200, width - 24));
+          // Narrow read-only gardens arrange blooms on the bouquet grid, not
+          // the front row — so ask the bouquet where this bloom actually is
+          // before falling back to the front-row math the bee popover uses.
+          const bouquetPosition = bouquetLayout?.positions.get(flowerPopover.skill.id);
+          const centerX = bouquetPosition?.centerX
+            ?? getFrontRowCenterX(flowerPopover.slotIndex, GARDEN_CAPACITY, width);
+          const anchorY = bouquetPosition?.anchorY
+            ?? getFrontRowAnchorY(meadowHeight, width, flowerPopover.slotIndex, compactLandscape, groundHeight, depthLiftRange);
+          const popoverBand = compactLandscape || width < 520 ? 0 : getDepthBand(flowerPopover.slotIndex);
+          const rowScale = bouquetPosition?.scale ?? plantScale * getDepthScaleFactor(popoverBand);
+          const spriteHeight = getStageCanvasHeight(getStage(getLevel(flowerPopover.skill))) * rowScale;
+          const cardLeft = clamp(centerX - cardWidth / 2, 10, Math.max(10, width - cardWidth - 10));
+          const cardBottom = clamp(
+            meadowHeight - anchorY + spriteHeight + 6,
+            groundHeight * 0.6,
+            Math.max(groundHeight * 0.6, meadowHeight - 190)
+          );
+
+          return (
+            <>
+              <Pressable
+                onPress={() => setFlowerPopover(null)}
+                accessibilityLabel="Close sunflowers"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  zIndex: 590,
+                  ...(Platform.OS === 'web' ? ({ cursor: 'default' } as any) : {}),
+                }}
+              />
+              <View
+                style={{
+                  position: 'absolute',
+                  left: cardLeft,
+                  bottom: cardBottom,
+                  width: cardWidth,
+                  zIndex: 600,
+                  borderRadius: 18,
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.55)',
+                  backgroundColor: 'rgba(255,253,247,0.98)',
+                  paddingHorizontal: 12,
+                  paddingVertical: 11,
+                  gap: 7,
+                  shadowColor: '#4d3a22',
+                  shadowOpacity: 0.22,
+                  shadowRadius: 16,
+                  shadowOffset: { width: 0, height: 6 },
+                  elevation: 6,
+                }}
+              >
+                <Text
+                  selectable={false}
+                  numberOfLines={2}
+                  style={{ fontFamily: 'Lato_700Bold', color: '#8a5a16', fontSize: 12.5, lineHeight: 16 }}
+                >
+                  🌻 {flowerPopover.skill.description}
+                </Text>
+                {flowerCount > 0 && giverLine.length > 0 && (
+                  <Text
+                    selectable={false}
+                    style={{ fontFamily: 'Lato_400Regular', color: '#5c5648', fontSize: 11, lineHeight: 15 }}
+                  >
+                    From {giverLine}
+                  </Text>
+                )}
+                {!onToggleSkillFlower && (
+                  <Text
+                    selectable={false}
+                    style={{ fontFamily: 'Lato_400Regular', color: '#9b8a6b', fontSize: 10, lineHeight: 13 }}
+                  >
+                    Sunflowers left by garden visitors.
+                  </Text>
+                )}
+                {onToggleSkillFlower && (
+                  <Pressable
+                    onPress={() => {
+                      onToggleSkillFlower(flowerPopover.skill.id, !mine);
+                      setFlowerPopover(null);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={mine
+                      ? `Take your sunflower back from ${flowerPopover.skill.description}`
+                      : `Leave a sunflower on ${flowerPopover.skill.description}`}
+                    style={{
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: 'rgba(201,135,31,0.28)',
+                      backgroundColor: 'rgba(244,194,71,0.14)',
+                      paddingHorizontal: 9,
+                      paddingVertical: 8,
+                      ...(Platform.OS === 'web'
+                        ? ({
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            WebkitUserSelect: 'none',
+                          } as any)
+                        : {}),
+                    }}
+                  >
+                    <Text
+                      selectable={false}
+                      style={{ fontFamily: 'Lato_700Bold', color: '#8a5a16', fontSize: 11.5, lineHeight: 14 }}
+                    >
+                      {mine ? 'Take your 🌻 back' : 'Leave a 🌻 on this bloom'}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             </>
           );

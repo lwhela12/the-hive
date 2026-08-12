@@ -8,6 +8,7 @@ import {
   getSSEHeaders,
   SSEWriter,
 } from '../_shared/streaming.ts';
+import { recordAssistantUsage } from '../_shared/metering.ts';
 
 const SYSTEM_PROMPT = `You are Clive, HIVE's assistant, an AI helper for H.I.V.E. (Human Insight Vision Execution), a close-knit community practicing "high-definition wishing."
 
@@ -1549,6 +1550,10 @@ serve(async (req) => {
       messages
     });
 
+    // Clive keeps receipts: one row per API call, fire-and-forget — a
+    // metering failure must never break his reply (migration 175).
+    recordAssistantUsage({ functionName: 'chat', model: chatModel, usage: response.usage, communityId });
+
     let skillsAdded = 0;
     let onboardingComplete = false;
     let proposedActionsThisTurn = false;
@@ -2251,6 +2256,9 @@ serve(async (req) => {
         tools,
         messages
       });
+
+      // Each loop turn is its own billed API call, so each gets its own row.
+      recordAssistantUsage({ functionName: 'chat', model: chatModel, usage: response.usage, communityId });
     }
 
     // Extract text response

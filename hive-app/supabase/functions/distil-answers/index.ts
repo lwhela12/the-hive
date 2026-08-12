@@ -32,6 +32,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.115.0';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
+import { recordAssistantUsage, AnthropicUsageLike } from '../_shared/metering.ts';
 
 /** How many answers one run will attempt. The rest wait for tomorrow. */
 const BATCH_SIZE = 200;
@@ -211,6 +212,7 @@ function validateGist(raw: unknown): Gist | null {
 interface ModelReply {
   content: Array<{ type: string; text?: string }>;
   stop_reason?: string;
+  usage?: AnthropicUsageLike;
 }
 
 /** Pull the model's text back out, whatever blocks it came in. */
@@ -269,6 +271,11 @@ async function distilChunk(
   const reply = await ((anthropic.messages as unknown as {
     create: (p: unknown) => Promise<ModelReply>;
   }).create(params));
+
+  // Clive keeps receipts (migration 175). community_id stays null on purpose:
+  // one chunk mixes answers from every HIVE, so the call belongs to none.
+  // This runs nightly unattended — exactly the bill nobody was watching.
+  recordAssistantUsage({ functionName: 'distil-answers', model: MODEL, usage: reply.usage, communityId: null });
 
   if (reply.stop_reason === 'refusal') {
     console.warn('Model refused a chunk; those rows keep their null and retry tomorrow.');

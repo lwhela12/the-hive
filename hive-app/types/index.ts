@@ -245,6 +245,19 @@ export interface Skill extends Record<string, unknown> {
   user?: Profile;
 }
 
+/**
+ * A sunflower a visitor left on someone else's skill bloom (migration 177).
+ * One per person per bloom — leaving is an insert, taking it back is a delete.
+ * The bloom's owner discovers them by looking at their garden; nothing pings.
+ */
+export interface SkillFlower extends Record<string, unknown> {
+  id: string;
+  skill_id: string;
+  giver_id: string;
+  created_at: string;
+  giver?: Profile;
+}
+
 export interface Wish extends Record<string, unknown> {
   id: string;
   user_id: string;
@@ -803,6 +816,12 @@ export interface Database {
         Update: Partial<Omit<Skill, 'id' | 'created_at'>>;
         Relationships: [];
       };
+      skill_flowers: {
+        Row: SkillFlower;
+        Insert: Omit<SkillFlower, 'id' | 'created_at' | 'giver'>;
+        Update: Partial<Omit<SkillFlower, 'id' | 'created_at' | 'giver'>>;
+        Relationships: [];
+      };
       wishes: {
         Row: Wish;
         Insert: Omit<Wish, 'id' | 'created_at'>;
@@ -1060,6 +1079,18 @@ export interface Database {
           p_dues_covered_quarters?: number | null;
         };
         Returns: number;
+      };
+      // The HIVE-Wide calendar's narrow window (migration 176): every HIVE's
+      // meeting days — never the Meet link, location or description.
+      hive_wide_meeting_days: {
+        Args: { from_date: string; to_date: string };
+        Returns: {
+          id: string;
+          title: string | null;
+          event_date: string;
+          event_time: string | null;
+          community_id: string;
+        }[];
       };
     };
   };

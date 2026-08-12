@@ -3,6 +3,7 @@ import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { recordAssistantUsage } from '../_shared/metering.ts';
 
 // "The meeting notes write themselves": compose everything that happened in
 // the app on meeting day (events penciled in, to-dos fanned out, wish notes,
@@ -49,6 +50,9 @@ function cleanJotText(description: string) {
 // summary beats a failed seal.
 async function condenseHummdingers(
   people: { name: string; hd: string; progress: string; obstacles: string; priorities: string; took: string[] }[],
+  // Whose HIVE this seal is for — only used to attribute the model call's
+  // cost in assistant_usage (migration 175).
+  communityId: string,
 ): Promise<string[]> {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey || people.length === 0) return [];
@@ -95,6 +99,11 @@ async function condenseHummdingers(
       system,
       messages: [{ role: 'user', content: brief }],
     });
+
+    // Clive keeps receipts (migration 175). This runs from the nightly
+    // auto-seal cron as well as the deck's Seal button — unattended spend.
+    recordAssistantUsage({ functionName: 'seal-meeting', model: 'claude-sonnet-5', usage: response.usage, communityId });
+
     if ((response as { stop_reason?: string }).stop_reason === 'refusal') return [];
 
     const text = response.content
@@ -466,7 +475,7 @@ serve(async (req) => {
     // a fact to arrange, but "36 lines of verbatim POP" -> "Sara: Europe trip is
     // locked in (Aug 6-Sep 8); still hunting for a mental-health person" is
     // genuine condensing (Nat 2026-07-25: "it's a summary, not word for word").
-    const condensed = await condenseHummdingers(people);
+    const condensed = await condenseHummdingers(people, communityId);
     if (condensed.length > 0) {
       sections.push({ title: 'HummDingers', lines: condensed });
     } else if (hdLines.length > 0) {

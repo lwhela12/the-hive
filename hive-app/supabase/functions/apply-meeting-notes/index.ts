@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { recordAssistantUsage } from '../_shared/metering.ts';
 
 type ApplyMeetingNotesMode = 'preview' | 'apply';
 
@@ -753,6 +754,14 @@ ${meeting.transcript_attributed || meeting.transcript_raw || ''}`,
     thinking: { type: 'disabled' as const },
     messages: [{ role: 'user', content }],
   } as any);
+
+  // Clive keeps receipts (migration 175): fire-and-forget, never blocks.
+  recordAssistantUsage({
+    functionName: 'apply-meeting-notes',
+    model: 'claude-sonnet-5',
+    usage: (response as { usage?: { input_tokens?: number; output_tokens?: number } }).usage,
+    communityId: meeting.community_id ?? null,
+  });
 
   const textBlock = response.content.find((block: any) => block.type === 'text') as { text?: string } | undefined;
   return normalizeMeetingAnalysis(parseJsonText(textBlock?.text ?? '{}'));

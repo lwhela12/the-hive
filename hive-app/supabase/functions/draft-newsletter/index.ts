@@ -3,6 +3,7 @@ import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { recordAssistantUsage } from '../_shared/metering.ts';
 
 // The newsletter and the meeting summary are the SAME artifact pointed at
 // different dates, so this returns the same `sections[]` shape seal-meeting
@@ -83,7 +84,13 @@ function prettyTime(value: string) {
  * Nat" comes back as a bracketed placeholder for her to fill, and anything not
  * in the facts is left as a bracket rather than invented.
  */
-async function writeNewsletter(month: string, factsText: string): Promise<string | null> {
+async function writeNewsletter(
+  month: string,
+  factsText: string,
+  // Whose HIVE's newsletter — only used to attribute the model call's cost
+  // in assistant_usage (migration 175).
+  communityId: string,
+): Promise<string | null> {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey || !factsText.trim()) return null;
 
@@ -161,6 +168,9 @@ async function writeNewsletter(month: string, factsText: string): Promise<string
         content: `Everything that happened in the HIVE this cycle:\n\n${factsText}\n\nWrite the ${month} newsletter.`,
       }],
     });
+    // Clive keeps receipts (migration 175): fire-and-forget, never blocks.
+    recordAssistantUsage({ functionName: 'draft-newsletter', model: 'claude-sonnet-5', usage: response.usage, communityId });
+
     if ((response as { stop_reason?: string }).stop_reason === 'refusal') return null;
     return response.content
       .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
@@ -593,7 +603,7 @@ serve(async (req) => {
     const factsText = sections
       .map((section) => `${section.title}\n${section.lines.map((line) => `- ${line.trim()}`).join('\n')}`)
       .join('\n\n');
-    const prose = body.includeProse === false ? null : await writeNewsletter(monthLabel, factsText);
+    const prose = body.includeProse === false ? null : await writeNewsletter(monthLabel, factsText, communityId);
 
     return jsonResponse({
       success: true,

@@ -11,6 +11,7 @@ import { useAuth } from '../../lib/hooks/useAuth';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { useSurveys, type Survey, type SurveyAnswers } from '../../lib/hooks/useSurveys';
 import { useCarryForwardContext } from '../../lib/hooks/useCarryForwardContext';
+import { useSkillFlowers } from '../../lib/hooks/useSkillFlowers';
 import { Avatar } from '../../components/ui/Avatar';
 import { BirthdayPicker } from '../../components/ui/DatePicker';
 import { AppHeader } from '../../components/navigation';
@@ -187,6 +188,10 @@ export default function ProfileScreen() {
   );
   const [refreshing, setRefreshing] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
+  // Garden visits (2026-08-12): sunflowers other members left on your blooms.
+  // No toggle here — you discover them, you don't leave them on yourself.
+  const gardenSkillIds = useMemo(() => skills.map((s) => s.id), [skills]);
+  const { flowersBySkill: gardenFlowers } = useSkillFlowers(gardenSkillIds);
   const [skillWishMatches, setSkillWishMatches] = useState<SkillWishMatch[]>([]);
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [selectedWish, setSelectedWish] = useState<(Wish & { user: Profile }) | null>(null);
@@ -2697,6 +2702,7 @@ export default function ProfileScreen() {
                 draftKey={profile?.id ? `the-hive:skills-garden:${profile.id}` : null}
                 wishMatches={skillWishMatches}
                 onOpenWish={(wishId) => router.push({ pathname: '/hive', params: { openWishId: wishId } })}
+                skillFlowers={gardenFlowers}
               />
             </View>
           </FadeIn>

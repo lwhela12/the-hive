@@ -55,6 +55,7 @@ import { HeaderTabs } from '../../components/ui/HeaderTabs';
 import { getHdWishTabLabel, pickSpotlightWish, type HdWishTabKey } from '../../lib/wishDisplay';
 import { useWishes } from '../../lib/hooks/useWishes';
 import { useMemberRosterQuery, useMemberDetailsQuery } from '../../lib/hooks/useMembersQuery';
+import { useSkillFlowers } from '../../lib/hooks/useSkillFlowers';
 import { EventScopeFields, invalidateBirthdayQueries, type EventAudience } from '../../components/events/EventAudienceToggle';
 
 import { ComposerBar } from '../../components/ui/ComposerBar';
@@ -446,6 +447,12 @@ function MemberDetailPage({
   const memberWishPanelMaxHeight = isPhoneProfile ? 500 : 520;
   const roleLabel = ROLE_LABELS[member.role];
   const { getOrCreateDMRoom } = useChatRooms(communityId ?? undefined, currentAuthId ?? undefined);
+  // Garden visits (2026-08-12): the sunflowers on this member's blooms. On
+  // somebody else's card the garden also gets the toggle, which is what turns
+  // a bloom tap into the "Leave a 🌻" offer; on your own card the badge just
+  // shows who visited.
+  const memberSkillIds = useMemo(() => member.skills.map((s) => s.id), [member.skills]);
+  const { flowersBySkill, toggleFlower } = useSkillFlowers(memberSkillIds);
   const [introExpanded, setIntroExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2207,7 +2214,13 @@ function MemberDetailPage({
                   </Text>
                 </View>
               ) : (
-                <SkillBubbleGarden skills={member.skills} />
+                <SkillBubbleGarden
+                  skills={member.skills}
+                  skillFlowers={flowersBySkill}
+                  // Only a VISITOR gets the toggle — it is what makes a bloom
+                  // tap offer "Leave a 🌻", and you never leave one on your own.
+                  onToggleSkillFlower={isCurrentUser ? undefined : toggleFlower}
+                />
               )}
             </View>
 

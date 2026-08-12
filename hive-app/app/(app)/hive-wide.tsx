@@ -30,6 +30,7 @@ import type { Community } from '../../types';
 
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
+import { HiveWideCalendar } from '../../components/hive/HiveWideCalendar';
 /**
  * HIVE-Wide — the shared high street.
  *
@@ -868,6 +869,29 @@ export default function HiveWideScreen() {
                     meeting, it turns up here.
                   </Text>
                 )}
+              </TopBox>
+
+              {/* The whole month of HIVE life, at a glance.
+                  Nat's parked idea, her words: "A genuinely HIVE-Wide
+                  calendar, with a coloured bee per HIVE's meeting day."
+                  The box above answers "when am I expected somewhere?"; this
+                  one answers "when is everybody meeting?" — every HIVE's
+                  meeting days, yours or not, each wearing its own colour.
+                  The days come through migration 176's narrow window: day,
+                  time, title, whose — never a Meet link, notes or recordings,
+                  which stay inside their own HIVE. */}
+              <TopBox label="HIVE-Wide Calendar" wide={wide}>
+                <HiveWideCalendar
+                  hives={hives}
+                  myHiveIds={memberships.map((m) => m.community_id)}
+                  colours={PANEL_COLOURS}
+                  onOpenMeetings={(id) => {
+                    // The same walk the meetings box above takes: step into
+                    // that HIVE, then open its Meetings page.
+                    void switchCommunity(id);
+                    router.push('/meetings' as never);
+                  }}
+                />
               </TopBox>
 
               <TopBox label="HIVE-Wide Wishes" wide={wide}>

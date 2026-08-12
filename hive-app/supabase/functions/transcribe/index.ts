@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { verifySupabaseJwt, isAuthError, isCommunityMember } from '../_shared/auth.ts';
+import { recordAssistantUsage } from '../_shared/metering.ts';
 
 const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY')!;
 
@@ -309,6 +310,15 @@ Format your response as JSON:
             content: `Please analyze this meeting transcript:\n\n${formattedTranscript}`
           }
         ]
+      });
+
+      // Clive keeps receipts (migration 175). This is the unattended
+      // AssemblyAI-webhook path — spend nobody was watching.
+      recordAssistantUsage({
+        functionName: 'transcribe',
+        model: 'claude-sonnet-5',
+        usage: response.usage,
+        communityId: meeting.community_id ?? null,
       });
 
       const textBlock = response.content.find(
