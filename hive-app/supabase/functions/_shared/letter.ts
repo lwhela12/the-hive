@@ -115,7 +115,13 @@ export function readLetter(text: string): LetterBlock[] {
     if (/:.+$/.test(t)) return false;
     // Starting lowercase or with a dash means this line finishes the one above it.
     if (/^[\p{Lowercase_Letter}—–→]/u.test(t)) return false;
-    if (/[.!?,;]$/.test(t.replace(DECORATION, ''))) return false;
+    // A question mark does NOT disqualify a heading. "Not in a HIVE?" and
+    // "So — what is HIVE?" are headings by any reader's eye, and this test
+    // was throwing both away (Nat wrote them as headers, 2026-08-12). The
+    // other guards still hold: it has to be short, start like a title, and be
+    // followed by something a title would introduce — so a rhetorical
+    // question inside a paragraph is still just a sentence.
+    if (/[.!,;]$/.test(t.replace(DECORATION, ''))) return false;
     if (!next) return false;
     if (!next.isLink && next.kind === 'paragraph' && /^\p{Lowercase_Letter}/u.test(next.text)) {
       return false;

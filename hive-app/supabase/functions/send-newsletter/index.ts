@@ -86,6 +86,43 @@ function escapeHtml(value: string): string {
  * Inline styles only, and tables nowhere: every mail client strips a
  * stylesheet, and the shapes here are simple enough not to need a grid.
  */
+/**
+ * A button, written into the letter as a line of its own.
+ *
+ * `[[BUTTON:tech]]` on its own line becomes the Tech HIVE button, right where
+ * it sits in the text. Nat wanted the ask beside the thing being asked about
+ * rather than stranded at the bottom (2026-08-12: *"maybe under tech hive we
+ * move the interest button up there"*, and for OG *"express your interest
+ * here + add button"*).
+ *
+ * Written as a marker rather than assembled in code so the letter stays ONE
+ * source of truth — the button lives in the same text The Buzz and the public
+ * site read, and moving it is editing a line, not a deploy.
+ *
+ * Each wears its own HIVE's colour, Nat's ask: amber for OG, blue for Tech.
+ * OG's accent is null in the database (it predates per-HIVE colours and keeps
+ * the house gold), so the gold is written here rather than looked up.
+ */
+const HIVE_BUTTONS: Record<string, { label: string; colour: string; slug: string }> = {
+  tech: { label: "I'm interested in Tech HIVE", colour: '#2f4a63', slug: 'tech' },
+  og: { label: 'Add me to the OG HIVE waitlist', colour: '#bd9348', slug: 'default' },
+};
+
+const BUTTON_LINE = /^\[\[BUTTON:([a-z]+)\]\]$/;
+
+function buttonHtml(key: string, recipient: Recipient): string {
+  const button = HIVE_BUTTONS[key];
+  if (!button) return '';
+  const params = new URLSearchParams({ email: recipient.email, hive: button.slug });
+  if (recipient.name) params.set('name', recipient.name);
+  return `<div style="text-align:center;padding:14px 0 6px;">
+    <a href="${PUBLIC_SITE_URL}/api/interested?${params.toString()}"
+       style="display:inline-block;background:${button.colour};color:#fffdf5;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;text-decoration:none;border-radius:999px;padding:13px 26px;">
+      ${button.label} &rarr;
+    </a>
+  </div>`;
+}
+
 function blockHtml(block: LetterBlock): string {
   switch (block.kind) {
     case 'heading':
@@ -107,33 +144,13 @@ function blockHtml(block: LetterBlock): string {
   }
 }
 
-/**
- * The one-tap "I'm interested in Tech HIVE" button.
- *
- * Drawn per recipient, because the link carries their own address — that is
- * what makes it one tap instead of a form. Nat, on the alternative: *"I dont
- * want 'im interested in...' on the public site. No thanks. only this one
- * time in this one newsletter."* So the landing page is reachable by link
- * only, and `site/api/interested.js` asks them to confirm the address before
- * it files anything, because newsletters get forwarded.
- *
- * Only drawn for an issue that actually opens a HIVE — `techButton` is off
- * unless the content mentions Tech HIVE, so next month's issue does not
- * quietly keep recruiting.
- */
-function techInterestButton(recipient: Recipient): string {
-  const params = new URLSearchParams({ email: recipient.email, hive: 'tech' });
-  if (recipient.name) params.set('name', recipient.name);
-  return `<div style="text-align:center;padding:6px 0 2px;">
-    <a href="${PUBLIC_SITE_URL}/api/interested?${params.toString()}"
-       style="display:inline-block;background:#bd9348;color:#fffdf5;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:bold;text-decoration:none;border-radius:999px;padding:14px 28px;">
-      I'm interested in Tech HIVE →
-    </a>
-  </div>`;
-}
-
-function issueHtml(title: string, content: string, footerHtml: string, ctaHtml = ''): string {
-  const body = readLetter(content).map(blockHtml).join('\n');
+function issueHtml(title: string, content: string, footerHtml: string, recipient: Recipient): string {
+  const body = readLetter(content)
+    .map((block) => {
+      const button = block.kind === 'paragraph' ? BUTTON_LINE.exec(block.text) : null;
+      return button ? buttonHtml(button[1], recipient) : blockHtml(block);
+    })
+    .join('\n');
   return `<!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#f4efe2;">
@@ -150,12 +167,15 @@ function issueHtml(title: string, content: string, footerHtml: string, ctaHtml =
              alt="H.I.V.E. — Human, Insight, Vision, Execution"
              width="120" height="120"
              style="width:120px;height:120px;display:inline-block;border:0;outline:none;text-decoration:none;background:#ffffff;border-radius:60px;" />
-        <div style="font-family:Helvetica,Arial,sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:#8a6a2f;padding-top:10px;">The Buzz</div>
+        <!-- The masthead carries the whole title, and the letter starts with
+             "Yellow!". It used to say "THE BUZZ" here and then repeat the title
+             as a heading inside the card — Nat, 2026-08-12: *"this doubles up a
+             little for me... i feel like the light amber 'the buzz' should
+             maybe hold this title & we just start with 'yellow!'"* -->
+        <div style="font-family:Helvetica,Arial,sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:#8a6a2f;padding-top:10px;">${escapeHtml(title)}</div>
       </div>
       <div style="background:#fffdf5;border:1px solid #e3d4ac;border-radius:16px;padding:26px 26px 30px;">
-        <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:33px;color:#2c2418;margin:0 0 18px;">${escapeHtml(title)}</h1>
         ${body}
-        ${ctaHtml}
       </div>
       <div style="text-align:center;padding-top:22px;">
         <a href="${PUBLIC_SITE_URL}" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#8a6a2f;text-decoration:none;font-weight:bold;">Read everything at the-hive.app →</a>
@@ -183,8 +203,9 @@ function issueHtml(title: string, content: string, footerHtml: string, ctaHtml =
  */
 function footerFor(recipient: Recipient): string {
   const stop = `<a href="${PUBLIC_SITE_URL}/api/unsubscribe?token=${encodeURIComponent(recipient.token!)}" style="color:#9a8a6a;">Unsubscribe</a> any time — one click, no questions asked.`;
+  // On its own line — Nat: "i'd start 'you're in a hive' on a new line."
   const settings = recipient.isMember
-    ? ` You're in a HIVE, so you can also <a href="${APP_URL}/settings" style="color:#9a8a6a;">manage this in Settings</a>.`
+    ? `<br />You're in a HIVE, so you can also <a href="${APP_URL}/settings" style="color:#9a8a6a;">manage this in Settings</a>.`
     : '';
   return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#9a8a6a;text-align:center;padding-top:18px;margin:0;">${stop}${settings}</p>`;
 }
@@ -314,10 +335,6 @@ serve(async (req) => {
   const title = String(post.title ?? 'The Buzz');
   const content = String(post.content ?? '');
   const subject = mode === 'test' ? `[TEST] ${title}` : title;
-  // The button rides on the issue that opens the doors, and no other. Read
-  // off the content rather than a flag, so it cannot be left switched on by
-  // accident next month.
-  const opensTechHive = /tech hive/i.test(content);
 
   let sent = 0;
   const failures: string[] = [];
@@ -328,12 +345,7 @@ serve(async (req) => {
       from: FROM_EMAIL,
       to: recipient.email,
       subject,
-      html: issueHtml(
-        title,
-        content,
-        footerFor(recipient),
-        opensTechHive ? techInterestButton(recipient) : ''
-      ),
+      html: issueHtml(title, content, footerFor(recipient), recipient),
     }));
 
     const res = await fetch('https://api.resend.com/emails/batch', {
