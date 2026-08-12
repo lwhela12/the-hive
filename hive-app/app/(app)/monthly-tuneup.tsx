@@ -74,9 +74,12 @@ const hiveBeeMark = require('../../assets/BEE ONLY IN GOLD BG.png');
 // same wherever you pick it.
 const hiveCrest = require('../../assets/HIVE Logo Transparent  BG.png');
 
-type StepKey = 'wishes' | 'hangs' | 'calendar' | 'helpers' | 'todos' | 'checkin' | 'newsletter' | 'reading' | 'profile' | 'privacy';
+type StepKey = 'wishes' | 'hangs' | 'calendar' | 'helpers' | 'todos' | 'checkin' | 'newsletter' | 'reading' | 'profile' | 'privacy' | 'pulse' | 'shoutouts';
 type Step = { key: StepKey; label: string };
 
+// OG HIVE's pre-meeting flow, exactly as Nat walked it. Each HIVE that has a
+// tailored rhythm gets a LIST here, not a scatter of slug checks — see FLOWS
+// below. This one is OG's.
 const STEPS: Step[] = [
   { key: 'wishes', label: 'HD wishes' },
   { key: 'hangs', label: 'Hang ideas' },
@@ -126,6 +129,43 @@ const MIDPOINT_STEPS: Step[] = [
   { key: 'todos', label: 'To-dos' },
   { key: 'helpers', label: 'HIVE Help' },
 ];
+
+/**
+ * Tech HIVE's pre-meeting flow — Nat designed it 2026-08-11: monthly on the
+ * first Thursday evening, remote-friendly, work-focused. It keeps the steps
+ * that are the heart of HIVE (the HD wish) or genuinely generic (check-in,
+ * to-dos, profile, privacy) and drops OG's social rituals: hang ideas, the
+ * calendar-of-hangs, HIVE Help, the reading/mingle-fodder step. The check-in
+ * comes SECOND, not last — for Tech it is the main event (POP + what you
+ * learned), not the wrap-up.
+ */
+const TECH_STEPS: Step[] = [
+  { key: 'wishes', label: 'HD wishes' },
+  { key: 'checkin', label: 'Check-in' },
+  { key: 'todos', label: 'To-dos' },
+  { key: 'profile', label: 'Your profile' },
+  { key: 'privacy', label: 'Your settings' },
+];
+
+// Tech's halfway touch, per Nat's design (2026-08-11): a quick pulse — still
+// on track? blocked? need a hand before the meeting? — plus shout-outs,
+// because compliments work in every HIVE. No newsletter step (that's OG's
+// rhythm) and no HIVE Help (OG's ritual).
+const TECH_MIDPOINT_STEPS: Step[] = [
+  { key: 'pulse', label: 'Quick pulse' },
+  { key: 'shoutouts', label: 'Shout-outs' },
+];
+
+/**
+ * One flow pair per HIVE that has tailored check-ins. `hasTailoredCheckIns`
+ * (lib/checkIns.ts) is the gate; this table is what opens once you're
+ * through it. When Production's rhythm gets designed, it becomes a third
+ * entry here — a third list, not a third tangle of slug checks.
+ */
+const FLOWS: Record<'default' | 'tech', { tuneup: Step[]; midpoint: Step[] }> = {
+  default: { tuneup: STEPS, midpoint: MIDPOINT_STEPS },
+  tech: { tuneup: TECH_STEPS, midpoint: TECH_MIDPOINT_STEPS },
+};
 
 // What someone might want in the newsletter. Pills, not a blank box — the whole
 // point is walking people through it rather than asking them to compose.
@@ -665,8 +705,14 @@ export default function MonthlyTuneupScreen() {
   const { from, mode } = useLocalSearchParams<{ from?: string; mode?: string }>();
   // The halfway nudge deep-links here with mode=midpoint.
   const isMidpoint = mode === 'midpoint';
-  const steps = isMidpoint ? MIDPOINT_STEPS : STEPS;
   const { profile, community, communityId } = useAuth();
+  // Which HIVE's flow this is. Until the community loads, `profile` is null
+  // too and the screen renders nothing, so the flow never switches under a
+  // member mid-wizard. Only slugs that pass `hasTailoredCheckIns` (checked
+  // below, before anything renders) ever reach their FLOWS entry.
+  const isTechFlow = community?.slug === 'tech';
+  const flow = FLOWS[isTechFlow ? 'tech' : 'default'];
+  const steps = isMidpoint ? flow.midpoint : flow.tuneup;
   const privacyChoices = usePrivacyChoices();
 
   // Reading + the quarterly profile pass both write to `profiles`, so they
@@ -716,6 +762,11 @@ export default function MonthlyTuneupScreen() {
   // member can use either route (or both) without wondering whether it worked.
   const [halfwayHelpStatus, setHalfwayHelpStatus] = useState<'done' | 'not_yet' | 'other' | null>(null);
   const [halfwayHelpLog, setHalfwayHelpLog] = useState('');
+  // Tech's halfway pulse. A nudge, not a record — same as OG's "have you done
+  // your HIVE Help yet?" pills, the answer lives only on this screen. What
+  // PERSISTS is what the member does with it: "blocked" opens the door to an
+  // HD wish, which is the app's real "I need a hand" object.
+  const [pulseStatus, setPulseStatus] = useState<'on_track' | 'blocked' | 'need_hand' | null>(null);
   const [newsletterKind, setNewsletterKind] = useState<NewsletterKind>('shoutout');
   const [newsletterText, setNewsletterText] = useState('');
   const [newsletterPosting, setNewsletterPosting] = useState(false);
@@ -1093,7 +1144,7 @@ export default function MonthlyTuneupScreen() {
   ), []);
   const canRefineWish = useCallback((wish: Wish) => wish.status !== 'fulfilled', []);
 
-  const findBoardTarget = useCallback(async (kind: 'hangs' | 'helpers' | 'newsletter' | 'compliments'): Promise<BoardTarget | null> => {
+  const findBoardTarget = useCallback(async (kind: 'hangs' | 'helpers' | 'newsletter' | 'compliments' | 'general'): Promise<BoardTarget | null> => {
     if (!communityId) return null;
 
     let query = supabase
@@ -1108,6 +1159,11 @@ export default function MonthlyTuneupScreen() {
         : kind === 'newsletter'
           // topic_kind, not name — renaming the board must not break the check-in.
           ? query.or('topic_kind.eq.newsletter,name.ilike.%newsletter%,name.ilike.%announcement%')
+        : kind === 'general'
+          // The everything-else board a HIVE talks on — Tech's shout-outs land
+          // here because Tech has no compliments board (checked live,
+          // 2026-08-11: its four boards are all plain discussion).
+          ? query.ilike('name', '%general%')
         : query.or('topic_kind.eq.helper_log,name.ilike.%HIVE Helpers%');
 
     const { data, error } = await query;
@@ -1231,6 +1287,101 @@ export default function MonthlyTuneupScreen() {
         return;
       }
       setNewsletterPosted((current) => [...current, { content, thread: thread.postTitle ?? 'the newsletter thread' }]);
+      setNewsletterText('');
+      resetNewsletterMentionSelection();
+    } finally {
+      setNewsletterPosting(false);
+    }
+  };
+
+  // Tech's shout-outs need a home too. A compliments board wins if the HIVE
+  // ever grows one; today Tech has none, so the monthly "{Month} Shout-outs"
+  // thread opens on the General board — where Tech already talks — created by
+  // whoever shouts first.
+  const findOrCreateTechShoutoutThread = useCallback(async (): Promise<HelperThread | null> => {
+    if (!profile || !communityId) return null;
+    const board = (await findBoardTarget('compliments')) ?? (await findBoardTarget('general'));
+    if (!board) return null;
+
+    const { data: existing } = await supabase
+      .from('board_posts')
+      .select('id, title, created_at')
+      .eq('community_id', communityId)
+      .eq('category_id', board.id)
+      .or('title.ilike.%shout%,title.ilike.%compliment%')
+      .is('archived_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const found = ((existing ?? []) as { id: string; title: string }[])[0];
+    if (found) {
+      return { boardId: board.id, boardName: board.name, postId: found.id, postTitle: found.title, postContent: null };
+    }
+
+    const month = new Date().toLocaleString('en-US', { month: 'long' });
+    const { data: created, error } = await (supabase as any)
+      .from('board_posts')
+      .insert({
+        community_id: communityId,
+        category_id: board.id,
+        author_id: profile.id,
+        title: `${month} Shout-outs 💐`,
+        content: 'Who unblocked you, shipped something great, or showed up when it mattered? Drop it here — @ them and they get a little love note the moment you post it.',
+      })
+      .select('id, title')
+      .single();
+    if (error || !created) return { boardId: board.id, boardName: board.name, postId: null, postTitle: null, postContent: null };
+    return { boardId: board.id, boardName: board.name, postId: created.id, postTitle: created.title, postContent: null };
+  }, [communityId, findBoardTarget, profile]);
+
+  // Tech's shout-out submit. Same reply machinery as OG's compliments — plus
+  // the notify-board-mention calls the Boards reply composer makes, so "they
+  // get a little love note the moment you post it" is TRUE here, not a wish.
+  const submitTechShoutout = async () => {
+    const content = newsletterText.trim();
+    if (!content || !profile || !communityId || newsletterPosting) return;
+    const hasRecipient = newsletterMentionsEveryone || newsletterMentionedMembers.length > 0;
+    if (!hasRecipient) {
+      setNewsletterError(`Type @ and pick who it's for (or ${hiveAudienceLabel}) — that's how they get the love note.`);
+      return;
+    }
+    setNewsletterPosting(true);
+    setNewsletterError(null);
+    try {
+      const thread = await findOrCreateTechShoutoutThread();
+      if (!thread?.postId) {
+        setNewsletterError('Could not find a board for shout-outs. You can post it from the Boards tab instead.');
+        return;
+      }
+      const { error } = await (supabase as any).from('board_replies').insert({
+        community_id: communityId,
+        post_id: thread.postId,
+        author_id: profile.id,
+        content,
+      });
+      if (error) {
+        setNewsletterError(`Could not post that: ${error.message}`);
+        return;
+      }
+
+      // Non-blocking, mirroring BoardReplyComposer: each tagged member gets
+      // the mention push; @everyone fans out to the whole HIVE minus you.
+      const recipients = newsletterMentionsEveryone
+        ? mentionableMembers.filter((member) => member.id !== profile.id)
+        : newsletterMentionedMembers;
+      recipients.forEach((member) => {
+        supabase.functions.invoke('notify-board-mention', {
+          body: {
+            post_id: thread.postId,
+            sender_id: profile.id,
+            recipient_id: member.id,
+            message_preview: content,
+            community_id: communityId,
+            board_name: thread.boardName,
+          },
+        }).catch((err) => console.log('Shout-out mention notification error (non-blocking):', err));
+      });
+
+      setNewsletterPosted((current) => [...current, { content, thread: thread.postTitle ?? 'the shout-outs thread' }]);
       setNewsletterText('');
       resetNewsletterMentionSelection();
     } finally {
@@ -3031,6 +3182,175 @@ export default function MonthlyTuneupScreen() {
     );
   };
 
+  // Tech's halfway beat 1: the quick pulse. Same pill pattern as OG's halfway
+  // HIVE Help — local state, no survey write (filing a check-in here would
+  // light the member up on the Arrival Board weeks early, the exact bug OG's
+  // midpoint already dodged). "Blocked" opens the HD wish door: the modal is
+  // already mounted on this screen, and a wish is the app's native ask.
+  const renderPulseStep = () => {
+    const options = [
+      { key: 'on_track' as const, label: 'Still on track ✅' },
+      { key: 'blocked' as const, label: 'Blocked 🧱' },
+      { key: 'need_hand' as const, label: 'Could use a hand before the meeting 🙋' },
+    ];
+    const wantsHelp = pulseStatus === 'blocked' || pulseStatus === 'need_hand';
+    return (
+      <View>
+        <StepHeader
+          title="Quick pulse"
+          icon={<Text style={{ fontSize: 20 }}>⚡</Text>}
+          subtitle="Halfway to the next meeting. Where are you at — no wrong answer."
+        />
+        <View style={[cardStyle, { gap: 12 }]}>
+          <BoxHeading style={{ marginBottom: 0 }}>How's the month going?</BoxHeading>
+          <View style={{ gap: 8 }}>
+            {options.map((option) => {
+              const selected = pulseStatus === option.key;
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => setPulseStatus(selected ? null : option.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={option.label}
+                  style={{
+                    alignSelf: 'flex-start',
+                    maxWidth: '100%',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: selected ? '#fdf3dc' : '#faf8f3',
+                    borderWidth: 1,
+                    borderColor: selected ? 'rgba(222,193,129,0.7)' : 'rgba(222,193,129,0.25)',
+                    borderRadius: 14,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                  }}
+                >
+                  <Text style={{ fontSize: 14 }}>{selected ? '●' : '○'}</Text>
+                  <Text
+                    style={{
+                      fontFamily: selected ? 'Lato_700Bold' : 'Lato_400Regular',
+                      fontSize: 14,
+                      color: selected ? '#8a6b30' : '#6b7280',
+                      flexShrink: 1,
+                    }}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {pulseStatus === 'on_track' ? (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 13, color: '#8e7a5e' }}>
+              Good. See you at the meeting. 🐝
+            </Text>
+          ) : null}
+
+          {wantsHelp ? (
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, lineHeight: 19, color: '#6f6559' }}>
+                Don't sit on it until the meeting. The fastest help is a specific ask — an HD wish puts yours in front of the whole HIVE today.
+              </Text>
+              <Pressable
+                onPress={() => setAddWishModalVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Make it an HD wish"
+                style={({ pressed }) => ({
+                  alignSelf: 'flex-start',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: 'rgba(222,193,129,0.72)',
+                  backgroundColor: pressed ? '#fbf0d7' : '#fdf3dc',
+                  paddingHorizontal: 14,
+                  paddingVertical: 9,
+                })}
+              >
+                <Text style={{ fontSize: 13 }}>⭐</Text>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>Make it an HD wish</Text>
+              </Pressable>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
+                Rather wait? Your check-in's Obstacles box is exactly for this — the meeting starts from those.
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
+          That's the whole question — tap "Looks good →" when you've answered it.
+        </Text>
+      </View>
+    );
+  };
+
+  // Tech's halfway beat 2: shout-outs. Compliments work in every HIVE (Nat
+  // 2026-08-11). No face-bubble grid here — the shared bar's own @ tagging is
+  // the one door, which keeps the step as quick as the pulse before it.
+  const renderTechShoutoutsStep = () => (
+    <View>
+      <StepHeader
+        title="Shout-outs"
+        icon={<Text style={{ fontSize: 20 }}>💐</Text>}
+        subtitle="Someone unblock you? Ship something worth cheering? Say it here."
+      />
+      <View style={[cardStyle, { gap: 10 }]}>
+        <BoxHeading style={{ marginBottom: 0 }}>Who's earned one?</BoxHeading>
+        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060' }}>
+          Type @ to pick who it's for — they get a little love note the moment you post it.
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <ComposerBar
+            tone="light"
+            variant="form"
+            containerClassName="flex-1"
+            value={newsletterText}
+            onChangeText={setNewsletterText}
+            placeholder="@Sam got my deploy unstuck at 11pm…"
+            multiline={false}
+            onSubmit={submitTechShoutout}
+            canSubmit={!!newsletterText.trim()}
+            submitting={newsletterPosting}
+            mentionMembers={mentionableMembers}
+            mentionsLoading={mentionableMembersLoading}
+            mentionReach={mentionReach}
+            currentUserId={profile?.id}
+          />
+          <Pressable
+            onPress={() => void submitTechShoutout()}
+            disabled={newsletterPosting || !newsletterText.trim()}
+            style={({ pressed }) => ({
+              backgroundColor: newsletterText.trim() ? '#bd9348' : '#e5e7eb',
+              borderRadius: 12,
+              paddingHorizontal: 16,
+              paddingVertical: 11,
+              opacity: pressed || newsletterPosting ? 0.8 : 1,
+            })}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: newsletterText.trim() ? 'white' : '#a09274' }}>
+              {newsletterPosting ? '…' : 'Send it'}
+            </Text>
+          </Pressable>
+        </View>
+        {newsletterError ? (
+          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#dc2626' }}>{newsletterError}</Text>
+        ) : null}
+      </View>
+      {newsletterPosted.length > 0 ? (
+        <PostedConfirmation
+          lines={newsletterPosted.map((item) => item.content)}
+          boardNames={newsletterPosted.map((item) => item.thread)}
+        />
+      ) : null}
+      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#9a8060', marginTop: 12 }}>
+        Nobody springs to mind? No worries — tap "Finish ✓".
+      </Text>
+    </View>
+  );
+
   const renderReadingStep = () => (
     <View>
       <StepHeader
@@ -3337,12 +3657,19 @@ export default function MonthlyTuneupScreen() {
       : `The HIVE Help focus is ${helpFocus} — do yours out in the world, then tell us at the meeting!`
     : null;
 
+  // OG walks the check-in last; Tech walks it second, so "last stop" is only
+  // said when it's true. Answers save at Finish either way — they ride along
+  // in the draft between here and the end.
+  const checkInIsFinalStep = steps[steps.length - 1].key === 'checkin';
+
   const renderCheckInStep = () => (
     <View>
       <StepHeader
         title="Check-in"
         icon={<Text style={{ fontSize: 20 }}>✅</Text>}
-        subtitle="Last stop — a few quick questions so HIVE and Clive arrive prepared. Answers save when you tap Finish."
+        subtitle={checkInIsFinalStep
+          ? 'Last stop — a few quick questions so HIVE and Clive arrive prepared. Answers save when you tap Finish.'
+          : 'The heart of it — a few quick questions so the meeting starts prepared. Answers save when you tap Finish at the end.'}
       />
       {/* The HIVE Help reminder banner used to sit here too, stacking a third
           bold-then-info block on top of the header and the submitted line
@@ -3409,14 +3736,20 @@ export default function MonthlyTuneupScreen() {
         return renderProfileReviewStep();
       case 'privacy':
         return renderPrivacyStep();
+      case 'pulse':
+        return renderPulseStep();
+      case 'shoutouts':
+        return renderTechShoutoutsStep();
       default:
         return null;
     }
   };
 
-  // This deck is OG HIVE's operating rhythm, not a generic template. Keep the
+  // Each HIVE that reaches this deck has a rhythm designed for it (FLOWS, at
+  // the top of the file) — OG since the start, Tech since 2026-08-11. Keep the
   // route boundary here as well as in Admin so a bookmarked/deep-linked URL
-  // cannot open OG questions while somebody is standing in Tech or Production.
+  // cannot open a wizard for a HIVE whose rhythm hasn't been designed yet:
+  // `hasTailoredCheckIns` fails closed, so Production waits behind this door.
   if (!hasTailoredCheckIns(community)) {
     return (
       <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
@@ -3493,8 +3826,12 @@ export default function MonthlyTuneupScreen() {
           </Text>
           <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 15, lineHeight: 22, color: '#7d715f', textAlign: 'center', marginBottom: 32 }}>
             {isMidpoint
-              ? 'Anything you added goes straight into the newsletter — HIVE thanks you.'
-              : 'Wishes refreshed, ideas posted, calendar updated — HIVE thanks you.'}
+              ? isTechFlow
+                ? 'Pulse taken, shout-outs sent — see you at the meeting.'
+                : 'Anything you added goes straight into the newsletter — HIVE thanks you.'
+              : isTechFlow
+                ? 'Check-in filed, wishes fresh, to-dos squared away — HIVE thanks you.'
+                : 'Wishes refreshed, ideas posted, calendar updated — HIVE thanks you.'}
           </Text>
           {/* Finishing leaves the same way closing does — back to the room you
               opened the tune-up from, named on the button so you know where the
@@ -3718,8 +4055,11 @@ export default function MonthlyTuneupScreen() {
           })}
         >
           <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: 'white' }}>
+            {/* The midpoint never files a check-in (see goNext), so its finish
+                button must not say "Save" — the to-do seeds mark answers dirty
+                even when nothing will be written. */}
             {stepIndex === steps.length - 1
-              ? checkInSaving ? 'Saving...' : checkInDirty ? 'Save & finish ✓' : 'Finish ✓'
+              ? checkInSaving ? 'Saving...' : checkInDirty && !isMidpoint ? 'Save & finish ✓' : 'Finish ✓'
               : 'Looks good →'}
           </Text>
         </Pressable>

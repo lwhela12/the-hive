@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { hiveAccent } from '../../lib/hiveBrand';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns } from '../../lib/checkIns';
@@ -48,13 +49,30 @@ import {
 const hiveBee = require('../../assets/HIVE Bee.png');
 const hiveLogo = require('../../assets/HIVE Logo Transparent  BG.png');
 
-const GOLD = '#bd9348';
-const GOLD_DEEP = '#8a6b30';
-const GOLD_SOFT = 'rgba(222,193,129,0.5)';
+// OG's hand-tuned golds. Other HIVEs' decks derive the same three roles —
+// accent, deep ink, light tint — from their own `accent_color`, inside the
+// component, so Tech's deck reads in Tech's blue everywhere OG's reads gold.
+const OG_GOLD = '#bd9348';
+const OG_GOLD_DEEP = '#8a6b30';
 const CHARCOAL = '#313130';
 const MUTED = '#9a8060';
 const PAPER = '#fdfbf2';
 const CARD = '#fffdf5';
+
+/** #rrggbb → its three channel numbers (hiveAccent guarantees the shape). */
+const hexChannels = (hex: string): [number, number, number] => [
+  parseInt(hex.slice(1, 3), 16),
+  parseInt(hex.slice(3, 5), 16),
+  parseInt(hex.slice(5, 7), 16),
+];
+
+/** Move a colour part-way toward black (0) or white (255). */
+const mixToward = (hex: string, target: number, amount: number): [number, number, number] =>
+  hexChannels(hex).map((channel) => Math.round(channel + (target - channel) * amount)) as [
+    number,
+    number,
+    number,
+  ];
 
 const TAGLINE = 'HUMAN · INSIGHT · VISION · EXECUTION';
 
@@ -81,14 +99,141 @@ const PLAIN_FIELD = {
   color: FIELD_LOOK.ink,
 } as const;
 
-// Tonight's agenda — drives both the Outline slide and the frozen rail.
-const AGENDA: { key: string; label: string }[] = [
-  { key: 'news', label: 'News from Nat' },
-  { key: 'treasurer', label: 'Treasurer' },
-  { key: 'meetups', label: 'Plan the Meet Ups' },
-  { key: 'hummdinger', label: 'HummDinger Sesh' },
-  { key: 'wrapup', label: 'Wrap-Up' },
-];
+// ---- Per-HIVE deck definitions ----
+// Each HIVE that has a designed rhythm gets a deck here — a declarative list,
+// so Production's future deck becomes a third entry rather than a third
+// branch. OG (slug 'default') is the original deck, byte-for-byte; Tech is
+// Nat's 2026-08-11 voice-memo design: monthly first-Thursday evenings,
+// work-and-craft focused, networking instead of hangs, and the treasurer
+// slide kept deliberately as the place to talk about WHETHER Tech wants dues.
+
+type DeckSlideKey =
+  | 'room'
+  | 'outline'
+  | 'news'
+  | 'treasurer'
+  | 'meetups'
+  | 'hummdinger'
+  | 'wrapup'
+  | 'thanks';
+
+type DeckDefinition = {
+  /** The slides, in show order. */
+  slides: DeckSlideKey[];
+  /** Tonight's agenda — drives both the Outline slide and the frozen rail. */
+  agenda: { key: string; label: string }[];
+  /** The italic line under the welcome title as people arrive. */
+  welcomeNudge: string;
+  /**
+   * The Treasurer slide. OG reports the Honey Pot with real dues numbers;
+   * Tech has no Honey Pot yet, and the slide is KEPT on purpose — Nat: having
+   * the screen is what starts the do-we-want-dues conversation.
+   */
+  treasurer:
+    | { kind: 'honeyPot'; kicker: string; title: string }
+    | { kind: 'duesConversation'; kicker: string; title: string; lead: string; questions: string[] };
+  plan: {
+    kicker: string;
+    title: string;
+    cards: { key: 'meeting' | 'help' | 'hang'; title: string; blurb: string }[];
+    /**
+     * OG's Hang card opens the polls-and-ideas panel. Tech's third card is
+     * HIVE Networking — tapping it arms the calendar for scheduling one,
+     * the same move as the Meeting card, with no panel.
+     */
+    hangCardExpands: boolean;
+    /**
+     * What the Help card opens: OG's check-in voices and focus tally, or —
+     * for a HIVE that hasn't chosen a HIVE Help yet — a short conversation
+     * about whether to have one at all. No pressure; it's a choice.
+     */
+    helpExpansion: { kind: 'voices' } | { kind: 'conversation'; lead: string; points: string[] };
+    /**
+     * The "Help Focus:" composer in the calendar headers is OG's monthly-
+     * focus machinery (board thread + to-do fan-out). A HIVE still deciding
+     * whether it wants HIVE Help doesn't get the controls for running one.
+     */
+    hasHelpFocusHeader: boolean;
+  };
+  wrapupReminders: string[];
+};
+
+const DECKS: Record<'default' | 'tech', DeckDefinition> = {
+  default: {
+    slides: ['room', 'outline', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
+    agenda: [
+      { key: 'news', label: 'News from Nat' },
+      { key: 'treasurer', label: 'Treasurer' },
+      { key: 'meetups', label: 'Plan the Meet Ups' },
+      { key: 'hummdinger', label: 'HummDinger Sesh' },
+      { key: 'wrapup', label: 'Wrap-Up' },
+    ],
+    welcomeNudge: 'grab a plate and check in',
+    treasurer: { kind: 'honeyPot', kicker: 'Cabinet Reports', title: 'Treasurer Report — Ollie' },
+    plan: {
+      kicker: 'Ways we gather · on the calendar',
+      title: 'Plan the Meet Ups',
+      cards: [
+        { key: 'meeting', title: 'HIVE Meeting', blurb: 'Second Wednesday — dinner, business, and the HummDinger.' },
+        { key: 'help', title: 'HIVE Help', blurb: 'Fifteen-minute favors — small asks, quick wins.' },
+        { key: 'hang', title: 'HIVE Hang', blurb: 'Casual get-togethers between meetings. Anyone can host.' },
+      ],
+      hangCardExpands: true,
+      helpExpansion: { kind: 'voices' },
+      hasHelpFocusHeader: true,
+    },
+    wrapupReminders: [
+      'Next meeting — second Wednesday of the month',
+      'Newsletter lands on the 1st',
+      'Dues: $25 / quarter · CashApp $HiveLV',
+    ],
+  },
+  tech: {
+    slides: ['room', 'outline', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
+    agenda: [
+      { key: 'news', label: 'News from Nat' },
+      { key: 'treasurer', label: 'Treasurer' },
+      { key: 'meetups', label: 'Plan' },
+      { key: 'hummdinger', label: 'HummDinger Sesh' },
+      { key: 'wrapup', label: 'Wrap-Up' },
+    ],
+    welcomeNudge: 'grab a drink and check in',
+    treasurer: {
+      kind: 'duesConversation',
+      kicker: 'Cabinet Reports',
+      title: 'Treasurer',
+      lead: 'This one is ours to decide together.',
+      questions: [
+        'Do we want dues at all?',
+        'What would dues be for?',
+        'Who keeps the pot?',
+      ],
+    },
+    plan: {
+      kicker: 'Ways we gather · on the calendar',
+      title: 'Plan',
+      cards: [
+        { key: 'meeting', title: 'HIVE Meeting', blurb: 'First Thursday evening, monthly — built to fit around work.' },
+        { key: 'help', title: 'HIVE Help', blurb: 'A small shared kindness some HIVEs take on each month.' },
+        { key: 'hang', title: 'HIVE Networking', blurb: 'Get the crew in a room with new faces — schedule one right here.' },
+      ],
+      hangCardExpands: false,
+      helpExpansion: {
+        kind: 'conversation',
+        lead: 'Some HIVEs pick one small act of kindness to do together each month.',
+        points: [
+          'Does Tech want one? Totally a choice — no pressure either way.',
+          "If it's a yes, we pick the first focus together.",
+        ],
+      },
+      hasHelpFocusHeader: false,
+    },
+    wrapupReminders: [
+      'Next meeting — first Thursday of the month',
+      'Monthly check-in — POP + what you learned, before we meet',
+    ],
+  },
+};
 
 // Nat's POP formula — the backbone of the HummDinger sesh.
 const POP_SECTIONS = [
@@ -254,6 +399,29 @@ export default function MeetingHelperScreen() {
   const { width, height } = useWindowDimensions();
   const isTV = width >= 1400;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+
+  // Which deck tonight is. Any HIVE without a designed deck falls to 'default'
+  // here, but never reaches the slides — the hasTailoredCheckIns() gate below
+  // shows those HIVEs (Production, for now) the coming-soon screen instead.
+  const deckSlug: keyof typeof DECKS = community?.slug === 'tech' ? 'tech' : 'default';
+  const deck = DECKS[deckSlug];
+
+  // The deck's palette. OG keeps its hand-tuned golds exactly; every other
+  // HIVE's deck cuts the same three roles — accent, deep ink, light tint —
+  // from that HIVE's own accent colour, so Tech's deck reads in Tech's blue
+  // wherever OG's reads gold. The papers (PAPER/CARD/MUTED/CHARCOAL) stay
+  // shared: they are the deck's stationery, and only the accent changes hands.
+  const deckIsOg = deckSlug === 'default';
+  const accent = hiveAccent(community);
+  const GOLD = deckIsOg ? OG_GOLD : accent;
+  const GOLD_DEEP = deckIsOg ? OG_GOLD_DEEP : `rgb(${mixToward(accent, 0, 0.3).join(',')})`;
+  // OG's washes were mixed from a lightened gold (#dec181); other accents lift
+  // the same way so their washes stay soft rather than muddy.
+  const tintChannels = deckIsOg ? '222,193,129' : mixToward(accent, 255, 0.35).join(',');
+  const tintWash = (alpha: number) => `rgba(${tintChannels},${alpha})`;
+  const accentChannels = deckIsOg ? '189,147,72' : hexChannels(accent).join(',');
+  const accentWash = (alpha: number) => `rgba(${accentChannels},${alpha})`;
+  const GOLD_SOFT = tintWash(0.5);
 
   const [slideIndex, setSlideIndex] = useState(0);
 
@@ -973,8 +1141,13 @@ export default function MeetingHelperScreen() {
   // ---- Sizing helpers ----
   const sz = useCallback((tv: number, small: number) => (isTV ? tv : small), [isTV]);
   const contentPadH = sz(150, 44);
-  const contentPadTop = sz(72, 36);
-  const contentPadBottom = sz(96, 72);
+  // Trimmed 2026-08-11 (were 72/36 and 96/72): Nat — "I have to scroll just
+  // the tiniest bit and that drives me nuts." The footer overlay is ~48px
+  // tall, so the bottom pad only needs to clear that, and the top pad was
+  // pure air. Checked against ~1440x900 (the TV branch starts at 1400) and
+  // ~1280x800 laptop viewports.
+  const contentPadTop = sz(44, 26);
+  const contentPadBottom = sz(56, 44);
 
   const monthName = getMonthNameFromPeriod(responsePeriod);
   const periodMatch = (responsePeriod ?? '').match(/^(\d{4})-(\d{2})$/);
@@ -997,7 +1170,7 @@ export default function MeetingHelperScreen() {
     >
       {children}
     </Text>
-  ), [sz]);
+  ), [sz, GOLD]);
 
   const SlideTitle = useCallback(({ children }: { children: string }) => (
     <Text
@@ -1032,10 +1205,10 @@ export default function MeetingHelperScreen() {
       <EditButton
         onPress={() => openNoteEditor(noteKey)}
         size={sz(34, 26)}
-        accessibilityLabel={`Edit ${EDIT_SLIDE_META[noteKey].title}`}
+        accessibilityLabel={`Edit ${noteKey === 'meetups' ? deck.plan.title : EDIT_SLIDE_META[noteKey].title}`}
       />
     );
-  }, [isAdmin, openNoteEditor, sz]);
+  }, [isAdmin, openNoteEditor, sz, deck.plan.title]);
 
   const NoteBody = useCallback(({ noteKey, emptyText }: { noteKey: EditableNoteKey; emptyText: string }) => {
     const value = (notes[noteKey] ?? '').trim();
@@ -1078,10 +1251,12 @@ export default function MeetingHelperScreen() {
     <View style={{ flex: 1 }}>
       <View style={{ alignItems: 'center', marginBottom: sz(24, 14) }}>
         {/* Crest + title mirror the timekeeper clock's lockup: a big mark
-            with the words tucked right underneath. */}
+            with the words tucked right underneath. Was 300/150 — the crest
+            was the single biggest reason this slide overflowed a laptop
+            screen by a hair (the one-page rule, 2026-08-11). */}
         <Image
           source={hiveBee}
-          style={{ width: sz(300, 150), height: sz(300, 150) }}
+          style={{ width: sz(230, 130), height: sz(230, 130) }}
           contentFit="contain"
         />
         <Text
@@ -1103,7 +1278,7 @@ export default function MeetingHelperScreen() {
         ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: sz(8, 5), marginTop: sz(8, 5) }}>
           <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(23, 13), color: MUTED, textAlign: 'center' }}>
-            grab a plate and check in
+            {deck.welcomeNudge}
           </Text>
           <Text style={{ fontSize: sz(22, 13) }}>🍯</Text>
         </View>
@@ -1164,7 +1339,7 @@ export default function MeetingHelperScreen() {
         <Kicker>Tonight</Kicker>
         <SlideTitle>Outline</SlideTitle>
         <View style={{ marginTop: sz(40, 22), gap: sz(20, 12) }}>
-          {AGENDA.map((item, index) => (
+          {deck.agenda.map((item, index) => (
             <View key={item.key} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(24, 14) }}>
               <Text
                 style={{
@@ -1275,54 +1450,95 @@ export default function MeetingHelperScreen() {
 
   const renderTreasurer = () => (
     <View style={{ flex: 1 }}>
-      <Kicker>Cabinet Reports</Kicker>
-      <SlideTitle>Treasurer Report — Ollie</SlideTitle>
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: sz(40, 20) }}>
-        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(22, 13), letterSpacing: 3, textTransform: 'uppercase', color: MUTED }}>
-          Honey Pot balance
-        </Text>
-        <Text
-          style={{
-            fontFamily: 'LibreBaskerville_700Bold',
-            fontSize: sz(120, 54),
-            lineHeight: sz(150, 70),
-            color: GOLD,
-            marginTop: sz(14, 8),
-          }}
-        >
-          {honeyPotBalance === null ? '—' : formatBalance(honeyPotBalance)}
-        </Text>
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: sz(16, 10),
-            marginTop: sz(44, 24),
-            backgroundColor: CARD,
-            borderWidth: 1,
-            borderColor: GOLD_SOFT,
-            borderRadius: 999,
-            paddingHorizontal: sz(34, 20),
-            paddingVertical: sz(16, 10),
-          }}
-        >
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(24, 14), color: CHARCOAL }}>
-            Dues: $25 / quarter
+      <Kicker>{deck.treasurer.kicker}</Kicker>
+      <SlideTitle>{deck.treasurer.title}</SlideTitle>
+      {deck.treasurer.kind === 'honeyPot' ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: sz(40, 20) }}>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(22, 13), letterSpacing: 3, textTransform: 'uppercase', color: MUTED }}>
+            Honey Pot balance
           </Text>
-          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(24, 14), color: MUTED }}>·</Text>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(24, 14), color: GOLD_DEEP }}>
-            CashApp $HiveLV
+          <Text
+            style={{
+              fontFamily: 'LibreBaskerville_700Bold',
+              fontSize: sz(120, 54),
+              lineHeight: sz(150, 70),
+              color: GOLD,
+              marginTop: sz(14, 8),
+            }}
+          >
+            {honeyPotBalance === null ? '—' : formatBalance(honeyPotBalance)}
+          </Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: sz(16, 10),
+              marginTop: sz(44, 24),
+              backgroundColor: CARD,
+              borderWidth: 1,
+              borderColor: GOLD_SOFT,
+              borderRadius: 999,
+              paddingHorizontal: sz(34, 20),
+              paddingVertical: sz(16, 10),
+            }}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(24, 14), color: CHARCOAL }}>
+              Dues: $25 / quarter
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(24, 14), color: MUTED }}>·</Text>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(24, 14), color: GOLD_DEEP }}>
+              CashApp $HiveLV
+            </Text>
+          </View>
+        </View>
+      ) : (
+        /* The dues conversation — this slide exists ON PURPOSE for a HIVE with
+           no Honey Pot yet. Nat: "leave the treasurer slide in there, because
+           we'll want to talk about if we want to have dues, what they are for,
+           who's in charge, & having that screen will do that." */
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: sz(40, 20) }}>
+          <Text
+            style={{
+              fontFamily: 'Lato_400Regular',
+              fontStyle: 'italic',
+              fontSize: sz(26, 15),
+              lineHeight: sz(38, 22),
+              color: MUTED,
+              textAlign: 'center',
+            }}
+          >
+            {deck.treasurer.lead}
+          </Text>
+          <View
+            style={{
+              marginTop: sz(30, 18),
+              backgroundColor: CARD,
+              borderWidth: 1,
+              borderColor: GOLD_SOFT,
+              borderRadius: sz(22, 16),
+              paddingHorizontal: sz(38, 20),
+              paddingVertical: sz(26, 16),
+              gap: sz(16, 10),
+            }}
+          >
+            {deck.treasurer.questions.map((question, index) => (
+              <View key={question} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(16, 10) }}>
+                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(26, 15), color: GOLD }}>
+                  {index + 1}
+                </Text>
+                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(30, 17), lineHeight: sz(42, 25), color: CHARCOAL }}>
+                  {question}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 11), color: GOLD_DEEP, marginTop: sz(22, 14) }}>
+            Whatever we land on goes in tonight's wrap-up.
           </Text>
         </View>
-      </View>
+      )}
     </View>
   );
-
-  const MEETUP_COLUMNS = [
-    { key: 'meeting' as const, title: 'HIVE Meeting', blurb: 'Second Wednesday — dinner, business, and the HummDinger.' },
-    { key: 'help' as const, title: 'HIVE Help', blurb: 'Fifteen-minute favors — small asks, quick wins.' },
-    { key: 'hang' as const, title: 'HIVE Hang', blurb: 'Casual get-togethers between meetings. Anyone can host.' },
-  ];
 
   // Plan the Meet Ups: how we gather across the top, then a classic two-month
   // calendar (this month + next, side by side on the TV) painted with what's
@@ -1462,8 +1678,11 @@ export default function MeetingHelperScreen() {
             }}
           >
             {/* The month's HIVE Help focus lives top-center of the calendar —
-                type it here and the board thread is created automatically. */}
-            {existingFocus ? (
+                type it here and the board thread is created automatically.
+                Only for a HIVE that has chosen to run HIVE Help: Tech is
+                still deciding whether it wants one, so Tech's calendar
+                doesn't carry the controls for running it. */}
+            {!deck.plan.hasHelpFocusHeader ? null : existingFocus ? (
               <Text
                 numberOfLines={1}
                 style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(19, 12), color: GOLD_DEEP, textAlign: 'center', marginBottom: sz(8, 5) }}
@@ -1554,12 +1773,14 @@ export default function MeetingHelperScreen() {
                       }}
                       style={{
                         flex: 1,
-                        minHeight: sz(56, 40),
+                        // Was 56/40 — six-week months made the calendar the
+                        // tallest thing on the slide (one-page rule).
+                        minHeight: sz(52, 38),
                         margin: sz(2, 1),
                         borderRadius: sz(10, 7),
                         borderWidth: isMeetingDay || isToday ? 2 : 1,
-                        borderColor: isMeetingDay || isToday ? GOLD : isBusy ? GOLD_SOFT : 'rgba(222,193,129,0.24)',
-                        backgroundColor: isBusy ? 'rgba(222,193,129,0.16)' : PAPER,
+                        borderColor: isMeetingDay || isToday ? GOLD : isBusy ? GOLD_SOFT : tintWash(0.24),
+                        backgroundColor: isBusy ? tintWash(0.16) : PAPER,
                         paddingHorizontal: sz(6, 3),
                         paddingVertical: sz(4, 2),
                         opacity: isPast ? 0.4 : 1,
@@ -1626,8 +1847,8 @@ export default function MeetingHelperScreen() {
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: sz(26, 16) }}>
           <View>
-            <Kicker>Ways we gather · on the calendar</Kicker>
-            <SlideTitle>Plan the Meet Ups</SlideTitle>
+            <Kicker>{deck.plan.kicker}</Kicker>
+            <SlideTitle>{deck.plan.title}</SlideTitle>
           </View>
           <EditPill noteKey="meetups" />
         </View>
@@ -1636,7 +1857,7 @@ export default function MeetingHelperScreen() {
             what a calendar tap schedules; Help expands with the focus + the
             check-in voices. */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sz(16, 8) }}>
-          {MEETUP_COLUMNS.map((column) => {
+          {deck.plan.cards.map((column) => {
             // Exactly ONE card carries the highlight: the open panel wins;
             // with nothing expanded, the active schedule mode does. The ●/○
             // line still shows which mode calendar taps use.
@@ -1652,7 +1873,11 @@ export default function MeetingHelperScreen() {
                     setExpandedPlanCard(null);
                   } else if (column.key === 'hang') {
                     setPlanMode('hang');
-                    setExpandedPlanCard((card) => (card === 'hang' ? null : 'hang'));
+                    // Tech's third card (HIVE Networking) has no panel — it
+                    // arms the calendar, the same move as the Meeting card.
+                    setExpandedPlanCard((card) =>
+                      deck.plan.hangCardExpands && card !== 'hang' ? 'hang' : null
+                    );
                   } else {
                     setExpandedPlanCard((card) => (card === 'help' ? null : 'help'));
                   }
@@ -1660,7 +1885,7 @@ export default function MeetingHelperScreen() {
                 style={({ pressed }) => ({
                   flex: 1,
                   minWidth: sz(260, 150),
-                  backgroundColor: isSelected ? 'rgba(222,193,129,0.18)' : CARD,
+                  backgroundColor: isSelected ? tintWash(0.18) : CARD,
                   borderWidth: isSelected ? 2 : 1,
                   borderColor: isSelected ? GOLD : GOLD_SOFT,
                   borderRadius: sz(18, 14),
@@ -1676,13 +1901,19 @@ export default function MeetingHelperScreen() {
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 12), lineHeight: sz(25, 18), color: MUTED, marginTop: sz(4, 3) }}>
                   {column.blurb}
                 </Text>
-                {/* The hang card says nothing extra — the panel it opens
-                    explains itself (Nat 2026-07-24). */}
-                {column.key === 'hang' ? null : (
+                {/* OG's hang card says nothing extra — the panel it opens
+                    explains itself (Nat 2026-07-24). Tech's networking card
+                    schedules instead of expanding, so it talks like the
+                    meeting card does. */}
+                {column.key === 'hang' && deck.plan.hangCardExpands ? null : (
                   <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(14, 10), color: isSelected ? GOLD_DEEP : 'rgba(154,128,96,0.55)', marginTop: sz(6, 4) }}>
                     {column.key === 'meeting'
                       ? isSelected ? '● tap a day below to schedule the meeting' : '○ select, then tap a day to schedule'
-                      : expandedPlanCard === 'help' ? '▾ voices from the check-ins' : '▸ tap for voices from the check-ins'}
+                      : column.key === 'hang'
+                        ? isSelected ? '● tap a day below to schedule it' : '○ select, then tap a day to schedule'
+                        : deck.plan.helpExpansion.kind === 'voices'
+                          ? expandedPlanCard === 'help' ? '▾ voices from the check-ins' : '▸ tap for voices from the check-ins'
+                          : expandedPlanCard === 'help' ? '▾ the conversation' : '▸ tap to talk it over'}
                   </Text>
                 )}
               </Pressable>
@@ -1732,7 +1963,7 @@ export default function MeetingHelperScreen() {
                           : 'waiting on the check-ins'}
                       </Text>
                     </View>
-                    <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: 'rgba(222,193,129,0.18)', overflow: 'hidden' }}>
+                    <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: tintWash(0.18), overflow: 'hidden' }}>
                       <View
                         style={{
                           width: `${Math.round((hang.went / Math.max(1, members.length)) * 100)}%`,
@@ -1811,7 +2042,7 @@ export default function MeetingHelperScreen() {
                           flexDirection: 'row',
                           alignItems: 'center',
                           gap: sz(6, 4),
-                          backgroundColor: isArmed ? GOLD : pressed ? 'rgba(222,193,129,0.34)' : 'rgba(222,193,129,0.18)',
+                          backgroundColor: isArmed ? GOLD : pressed ? tintWash(0.34) : tintWash(0.18),
                           borderWidth: 1,
                           borderColor: isArmed ? GOLD : 'transparent',
                           borderRadius: 999,
@@ -1853,11 +2084,25 @@ export default function MeetingHelperScreen() {
               gap: sz(12, 8),
             }}
           >
+            {/* A HIVE still deciding whether it wants a HIVE Help gets the
+                conversation, in Nat's framing: no pressure, it's a choice. */}
+            {deck.plan.helpExpansion.kind === 'conversation' ? (
+              <View style={{ gap: sz(8, 5) }}>
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(19, 13), lineHeight: sz(29, 20), color: CHARCOAL }}>
+                  {deck.plan.helpExpansion.lead}
+                </Text>
+                {deck.plan.helpExpansion.points.map((point) => (
+                  <Text key={point} style={{ fontFamily: 'Lato_700Bold', fontSize: sz(17, 12), lineHeight: sz(26, 18), color: GOLD_DEEP }}>
+                    {point}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
             {/* Survey says, for the focus: how many did it and how it landed.
                 This is the whole reason the recap is structured rather than a
                 paragraph — counts and averages can be shown, prose can only be
                 read aloud. */}
-            {focusTally.did > 0 ? (
+            {deck.plan.helpExpansion.kind === 'voices' && focusTally.did > 0 ? (
               <View style={{ gap: sz(4, 3) }}>
                 <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 13), color: GOLD_DEEP }}>
                   🙌 {focusTally.did} of {members.length} did it
@@ -1868,7 +2113,7 @@ export default function MeetingHelperScreen() {
                     Did their own thing — {focusTally.instead.join(' · ')}
                   </Text>
                 ) : null}
-                <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: 'rgba(222,193,129,0.18)', overflow: 'hidden' }}>
+                <View style={{ height: sz(10, 7), borderRadius: 999, backgroundColor: tintWash(0.18), overflow: 'hidden' }}>
                   <View
                     style={{
                       width: `${Math.round((focusTally.did / Math.max(1, members.length)) * 100)}%`,
@@ -1880,23 +2125,25 @@ export default function MeetingHelperScreen() {
                 </View>
               </View>
             ) : null}
-            {helpVoices.length > 0 ? (
-              <View style={{ gap: sz(4, 3) }}>
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginTop: sz(4, 3) }}>
-                  🗣️ Voices from the check-ins
-                </Text>
-                {helpVoices.map((voice) => (
-                  <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
-                    <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
-                    {voice.text}
+            {deck.plan.helpExpansion.kind === 'voices' ? (
+              helpVoices.length > 0 ? (
+                <View style={{ gap: sz(4, 3) }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD, marginTop: sz(4, 3) }}>
+                    🗣️ Voices from the check-ins
                   </Text>
-                ))}
-              </View>
-            ) : (
-              <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
-                No HIVE Help thoughts in the check-ins yet — they'll gather here as people fill theirs out.
-              </Text>
-            )}
+                  {helpVoices.map((voice) => (
+                    <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
+                      {voice.text}
+                    </Text>
+                  ))}
+                </View>
+              ) : (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
+                  No HIVE Help thoughts in the check-ins yet — they'll gather here as people fill theirs out.
+                </Text>
+              )
+            ) : null}
           </View>
         ) : null}
 
@@ -1948,7 +2195,7 @@ export default function MeetingHelperScreen() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 opacity: pressed ? 0.7 : 1,
-                shadowColor: '#bd9348',
+                shadowColor: GOLD,
                 shadowOpacity: 0.14,
                 shadowRadius: 10,
                 shadowOffset: { width: 0, height: 3 },
@@ -1965,8 +2212,11 @@ export default function MeetingHelperScreen() {
         {/* Everything lives in the cards above now — recaps, polls, ideas,
             and plans all expand from Meeting/Hang/Help. */}
 
-        {/* Breathing room so the last row scrolls clear of the footer. */}
-        <View style={{ height: sz(90, 64) }} />
+        {/* Breathing room so the last row scrolls clear of the footer. The
+            page's own bottom padding already clears most of it — this was
+            90/64 on top of that, which is exactly the "scroll the tiniest
+            bit" Nat named (one-page rule, 2026-08-11). */}
+        <View style={{ height: sz(20, 14) }} />
       </View>
     );
   };
@@ -2082,7 +2332,9 @@ export default function MeetingHelperScreen() {
                   borderColor: hummdingerVisited.has(member.id) ? GOLD : GOLD_SOFT,
                   borderRadius: sz(20, 14),
                   paddingHorizontal: sz(18, 11),
-                  paddingVertical: sz(26, 16),
+                  // Was 26/16 of vertical padding — with a full roster the
+                  // grid ran just past one screen (one-page rule).
+                  paddingVertical: sz(18, 12),
                   outlineWidth: 0,
                 }}
               >
@@ -2230,7 +2482,7 @@ export default function MeetingHelperScreen() {
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 6,
-                  backgroundColor: 'rgba(222,193,129,0.18)',
+                  backgroundColor: tintWash(0.18),
                   borderRadius: 999,
                   paddingHorizontal: sz(18, 12),
                   paddingVertical: sz(9, 7),
@@ -2339,7 +2591,7 @@ export default function MeetingHelperScreen() {
                             borderRadius: 999,
                             borderWidth: 1,
                             borderColor: selected ? GOLD : GOLD_SOFT,
-                            backgroundColor: selected ? 'rgba(222,193,129,0.22)' : 'transparent',
+                            backgroundColor: selected ? tintWash(0.22) : 'transparent',
                             opacity: pressed ? 0.7 : 1,
                           })}
                         >
@@ -2428,12 +2680,6 @@ export default function MeetingHelperScreen() {
     );
   };
 
-  const WRAPUP_REMINDERS = [
-    'Next meeting — second Wednesday of the month',
-    'Newsletter lands on the 1st',
-    'Dues: $25 / quarter · CashApp $HiveLV',
-  ];
-
   const renderWrapup = () => (
     <View style={{ flex: 1 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: sz(30, 18) }}>
@@ -2458,7 +2704,7 @@ export default function MeetingHelperScreen() {
         <View
           style={{
             marginTop: sz(26, 14),
-            backgroundColor: 'rgba(222,193,129,0.12)',
+            backgroundColor: tintWash(0.12),
             borderWidth: 1,
             borderColor: GOLD_SOFT,
             borderRadius: sz(20, 14),
@@ -2501,7 +2747,7 @@ export default function MeetingHelperScreen() {
             style={{
               alignSelf: 'flex-start',
               marginTop: sz(10, 6),
-              backgroundColor: sealState === 'done' ? 'rgba(189,147,72,0.16)' : GOLD,
+              backgroundColor: sealState === 'done' ? accentWash(0.16) : GOLD,
               borderWidth: sealState === 'done' ? 1 : 0,
               borderColor: GOLD_SOFT,
               borderRadius: 999,
@@ -2529,7 +2775,9 @@ export default function MeetingHelperScreen() {
       ) : null}
       <View
         style={{
-          marginTop: sz(40, 22),
+          // Was 40/22 of top margin — the reminders card is what nudged this
+          // slide past one screen (one-page rule).
+          marginTop: sz(26, 16),
           backgroundColor: CARD,
           borderWidth: 1,
           borderColor: GOLD_SOFT,
@@ -2541,7 +2789,7 @@ export default function MeetingHelperScreen() {
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 12), letterSpacing: 2, textTransform: 'uppercase', color: MUTED }}>
           Standing reminders
         </Text>
-        {WRAPUP_REMINDERS.map((reminder) => (
+        {deck.wrapupReminders.map((reminder) => (
           <View key={reminder} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(12, 8) }}>
             <View style={{ width: sz(9, 6), height: sz(9, 6), borderRadius: 999, backgroundColor: GOLD, transform: [{ translateY: -2 }] }} />
             <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: sz(24, 14), lineHeight: sz(34, 21), color: CHARCOAL }}>
@@ -2576,16 +2824,20 @@ export default function MeetingHelperScreen() {
     </View>
   );
 
-  const slides = [
-    { key: 'room', render: renderRoom },
-    { key: 'outline', render: renderOutline },
-    { key: 'news', render: renderNews },
-    { key: 'treasurer', render: renderTreasurer },
-    { key: 'meetups', render: renderMeetups },
-    { key: 'hummdinger', render: renderHummdinger },
-    { key: 'wrapup', render: renderWrapup },
-    { key: 'thanks', render: renderThanks },
-  ];
+  // The show, in the order this HIVE's deck declares it. Every renderer knows
+  // how to wear any deck's content, so a new HIVE's deck is a new list in
+  // DECKS — the renderers stay shared.
+  const SLIDE_RENDERERS: Record<DeckSlideKey, () => React.ReactNode> = {
+    room: renderRoom,
+    outline: renderOutline,
+    news: renderNews,
+    treasurer: renderTreasurer,
+    meetups: renderMeetups,
+    hummdinger: renderHummdinger,
+    wrapup: renderWrapup,
+    thanks: renderThanks,
+  };
+  const slides = deck.slides.map((key) => ({ key, render: SLIDE_RENDERERS[key] }));
 
   const slideCount = slides.length;
   const clampedIndex = Math.min(slideIndex, slideCount - 1);
@@ -2617,7 +2869,11 @@ export default function MeetingHelperScreen() {
   }, [editKey, goNext, goPrev]);
 
   const navStripWidth = sz(96, 52);
-  const editMeta = editKey ? EDIT_SLIDE_META[editKey] : null;
+  // The plan slide's name is per-deck ("Plan the Meet Ups" / "Plan"), so its
+  // edit modal says whichever name is on the slide being edited.
+  const editMeta = editKey
+    ? { ...EDIT_SLIDE_META[editKey], ...(editKey === 'meetups' ? { title: deck.plan.title } : null) }
+    : null;
 
   // The frozen agenda rail (wide screens): analog clock + countdown on top,
   // tonight's outline below with the current stop in gold, and the HummDinger
@@ -2734,7 +2990,7 @@ export default function MeetingHelperScreen() {
         {/* A long roster can outgrow the rail, so it scrolls — and bounces at
             its ends like every other scroller, so a full list says so. */}
         <BounceScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-          {AGENDA.map((item, agendaIndex) => {
+          {deck.agenda.map((item, agendaIndex) => {
             const slidePosition = slides.findIndex((slide) => slide.key === item.key);
             const isActive = activeKey === item.key;
             return (
@@ -2749,7 +3005,7 @@ export default function MeetingHelperScreen() {
                     opacity: pressed ? 0.7 : 1,
                   })}
                 >
-                  <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(17, 12), color: isActive ? GOLD_DEEP : 'rgba(189,147,72,0.45)' }}>
+                  <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(17, 12), color: isActive ? GOLD_DEEP : accentWash(0.45) }}>
                     {agendaIndex + 1}
                   </Text>
                   <Text
@@ -2813,13 +3069,12 @@ export default function MeetingHelperScreen() {
   // still on its way in.
   if (!profile) return null;
 
-  // This deck is OG HIVE's meeting night, not a generic template — the agenda
-  // itself is hardcoded (News from Nat, Treasurer, Plan the Meet Ups,
-  // HummDinger Sesh) and the Room slide shows check-in answers. Same route
-  // boundary as monthly-tuneup.tsx, so a bookmarked or typed /meeting-helper
-  // URL cannot open OG's deck while somebody is standing in Tech or Production
-  // (the 2026-08-07 decision covered Admin; this door was missed until
-  // 2026-08-11).
+  // Only HIVEs with a designed deck in DECKS get past this door — OG and, as
+  // of 2026-08-11, Tech. Production waits here on the coming-soon screen
+  // until Nat designs its rhythm, and then joins as a third entry in DECKS.
+  // Same route boundary as monthly-tuneup.tsx, so a bookmarked or typed
+  // /meeting-helper URL cannot open a deck while somebody is standing in a
+  // HIVE that doesn't have one yet.
   if (!hasTailoredCheckIns(community)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: PAPER }} edges={['top']}>
@@ -3003,7 +3258,7 @@ export default function MeetingHelperScreen() {
               fontFamily: 'Lato_700Bold',
               fontSize: sz(15, 9),
               letterSpacing: sz(4, 2.5),
-              color: 'rgba(189,147,72,0.65)',
+              color: accentWash(0.65),
               textAlign: 'center',
             }}
           >
