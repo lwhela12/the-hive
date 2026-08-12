@@ -710,7 +710,7 @@ export function NewsletterPanel({
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, lineHeight: 19 }}>
                   No issues written yet. Write one first, and it will show up here.
                 </Text>
-              ) : issues.map((issue) => (
+              ) : issues.slice(0, 1).map((issue) => (
                 <View
                   key={issue.id}
                   style={{
@@ -758,6 +758,35 @@ export function NewsletterPanel({
                   </View>
                 </View>
               ))}
+
+              {/* EARLIER ISSUES — read-only on purpose.
+                  Every issue used to get its own pair of buttons, which turned
+                  a shelf of finished work into a to-do list. Nat, seeing it
+                  live 2026-08-12: *"how do i get rid of those buttons? i dont
+                  like feeling like i have 'un done' tasks, and i dont want to
+                  accidently send out an old one. those have all been accounted
+                  for in various ways."* Both halves of that are the same fix:
+                  only the newest issue can be sent, so the older ones cannot
+                  nag and cannot go out by accident. */}
+              {issues.length > 1 ? (
+                <View style={{ borderTopWidth: 1, borderTopColor: PANEL_HAIRLINE, paddingTop: 10, gap: 5 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: SPACE_SKIN.inkSoft }}>
+                    Earlier issues
+                  </Text>
+                  {issues.slice(1).map((issue) => (
+                    <Text
+                      key={issue.id}
+                      style={{ fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 19, color: SPACE_SKIN.inkSoft }}
+                    >
+                      {issue.title}
+                      {issue.sentAt ? ` · emailed ${String(issue.sentAt).slice(0, 10)}` : ''}
+                    </Text>
+                  ))}
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: 11.5, lineHeight: 17, color: SPACE_SKIN.inkSoft, paddingTop: 2 }}>
+                    Done and dusted — only the newest issue can be sent from here.
+                  </Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
 

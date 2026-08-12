@@ -46,7 +46,21 @@ import { readLetter, type LetterBlock } from '../_shared/letter.ts';
  */
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@the-hive.app>';
+/**
+ * The Buzz has its own sender, and deliberately does not borrow the app's.
+ *
+ * `FROM_EMAIL` — the one every other function uses — is
+ * `clive@the-hive.app`, which is right for an invite or a notification and
+ * wrong for a newsletter: Clive is the in-app assistant, and members know him
+ * as something else entirely. Nat, 2026-08-12: *"The Buzz is your voice, and
+ * members already know him as something else."* Caught on her very first test
+ * send, which arrived from Clive.
+ *
+ * A separate variable rather than changing `FROM_EMAIL`, because that one is
+ * shared with `invite`, `subscribe-welcome` and the notify family, and those
+ * are genuinely from the app.
+ */
+const FROM_EMAIL = Deno.env.get('NEWSLETTER_FROM_EMAIL') || 'HIVE <hello@the-hive.app>';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const PUBLIC_SITE_URL = Deno.env.get('PUBLIC_SITE_URL') || 'https://the-hive.app';
@@ -93,7 +107,32 @@ function blockHtml(block: LetterBlock): string {
   }
 }
 
-function issueHtml(title: string, content: string, footerHtml: string): string {
+/**
+ * The one-tap "I'm interested in Tech HIVE" button.
+ *
+ * Drawn per recipient, because the link carries their own address — that is
+ * what makes it one tap instead of a form. Nat, on the alternative: *"I dont
+ * want 'im interested in...' on the public site. No thanks. only this one
+ * time in this one newsletter."* So the landing page is reachable by link
+ * only, and `site/api/interested.js` asks them to confirm the address before
+ * it files anything, because newsletters get forwarded.
+ *
+ * Only drawn for an issue that actually opens a HIVE — `techButton` is off
+ * unless the content mentions Tech HIVE, so next month's issue does not
+ * quietly keep recruiting.
+ */
+function techInterestButton(recipient: Recipient): string {
+  const params = new URLSearchParams({ email: recipient.email, hive: 'tech' });
+  if (recipient.name) params.set('name', recipient.name);
+  return `<div style="text-align:center;padding:6px 0 2px;">
+    <a href="${PUBLIC_SITE_URL}/api/interested?${params.toString()}"
+       style="display:inline-block;background:#bd9348;color:#fffdf5;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:bold;text-decoration:none;border-radius:999px;padding:14px 28px;">
+      I'm interested in Tech HIVE →
+    </a>
+  </div>`;
+}
+
+function issueHtml(title: string, content: string, footerHtml: string, ctaHtml = ''): string {
   const body = readLetter(content).map(blockHtml).join('\n');
   return `<!doctype html>
 <html>
@@ -106,6 +145,7 @@ function issueHtml(title: string, content: string, footerHtml: string): string {
       <div style="background:#fffdf5;border:1px solid #e3d4ac;border-radius:16px;padding:26px 26px 30px;">
         <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:33px;color:#2c2418;margin:0 0 18px;">${escapeHtml(title)}</h1>
         ${body}
+        ${ctaHtml}
       </div>
       <div style="text-align:center;padding-top:22px;">
         <a href="${PUBLIC_SITE_URL}" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#8a6a2f;text-decoration:none;font-weight:bold;">Read everything at the-hive.app →</a>
@@ -233,6 +273,10 @@ serve(async (req) => {
   const title = String(post.title ?? 'The Buzz');
   const content = String(post.content ?? '');
   const subject = mode === 'test' ? `[TEST] ${title}` : title;
+  // The button rides on the issue that opens the doors, and no other. Read
+  // off the content rather than a flag, so it cannot be left switched on by
+  // accident next month.
+  const opensTechHive = /tech hive/i.test(content);
 
   let sent = 0;
   const failures: string[] = [];
@@ -243,7 +287,12 @@ serve(async (req) => {
       from: FROM_EMAIL,
       to: recipient.email,
       subject,
-      html: issueHtml(title, content, footerFor(recipient)),
+      html: issueHtml(
+        title,
+        content,
+        footerFor(recipient),
+        opensTechHive ? techInterestButton(recipient) : ''
+      ),
     }));
 
     const res = await fetch('https://api.resend.com/emails/batch', {
