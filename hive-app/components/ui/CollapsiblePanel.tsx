@@ -279,7 +279,14 @@ export function CollapsiblePanel({
         />
       ) : null}
 
-      {topAccent ? <View style={{ height: 4, backgroundColor: topAccent }} /> : null}
+      {/* A dashed panel never wears the accent band.
+          The band is a solid 4px bar across the top, and on a dashed panel it
+          read as the panel simply having a solid edge — Nat, looking at a
+          draft that was dashed on three sides, 2026-08-12: *"this still has a
+          solid line around the draft, i liked the dotted line."* Dashed means
+          unfinished, and one finished-looking edge is enough to undo that, so
+          the rule lives here rather than at each call site. */}
+      {topAccent && !dashed ? <View style={{ height: 4, backgroundColor: topAccent }} /> : null}
 
       <Pressable
         onPress={toggle}
