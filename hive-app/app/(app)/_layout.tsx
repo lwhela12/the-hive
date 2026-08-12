@@ -288,9 +288,12 @@ export default function AppLayout() {
           // Naming the colour here fixes it at the source rather than covering
           // it: the container is the page's own colour from its very first
           // frame, so there is no wrong colour to see. It also gives the right
-          // floor to any screen that is still arriving — which is what makes
-          // splitting the download per screen (app.json → asyncRoutes) safe,
-          // since a route that has not landed yet draws nothing at all.
+          // floor to any screen that is still arriving. (When routes were
+          // split per screen — asyncRoutes, on briefly around 2026-08-06 —
+          // this floor is what made the wait invisible. The split was turned
+          // off 2026-08-07 because each deploy renamed the pieces and stranded
+          // returning phones; scripts/verify-web-export.mjs now enforces the
+          // single bundle. The floor still matters for lazy tabs.)
           //
           // AND IT STILL FLASHED — the other half, found 2026-08-06.
           //

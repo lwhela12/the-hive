@@ -1,4 +1,12 @@
 import type { QuestionTheme } from './questionThemes';
+import { TECH_DAILY_QUESTIONS } from './techQuestions';
+import { PRODUCTION_DAILY_QUESTIONS } from './productionQuestions';
+
+// Each HIVE's year of questions lives in its own file; this one keeps OG's
+// deck (the original), the shared shape, and the picking logic. Re-exported so
+// a screen can keep importing every deck from here.
+export { TECH_DAILY_QUESTIONS } from './techQuestions';
+export { PRODUCTION_DAILY_QUESTIONS } from './productionQuestions';
 
 /**
  * `category` is the label — one per question, useful for showing what was
@@ -385,50 +393,17 @@ export const DAILY_QUESTIONS: DailyQuestion[] = [
   { text: 'What is a secret menu item for your personality?', category: 'secret menu', emoji: '📋', themes: ['identity', 'humour'] },
 ];
 
-// Tech HIVE's deck. Same daily habit, a working crew's version of it: the
-// questions worth knowing the answers to when you build things together and
-// only ever meet on a screen. Drawn from the shelf Nat named (2026-07-31) —
-// Culture Code, Five Dysfunctions, Never Split the Difference, Thinking Fast
-// and Slow, Code of the Extraordinary Mind, Shoe Dog, Boys in the Boat, How to
-// Win Friends, The 4-Hour Work Week.
-export const TECH_DAILY_QUESTIONS: DailyQuestion[] = [
-  { text: 'What has to be true for you to trust someone with your unfinished work?', category: 'trust', emoji: '🤝', themes: ['connection', 'courage'] },
-  { text: 'When you disagree with the room, do you say it straight away, sleep on it, or let it go?', category: 'conflict', emoji: '💬', themes: ['conflict', 'community'] },
-  { text: 'What is a strong opinion you have changed your mind about in the last year?', category: 'changing your mind', emoji: '🔄', themes: ['growth', 'learning'] },
-  { text: 'What does it look like when you are in flow? How would we spot it?', category: 'flow', emoji: '🌊', themes: ['work', 'craft'] },
-  { text: 'What is the fastest way to lose your buy-in on a project?', category: 'commitment', emoji: '🚪', themes: ['values', 'work'] },
-  { text: 'Would you rather be told the hard thing immediately or once someone has a fix in mind?', category: 'feedback', emoji: '📣', themes: ['conflict', 'connection'] },
-  { text: 'What is a rule everyone follows that you think is nonsense?', category: 'brules', emoji: '🧨', themes: ['values', 'boundaries'] },
-  { text: 'What is the last thing you shipped that you were genuinely proud of?', category: 'craft', emoji: '🏗️', themes: ['craft', 'creativity'] },
-  { text: 'What part of your work would you automate tomorrow if you could?', category: 'leverage', emoji: '⚙️', themes: ['work', 'rest'] },
-  { text: 'What do you do first when something breaks in production?', category: 'under pressure', emoji: '🚨', themes: ['work', 'courage'] },
-  { text: 'What is a mistake you made that you would happily make again?', category: 'good failures', emoji: '🎯', themes: ['memory', 'growth'] },
-  { text: 'When you are stuck, do you go quiet, go for a walk, or go ask someone?', category: 'getting unstuck', emoji: '🧗', themes: ['work', 'comfort', 'rest'] },
-  { text: 'Whose work do you quietly study?', category: 'influences', emoji: '🔭', themes: ['learning', 'craft'] },
-  { text: 'What is the smallest change that made the biggest difference to how you work?', category: 'small hinges', emoji: '🔑', themes: ['work', 'growth'] },
-  { text: 'What would you want us to do if you went quiet for a week?', category: 'looking out', emoji: '🫱', themes: ['community', 'connection'] },
-  { text: 'What do you need from a meeting for it to have been worth your time?', category: 'meetings', emoji: '⏱️', themes: ['work', 'boundaries'] },
-  { text: 'What is your honest tell that you are overloaded?', category: 'capacity', emoji: '🪫', themes: ['rest', 'boundaries'] },
-  { text: 'What is a problem you would work on for free?', category: 'obsession', emoji: '🔥', themes: ['work', 'play'] },
-  { text: 'Where does your gut usually beat your analysis, and where does it usually lose?', category: 'fast and slow', emoji: '🧠', themes: ['identity', 'learning'] },
-  { text: 'What is something you believe about AI that most people you talk to do not?', category: 'contrarian', emoji: '🤖', themes: ['values', 'identity'] },
-  { text: 'What is the part of building with AI you find genuinely hard?', category: 'honest difficulty', emoji: '🪛', themes: ['learning', 'craft'] },
-  { text: 'What do you want to be noticeably better at six months from now?', category: 'growth', emoji: '📈', themes: ['growth', 'ambition'] },
-  { text: 'What does a good week look like for you, hour by hour?', category: 'ideal week', emoji: '🗓️', themes: ['ritual', 'rest', 'work'] },
-  { text: 'What kind of praise actually lands for you?', category: 'recognition', emoji: '👏', themes: ['connection', 'identity'] },
-  { text: 'What is a question you wish clients asked you more often?', category: 'client work', emoji: '💼', themes: ['work', 'craft'] },
-  { text: 'When has quitting something been the right call?', category: 'knowing when', emoji: '🛑', themes: ['boundaries', 'growth'] },
-  { text: 'What do you want to be the person we come to for?', category: 'your lane', emoji: '🧭', themes: ['identity', 'generosity'] },
-  { text: 'What is the most useful thing you learned the hard way?', category: 'scar tissue', emoji: '🩹', themes: ['learning', 'growth'] },
-  { text: 'Would you rather ship it rough on Friday or right on Wednesday next week?', category: 'shipping', emoji: '🚀', themes: ['craft', 'values'] },
-  { text: 'What is one thing about how you work that people usually get wrong at first?', category: 'user manual', emoji: '📖', themes: ['identity', 'connection'] },
-  { text: 'What are you working on that you would love a second pair of eyes on?', category: 'open invitation', emoji: '👀', themes: ['work', 'community'] },
-  { text: 'What would make this crew worth staying in five years from now?', category: 'the long game', emoji: '🌳', themes: ['community', 'values'] },
-];
 
-/** Which deck a HIVE draws from. Keyed by slug so a new HIVE picks one deliberately. */
+/**
+ * Which deck a HIVE draws from. Keyed by slug so a new HIVE picks one
+ * deliberately — an unknown slug falls back to OG's deck rather than guessing.
+ * Production HIVE keeps the database slug `show` (see checkIns.ts, which
+ * learned this the same way).
+ */
 export function deckForCommunity(slug?: string | null): DailyQuestion[] {
-  return slug === 'tech' ? TECH_DAILY_QUESTIONS : DAILY_QUESTIONS;
+  if (slug === 'tech') return TECH_DAILY_QUESTIONS;
+  if (slug === 'show') return PRODUCTION_DAILY_QUESTIONS;
+  return DAILY_QUESTIONS;
 }
 
 const LEGACY_DAILY_QUESTION_COUNT = 48;
@@ -441,13 +416,40 @@ export function getQuestionDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+// Tech HIVE asked its original 32 questions from its first day; the deck grew
+// to 365 on August 13, 2026. Same move OG made on July 2: dates before the
+// growth keep the exact walk members actually answered (their saved
+// question_index rows point at it), dates from the growth onward pick up at
+// the first new question and walk the whole year.
+const TECH_EPOCH = new Date(2026, 6, 31); // Tech HIVE's first day
+const TECH_LEGACY_COUNT = 32;
+const TECH_EXPANSION_START = new Date(2026, 7, 13); // August 13, 2026
+
+// Production HIVE has no question history and no meeting rhythm yet, so its
+// deck simply starts the day it shipped: question 0 on August 13, 2026, then
+// one a day. Chosen 2026-08-12; if Production wants its year to start on a
+// meaningful day instead, this is the only line to move.
+const PRODUCTION_EPOCH = new Date(2026, 7, 13);
+
+/** Days-since-epoch walk around a deck, safe on dates before the epoch. */
+function walkFromEpoch(questionDate: Date, epoch: Date, length: number) {
+  const days = Math.floor((questionDate.getTime() - epoch.getTime()) / 86_400_000);
+  return ((days % length) + length) % length;
+}
+
 function getQuestionIndexForDate(questionDate: Date, deck: DailyQuestion[] = DAILY_QUESTIONS) {
-  // Only the original deck carries history worth preserving. A HIVE that
-  // started later just walks its own list from the day it opened.
-  if (deck !== DAILY_QUESTIONS) {
-    const epoch = new Date(2026, 6, 31); // Tech HIVE's first day
-    const days = Math.floor((questionDate.getTime() - epoch.getTime()) / 86_400_000);
-    return ((days % deck.length) + deck.length) % deck.length;
+  if (deck === TECH_DAILY_QUESTIONS) {
+    const expansionStart = new Date(TECH_EXPANSION_START);
+    expansionStart.setHours(0, 0, 0, 0);
+    if (questionDate >= expansionStart) {
+      const daysSinceExpansion = Math.floor((questionDate.getTime() - expansionStart.getTime()) / 86_400_000);
+      return (TECH_LEGACY_COUNT + daysSinceExpansion) % deck.length;
+    }
+    return walkFromEpoch(questionDate, TECH_EPOCH, TECH_LEGACY_COUNT);
+  }
+
+  if (deck === PRODUCTION_DAILY_QUESTIONS) {
+    return walkFromEpoch(questionDate, PRODUCTION_EPOCH, deck.length);
   }
 
   const expansionStart = new Date(DAILY_QUESTION_EXPANSION_START);

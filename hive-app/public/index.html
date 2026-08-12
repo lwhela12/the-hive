@@ -23,6 +23,16 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="HIVE" />
     <meta name="format-detection" content="telephone=no" />
+    <!-- Open the road to the database while the app is still downloading.
+         The very first thing the loaded app does is ask Supabase who is signed
+         in and fetch their HIVE, and on a phone that request pays for DNS, TCP
+         and TLS before a byte of data moves. This line does that handshake in
+         parallel with the script download, so by the time the app asks, the
+         road is already open. The address is this project's Supabase host —
+         the same one lib/supabase.ts is built with. If the Supabase project
+         ever moves, update this too; a preconnect to a wrong address wastes a
+         handshake and breaks nothing. (2026-08-12) -->
+    <link rel="preconnect" href="https://cpfvnfcjhoeowdcexppi.supabase.co" crossorigin />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
@@ -102,8 +112,11 @@
       the bee vanished for a couple of hundred milliseconds, the root layout drew
       its own bee for another four hundred, that one vanished too, and then the
       screen was empty for six hundred more while the code for the page
-      downloaded — routes are split per screen on web now, and a screen that has
-      not landed yet draws nothing at all.
+      downloaded — routes were split per screen on web at the time, and a screen
+      that had not landed yet drew nothing at all. (The split itself was turned
+      off on 2026-08-07 — every deploy renamed the pieces and stranded returning
+      phones, see scripts/verify-web-export.mjs — but the one-bee rule it taught
+      us stands.)
 
       Bee, gone, bee, gone, page. So this splash is now the ONLY loading surface
       the boot has. It waits to be told the app has drawn a real screen —

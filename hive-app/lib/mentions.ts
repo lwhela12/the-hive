@@ -82,6 +82,20 @@ import {
  * would be a promise the app cannot keep. Naming one *person* still works
  * there — that is just useful context for Clive to read — only the whole-HIVE
  * rows are turned off.
+ *
+ * ## Naming another HIVE by hand delivers now (2026-08-12)
+ *
+ * Nat's shout-out idea from 2026-08-06: *"@OG HIVE dont forget ___ & @tech
+ * HIVE dont forget ___"* — one message, two HIVEs, everyone in each actually
+ * told. The picker still shows its two rows (Nat's 2026-08-11 call stands),
+ * but a handle TYPED by hand — `@og`, `@tech`, `@production` — now resolves
+ * to that HIVE even when it is not the one hosting the writing, so long as
+ * the writing travels HIVE-Wide. `getMentionedGroups` reports it, and
+ * delivery happens server-side (`sendMentionNotifications` in
+ * `lib/mentionableMembers.ts`), because the sender may stand outside the
+ * tagged HIVE and row-level security rightly hides its member list from
+ * them. Only the notify-* edge functions, holding the service role and
+ * checking who is asking, can turn "@tech" into Tech HIVE's people.
  */
 
 export type MentionGroupKind = 'hive' | 'hive_wide' | 'room';
@@ -140,11 +154,16 @@ export type MentionReach = {
    */
   ceiling?: string | null;
   /**
-   * Other HIVEs this writer belongs to. No longer read by anything in this
-   * file — the picker offers only the HIVE hosting the writing, never a list
-   * of every HIVE the writer happens to also be in (Nat, 2026-08-11). Kept on
-   * the type because `useMentionReach()` still fills it in for callers that
-   * read it directly.
+   * HIVEs beyond the one hosting the writing, whose typed handles may resolve.
+   *
+   * The picker never offers these — it shows the two rows Nat asked for
+   * (2026-08-11) and nothing more. But `getMentionedGroups` reads this list
+   * again as of 2026-08-12, for handles the writer TYPED by hand: "@tech"
+   * written on a HIVE-Wide board should reach Tech HIVE, and this is where
+   * detection learns Tech HIVE exists. `useMentionReach()` fills it with the
+   * writer's own other HIVEs; `sendMentionNotifications` swaps in every HIVE
+   * there is at send time, since any member may read every HIVE's name
+   * (migration 137).
    */
   otherHives?: TaggableHive[];
   /**
@@ -167,7 +186,15 @@ type SettledReach = {
   rung: ScopeKey;
   /** True when the writing already reaches every HIVE. */
   wide: boolean;
+  /** The one HIVE the picker may offer: the HIVE hosting the writing. */
   hives: TaggableHive[];
+  /**
+   * The HIVEs a handle typed by hand may resolve to. The home HIVE always
+   * may. Any other HIVE counts only once the writing travels HIVE-Wide,
+   * because a tag cannot outrun what can be seen — members of a HIVE that
+   * cannot open the thing must not be told what it says.
+   */
+  named: TaggableHive[];
   closedRoom: { label: string; description?: string } | null;
 };
 
@@ -290,16 +317,28 @@ function settleReach(reach?: MentionReach | null): SettledReach {
   // HIVE that shares everything with everybody and it still only reaches the
   // handful who are in the chat.
   if (closedRoom) {
-    return { rung: 'hive', wide: false, hives: [], closedRoom };
+    return { rung: 'hive', wide: false, hives: [], named: [], closedRoom };
   }
 
-  // Only the HIVE hosting this writing is ever named — see the file's own
-  // doc comment. `otherHives` (every other HIVE the writer belongs to) used to
-  // be added here whenever the writing already reached HIVE-Wide, which is
-  // exactly the multi-row picker Nat asked to have removed (2026-08-11).
-  const hives: TaggableHive[] = reach?.hive ? [reach.hive] : [];
+  // Only the HIVE hosting this writing is ever OFFERED — see the file's own
+  // doc comment. `otherHives` used to be added to the picker whenever the
+  // writing reached HIVE-Wide, which is exactly the multi-row picker Nat asked
+  // to have removed (2026-08-11).
+  const home = reach?.hive ?? null;
+  const hives: TaggableHive[] = home ? [home] : [];
 
-  return { rung, wide, hives, closedRoom: null };
+  // A handle TYPED by hand is a different question from a row on offer
+  // (2026-08-12, Nat's "@OG HIVE dont forget ___ & @tech HIVE dont forget ___"
+  // shout-out). Another HIVE's name resolves only where the writing already
+  // travels HIVE-Wide, so its members can open the thing they are told about.
+  const named: TaggableHive[] = [...hives];
+  if (wide) {
+    for (const hive of reach?.otherHives ?? []) {
+      if (hive?.id && hive.id !== home?.id) named.push(hive);
+    }
+  }
+
+  return { rung, wide, hives, named, closedRoom: null };
 }
 
 /**
@@ -442,13 +481,15 @@ export function getMentionedGroups(
 
   if (settled.wide && saidEveryone) groups.push({ kind: 'hive_wide' });
 
-  settled.hives.forEach((hive) => {
+  const homeId = settled.hives[0]?.id ?? null;
+  settled.named.forEach((hive) => {
     const own = getHiveMentionHandles(hive.name);
-    const named = own.some((handle) => handles.has(handle));
+    const namedByHand = own.some((handle) => handles.has(handle));
     // Can't reach HIVE-Wide from here, so the everyone words land on the one
-    // HIVE that IS reachable instead — same as they always have.
-    const reachedByEveryone = !settled.wide && saidEveryone;
-    if (named || reachedByEveryone) {
+    // HIVE that IS reachable instead — same as they always have. Only the home
+    // HIVE ever catches them; a different HIVE has to be named on purpose.
+    const reachedByEveryone = hive.id === homeId && !settled.wide && saidEveryone;
+    if (namedByHand || reachedByEveryone) {
       groups.push({ kind: 'hive', id: hive.id, name: hiveDisplayName(hive.name) });
     }
   });

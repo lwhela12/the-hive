@@ -12,7 +12,13 @@ import { supabase } from '../../lib/supabase';
 // `confirmAction` say it on both platforms (see `lib/showAlert.ts`).
 import { showAlert, confirmAction } from '../../lib/showAlert';
 import { getHalfwayDoneKey } from '../../lib/meetingCycle';
-import { getHalfwayShape, isInHalfwayWindow } from '../../lib/checkIns';
+import {
+  SEASON_CHECK_IN_EMOJI,
+  getHalfwayShape,
+  getSeasonCheckInKind,
+  isInHalfwayWindow,
+  isSurveyOnHomeToday,
+} from '../../lib/checkIns';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
@@ -1063,6 +1069,8 @@ export default function HiveScreen() {
     if (!text || !profile?.id || !communityId || isSubmittingAnswer) return;
     setAnswerError(null);
     setIsSubmittingAnswer(true);
+    // One answer per person per HIVE per day (migration 173) — each HIVE
+    // asks its own question now, so the day alone stopped being the key.
     const { error } = await supabase.from('daily_question_answers').upsert({
       user_id: profile.id,
       community_id: communityId,
@@ -1070,7 +1078,7 @@ export default function HiveScreen() {
       question_date: currentAnswerPrompt.dateKey,
       answer: text,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,question_date' });
+    }, { onConflict: 'user_id,community_id,question_date' });
     setIsSubmittingAnswer(false);
 
     if (error) {
@@ -2594,13 +2602,20 @@ export default function HiveScreen() {
           } as any),
         } as HomeTodo]
       : []),
-    ...availableSurveys.map(s => {
+    // Quarterly and end-of-year check-ins keep to their season: the card
+    // appears three days before the quarter/year ends and steps back two
+    // weeks after (lib/checkIns.ts), however early the survey was launched
+    // from Admin. Every other survey shows the moment it exists, unchanged.
+    ...availableSurveys.filter((s) => isSurveyOnHomeToday(s, todayDate)).map(s => {
       const response = myResponses.get(s.id);
       const submittedAt = response?.submitted_at ?? null;
       const isDone = !!submittedAt && !pendingSurveyIds.has(s.id);
       // Monthly check-ins route through the guided Monthly Tune-up (wishes →
       // hang ideas → calendar → helpers → check-in) instead of the bare survey.
       const isMonthlyTuneUp = isMonthlyCheckInSurvey(s);
+      // The compass (quarter) and the party popper (year) — the season
+      // check-ins wear their own marks so the card says which rhythm it is.
+      const seasonKind = getSeasonCheckInKind(s);
       const tuneUpPeriodMatch = isMonthlyTuneUp
         ? getSurveyResponsePeriod(s).match(/^(\d{4})-(\d{2})$/)
         : null;
@@ -2611,8 +2626,9 @@ export default function HiveScreen() {
 
       return {
         id: `survey-${s.id}`,
-        emoji: '📋',
-        // One mark for the check-in everywhere: the gold outlined clipboard.
+        // One mark per rhythm: the clipboard for the monthly, the season
+        // marks for the quarter and the year.
+        emoji: seasonKind ? SEASON_CHECK_IN_EMOJI[seasonKind] : '📋',
         title: isMonthlyTuneUp ? `${tuneUpMonthName} tune-up + check-in` : s.title,
         detail: isDone
           ? `Submitted ${formatDateShort(submittedAt)} · Tap to edit`

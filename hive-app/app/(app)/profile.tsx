@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, RefreshControl, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -46,6 +46,7 @@ import { EventScopeFields, invalidateBirthdayQueries, type EventAudience } from 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { confirmAction } from '../../lib/showAlert';
+import { isSurveyOnHomeToday } from '../../lib/checkIns';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
 
@@ -177,7 +178,13 @@ export default function ProfileScreen() {
   const { profile, communityId, communityRole, refreshProfile } = useAuth();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { grantWish } = useWishes();
-  const { availableSurveys, pendingSurveys, myResponses, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
+  const { availableSurveys, pendingSurveys: allPendingSurveys, myResponses, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
+  // A quarter/year check-in launched early from Admin stays off this screen
+  // until its Home window opens, exactly as it stays off Home (2026-08-12).
+  const pendingSurveys = useMemo(
+    () => allPendingSurveys.filter((survey) => isSurveyOnHomeToday(survey, new Date())),
+    [allPendingSurveys],
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [skillWishMatches, setSkillWishMatches] = useState<SkillWishMatch[]>([]);

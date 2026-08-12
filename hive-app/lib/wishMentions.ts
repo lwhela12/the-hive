@@ -1,6 +1,6 @@
 import type { Profile } from '../types';
-import { getMentionedMembers, type MentionReach } from './mentions';
-import { supabase } from './supabase';
+import { sendMentionNotifications } from './mentionableMembers';
+import type { MentionReach } from './mentions';
 
 type MentionMember = Pick<Profile, 'id' | 'name'>;
 
@@ -29,20 +29,15 @@ export function notifyWishMentions({
   wishOwnerName,
   reach = null,
 }: NotifyWishMentionsOptions) {
-  const mentionedMembers = getMentionedMembers(content, members, senderId, reach);
-  const preview = content.trim();
-  if (!preview || mentionedMembers.length === 0) return;
-
-  mentionedMembers.forEach((member) => {
-    supabase.functions.invoke('notify-wish-mention', {
-      body: {
-        wish_id: wishId,
-        sender_id: senderId,
-        recipient_id: member.id,
-        message_preview: preview,
-        community_id: communityId,
-        wish_owner_name: wishOwnerName,
-      },
-    }).catch((err) => console.log('Wish mention notification error (non-blocking):', err));
+  // Delegates to the one delivery path (2026-08-12): people named by hand
+  // get a call each, a tagged whole HIVE or everyone HIVE-Wide goes to the
+  // server as one group call, resolved where the member list is readable.
+  sendMentionNotifications({
+    target: { kind: 'wish', wishId, wishOwnerName },
+    senderId,
+    communityId,
+    content,
+    members,
+    reach,
   });
 }

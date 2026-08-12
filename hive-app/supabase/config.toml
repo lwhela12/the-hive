@@ -77,6 +77,11 @@ verify_jwt = false
 [functions.notify-wish-mention]
 verify_jwt = false
 
+# Chat mention notification system - uses service_role key
+# Sends push notifications when someone @mentions a member in a community room
+[functions.notify-chat-mention]
+verify_jwt = false
+
 # Generate conversation titles using Claude Haiku - requires user authentication
 # Auth handled via _shared/auth.ts using jose library
 [functions.generate-title]

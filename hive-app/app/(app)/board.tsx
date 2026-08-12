@@ -20,8 +20,7 @@ import { AppHeader } from '../../components/navigation';
 import { SpaceBackdrop } from '../../components/ui/SpaceBackdrop';
 import { usePageSkin } from '../../lib/pageSkin';
 import { useBoardLinkedWishes, type LinkedWish } from '../../lib/hooks/useBoardLinkedWishes';
-import { getMentionedMembers } from '../../lib/mentions';
-import { fetchCommunityMentionableMembers } from '../../lib/mentionableMembers';
+import { fetchCommunityMentionableMembers, sendMentionNotifications } from '../../lib/mentionableMembers';
 import { useMentionReach } from '../../lib/hooks/useMentionableMembers';
 import { markBoardThreadGranted } from '../../lib/boardThreadCompletion';
 import { setBoardThreadArchiveState } from '../../lib/boardThreadArchive';
@@ -945,23 +944,18 @@ export default function BoardScreen({ reach = 'hive' }: { reach?: BoardReach } =
       const mentionableMembers = topicMembers.length > 0
         ? topicMembers
         : await fetchCommunityMentionableMembers(communityId);
-      const mentionedMembers = getMentionedMembers(
-        `${title} ${content}`,
-        mentionableMembers,
-        profile.id,
-        mentionReach
-      );
-      mentionedMembers.forEach((member) => {
-        supabase.functions.invoke('notify-board-mention', {
-          body: {
-            post_id: data.id,
-            sender_id: profile.id,
-            recipient_id: member.id,
-            message_preview: content,
-            community_id: communityId,
-            board_name: selectedCategory.name,
-          },
-        }).catch((err) => console.log('Board mention notification error (non-blocking):', err));
+      // One call delivers every kind of tag: people named by hand get their
+      // own call each, and a whole HIVE (or everyone HIVE-Wide) goes to the
+      // server as one group call — the sender may not be able to see that
+      // HIVE's member list, and the notify function can (2026-08-12).
+      sendMentionNotifications({
+        target: { kind: 'board', postId: data.id, boardName: selectedCategory.name },
+        senderId: profile.id,
+        communityId,
+        content: `${title} ${content}`,
+        preview: content,
+        members: mentionableMembers,
+        reach: mentionReach,
       });
       return true;
     } catch (error: unknown) {

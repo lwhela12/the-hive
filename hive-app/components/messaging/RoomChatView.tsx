@@ -25,7 +25,7 @@ import { RoomTypingIndicator } from './RoomTypingIndicator';
 import { SelectedImage, pickSingleImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadAttachments, uploadSingleImage } from '../../lib/attachmentUpload';
-import { getMentionedMembers } from '../../lib/mentions';
+import { sendMentionNotifications } from '../../lib/mentionableMembers';
 import { hiveDisplayName, hiveAccent, accentWash } from '../../lib/hiveBrand';
 import { HiveMark } from '../ui/HiveMark';
 import { SPACE_SKIN } from '../../lib/pageSkin';
@@ -624,32 +624,28 @@ export function RoomChatView({ room, onBack, startCustomizing = false, hideBackB
       // Refetch messages to show the new one
       await refetchMessages();
 
-      // In community rooms, @mentions notify only the people named.
+      // In community rooms, @mentions notify the people named — and, since
+      // 2026-08-12, a tagged whole HIVE for real: one server call resolves
+      // that HIVE's members where this client cannot. DMs and group DMs stay
+      // on notify-dm below; whole-HIVE tags never apply in a closed room.
       if (room.room_type === 'community' && messageContent) {
-        const mentionedMembers = getMentionedMembers(
-          messageContent,
-          activeMentionableMembers,
-          profile.id,
-          mentionReach
-        );
-        const messagePreview = messageContent || (attachments ? 'Sent an attachment' : '');
-
-        mentionedMembers.forEach((member) => {
-          supabase.functions.invoke('notify-chat-mention', {
-            body: {
-              room_id: room.id,
-              sender_id: profile.id,
-              recipient_id: member.id,
-              message_preview: messagePreview,
-              community_id: communityId,
-              // The email and the push say where you were tagged, so they say
-              // the HIVE's name too — "General" would name a room nobody sees
-              // called that any more (Nat 2026-08-03). No user id, because the
-              // sender's private nickname for the room is theirs alone and has
-              // no business in somebody else's inbox.
-              room_name: getMessagesRoomLabel(roomWithCustomization, undefined, hiveName),
-            },
-          }).catch((err) => console.log('Mention notification error (non-blocking):', err));
+        sendMentionNotifications({
+          target: {
+            kind: 'chat',
+            roomId: room.id,
+            // The email and the push say where you were tagged, so they say
+            // the HIVE's name too — "General" would name a room nobody sees
+            // called that any more (Nat 2026-08-03). No user id, because the
+            // sender's private nickname for the room is theirs alone and has
+            // no business in somebody else's inbox.
+            roomName: getMessagesRoomLabel(roomWithCustomization, undefined, hiveName),
+          },
+          senderId: profile.id,
+          communityId,
+          content: messageContent,
+          preview: messageContent || (attachments ? 'Sent an attachment' : ''),
+          members: activeMentionableMembers,
+          reach: mentionReach,
         });
       }
 

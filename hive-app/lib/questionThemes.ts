@@ -7,12 +7,14 @@
  *
  * It could not, and the reason was structural. The Swarm Report paired answers
  * by **date** — everyone who answered on the 5th was assumed to have answered
- * the same question, which was true when there was one HIVE. OG's deck has 365
- * questions and Tech's has 32, they walk from different start dates, and their
- * categories overlap in exactly zero places: OG asks about *comfort food* and
- * *scent memory*, Tech asks about *scar tissue* and *shipping*. Matching those
- * by date would have compared an answer about a childhood snack against one
- * about a bad deploy, found the word "the" in both, and reported a percentage.
+ * the same question, which was true when there was one HIVE. Every HIVE now
+ * carries its own 365 (Nat's call, 2026-08-12: a person in two HIVEs should
+ * never be asked the same question twice), they walk from different start
+ * dates, and their categories overlap in exactly zero places: OG asks about
+ * *comfort food* and *scent memory*, Tech asks about *scar tissue* and
+ * *shipping*. Matching those by date would have compared an answer about a
+ * childhood snack against one about a bad deploy, found the word "the" in
+ * both, and reported a percentage.
  *
  * A question's `category` is its label — 365 of them, one per question, useful
  * for showing what was asked and useless for comparing anything. A **theme** is

@@ -23,6 +23,7 @@ import {
 import { deleteWishById } from '../../lib/wishMutations';
 import { getCycleStart, getHalfwayDoneKey } from '../../lib/meetingCycle';
 import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
+import { sendMentionNotifications } from '../../lib/mentionableMembers';
 import { useMentionInput } from '../../lib/hooks/useMentionInput';
 import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { Avatar } from '../../components/ui/Avatar';
@@ -1366,22 +1367,16 @@ export default function MonthlyTuneupScreen() {
         return;
       }
 
-      // Non-blocking, mirroring BoardReplyComposer: each tagged member gets
-      // the mention push; @everyone fans out to the whole HIVE minus you.
-      const recipients = newsletterMentionsEveryone
-        ? mentionableMembers.filter((member) => member.id !== profile.id)
-        : newsletterMentionedMembers;
-      recipients.forEach((member) => {
-        supabase.functions.invoke('notify-board-mention', {
-          body: {
-            post_id: thread.postId,
-            sender_id: profile.id,
-            recipient_id: member.id,
-            message_preview: content,
-            community_id: communityId,
-            board_name: thread.boardName,
-          },
-        }).catch((err) => console.log('Shout-out mention notification error (non-blocking):', err));
+      // Non-blocking, mirroring BoardReplyComposer: each named member gets
+      // their own love note, and @everyone (or a tagged whole HIVE) fans out
+      // server-side, whole HIVE minus you (2026-08-12).
+      sendMentionNotifications({
+        target: { kind: 'board', postId: thread.postId, boardName: thread.boardName },
+        senderId: profile.id,
+        communityId,
+        content,
+        members: mentionableMembers,
+        reach: mentionReach,
       });
 
       setNewsletterPosted((current) => [...current, { content, thread: thread.postTitle ?? 'the shout-outs thread' }]);

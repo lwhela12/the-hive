@@ -8,6 +8,17 @@ const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@yourdomain.com>
 const APP_URL = Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app';
 
 const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
+// The two slower check-ins (2026-08-12). Each occurrence is its own survey
+// row that an admin launches from the Admin screen — "Quarterly Check-in ·
+// Q3 2026", "End-of-Year Check-in · 2026" — with due_date set to the
+// quarter/year's last day. This cron nudges three days before that day and
+// gives a last call on the day itself, WHICH MEANS: a HIVE that holds no
+// such active survey hears nothing at all. That is the property that made
+// this cron safe to leave running (verified 2026-08-11) and it must stay.
+// lib/checkIns.ts keeps the app-side copies of these patterns — change one,
+// change both.
+const QUARTERLY_CHECK_IN_PATTERN = /quarterly\s+check-?in/i;
+const END_OF_YEAR_CHECK_IN_PATTERN = /end[-\s]of[-\s]year\s+check-?in/i;
 const REMINDER_WINDOW_DAYS = 3;
 
 const MONTH_NAMES = [
@@ -105,6 +116,23 @@ function addDaysToDateOnly(dueDateOnly: string, days: number): string {
 
 function getWindowOpenDate(dueDateOnly: string): string {
   return addDaysToDateOnly(dueDateOnly, -REMINDER_WINDOW_DAYS);
+}
+
+// The upcoming quarter/year end as a Pacific calendar date, for previews.
+// Q4 deliberately rolls to Q1 of the new year: December's quarter-end belongs
+// to the end-of-year check-in, so there is no Q4 quarterly (see lib/checkIns.ts).
+function upcomingSeasonEndDateOnly(kind: SeasonKind, todayDateOnly: string): string {
+  const [y, m] = todayDateOnly.split('-').map(Number);
+  if (kind === 'year') return `${y}-12-31`;
+  let quarter = Math.floor((m - 1) / 3) + 1;
+  let year = y;
+  if (quarter === 4) {
+    quarter = 1;
+    year += 1;
+  }
+  const endMonth = quarter * 3;
+  const endDay = new Date(Date.UTC(year, endMonth, 0)).getUTCDate();
+  return `${year}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
 }
 
 // Three touches per cycle, all fired by the same daily cron:
@@ -215,6 +243,65 @@ function checkInEmailHtml(rawName: string, month: string, day: number, kind: Rem
   `;
 }
 
+/**
+ * The quarter and the year get their own emails — same honey/gold dress as
+ * the monthly ones, different words. A quarter is a look back; a year is a
+ * small celebration. Both land on Home, where the check-in card lives.
+ */
+type SeasonKind = 'quarter' | 'year';
+type SeasonTouch = 'window' | 'day_of';
+
+function seasonEmailHtml(
+  rawName: string,
+  kind: SeasonKind,
+  touch: SeasonTouch,
+  month: string,
+  day: number,
+): string {
+  const name = escapeHtml(rawName);
+  const heading = kind === 'quarter'
+    ? (touch === 'day_of' ? 'Last day of the quarter' : "The quarter's wrapping up")
+    : (touch === 'day_of' ? 'Last day of the year!' : 'One more look at the year');
+  const sub = kind === 'quarter'
+    ? `The quarter ends ${month} ${day}`
+    : `The year ends ${month} ${day}`;
+  const emoji = kind === 'quarter' ? '🧭' : '🎉';
+  const body = kind === 'quarter'
+    ? (touch === 'day_of'
+        ? `Today's the last day of the quarter and your check-in isn't in yet — it takes about <strong>5 minutes</strong>, and it's a lovely way to close the chapter before the next one starts.`
+        : `Three months went by fast. Your <strong>quarterly check-in</strong> is open on Home — five quiet minutes to look back at what happened, what you're proud of, and what you want from the next stretch. Short answers are perfect.`)
+    : (touch === 'day_of'
+        ? `It's the very last day of the year and your check-in isn't in yet — five minutes, one look back, and you get to walk into the new year with the whole story written down.`
+        : `The year is wrapping up. Your <strong>end-of-year check-in</strong> is open on Home — look back with us, celebrate a little, and point at what comes next. Short answers are perfect.`);
+  const button = kind === 'quarter' ? 'Open HIVE and look back' : 'Open HIVE and wrap the year';
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
+      <div style="text-align: center; padding: 8px 0 4px;">
+        <span style="font-size: 40px;">${emoji}</span>
+      </div>
+      <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
+      <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${sub}</p>
+      <p style="font-size: 15px;">Hi ${name},</p>
+      <p style="font-size: 15px;">${body}</p>
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${APP_URL}/hive" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">${button}</a>
+      </div>
+      <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Every answer stays inside your HIVE. 🍯</p>
+    </div>
+  `;
+}
+
+function seasonSubject(kind: SeasonKind, touch: SeasonTouch, month: string, day: number): string {
+  if (kind === 'quarter') {
+    return touch === 'day_of'
+      ? `🧭 Last day of the quarter — quick check-in if you haven't`
+      : `🧭 The quarter wraps up ${month} ${day} — your check-in is open`;
+  }
+  return touch === 'day_of'
+    ? `🎉 Last day of the year — one look back before it goes`
+    : `🎉 One more look at the year — your end-of-year check-in is open`;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   const corsResponse = handleCors(req);
@@ -294,6 +381,31 @@ serve(async (req) => {
       if (previewDate) ({ month, day } = formatMeetingDate(previewDate));
     }
     const requestedTestKind = typeof body.test_kind === 'string' ? body.test_kind : 'window';
+
+    // Season previews: test_kind 'quarter' or 'year' sends that sample,
+    // dated to the upcoming quarter/year end so it reads like the real one.
+    if (requestedTestKind === 'quarter' || requestedTestKind === 'year') {
+      const seasonKind = requestedTestKind as SeasonKind;
+      const previewToday = toPacificDateOnly(new Date()) ?? new Date().toISOString().slice(0, 10);
+      const endDateOnly = upcomingSeasonEndDateOnly(seasonKind, previewToday);
+      const { month: seasonMonth, day: seasonDay } = formatMeetingDate(endDateOnly);
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: FROM_EMAIL,
+          to: testEmail,
+          subject: `[Preview] ${seasonSubject(seasonKind, 'window', seasonMonth, seasonDay)}`,
+          html: seasonEmailHtml(
+            typeof body.test_name === 'string' ? body.test_name : 'there',
+            seasonKind, 'window', seasonMonth, seasonDay,
+          ),
+        }),
+      });
+      if (!res.ok) return errorResponse(`Preview email failed: ${await res.text()}`, 502);
+      return jsonResponse({ preview_sent_to: testEmail, kind: seasonKind, ends: `${seasonMonth} ${seasonDay}` });
+    }
+
     const testKind: ReminderKind = requestedTestKind === 'midpoint' || requestedTestKind === 'day_of'
       ? requestedTestKind
       : 'window';
@@ -696,6 +808,197 @@ serve(async (req) => {
         }
       } catch (surveyErr) {
         console.error(`Survey processing failed for ${survey.id}:`, surveyErr);
+        errors.push(`survey:${survey.id}:${String(surveyErr)}`);
+      }
+    }
+
+    /* ---- The quarter and the year (2026-08-12) --------------------------
+       Driven entirely by which HIVEs hold a launched, active season survey —
+       a HIVE with none hears nothing, which is the safety property this cron
+       was verified on. Two touches, computed from the survey's own due date
+       (the quarter/year's last day), never from a hardcoded calendar:
+         window — three days before the end (Mar 28, Jun 27, Sep 27, Dec 28)
+         day_of — the end itself, only to people who haven't answered
+       This loop deliberately repeats the monthly loop's shape instead of
+       sharing its body: the monthly path is verified in production, and
+       leaving it byte-for-byte untouched beats a refactor here. */
+    const seasonCheckIns = (activeSurveys as Survey[] | null ?? [])
+      .map((s) => ({
+        survey: s,
+        kind: END_OF_YEAR_CHECK_IN_PATTERN.test(s.title || '')
+          ? ('year' as SeasonKind)
+          : QUARTERLY_CHECK_IN_PATTERN.test(s.title || '')
+            ? ('quarter' as SeasonKind)
+            : null,
+      }))
+      .filter((entry): entry is { survey: Survey; kind: SeasonKind } => entry.kind !== null);
+
+    for (const { survey, kind } of seasonCheckIns) {
+      try {
+        if (!survey.due_date) continue;
+        const dueDateOnly = toPacificDateOnly(new Date(survey.due_date));
+        if (!dueDateOnly) continue;
+
+        const windowOpen = getWindowOpenDate(dueDateOnly);
+        const touch: SeasonTouch | null = todayStr === windowOpen
+          ? 'window'
+          : todayStr === dueDateOnly
+            ? 'day_of'
+            : null;
+        if (!touch) continue;
+
+        // One notification row is the send receipt, exactly like the monthly.
+        // The period carries the end date, so relaunching next quarter under
+        // the same survey title can never be swallowed by last quarter's send.
+        const period = `${dueDateOnly}:season-${touch}`;
+        const { data: existingReminders, error: dedupError } = await supabaseAdmin
+          .from('notifications')
+          .select('id')
+          .eq('metadata->>reminder_survey_id', survey.id)
+          .eq('metadata->>reminder_period', period)
+          .limit(1);
+        if (dedupError) {
+          console.error(`Dedup check failed for season survey ${survey.id}:`, dedupError);
+          errors.push(`dedup:${survey.id}:${dedupError.message}`);
+          continue;
+        }
+        if (existingReminders && existingReminders.length > 0) {
+          skippedDedup++;
+          continue;
+        }
+
+        const { data: memberships, error: memberError } = await supabaseAdmin
+          .from('community_memberships')
+          .select('user_id')
+          .eq('community_id', survey.community_id);
+        if (memberError || !memberships?.length) {
+          console.error(`Error fetching members for community ${survey.community_id}:`, memberError);
+          errors.push(`members:${survey.id}:${memberError?.message ?? 'no members'}`);
+          continue;
+        }
+
+        let memberIds = memberships.map((m: { user_id: string }) => m.user_id);
+
+        // The day-of last call only nags people who haven't answered. One
+        // survey row IS one occurrence, so any response to it means answered —
+        // no period arithmetic like the monthly needs.
+        if (touch === 'day_of') {
+          const { data: responded } = await supabaseAdmin
+            .from('survey_responses')
+            .select('user_id')
+            .eq('survey_id', survey.id);
+          const respondedIds = new Set((responded ?? []).map((r: { user_id: string }) => r.user_id));
+          memberIds = memberIds.filter((id: string) => !respondedIds.has(id));
+          if (memberIds.length === 0) {
+            console.log(`Everyone already answered season survey ${survey.id} — skipping ${touch}`);
+            continue;
+          }
+        }
+
+        const { data: members, error: profilesError } = await supabaseAdmin
+          .from('profiles')
+          .select('id, name, email, push_token, email_reminders_enabled, email_meeting_checkin_enabled')
+          .in('id', memberIds);
+        if (profilesError || !members?.length) {
+          console.error('Error fetching member profiles:', profilesError);
+          errors.push(`profiles:${survey.id}:${profilesError?.message ?? 'no profiles'}`);
+          continue;
+        }
+
+        const { month, day } = formatMeetingDate(dueDateOnly);
+        const notificationTitle = kind === 'quarter'
+          ? (touch === 'day_of'
+              ? '🧭 Last day of the quarter — quick check-in if you haven\'t'
+              : '🧭 Your quarterly check-in is open')
+          : (touch === 'day_of'
+              ? '🎉 Last day of the year — one look back before it goes'
+              : '🎉 Your end-of-year check-in is open');
+        const notificationBody = kind === 'quarter'
+          ? (touch === 'day_of'
+              ? `The quarter ends today and your check-in isn't in yet — five quiet minutes on Home closes the chapter.`
+              : `The quarter wraps up ${month} ${day}. Five quiet minutes on Home: what happened, what you're proud of, what's next.`)
+          : (touch === 'day_of'
+              ? `The year ends today and your check-in isn't in yet — five minutes on Home and you walk into the new year with the story written down.`
+              : `The year wraps up ${month} ${day}. Look back with us on Home — celebrate a little, and point at what comes next.`);
+        const emailSubject = seasonSubject(kind, touch, month, day);
+
+        surveysFired++;
+
+        for (const member of members as MemberProfile[]) {
+          try {
+            // Season check-ins ride the pre-meeting check-in toggle: they are
+            // check-in invitations, and somebody who muted those did not mean
+            // "except four times a year". The master switch still rules all.
+            const hasEmail =
+              member.email_reminders_enabled !== false &&
+              member.email_meeting_checkin_enabled !== false &&
+              !!(RESEND_API_KEY && member.email);
+            let emailDelivered = false;
+
+            if (hasEmail) {
+              try {
+                const res = await fetch('https://api.resend.com/emails', {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${RESEND_API_KEY}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    from: FROM_EMAIL,
+                    to: member.email,
+                    subject: emailSubject,
+                    html: seasonEmailHtml(member.name ?? 'there', kind, touch, month, day),
+                  }),
+                });
+                if (res.ok) {
+                  emailDelivered = true;
+                  emailsSent++;
+                } else {
+                  console.error(`Email failed for ${member.email}:`, await res.text());
+                }
+              } catch (emailErr) {
+                console.error(`Email error for ${member.email}:`, emailErr);
+              }
+            }
+
+            const { error: notifError } = await supabaseAdmin.from('notifications').insert({
+              user_id: member.id,
+              community_id: survey.community_id,
+              notification_type: 'general',
+              title: notificationTitle,
+              content: notificationBody,
+              email_sent: emailDelivered,
+              metadata: {
+                reminder_survey_id: survey.id,
+                reminder_period: period,
+              },
+            });
+            if (notifError) {
+              console.error(`Failed to create notification for ${member.id}:`, notifError);
+              errors.push(`notif:${member.id}:${notifError.message}`);
+            } else {
+              notificationsCreated++;
+            }
+
+            if (member.push_token) {
+              try {
+                await sendExpoPushNotification(member.push_token, notificationTitle, notificationBody, {
+                  type: 'general',
+                  reminder_survey_id: survey.id,
+                  reminder_period: period,
+                });
+                pushSent++;
+              } catch (pushError) {
+                console.error(`Push failed for ${member.id}:`, pushError);
+              }
+            }
+          } catch (memberErr) {
+            console.error(`Member processing failed for ${member.id}:`, memberErr);
+            errors.push(`member:${member.id}:${String(memberErr)}`);
+          }
+        }
+      } catch (surveyErr) {
+        console.error(`Season survey processing failed for ${survey.id}:`, surveyErr);
         errors.push(`survey:${survey.id}:${String(surveyErr)}`);
       }
     }

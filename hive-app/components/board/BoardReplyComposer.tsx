@@ -8,9 +8,8 @@ import { queryKeys } from '../../lib/queryClient';
 import { SelectedImage } from '../../lib/imagePicker';
 import { SelectedFile } from '../../lib/filePicker';
 import { uploadAttachments } from '../../lib/attachmentUpload';
-import { getMentionedMembers, hasBroadcastMention } from '../../lib/mentions';
 import { useMentionableMembers, useMentionReach } from '../../lib/hooks/useMentionableMembers';
-import { fetchCommunityMentionableMembers } from '../../lib/mentionableMembers';
+import { sendMentionNotifications } from '../../lib/mentionableMembers';
 import { usePersistentTextDraft } from '../../lib/hooks/usePersistentTextDraft';
 import { showAlert } from '../../lib/showAlert';
 import type { Attachment, Profile } from '../../types';
@@ -131,27 +130,22 @@ export function BoardReplyComposer({
         },
       }).catch((err) => console.log('Board reply notification error (non-blocking):', err));
 
-      const replyMentionsEveryone = hasBroadcastMention(replyText);
-      const mentionableMembersForNotification = replyMentionsEveryone && activeMentionableMembers.length === 0
-        ? await fetchCommunityMentionableMembers(communityId)
-        : activeMentionableMembers;
-      const mentionedMembers = getMentionedMembers(
-        replyText,
-        mentionableMembersForNotification,
-        profile.id,
-        mentionReach
-      ).filter((member) => replyMentionsEveryone || member.id !== postAuthorId);
-      mentionedMembers.forEach((member) => {
-        supabase.functions.invoke('notify-board-mention', {
-          body: {
-            post_id: postId,
-            sender_id: profile.id,
-            recipient_id: member.id,
-            message_preview: replyText || 'Sent an attachment',
-            community_id: communityId,
-            board_name: boardName,
-          },
-        }).catch((err) => console.log('Board mention notification error (non-blocking):', err));
+      // One call delivers every kind of tag; whole-group tags fan out
+      // server-side (2026-08-12). The post author is left off the personal
+      // calls because notify-board-reply above already told them — a
+      // whole-group tag still reaches them, same as @everyone always did.
+      // The old "fetch the member list if it hasn't loaded" fallback is gone
+      // with the client-side @everyone expansion it existed for: the server
+      // resolves the group's members itself now.
+      sendMentionNotifications({
+        target: { kind: 'board', postId, boardName },
+        senderId: profile.id,
+        communityId,
+        content: replyText,
+        preview: replyText || 'Sent an attachment',
+        members: activeMentionableMembers,
+        reach: mentionReach,
+        excludePersonIds: postAuthorId ? [postAuthorId] : undefined,
       });
 
       reset();

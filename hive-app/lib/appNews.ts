@@ -28,6 +28,36 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-12-quarter-and-year-checkins',
+    date: '2026-08-12',
+    title: 'Every HIVE gets a quarterly check-in now — and an end-of-year one',
+    detail: 'Three days before the quarter ends, a five-minute look-back lands on Home: what happened, what you\'re proud of, what you want next. December\'s is the big one — the whole year. Short answers are perfect.',
+  },
+  {
+    id: '2026-08-12-tag-a-whole-hive',
+    date: '2026-08-12',
+    title: 'You can tag a whole HIVE',
+    detail: 'Writing @og or @tech in a shout-out or a post that travels HIVE-Wide reaches every member of that HIVE — each one gets their own little nudge, even if you\'re not in that HIVE yourself.',
+  },
+  {
+    id: '2026-08-12-your-hives-own-questions',
+    date: '2026-08-12',
+    title: 'Each HIVE asks its own daily questions now',
+    detail: 'Tech HIVE and Production HIVE each have a full year of their own — flavored to who they are. Your answers quietly show how you think and work, so you can find the people who work like you, and the ones who think exactly opposite.',
+  },
+  {
+    id: '2026-08-12-one-answer-per-hive',
+    date: '2026-08-12',
+    title: 'In more than one HIVE? Answer them all',
+    detail: 'Each of your HIVEs asks its own daily question, and you can now answer every one of them on the same day.',
+  },
+  {
+    id: '2026-08-12-lighter-on-cellular',
+    date: '2026-08-12',
+    title: 'HIVE shows up faster on a slow connection',
+    detail: 'There is about a fifth less to download before the bee appears, and the connection to your HIVE now starts while the rest is still arriving.',
+  },
+  {
     id: '2026-08-12-meeting-titles-follow-the-day',
     date: '2026-08-12',
     title: 'A meeting is named after the month it happens in',

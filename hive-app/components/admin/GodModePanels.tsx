@@ -11,12 +11,23 @@ import { formatDateMedium } from '../../lib/dateUtils';
 // here take the space skin's ink rather than asking `usePageSkin()`.
 import { SPACE_SKIN } from '../../lib/pageSkin';
 import { showAlert } from '../../lib/showAlert';
-import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns } from '../../lib/checkIns';
+import {
+  CHECK_INS_COMING_SOON_MESSAGE,
+  buildSeasonCheckIn,
+  getSeasonCheckInKind,
+  getUpcomingSeasonOccurrence,
+  hasSeasonCheckIns,
+  hasTailoredCheckIns,
+  type SeasonKind,
+  type SeasonOccurrence,
+} from '../../lib/checkIns';
+import { useSurveys } from '../../lib/hooks/useSurveys';
 import type { UserRole } from '../../types';
 
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { FIELD_LOOK } from '../ui/Input';
 import { ThinkingBee } from '../ui/ThinkingBee';
+import { SurveyModal } from '../surveys/SurveyModal';
 /**
  * Everyone, everywhere, in one room.
  *
@@ -1010,34 +1021,34 @@ export function NewsletterPanel({
  *
  * The quarter and the year are Nat's, 2026-08-06: *"check-ins should show the 3
  * days before the meeting, 3 days before the newsletter & 3 days before the end
- * of the quarter & 3 days before the end of the year."* Nothing sends those —
- * no survey, no cron, no table — so they are listed in italics and say so. She
- * asked to see the shape of the year, and a line that quietly looked live would
- * have her waiting on answers that never come.
+ * of the quarter & 3 days before the end of the year."* They sat in italics as
+ * coming soon until 2026-08-12, when they became real — the schedule below is
+ * built per HIVE now, so each row can be a live door, a launch button, or an
+ * honest italic, depending on what that HIVE actually has.
+ *
+ * How the two slow ones run (the full decision lives in lib/checkIns.ts):
+ * each occurrence is its own `surveys` row that an admin launches from the
+ * row below. Members meet it as a card on Home three days before the
+ * quarter/year ends; the cron only nudges a HIVE whose survey is actually
+ * launched and active. December's quarter-end belongs to the end-of-year
+ * check-in, so the quarterly runs March, June and September.
  */
-const CHECK_IN_SCHEDULE: {
+type CheckInScheduleRow = {
+  key: string;
   when: string;
   what: string;
   live: boolean;
   actionLabel?: string;
-  mode?: 'midpoint';
-}[] = [
-  {
-    when: 'Three days before the meeting',
-    what: 'open the monthly tune-up',
-    live: true,
-    actionLabel: 'Test or fill out the monthly check-in',
-  },
-  {
-    when: 'The last three days of the month',
-    what: 'shout-outs for the newsletter',
-    live: true,
-    actionLabel: 'Test or fill out the halfway check-in',
-    mode: 'midpoint',
-  },
-  { when: 'Three days before the quarter ends', what: 'coming soon', live: false },
-  { when: 'Three days before the year ends', what: 'coming soon', live: false },
-];
+  onPress?: () => void;
+};
+
+/** The slim slice of a `surveys` row this panel needs to know "is it launched?". */
+type SeasonSurveyRow = {
+  id: string;
+  community_id: string;
+  title: string;
+  due_date: string | null;
+};
 
 export function HiveMemberPanels({
   cellStyle,
@@ -1132,6 +1143,36 @@ export function HiveMemberPanels({
   >(null);
   const [removing, setRemoving] = useState(false);
 
+  /**
+   * The quarter and the year, per HIVE (2026-08-12).
+   *
+   * `seasonSurveysByHive` holds each HIVE's launched-and-active season
+   * check-ins so the schedule can tell a launch button from an open door.
+   * `confirmSeasonLaunch` is the one dialog all the launch rows share, the
+   * same shape as `confirmRevoke` above and for the same reason. `seasonFill`
+   * opens the launched survey right here in the member-facing answer sheet —
+   * the same "test or fill out is the real flow" idea as `openMemberCheckIn`,
+   * without leaving Admin, because a season check-in has no wizard to walk.
+   */
+  const [seasonSurveysByHive, setSeasonSurveysByHive] = useState<Record<string, SeasonSurveyRow[]>>({});
+  const [confirmSeasonLaunch, setConfirmSeasonLaunch] = useState<
+    { hiveId: string; hiveName: string; kind: SeasonKind; occurrence: SeasonOccurrence } | null
+  >(null);
+  const [launchingSeason, setLaunchingSeason] = useState(false);
+  const [seasonFill, setSeasonFill] = useState<{ communityId: string; surveyId: string } | null>(null);
+  // The same hook the member surfaces use, pointed at whichever HIVE's survey
+  // is being filled out. It computes the response period and writes the cache
+  // the way Home expects, so an answer filed from Admin is a real answer.
+  const {
+    allSurveys: seasonFillSurveys,
+    myResponses: seasonFillResponses,
+    submitResponse: submitSeasonFill,
+  } = useSurveys(seasonFill?.communityId, profile?.id);
+  const seasonFillSurvey = seasonFill
+    ? seasonFillSurveys.find((survey) => survey.id === seasonFill.surveyId) ?? null
+    : null;
+  const seasonFillExisting = seasonFillSurvey ? seasonFillResponses.get(seasonFillSurvey.id) : undefined;
+
   const load = useCallback(async () => {
     setLoading(true);
     const next: Record<string, Row[]> = {};
@@ -1151,6 +1192,24 @@ export function HiveMemberPanels({
     }));
 
     setByHive(next);
+
+    // Which quarterly / end-of-year check-ins are launched and still active,
+    // per HIVE, recognised by title exactly the way the cron recognises them.
+    // One query for every HIVE on the screen, like the invites below.
+    const allHiveIds = memberships.map((m) => m.community_id);
+    const nextSeason: Record<string, SeasonSurveyRow[]> = {};
+    allHiveIds.forEach((id) => { nextSeason[id] = []; });
+    if (allHiveIds.length > 0) {
+      const { data: seasonRows } = await supabase
+        .from('surveys')
+        .select('id, community_id, title, due_date')
+        .in('community_id', allHiveIds)
+        .eq('is_active', true);
+      ((seasonRows ?? []) as SeasonSurveyRow[]).forEach((row) => {
+        if (getSeasonCheckInKind(row)) nextSeason[row.community_id]?.push(row);
+      });
+    }
+    setSeasonSurveysByHive(nextSeason);
 
     // Who has been invited and hasn't walked in yet. Only admins may read the
     // invite table at all, so we ask about the HIVEs where you are one — every
@@ -1401,6 +1460,63 @@ export function HiveMemberPanels({
     if (isSelf) await refreshProfile();
   };
 
+  /**
+   * Launch one occurrence of a season check-in: insert the `surveys` row
+   * built from that HIVE's declarative deck in lib/checkIns.ts. From this
+   * moment the cron will nudge this HIVE (and only HIVEs with such a row) —
+   * launching IS the switch. The card still waits for its window on Home, so
+   * launching early is safe and is how Nat reads the questions first.
+   *
+   * The database checks the launcher is an admin of this HIVE (the "Admins
+   * can manage surveys" rule from migration 057), so like every write in
+   * this file the button and the rule agree.
+   */
+  const launchSeasonCheckIn = async () => {
+    if (!confirmSeasonLaunch || launchingSeason) return;
+    const { hiveId, hiveName, kind } = confirmSeasonLaunch;
+    const community = memberships.find((m) => m.community_id === hiveId)?.community;
+    const template = buildSeasonCheckIn(community, kind, new Date());
+    if (!template) {
+      setConfirmSeasonLaunch(null);
+      showAlert('No deck designed yet', `${hiveName} does not have questions for this check-in yet.`);
+      return;
+    }
+
+    setLaunchingSeason(true);
+    const { data, error } = await supabase
+      .from('surveys')
+      .insert({
+        community_id: hiveId,
+        title: template.title,
+        description: template.description,
+        questions: template.questions,
+        due_date: template.dueDateIso,
+        created_by: profile?.id ?? null,
+        is_active: true,
+      })
+      .select();
+    setLaunchingSeason(false);
+    setConfirmSeasonLaunch(null);
+
+    if (error || !data?.length) {
+      // An empty answer with no error means the rules stopped the write —
+      // saying nothing here is how "the button does nothing" happens.
+      showAlert(
+        'Could not launch it',
+        error?.message ?? `The database did not accept it — are you an admin of ${hiveName}?`
+      );
+      return;
+    }
+
+    await load();
+    showAlert(
+      "It's launched",
+      `${template.title} is ready for ${hiveName}. Members will find it on Home from ${
+        template.occurrence.opensDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+      }, and the reminder email goes out that morning. Tap the row any time to read or answer it yourself.`
+    );
+  };
+
   return (
     <>
       {/* EVERY HIVE, including the one you happen to be standing in.
@@ -1437,6 +1553,78 @@ export function HiveMemberPanels({
         // no way back without somebody going into the database by hand.
         const admins = rows.filter((r) => r.role === 'admin');
         const soleAdminId = admins.length === 1 ? admins[0].id : null;
+
+        /* The check-in schedule, built for THIS HIVE. The monthly pair is
+           live where the monthly rhythm has been designed (OG and Tech);
+           the quarter and the year are live wherever a season deck exists
+           in lib/checkIns.ts — all three HIVEs, Nat's Trello call — and
+           each of those rows is either the door to the launched survey or
+           the button that launches this occurrence. Italic "coming soon"
+           now only ever means "no deck designed", never "built but
+           resting". */
+        const tailored = hasTailoredCheckIns(m.community);
+        const seasonReady = hasSeasonCheckIns(m.community);
+        const launchedSeason = seasonSurveysByHive[m.community_id] ?? [];
+        const seasonRow = (kind: SeasonKind): CheckInScheduleRow => {
+          const when = kind === 'quarter'
+            ? 'Three days before the quarter ends'
+            : 'Three days before the year ends';
+          const what = kind === 'quarter' ? 'look back at the quarter' : 'look back at the whole year';
+          if (!seasonReady) return { key: kind, when, what: 'coming soon', live: false };
+          const occurrence = getUpcomingSeasonOccurrence(kind, new Date());
+          const launched = launchedSeason.find((row) => (
+            getSeasonCheckInKind(row) === kind && row.title.includes(occurrence.label)
+          ));
+          if (launched) {
+            return {
+              key: kind,
+              when,
+              what,
+              live: true,
+              actionLabel: `${occurrence.label} is launched — read it or fill it out`,
+              onPress: () => setSeasonFill({ communityId: m.community_id, surveyId: launched.id }),
+            };
+          }
+          // Not launched yet. Launching is an admin's act, like inviting —
+          // anyone else sees the schedule without a button on it.
+          if (m.role !== 'admin') return { key: kind, when, what, live: true };
+          return {
+            key: kind,
+            when,
+            what,
+            live: true,
+            actionLabel: `Launch ${occurrence.label} — members see it from ${
+              occurrence.opensDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            }`,
+            onPress: () => setConfirmSeasonLaunch({
+              hiveId: m.community_id, hiveName: name, kind, occurrence,
+            }),
+          };
+        };
+        const checkInSchedule: CheckInScheduleRow[] = [
+          {
+            key: 'monthly',
+            when: 'Three days before the meeting',
+            what: tailored ? 'open the monthly tune-up' : 'coming soon',
+            live: tailored,
+            ...(tailored ? {
+              actionLabel: 'Test or fill out the monthly check-in',
+              onPress: () => void openMemberCheckIn(m.community_id),
+            } : {}),
+          },
+          {
+            key: 'halfway',
+            when: 'The last three days of the month',
+            what: tailored ? 'shout-outs for the newsletter' : 'coming soon',
+            live: tailored,
+            ...(tailored ? {
+              actionLabel: 'Test or fill out the halfway check-in',
+              onPress: () => void openMemberCheckIn(m.community_id, 'midpoint'),
+            } : {}),
+          },
+          seasonRow('quarter'),
+          seasonRow('year'),
+        ];
 
         return (
           // One after another, no gaps. The HIVEs used to take every other
@@ -1511,7 +1699,6 @@ export function HiveMemberPanels({
             >
               <ScrollView style={scrollStyle} nestedScrollEnabled showsVerticalScrollIndicator>
                 {tab === 'checkins' ? (
-                  hasTailoredCheckIns(m.community) ? (
                   /* THE CHECK-INS THIS HIVE RUNS.
                      One door, then the shape of the year underneath it.
 
@@ -1526,28 +1713,48 @@ export function HiveMemberPanels({
                      were collected for. An Answers tab would be a third door
                      onto those two rooms, on the morning whose whole job was
                      taking doors away. So this row says "answers" out loud, and
-                     the line below names where the shout-outs go. */
+                     the line below names where the shout-outs go.
+
+                     Every HIVE shows the schedule now (2026-08-12): a HIVE
+                     whose monthly rhythm is still being designed keeps those
+                     two rows in honest italics, and its quarter and year rows
+                     work today — that was the whole promise. */
                   <View style={{ paddingVertical: 6 }}>
-                    <Pressable
-                      onPress={() => void openCheckInsForHive(m.community_id)}
-                      style={({ pressed }) => ({
-                        flexDirection: 'row', alignItems: 'center', gap: 10,
-                        paddingHorizontal: 14, paddingVertical: 11,
-                        backgroundColor: pressed ? skin.inset : 'transparent',
-                        borderBottomWidth: 1, borderBottomColor: skin.hairline,
-                      })}
-                    >
-                      <Text style={{ fontSize: 15 }}>📊</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#F6F4E5' }}>
-                          Questions &amp; answers
-                        </Text>
-                        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
-                          The meeting check-in, and what {name} said
-                        </Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={15} color="rgba(246,244,229,0.5)" />
-                    </Pressable>
+                    {tailored ? (
+                      <Pressable
+                        onPress={() => void openCheckInsForHive(m.community_id)}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row', alignItems: 'center', gap: 10,
+                          paddingHorizontal: 14, paddingVertical: 11,
+                          backgroundColor: pressed ? skin.inset : 'transparent',
+                          borderBottomWidth: 1, borderBottomColor: skin.hairline,
+                        })}
+                      >
+                        <Text style={{ fontSize: 15 }}>📊</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#F6F4E5' }}>
+                            Questions &amp; answers
+                          </Text>
+                          <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: 'rgba(246,244,229,0.55)' }}>
+                            The meeting check-in, and what {name} said
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={15} color="rgba(246,244,229,0.5)" />
+                      </Pressable>
+                    ) : (
+                      <Text
+                        accessibilityRole="text"
+                        style={{
+                          fontFamily: 'Lato_400Regular', fontStyle: 'italic',
+                          fontSize: 12, lineHeight: 18,
+                          color: 'rgba(246,244,229,0.55)',
+                          paddingHorizontal: 14, paddingVertical: 10,
+                          borderBottomWidth: 1, borderBottomColor: skin.hairline,
+                        }}
+                      >
+                        {CHECK_INS_COMING_SOON_MESSAGE}
+                      </Text>
+                    )}
 
                     <Text
                       style={{
@@ -1558,7 +1765,7 @@ export function HiveMemberPanels({
                     >
                       When they go out
                     </Text>
-                    {CHECK_IN_SCHEDULE.map((step) => {
+                    {checkInSchedule.map((step) => {
                           const content = (
                             <>
                               <View
@@ -1587,18 +1794,18 @@ export function HiveMemberPanels({
                                   </Text>
                                 ) : null}
                               </View>
-                              {step.actionLabel ? (
+                              {step.onPress ? (
                                 <Ionicons name="chevron-forward" size={14} color="rgba(246,244,229,0.5)" />
                               ) : null}
                             </>
                           );
 
-                          return step.actionLabel ? (
+                          return step.onPress ? (
                             <Pressable
-                              key={step.when}
-                              onPress={() => void openMemberCheckIn(m.community_id, step.mode)}
+                              key={step.key}
+                              onPress={step.onPress}
                               accessibilityRole="button"
-                              accessibilityLabel={step.actionLabel}
+                              accessibilityLabel={step.actionLabel ?? step.when}
                               style={({ pressed }) => ({
                                 flexDirection: 'row', alignItems: 'flex-start', gap: 8,
                                 paddingHorizontal: 14, paddingVertical: 9,
@@ -1609,7 +1816,7 @@ export function HiveMemberPanels({
                             </Pressable>
                           ) : (
                             <View
-                              key={step.when}
+                              key={step.key}
                               style={{
                                 flexDirection: 'row', alignItems: 'flex-start', gap: 8,
                                 paddingHorizontal: 14, paddingVertical: 5,
@@ -1621,39 +1828,6 @@ export function HiveMemberPanels({
                         })}
                     <View style={{ height: 10 }} />
                   </View>
-                  ) : (
-                    <View
-                      accessible
-                      accessibilityRole="text"
-                      accessibilityLabel={CHECK_INS_COMING_SOON_MESSAGE}
-                      style={{
-                        minHeight: 150,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingHorizontal: 24,
-                        paddingVertical: 30,
-                      }}
-                    >
-                      <Ionicons
-                        name="time-outline"
-                        size={24}
-                        color={accentOnDark(accent)}
-                        style={{ marginBottom: 10 }}
-                      />
-                      <Text
-                        style={{
-                          maxWidth: 360,
-                          fontFamily: 'Lato_700Bold',
-                          fontSize: 14,
-                          lineHeight: 21,
-                          color: '#F6F4E5',
-                          textAlign: 'center',
-                        }}
-                      >
-                        {CHECK_INS_COMING_SOON_MESSAGE}
-                      </Text>
-                    </View>
-                  )
                 ) : (
                 <>
                 {inviting ? (
@@ -2168,6 +2342,41 @@ export function HiveMemberPanels({
         onConfirm={() => { void removeMember(); }}
         onCancel={() => { if (!removing) setConfirmRemove(null); }}
       />
+
+      {/* Launching a quarter or a year. One dialog for all the HIVEs, like the
+          two above. What it has to say plainly: launching switches the
+          reminder on, and the questions can still be reworded afterwards. */}
+      <ConfirmDialog
+        visible={!!confirmSeasonLaunch}
+        title={confirmSeasonLaunch
+          ? confirmSeasonLaunch.kind === 'quarter'
+            ? `Launch the ${confirmSeasonLaunch.occurrence.label} check-in?`
+            : `Launch the ${confirmSeasonLaunch.occurrence.label} end-of-year check-in?`
+          : ''}
+        body={confirmSeasonLaunch
+          ? `${confirmSeasonLaunch.hiveName} members will find it on Home from ${
+              confirmSeasonLaunch.occurrence.opensDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+            }, with the reminder email that morning and a last call on ${
+              confirmSeasonLaunch.occurrence.endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+            }. You can read it any time after launching — tap the row it becomes. To reword a question, ask in chat.`
+          : undefined}
+        confirmLabel={launchingSeason ? 'Launching…' : 'Launch it'}
+        onConfirm={() => { void launchSeasonCheckIn(); }}
+        onCancel={() => { if (!launchingSeason) setConfirmSeasonLaunch(null); }}
+      />
+
+      {/* The launched season check-in, in the same answer sheet members get.
+          Filling it out here files a real answer under your own name — the
+          same deliberate choice as `openMemberCheckIn` for the monthly. */}
+      {seasonFillSurvey ? (
+        <SurveyModal
+          survey={seasonFillSurvey}
+          initialAnswers={seasonFillExisting?.answers}
+          isEditingResponse={!!seasonFillExisting}
+          onSubmit={(answers) => submitSeasonFill(seasonFillSurvey.id, answers)}
+          onClose={() => setSeasonFill(null)}
+        />
+      ) : null}
     </>
   );
 }

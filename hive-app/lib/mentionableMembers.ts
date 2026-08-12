@@ -1,15 +1,24 @@
 import type { Community, Profile } from '../types';
 import { hiveAccent } from './hiveBrand';
-import type { TaggableHive } from './mentions';
+import {
+  getMentionedGroups,
+  getMentionedMembers,
+  type MentionReach,
+  type TaggableHive,
+} from './mentions';
 import { supabase } from './supabase';
 
 /**
- * Who a picker can offer, and which HIVEs can be tagged as a whole.
+ * Who a picker can offer, which HIVEs can be tagged as a whole — and, since
+ * 2026-08-12, the one place a mention actually gets delivered from.
  *
  * The people half has always been one HIVE at a time, and stays that way: a
  * screen asks for the HIVE it is standing in, row-level security decides what
  * comes back. The HIVE half is new — see `lib/mentions.ts` for why "everyone"
- * needed to start saying whose everyone.
+ * needed to start saying whose everyone. Delivery lives at the bottom of this
+ * file (`sendMentionNotifications`), because five screens each hand-rolled
+ * the same "one edge-function call per tagged person" loop and none of them
+ * could reach a whole HIVE the sender stands outside of.
  */
 
 export type MentionableMember = Pick<Profile, 'id' | 'name'> & { avatar_url?: string | null };
@@ -125,4 +134,206 @@ export async function fetchMentionableMembersForHives(
   }
 
   return membersFromJoinedRows(data as any[]);
+}
+
+/**
+ * Every HIVE there is, in taggable shape.
+ *
+ * Any member of any HIVE may read every HIVE's name and colour — that is
+ * migration 137, Nat's call, made knowingly — and a name and a colour are
+ * exactly the two facts a typed "@og" needs in order to resolve. Members
+ * stay private; this list says nothing about who is inside.
+ *
+ * Cached in the module for the same ten minutes as the member lists: new
+ * HIVEs appear rarely, and a shout-out should not pay a round trip to learn
+ * names that have not changed since the last one.
+ */
+const ALL_HIVES_STALE_MS = 10 * 60 * 1000;
+let allHivesCache: { at: number; hives: TaggableHive[] } | null = null;
+
+export async function fetchAllTaggableHives(): Promise<TaggableHive[]> {
+  if (allHivesCache && Date.now() - allHivesCache.at < ALL_HIVES_STALE_MS) {
+    return allHivesCache.hives;
+  }
+
+  const { data, error } = await supabase
+    .from('communities')
+    .select('id, name, accent_color');
+
+  if (error) {
+    console.warn('[Mentions] HIVE list load failed', error);
+    // A stale list of HIVE names still beats no list at all.
+    return allHivesCache?.hives ?? [];
+  }
+
+  const hives = (data ?? [])
+    .map((community: any) => taggableHiveFromCommunity(community))
+    .filter((hive): hive is TaggableHive => !!hive)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  allHivesCache = { at: Date.now(), hives };
+  return hives;
+}
+
+/**
+ * Delivery. One call, whatever was typed.
+ *
+ * Until 2026-08-12 every composer ran the same loop by hand: expand the @s
+ * against the member list it could see, then one edge-function call per
+ * person. That loop cannot notify a whole HIVE the sender stands outside of —
+ * row-level security hides that HIVE's member list from the client, which is
+ * correct and must stay. So whole-group tags go to the server as ONE call
+ * naming the group, and the edge function (service role, and it checks who is
+ * calling) resolves the members there. What still happens client-side:
+ *
+ * - people named by hand → one call each, exactly as before
+ * - `@everyone` in a closed room (a group DM) → one call per room member,
+ *   exactly as before, because the client's list IS the room
+ * - a whole HIVE, or everyone HIVE-Wide → one call naming the group
+ *
+ * When a group goes server-side, the client deliberately stops expanding the
+ * everyone words itself — otherwise everybody the sender CAN see would be
+ * told twice, once by name and once with the group.
+ */
+
+type MentionMember = Pick<Profile, 'id' | 'name'>;
+
+/** Which thing was written on. Decides the edge function and its id field. */
+export type MentionNotificationTarget =
+  | { kind: 'board'; postId: string; boardName?: string }
+  | { kind: 'chat'; roomId: string; roomName?: string }
+  | { kind: 'wish'; wishId: string; wishOwnerName?: string };
+
+type SendMentionNotificationsOptions = {
+  target: MentionNotificationTarget;
+  senderId: string;
+  /** The HIVE hosting the thing that was written on. */
+  communityId: string;
+  /** The full written text — where the @-handles are found. */
+  content: string;
+  /** What the notification shows. Defaults to the content itself. */
+  preview?: string;
+  /** The people this screen could see. People named by hand resolve from here. */
+  members: MentionMember[];
+  /** How far the writing travels. Build it with `useMentionReach()`. */
+  reach?: MentionReach | null;
+  /**
+   * People who must not get an individual "mentioned you" call — a board
+   * reply's post author, say, whom notify-board-reply already told. A
+   * whole-group tag still reaches them, same as the old @everyone expansion
+   * always did.
+   */
+  excludePersonIds?: string[];
+};
+
+function mentionFunctionAndPayload(
+  target: MentionNotificationTarget,
+  senderId: string,
+  communityId: string,
+  preview: string
+): { functionName: string; payload: Record<string, unknown> } {
+  const base = {
+    sender_id: senderId,
+    community_id: communityId,
+    message_preview: preview,
+  };
+  if (target.kind === 'board') {
+    return {
+      functionName: 'notify-board-mention',
+      payload: { ...base, post_id: target.postId, board_name: target.boardName },
+    };
+  }
+  if (target.kind === 'chat') {
+    return {
+      functionName: 'notify-chat-mention',
+      payload: { ...base, room_id: target.roomId, room_name: target.roomName },
+    };
+  }
+  return {
+    functionName: 'notify-wish-mention',
+    payload: { ...base, wish_id: target.wishId, wish_owner_name: target.wishOwnerName },
+  };
+}
+
+/** Fire-and-forget, like every mention call before it. Never throws. */
+export function sendMentionNotifications(options: SendMentionNotificationsOptions): void {
+  dispatchMentionNotifications(options).catch((err) =>
+    console.log('Mention notification error (non-blocking):', err)
+  );
+}
+
+async function dispatchMentionNotifications({
+  target,
+  senderId,
+  communityId,
+  content,
+  preview,
+  members,
+  reach = null,
+  excludePersonIds,
+}: SendMentionNotificationsOptions): Promise<void> {
+  const text = content.trim();
+  const shownPreview = (preview ?? content).trim();
+  if (!text || !shownPreview) return;
+
+  // Resolve typed handles against every HIVE there is, not only the ones the
+  // screen's reach object happened to know. An owner tags "@production" from
+  // a HIVE she is standing outside of; detection has to know Production HIVE
+  // exists before the server can be asked to reach it.
+  let sendReach = reach;
+  if (sendReach && !sendReach.noGroups && !sendReach.closedRoom && sendReach.hive && text.includes('@')) {
+    try {
+      const allHives = await fetchAllTaggableHives();
+      if (allHives.length > 0) {
+        const homeId = sendReach.hive.id;
+        sendReach = {
+          ...sendReach,
+          otherHives: allHives.filter((hive) => hive.id !== homeId),
+        };
+      }
+    } catch {
+      // The reach we were handed still resolves the home HIVE and HIVE-Wide.
+    }
+  }
+
+  const groups = getMentionedGroups(text, sendReach);
+  const saidHiveWide = groups.some((group) => group.kind === 'hive_wide');
+  // Groups the server fans out. Every HIVE is already inside HIVE-Wide, so a
+  // named HIVE alongside @everyone would only push people twice — drop it.
+  const serverGroups = groups.filter(
+    (group) => group.kind === 'hive_wide' || (group.kind === 'hive' && !saidHiveWide)
+  );
+
+  // Once the server owns the group, the client stops expanding the everyone
+  // words itself — `noGroups` leaves exactly the people named by hand. With no
+  // server group (a closed room, or a screen with no HIVE context), the old
+  // expansion still happens here, against the list the screen already holds.
+  const personReach = serverGroups.length > 0 && sendReach
+    ? { ...sendReach, noGroups: true }
+    : sendReach;
+  const excluded = new Set(excludePersonIds ?? []);
+  const people = getMentionedMembers(text, members, senderId, personReach)
+    .filter((member) => member.id && !excluded.has(member.id));
+
+  const { functionName, payload } = mentionFunctionAndPayload(
+    target,
+    senderId,
+    communityId,
+    shownPreview
+  );
+
+  people.forEach((member) => {
+    supabase.functions
+      .invoke(functionName, { body: { ...payload, recipient_id: member.id } })
+      .catch((err) => console.log('Mention notification error (non-blocking):', err));
+  });
+
+  serverGroups.forEach((group) => {
+    const recipient_group = group.kind === 'hive_wide'
+      ? { kind: 'hive_wide' }
+      : { kind: 'hive', community_id: (group as { id: string }).id };
+    supabase.functions
+      .invoke(functionName, { body: { ...payload, recipient_group } })
+      .catch((err) => console.log('Mention notification error (non-blocking):', err));
+  });
 }

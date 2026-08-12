@@ -5,7 +5,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
-      "@expo/vector-icons": ["./lib/vectorIcons"]
+      "@expo/vector-icons": ["./lib/vectorIcons"],
+      "react-native-reanimated": ["./lib/lazyReanimatedWeb.tsx"]
     }
   },
   "include": [

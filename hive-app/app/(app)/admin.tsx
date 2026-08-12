@@ -9,7 +9,6 @@ import {
   Modal,
   useWindowDimensions,
   ActivityIndicator,
-  PanResponder,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -141,11 +140,6 @@ type HoneyPotFeedback = {
   message: string;
 };
 
-type QuestionLayout = {
-  y: number;
-  height: number;
-};
-
 const HONEY_POT_FEEDBACK_STYLE: Record<HoneyPotFeedback['tone'], {
   backgroundColor: string;
   borderColor: string;
@@ -168,234 +162,38 @@ const HONEY_POT_FEEDBACK_STYLE: Record<HoneyPotFeedback['tone'], {
   },
 };
 
-const SURVEY_QUESTION_TYPES: SurveyQuestion['type'][] = ['short', 'long', 'scale', 'choice', 'hangs', 'focus'];
-const SURVEY_TYPE_LABELS: Record<SurveyQuestion['type'], string> = {
-  short: 'Short',
-  long: 'Long',
-  scale: 'Scale',
-  choice: 'Choice',
-  focus: 'HIVE Help focus',
-  hangs: 'Hangs recap',
-};
+/*
+ * THE SURVEY BUILDER IS GONE. Nat, 2026-08-12: "Survey builder? kill it.
+ * We'll just chat here." (She'd already said it on 2026-08-06: "honestly, I
+ * wouldn't use this to make one anyway — I would just message you here, like
+ * this, to create one.") Making or rewording a survey is now a thing she asks
+ * for in chat and it appears as a row in `surveys` — the check-in Launch
+ * buttons in GodModePanels insert theirs the same way. What used to live here:
+ * the "Edit questions & schedule" mode of the Questions & answers sheet, with
+ * its title/description boxes, due-date and time pickers, "Sync to next HIVE
+ * meeting", the drag-to-reorder question list, the question-type pills, and
+ * the "Use 2-3 min monthly template" button (the template itself lives on as
+ * the live survey rows it seeded). The Responses side of that sheet — reading
+ * what members answered — is untouched, and members answer surveys exactly as
+ * before.
+ */
 
 const DEFAULT_RESPONSE_PERIOD = 'default';
 const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
 
-const MONTHLY_CHECK_IN_TEMPLATE: SurveyQuestion[] = [
-  // Arrival questions power the meeting-day Arrival Board. Keep the ids and
-  // text in sync with the live monthly check-in survey (q_name_today,
-  // q_feeling_today, q_feeling_note) so re-applying the template never drops them.
-  {
-    id: 'q_name_today',
-    text: 'Arrival: what do you want to be called today?',
-    type: 'short',
-    required: false,
-  },
-  {
-    id: 'q_feeling_today',
-    text: 'Arrival: how are you feeling right now?',
-    type: 'choice',
-    options: [
-      '😊 Great — bring it on!',
-      '😌 Good & steady',
-      '🫠 Tired, but here',
-      '🤒 Under the weather — love me from a distance',
-      '💛 Sad — extra hugs please',
-      "🖤 Sad — please don't ask about it",
-      '🌀 All over the place',
-    ],
-    required: false,
-  },
-  {
-    id: 'q_feeling_note',
-    text: 'Arrival: anything we should know on sight? (optional)',
-    type: 'short',
-    required: false,
-  },
-  {
-    id: 'q_energy_level',
-    text: 'Energy: what is your energy level right now?',
-    type: 'scale',
-    required: false,
-  },
-  {
-    id: 'q_energy_mode',
-    text: 'Energy: what would feel best from HIVE this month?',
-    type: 'choice',
-    options: [
-      'I could use support',
-      'I could use space',
-      'I am steady',
-      'I have energy to offer help',
-    ],
-    required: false,
-  },
-  {
-    id: 'q_pop_progress',
-    text: 'Progress: what moved forward since last HIVE? Give yourself a little pat on the back.',
-    type: 'long',
-    required: false,
-  },
-  {
-    id: 'q_pop_obstacles',
-    text: 'Obstacles: where are you stuck, and how could HIVE help?',
-    type: 'long',
-    required: false,
-  },
-  {
-    id: 'q_pop_priorities',
-    text: 'Priorities: what are you focusing on before the next HIVE?',
-    type: 'long',
-    required: false,
-  },
-  {
-    id: 'q_carry_forward',
-    text: 'Carry-forward: anything from your HD boards, wishes, to-do list, or previous notes that should stay active, get attention, be marked complete, or be archived?',
-    type: 'long',
-    required: false,
-  },
-  {
-    id: 'q_meeting_topic',
-    text: 'Anything you want HIVE to mull over at the meeting, even if you might miss it?',
-    type: 'long',
-    required: false,
-  },
-  {
-    id: 'q_group_note',
-    text: 'Anything else HIVE should know before we gather?',
-    type: 'long',
-    required: false,
-  },
-];
-
-const MONTHLY_CHECK_IN_DESCRIPTION =
-  'A quick POP + Energy check-in so HIVE can celebrate progress, spot obstacles, choose priorities, and keep the right things on the roster.';
-
+// Old questions saved before ids were mandatory get one on the way into the
+// responses sheet, so React keys and answer lookups stay stable.
 const createSurveyQuestionId = () => `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-const DEFAULT_MEETING_ARRIVAL_MINUTES = 17 * 60 + 30;
-const DEFAULT_SURVEY_DUE_MINUTES = 17 * 60;
-const SURVEY_TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_, index) => {
-  const totalMinutes = index * 15;
-  const hour = Math.floor(totalMinutes / 60);
-  const minute = totalMinutes % 60;
-  return {
-    value: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
-    label: formatClockTime(totalMinutes),
-  };
-});
 
 const cloneQuestion = (question: SurveyQuestion): SurveyQuestion => ({
   ...question,
   options: question.options ? [...question.options] : undefined,
 });
 
-function moveQuestion(questions: SurveyQuestion[], fromIndex: number, toIndex: number) {
-  if (
-    fromIndex === toIndex
-    || fromIndex < 0
-    || toIndex < 0
-    || fromIndex >= questions.length
-    || toIndex >= questions.length
-  ) {
-    return questions;
-  }
-
-  const next = [...questions];
-  const [moved] = next.splice(fromIndex, 1);
-  next.splice(toIndex, 0, moved);
-  return next;
-}
-
-function formatClockTime(totalMinutes: number) {
-  const normalized = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
-  const hour24 = Math.floor(normalized / 60);
-  const minute = normalized % 60;
-  const period = hour24 >= 12 ? 'PM' : 'AM';
-  const hour12 = hour24 % 12 || 12;
-  return `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
-}
-
-function getLocalIsoDate(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function toAmericanDate(date: Date) {
-  return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-${date.getFullYear()}`;
-}
-
-function getTimeInputValue(date: Date) {
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-}
-
-function parseEventTimeToMinutes(value?: string | null) {
-  if (!value) return null;
-  const trimmed = value.trim();
-  const match = trimmed.match(/^(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*(am|pm)?$/i);
-  if (!match) return null;
-
-  let hour = Number(match[1]);
-  const minute = Number(match[2] ?? 0);
-  const period = match[3]?.toLowerCase();
-  if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute > 59) return null;
-
-  if (period === 'pm' && hour < 12) hour += 12;
-  if (period === 'am' && hour === 12) hour = 0;
-  if (hour > 23) return null;
-  return hour * 60 + minute;
-}
-
-function getSecondWednesday(year: number, monthIndex: number) {
-  const firstOfMonth = new Date(year, monthIndex, 1);
-  const firstWednesdayOffset = (3 - firstOfMonth.getDay() + 7) % 7;
-  return new Date(year, monthIndex, 1 + firstWednesdayOffset + 7);
-}
-
-function getNextSecondWednesdayDueAt(from = new Date()) {
-  for (let offset = 0; offset < 18; offset += 1) {
-    const candidate = getSecondWednesday(from.getFullYear(), from.getMonth() + offset);
-    candidate.setHours(
-      Math.floor(DEFAULT_SURVEY_DUE_MINUTES / 60),
-      DEFAULT_SURVEY_DUE_MINUTES % 60,
-      0,
-      0
-    );
-    if (candidate > from) return candidate;
-  }
-
-  const fallback = new Date(from);
-  fallback.setDate(fallback.getDate() + 30);
-  fallback.setHours(17, 0, 0, 0);
-  return fallback;
-}
-
-function getSurveyDefaultDueAt(nextMeeting?: Pick<Event, 'event_date' | 'event_time'> | null) {
-  if (nextMeeting?.event_date) {
-    const [year, month, day] = nextMeeting.event_date.split('-').map(Number);
-    if (Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) {
-      const meetingMinutes = parseEventTimeToMinutes(nextMeeting.event_time) ?? DEFAULT_MEETING_ARRIVAL_MINUTES;
-      const dueAt = new Date(year, month - 1, day, Math.floor(meetingMinutes / 60), meetingMinutes % 60, 0, 0);
-      dueAt.setMinutes(dueAt.getMinutes() - 30);
-      return dueAt;
-    }
-  }
-
-  return getNextSecondWednesdayDueAt();
-}
-
 function parseSurveyDueAt(dueDate?: string | null) {
   if (!dueDate) return null;
   const parsed = new Date(dueDate);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function getSurveyDateInputValue(dueDate?: string | null) {
-  const parsed = parseSurveyDueAt(dueDate);
-  return parsed ? toAmericanDate(parsed) : dueDate?.slice(0, 10) ?? '';
-}
-
-function getSurveyTimeInputValue(dueDate?: string | null, fallback?: Date) {
-  return getTimeInputValue(parseSurveyDueAt(dueDate) ?? fallback ?? getNextSecondWednesdayDueAt());
 }
 
 function getSurveyResponsePeriodForSurvey(survey: Survey) {
@@ -626,105 +424,6 @@ function CarryForwardPreviewList({ items }: { items: PopPreviewCarryForwardItem[
           ) : null}
         </View>
       ))}
-    </View>
-  );
-}
-
-const normalizeSurveyDueDateInput = (dateValue: string, timeValue: string) => {
-  const clean = dateValue.trim();
-  if (!clean) return { dueDate: null as string | null, error: null as string | null };
-
-  const parsed = parseAmericanDate(clean);
-  if (!parsed) {
-    return {
-      dueDate: null,
-      error: 'Use MM-DD-YYYY or YYYY-MM-DD for the due date.',
-    };
-  }
-
-  const [year, month, day] = parsed.split('-').map(Number);
-  const timeMinutes = parseEventTimeToMinutes(timeValue) ?? DEFAULT_SURVEY_DUE_MINUTES;
-  const dueAt = new Date(year, month - 1, day, Math.floor(timeMinutes / 60), timeMinutes % 60, 0, 0);
-  return { dueDate: dueAt.toISOString(), error: null };
-};
-
-function SurveyTimePicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const selected = SURVEY_TIME_OPTIONS.find(option => option.value === value);
-
-  return (
-    <View style={{ flex: 1, minWidth: 150 }}>
-      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 12, color: '#7f715f', marginBottom: 4 }}>
-        Time
-      </Text>
-      <Pressable
-        onPress={() => setOpen(true)}
-        style={({ pressed }) => ({
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          backgroundColor: pressed ? '#fbf0d7' : '#faf8f3',
-          borderColor: 'rgba(222,193,129,0.5)',
-          borderWidth: 1,
-          borderRadius: 12,
-          paddingHorizontal: 12,
-          paddingVertical: 12,
-        })}
-      >
-        <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 14, color: selected ? '#2d2d2d' : '#b5ad9f' }}>
-          {selected?.label ?? 'Select time'}
-        </Text>
-        <Ionicons name="time-outline" size={18} color="#bd9348" />
-      </Pressable>
-
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable
-          onPress={() => setOpen(false)}
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 }}
-        >
-          <Pressable
-            onPress={(event) => event.stopPropagation()}
-            style={{ width: '100%', maxWidth: 320, maxHeight: 460, backgroundColor: 'white', borderRadius: 18, overflow: 'hidden' }}
-          >
-            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(222,193,129,0.3)' }}>
-              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 16, color: '#2d2d2d', textAlign: 'center' }}>
-                Select Time
-              </Text>
-            </View>
-            <BounceScrollView showsVerticalScrollIndicator={true}>
-              {SURVEY_TIME_OPTIONS.map(option => {
-                const active = option.value === value;
-                return (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => {
-                      onChange(option.value);
-                      setOpen(false);
-                    }}
-                    style={({ pressed }) => ({
-                      paddingHorizontal: 18,
-                      paddingVertical: 14,
-                      borderBottomWidth: 1,
-                      borderBottomColor: 'rgba(222,193,129,0.18)',
-                      backgroundColor: active ? '#fdf3dc' : pressed ? '#fbf4e3' : 'white',
-                    })}
-                  >
-                    <Text style={{ fontFamily: active ? 'Lato_700Bold' : 'Lato_400Regular', fontSize: 15, color: active ? '#8a6b30' : '#2d2d2d' }}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </BounceScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
@@ -1219,29 +918,21 @@ export default function AdminScreen() {
   const [showEventModal, setShowEventModal] = useState(false);
 
   // Survey management. The create-a-survey half of this went with the Surveys
-  // box on 2026-08-06; what is left edits the check-ins that exist.
+  // box on 2026-08-06, and the edit-questions half followed on 2026-08-12;
+  // what is left reads the answers to the check-ins that exist.
   const { allSurveys, refetch: refetchSurveys } = useSurveys(
     canEditHoneyPot ? communityId ?? undefined : undefined,
     canEditHoneyPot ? profile?.id : undefined
   );
   const [editingSurvey, setEditingSurvey] = useState<Survey | null>(null);
-  const [surveyEditorMode, setSurveyEditorMode] = useState<'responses' | 'settings'>('responses');
-  const [surveyEditorTitle, setSurveyEditorTitle] = useState('');
-  const [surveyEditorDescription, setSurveyEditorDescription] = useState('');
-  const [surveyEditorDueDate, setSurveyEditorDueDate] = useState('');
-  const [surveyEditorDueTime, setSurveyEditorDueTime] = useState('');
+  // The questions of the survey being read, for the responses sheet's answer
+  // labels and counts. Read-only since 2026-08-12 — the builder that edited
+  // them is gone (see the removal note by MONTHLY_CHECK_IN_PATTERN above).
   const [surveyEditorQuestions, setSurveyEditorQuestions] = useState<SurveyQuestion[]>([]);
-  const [savingSurveyEditor, setSavingSurveyEditor] = useState(false);
-  const [surveyEditorError, setSurveyEditorError] = useState<string | null>(null);
-  const [nextSurveyMeeting, setNextSurveyMeeting] = useState<Pick<Event, 'event_date' | 'event_time' | 'title'> | null>(null);
   const [surveyResponses, setSurveyResponses] = useState<SurveyResponseWithUser[]>([]);
   const [surveyResponsesLoading, setSurveyResponsesLoading] = useState(false);
   const [surveyResponsesError, setSurveyResponsesError] = useState<string | null>(null);
   const [selectedSurveyResponsePeriod, setSelectedSurveyResponsePeriod] = useState<string | null>(null);
-  const surveyEditorQuestionsRef = useRef<SurveyQuestion[]>([]);
-  const questionLayoutsRef = useRef<Record<string, QuestionLayout>>({});
-  const activeQuestionDragRef = useRef<{ id: string; startCenterY: number } | null>(null);
-  const [draggingQuestionId, setDraggingQuestionId] = useState<string | null>(null);
 
   // Form states
   const [eventTitle, setEventTitle] = useState('');
@@ -1282,19 +973,6 @@ export default function AdminScreen() {
     const memberRows = (membersData || []) as unknown as MemberRow[];
     if (membersData) setMembers(memberRows);
 
-    const today = getLocalIsoDate(new Date());
-    const { data: nextMeetingData } = await supabase
-      .from('events')
-      .select('event_date, event_time, title')
-      .eq('community_id', communityId)
-      .eq('event_type', 'meeting')
-      .gte('event_date', today)
-      .or('status.is.null,status.eq.scheduled')
-      .order('event_date', { ascending: true })
-      .limit(1);
-
-    setNextSurveyMeeting((nextMeetingData?.[0] as Pick<Event, 'event_date' | 'event_time' | 'title'> | undefined) ?? null);
-
     // Fetch honey pot balance and transparent ledger
     try {
       setHoneyPotLedgerLoading(true);
@@ -1313,10 +991,6 @@ export default function AdminScreen() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  useEffect(() => {
-    surveyEditorQuestionsRef.current = surveyEditorQuestions;
-  }, [surveyEditorQuestions]);
 
   const memberProfilesById = useMemo(() => {
     const next = new Map<string, Profile>();
@@ -1492,8 +1166,6 @@ export default function AdminScreen() {
     }
   }, []);
 
-  const getDefaultSurveyDue = () => getSurveyDefaultDueAt(nextSurveyMeeting);
-
   // Load the requested HIVE's survey directly before opening it. `useSurveys`
   // intentionally keeps the previous HIVE's rows while the next fetch starts;
   // reading that cache here could put OG answers under Tech's heading.
@@ -1539,217 +1211,23 @@ export default function AdminScreen() {
   }, [pendingCheckInOpen, communityId]);
 
   const openSurveyEditor = (survey: Survey) => {
-    const defaultDueAt = getDefaultSurveyDue();
-    questionLayoutsRef.current = {};
-    setSurveyEditorMode('responses');
     setEditingSurvey(survey);
     setSurveyResponses([]);
     setSurveyResponsesError(null);
     setSelectedSurveyResponsePeriod(getSurveyResponsePeriodForSurvey(survey));
-    setSurveyEditorTitle(survey.title);
-    setSurveyEditorDescription(survey.description ?? '');
-    setSurveyEditorDueDate(survey.due_date ? getSurveyDateInputValue(survey.due_date) : toAmericanDate(defaultDueAt));
-    setSurveyEditorDueTime(getSurveyTimeInputValue(survey.due_date, defaultDueAt));
     setSurveyEditorQuestions((survey.questions ?? []).map(question => ({
       ...cloneQuestion(question),
       id: question.id || createSurveyQuestionId(),
     })));
-    setSurveyEditorError(null);
     void loadSurveyResponses(survey);
   };
 
   const closeSurveyEditor = () => {
-    questionLayoutsRef.current = {};
-    activeQuestionDragRef.current = null;
-    setDraggingQuestionId(null);
-    setSurveyEditorMode('responses');
     setEditingSurvey(null);
-    setSurveyEditorTitle('');
-    setSurveyEditorDescription('');
-    setSurveyEditorDueDate('');
-    setSurveyEditorDueTime('');
     setSurveyEditorQuestions([]);
-    setSurveyEditorError(null);
     setSurveyResponses([]);
     setSurveyResponsesError(null);
     setSelectedSurveyResponsePeriod(null);
-  };
-
-  const updateSurveyQuestion = (
-    index: number,
-    updater: (question: SurveyQuestion) => SurveyQuestion
-  ) => {
-    setSurveyEditorQuestions(prev => prev.map((question, questionIndex) => (
-      questionIndex === index ? updater(question) : question
-    )));
-  };
-
-  const addSurveyQuestion = () => {
-    setSurveyEditorQuestions(prev => ([
-      ...prev,
-      {
-        id: createSurveyQuestionId(),
-        text: '',
-        type: 'long',
-        required: false,
-      },
-    ]));
-  };
-
-  const removeSurveyQuestion = (index: number) => {
-    setSurveyEditorQuestions(prev => prev.filter((_, questionIndex) => questionIndex !== index));
-  };
-
-  const moveSurveyQuestion = (fromIndex: number, toIndex: number) => {
-    setSurveyEditorQuestions(prev => moveQuestion(prev, fromIndex, toIndex));
-  };
-
-  const reorderDraggingQuestion = (questionId: string, targetIndex: number) => {
-    setSurveyEditorQuestions(prev => {
-      const currentIndex = prev.findIndex(question => question.id === questionId);
-      if (currentIndex === -1 || currentIndex === targetIndex) return prev;
-      return moveQuestion(prev, currentIndex, targetIndex);
-    });
-  };
-
-  const createQuestionDragResponder = (questionId: string, index: number) => (
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_event, gestureState) => Math.abs(gestureState.dy) > 3,
-      onPanResponderGrant: () => {
-        const layout = questionLayoutsRef.current[questionId];
-        activeQuestionDragRef.current = {
-          id: questionId,
-          startCenterY: layout ? layout.y + layout.height / 2 : index * 120,
-        };
-        setDraggingQuestionId(questionId);
-      },
-      onPanResponderMove: (_event, gestureState) => {
-        const activeDrag = activeQuestionDragRef.current;
-        if (!activeDrag) return;
-
-        const currentCenterY = activeDrag.startCenterY + gestureState.dy;
-        const questions = surveyEditorQuestionsRef.current;
-        let targetIndex = questions.findIndex(question => question.id === activeDrag.id);
-        let closestDistance = Number.POSITIVE_INFINITY;
-
-        questions.forEach((question, questionIndex) => {
-          const layout = questionLayoutsRef.current[question.id];
-          if (!layout) return;
-
-          const distance = Math.abs(currentCenterY - (layout.y + layout.height / 2));
-          if (distance < closestDistance) {
-            closestDistance = distance;
-            targetIndex = questionIndex;
-          }
-        });
-
-        if (targetIndex >= 0) {
-          reorderDraggingQuestion(activeDrag.id, targetIndex);
-        }
-      },
-      onPanResponderRelease: () => {
-        activeQuestionDragRef.current = null;
-        setDraggingQuestionId(null);
-      },
-      onPanResponderTerminate: () => {
-        activeQuestionDragRef.current = null;
-        setDraggingQuestionId(null);
-      },
-    })
-  );
-
-  const syncSurveyDueToNextMeeting = async () => {
-    let meeting: Pick<Event, 'event_date' | 'event_time' | 'title'> | null = nextSurveyMeeting;
-
-    // Fallback: some meetings are saved without event_type='meeting', so also
-    // look for the next upcoming event whose title mentions "meeting".
-    if (!meeting && communityId) {
-      const today = getLocalIsoDate(new Date());
-      const { data } = await supabase
-        .from('events')
-        .select('event_date, event_time, title')
-        .eq('community_id', communityId)
-        .gte('event_date', today)
-        .or('status.is.null,status.eq.scheduled')
-        .ilike('title', '%meeting%')
-        .order('event_date', { ascending: true })
-        .limit(1);
-      meeting = (data?.[0] as Pick<Event, 'event_date' | 'event_time' | 'title'> | undefined) ?? null;
-    }
-
-    if (!meeting?.event_date) {
-      setSurveyEditorError('No upcoming HIVE meeting found on the calendar yet.');
-      return;
-    }
-
-    // 30 minutes before the meeting start (5:30 PM default → 5:00 PM due).
-    const dueAt = getSurveyDefaultDueAt(meeting);
-    setSurveyEditorDueDate(toAmericanDate(dueAt));
-    setSurveyEditorDueTime(getTimeInputValue(dueAt));
-    setSurveyEditorError(null);
-  };
-
-  const applyMonthlyCheckInTemplate = () => {
-    questionLayoutsRef.current = {};
-    setSurveyEditorTitle(prev => prev.trim() || 'Monthly Check-in: POP + Energy');
-    setSurveyEditorDescription(prev => prev.trim() || MONTHLY_CHECK_IN_DESCRIPTION);
-    setSurveyEditorQuestions(MONTHLY_CHECK_IN_TEMPLATE.map(cloneQuestion));
-    setSurveyEditorError(null);
-  };
-
-  const saveSurveyEdits = async () => {
-    if (!editingSurvey || !communityId) return;
-
-    const title = surveyEditorTitle.trim();
-    if (!title) {
-      setSurveyEditorError('Add a survey title before saving.');
-      return;
-    }
-
-    const { dueDate, error: dueDateError } = normalizeSurveyDueDateInput(surveyEditorDueDate, surveyEditorDueTime);
-    if (dueDateError) {
-      setSurveyEditorError(dueDateError);
-      return;
-    }
-
-    const questions = surveyEditorQuestions
-      .map((question) => ({
-        ...question,
-        id: question.id || createSurveyQuestionId(),
-        text: question.text.trim(),
-        options: question.options?.map(option => option.trim()).filter(Boolean),
-      }))
-      .filter(question => question.text.length > 0)
-      .map(question => ({
-        ...question,
-        options: question.type === 'choice' ? question.options : undefined,
-      }));
-
-    setSavingSurveyEditor(true);
-    setSurveyEditorError(null);
-    try {
-      const { error } = await supabase
-        .from('surveys')
-        .update({
-          title,
-          description: surveyEditorDescription.trim() || null,
-          due_date: dueDate,
-          questions,
-        })
-        .eq('id', editingSurvey.id)
-        .eq('community_id', communityId);
-
-      if (error) {
-        setSurveyEditorError('Could not save this survey. Please try again.');
-        return;
-      }
-
-      closeSurveyEditor();
-      await refetchSurveys();
-    } finally {
-      setSavingSurveyEditor(false);
-    }
   };
 
   // `updateMemberRole` and `removeMember` used to live here, and they are gone
@@ -2035,8 +1513,10 @@ export default function AdminScreen() {
               Going with it: the "+ Create" survey builder, which Nat says she
               would never use, and the Meeting tools paragraph, which explained
               where the meeting tools are on a screen that shows them a little
-              further down. The survey EDITOR is untouched — each HIVE's
-              Check-ins tab opens it. */}
+              further down. The survey EDITOR followed on 2026-08-12 — Nat:
+              "Survey builder? kill it. We'll just chat here." Each HIVE's
+              Check-ins tab still opens the Questions & answers sheet, which
+              reads the answers and edits nothing. */}
 
           {/* The newsletter goes out past every HIVE, so its box wears the house
               cream rather than any one HIVE's colour. Nat's draft opens from
@@ -2133,89 +1613,13 @@ export default function AdminScreen() {
                 </Pressable>
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-                {([
-                  { key: 'responses' as const, label: 'Responses' },
-                  { key: 'settings' as const, label: 'Edit questions & schedule' },
-                ]).map((option) => {
-                  const active = surveyEditorMode === option.key;
-                  return (
-                    <Pressable
-                      key={option.key}
-                      onPress={() => setSurveyEditorMode(option.key)}
-                      accessibilityRole="tab"
-                      accessibilityState={{ selected: active }}
-                      style={({ pressed }) => ({
-                        backgroundColor: active ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
-                        borderColor: active ? '#bd9348' : 'rgba(222,193,129,0.55)',
-                        borderWidth: 1,
-                        borderRadius: 999,
-                        paddingHorizontal: 13,
-                        paddingVertical: 8,
-                      })}
-                    >
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: active ? 'white' : '#8a6b30' }}>
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              {surveyEditorMode === 'settings' ? (
-                <>
-              <ComposerBar
-                tone="light"
-                variant="form"
-                containerClassName="mb-3"
-                label="Survey title"
-                value={surveyEditorTitle}
-                onChangeText={setSurveyEditorTitle}
-                multiline={false}
-              />
-              <ComposerBar
-                tone="light"
-                variant="form"
-                containerClassName="mb-3"
-                label="Description"
-                value={surveyEditorDescription}
-                onChangeText={setSurveyEditorDescription}
-                minHeight={72}
-              />
-              <View style={{ flexDirection: useMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 8 }}>
-                <View style={{ flex: 2, minWidth: 180 }}>
-                  <EventDatePicker
-                    value={surveyEditorDueDate}
-                    onChange={setSurveyEditorDueDate}
-                  />
-                </View>
-                <SurveyTimePicker
-                  value={surveyEditorDueTime}
-                  onChange={setSurveyEditorDueTime}
-                />
-              </View>
-              <Pressable
-                onPress={() => { void syncSurveyDueToNextMeeting(); }}
-                style={({ pressed }) => ({
-                  alignSelf: 'flex-start',
-                  backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-                  borderColor: 'rgba(222,193,129,0.55)',
-                  borderWidth: 1,
-                  borderRadius: 999,
-                  paddingHorizontal: 12,
-                  paddingVertical: 7,
-                  marginBottom: 12,
-                })}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>
-                  📅 Sync to next HIVE meeting
-                </Text>
-              </Pressable>
-                </>
-              ) : null}
-
-              {surveyEditorMode === 'responses' ? (
-                <View
+              {/* This sheet had a second tab, "Edit questions & schedule" —
+                  the survey builder. Killed 2026-08-12, Nat: "Survey builder?
+                  kill it. We'll just chat here." Changing a survey's words,
+                  dates or questions is a thing she asks for in chat now, so
+                  the sheet is the one thing it was actually used for: reading
+                  the answers. */}
+              <View
                   style={{
                   borderWidth: 1,
                   borderColor: 'rgba(222,193,129,0.55)',
@@ -2487,234 +1891,6 @@ export default function AdminScreen() {
                   </View>
                 )}
                 </View>
-              ) : null}
-
-              {surveyEditorMode === 'settings' ? (
-                <>
-              <Pressable
-                onPress={applyMonthlyCheckInTemplate}
-                style={({ pressed }) => ({
-                  backgroundColor: pressed ? '#f5e0b0' : '#fdf3dc',
-                  borderColor: 'rgba(222,193,129,0.72)',
-                  borderWidth: 1,
-                  borderRadius: 14,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  marginBottom: 16,
-                })}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#8a6b30', textAlign: 'center' }}>
-                  Use 2-3 min monthly template
-                </Text>
-              </Pressable>
-
-              <View style={{ gap: 12 }}>
-                {surveyEditorQuestions.map((question, index) => {
-                  const isDragging = draggingQuestionId === question.id;
-                  const dragResponder = createQuestionDragResponder(question.id, index);
-                  return (
-                    <View
-                      key={`${question.id}-${index}`}
-                      onLayout={(event) => {
-                        questionLayoutsRef.current[question.id] = event.nativeEvent.layout;
-                      }}
-                      style={{
-                        borderWidth: 1,
-                        borderColor: isDragging ? '#bd9348' : 'rgba(222,193,129,0.45)',
-                        borderRadius: 14,
-                        backgroundColor: isDragging ? '#fdf3dc' : '#fff8e8',
-                        padding: 12,
-                        opacity: isDragging ? 0.78 : 1,
-                        shadowColor: '#bd9348',
-                        shadowOpacity: isDragging ? 0.2 : 0,
-                        shadowRadius: isDragging ? 10 : 0,
-                        shadowOffset: { width: 0, height: 4 },
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-                          <View
-                            {...dragResponder.panHandlers}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Drag question ${index + 1}`}
-                            style={{
-                              width: 30,
-                              height: 30,
-                              borderRadius: 15,
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              backgroundColor: isDragging ? '#bd9348' : '#fffdf5',
-                              borderWidth: 1,
-                              borderColor: isDragging ? '#bd9348' : 'rgba(222,193,129,0.55)',
-                            }}
-                          >
-                            <Ionicons name="reorder-three-outline" size={18} color={isDragging ? 'white' : '#8a6b30'} />
-                          </View>
-                          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a6b30' }}>
-                            Question {index + 1}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                          <Pressable
-                            onPress={() => moveSurveyQuestion(index, index - 1)}
-                            disabled={index === 0}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Move question ${index + 1} up`}
-                            hitSlop={8}
-                            style={({ pressed }) => ({
-                              opacity: index === 0 ? 0.3 : pressed ? 0.55 : 1,
-                              padding: 5,
-                            })}
-                          >
-                            <Ionicons name="chevron-up" size={16} color="#8a6b30" />
-                          </Pressable>
-                          <Pressable
-                            onPress={() => moveSurveyQuestion(index, index + 1)}
-                            disabled={index === surveyEditorQuestions.length - 1}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Move question ${index + 1} down`}
-                            hitSlop={8}
-                            style={({ pressed }) => ({
-                              opacity: index === surveyEditorQuestions.length - 1 ? 0.3 : pressed ? 0.55 : 1,
-                              padding: 5,
-                            })}
-                          >
-                            <Ionicons name="chevron-down" size={16} color="#8a6b30" />
-                          </Pressable>
-                          <Pressable
-                            onPress={() => removeSurveyQuestion(index)}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Remove question ${index + 1}`}
-                            hitSlop={8}
-                            style={({ pressed }) => ({
-                              opacity: pressed ? 0.55 : 1,
-                              padding: 5,
-                            })}
-                          >
-                            <Ionicons name="trash-outline" size={16} color="#b45309" />
-                          </Pressable>
-                        </View>
-                      </View>
-
-                    {/* The question itself is a sentence somebody writes, so it
-                        gets the shared box. The text lives inside a question
-                        object rather than in its own useState, so the setter
-                        unwraps both shapes the box can hand back: a plain
-                        string when you type, an updater when you talk. */}
-                    <ComposerBar
-                      tone="light"
-                      variant="form"
-                      containerClassName="mb-3"
-                      value={question.text}
-                      onChangeText={(next) => updateSurveyQuestion(index, (current) => ({
-                        ...current,
-                        text: typeof next === 'function' ? next(current.text ?? '') : next,
-                      }))}
-                      placeholder="Question text"
-                      minHeight={58}
-                    />
-
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: question.type === 'choice' ? 10 : 0 }}>
-                      {SURVEY_QUESTION_TYPES.map((type) => {
-                        const active = question.type === type;
-                        return (
-                          <Pressable
-                            key={type}
-                            onPress={() => updateSurveyQuestion(index, current => ({ ...current, type }))}
-                            style={({ pressed }) => ({
-                              backgroundColor: active ? '#bd9348' : pressed ? '#fbf0d7' : '#fffdf5',
-                              borderColor: active ? '#bd9348' : 'rgba(222,193,129,0.55)',
-                              borderWidth: 1,
-                              borderRadius: 999,
-                              paddingHorizontal: 10,
-                              paddingVertical: 6,
-                            })}
-                          >
-                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: active ? 'white' : '#8a6b30' }}>
-                              {SURVEY_TYPE_LABELS[type]}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                      <Pressable
-                        onPress={() => updateSurveyQuestion(index, current => ({ ...current, required: !current.required }))}
-                        style={({ pressed }) => ({
-                          backgroundColor: question.required ? '#fdf3dc' : pressed ? '#fbf0d7' : '#fffdf5',
-                          borderColor: question.required ? '#bd9348' : 'rgba(222,193,129,0.55)',
-                          borderWidth: 1,
-                          borderRadius: 999,
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                        })}
-                      >
-                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#8a6b30' }}>
-                          {question.required ? 'Required' : 'Optional'}
-                        </Text>
-                      </Pressable>
-                    </View>
-
-                    {question.type === 'choice' && (
-                      // The answers people will pick from are words too, so this
-                      // box takes the mic as well. One choice per line: speaking
-                      // adds to the line you are on, so start a new line first.
-                      <ComposerBar
-                        tone="light"
-                        variant="form"
-                        value={(question.options ?? []).join('\n')}
-                        onChangeText={(next) => updateSurveyQuestion(index, (current) => {
-                          const previous = (current.options ?? []).join('\n');
-                          const text = typeof next === 'function' ? next(previous) : next;
-                          return { ...current, options: text.split('\n') };
-                        })}
-                        placeholder="One choice per line"
-                        minHeight={78}
-                      />
-                    )}
-                  </View>
-                );
-                })}
-              </View>
-
-              <Pressable
-                onPress={addSurveyQuestion}
-                style={({ pressed }) => ({
-                  backgroundColor: pressed ? '#fbf0d7' : '#fffdf5',
-                  borderColor: 'rgba(222,193,129,0.72)',
-                  borderWidth: 1,
-                  borderRadius: 14,
-                  paddingVertical: 12,
-                  marginTop: 12,
-                })}
-              >
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 14, color: '#8a6b30', textAlign: 'center' }}>
-                  Add Question
-                </Text>
-              </Pressable>
-
-              {surveyEditorError ? (
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#ef4444', marginTop: 14 }}>
-                  {surveyEditorError}
-                </Text>
-              ) : null}
-
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-                <Pressable onPress={closeSurveyEditor} style={{ flex: 1, backgroundColor: '#f5f3ee', borderRadius: 14, paddingVertical: 14 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: '#2d2d2d', textAlign: 'center' }}>
-                    Cancel
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={saveSurveyEdits}
-                  disabled={savingSurveyEditor}
-                  style={{ flex: 2, backgroundColor: '#bd9348', borderRadius: 14, paddingVertical: 14, opacity: savingSurveyEditor ? 0.65 : 1 }}
-                >
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 15, color: 'white', textAlign: 'center' }}>
-                    {savingSurveyEditor ? 'Saving...' : 'Save Survey'}
-                  </Text>
-                </Pressable>
-              </View>
-                </>
-              ) : null}
             </BounceScrollView>
           </View>
         </ModalBackdrop>
