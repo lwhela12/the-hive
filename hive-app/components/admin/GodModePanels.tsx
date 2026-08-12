@@ -513,13 +513,33 @@ export function NewsletterPanel({
     })));
     setMemberCount(memberRes.count ?? 0);
 
+    /**
+     * Shout-outs belong to ONE month, and retire with it.
+     *
+     * This read the newest THREE collecting threads and ignored archiving
+     * altogether, so a shout-out kept showing up for months and the count was
+     * really "the last three months of shout-outs, roughly". Nat asked the
+     * question that found it (2026-08-12): *"when do these populate, when do
+     * they get retired? how/when do they fall off? and where do they go?"* —
+     * and the honest answer was "they don't", right after she had archived
+     * July's thread and still saw its twelve.
+     *
+     * So: the one collecting thread that is currently open. A shout-out
+     * appears when somebody adds one (from The Buzz, or from the halfway
+     * check-in, both of which post a reply here) and leaves this box the
+     * moment that thread is archived or the next month's thread opens.
+     *
+     * Nowhere is it deleted — the replies stay on the board thread for good.
+     * This box is a worktop, not an archive.
+     */
     const { data: threads } = await supabase
       .from('board_posts')
       .select('id, title')
       .in('category_id', boardIds)
       .ilike('title', '%newsletter%')
+      .is('archived_at', null)
       .order('created_at', { ascending: false })
-      .limit(3);
+      .limit(1);
     const threadIds = ((threads ?? []) as { id: string }[]).map((t) => t.id);
     if (threadIds.length === 0) { setShoutOuts([]); return; }
 

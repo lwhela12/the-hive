@@ -577,6 +577,12 @@ export default function BuzzScreen() {
                 // it being here is that Nat can read hers back while knowing
                 // nobody else can (2026-08-12).
                 eyebrow={item.unsent ? 'Draft · only you can see this' : undefined}
+                // The same dashed edge the collecting thread wears, for the
+                // same reason: unfinished. Nat, 2026-08-12: *"i want that
+                // dotted outline, like before, that made it super obvious, i
+                // liked that."* The words say it; the border says it from
+                // across the room.
+                dashed={item.unsent}
                 subtitle={
                   formatDateLong(item.created_at)
                   + (showWhichHive && fromElsewhere
