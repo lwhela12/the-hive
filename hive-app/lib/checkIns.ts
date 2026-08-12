@@ -21,3 +21,77 @@ export function hasTailoredCheckIns(
 ): boolean {
   return community?.slug === 'default' || community?.slug === 'tech';
 }
+
+/**
+ * When Home nudges a member about the halfway check-in, and what it says.
+ *
+ * OG's halfway feeds the newsletter, which goes out on the 1st, so OG's
+ * window rides the CALENDAR — the last five days of the month — and the copy
+ * talks about the newsletter. That was the only shape until 2026-08-12.
+ *
+ * **Tech meets on the FIRST Thursday**, which makes the end of the month just
+ * about the worst possible moment to call something "halfway": the nudge
+ * would land three or four days before the meeting, not midway between two.
+ * And Tech's halfway has no newsletter step at all (pulse and shout-outs
+ * only), so OG's copy promised Tech members something that isn't in their
+ * flow. Tech's window is measured from its next meeting instead.
+ *
+ * A third HIVE is a third entry here, the same way the deck and the check-in
+ * flows are third lists rather than third slug checks.
+ */
+export type HalfwayShape = {
+  /** `month` = last 5 days of the calendar month. `cycle` = ~2 weeks out. */
+  window: 'month' | 'cycle';
+  emoji: string;
+  detail: string;
+};
+
+const HALFWAY_BY_SLUG: Record<string, HalfwayShape> = {
+  default: {
+    window: 'month',
+    emoji: '🗞️',
+    detail: 'The newsletter goes out on the 1st — want a shout-out, a plug, or a reminder in it?',
+  },
+  tech: {
+    window: 'cycle',
+    emoji: '🫶',
+    detail: "Halfway to the next meeting — how's it going, and who deserves a shout-out?",
+  },
+};
+
+export function getHalfwayShape(
+  community: Pick<Community, 'slug'> | null | undefined,
+): HalfwayShape | null {
+  return HALFWAY_BY_SLUG[community?.slug ?? ''] ?? null;
+}
+
+/**
+ * Whether today sits in that HIVE's halfway nudge window.
+ *
+ * `nextMeetingDate` is only consulted for the `cycle` shape, and a HIVE with
+ * no meeting on the books simply doesn't get nudged — better silent than
+ * nudging about a halfway point to nothing.
+ */
+export function isInHalfwayWindow(
+  shape: HalfwayShape,
+  today: Date,
+  nextMeetingDate?: string | null,
+): boolean {
+  if (shape.window === 'month') {
+    const daysLeftInMonth =
+      new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() - today.getDate();
+    return daysLeftInMonth <= 4;
+  }
+
+  if (!nextMeetingDate) return false;
+  const [year, month, day] = nextMeetingDate.split('-').map(Number);
+  if (!year || !month || !day) return false;
+  const meeting = new Date(year, month - 1, day);
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const daysUntilMeeting = Math.round(
+    (meeting.getTime() - startOfToday.getTime()) / (24 * 60 * 60 * 1000)
+  );
+  // Days 16 through 12 before the meeting — five days sitting squarely in the
+  // middle of a monthly cycle, the same five-day length OG's window has.
+  return daysUntilMeeting <= 16 && daysUntilMeeting >= 12;
+}

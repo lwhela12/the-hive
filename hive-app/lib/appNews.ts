@@ -28,6 +28,12 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-12-meeting-titles-follow-the-day',
+    date: '2026-08-12',
+    title: 'A meeting is named after the month it happens in',
+    detail: 'Booking September\'s meeting in August used to call it "Aug" — the title was stamped with the day you booked it rather than the day you picked. It follows the date now, until you write your own.',
+  },
+  {
     id: '2026-08-12-home-remembers',
     date: '2026-08-12',
     title: 'Coming back to Home is quick now',
@@ -787,6 +793,24 @@ export function getAppNews(limit = APP_NEWS.length): AppNewsEntry[] {
   return [...APP_NEWS]
     .sort((left, right) => right.date.localeCompare(left.date) || right.id.localeCompare(left.id))
     .slice(0, limit);
+}
+
+/**
+ * Everything shipped since a given day — the meeting deck's window.
+ *
+ * The deck used to show "the newest 6" under a heading that said "this
+ * month", which is two different claims and neither was checked. Nat,
+ * 2026-08-12: *"Ideally this page will list all of the app updates from one
+ * 1st thurs to the next."* So the deck asks for one meeting cycle, and gets
+ * exactly that however many entries it turns out to be.
+ *
+ * `since` is the last meeting's date. Entries dated that day count as
+ * belonging to the cycle that follows it — the meeting happens in the
+ * evening, so anything shipped that day was news at the meeting, not after.
+ */
+export function getAppNewsSince(since: Date): AppNewsEntry[] {
+  const sinceIso = `${since.getFullYear()}-${String(since.getMonth() + 1).padStart(2, '0')}-${String(since.getDate()).padStart(2, '0')}`;
+  return getAppNews().filter((entry) => entry.date > sinceIso);
 }
 
 /** Per-member key for the newest entry they've acknowledged. */

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -70,6 +70,9 @@ export function ScheduleMeetingModal({
   const hiveName = hiveDisplayName(community?.name);
   const cadence = (community?.meeting_cadence as 'monthly' | 'weekly' | undefined) ?? 'monthly';
   const [title, setTitle] = useState(() => defaultMeetingTitle(hiveName, new Date(), cadence));
+  // Whether Nat has written her own title. Until she does, the title follows
+  // the day she picks — see the effect below.
+  const titleIsHers = useRef(false);
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [date, setDate] = useState(new Date());
@@ -99,6 +102,23 @@ export function ScheduleMeetingModal({
     const seeded = new Date(`${initialDate}T17:30:00`);
     if (!Number.isNaN(seeded.getTime())) setDate(seeded);
   }, [visible, initialDate]);
+
+  // The title names the month the meeting is IN, not the month you happen to
+  // be sitting in when you book it. Nat, 2026-08-12, booking September's Tech
+  // meeting on August 12th: *"woah, these titles are off"* — it came out
+  // "Aug Tech HIVE Meeting". The title was seeded once from `new Date()` in a
+  // `useState` initialiser, so it was stamped with today and then never looked
+  // at the day being picked again. It follows the date now, right up until she
+  // writes her own, and then it leaves her alone.
+  useEffect(() => {
+    if (titleIsHers.current) return;
+    setTitle(defaultMeetingTitle(hiveName, date, cadence));
+  }, [date, hiveName, cadence]);
+
+  // A fresh open is a fresh title.
+  useEffect(() => {
+    if (!visible) titleIsHers.current = false;
+  }, [visible]);
 
   const fetchMembers = async () => {
     if (!communityId) return;
@@ -179,7 +199,9 @@ export function ScheduleMeetingModal({
         location: location.trim() || undefined,
       });
 
-      // Reset form
+      // Reset form. Handing the title back to the date means the next open
+      // starts from the day rather than from whatever was last typed.
+      titleIsHers.current = false;
       setTitle(defaultMeetingTitle(hiveName, date, cadence));
       setDescription('');
       setLocation('');
@@ -305,11 +327,12 @@ export function ScheduleMeetingModal({
               // Every meeting title goes through the brand normaliser ("Hive" →
               // "HIVE"), including one arriving from dictation, which is why the
               // updater form is resolved here rather than at the composer.
-              onChangeText={(next) =>
+              onChangeText={(next) => {
+                titleIsHers.current = true;
                 setTitle((previous) =>
                   normalizeHiveBrandText(typeof next === 'function' ? next(previous) : next)
-                )
-              }
+                );
+              }}
               placeholder="e.g., Weekly Check-in"
               multiline={false}
               onSubmit={handleSchedule}

@@ -21,7 +21,7 @@ import { fetchHoneyPotLedger } from '../../lib/honeyPot';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
 import { getWishQuickTitle, pickSpotlightWish } from '../../lib/wishDisplay';
-import { getAppNews } from '../../lib/appNews';
+import { getAppNews, getAppNewsSince } from '../../lib/appNews';
 import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { parseFocusAnswer, focusAnswerDidIt, focusAnswerScore } from '../../components/surveys/SurveyQuestionField';
 import { Avatar } from '../../components/ui/Avatar';
@@ -154,6 +154,16 @@ type DeckDefinition = {
      * whether it wants HIVE Help doesn't get the controls for running one.
      */
     hasHelpFocusHeader: boolean;
+    /**
+     * A check-in answer key whose replies are printed under the three cards.
+     * Tech's Networking card doesn't open a panel, so without this the
+     * networking question Nat asked for (2026-08-12: *"we'll deff want to put
+     * that on the meeting checkin surveys… ask people if they know of any or
+     * have any that they want to go to"*) would be collected and never shown
+     * — the exact "where does this info end up" failure the hang voices two
+     * hundred lines below exist to correct.
+     */
+    voicesUnderCards?: { answerKey: string; heading: string; empty: string };
   };
   wrapupReminders: string[];
 };
@@ -227,6 +237,11 @@ const DECKS: Record<'default' | 'tech', DeckDefinition> = {
         ],
       },
       hasHelpFocusHeader: false,
+      voicesUnderCards: {
+        answerKey: 'q_networking',
+        heading: '🔗 Events on people’s radar',
+        empty: 'Nothing on the radar yet — the check-in asks, and answers land here.',
+      },
     },
     wrapupReminders: [
       'Next meeting — first Thursday of the month',
@@ -321,6 +336,16 @@ type MeetingHelperNotes = {
   appnews?: string;
   meetups?: string;
   wrapup?: string;
+  // Where the dues conversation actually lands, typed live on the night.
+  // Nat, 2026-08-12, on an all-remote Tech HIVE: *"its kinda nice to be able
+  // to put things in the meeting helper in real time… what do you think
+  // about me being able to type in the answers to those spaces?"*
+  treasurer?: string;
+  // The month's HIVE Help, written down before the meeting rather than only
+  // talked about at it. Nat: *"I'd also like to be able to put text directly
+  // in there, I think its at the top of the month? where i could just put
+  // the help in."*
+  help?: string;
 };
 
 type EditableNoteKey = keyof MeetingHelperNotes;
@@ -376,6 +401,14 @@ const EDIT_SLIDE_META: Record<EditableNoteKey, { title: string; placeholder: str
   wrapup: {
     title: 'Wrap-Up',
     placeholder: 'Final notes, decisions made tonight, things to remember…',
+  },
+  treasurer: {
+    title: 'Treasurer',
+    placeholder: 'What did we land on? Dues or no dues, what they are for, who keeps the pot…',
+  },
+  help: {
+    title: 'HIVE Help',
+    placeholder: "This month's HIVE Help — the one small kindness we're taking on together…",
   },
 };
 
@@ -472,9 +505,16 @@ export default function MeetingHelperScreen() {
   // HummDinger: which member's full check-in is expanded on the bubbles grid,
   // plus everyone who's had their turn this session (feeds the agenda rail's
   // who's-left-to-go list).
-  // The last handful of shipped changes, shown on the News slide so the app
-  // update note doesn't rely on Nat remembering what we did.
-  const recentAppNews = useMemo(() => getAppNews(6), []);
+  // Everything shipped since the last meeting, shown on the News slide so the
+  // app update note doesn't rely on Nat remembering what we did. One meeting
+  // cycle, not "the newest six" — Nat, 2026-08-12: *"Ideally this page will
+  // list all of the app updates from one 1st thurs to the next."* Falls back
+  // to the newest six only while the cycle start is still loading.
+  const [cycleStart, setCycleStart] = useState<Date | null>(null);
+  const recentAppNews = useMemo(
+    () => (cycleStart ? getAppNewsSince(cycleStart) : getAppNews(6)),
+    [cycleStart]
+  );
 
   const [expandedHummdingerId, setExpandedHummdingerId] = useState<string | null>(null);
   const [hummdingerVisited, setHummdingerVisited] = useState<Set<string>>(new Set());
@@ -564,6 +604,7 @@ export default function MeetingHelperScreen() {
     // "Since last meeting" means the ACTUAL last meeting, not a fixed 35 days.
     const sinceLastMeeting = await getCycleStart(communityId, today);
     const sinceIso = sinceLastMeeting.toISOString();
+    setCycleStart(sinceLastMeeting);
 
     await Promise.all([
       // Admin-editable slide notes
@@ -1420,21 +1461,27 @@ export default function MeetingHelperScreen() {
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: sz(8, 5) }}>
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e7a5e' }}>
-              ✨ New in the app this month
+              ✨ New in the app since last meeting
             </Text>
             <EditPill noteKey="appnews" />
           </View>
-          <NoteBody
-            noteKey="appnews"
-            emptyText="No app news this month — smooth sailing."
-          />
-          {/* What actually shipped, so this doesn't depend on remembering.
-              It's a prompt, not the content: whatever Nat types above is what
-              reaches the deck and the newsletter, in her words. */}
+          {/* The empty line only speaks when the slide really is empty. It used
+              to say "No app news this month — smooth sailing" directly above a
+              list of app news, because it was reporting on Nat's typed note and
+              the list underneath came from somewhere else. Nat, 2026-08-12:
+              *"it says 'no app news, smooth sailing' and then below it its
+              listing app news, whcih seems silly."* Two claims, one slide —
+              now the shipped list answers for both. */}
+          {notes.appnews?.trim() || recentAppNews.length === 0 ? (
+            <NoteBody
+              noteKey="appnews"
+              emptyText="No app news this cycle — smooth sailing."
+            />
+          ) : null}
           {recentAppNews.length > 0 ? (
-            <View style={{ marginTop: sz(10, 7), borderTopWidth: 1, borderTopColor: GOLD_SOFT, paddingTop: sz(9, 6), gap: sz(3, 2) }}>
+            <View style={{ marginTop: notes.appnews?.trim() ? sz(10, 7) : 0, borderTopWidth: notes.appnews?.trim() ? 1 : 0, borderTopColor: GOLD_SOFT, paddingTop: notes.appnews?.trim() ? sz(9, 6) : 0, gap: sz(3, 2) }}>
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(11, 9), letterSpacing: 1.2, textTransform: 'uppercase', color: MUTED }}>
-                Shipped recently — for your notes
+                Shipped this cycle
               </Text>
               {recentAppNews.map((entry) => (
                 <Text key={entry.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(13, 10), lineHeight: sz(19, 14), color: MUTED }}>
@@ -1532,9 +1579,34 @@ export default function MeetingHelperScreen() {
               </View>
             ))}
           </View>
-          <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 11), color: GOLD_DEEP, marginTop: sz(22, 14) }}>
-            Whatever we land on goes in tonight's wrap-up.
-          </Text>
+          {/* Somewhere to put the answer while the room is still talking.
+              Tech HIVE meets entirely remotely, so there is no notebook going
+              round the table — Nat asked to be able to type straight into the
+              deck on the night (2026-08-12). Empty until she writes, so the
+              slide still reads as three clean questions on the screen share. */}
+          <View style={{ marginTop: sz(22, 14), width: '100%', maxWidth: sz(900, 620), alignItems: 'center', gap: sz(8, 5) }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 6) }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 11), color: GOLD_DEEP }}>
+                Whatever we land on goes in tonight's wrap-up.
+              </Text>
+              <EditPill noteKey="treasurer" />
+            </View>
+            {notes.treasurer?.trim() ? (
+              <View
+                style={{
+                  alignSelf: 'stretch',
+                  backgroundColor: CARD,
+                  borderWidth: 1,
+                  borderColor: GOLD_SOFT,
+                  borderRadius: sz(16, 12),
+                  paddingHorizontal: sz(22, 14),
+                  paddingVertical: sz(14, 9),
+                }}
+              >
+                <NoteBody noteKey="treasurer" emptyText="" />
+              </View>
+            ) : null}
+          </View>
         </View>
       )}
     </View>
@@ -1572,6 +1644,8 @@ export default function MeetingHelperScreen() {
     const focusNote = (raw: string) => parseFocusAnswer(raw).note.trim();
     const helpVoices = voicesFor('q_hive_help_recap', focusNote);
     const hangVoices = voicesFor('q_hangs_recap', recapNote);
+    const underCards = deck.plan.voicesUnderCards;
+    const underCardVoices = underCards ? voicesFor(underCards.answerKey) : [];
 
     const focusTally = members.reduce(
       (tally, member) => {
@@ -1921,6 +1995,28 @@ export default function MeetingHelperScreen() {
           })}
         </View>
 
+        {/* What people wrote in their check-in, for a card that doesn't open a
+            panel of its own. Tech's networking answers live here. */}
+        {underCards ? (
+          <View style={{ marginTop: sz(14, 8), gap: sz(4, 3) }}>
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
+              {underCards.heading}
+            </Text>
+            {underCardVoices.length > 0 ? (
+              underCardVoices.map((voice) => (
+                <Text key={voice.id} style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 11), lineHeight: sz(24, 16), color: CHARCOAL }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: GOLD_DEEP }}>{voice.name}: </Text>
+                  {voice.text}
+                </Text>
+              ))
+            ) : (
+              <Text style={{ fontFamily: 'Lato_400Regular', fontStyle: 'italic', fontSize: sz(14, 10), color: MUTED }}>
+                {underCards.empty}
+              </Text>
+            )}
+          </View>
+        ) : null}
+
         {/* HIVE Hang expansion — the POP formula for hangs. Left: how did
             last cycle land (real turnout meters from the check-in "I went 🙌"
             taps — survey says!). Right: what should we do next. Async voices
@@ -2096,6 +2192,22 @@ export default function MeetingHelperScreen() {
                     {point}
                   </Text>
                 ))}
+                {/* The conversation is the point, and a HIVE that has already
+                    picked its Help wants somewhere to say so. Nat, 2026-08-12:
+                    *"I love that you have the 'lets talk about this' part, but
+                    I'd also like to be able to put text directly in there…
+                    where i could just put the help in."* Written any time —
+                    top of the month, or live while the room decides. */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(10, 6), marginTop: sz(4, 3) }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 10), letterSpacing: 1.5, textTransform: 'uppercase', color: GOLD }}>
+                    This month's Help
+                  </Text>
+                  <EditPill noteKey="help" />
+                </View>
+                <NoteBody
+                  noteKey="help"
+                  emptyText="Nothing written down yet — talk it over, or write it in ahead of the meeting."
+                />
               </View>
             ) : null}
             {/* Survey says, for the focus: how many did it and how it landed.

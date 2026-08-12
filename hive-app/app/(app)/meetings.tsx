@@ -14,7 +14,7 @@ import { AppHeader } from '../../components/navigation';
 import { FadeIn } from '../../components/ui/FadeIn';
 import { BounceScrollView } from '../../components/ui/BounceScrollView';
 import { UpcomingMeetingsSkeleton, PastRecordingsSkeleton } from '../../components/meetings/MeetingsSkeleton';
-import { formatDateLong, parseAmericanDate } from '../../lib/dateUtils';
+import { formatDateLong, formatTime, parseAmericanDate } from '../../lib/dateUtils';
 import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
@@ -1346,7 +1346,11 @@ export default function MeetingsScreen() {
                     </Text>
                     <Text className="text-sm text-label mt-1">
                       {formatDateLong(event.event_date)}
-                      {event.event_time ? ` at ${event.event_time}` : ''}
+                      {/* `formatTime`, not the raw column — this line was
+                          printing "September 3, 2026 at 17:30:00" (Nat,
+                          2026-08-12). The shared formatter has been in
+                          dateUtils the whole time. */}
+                      {event.event_time ? ` at ${formatTime(event.event_time)}` : ''}
                     </Text>
                     {event.location && (
                       <Text className="text-sm text-gray-600 mt-1">

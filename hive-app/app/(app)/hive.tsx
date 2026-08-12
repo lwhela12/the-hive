@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase';
 // `confirmAction` say it on both platforms (see `lib/showAlert.ts`).
 import { showAlert, confirmAction } from '../../lib/showAlert';
 import { getHalfwayDoneKey } from '../../lib/meetingCycle';
+import { getHalfwayShape, isInHalfwayWindow } from '../../lib/checkIns';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useHiveDataQuery } from '../../lib/hooks/useHiveDataQuery';
 import { useWishes } from '../../lib/hooks/useWishes';
@@ -2568,23 +2569,24 @@ export default function HiveScreen() {
     return () => { cancelled = true; };
   }, [communityId, profile?.id]);
 
-  // The newsletter goes out on the 1st, so the check-in that feeds it rides the
-  // CALENDAR, not the meeting date — meetings wander with availability, and
-  // "two weeks before whenever we meet" was a moving target nobody could plan
-  // around. The card runs the last 5 days of the month and drops the moment you
-  // finish, because stale to-dos piling up is what we're avoiding.
+  // When to nudge, and what to say, is per-HIVE — see `getHalfwayShape` in
+  // lib/checkIns.ts for why OG rides the calendar and Tech rides its meeting.
+  // Either way the card drops the moment you finish, because stale to-dos
+  // piling up is what we're avoiding. The flow itself is always open from
+  // Meetings; this is only the nudge.
   const todayDate = new Date();
-  const daysLeftInMonth =
-    new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0).getDate() - todayDate.getDate();
-  const inHalfwayWindow = daysLeftInMonth <= 4;
+  const halfwayShape = getHalfwayShape(community);
+  const nextMeetingDate = upcomingEvents.find((event) => event.event_type === 'meeting')?.event_date;
+  const inHalfwayWindow = !!halfwayShape
+    && isInHalfwayWindow(halfwayShape, todayDate, nextMeetingDate);
 
   const homeTodos: HomeTodo[] = [
-    ...(inHalfwayWindow && !halfwayDone
+    ...(inHalfwayWindow && halfwayShape && !halfwayDone
       ? [{
           id: 'halfway-checkin',
-          emoji: '🗞️',
+          emoji: halfwayShape.emoji,
           title: 'Halfway check-in',
-          detail: "The newsletter goes out on the 1st — want a shout-out, a plug, or a reminder in it?",
+          detail: halfwayShape.detail,
           cta: 'Take 2 min →',
           onPress: () => router.push({
             pathname: '/monthly-tuneup',
