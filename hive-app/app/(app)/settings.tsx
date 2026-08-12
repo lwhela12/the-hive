@@ -51,17 +51,21 @@ const MUTED = '#8e7f6b';
 // are gone; the switch carries the gold now, out of `components/ui/Switch.tsx`.
 
 /**
- * One switch per email the HIVE actually sends. Two, because two is how many
- * there are: check-in-reminder is the only function that mails a member, and
- * it reads exactly these two columns (migration 117).
+ * One switch per email the HIVE actually sends.
  *
- * The newsletter is not here. Nat still writes it in the app and pastes it into
- * Wix to send, so nothing in our code consults a member's answer at send time —
- * a switch would take the choice and quietly drop it, which is worse than
- * sending them to the unsubscribe link already at the foot of the email (Nat
- * 2026-07-26, and still true on 2026-08-03).
+ * **The newsletter switch is here as of 2026-08-12, and the reason it was
+ * absent is worth keeping.** It used to say: *"Nat still writes it in the app
+ * and pastes it into Wix to send, so nothing in our code consults a member's
+ * answer at send time — a switch would take the choice and quietly drop it."*
+ * That was right, and it stopped being right the day `send-newsletter`
+ * shipped, because that function reads `email_newsletter_enabled` to decide
+ * who gets an issue.
  *
- * Replies and @s are not here either. Those arrive as a nudge on your phone —
+ * Nat found the gap from the other end, in the email itself: the footer told
+ * members to "turn it off in Settings" and Settings had no such switch. A
+ * promise pointing at nothing.
+ *
+ * Replies and @s are not here. Those arrive as a nudge on your phone —
  * notify-board-reply, notify-board-mention, notify-chat-mention and
  * notify-wish-mention all push, none of them mail — so the Notifications card
  * further down this page is the one that governs them.
@@ -70,11 +74,17 @@ type EmailSetting = {
   /** The boolean column on profiles that carries this. */
   column: string;
   label: string;
+  hint?: string;
 };
 
 const EMAIL_SETTINGS: EmailSetting[] = [
   { column: 'email_meeting_checkin_enabled', label: 'Before a meeting' },
   { column: 'email_midpoint_checkin_enabled', label: 'The month-end check-in' },
+  {
+    column: 'email_newsletter_enabled',
+    label: 'The Buzz',
+    hint: 'The monthly newsletter — what everyone worked on, and what got granted.',
+  },
 ];
 
 /** The one card shape this page uses. */
@@ -345,6 +355,16 @@ export default function SettingsScreen() {
                     label={setting.label}
                     onToggle={(next) => setEmail(setting, next)}
                   />
+                  {setting.hint ? (
+                    <Text
+                      style={{
+                        fontFamily: 'Lato_400Regular', fontSize: 12.5, lineHeight: 18,
+                        color: MUTED, paddingHorizontal: 16, paddingBottom: 12, marginTop: -6,
+                      }}
+                    >
+                      {setting.hint}
+                    </Text>
+                  ) : null}
                 </View>
               );
             })}

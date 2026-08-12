@@ -69,7 +69,7 @@ const APP_URL = Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app
 /** Resend's batch endpoint takes 100 at a time. */
 const BATCH_SIZE = 100;
 
-type Recipient = { email: string; name: string | null; token: string | null };
+type Recipient = { email: string; name: string | null; token: string | null; isMember?: boolean };
 
 function escapeHtml(value: string): string {
   return value
@@ -138,9 +138,19 @@ function issueHtml(title: string, content: string, footerHtml: string, ctaHtml =
 <html>
   <body style="margin:0;padding:0;background:#f4efe2;">
     <div style="max-width:600px;margin:0 auto;padding:28px 20px 40px;">
+      <!-- The real logo, not the emoji-and-wordmark stand-in (Nat 2026-08-12).
+           Sitting on a white tile because the file has no transparency — it is
+           RGB, despite being named "Transparent BG" — so laying it straight on
+           the cream would have put a white square in the middle of the page.
+           Width in the tag as well as the style: Outlook ignores CSS sizing on
+           images, and alt text so it still says something with images off,
+           which is how a good many people read mail. -->
       <div style="text-align:center;padding-bottom:18px;">
-        <div style="font-size:30px;line-height:34px;">🐝</div>
-        <div style="font-family:Helvetica,Arial,sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:#8a6a2f;padding-top:6px;">The Buzz</div>
+        <img src="${PUBLIC_SITE_URL}/assets/hive-logo-email.png"
+             alt="H.I.V.E. — Human, Insight, Vision, Execution"
+             width="120" height="120"
+             style="width:120px;height:120px;display:inline-block;border:0;outline:none;text-decoration:none;background:#ffffff;border-radius:60px;" />
+        <div style="font-family:Helvetica,Arial,sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:#8a6a2f;padding-top:10px;">The Buzz</div>
       </div>
       <div style="background:#fffdf5;border:1px solid #e3d4ac;border-radius:16px;padding:26px 26px 30px;">
         <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:33px;color:#2c2418;margin:0 0 18px;">${escapeHtml(title)}</h1>
@@ -156,12 +166,27 @@ function issueHtml(title: string, content: string, footerHtml: string, ctaHtml =
 </html>`;
 }
 
-/** Members leave through Settings; subscribers leave through their token. */
+/**
+ * Everybody gets a real unsubscribe link. Members get Settings as well.
+ *
+ * This used to give members ONLY a "turn it off in Settings" line, on the
+ * reasoning that a member's newsletter preference lives on their profile. Two
+ * things were wrong with that, and Nat found both from the reader's side on
+ * 2026-08-12: *"that'll only work if you're already a member... they should
+ * have a regular unsubscribe button"* — and then, opening Settings, *"the
+ * 'turn off newsletter' setting isnt even there."* A link to a switch that
+ * did not exist, shown to people who might not have an account at all.
+ *
+ * The switch exists now (`settings.tsx`), and the one-click link is
+ * unconditional. `unsubscribeTokenFor` guarantees every recipient has one,
+ * so nobody is ever handed a way out that depends on being able to log in.
+ */
 function footerFor(recipient: Recipient): string {
-  const out = recipient.token
-    ? `<a href="${PUBLIC_SITE_URL}/api/unsubscribe?token=${encodeURIComponent(recipient.token)}" style="color:#9a8a6a;">Unsubscribe any time</a>, one click, no questions asked.`
-    : `You get this because you are in a HIVE. <a href="${APP_URL}/settings" style="color:#9a8a6a;">Turn it off in Settings</a> whenever you like.`;
-  return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#9a8a6a;text-align:center;padding-top:18px;margin:0;">${out}</p>`;
+  const stop = `<a href="${PUBLIC_SITE_URL}/api/unsubscribe?token=${encodeURIComponent(recipient.token!)}" style="color:#9a8a6a;">Unsubscribe</a> any time — one click, no questions asked.`;
+  const settings = recipient.isMember
+    ? ` You're in a HIVE, so you can also <a href="${APP_URL}/settings" style="color:#9a8a6a;">manage this in Settings</a>.`
+    : '';
+  return `<p style="font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#9a8a6a;text-align:center;padding-top:18px;margin:0;">${stop}${settings}</p>`;
 }
 
 serve(async (req) => {
@@ -181,7 +206,7 @@ serve(async (req) => {
   // migration 128 drew `is_owner` for — not each HIVE's admin.
   const { data: caller } = await supabase
     .from('profiles')
-    .select('id, email, name, is_owner')
+    .select('id, email, name, is_owner, newsletter_token')
     .eq('id', auth.userId)
     .maybeSingle();
 
@@ -238,7 +263,14 @@ serve(async (req) => {
 
   if (mode === 'test') {
     if (!caller.email) return errorResponse('Your account has no email address to test with', 400);
-    recipients = [{ email: caller.email, name: caller.name ?? null, token: null }];
+    // Carrying the real token so a test exercises the real unsubscribe link
+    // rather than a dead one — the footer is exactly what everybody else gets.
+    recipients = [{
+      email: caller.email,
+      name: caller.name ?? null,
+      token: caller.newsletter_token ?? null,
+      isMember: true,
+    }];
   } else {
     const [subscriberRes, memberRes] = await Promise.all([
       supabase
@@ -247,23 +279,32 @@ serve(async (req) => {
         .is('unsubscribed_at', null),
       supabase
         .from('profiles')
-        .select('email, name')
+        .select('email, name, newsletter_token')
         .eq('email_newsletter_enabled', true),
     ]);
 
     // Subscribers first, so their unsubscribe token survives the de-dupe —
     // a member who also signed up publicly should still get the one-click
-    // link they were promised when they signed up.
+    // link they were promised when they signed up. Either token now stops
+    // BOTH lists (migration 171), so whichever one wins the tie is fine.
     const byEmail = new Map<string, Recipient>();
     for (const row of (subscriberRes.data ?? []) as Recipient[]) {
       const email = String(row.email ?? '').trim().toLowerCase();
       if (email) byEmail.set(email, { email, name: row.name ?? null, token: row.token ?? null });
     }
-    for (const row of (memberRes.data ?? []) as { email: string | null; name: string | null }[]) {
+    for (const row of (memberRes.data ?? []) as { email: string | null; name: string | null; newsletter_token: string | null }[]) {
       const email = String(row.email ?? '').trim().toLowerCase();
-      if (email && !byEmail.has(email)) byEmail.set(email, { email, name: row.name ?? null, token: null });
+      if (!email) continue;
+      const already = byEmail.get(email);
+      if (already) {
+        already.isMember = true;
+      } else {
+        byEmail.set(email, { email, name: row.name ?? null, token: row.newsletter_token ?? null, isMember: true });
+      }
     }
-    recipients = [...byEmail.values()];
+    // Nobody goes out without a way back. A recipient with no token at all
+    // would be handed a dead unsubscribe link, which is worse than no link.
+    recipients = [...byEmail.values()].filter((r) => !!r.token);
   }
 
   if (recipients.length === 0) {

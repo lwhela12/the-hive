@@ -205,7 +205,13 @@ function TopBox({ label, wide, children }: { label: string; wide: boolean; child
         // grow leaves room for the gap and still lets a lonely last box fill
         // its row. On a phone they stack, and a flex child inside a column
         // would fight the scroll view for height.
-        flexGrow: wide ? 1 : 0,
+        // `flexGrow: 0`, so a box that ends up alone on the last row stays a
+        // cube instead of stretching the width of the page. That stretch is
+        // what made "What We've Been Building" a long box under two short ones
+        // (Nat 2026-08-12: *"instead of having some really long ones, they look
+        // silly"*). With four boxes it is a tidy 2x2; a fifth lands under them
+        // at the same width rather than reflowing the lot.
+        flexGrow: 0,
         flexBasis: wide ? '48%' : 'auto',
         // All of them the same height (Nat 2026-08-04: "why are these bottom
         // boxes shorter than the top ones? they should all be equal"). A
@@ -752,17 +758,6 @@ export default function HiveWideScreen() {
             void persistHiveWideWelcomeSeen(profile, version).then(() => refreshProfile());
           }}
         />
-        {/* The door — a new member sees the way into their HIVE while the rest
-            of this page is still fetching, rather than after it. */}
-        <WayIntoYourHive
-          memberships={memberships}
-          firstName={(profile?.name ?? '').trim().split(/\s+/)[0] || null}
-          firstVisit={firstVisit}
-          // Picking a HIVE by name is how you come down out of HIVE-Wide —
-          // `switchCommunity` clears the HIVE-Wide standing and lands you on
-          // that HIVE's home page (see lib/hiveSwitchRoute.ts).
-          onEnter={(id) => { void switchCommunity(id); }}
-        />
         {loading ? (
           <ThinkingBee />
         ) : (
@@ -791,6 +786,25 @@ export default function HiveWideScreen() {
                 columnGap: 12,
               }}
             >
+              {/* The door is one of the cubes now.
+                  It used to sit full-width above this grid, which left the page
+                  reading as one long box, then two short ones, then another
+                  long one. Nat, 2026-08-12: *"i think all of these sub ones
+                  should be shorties & we can cube it up, instead of having some
+                  really long ones, they look silly."*
+                  Welcome stays big and full-width above — that one she likes
+                  exactly as it is. Everything under it is a cube. */}
+              <View style={{ flexGrow: 0, flexBasis: wide ? '48%' : 'auto' }}>
+                <WayIntoYourHive
+                  memberships={memberships}
+                  firstName={(profile?.name ?? '').trim().split(/\s+/)[0] || null}
+                  firstVisit={firstVisit}
+                  // Picking a HIVE by name is how you come down out of
+                  // HIVE-Wide — `switchCommunity` clears the HIVE-Wide standing
+                  // and lands you on that HIVE's home page.
+                  onEnter={(id) => { void switchCommunity(id); }}
+                />
+              </View>
               {/* The wishes that travel — the home they never had.
                   Marking a wish HIVE-Wide worked all along and then it went
                   nowhere visible, so the setting read as broken because its

@@ -109,7 +109,9 @@ export default async function handler(req, res) {
           .then(function (d) {
             if (d && d.ok) {
               go.style.display = 'none';
-              out.innerHTML = "You're on the list \\u{1F41D} Nat will be in touch before the next meeting.";
+              // No "before the next meeting" — Nat, 2026-08-12: "lets not make
+              // promises." A page cannot commit her to a deadline.
+              out.innerHTML = "You're on the list \\u{1F41D} Nat will be in touch.";
             } else {
               go.disabled = false;
               out.textContent = 'That did not go through. Try once more, or just reply to the newsletter.';
