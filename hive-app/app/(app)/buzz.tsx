@@ -53,6 +53,8 @@ type Buzz = {
   visibility: string;
   community_id: string;
   community?: Pick<Community, 'id' | 'name' | 'accent_color'> | null;
+  /** Written but never sent or published — owners only (2026-08-12). */
+  unsent?: boolean;
 };
 
 const MONTH_NAMES = [
@@ -136,6 +138,7 @@ const letterTrailLabel = (item: Buzz): string => {
 
 export default function BuzzScreen() {
   const { profile, communityId, memberships } = useAuth();
+  const isOwner = !!profile?.is_owner;
   // The Buzz lives at HIVE-Wide and nowhere else (Nat 2026-08-03), so it is
   // always dressed for space rather than following whoever opened it.
   const skin = SPACE_SKIN;
@@ -199,7 +202,12 @@ export default function BuzzScreen() {
       .from('board_posts')
       .select('id, title, content, created_at, visibility, community_id, community:communities(id, name, accent_color)')
       .in('category_id', boardIds)
-      .neq('status', 'archived')
+      // `archived_at`, not `status`. This filtered on `status <> 'archived'`,
+      // and the column's own constraint only permits 'active' or 'completed' —
+      // so the test could never be true and an archived letter stayed on the
+      // page. Archiving a board post has always been `archived_at` (it is what
+      // useCarryForwardContext and the newsletter-release query both read).
+      .is('archived_at', null)
       .order('created_at', { ascending: false })
       .limit(40);
 
@@ -225,7 +233,37 @@ export default function BuzzScreen() {
     const brewing = mine ?? brewingRows[0] ?? null;
     setCollecting(brewing);
     const brewingIds = new Set(brewingRows.map((row) => row.id));
-    const archive = rows.filter((row) => !brewingIds.has(row.id));
+
+    /**
+     * An issue joins the archive when it has actually GONE OUT — never before.
+     *
+     * Nat, 2026-08-12, finding this month's half-written letter sitting in the
+     * list under every finished one: *"shouldnt the one we're working on
+     * technically fall under 'still being written' until we click 'send to
+     * everyone'?? what if people were in here reading the unfinished one?"*
+     * They could, and it read as an issue they had somehow missed.
+     *
+     * Gone out means one of two things, because the archive predates the send
+     * button: published to the public site (`visibility = 'public'`, which is
+     * what the `public_newsletters` view reads and what every issue before
+     * today has), or emailed to the list at least once.
+     *
+     * A draft that is neither is shown to OWNERS ONLY, wearing its own label,
+     * so Nat can read hers back without it being on anybody else's page.
+     */
+    const { data: sends } = await supabase
+      .from('newsletter_sends')
+      .select('post_id')
+      .eq('mode', 'live');
+    const sent = new Set(((sends ?? []) as { post_id: string }[]).map((s) => s.post_id));
+
+    const archive = rows
+      .filter((row) => !brewingIds.has(row.id))
+      .filter((row) => row.visibility === 'public' || sent.has(row.id) || isOwner)
+      .map((row) => ({
+        ...row,
+        unsent: !(row.visibility === 'public' || sent.has(row.id)),
+      }));
     setItems(archive);
     // Nothing is opened for you. Nat, 2026-08-06: *"I think the first view of
     // the newsletter page should always start out with them all collapsed & you
@@ -251,7 +289,7 @@ export default function BuzzScreen() {
     } else {
       setAdded([]);
     }
-  }, [memberships, profile?.id]);
+  }, [memberships, profile?.id, isOwner]);
 
   useEffect(() => { void load(); }, [load, communityId]);
 
@@ -535,12 +573,18 @@ export default function BuzzScreen() {
               <CollapsiblePanel
                 key={item.id}
                 title={item.title}
+                // A draft says so, and says who can see it — the whole point of
+                // it being here is that Nat can read hers back while knowing
+                // nobody else can (2026-08-12).
+                eyebrow={item.unsent ? 'Draft · only you can see this' : undefined}
                 subtitle={
                   formatDateLong(item.created_at)
                   + (showWhichHive && fromElsewhere
                     ? ` · from ${hiveDisplayName(item.community?.name)}`
                     : '')
-                  + (item.visibility === 'public' ? ' · on the website' : '')
+                  + (item.unsent
+                    ? ' · not sent yet'
+                    : item.visibility === 'public' ? ' · on the website' : '')
                 }
                 // One at a time — opening a letter shuts the one you were
                 // reading, which is what "expand the one you want to read"

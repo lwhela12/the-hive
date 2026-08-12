@@ -77,13 +77,31 @@ type EmailSetting = {
   hint?: string;
 };
 
+/**
+ * These three carry a line of explanation each, against this page's usual rule.
+ *
+ * Nat set that rule herself on 2026-08-11 — *"each bolded header is self
+ * explanatory enough, we dont need to explain it, thats just too many words"* —
+ * and made this exception on 2026-08-12: *"Normally, i dont like the extra
+ * explainer text, but here, i think we can add a little more."* The difference
+ * is that these three switch off an email a member has not received yet, so
+ * the label alone is asking them to decide about something they cannot picture.
+ */
 const EMAIL_SETTINGS: EmailSetting[] = [
-  { column: 'email_meeting_checkin_enabled', label: 'Before a meeting' },
-  { column: 'email_midpoint_checkin_enabled', label: 'The month-end check-in' },
+  {
+    column: 'email_meeting_checkin_enabled',
+    label: 'Before-a-meeting check-in',
+    hint: 'Three days before the meeting, an email walks you through getting ready — your wishes, your to-dos, and how you are doing.',
+  },
+  {
+    column: 'email_midpoint_checkin_enabled',
+    label: 'Halfway check-in',
+    hint: 'Roughly halfway between meetings. A quick pulse on how it is going, and your chance to put a shout-out or a plug in the next newsletter.',
+  },
   {
     column: 'email_newsletter_enabled',
     label: 'The Buzz',
-    hint: 'The monthly newsletter — what everyone worked on, and what got granted.',
+    hint: 'The monthly newsletter — what everyone worked on, what got granted, and what is coming up.',
   },
 ];
 
