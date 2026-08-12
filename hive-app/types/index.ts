@@ -107,6 +107,36 @@ export interface Waitlist extends Record<string, unknown> {
   name?: string;
   message?: string;
   created_at: string;
+  /**
+   * The HIVE they asked about, as a slug, or null for "any / not sure"
+   * (migration 168). A slug rather than a foreign key because the public
+   * site writes here anonymously and must not need to read `communities`
+   * to do it.
+   */
+  interested_in?: string | null;
+  /** new -> invited -> joined | passed. Set by an owner in Admin. */
+  status?: 'new' | 'invited' | 'joined' | 'passed';
+  /** join-page, public-site, newsletter. */
+  source?: string | null;
+}
+
+/**
+ * One row per time an issue of The Buzz was mailed (migration 169).
+ *
+ * Its real job is stopping a second click mailing the whole list twice —
+ * `send-newsletter` refuses a live send for an issue that already has one
+ * unless it is told to mean it. Written only by that function on the service
+ * role, which is why `Insert` is `never` here, the same shape `app_feedback`
+ * uses.
+ */
+export interface NewsletterSend extends Record<string, unknown> {
+  id: string;
+  post_id: string;
+  mode: 'test' | 'live';
+  sent_by?: string | null;
+  recipient_count: number;
+  failed_count: number;
+  created_at: string;
 }
 
 /**
@@ -953,6 +983,14 @@ export interface Database {
         Row: NewsletterSubscriber;
         Insert: Omit<NewsletterSubscriber, 'id' | 'created_at' | 'token'>;
         Update: Partial<Omit<NewsletterSubscriber, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      // Insert is deliberately `never`: only the send-newsletter function
+      // writes here, on the service role, so a row is always a real send.
+      newsletter_sends: {
+        Row: NewsletterSend;
+        Insert: never;
+        Update: never;
         Relationships: [];
       };
       monthly_focus: {

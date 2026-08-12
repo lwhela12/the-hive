@@ -32,6 +32,16 @@ import { ThinkingBee } from '../ui/ThinkingBee';
 type Row = { id: string; name: string; email: string; role: string };
 type Subscriber = { id: string; email: string; name: string | null; unsubscribed_at: string | null };
 
+/** An issue of The Buzz, with whatever the send log knows about it. */
+type NewsletterIssue = {
+  id: string;
+  title: string;
+  visibility: string | null;
+  created_at: string;
+  sentAt: string | null;
+  sentCount: number;
+};
+
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /**
@@ -418,10 +428,24 @@ export function NewsletterPanel({
    * on arrival is showing you what members have asked to have mentioned. Write
    * is where you go once you've read them.
    */
-  const [tab, setTab] = useState<'write' | 'shoutouts' | 'signed'>('shoutouts');
+  /**
+   * And a fourth: actually sending it.
+   *
+   * Until 2026-08-12 there was no way to put an issue in anybody's inbox.
+   * Sign-up, the welcome email, unsubscribe and the published archive were
+   * all built; the send never was, so The Buzz only ever reached people who
+   * went looking for it. Nat, believing it was done: *"we have the sign up
+   * button on the public facing site & inside the app, right?"* — she did.
+   * That was the half that existed.
+   */
+  const [tab, setTab] = useState<'write' | 'shoutouts' | 'signed' | 'send'>('shoutouts');
   const [shoutOuts, setShoutOuts] = useState<
     { id: string; content: string; created_at: string; author: string }[]
   >([]);
+  const [issues, setIssues] = useState<NewsletterIssue[]>([]);
+  const [memberCount, setMemberCount] = useState(0);
+  const [sending, setSending] = useState<string | null>(null);
+  const [confirmSend, setConfirmSend] = useState<NewsletterIssue | null>(null);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -440,7 +464,43 @@ export function NewsletterPanel({
       .select('id')
       .eq('topic_kind', 'newsletter');
     const boardIds = ((boards ?? []) as { id: string }[]).map((b) => b.id);
-    if (boardIds.length === 0) { setShoutOuts([]); return; }
+    if (boardIds.length === 0) { setShoutOuts([]); setIssues([]); return; }
+
+    // The issues themselves, and what the send log knows about each. Members
+    // are counted here too: the send merges `newsletter_subscribers` with
+    // every member who has newsletter email switched on, so a count that only
+    // showed subscribers would tell Nat "1 person" before mailing twelve.
+    const [issueRes, sendRes, memberRes] = await Promise.all([
+      supabase
+        .from('board_posts')
+        .select('id, title, visibility, created_at')
+        .in('category_id', boardIds)
+        .order('created_at', { ascending: false })
+        .limit(12),
+      supabase
+        .from('newsletter_sends')
+        .select('post_id, created_at, recipient_count')
+        .eq('mode', 'live')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('email_newsletter_enabled', true),
+    ]);
+
+    const sends = new Map<string, { created_at: string; recipient_count: number }>();
+    for (const row of ((sendRes.data ?? []) as any[])) {
+      if (!sends.has(row.post_id)) sends.set(row.post_id, row);
+    }
+    setIssues(((issueRes.data ?? []) as any[]).map((row) => ({
+      id: row.id,
+      title: String(row.title ?? 'Untitled'),
+      visibility: row.visibility ?? null,
+      created_at: row.created_at,
+      sentAt: sends.get(row.id)?.created_at ?? null,
+      sentCount: sends.get(row.id)?.recipient_count ?? 0,
+    })));
+    setMemberCount(memberRes.count ?? 0);
 
     const { data: threads } = await supabase
       .from('board_posts')
@@ -522,6 +582,44 @@ export function NewsletterPanel({
 
   const active = subs.filter((s) => !s.unsubscribed_at);
 
+  /**
+   * Send an issue. A test goes only to whoever pressed it; a live send goes
+   * to the merged list, and the function refuses a second live send for the
+   * same issue unless it is told to mean it.
+   *
+   * The function reads the issue out of the database itself — all that
+   * travels from here is an id, so this button can never be the thing that
+   * mails arbitrary content to everybody.
+   */
+  const sendIssue = useCallback(async (issue: NewsletterIssue, mode: 'test' | 'live') => {
+    setSending(`${issue.id}:${mode}`);
+    const { data, error } = await supabase.functions.invoke('send-newsletter', {
+      body: { postId: issue.id, mode },
+    });
+    setSending(null);
+    setConfirmSend(null);
+
+    if (error) {
+      // The function's own words, not a generic failure — a refusal to
+      // double-send is the useful sentence here, and it lives in the body.
+      const detail = await (async () => {
+        try { return (await (error as any).context?.json())?.error ?? null; } catch { return null; }
+      })();
+      showAlert('It did not send', detail ?? 'Something went wrong on the way out. Try again in a moment.');
+      return;
+    }
+
+    const sent = (data as any)?.sent ?? 0;
+    const failed = (data as any)?.failed ?? 0;
+    showAlert(
+      mode === 'test' ? 'Test sent' : 'The Buzz is out',
+      mode === 'test'
+        ? 'Check your inbox — it went only to you.'
+        : `Sent to ${sent} ${sent === 1 ? 'person' : 'people'}.${failed > 0 ? ` ${failed} did not go through.` : ''}`
+    );
+    await load();
+  }, [load]);
+
   return (
     <View style={[cellStyle, { order } as any]}>
       {/* Real tabs, the same ones every HIVE box wears.
@@ -537,10 +635,13 @@ export function NewsletterPanel({
           // The draft quotes members before Nat has chosen what stays in, so
           // the tab itself is hers alone. Anyone else never sees the door.
           ...(profile?.is_owner ? [{ key: 'write', label: 'Write this month’s' }] : []),
+          // Sending speaks for HIVE to everybody it has an address for, so
+          // the door is owners-only, same as writing.
+          ...(profile?.is_owner ? [{ key: 'send', label: 'Send it' }] : []),
           { key: 'signed', label: `Signed up (${active.length})` },
         ]}
         activeTab={tab}
-        onTabChange={(key: string) => setTab(key as 'write' | 'shoutouts' | 'signed')}
+        onTabChange={(key: string) => setTab(key as 'write' | 'shoutouts' | 'signed' | 'send')}
         // No action tab. This box's one "do it" is writing the draft, and Nat
         // made that a tab on 2026-08-06 — so the folder's edge already carries
         // it, and a gold pill saying the same word twice would be the pill she
@@ -584,6 +685,68 @@ export function NewsletterPanel({
                   ? ` The ${shoutOuts.length} ${shoutOuts.length === 1 ? 'thing' : 'things'} members have asked to have mentioned are in Shout-outs — worth reading before you start.`
                   : ' Anything members ask to have mentioned shows up in Shout-outs.'}
               </Text>
+            </View>
+          ) : null}
+
+          {tab === 'send' && profile?.is_owner ? (
+            <View style={{ padding: 12, gap: 10 }}>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, lineHeight: 19 }}>
+                It goes to everyone signed up plus every member who has newsletter
+                email switched on — <Text style={{ fontFamily: 'Lato_700Bold', color: SPACE_SKIN.gold }}>about {active.length + memberCount}</Text>, minus
+                anyone on both lists. Send yourself a test first; it goes only to you.
+              </Text>
+              {issues.length === 0 ? (
+                <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, lineHeight: 19 }}>
+                  No issues written yet. Write one first, and it will show up here.
+                </Text>
+              ) : issues.map((issue) => (
+                <View
+                  key={issue.id}
+                  style={{
+                    borderWidth: 1, borderColor: SPACE_SKIN.border, backgroundColor: SPACE_SKIN.card,
+                    borderRadius: 12, padding: 11, gap: 8,
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: SPACE_SKIN.ink }}>
+                    {issue.title}
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: SPACE_SKIN.inkSoft }}>
+                    {issue.sentAt
+                      ? `Sent ${String(issue.sentAt).slice(0, 10)} to ${issue.sentCount} ${issue.sentCount === 1 ? 'person' : 'people'}`
+                      : issue.visibility === 'public'
+                        ? 'Published — never emailed'
+                        : 'Draft — publish it before you send'}
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <Pressable
+                      onPress={() => { void sendIssue(issue, 'test'); }}
+                      disabled={!!sending}
+                      style={({ pressed }) => ({
+                        borderWidth: 1, borderColor: SPACE_SKIN.border, borderRadius: 999,
+                        paddingHorizontal: 13, paddingVertical: 7,
+                        opacity: pressed || sending ? 0.6 : 1,
+                      })}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: SPACE_SKIN.ink }}>
+                        {sending === `${issue.id}:test` ? 'Sending…' : 'Send test to me'}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setConfirmSend(issue)}
+                      disabled={!!sending}
+                      style={({ pressed }) => ({
+                        backgroundColor: SPACE_SKIN.gold, borderRadius: 999,
+                        paddingHorizontal: 13, paddingVertical: 7,
+                        opacity: pressed || sending ? 0.6 : 1,
+                      })}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#1b1a16' }}>
+                        {sending === `${issue.id}:live` ? 'Sending…' : 'Send to everyone'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
             </View>
           ) : null}
 
@@ -685,6 +848,16 @@ export function NewsletterPanel({
           ) : null}
         </ScrollView>
       </Panel>
+      {/* The one genuinely irreversible button in this box. An email cannot be
+          taken back, so it asks, and it says the number out loud. */}
+      <ConfirmDialog
+        visible={!!confirmSend}
+        title={confirmSend ? `Send "${confirmSend.title}" to everyone?` : ''}
+        body={`This emails about ${active.length + memberCount} people and cannot be undone. If you have not sent yourself a test yet, do that first.`}
+        confirmLabel={sending ? 'Sending…' : 'Send it'}
+        onConfirm={() => { if (confirmSend) void sendIssue(confirmSend, 'live'); }}
+        onCancel={() => { if (!sending) setConfirmSend(null); }}
+      />
       <ConfirmDialog
         visible={!!confirmRemoveSub}
         title={confirmRemoveSub ? `Remove ${confirmRemoveSub.email}?` : ''}
