@@ -252,6 +252,8 @@ export default function NewsletterScreen() {
   const [cycleStart, setCycleStart] = useState<string | null>(null);
   const [recapTitle, setRecapTitle] = useState<string | null>(null);
   const [prose, setProse] = useState<string | null>(null);
+  /** True when the prose above is a letter Nat already wrote, not a generated one. */
+  const [existingDraft, setExistingDraft] = useState(false);
   // The letter is what she pastes into Wix; the outline is for checking the
   // facts behind it. Same data, two readings.
   const [view, setView] = useState<'letter' | 'facts'>('letter');
@@ -279,6 +281,7 @@ export default function NewsletterScreen() {
     setLoading(true);
     setError(null);
     setProse(null);
+    setExistingDraft(false);
 
     // What's new in the app, straight from the list every member already sees on
     // Home. This used to come off the meeting deck's frozen copy, so a recap
@@ -315,6 +318,53 @@ export default function NewsletterScreen() {
     setCycleStart(data.cycle_start ?? null);
     setRecapTitle(typeof data.recap_title === 'string' ? data.recap_title : null);
     setLoading(false);
+
+    /**
+     * A letter already in progress is what you see. Nothing is written over it.
+     *
+     * This page always generated a fresh letter, and on 2026-08-12 Nat tapped
+     * a row in Admin that named her own draft — "The Buzz — July Recap" — and
+     * landed on a completely different, machine-written August letter:
+     * *"which is all bad, this doesnt match the one we're writing in the email
+     * at all."* Worse than confusing: posting from here would have overwritten
+     * three weeks of her writing with a generated draft.
+     *
+     * So an unsent draft is loaded as the prose, and the writer is not asked
+     * for one. The FACTS above are still gathered either way — that is the
+     * genuinely useful half of this page once a letter exists, because it is
+     * what happened this cycle, ready to fold in by hand.
+     */
+    const { data: sends } = await supabase
+      .from('newsletter_sends')
+      .select('post_id')
+      .eq('mode', 'live');
+    const sentIds = new Set(((sends ?? []) as { post_id: string }[]).map((s) => s.post_id));
+
+    const { data: boardRows } = await supabase
+      .from('board_categories')
+      .select('id')
+      .eq('community_id', communityId)
+      .eq('topic_kind', 'newsletter');
+    const newsletterBoardIds = ((boardRows ?? []) as { id: string }[]).map((b) => b.id);
+
+    if (newsletterBoardIds.length > 0) {
+      const { data: drafts } = await supabase
+        .from('board_posts')
+        .select('id, title, content, visibility')
+        .in('category_id', newsletterBoardIds)
+        .is('archived_at', null)
+        .neq('visibility', 'public')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      const inProgress = ((drafts ?? []) as { id: string; title: string; content: string }[])
+        .find((row) => !sentIds.has(row.id) && String(row.content ?? '').trim());
+      if (inProgress) {
+        setProse(inProgress.content);
+        setRecapTitle(inProgress.title);
+        setExistingDraft(true);
+        return;
+      }
+    }
 
     if ((data.sections ?? []).length === 0) return;
 

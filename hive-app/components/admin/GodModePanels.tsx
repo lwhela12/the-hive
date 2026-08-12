@@ -454,7 +454,7 @@ export function NewsletterPanel({
     { id: string; content: string; created_at: string; author: string }[]
   >([]);
   const [issues, setIssues] = useState<NewsletterIssue[]>([]);
-  const [memberCount, setMemberCount] = useState(0);
+  const [memberEmails, setMemberEmails] = useState<string[]>([]);
   const [sending, setSending] = useState<string | null>(null);
   const [confirmSend, setConfirmSend] = useState<NewsletterIssue | null>(null);
 
@@ -495,7 +495,7 @@ export function NewsletterPanel({
         .order('created_at', { ascending: false }),
       supabase
         .from('profiles')
-        .select('id', { count: 'exact', head: true })
+        .select('email')
         .eq('email_newsletter_enabled', true),
     ]);
 
@@ -511,7 +511,12 @@ export function NewsletterPanel({
       sentAt: sends.get(row.id)?.created_at ?? null,
       sentCount: sends.get(row.id)?.recipient_count ?? 0,
     })));
-    setMemberCount(memberRes.count ?? 0);
+    // De-duplicated the same way the send de-duplicates, so the number here
+    // is the number that actually goes out. "About 27" beside a tab reading
+    // "Signed up (16)" reconciled with nothing (Nat 2026-08-12).
+    setMemberEmails(((memberRes.data ?? []) as { email: string | null }[])
+      .map((row) => String(row.email ?? '').trim().toLowerCase())
+      .filter(Boolean));
 
     /**
      * Shout-outs belong to ONE month, and retire with it.
@@ -612,6 +617,11 @@ export function NewsletterPanel({
   };
 
   const active = subs.filter((s) => !s.unsubscribed_at);
+  /** Exactly who a live send reaches: both lists, merged, one row per email. */
+  const recipientCount = new Set([
+    ...active.map((s) => s.email.trim().toLowerCase()),
+    ...memberEmails,
+  ]).size;
   /**
    * The letter in progress — written, never sent, never published.
    *
@@ -675,7 +685,11 @@ export function NewsletterPanel({
           ...(profile?.is_owner ? [{ key: 'write', label: 'Write this month’s' }] : []),
           // Sending speaks for HIVE to everybody it has an address for, so
           // the door is owners-only, same as writing.
-          ...(profile?.is_owner ? [{ key: 'send', label: 'Send it' }] : []),
+          // "Test & send", never "Send it". A tab is a place, but this one was
+                  // named like a button — Nat: "i keep getting nervous to click on
+                  // the tab called 'send it' because i think its going to send it if
+                  // i click on it." Leading with the safe half says what is inside.
+                  ...(profile?.is_owner ? [{ key: 'send', label: 'Test & send' }] : []),
           { key: 'signed', label: `Signed up (${active.length})` },
         ]}
         activeTab={tab}
@@ -744,9 +758,8 @@ export function NewsletterPanel({
           {tab === 'send' && profile?.is_owner ? (
             <View style={{ padding: 12, gap: 10 }}>
               <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, lineHeight: 19 }}>
-                It goes to everyone signed up plus every member who has newsletter
-                email switched on — <Text style={{ fontFamily: 'Lato_700Bold', color: SPACE_SKIN.gold }}>about {active.length + memberCount}</Text>, minus
-                anyone on both lists. Send yourself a test first; it goes only to you.
+                Goes to <Text style={{ fontFamily: 'Lato_700Bold', color: SPACE_SKIN.gold }}>{recipientCount}</Text> people
+                {' '}— the {active.length} signed up, plus members with it switched on.
               </Text>
               {issues.length === 0 ? (
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: SPACE_SKIN.inkSoft, lineHeight: 19 }}>
@@ -935,7 +948,7 @@ export function NewsletterPanel({
       <ConfirmDialog
         visible={!!confirmSend}
         title={confirmSend ? `Send "${confirmSend.title}" to everyone?` : ''}
-        body={`This emails about ${active.length + memberCount} people and cannot be undone. If you have not sent yourself a test yet, do that first.`}
+        body={`This emails ${recipientCount} people and cannot be undone. If you have not sent yourself a test yet, do that first.`}
         confirmLabel={sending ? 'Sending…' : 'Send it'}
         onConfirm={() => { if (confirmSend) void sendIssue(confirmSend, 'live'); }}
         onCancel={() => { if (!sending) setConfirmSend(null); }}
