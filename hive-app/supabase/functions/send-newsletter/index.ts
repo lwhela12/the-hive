@@ -366,6 +366,19 @@ serve(async (req) => {
     }
   }
 
+  // Sending IS publishing. Nat's rule for the whole pipeline: "whatever is
+  // in the email to be on HIVE wide & public site... one shot one kill." The
+  // email and HIVE-Wide were covered; the public site reads the
+  // public_newsletters view, which only shows visibility='public' — so
+  // without this, a sent issue would reach every inbox and never appear on
+  // the-hive.app. Only a LIVE send flips it; a test changes nothing.
+  if (mode === 'live' && sent > 0 && post.visibility !== 'public') {
+    await supabase
+      .from('board_posts')
+      .update({ visibility: 'public', is_pinned: true })
+      .eq('id', postId);
+  }
+
   // Logged even for a test, so "did my test actually send?" has an answer
   // that does not live in somebody's inbox.
   await supabase.from('newsletter_sends').insert({
