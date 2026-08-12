@@ -612,6 +612,13 @@ export function NewsletterPanel({
   };
 
   const active = subs.filter((s) => !s.unsubscribed_at);
+  /**
+   * The letter in progress — written, never sent, never published.
+   *
+   * The same test The Buzz uses, so "still a draft" means one thing in both
+   * places: it clears from here the moment Send to everyone goes through.
+   */
+  const draftIssue = issues.find((issue) => !issue.sentAt && issue.visibility !== 'public') ?? null;
 
   /**
    * Send an issue. A test goes only to whoever pressed it; a live send goes
@@ -700,9 +707,22 @@ export function NewsletterPanel({
                 })}
               >
                 <Ionicons name="create-outline" size={18} color={SPACE_SKIN.gold} />
-                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: SPACE_SKIN.ink, flex: 1 }}>
-                  Write this month&rsquo;s newsletter
-                </Text>
+                <View style={{ flex: 1 }}>
+                  {/* Name the letter in progress rather than a generic errand.
+                      Nat, 2026-08-12: *"I keep feeling like this tab should be
+                      showing the draft version we're working on now, shouldnt
+                      it? and once its posted, then that clears?"* Yes to both —
+                      an issue stops being a draft the moment it is sent or
+                      published, which is the same test The Buzz uses. */}
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13.5, color: SPACE_SKIN.ink }}>
+                    {draftIssue ? draftIssue.title : 'Start this month’s newsletter'}
+                  </Text>
+                  {draftIssue ? (
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: SPACE_SKIN.gold, marginTop: 2 }}>
+                      In progress · not sent yet
+                    </Text>
+                  ) : null}
+                </View>
                 <Ionicons name="chevron-forward" size={15} color={SPACE_SKIN.inkSoft} />
               </Pressable>
               <Text
@@ -711,7 +731,9 @@ export function NewsletterPanel({
                   lineHeight: 19, padding: 14,
                 }}
               >
-                The draft opens on its own page, where you shape it and post it.
+                {draftIssue
+                  ? 'Opens on its own page, where you shape it and post it. It stops showing here once you send it.'
+                  : 'The draft opens on its own page, where you shape it and post it.'}
                 {shoutOuts.length > 0
                   ? ` The ${shoutOuts.length} ${shoutOuts.length === 1 ? 'thing' : 'things'} members have asked to have mentioned are in Shout-outs — worth reading before you start.`
                   : ' Anything members ask to have mentioned shows up in Shout-outs.'}

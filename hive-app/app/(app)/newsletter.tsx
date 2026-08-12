@@ -383,10 +383,42 @@ export default function NewsletterScreen() {
       // a letter about July stops feeling a month late (2026-08-03).
       const title = recapTitle ?? `The Buzz — ${month} HIVE Recap`;
 
-      // Match on the month, not the exact title — this is the same thread that
-      // opened at month-end to collect shout-outs, and publishing turns it into
-      // the newsletter in place. The replies that fed it stay underneath.
-      const { data: existing } = await supabase
+      /**
+       * The issue in progress, if there is one — otherwise this month's
+       * collecting thread.
+       *
+       * The month match alone was the only rule until 2026-08-12, and it
+       * assumed every letter's title STARTS with a month, which stopped being
+       * true the day the archive was renamed to "The Buzz — {Month} Recap".
+       * A hand-written draft sitting on the board would have been missed
+       * entirely and posting would have quietly made a second one beside it.
+       *
+       * So: an unsent draft wins. That is a letter on this board that has
+       * never been published and never been mailed — the same test The Buzz
+       * uses to decide what is still Nat's alone. Falling back to the month
+       * match keeps the original behaviour, where publishing turns the
+       * shout-out thread into the letter in place and the replies that fed it
+       * stay underneath.
+       */
+      const { data: sends } = await supabase
+        .from('newsletter_sends')
+        .select('post_id')
+        .eq('mode', 'live');
+      const sent = new Set(((sends ?? []) as { post_id: string }[]).map((s) => s.post_id));
+
+      const { data: drafts } = await supabase
+        .from('board_posts')
+        .select('id, visibility')
+        .eq('category_id', board.id)
+        .is('archived_at', null)
+        .neq('visibility', 'public')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      const inProgress = ((drafts ?? []) as { id: string; visibility: string }[])
+        .find((row) => !sent.has(row.id));
+
+      const { data: byMonth } = inProgress ? { data: null } : await supabase
         .from('board_posts')
         .select('id')
         .eq('category_id', board.id)
@@ -394,6 +426,8 @@ export default function NewsletterScreen() {
         .is('archived_at', null)
         .order('created_at', { ascending: true })
         .limit(1);
+
+      const existing = inProgress ? [inProgress] : byMonth;
 
       const content = prose ?? asPlainText();
       if ((existing ?? []).length > 0) {
