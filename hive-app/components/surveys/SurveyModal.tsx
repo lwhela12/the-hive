@@ -18,6 +18,7 @@ import type { Survey, SurveyAnswers, SurveyQuestion } from '../../lib/hooks/useS
 import { SurveyQuestionField } from './SurveyQuestionField';
 import { getSeasonCheckInKind } from '../../lib/checkIns';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../lib/hooks/useAuth';
 
 import { ComposerBar } from '../ui/ComposerBar';
 import { ThinkingBee } from '../ui/ThinkingBee';
@@ -112,6 +113,7 @@ export function SurveyModal({
   // season's hangs and granted wishes, shown once above the opening
   // question so "how did the last three months go?" isn't a blank stare.
   const seasonKind = getSeasonCheckInKind(survey);
+  const { profile: viewerProfile } = useAuth();
   const [seasonRecap, setSeasonRecap] = useState<{ hangs: string[]; granted: string[] } | null>(null);
   useEffect(() => {
     if (!seasonKind) return;
@@ -120,9 +122,27 @@ export function SurveyModal({
       const end = new Date(survey.due_date ?? Date.now());
       const start = new Date(end);
       start.setMonth(start.getMonth() - (seasonKind === 'year' ? 12 : 3));
+
+      // A HIVE younger than the lookback should never claim a history it
+      // doesn't have — Nat, 2026-08-13: "Prod & Tech dont evne start until
+      // sept, so we dont want to ask 'how its been since jan'." Their
+      // year-end window starts at their own creation date this year; next
+      // year they'll have a full twelve months and this clamp does nothing.
+      const { data: community } = await supabase
+        .from('communities')
+        .select('created_at')
+        .eq('id', survey.community_id)
+        .single();
+      const createdAt = community?.created_at ? new Date(community.created_at) : null;
+      if (createdAt && createdAt > start) start.setTime(createdAt.getTime());
+
       const startIso = start.toISOString().slice(0, 10);
       const endIso = end.toISOString().slice(0, 10);
 
+      // 24, not 12 — a year-end lookback for an established HIVE can
+      // genuinely outrun the old cap (Nat, 2026-08-13: "we'll have to go
+      // allll the way back to Jan!!! that's a lot"). The card below
+      // collapses long lists so this doesn't turn into a wall of text.
       const [{ data: events }, { data: wishes }] = await Promise.all([
         supabase
           .from('events')
@@ -133,27 +153,42 @@ export function SurveyModal({
           .neq('event_type', 'meeting')
           .neq('event_type', 'birthday')
           .order('event_date', { ascending: true })
-          .limit(12),
+          .limit(24),
         supabase
           .from('wishes')
-          .select('id, title, description, fulfilled_at')
+          .select('id, title, description, fulfilled_at, granters:wish_granters(granter_id)')
           .eq('community_id', survey.community_id)
           .eq('status', 'fulfilled')
           .gte('fulfilled_at', startIso)
           .lte('fulfilled_at', endIso)
           .order('fulfilled_at', { ascending: true })
-          .limit(12),
+          .limit(24),
       ]);
       if (!active) return;
       setSeasonRecap({
         hangs: (events ?? [])
           .filter((event: any) => !/\b(out of town|away|trip|travel|galavant)/i.test(event.title))
           .map((event: any) => event.title),
-        granted: (wishes ?? []).map((wish: any) => (wish.title || wish.description || '').trim()).filter(Boolean),
+        // Migration 178 opened fulfilled wishes to the whole HIVE — before
+        // it, only a wish's own owner could see it granted at all, so a
+        // recap of "what the HIVE granted" silently showed just Nat's own
+        // four (Nat, 2026-08-13, reacting to that exact gap: "we shoudl list
+        // the ones you got granted & the ones that the HIVE had granted in
+        // general"). Tagging "— you helped grant this" covers her example
+        // (Charlee's act-filming wish) even when she wasn't the one asking.
+        granted: (wishes ?? []).map((wish: any) => {
+          const text = (wish.title || wish.description || '').trim();
+          if (!text) return '';
+          const helped = viewerProfile?.id
+            && (wish.granters ?? []).some((g: any) => g.granter_id === viewerProfile.id);
+          return helped ? `${text} — you helped grant this` : text;
+        }).filter(Boolean),
       });
     })().catch((err) => console.warn('Could not load season recap', err));
     return () => { active = false; };
-  }, [seasonKind, survey.community_id, survey.due_date]);
+  }, [seasonKind, survey.community_id, survey.due_date, viewerProfile?.id]);
+  const SEASON_RECAP_COLLAPSE_THRESHOLD = 6;
+  const [seasonRecapExpanded, setSeasonRecapExpanded] = useState(false);
   const carryForwardResponses = useMemo(() => (
     normalizeCarryForwardResponse(answers[CARRY_FORWARD_ANSWER_KEY])
   ), [answers]);
@@ -432,29 +467,53 @@ export function SurveyModal({
                 <View style={{ height: 1, backgroundColor: 'rgba(222,193,129,0.3)', marginTop: 20 }} />
               </View>
 
-              {seasonRecap && (seasonRecap.hangs.length > 0 || seasonRecap.granted.length > 0) && (
-                <View style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 14, padding: 14, marginBottom: 22, gap: 10 }}>
-                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, letterSpacing: 0.6, textTransform: 'uppercase', color: '#8a5a16' }}>
-                    A little jog for your memory
-                  </Text>
-                  {seasonRecap.hangs.length > 0 && (
-                    <View style={{ gap: 3 }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#5c5648' }}>What happened:</Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
-                        {seasonRecap.hangs.join(' · ')}
+              {seasonRecap && (seasonRecap.hangs.length > 0 || seasonRecap.granted.length > 0) && (() => {
+                const total = seasonRecap.hangs.length + seasonRecap.granted.length;
+                // A year-end recap can genuinely run long; collapse it to a
+                // one-line count with a tap to open (Nat, 2026-08-13: "maybe
+                // we have a 'jog my memroy' screen that collapses or
+                // something?"). A quarter's usual handful stays open.
+                const collapsible = total > SEASON_RECAP_COLLAPSE_THRESHOLD;
+                const showFull = !collapsible || seasonRecapExpanded;
+                return (
+                  <View style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 14, padding: 14, marginBottom: 22, gap: 10 }}>
+                    <Pressable
+                      onPress={() => collapsible && setSeasonRecapExpanded((v) => !v)}
+                      disabled={!collapsible}
+                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                    >
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, letterSpacing: 0.6, textTransform: 'uppercase', color: '#8a5a16' }}>
+                        A little jog for your memory
                       </Text>
-                    </View>
-                  )}
-                  {seasonRecap.granted.length > 0 && (
-                    <View style={{ gap: 3 }}>
-                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#5c5648' }}>💛 Wishes granted:</Text>
-                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
-                        {seasonRecap.granted.join(' · ')}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
+                      {collapsible && (
+                        <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
+                          {showFull ? 'Hide ▲' : `${seasonRecap.hangs.length} hangs · ${seasonRecap.granted.length} granted ▾`}
+                        </Text>
+                      )}
+                    </Pressable>
+                    {showFull && (
+                      <>
+                        {seasonRecap.hangs.length > 0 && (
+                          <View style={{ gap: 3 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#5c5648' }}>What happened:</Text>
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
+                              {seasonRecap.hangs.join(' · ')}
+                            </Text>
+                          </View>
+                        )}
+                        {seasonRecap.granted.length > 0 && (
+                          <View style={{ gap: 3 }}>
+                            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#5c5648' }}>💛 Wishes granted:</Text>
+                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
+                              {seasonRecap.granted.join(' · ')}
+                            </Text>
+                          </View>
+                        )}
+                      </>
+                    )}
+                  </View>
+                );
+              })()}
 
               {draftLoaded && renderCarryForwardContext()}
 
