@@ -16,6 +16,8 @@ import {
 } from '../../lib/carryForward';
 import type { Survey, SurveyAnswers, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { SurveyQuestionField } from './SurveyQuestionField';
+import { getSeasonCheckInKind } from '../../lib/checkIns';
+import { supabase } from '../../lib/supabase';
 
 import { ComposerBar } from '../ui/ComposerBar';
 import { ThinkingBee } from '../ui/ThinkingBee';
@@ -105,6 +107,53 @@ export function SurveyModal({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
+  // Memory jogger (Nat, 2026-08-13, twice: "werent we goint to preseeed it
+  // with activities and granted wishes and stuff?") — a quiet recap of the
+  // season's hangs and granted wishes, shown once above the opening
+  // question so "how did the last three months go?" isn't a blank stare.
+  const seasonKind = getSeasonCheckInKind(survey);
+  const [seasonRecap, setSeasonRecap] = useState<{ hangs: string[]; granted: string[] } | null>(null);
+  useEffect(() => {
+    if (!seasonKind) return;
+    let active = true;
+    (async () => {
+      const end = new Date(survey.due_date ?? Date.now());
+      const start = new Date(end);
+      start.setMonth(start.getMonth() - (seasonKind === 'year' ? 12 : 3));
+      const startIso = start.toISOString().slice(0, 10);
+      const endIso = end.toISOString().slice(0, 10);
+
+      const [{ data: events }, { data: wishes }] = await Promise.all([
+        supabase
+          .from('events')
+          .select('id, title, event_date')
+          .eq('community_id', survey.community_id)
+          .gte('event_date', startIso)
+          .lte('event_date', endIso)
+          .neq('event_type', 'meeting')
+          .neq('event_type', 'birthday')
+          .order('event_date', { ascending: true })
+          .limit(12),
+        supabase
+          .from('wishes')
+          .select('id, title, description, fulfilled_at')
+          .eq('community_id', survey.community_id)
+          .eq('status', 'fulfilled')
+          .gte('fulfilled_at', startIso)
+          .lte('fulfilled_at', endIso)
+          .order('fulfilled_at', { ascending: true })
+          .limit(12),
+      ]);
+      if (!active) return;
+      setSeasonRecap({
+        hangs: (events ?? [])
+          .filter((event: any) => !/\b(out of town|away|trip|travel|galavant)/i.test(event.title))
+          .map((event: any) => event.title),
+        granted: (wishes ?? []).map((wish: any) => (wish.title || wish.description || '').trim()).filter(Boolean),
+      });
+    })().catch((err) => console.warn('Could not load season recap', err));
+    return () => { active = false; };
+  }, [seasonKind, survey.community_id, survey.due_date]);
   const carryForwardResponses = useMemo(() => (
     normalizeCarryForwardResponse(answers[CARRY_FORWARD_ANSWER_KEY])
   ), [answers]);
@@ -382,6 +431,30 @@ export function SurveyModal({
                 )}
                 <View style={{ height: 1, backgroundColor: 'rgba(222,193,129,0.3)', marginTop: 20 }} />
               </View>
+
+              {seasonRecap && (seasonRecap.hangs.length > 0 || seasonRecap.granted.length > 0) && (
+                <View style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 14, padding: 14, marginBottom: 22, gap: 10 }}>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, letterSpacing: 0.6, textTransform: 'uppercase', color: '#8a5a16' }}>
+                    A little jog for your memory
+                  </Text>
+                  {seasonRecap.hangs.length > 0 && (
+                    <View style={{ gap: 3 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#5c5648' }}>What happened:</Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
+                        {seasonRecap.hangs.join(' · ')}
+                      </Text>
+                    </View>
+                  )}
+                  {seasonRecap.granted.length > 0 && (
+                    <View style={{ gap: 3 }}>
+                      <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#5c5648' }}>💛 Wishes granted:</Text>
+                      <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
+                        {seasonRecap.granted.join(' · ')}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
 
               {draftLoaded && renderCarryForwardContext()}
 
