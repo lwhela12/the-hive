@@ -3469,8 +3469,10 @@ export function SkillBubbleGarden({
       // side by side, and a garden with few blooms scales them up until two
       // neighbours swallow each other whole (Nat, 2026-08-13: Infiniti's
       // Crystal Collecting buried under Resume Polishing, unheartable).
-      // Editable gardens keep exact pinned slots — it's your garden, your
-      // clusters, and dragging must land where you dropped.
+      // Editable gardens keep exact pinned slots — the owner's stored
+      // placements (from replants and the era when dragging was on; the
+      // `canDrag = false` switch below turned it off in May 2026) stay
+      // exactly where the data says.
       return slots.map((slot, orderIndex) => ({
         ...slot,
         slotIndex: Math.round(((GARDEN_CAPACITY - 1) * orderIndex) / Math.max(1, slots.length - 1)),
