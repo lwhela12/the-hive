@@ -469,7 +469,17 @@ function WayIntoYourHive({
 
 export default function HiveWideScreen() {
   const router = useRouter();
-  const { communityId, community, profile, refreshProfile, memberships, switchCommunity } = useAuth();
+  const { communityId, community, profile, refreshProfile, memberships, switchCommunity, wholeHive, enterWholeHive } = useAuth();
+
+  // The address is the truth: standing on /hive-wide means standing above the
+  // HIVEs, so the mode follows the route. A "fresh honey" reload could land
+  // here with the mode still pointing at one HIVE — the page and header said
+  // HIVE-Wide while the rail and footer said OG HIVE (Nat, 2026-08-13:
+  // "its 1/2 OG & 1/2 HIVE wide... THAT cant happen"). The /hive screen
+  // referees the mirror case (wholeHive mode on a one-HIVE page) itself.
+  useEffect(() => {
+    if (!wholeHive) enterWholeHive();
+  }, [wholeHive, enterWholeHive]);
 
   // Whether this person has ever opened the HIVE-Wide explainer is the same
   // question as whether they have been here before, so the door reads that flag
