@@ -2245,10 +2245,13 @@ function SkillPlant({
           />
         </View>
       )}
-      {/* Sunflowers visitors left (garden visits, 2026-08-12). Tucked on the
-          lower-left edge: the bee owns the top-left, and the reseed and water
-          buttons own the right side of an editable garden, so this corner is
-          free in every mode and the bubble layout stays untouched. */}
+      {/* Hearts visitors left (garden visits, 2026-08-12). Pinned to the
+          flower head itself — it lived on the slot's lower-left corner first,
+          and in a crowded garden that corner sits on top of the NEIGHBOUR
+          (Nat, 2026-08-13: hearted Charlee's Plant Parenting, watched the
+          pill appear on Cuddles). The head is the one spot that is
+          unmistakably this bloom's own; the bee keeps the top-left and the
+          water/reseed buttons keep the right. */}
       {flowerSummary && flowerSummary.count > 0 && !isReseeding && (
         <Pressable
           onPress={(event) => {
@@ -2261,8 +2264,8 @@ function SkillPlant({
           accessibilityLabel={`${skill.description} has ${flowerSummary.count} ${flowerSummary.count === 1 ? 'heart' : 'hearts'} from garden visitors`}
           style={{
             position: 'absolute',
-            left: Math.max(4, plantWidth * 0.12),
-            bottom: showLabel ? LABEL_HEIGHT + 4 : 8,
+            left: plantWidth / 2 - 13,
+            top: Math.max(20, plantHeight * 0.32),
             minWidth: 26,
             height: 26,
             borderRadius: 999,
