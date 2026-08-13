@@ -1566,9 +1566,9 @@ export function HiveMemberPanels({
         const seasonReady = hasSeasonCheckIns(m.community);
         const launchedSeason = seasonSurveysByHive[m.community_id] ?? [];
         const seasonRow = (kind: SeasonKind): CheckInScheduleRow => {
-          const when = kind === 'quarter'
-            ? 'Three days before the quarter ends'
-            : 'Three days before the year ends';
+          // Nat, 2026-08-13: "its so much to read. The bold could just be
+          // Pre-Meeting, End of Month, End of Quarter & End of Year"
+          const when = kind === 'quarter' ? 'End of Quarter' : 'End of Year';
           const what = kind === 'quarter' ? 'look back at the quarter' : 'look back at the whole year';
           if (!seasonReady) return { key: kind, when, what: 'coming soon', live: false };
           const occurrence = getUpcomingSeasonOccurrence(kind, new Date());
@@ -1604,7 +1604,7 @@ export function HiveMemberPanels({
         const checkInSchedule: CheckInScheduleRow[] = [
           {
             key: 'monthly',
-            when: 'Three days before the meeting',
+            when: 'Pre-Meeting',
             what: tailored ? 'open the monthly tune-up' : 'coming soon',
             live: tailored,
             ...(tailored ? {
@@ -1614,7 +1614,7 @@ export function HiveMemberPanels({
           },
           {
             key: 'halfway',
-            when: 'The last three days of the month',
+            when: 'End of Month',
             what: tailored ? 'shout-outs for the newsletter' : 'coming soon',
             live: tailored,
             ...(tailored ? {
