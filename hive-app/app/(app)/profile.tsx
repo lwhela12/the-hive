@@ -176,7 +176,49 @@ type ProfileFormDraft = {
 };
 
 export default function ProfileScreen() {
-  const { profile, communityId, communityRole, refreshProfile } = useAuth();
+  const { profile, communityId, community, communityRole, refreshProfile } = useAuth();
+  // Production HIVE's MVP piece (Nat voice memo, 2026-08-13): "get clear on
+  // what your production goals are... maybe it lives in your profile, where
+  // we have the three MIQs." Lives on the membership row (migration 179),
+  // not the profile — this HIVE's question means nothing in another one the
+  // same person might also belong to. Generic slug check now; any future
+  // HIVE with its own singular focus can flip this on without new code.
+  const showsHiveGoal = community?.slug === 'show';
+  const [hiveGoal, setHiveGoal] = useState('');
+  const [hiveGoalSaving, setHiveGoalSaving] = useState(false);
+  const [hiveGoalDraft, setHiveGoalDraft] = useState('');
+  const [editingHiveGoal, setEditingHiveGoal] = useState(false);
+  useEffect(() => {
+    if (!showsHiveGoal || !communityId || !profile?.id) return;
+    let active = true;
+    supabase
+      .from('community_memberships')
+      .select('hive_goal')
+      .eq('community_id', communityId)
+      .eq('user_id', profile.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!active) return;
+        setHiveGoal((data as { hive_goal?: string | null } | null)?.hive_goal ?? '');
+      });
+    return () => { active = false; };
+  }, [showsHiveGoal, communityId, profile?.id]);
+  const saveHiveGoal = async (next: string) => {
+    if (!communityId || !profile?.id) return;
+    setHiveGoalSaving(true);
+    const { error: saveError } = await supabase
+      .from('community_memberships')
+      .update({ hive_goal: next.trim() || null })
+      .eq('community_id', communityId)
+      .eq('user_id', profile.id);
+    setHiveGoalSaving(false);
+    if (saveError) {
+      showAlert('Error', 'Could not save your goal. Please try again.');
+      return;
+    }
+    setHiveGoal(next.trim());
+    setEditingHiveGoal(false);
+  };
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { grantWish } = useWishes();
   const { availableSurveys, pendingSurveys: allPendingSurveys, myResponses, submitResponse } = useSurveys(communityId ?? undefined, profile?.id);
@@ -2488,6 +2530,78 @@ export default function ProfileScreen() {
         </View>
         </FadeIn>
         </>
+        )}
+
+        {/* Production HIVE's goal prompt — see showsHiveGoal above. */}
+        {showsHiveGoal && !immersiveSkillsGarden && (
+          <FadeIn delay={100}>
+            <View className="mb-6">
+              <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
+                Production Goals 🎬
+              </Text>
+              <View className="bg-white rounded-xl shadow-sm p-4">
+                {editingHiveGoal ? (
+                  <>
+                    <ComposerBar
+                      tone="light"
+                      variant="form"
+                      value={hiveGoalDraft}
+                      onChangeText={setHiveGoalDraft}
+                      placeholder="What are you working toward with this show?"
+                      multiline
+                      submitOnEnterKey={false}
+                    />
+                    <View className="flex-row gap-2 mt-3">
+                      <Pressable
+                        onPress={() => setEditingHiveGoal(false)}
+                        className="flex-1 bg-cream rounded-lg py-2"
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-charcoal/60 text-center">Cancel</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => void saveHiveGoal(hiveGoalDraft)}
+                        disabled={hiveGoalSaving}
+                        className="flex-1 bg-gold rounded-lg py-2"
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-center">
+                          {hiveGoalSaving ? 'Saving…' : 'Save'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal leading-6">
+                      {hiveGoal || "What are you working toward with this show? Get clear on it — Clive can help you find the words."}
+                    </Text>
+                    <View className="flex-row gap-4 mt-3">
+                      <Pressable
+                        onPress={() => { setHiveGoalDraft(hiveGoal); setEditingHiveGoal(true); }}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+                          {hiveGoal ? 'Edit' : 'Write it myself'}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => router.push({
+                          pathname: '/(app)',
+                          params: {
+                            prefill: hiveGoal
+                              ? `Help me refine my production goal for this HIVE. Here's what I have so far: "${hiveGoal}". Help me make it sharper.`
+                              : 'Help me get clear on my production goal for this HIVE — what am I working toward with this show?',
+                          },
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-gold text-sm">
+                          {hiveGoal ? 'Refine with Clive ✨' : 'Find with Clive ✨'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+              </View>
+            </View>
+          </FadeIn>
         )}
 
         {/* Loading skeletons for dynamic sections */}

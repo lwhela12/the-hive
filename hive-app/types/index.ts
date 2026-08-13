@@ -72,6 +72,11 @@ export interface CommunityMembership extends Record<string, unknown> {
   user_id: string;
   role: UserRole;
   created_at: string;
+  /** This HIVE's singular question, if it has one (migration 179) — e.g.
+   *  Production HIVE's "what are your production goals?". Per membership,
+   *  not per profile: a person's answer for one HIVE means nothing in
+   *  another they also belong to. */
+  hive_goal?: string | null;
   community?: Community;
   user?: Profile;
 }
