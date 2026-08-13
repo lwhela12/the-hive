@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { ComposerBar } from '../ui/ComposerBar';
 import type { SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { useAuth } from '../../lib/hooks/useAuth';
@@ -378,6 +380,8 @@ export function SurveyQuestionField({
   // this screen, navigate to this other screen & come back', it'll never
   // work. Ever."
   const { profile } = useAuth();
+  const router = useRouter();
+  const [miqLaterDismissed, setMiqLaterDismissed] = useState(false);
   const miqEntries = question.id === 'q_quarter_miq'
     ? ([
         ['Experiences', (profile as any)?.miq_experiences],
@@ -410,10 +414,46 @@ export function SurveyQuestionField({
                 {String(answer).trim()}
               </Text>
             ))
-          ) : (
+          ) : miqLaterDismissed ? (
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8e7a5e', lineHeight: 18 }}>
-              You haven't written a 3MIQ yet — skip this one guilt-free.
+              No worries — Clive's around whenever you want to write it.
             </Text>
+          ) : (
+            <>
+              {/* No 3MIQ yet: a fork, not homework. Answers draft-save, so
+                  stepping out to Clive loses nothing. (Nat, 2026-08-13.) */}
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 13, color: '#8a5a16', lineHeight: 18 }}>
+                No 3MIQ yet?
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                <Pressable
+                  onPress={() => router.push({
+                    pathname: '/(app)',
+                    params: {
+                      prefill: 'Help me discover my 3 Most Important Questions. I want one for experiences, one for growth, and one for contribution.',
+                    },
+                  })}
+                  accessibilityRole="button"
+                  style={{ backgroundColor: '#bd9348', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: 'white', fontSize: 13 }}>
+                    Figure it out with Clive now ✨
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setMiqLaterDismissed(true)}
+                  accessibilityRole="button"
+                  style={{ backgroundColor: '#f5f3ee', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14 }}
+                >
+                  <Text style={{ fontFamily: 'Lato_700Bold', color: '#8e7a5e', fontSize: 13 }}>
+                    I'll do it later
+                  </Text>
+                </Pressable>
+              </View>
+              <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 11.5, color: '#9b8a6b', marginTop: 6 }}>
+                Your answers here are saved — you can hop to Clive and come right back.
+              </Text>
+            </>
           )}
         </View>
       )}
