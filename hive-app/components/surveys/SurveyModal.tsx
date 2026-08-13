@@ -493,20 +493,27 @@ export function SurveyModal({
                     </Pressable>
                     {showFull && (
                       <>
+                        {/* One line per item, not one run-on sentence (Nat,
+                            2026-08-13: "you know how i feel about long form
+                            stuff"). */}
                         {seasonRecap.hangs.length > 0 && (
-                          <View style={{ gap: 3 }}>
+                          <View style={{ gap: 4 }}>
                             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#5c5648' }}>What happened:</Text>
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
-                              {seasonRecap.hangs.join(' · ')}
-                            </Text>
+                            {seasonRecap.hangs.map((hang) => (
+                              <Text key={hang} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 18 }}>
+                                • {hang}
+                              </Text>
+                            ))}
                           </View>
                         )}
                         {seasonRecap.granted.length > 0 && (
-                          <View style={{ gap: 3 }}>
+                          <View style={{ gap: 4 }}>
                             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#5c5648' }}>💛 Wishes granted:</Text>
-                            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 19 }}>
-                              {seasonRecap.granted.join(' · ')}
-                            </Text>
+                            {seasonRecap.granted.map((grant) => (
+                              <Text key={grant} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 18 }}>
+                                • {grant}
+                              </Text>
+                            ))}
                           </View>
                         )}
                       </>
