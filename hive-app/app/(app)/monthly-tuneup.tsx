@@ -2714,6 +2714,7 @@ export default function MonthlyTuneupScreen() {
               value={checkInAnswers[helpRecap.id]}
               onChange={(value) => setCheckInAnswer(helpRecap.id, value)}
               hangEvents={hangRecapEvents}
+              communityId={communityId}
             />
           </View>
         ) : null;
@@ -3702,6 +3703,7 @@ export default function MonthlyTuneupScreen() {
               value={checkInAnswers[question.id]}
               onChange={(value) => setCheckInAnswer(question.id, value)}
               hangEvents={hangRecapEvents}
+              communityId={communityId}
             />
           ))}
           {checkInError ? (

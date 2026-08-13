@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { ComposerBar } from '../ui/ComposerBar';
 import type { SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { useMentionableMembers } from '../../lib/hooks/useMentionableMembers';
 
 export function ScaleInput({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
   return (
@@ -88,12 +89,20 @@ export function VoiceTextInput({
   onChangeText,
   placeholder,
   multiline = false,
+  communityId,
 }: {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
   multiline?: boolean;
+  /** Turns on @-mention profile bubbles, same as Compliment Corner (Nat,
+   *  2026-08-13, looking at "Who showed up for you this year?": "are we
+   *  supposed to tag people? If so, we shoudl show their little profile
+   *  bubbles"). ComposerBar already has the picker built in — survey answer
+   *  boxes just never handed it a member list before. */
+  communityId?: string | null;
 }) {
+  const { members: mentionMembers, loading: mentionsLoading } = useMentionableMembers(communityId);
   return (
     <ComposerBar
       tone="light"
@@ -106,6 +115,8 @@ export function VoiceTextInput({
       placeholder={placeholder ?? 'Your answer...'}
       multiline={multiline}
       minHeight={multiline ? 100 : undefined}
+      mentionMembers={mentionMembers}
+      mentionsLoading={mentionsLoading}
     />
   );
 }
@@ -366,12 +377,14 @@ export function SurveyQuestionField({
   value,
   onChange,
   hangEvents,
+  communityId,
 }: {
   question: SurveyQuestion;
   index: number;
   value: any;
   onChange: (value: any) => void;
   hangEvents?: HangRecapEvent[];
+  communityId?: string | null;
 }) {
   const textValue = typeof value === 'string' ? value : '';
 
@@ -463,6 +476,7 @@ export function SurveyQuestionField({
           value={textValue}
           onChangeText={onChange}
           multiline={question.type === 'long'}
+          communityId={communityId}
         />
       )}
       {question.type === 'scale' && (

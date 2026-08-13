@@ -459,6 +459,7 @@ export function SurveyModal({
       index={index}
       value={answers[q.id]}
       onChange={(value) => setAnswer(q.id, value)}
+      communityId={survey.community_id}
     />
   );
 
