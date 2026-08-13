@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ActivityIndicator, View, Text, ScrollView, Pressable, Modal } from 'react-native';
+import { ActivityIndicator, View, Text, ScrollView, Pressable, Modal, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -82,6 +82,29 @@ function buildCarryForwardResponse(
   });
 }
 
+/**
+ * A wish's recap text: its title, unless the title is old seed data that got
+ * hard-cut mid-word (no trailing punctuation, description carries on past
+ * it) — then the description instead, cleanly truncated at a word boundary.
+ * Nat, 2026-08-13, looking at the recap: several wishes read "...Climby
+ * things where I have ch" — `title` really is stored that way in the
+ * database (cut at a character count, not a word), not something this recap
+ * did to it. Scoped to this recap only; the stored titles are untouched.
+ */
+function cleanWishText(title: string | null | undefined, description: string | null | undefined) {
+  const cleanTitle = (title ?? '').trim();
+  const cleanDescription = (description ?? '').trim();
+  const titleLooksCut = cleanTitle.length > 0
+    && cleanDescription.startsWith(cleanTitle)
+    && cleanDescription.length > cleanTitle.length
+    && !/[\s.!?]$/.test(cleanTitle);
+  const text = titleLooksCut ? cleanDescription : (cleanTitle || cleanDescription);
+  if (text.length <= 80) return text;
+  const cut = text.slice(0, 80);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${cut.slice(0, lastSpace > 40 ? lastSpace : 80)}…`;
+}
+
 function formatSurveyDueDate(dueDate: string) {
   const parsed = new Date(dueDate);
   if (Number.isNaN(parsed.getTime())) return dueDate;
@@ -104,6 +127,7 @@ export function SurveyModal({
   onSubmit,
   onClose,
 }: SurveyModalProps) {
+  const { width: recapWidth } = useWindowDimensions();
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -116,7 +140,8 @@ export function SurveyModal({
   const seasonKind = getSeasonCheckInKind(survey);
   const { profile: viewerProfile } = useAuth();
   type SeasonRecapGrantee = { userId: string; name: string; avatarUrl: string | null; wishes: string[] };
-  const [seasonRecap, setSeasonRecap] = useState<{ hangs: string[]; granted: SeasonRecapGrantee[] } | null>(null);
+  type SeasonRecapMonth = { label: string; hangs: string[] };
+  const [seasonRecap, setSeasonRecap] = useState<{ hangMonths: SeasonRecapMonth[]; hangCount: number; granted: SeasonRecapGrantee[] } | null>(null);
   useEffect(() => {
     if (!seasonKind) return;
     let active = true;
@@ -178,7 +203,7 @@ export function SurveyModal({
       // person & then a list of all of their granted wishes").
       const byPerson = new Map<string, SeasonRecapGrantee>();
       for (const wish of (wishes ?? []) as any[]) {
-        const text = (wish.title || wish.description || '').trim();
+        const text = cleanWishText(wish.title, wish.description);
         if (!text) continue;
         const helped = viewerProfile?.id
           && (wish.granters ?? []).some((g: any) => g.granter_id === viewerProfile.id);
@@ -196,10 +221,23 @@ export function SurveyModal({
         }
       }
 
+      // Grouped by month, not one long list — Nat, 2026-08-13, on the EOY
+      // recap: "can we break these up by date? or by month?" A year of
+      // hangs read flat is a wall; a month header every few items is a
+      // calendar.
+      const hangsByMonth = new Map<string, string[]>();
+      for (const event of (events ?? []) as any[]) {
+        if (/\b(out of town|away|trip|travel|galavant)/i.test(event.title)) continue;
+        const monthLabel = new Date(`${event.event_date}T00:00:00`)
+          .toLocaleDateString('en-US', { month: 'long', year: seasonKind === 'year' ? '2-digit' : undefined });
+        const bucket = hangsByMonth.get(monthLabel);
+        if (bucket) bucket.push(event.title);
+        else hangsByMonth.set(monthLabel, [event.title]);
+      }
+
       setSeasonRecap({
-        hangs: (events ?? [])
-          .filter((event: any) => !/\b(out of town|away|trip|travel|galavant)/i.test(event.title))
-          .map((event: any) => event.title),
+        hangMonths: Array.from(hangsByMonth, ([label, hangs]) => ({ label, hangs })),
+        hangCount: (events ?? []).filter((event: any) => !/\b(out of town|away|trip|travel|galavant)/i.test(event.title)).length,
         granted: Array.from(byPerson.values()),
       });
     })().catch((err) => console.warn('Could not load season recap', err));
@@ -485,9 +523,13 @@ export function SurveyModal({
                 <View style={{ height: 1, backgroundColor: 'rgba(222,193,129,0.3)', marginTop: 20 }} />
               </View>
 
-              {seasonRecap && (seasonRecap.hangs.length > 0 || seasonRecap.granted.length > 0) && (() => {
+              {seasonRecap && (seasonRecap.hangCount > 0 || seasonRecap.granted.length > 0) && (() => {
                 const grantedCount = seasonRecap.granted.reduce((sum, person) => sum + person.wishes.length, 0);
-                const total = seasonRecap.hangs.length + grantedCount;
+                const total = seasonRecap.hangCount + grantedCount;
+                // Columns on a laptop, a stacked list on a phone (Nat,
+                // 2026-08-13: "on the laptop view, they could read left to
+                // right & cell phone view a vertical list").
+                const monthsSideBySide = recapWidth >= 640;
                 // A year-end recap can genuinely run long; collapse it to a
                 // one-line count with a tap to open (Nat, 2026-08-13: "maybe
                 // we have a 'jog my memroy' screen that collapses or
@@ -506,7 +548,7 @@ export function SurveyModal({
                       </Text>
                       {collapsible && (
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
-                          {showFull ? 'Hide ▲' : `${seasonRecap.hangs.length} hangs · ${grantedCount} granted ▾`}
+                          {showFull ? 'Hide ▲' : `${seasonRecap.hangCount} hangs · ${grantedCount} granted ▾`}
                         </Text>
                       )}
                     </Pressable>
@@ -515,14 +557,23 @@ export function SurveyModal({
                         {/* One line per item, not one run-on sentence (Nat,
                             2026-08-13: "you know how i feel about long form
                             stuff"). */}
-                        {seasonRecap.hangs.length > 0 && (
-                          <View style={{ gap: 4 }}>
+                        {seasonRecap.hangMonths.length > 0 && (
+                          <View style={{ gap: 6 }}>
                             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#5c5648' }}>What happened:</Text>
-                            {seasonRecap.hangs.map((hang) => (
-                              <Text key={hang} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 18 }}>
-                                • {hang}
-                              </Text>
-                            ))}
+                            <View style={{ flexDirection: monthsSideBySide ? 'row' : 'column', flexWrap: 'wrap', gap: monthsSideBySide ? 16 : 10 }}>
+                              {seasonRecap.hangMonths.map((month) => (
+                                <View key={month.label} style={monthsSideBySide ? { minWidth: 150, flexGrow: 1 } : undefined}>
+                                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 11.5, color: '#8a5a16', marginBottom: 2 }}>
+                                    {month.label}
+                                  </Text>
+                                  {month.hangs.map((hang) => (
+                                    <Text key={hang} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 18 }}>
+                                      • {hang}
+                                    </Text>
+                                  ))}
+                                </View>
+                              ))}
+                            </View>
                           </View>
                         )}
                         {seasonRecap.granted.length > 0 && (
