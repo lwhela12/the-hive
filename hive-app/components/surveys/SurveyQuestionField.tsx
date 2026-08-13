@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import { ComposerBar } from '../ui/ComposerBar';
 import type { SurveyQuestion } from '../../lib/hooks/useSurveys';
+import { useAuth } from '../../lib/hooks/useAuth';
 
 export function ScaleInput({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
   return (
@@ -372,6 +373,19 @@ export function SurveyQuestionField({
 }) {
   const textValue = typeof value === 'string' ? value : '';
 
+  // The 3MIQ question brings the member's own answers TO them — never
+  // "peek at your profile". Nat, 2026-08-13: "if you tell someone 'leave
+  // this screen, navigate to this other screen & come back', it'll never
+  // work. Ever."
+  const { profile } = useAuth();
+  const miqEntries = question.id === 'q_quarter_miq'
+    ? ([
+        ['Experiences', (profile as any)?.miq_experiences],
+        ['Growth', (profile as any)?.miq_growth],
+        ['Contribution', (profile as any)?.miq_contribution],
+      ] as const).filter(([, answer]) => typeof answer === 'string' && answer.trim().length > 0)
+    : [];
+
   return (
     <View style={{ marginBottom: 24 }}>
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
@@ -386,6 +400,23 @@ export function SurveyQuestionField({
           {question.required && <Text style={{ color: '#bd9348' }}> *</Text>}
         </Text>
       </View>
+
+      {question.id === 'q_quarter_miq' && (
+        <View style={{ backgroundColor: '#fdf3dc', borderWidth: 1, borderColor: 'rgba(222,193,129,0.5)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, gap: 4 }}>
+          {miqEntries.length > 0 ? (
+            miqEntries.map(([label, answer]) => (
+              <Text key={label} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 18 }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', color: '#8a5a16' }}>{label}: </Text>
+                {String(answer).trim()}
+              </Text>
+            ))
+          ) : (
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#8e7a5e', lineHeight: 18 }}>
+              You haven't written a 3MIQ yet — skip this one guilt-free.
+            </Text>
+          )}
+        </View>
+      )}
 
       {(question.type === 'short' || question.type === 'long') && (
         <VoiceTextInput

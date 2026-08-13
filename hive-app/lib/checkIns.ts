@@ -267,7 +267,8 @@ const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
     q('q_quarter_change', 'Change: one thing that needs to be different.', 'short'),
     q('q_quarter_try', 'Try: one new thing for next quarter.', 'short'),
     q('q_quarter_brule', 'A "brule" is a rule we follow without ever asking why — a bullshit rule (an idea from Vishen Lakhiani\'s The Code of the Extraordinary Mind). What brule are you ready to break next quarter?'),
-    q('q_quarter_miq', 'Peek at the 3MIQ on your profile — your three most important questions. Did this quarter move any of them (experiences, growth, contribution)? What changed?'),
+    // The app prints the member's own 3MIQ under this question — never homework.
+    q('q_quarter_miq', 'Your 3 Most Important Questions, as you wrote them, are below. Did this quarter move any of them? What changed?'),
     q('q_quarter_word', 'One word for the quarter.', 'short'),
   ],
   // Tech HIVE — building and learning, so the quarter is measured in what got made.
@@ -288,7 +289,8 @@ const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
     q('q_quarter_change', 'Change: one thing that needs to be different.', 'short'),
     q('q_quarter_try', 'Try: one new thing for next quarter.', 'short'),
     q('q_quarter_brule', 'A "brule" is a rule we follow without ever asking why — a bullshit rule (an idea from Vishen Lakhiani\'s The Code of the Extraordinary Mind). What brule are you ready to break next quarter?'),
-    q('q_quarter_miq', 'Peek at the 3MIQ on your profile — your three most important questions. Did this quarter move any of them (experiences, growth, contribution)? What changed?'),
+    // The app prints the member's own 3MIQ under this question — never homework.
+    q('q_quarter_miq', 'Your 3 Most Important Questions, as you wrote them, are below. Did this quarter move any of them? What changed?'),
     q('q_quarter_word', 'One word for the quarter.', 'short'),
   ],
   // Production HIVE keeps the database slug `show`.
@@ -309,7 +311,8 @@ const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
     q('q_quarter_change', 'Change: one thing that needs to be different.', 'short'),
     q('q_quarter_try', 'Try: one new thing for next quarter.', 'short'),
     q('q_quarter_brule', 'A "brule" is a rule we follow without ever asking why — a bullshit rule (an idea from Vishen Lakhiani\'s The Code of the Extraordinary Mind). What brule are you ready to break next quarter?'),
-    q('q_quarter_miq', 'Peek at the 3MIQ on your profile — your three most important questions. Did this quarter move any of them (experiences, growth, contribution)? What changed?'),
+    // The app prints the member's own 3MIQ under this question — never homework.
+    q('q_quarter_miq', 'Your 3 Most Important Questions, as you wrote them, are below. Did this quarter move any of them? What changed?'),
     q('q_quarter_word', 'One word for the quarter.', 'short'),
   ],
 };
