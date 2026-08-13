@@ -1744,6 +1744,13 @@ function SkillPlant({
   const depthBand = layoutOverride || compactLandscape || width < 520 ? 0 : getDepthBand(index);
   const bloomHasEmbeddedLabel = bloomStep > 0;
   const showLabel = !bloomHasEmbeddedLabel && (selected || count <= 10 || featured);
+  // A visitor's tap counts only on the flower head, never the whole slot.
+  // Slots are tall invisible rectangles that run to the ground, and in a
+  // crowded garden a big bloom's rectangle sits on top of a neighbour's face
+  // (Nat, 2026-08-13: Infiniti's Crystal Collecting was unheartable under
+  // Resume Polishing). The head is the part you can see, so in visiting mode
+  // it is the part you can tap.
+  const visitorHeadTap = !editable && visitorCanFlower && !!onFlowerPress;
   const plantWidth = stage.labelWidth * rowScale;
   const spriteHeight = getStageCanvasHeight(stage) * rowScale * (bloomStep >= 3 ? 1.04 : 1);
   const plantHeight = spriteHeight + (showLabel ? LABEL_HEIGHT : 8);
@@ -2073,6 +2080,12 @@ function SkillPlant({
     <>
     <Animated.View
       {...responder.panHandlers}
+      // In visiting mode the slot rectangle itself is see-through to taps —
+      // only the head Pressable below catches them — so one bloom's tall
+      // invisible box can't sit in front of a neighbour's face and eat its
+      // taps. Editable gardens keep the solid slot: dragging grabs the whole
+      // plant, and your own garden never fights you for a tap.
+      pointerEvents={visitorHeadTap ? 'box-none' : 'auto'}
       style={{
         position: 'absolute',
         left,
@@ -2119,13 +2132,10 @@ function SkillPlant({
         delayLongPress={620}
         onHoverIn={showHoverControls}
         onHoverOut={hideHoverControls}
-        disabled={(!editable && !(visitorCanFlower && onFlowerPress)) || isReseeding}
-        accessibilityRole={editable || (visitorCanFlower && onFlowerPress) ? 'button' : undefined}
-        accessibilityLabel={
-          !editable && visitorCanFlower && onFlowerPress
-            ? `${skill.description}, ${stage.label}. Leave a heart`
-            : `${skill.description}, ${stage.label}`
-        }
+        disabled={(!editable && !(visitorCanFlower && onFlowerPress)) || isReseeding || visitorHeadTap}
+        pointerEvents={visitorHeadTap ? 'none' : 'auto'}
+        accessibilityRole={editable ? 'button' : undefined}
+        accessibilityLabel={`${skill.description}, ${stage.label}`}
         style={{
           width: plantWidth,
           height: plantHeight,
@@ -2164,6 +2174,24 @@ function SkillPlant({
 
         {label}
       </Pressable>
+      {/* The visiting tap zone: exactly the flower head, nothing more. */}
+      {visitorHeadTap && !isReseeding && (
+        <Pressable
+          onPress={cycleLevel}
+          accessibilityRole="button"
+          accessibilityLabel={`${skill.description}, ${stage.label}. Leave a heart`}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            height: spriteHeight * 0.62,
+            ...(Platform.OS === 'web'
+              ? ({ cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none' } as any)
+              : {}),
+          }}
+        />
+      )}
       {isSplashing && (
         <Animated.View
           pointerEvents="none"
