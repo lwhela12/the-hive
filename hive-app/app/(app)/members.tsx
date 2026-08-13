@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useEffect, useCallback, useMemo } from 'react';
+import { type ReactNode, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // No `Modal` here any more: the member card became a page on 2026-08-06 so the
 // path along the bottom of the app stays visible while you read it.
 import { View, Text, Pressable, ActivityIndicator, useWindowDimensions, TextInput, Alert, RefreshControl } from 'react-native';
