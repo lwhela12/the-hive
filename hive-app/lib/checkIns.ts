@@ -251,7 +251,7 @@ const q = (
 const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
   // OG HIVE — lives and friendships, so the quarter is a chapter of life.
   default: [
-    q('q_quarter_story', 'How did the last three months go? Tell it however it comes — highlights, lowlights, plot twists.'),
+    q('q_quarter_story', 'How did the last three months — {months} — go? Tell it however it comes: highlights, lowlights, plot twists.'),
     q('q_quarter_proud', 'What are you proudest of from this quarter?'),
     q('q_quarter_heavy', 'What took more out of you than it should have?'),
     q('q_quarter_next', 'What do you want the next three months to hold?'),
@@ -268,7 +268,7 @@ const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
   ],
   // Tech HIVE — building and learning, so the quarter is measured in what got made.
   tech: [
-    q('q_quarter_shipped', 'What did you build, ship, or learn this quarter?'),
+    q('q_quarter_shipped', 'What did you build, ship, or learn this quarter ({months})?'),
     q('q_quarter_proud', "What are you proudest of — even if nobody else saw it?"),
     q('q_quarter_stuck', 'Where did you stay stuck the longest, and what would have helped?'),
     q('q_quarter_next', 'What do you want to be true by the end of next quarter?'),
@@ -285,7 +285,7 @@ const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
   ],
   // Production HIVE keeps the database slug `show`.
   show: [
-    q('q_quarter_stage', 'What did you perform, book, or bring to life this quarter?'),
+    q('q_quarter_stage', 'What did you perform, book, or bring to life this quarter ({months})?'),
     q('q_quarter_proud', 'What moment are you proudest of — on stage or behind the scenes?'),
     q('q_quarter_wings', "What's been waiting in the wings that didn't get its moment yet?"),
     q('q_quarter_next', 'What are you building toward for the next three months?'),
@@ -374,6 +374,14 @@ export function buildSeasonCheckIn(
 
   const occurrence = getUpcomingSeasonOccurrence(kind, today);
   const { endDate } = occurrence;
+  // "hearing 'how did the last 3 months go' i'm like uhhhhhhh" (Nat,
+  // 2026-08-13) — the opener names its months, so the {months} token in a
+  // deck becomes "July, August and September" for that occurrence.
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  const quarterMonths = kind === 'quarter'
+    ? `${monthNames[endDate.getMonth() - 2]}, ${monthNames[endDate.getMonth() - 1]} and ${monthNames[endDate.getMonth()]}`
+    : '';
   return {
     title: kind === 'quarter'
       ? `Quarterly Check-in · ${occurrence.label}`
@@ -381,7 +389,7 @@ export function buildSeasonCheckIn(
     description: kind === 'quarter' ? QUARTER_DESCRIPTION : YEAR_DESCRIPTION,
     // A fresh copy per launch, so editing one occurrence never reaches back
     // into this table or forward into the next occurrence.
-    questions: questions.map((question) => ({ ...question })),
+    questions: questions.map((question) => ({ ...question, text: question.text.replace('{months}', quarterMonths) })),
     dueDateIso: new Date(Date.UTC(
       endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1,
     )).toISOString(),
