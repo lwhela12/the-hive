@@ -19,6 +19,7 @@ import { SurveyQuestionField } from './SurveyQuestionField';
 import { getSeasonCheckInKind } from '../../lib/checkIns';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/hooks/useAuth';
+import { Avatar } from '../ui/Avatar';
 
 import { ComposerBar } from '../ui/ComposerBar';
 import { ThinkingBee } from '../ui/ThinkingBee';
@@ -114,7 +115,8 @@ export function SurveyModal({
   // question so "how did the last three months go?" isn't a blank stare.
   const seasonKind = getSeasonCheckInKind(survey);
   const { profile: viewerProfile } = useAuth();
-  const [seasonRecap, setSeasonRecap] = useState<{ hangs: string[]; granted: string[] } | null>(null);
+  type SeasonRecapGrantee = { userId: string; name: string; avatarUrl: string | null; wishes: string[] };
+  const [seasonRecap, setSeasonRecap] = useState<{ hangs: string[]; granted: SeasonRecapGrantee[] } | null>(null);
   useEffect(() => {
     if (!seasonKind) return;
     let active = true;
@@ -156,7 +158,7 @@ export function SurveyModal({
           .limit(24),
         supabase
           .from('wishes')
-          .select('id, title, description, fulfilled_at, granters:wish_granters(granter_id)')
+          .select('id, title, description, fulfilled_at, user_id, user:profiles!user_id(name, avatar_url), granters:wish_granters(granter_id)')
           .eq('community_id', survey.community_id)
           .eq('status', 'fulfilled')
           .gte('fulfilled_at', startIso)
@@ -165,24 +167,40 @@ export function SurveyModal({
           .limit(24),
       ]);
       if (!active) return;
+
+      // Migration 178 opened fulfilled wishes to the whole HIVE — before it,
+      // only a wish's own owner could see it granted at all, so a recap of
+      // "what the HIVE granted" silently showed just Nat's own four (Nat,
+      // 2026-08-13, reacting to that exact gap). Grouped by whose wish it
+      // was, with a face — "Name; wish" read flat to her ("its not doing it
+      // for me"); a little avatar bubble per person, wishes listed under it,
+      // is the version she asked for outright ("a profile bubble of the
+      // person & then a list of all of their granted wishes").
+      const byPerson = new Map<string, SeasonRecapGrantee>();
+      for (const wish of (wishes ?? []) as any[]) {
+        const text = (wish.title || wish.description || '').trim();
+        if (!text) continue;
+        const helped = viewerProfile?.id
+          && (wish.granters ?? []).some((g: any) => g.granter_id === viewerProfile.id);
+        const line = helped ? `${text} — you helped grant this` : text;
+        const existing = byPerson.get(wish.user_id);
+        if (existing) {
+          existing.wishes.push(line);
+        } else {
+          byPerson.set(wish.user_id, {
+            userId: wish.user_id,
+            name: wish.user?.name ?? 'A HIVE member',
+            avatarUrl: wish.user?.avatar_url ?? null,
+            wishes: [line],
+          });
+        }
+      }
+
       setSeasonRecap({
         hangs: (events ?? [])
           .filter((event: any) => !/\b(out of town|away|trip|travel|galavant)/i.test(event.title))
           .map((event: any) => event.title),
-        // Migration 178 opened fulfilled wishes to the whole HIVE — before
-        // it, only a wish's own owner could see it granted at all, so a
-        // recap of "what the HIVE granted" silently showed just Nat's own
-        // four (Nat, 2026-08-13, reacting to that exact gap: "we shoudl list
-        // the ones you got granted & the ones that the HIVE had granted in
-        // general"). Tagging "— you helped grant this" covers her example
-        // (Charlee's act-filming wish) even when she wasn't the one asking.
-        granted: (wishes ?? []).map((wish: any) => {
-          const text = (wish.title || wish.description || '').trim();
-          if (!text) return '';
-          const helped = viewerProfile?.id
-            && (wish.granters ?? []).some((g: any) => g.granter_id === viewerProfile.id);
-          return helped ? `${text} — you helped grant this` : text;
-        }).filter(Boolean),
+        granted: Array.from(byPerson.values()),
       });
     })().catch((err) => console.warn('Could not load season recap', err));
     return () => { active = false; };
@@ -468,7 +486,8 @@ export function SurveyModal({
               </View>
 
               {seasonRecap && (seasonRecap.hangs.length > 0 || seasonRecap.granted.length > 0) && (() => {
-                const total = seasonRecap.hangs.length + seasonRecap.granted.length;
+                const grantedCount = seasonRecap.granted.reduce((sum, person) => sum + person.wishes.length, 0);
+                const total = seasonRecap.hangs.length + grantedCount;
                 // A year-end recap can genuinely run long; collapse it to a
                 // one-line count with a tap to open (Nat, 2026-08-13: "maybe
                 // we have a 'jog my memroy' screen that collapses or
@@ -487,7 +506,7 @@ export function SurveyModal({
                       </Text>
                       {collapsible && (
                         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12, color: '#bd9348' }}>
-                          {showFull ? 'Hide ▲' : `${seasonRecap.hangs.length} hangs · ${seasonRecap.granted.length} granted ▾`}
+                          {showFull ? 'Hide ▲' : `${seasonRecap.hangs.length} hangs · ${grantedCount} granted ▾`}
                         </Text>
                       )}
                     </Pressable>
@@ -507,12 +526,22 @@ export function SurveyModal({
                           </View>
                         )}
                         {seasonRecap.granted.length > 0 && (
-                          <View style={{ gap: 4 }}>
+                          <View style={{ gap: 8 }}>
                             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#5c5648' }}>💛 Wishes granted:</Text>
-                            {seasonRecap.granted.map((grant) => (
-                              <Text key={grant} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 18 }}>
-                                • {grant}
-                              </Text>
+                            {seasonRecap.granted.map((person) => (
+                              <View key={person.userId} style={{ flexDirection: 'row', gap: 8 }}>
+                                <Avatar name={person.name} url={person.avatarUrl} size={26} />
+                                <View style={{ flex: 1, gap: 2 }}>
+                                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: 12.5, color: '#5c5648' }}>
+                                    {person.name}
+                                  </Text>
+                                  {person.wishes.map((wish) => (
+                                    <Text key={wish} style={{ fontFamily: 'Lato_400Regular', fontSize: 13, color: '#5c5648', lineHeight: 18 }}>
+                                      • {wish}
+                                    </Text>
+                                  ))}
+                                </View>
+                              </View>
                             ))}
                           </View>
                         )}
