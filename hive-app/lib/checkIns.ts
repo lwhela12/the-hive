@@ -254,6 +254,7 @@ const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
     q('q_quarter_story', 'How did the last three months — {months} — go? Tell it however it comes: highlights, lowlights, plot twists.'),
     q('q_quarter_proud', 'What are you proudest of from this quarter?'),
     q('q_quarter_heavy', 'What took more out of you than it should have?'),
+    q('q_quarter_unsaid', "What did you struggle with this quarter that you didn't mention at the time?"),
     q('q_quarter_next', 'What do you want the next three months to hold?'),
     q('q_quarter_hive', 'Anything HIVE can do to make next quarter easier — or more fun?'),
     // Borrowed with love (Nat, 2026-08-13): the first three from The Culture
@@ -261,9 +262,12 @@ const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
     // Vishen Lakhiani — explained in the question because Nat is the only one
     // who read the book ("ahhaahha").
     q('q_quarter_belong', 'When did you feel most part of the HIVE this quarter?'),
-    q('q_quarter_unsaid', "What did you struggle with this quarter that you didn't mention at the time?"),
-    q('q_quarter_kct', 'Keep / change / try — name one thing to keep doing, one to change, and one to try next quarter.'),
+    // Spelled out as three blanks (Nat 8/13: "Keep: ___, Change: ___, Try: ___").
+    q('q_quarter_keep', 'Keep: one thing that worked — keep doing it.', 'short'),
+    q('q_quarter_change', 'Change: one thing that needs to be different.', 'short'),
+    q('q_quarter_try', 'Try: one new thing for next quarter.', 'short'),
     q('q_quarter_brule', 'A "brule" is a rule we follow without ever asking why — a bullshit rule (an idea from Vishen Lakhiani\'s The Code of the Extraordinary Mind). What brule are you ready to break next quarter?'),
+    q('q_quarter_miq', 'Peek at the 3MIQ on your profile — your three most important questions. Did this quarter move any of them (experiences, growth, contribution)? What changed?'),
     q('q_quarter_word', 'One word for the quarter.', 'short'),
   ],
   // Tech HIVE — building and learning, so the quarter is measured in what got made.
@@ -271,6 +275,7 @@ const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
     q('q_quarter_shipped', 'What did you build, ship, or learn this quarter ({months})?'),
     q('q_quarter_proud', "What are you proudest of — even if nobody else saw it?"),
     q('q_quarter_stuck', 'Where did you stay stuck the longest, and what would have helped?'),
+    q('q_quarter_unsaid', "What did you struggle with this quarter that you didn't mention at the time?"),
     q('q_quarter_next', 'What do you want to be true by the end of next quarter?'),
     q('q_quarter_hive', 'What could this HIVE do for you next quarter — an intro, a second pair of eyes, a nudge?'),
     // Borrowed with love (Nat, 2026-08-13): the first three from The Culture
@@ -278,9 +283,12 @@ const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
     // Vishen Lakhiani — explained in the question because Nat is the only one
     // who read the book ("ahhaahha").
     q('q_quarter_belong', 'When did you feel most part of the HIVE this quarter?'),
-    q('q_quarter_unsaid', "What did you struggle with this quarter that you didn't mention at the time?"),
-    q('q_quarter_kct', 'Keep / change / try — name one thing to keep doing, one to change, and one to try next quarter.'),
+    // Spelled out as three blanks (Nat 8/13: "Keep: ___, Change: ___, Try: ___").
+    q('q_quarter_keep', 'Keep: one thing that worked — keep doing it.', 'short'),
+    q('q_quarter_change', 'Change: one thing that needs to be different.', 'short'),
+    q('q_quarter_try', 'Try: one new thing for next quarter.', 'short'),
     q('q_quarter_brule', 'A "brule" is a rule we follow without ever asking why — a bullshit rule (an idea from Vishen Lakhiani\'s The Code of the Extraordinary Mind). What brule are you ready to break next quarter?'),
+    q('q_quarter_miq', 'Peek at the 3MIQ on your profile — your three most important questions. Did this quarter move any of them (experiences, growth, contribution)? What changed?'),
     q('q_quarter_word', 'One word for the quarter.', 'short'),
   ],
   // Production HIVE keeps the database slug `show`.
@@ -288,6 +296,7 @@ const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
     q('q_quarter_stage', 'What did you perform, book, or bring to life this quarter ({months})?'),
     q('q_quarter_proud', 'What moment are you proudest of — on stage or behind the scenes?'),
     q('q_quarter_wings', "What's been waiting in the wings that didn't get its moment yet?"),
+    q('q_quarter_unsaid', "What did you struggle with this quarter that you didn't mention at the time?"),
     q('q_quarter_next', 'What are you building toward for the next three months?'),
     q('q_quarter_hive', 'How can this HIVE help you get there?'),
     // Borrowed with love (Nat, 2026-08-13): the first three from The Culture
@@ -295,9 +304,12 @@ const QUARTER_QUESTIONS_BY_SLUG: Record<string, SurveyQuestion[]> = {
     // Vishen Lakhiani — explained in the question because Nat is the only one
     // who read the book ("ahhaahha").
     q('q_quarter_belong', 'When did you feel most part of the HIVE this quarter?'),
-    q('q_quarter_unsaid', "What did you struggle with this quarter that you didn't mention at the time?"),
-    q('q_quarter_kct', 'Keep / change / try — name one thing to keep doing, one to change, and one to try next quarter.'),
+    // Spelled out as three blanks (Nat 8/13: "Keep: ___, Change: ___, Try: ___").
+    q('q_quarter_keep', 'Keep: one thing that worked — keep doing it.', 'short'),
+    q('q_quarter_change', 'Change: one thing that needs to be different.', 'short'),
+    q('q_quarter_try', 'Try: one new thing for next quarter.', 'short'),
     q('q_quarter_brule', 'A "brule" is a rule we follow without ever asking why — a bullshit rule (an idea from Vishen Lakhiani\'s The Code of the Extraordinary Mind). What brule are you ready to break next quarter?'),
+    q('q_quarter_miq', 'Peek at the 3MIQ on your profile — your three most important questions. Did this quarter move any of them (experiences, growth, contribution)? What changed?'),
     q('q_quarter_word', 'One word for the quarter.', 'short'),
   ],
 };
