@@ -102,7 +102,7 @@ serve(async (req) => {
 
   const { data: community } = await supabaseAdmin
     .from('communities')
-    .select('name, accent_color')
+    .select('name, accent_color, slug')
     .eq('id', communityId)
     .single();
 
@@ -134,6 +134,19 @@ serve(async (req) => {
    * which works for all three.
    */
   const headingColour = accent;
+
+  /**
+   * Production HIVE isn't a community of individual goals like OG or Tech —
+   * it's this HIVE's own singular project (Lucas, 2026-08-13, to Nat: "very
+   * diff than the other HIVEs, its more of a 'project management' tool").
+   * The generic "share what you're working on, others go 'I can help with
+   * that'" paragraph describes OG/Tech's model and actively misdescribes
+   * Production's, so it gets its own paragraph instead of the shared one.
+   */
+  const isProductionHive = community?.slug === 'show';
+  const whatIsThisHive = isProductionHive
+    ? `<p style="font-size: 15px;">${communityName} works a little differently from the rest of the HIVEs. It isn't a group of people each working on their own thing — it's everyone rowing toward one shared goal: producing the show. Think of it as a project's home base — the to-dos, the plan, and the people making it happen, all in one place.</p>`
+    : `<p style="font-size: 15px;">The HIVE is a small group of people who help each other get things done. Everyone shares what they're working on and what they could use a hand with — and the rest of us go "oh, I can help with that."</p>`;
 
   const { data: existingProfile } = await supabaseAdmin
     .from('profiles')
@@ -294,7 +307,7 @@ serve(async (req) => {
 
               <p style="font-size: 15px;">We are so glad you're here.</p>
 
-              <p style="font-size: 15px;">The HIVE is a small group of people who help each other get things done. Everyone shares what they're working on and what they could use a hand with — and the rest of us go "oh, I can help with that."</p>
+              ${whatIsThisHive}
 
               <p style="font-size: 15px;">H.I.V.E. stands for <strong>Human, Insight, Vision, Execution</strong>. There are multiple HIVEs now, each with its own people and its own rhythm — and you've been invited to <strong>${communityName}</strong>.</p>
 
