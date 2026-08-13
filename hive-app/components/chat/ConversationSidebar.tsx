@@ -29,7 +29,11 @@ interface ConversationSidebarProps {
   onToggleCollapse?: () => void;
 }
 
-const DRAWER_WIDTH_PERCENT = 0.85;
+// 0.85 covered nearly the whole phone — Nat, 2026-08-13: "it can be a little
+// more condensed, so it just slides out a little, without covering the whole
+// screen." 70% (capped) keeps the chat visible behind it.
+const DRAWER_WIDTH_PERCENT = 0.7;
+const DRAWER_MAX_WIDTH = 340;
 const SPRING_CONFIG = {
   damping: 20,
   stiffness: 200,
@@ -92,7 +96,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   const [draggingConversationId, setDraggingConversationId] = useState<string | null>(null);
   const [dropTargetProjectId, setDropTargetProjectId] = useState<string | null>(null);
   const { width: screenWidth } = useWindowDimensions();
-  const drawerWidth = screenWidth * DRAWER_WIDTH_PERCENT;
+  const drawerWidth = Math.min(screenWidth * DRAWER_WIDTH_PERCENT, DRAWER_MAX_WIDTH);
 
   const recents = useMemo(
     () => conversations.filter((conversation) => !conversation.project_id),
