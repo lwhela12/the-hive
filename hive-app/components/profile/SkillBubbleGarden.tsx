@@ -2123,7 +2123,7 @@ function SkillPlant({
         accessibilityRole={editable || (visitorCanFlower && onFlowerPress) ? 'button' : undefined}
         accessibilityLabel={
           !editable && visitorCanFlower && onFlowerPress
-            ? `${skill.description}, ${stage.label}. Leave a sunflower`
+            ? `${skill.description}, ${stage.label}. Leave a heart`
             : `${skill.description}, ${stage.label}`
         }
         style={{
@@ -2258,7 +2258,7 @@ function SkillPlant({
           disabled={!onFlowerPress}
           hitSlop={6}
           accessibilityRole={onFlowerPress ? 'button' : undefined}
-          accessibilityLabel={`${skill.description} has ${flowerSummary.count} ${flowerSummary.count === 1 ? 'sunflower' : 'sunflowers'} from garden visitors`}
+          accessibilityLabel={`${skill.description} has ${flowerSummary.count} ${flowerSummary.count === 1 ? 'heart' : 'hearts'} from garden visitors`}
           style={{
             position: 'absolute',
             left: Math.max(4, plantWidth * 0.12),
@@ -2289,7 +2289,7 @@ function SkillPlant({
           }}
         >
           <Text selectable={false} style={{ fontSize: 12, lineHeight: 15 }}>
-            🌻
+            💛
           </Text>
           {flowerSummary.count > 1 && (
             <Text
@@ -3956,7 +3956,7 @@ export function SkillBubbleGarden({
             <>
               <Pressable
                 onPress={() => setFlowerPopover(null)}
-                accessibilityLabel="Close sunflowers"
+                accessibilityLabel="Close hearts"
                 style={{
                   position: 'absolute',
                   left: 0,
@@ -3993,7 +3993,7 @@ export function SkillBubbleGarden({
                   numberOfLines={2}
                   style={{ fontFamily: 'Lato_700Bold', color: '#8a5a16', fontSize: 12.5, lineHeight: 16 }}
                 >
-                  🌻 {flowerPopover.skill.description}
+                  💛 {flowerPopover.skill.description}
                 </Text>
                 {flowerCount > 0 && giverLine.length > 0 && (
                   <Text
@@ -4008,7 +4008,7 @@ export function SkillBubbleGarden({
                     selectable={false}
                     style={{ fontFamily: 'Lato_400Regular', color: '#9b8a6b', fontSize: 10, lineHeight: 13 }}
                   >
-                    Sunflowers left by garden visitors.
+                    Hearts left by garden visitors.
                   </Text>
                 )}
                 {onToggleSkillFlower && (
@@ -4019,8 +4019,8 @@ export function SkillBubbleGarden({
                     }}
                     accessibilityRole="button"
                     accessibilityLabel={mine
-                      ? `Take your sunflower back from ${flowerPopover.skill.description}`
-                      : `Leave a sunflower on ${flowerPopover.skill.description}`}
+                      ? `Take your heart back from ${flowerPopover.skill.description}`
+                      : `Leave a heart on ${flowerPopover.skill.description}`}
                     style={{
                       borderRadius: 12,
                       borderWidth: 1,
@@ -4041,7 +4041,7 @@ export function SkillBubbleGarden({
                       selectable={false}
                       style={{ fontFamily: 'Lato_700Bold', color: '#8a5a16', fontSize: 11.5, lineHeight: 14 }}
                     >
-                      {mine ? 'Take your 🌻 back' : 'Leave a 🌻 on this bloom'}
+                      {mine ? 'Take your 💛 back' : 'Leave a 💛 on this bloom'}
                     </Text>
                   </Pressable>
                 )}

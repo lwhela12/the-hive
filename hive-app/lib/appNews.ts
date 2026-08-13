@@ -36,8 +36,8 @@ export const APP_NEWS: AppNewsEntry[] = [
   {
     id: '2026-08-12-garden-sunflowers',
     date: '2026-08-12',
-    title: 'You can leave a 🌻 on a bloom in someone’s garden',
-    detail: 'Visiting a member’s skills garden and one of their blooms is lovely? Tap it and leave a little sunflower. They’ll find it next time they tend their garden — and see who it’s from.',
+    title: 'You can leave a 💛 on a bloom in someone’s garden',
+    detail: 'Visiting a member’s skills garden and one of their blooms is lovely? Tap it and leave a little heart. They’ll find it next time they tend their garden — and see who it’s from.',
   },
   {
     id: '2026-08-12-quarter-and-year-checkins',
