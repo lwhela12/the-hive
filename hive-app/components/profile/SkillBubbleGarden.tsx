@@ -3463,22 +3463,22 @@ export function SkillBubbleGarden({
   const flowerSlots = useMemo(
     () => {
       const slots = buildFlowerSlots(visibleSkills, flowerSlotPins);
-      if (editable || slots.length <= 1) return slots;
-      // Visiting view: spread the occupied slots evenly across the meadow,
-      // keeping the owner's left-to-right order. Hand-pinned slots can sit
-      // side by side, and a garden with few blooms scales them up until two
+      if (slots.length <= 1) return slots;
+      // Spread the occupied slots evenly across the meadow, in every view,
+      // keeping the stored left-to-right order. Stored slots can sit side by
+      // side, and a garden with few blooms scales them up until two
       // neighbours swallow each other whole (Nat, 2026-08-13: Infiniti's
       // Crystal Collecting buried under Resume Polishing, unheartable).
-      // Editable gardens keep exact pinned slots — the owner's stored
-      // placements (from replants and the era when dragging was on; the
-      // `canDrag = false` switch below turned it off in May 2026) stay
-      // exactly where the data says.
+      // First shipped for visiting only; Nat the same day: "flowers should
+      // never overlap like that, not for either view." Dragging has been off
+      // since May 2026, so nobody's hand-placed cluster is being overridden —
+      // the stored positions only ever came from replants and history.
       return slots.map((slot, orderIndex) => ({
         ...slot,
         slotIndex: Math.round(((GARDEN_CAPACITY - 1) * orderIndex) / Math.max(1, slots.length - 1)),
       }));
     },
-    [editable, flowerSlotPins, visibleSkills]
+    [flowerSlotPins, visibleSkills]
   );
   const [beePopover, setBeePopover] = useState<{
     skill: GardenSkill;
