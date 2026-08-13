@@ -3461,8 +3461,22 @@ export function SkillBubbleGarden({
       .map(item => item.skill);
   }, [displaySkills, visibleSkillLimit]);
   const flowerSlots = useMemo(
-    () => buildFlowerSlots(visibleSkills, flowerSlotPins),
-    [flowerSlotPins, visibleSkills]
+    () => {
+      const slots = buildFlowerSlots(visibleSkills, flowerSlotPins);
+      if (editable || slots.length <= 1) return slots;
+      // Visiting view: spread the occupied slots evenly across the meadow,
+      // keeping the owner's left-to-right order. Hand-pinned slots can sit
+      // side by side, and a garden with few blooms scales them up until two
+      // neighbours swallow each other whole (Nat, 2026-08-13: Infiniti's
+      // Crystal Collecting buried under Resume Polishing, unheartable).
+      // Editable gardens keep exact pinned slots — it's your garden, your
+      // clusters, and dragging must land where you dropped.
+      return slots.map((slot, orderIndex) => ({
+        ...slot,
+        slotIndex: Math.round(((GARDEN_CAPACITY - 1) * orderIndex) / Math.max(1, slots.length - 1)),
+      }));
+    },
+    [editable, flowerSlotPins, visibleSkills]
   );
   const [beePopover, setBeePopover] = useState<{
     skill: GardenSkill;

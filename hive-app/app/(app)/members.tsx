@@ -2233,6 +2233,10 @@ function MemberDetailPage({
               Daily Answers header and colliding with that sheet's Close. */}
           {!selectedWish && !showDailyAnswersSheet && (
             <Pressable
+              // Both handlers on purpose: press-in makes the X instant under
+              // a finger, plain press is what a keyboard or screen reader
+              // fires. Closing twice is harmless — the dismissal ref makes
+              // the second call a no-op.
               onPress={onClose}
               onPressIn={onClose}
               accessibilityRole="button"
@@ -2303,7 +2307,16 @@ export default function MembersScreen() {
    * because that is somebody asking for the truth from the database.
    */
   const [memberEdits, setMemberEdits] = useState<Record<string, MemberData>>({});
-  const [dismissedRouteMemberId, setDismissedRouteMemberId] = useState<string | null>(null);
+  // A ref, not state, and cleared on a delay rather than the moment the
+  // address empties. Closing a card is a race on web: the X clears the
+  // address, but the params hook can replay the OLD address for a beat after
+  // the dismissal state was already reset — and the sync effect below read
+  // that beat as "somebody navigated here" and reopened the card (Nat,
+  // 2026-08-13: X on Infiniti's profile bounced her to the top of the same
+  // card, address already reading /members). A ref updates synchronously,
+  // and the 1.5s grace outlives any replayed frame while staying far below
+  // how fast a person could genuinely navigate back to the same member.
+  const dismissedRouteMemberIdRef = useRef<string | null>(null);
   const [search, setSearch] = useState('');
   const [memberViewMode, setMemberViewMode] = useState<MemberViewMode>('directory');
   const currentUserId = session?.user?.id ?? profile?.id ?? null;
@@ -2598,6 +2611,7 @@ export default function MembersScreen() {
   const [openAnswersOnSelect, setOpenAnswersOnSelect] = useState(false);
   const openMemberProfile = useCallback((member: MemberData, showAnswers = false) => {
     setOpenAnswersOnSelect(showAnswers);
+    dismissedRouteMemberIdRef.current = null;
     setSelectedId(member.id);
     // Put the member in the address as well as in state, so the card is a place
     // that survives a reload and can be sent to somebody. Links from other
@@ -2609,20 +2623,25 @@ export default function MembersScreen() {
   const closeMemberProfile = useCallback(() => {
     setSelectedId(null);
     if (memberId) {
-      setDismissedRouteMemberId(memberId);
+      dismissedRouteMemberIdRef.current = memberId;
       router.replace('/members');
     }
   }, [memberId, router]);
 
   useEffect(() => {
-    if (!memberId) {
-      setDismissedRouteMemberId(null);
-    }
+    if (memberId) return;
+    // Forget the dismissal only once the address has stayed empty for a
+    // moment — clearing it instantly is what let the replayed frame reopen
+    // the card.
+    const timer = setTimeout(() => {
+      dismissedRouteMemberIdRef.current = null;
+    }, 1500);
+    return () => clearTimeout(timer);
   }, [memberId]);
 
   // Keep member detail synced when links navigate between profiles.
   useEffect(() => {
-    if (!memberId || memberId === dismissedRouteMemberId || members.length === 0) return;
+    if (!memberId || memberId === dismissedRouteMemberIdRef.current || members.length === 0) return;
     if (selectedId === memberId) return;
     // An address naming somebody who is not in this list opens nothing. At
     // HIVE-Wide that is the privacy model doing its job: a link to a member who
@@ -2630,7 +2649,7 @@ export default function MembersScreen() {
     if (!members.some(m => m.id === memberId)) return;
 
     setSelectedId(memberId);
-  }, [dismissedRouteMemberId, memberId, members, selectedId]);
+  }, [memberId, members, selectedId]);
 
   /**
    * The member the card is showing, read from the list rather than copied out of
