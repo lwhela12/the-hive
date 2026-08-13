@@ -20,7 +20,9 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { confirmAction, showAlert } from '../../lib/showAlert';
-import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns } from '../../lib/checkIns';
+import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns, getSeasonCheckInKind, isSurveyOnHomeToday, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
+import { useSurveys } from '../../lib/hooks/useSurveys';
+import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
 import type { Meeting, Event } from '../../types';
 
@@ -169,6 +171,16 @@ export default function MeetingsScreen() {
   const { width } = useWindowDimensions();
   const useCompactActions = width < 640;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
+  // Quarter/year check-ins, added to this row alongside the monthly pair
+  // (Nat, 2026-08-13: the Q3 survey was great, "should we also add them
+  // here, to the meeting screen?"). They keep to the same narrow window
+  // Home uses — three days before the quarter/year ends — so this row never
+  // shows a check-in nobody can act on yet.
+  const { availableSurveys, myResponses, submitResponse: submitSeasonSurvey } = useSurveys(communityId ?? undefined, profile?.id);
+  const [activeSeasonSurvey, setActiveSeasonSurvey] = useState<any | null>(null);
+  const openSeasonSurveys = availableSurveys.filter(
+    (s) => getSeasonCheckInKind(s) && isSurveyOnHomeToday(s, new Date())
+  );
   // The 2026-08-07 decision gated the check-ins in Admin and on the direct
   // tune-up route, but this screen kept offering OG's tune-up pills and the
   // Meeting Helper deck inside Tech and Production as if they were theirs
@@ -1302,6 +1314,26 @@ export default function MeetingsScreen() {
                       </Text>
                     </Pressable>
                   ))}
+                  {openSeasonSurveys.map((survey) => {
+                    const kind = getSeasonCheckInKind(survey)!;
+                    return (
+                      <Pressable
+                        key={survey.id}
+                        onPress={() => setActiveSeasonSurvey(survey)}
+                        style={({ pressed }) => ({
+                          backgroundColor: 'rgba(255,255,255,0.08)',
+                          borderRadius: 999,
+                          paddingHorizontal: 14,
+                          paddingVertical: 9,
+                          opacity: pressed ? 0.7 : 1,
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
+                          {SEASON_CHECK_IN_EMOJI[kind]} {survey.title}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </>
               ) : (
                 // Not a button — the same sentence Admin shows, sitting where
@@ -1727,6 +1759,15 @@ export default function MeetingsScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+      {activeSeasonSurvey ? (
+        <SurveyModal
+          survey={activeSeasonSurvey}
+          initialAnswers={myResponses.get(activeSeasonSurvey.id)?.answers}
+          isEditingResponse={!!myResponses.get(activeSeasonSurvey.id)}
+          onSubmit={(answers) => submitSeasonSurvey(activeSeasonSurvey.id, answers)}
+          onClose={() => setActiveSeasonSurvey(null)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

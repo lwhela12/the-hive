@@ -1653,7 +1653,16 @@ function MemberDetailPage({
                     // `from` names this page, so the X on Profile brings you
                     // back to Members rather than to whatever the browser's
                     // history happens to remember (2026-08-06).
-                    onPress={() => { onClose(); router.push({ pathname: '/profile', params: { from: 'members' } }); }}
+                    //
+                    // No onClose() here on purpose. This used to call
+                    // onClose() (→ router.replace('/members')) and THEN push
+                    // to /profile — two navigations back to back, racing each
+                    // other, and the replace sometimes won (Nat, 2026-08-13:
+                    // the pencil "dumps me back" to the Members directory
+                    // instead of Profile). Pushing to /profile unmounts this
+                    // whole screen anyway, so closing the card first was
+                    // never necessary.
+                    onPress={() => router.push({ pathname: '/profile', params: { from: 'members' } })}
                     size={36}
                     accessibilityLabel="Edit your profile (opens your backstage)"
                   />
@@ -2128,7 +2137,7 @@ function MemberDetailPage({
                 </Text>
                 <EditButton
                   size={30}
-                  onPress={() => { onClose(); router.push({ pathname: '/profile', params: { focus: 'about', from: 'members' } }); }}
+                  onPress={() => router.push({ pathname: '/profile', params: { focus: 'about', from: 'members' } })}
                   accessibilityLabel="Edit your bio and details"
                 />
               </View>
@@ -2190,7 +2199,7 @@ function MemberDetailPage({
                 {isCurrentUser ? (
                   <EditButton
                     size={30}
-                    onPress={() => { onClose(); router.push({ pathname: '/profile', params: { focus: 'garden', from: 'members' } }); }}
+                    onPress={() => router.push({ pathname: '/profile', params: { focus: 'garden', from: 'members' } })}
                     accessibilityLabel="Tend your Skills Garden"
                   />
                 ) : null}

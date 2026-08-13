@@ -47,7 +47,7 @@ import { EventScopeFields, invalidateBirthdayQueries, type EventAudience } from 
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { confirmAction } from '../../lib/showAlert';
-import { isSurveyOnHomeToday } from '../../lib/checkIns';
+import { isSurveyOnHomeToday, getSeasonCheckInKind, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
 import { ThinkingBee } from '../../components/ui/ThinkingBee';
 const CONTACT_OPTIONS = ['email', 'phone', 'text'] as const;
 
@@ -316,6 +316,19 @@ export default function ProfileScreen() {
   const monthlyCheckInIsEditing = !!monthlyCheckInSurvey
     && !!monthlyCheckInResponse
     && !pendingSurveyIds.has(monthlyCheckInSurvey.id);
+  // The quarter/year check-in, only while it's actually open (Nat, 2026-08-13:
+  // "in profile, just the most pertinent one, right?" — her own answer to her
+  // own question). The Monthly Tune-up row above always shows because it
+  // always recurs; this one only joins it during its narrow window, so
+  // Profile never turns into a list of every survey that has ever existed.
+  const openSeasonSurvey = availableSurveys.find((survey) => (
+    getSeasonCheckInKind(survey) && isSurveyOnHomeToday(survey, new Date())
+  )) ?? null;
+  const openSeasonSurveyKind = openSeasonSurvey ? getSeasonCheckInKind(openSeasonSurvey) : null;
+  const openSeasonSurveyResponse = openSeasonSurvey ? myResponses.get(openSeasonSurvey.id) : undefined;
+  const openSeasonSurveyIsEditing = !!openSeasonSurvey
+    && !!openSeasonSurveyResponse
+    && !pendingSurveyIds.has(openSeasonSurvey.id);
   const activeSurveyResponse = activeSurvey ? myResponses.get(activeSurvey.id) : undefined;
   const activeSurveyIsEditing = !!activeSurvey && !!activeSurveyResponse && !pendingSurveyIds.has(activeSurvey.id);
   const {
@@ -1985,6 +1998,48 @@ export default function ProfileScreen() {
                         style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8e7a5e', marginTop: 2 }}
                       >
                         Submitted {formatDateShort(monthlyCheckInResponse.submitted_at)} · tap to review or update
+                      </Text>
+                    ) : null}
+                  </View>
+                </Pressable>
+              ) : null}
+              {openSeasonSurvey ? (
+                <Pressable
+                  onPress={() => setActiveSurvey(openSeasonSurvey)}
+                  className="active:opacity-75"
+                  style={{
+                    marginTop: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: openSeasonSurveyIsEditing ? '#fffdf5' : '#fffaf0',
+                    borderWidth: 1,
+                    borderColor: openSeasonSurveyIsEditing ? 'rgba(142,122,94,0.24)' : 'rgba(222,193,129,0.65)',
+                    borderRadius: 14,
+                    paddingHorizontal: 13,
+                    paddingVertical: 9,
+                    maxWidth: Math.min(screenWidth - 28, 420),
+                  }}
+                >
+                  <TodoMark done={openSeasonSurveyIsEditing} size={18} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        fontFamily: 'Lato_700Bold',
+                        fontSize: 12,
+                        color: openSeasonSurveyIsEditing ? '#8e7a5e' : '#bd9348',
+                        textDecorationLine: openSeasonSurveyIsEditing ? 'line-through' : 'none',
+                      }}
+                    >
+                      {openSeasonSurveyKind ? SEASON_CHECK_IN_EMOJI[openSeasonSurveyKind] : ''} {openSeasonSurvey.title}
+                    </Text>
+                    {openSeasonSurveyIsEditing && openSeasonSurveyResponse?.submitted_at ? (
+                      <Text
+                        numberOfLines={1}
+                        style={{ fontFamily: 'Lato_400Regular', fontSize: 11, color: '#8e7a5e', marginTop: 2 }}
+                      >
+                        Submitted {formatDateShort(openSeasonSurveyResponse.submitted_at)} · tap to review or update
                       </Text>
                     ) : null}
                   </View>
