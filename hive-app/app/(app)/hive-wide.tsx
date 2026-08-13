@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -477,9 +477,22 @@ export default function HiveWideScreen() {
   // HIVE-Wide while the rail and footer said OG HIVE (Nat, 2026-08-13:
   // "its 1/2 OG & 1/2 HIVE wide... THAT cant happen"). The /hive screen
   // referees the mirror case (wholeHive mode on a one-HIVE page) itself.
+  //
+  // Runs ONCE per mount, not on every wholeHive change — the first version
+  // fired every time wholeHive went false, which includes the split second
+  // switchCommunity() sets it false on the way OUT of this screen (tapping
+  // OG HIVE in the rail while standing on HIVE-Wide). This screen was still
+  // mounted for that one frame, so it flipped the mode straight back to true
+  // before the navigation to /hive landed, and the tap did nothing (Nat,
+  // 2026-08-13: "its not letting me click on 'OG HIVE' at all"). A stale
+  // arrival only ever needs correcting once, right when the screen appears.
+  const wholeHiveCorrectedRef = useRef(false);
   useEffect(() => {
+    if (wholeHiveCorrectedRef.current) return;
+    wholeHiveCorrectedRef.current = true;
     if (!wholeHive) enterWholeHive();
-  }, [wholeHive, enterWholeHive]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Whether this person has ever opened the HIVE-Wide explainer is the same
   // question as whether they have been here before, so the door reads that flag
