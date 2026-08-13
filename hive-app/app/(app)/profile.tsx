@@ -1394,6 +1394,14 @@ export default function ProfileScreen() {
 
   const isProfilePhone = screenWidth < 640;
   const profileWishPanelHeight = isProfilePhone ? 500 : 520;
+  // Nat, 2026-08-13, with Home/Members/Boards open beside this page: "i'd
+  // like the profile page to be a little more condensed… i love it when i can
+  // see the whole screen in one view." Those screens use the width; this one
+  // was a single tall column. On a roomy window the wishes (with the Clive
+  // notes above them) and the Skills Garden now share a row, and the bee-arc
+  // header tightens up. Phones and the landscape immersive garden keep the
+  // stacked layout exactly as it was.
+  const wideProfileColumns = !immersiveSkillsGarden && screenWidth >= 1024;
   const bloomingSkillCount = skills.filter(hasBloomingSkill).length;
   const unplantedSkillCount = skills.length - bloomingSkillCount;
   const gardenOpenSlots = Math.max(0, SKILLS_GARDEN_CAPACITY - bloomingSkillCount);
@@ -1785,11 +1793,11 @@ export default function ProfileScreen() {
           const missing = checks.filter(c => !c.done);
 
           return (
-            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+            <View style={{ alignItems: 'center', marginBottom: wideProfileColumns ? 12 : 20 }}>
               {/* Bee route + avatar */}
               <View style={{ alignItems: 'center' }}>
-                <BeeProgressArc profileCompletionPercent={percent} size={260} />
-                <View style={{ marginTop: -44, alignItems: 'center', zIndex: 1 }}>
+                <BeeProgressArc profileCompletionPercent={percent} size={wideProfileColumns ? 210 : 260} />
+                <View style={{ marginTop: wideProfileColumns ? -36 : -44, alignItems: 'center', zIndex: 1 }}>
                   <Pressable onPress={pickImage} disabled={isUploadingPhoto} style={{ position: 'relative' }} className="active:opacity-80">
                     <Avatar name={profile.name} url={profile.avatar_url} size={80} />
                     {isUploadingPhoto ? (
@@ -2498,8 +2506,12 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* Personality Notes - How HIVE Sees You */}
-        {!immersiveSkillsGarden && !initialLoading && userInsights?.personality_notes && (
+        {/* The Clive notes, the wishes and the Skills Garden render from one
+            place so a roomy window can seat them in two columns while a phone
+            keeps the familiar stack — one set of blocks, two arrangements. */}
+        {(() => {
+          // Personality Notes - How HIVE Sees You
+          const personalityBlock = !immersiveSkillsGarden && !initialLoading && userInsights?.personality_notes ? (
           <View className="mb-6">
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-lg text-charcoal mb-2">
               How HIVE Sees You
@@ -2513,10 +2525,10 @@ export default function ProfileScreen() {
               </Text>
             </View>
           </View>
-        )}
+          ) : null;
 
-        {/* Wishes */}
-        {!initialLoading && (
+          // Wishes
+          const wishesBlock = !initialLoading ? (
           <FadeIn delay={50}>
             {!immersiveSkillsGarden && (
               <View style={{ marginBottom: 24 }}>
@@ -2584,10 +2596,10 @@ export default function ProfileScreen() {
               </View>
             )}
           </FadeIn>
-        )}
+          ) : null;
 
-        {/* Skills Garden */}
-        {!initialLoading && (
+          // Skills Garden
+          const gardenBlock = !initialLoading ? (
           <FadeIn
             delay={50}
             style={immersiveSkillsGarden ? { flex: 1 } : undefined}
@@ -2596,7 +2608,7 @@ export default function ProfileScreen() {
             // so the Skills Garden chip scrolled to the top of the page — which
             // is where you already were, so it looked like a dead button
             // (Nat 2026-07-26: "nothing comes up").
-            onLayout={(event) => {
+            onLayout={wideProfileColumns ? undefined : (event) => {
               skillsGardenY.current = event.nativeEvent.layout.y;
             }}
           >
@@ -2706,7 +2718,37 @@ export default function ProfileScreen() {
               />
             </View>
           </FadeIn>
-        )}
+          ) : null;
+
+          if (!wideProfileColumns) {
+            return (
+              <>
+                {personalityBlock}
+                {wishesBlock}
+                {gardenBlock}
+              </>
+            );
+          }
+          return (
+            <View
+              style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 20 }}
+              // The Skills Garden chip scrolls here; in column mode the garden
+              // starts at this row's top, so the row carries the measurement
+              // (the FadeIn's own onLayout would report y within the row).
+              onLayout={(event) => {
+                skillsGardenY.current = event.nativeEvent.layout.y;
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 380 }}>
+                {personalityBlock}
+                {wishesBlock}
+              </View>
+              <View style={{ flex: 1, minWidth: 380 }}>
+                {gardenBlock}
+              </View>
+            </View>
+          );
+        })()}
 
         {/* Settings and Sign out USED to live here and are now gone (Nat
             2026-08-04): "we dont need 'settings' or 'sign out' inside of
