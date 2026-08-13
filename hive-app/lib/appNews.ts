@@ -28,6 +28,17 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    // The bees have matched skills to wishes for a while and nobody was ever
+    // told — Nat found out 2026-08-13 ("WHAT, OMG I didnt know it did this")
+    // and asked how we let people know. This is how.
+    id: '2026-08-13-garden-bees-explained',
+    date: '2026-08-13',
+    title: 'The bees in your garden are matchmakers',
+    detail: 'When one of your skills matches somebody’s public wish, a bee lands on that bloom all by itself. Tap the bee and it shows whose wish you could help grant.',
+    href: { pathname: '/profile' },
+    action: 'Visit your garden',
+  },
+  {
     id: '2026-08-12-hive-wide-calendar',
     date: '2026-08-12',
     title: 'HIVE-Wide has a calendar now',
