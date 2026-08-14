@@ -583,6 +583,14 @@ export function getPreMeetingCheckIn(
   return PRE_MEETING_BY_SLUG[community?.slug ?? ''] ?? null;
 }
 
+/** Every title that counts as this HIVE's pre-meeting check-in. */
+export const PRE_MEETING_TITLES_BY_SLUG: Record<string, string[]> = {
+  show: ['Before our first meeting', 'Before we meet'],
+};
+
+/** The title a NEW pre-meeting occurrence is launched under. */
+export const PRE_MEETING_RECURRING_TITLE = 'Before we meet';
+
 /**
  * Whether a survey row is that HIVE's pre-meeting check-in, going by its
  * title — the same way every other check-in is recognised. Pass the community
@@ -594,10 +602,10 @@ export function isPreMeetingCheckInSurvey(
 ): boolean {
   const title = (survey?.title ?? '').trim().toLowerCase();
   if (!title) return false;
-  const decks = community
-    ? [PRE_MEETING_BY_SLUG[community.slug ?? '']].filter(Boolean) as PreMeetingCheckIn[]
-    : Object.values(PRE_MEETING_BY_SLUG);
-  return decks.some((deck) => deck.title.toLowerCase() === title);
+  const slugs = community ? [community.slug ?? ''] : Object.keys(PRE_MEETING_TITLES_BY_SLUG);
+  return slugs.some((slug) =>
+    (PRE_MEETING_TITLES_BY_SLUG[slug] ?? []).some((known) => known.toLowerCase() === title)
+  );
 }
 
 /**
@@ -627,4 +635,78 @@ export function isSurveyOnHomeToday(
   const lingersUntil = new Date(endDay.getFullYear(), endDay.getMonth(), endDay.getDate() + 14);
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   return startOfToday >= opens && startOfToday <= lingersUntil;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Production HIVE's two recurring check-ins.
+ *
+ * Nat, 2026-08-14, after answering the first one: *"you did the pre-meeting
+ * survey, but we still need an end-of-the-month survey — and we always want a
+ * pre-meeting survey. The survey that you made was 'before the first meeting',
+ * but we always need, like, a check-in before the meeting, like we have for
+ * the other HIVEs."*
+ *
+ * So the first meeting keeps its own warm title and every meeting after it
+ * settles into a stable one. Both titles count as Production's pre-meeting
+ * check-in; `PRE_MEETING_TITLES_BY_SLUG` is the list, and
+ * `isPreMeetingCheckInSurvey()` reads it.
+ *
+ * **Production's end-of-month asks about the show, never about the person.**
+ * OG's end-of-month gathers shout-outs for the newsletter and Tech's asks what
+ * you learned — both right for a room of people each doing their own thing.
+ * Production has one shared goal, so "what are YOU working on" is the wrong
+ * question for it (Lucas to Nat, 2026-08-13). It asks what moved, what is
+ * stuck, and what comes next.
+ * ------------------------------------------------------------------------- */
+
+export type EndOfMonthCheckIn = {
+  title: string;
+  description: string;
+  questions: SurveyQuestion[];
+};
+
+const END_OF_MONTH_BY_SLUG: Record<string, EndOfMonthCheckIn> = {
+  show: {
+    title: 'Where the show got to this month',
+    description:
+      'A few minutes at the end of the month, so we can all see the shape of it. Answer what you have an answer for and skip the rest.',
+    questions: [
+      q('q_show_moved', 'What moved on the show this month? Anything at all — a call made, a number found, a room seen.', 'long'),
+      q('q_show_blocked', "What's stuck, and what would unstick it?", 'long'),
+      choice('q_show_confidence', 'How do you feel about where we are?', [
+        '🚀 Better than last month',
+        '😌 About the same, and that is fine',
+        '😐 About the same, and it is bugging me',
+        '😟 Wobblier than last month',
+      ]),
+      q('q_show_next', "What are you taking on before we meet again?", 'long'),
+      q('q_show_learned', 'Anything you found out that the rest of us should know?', 'long'),
+      q('q_show_shoutout', 'Anyone deserve a shout-out this month?', 'long'),
+    ],
+  },
+};
+
+export function hasEndOfMonthCheckIn(
+  community: Pick<Community, 'slug'> | null | undefined,
+): boolean {
+  return !!END_OF_MONTH_BY_SLUG[community?.slug ?? ''];
+}
+
+export function getEndOfMonthCheckIn(
+  community: Pick<Community, 'slug'> | null | undefined,
+): EndOfMonthCheckIn | null {
+  return END_OF_MONTH_BY_SLUG[community?.slug ?? ''] ?? null;
+}
+
+/** Whether a survey row is that HIVE's end-of-month check-in, going by title. */
+export function isEndOfMonthCheckInSurvey(
+  survey: { title?: string | null } | null | undefined,
+  community?: Pick<Community, 'slug'> | null,
+): boolean {
+  const title = (survey?.title ?? '').trim().toLowerCase();
+  if (!title) return false;
+  const decks = community
+    ? [END_OF_MONTH_BY_SLUG[community.slug ?? '']].filter(Boolean) as EndOfMonthCheckIn[]
+    : Object.values(END_OF_MONTH_BY_SLUG);
+  return decks.some((deck) => deck.title.toLowerCase() === title);
 }

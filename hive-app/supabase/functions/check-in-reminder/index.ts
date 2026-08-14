@@ -24,7 +24,10 @@ const END_OF_YEAR_CHECK_IN_PATTERN = /end[-\s]of[-\s]year\s+check-?in/i;
 // in lib/checkIns.ts's PRE_MEETING_BY_SLUG — change one, change both, the same
 // rule the patterns above already carry. Nat's shape for it: the survey goes
 // out three days before the meeting, which is what REMINDER_WINDOW_DAYS is.
-const PRE_MEETING_CHECK_IN_PATTERN = /before our first meeting/i;
+const PRE_MEETING_CHECK_IN_PATTERN = /before (our first meeting|we meet)/i;
+// Production's end-of-month check-in. Declared in lib/checkIns.ts's
+// END_OF_MONTH_BY_SLUG — change one, change both.
+const SHOW_END_OF_MONTH_PATTERN = /where the show got to this month/i;
 const REMINDER_WINDOW_DAYS = 3;
 
 const MONTH_NAMES = [
@@ -254,7 +257,7 @@ function checkInEmailHtml(rawName: string, month: string, day: number, kind: Rem
  * the monthly ones, different words. A quarter is a look back; a year is a
  * small celebration. Both land on Home, where the check-in card lives.
  */
-type SeasonKind = 'quarter' | 'year' | 'premeeting';
+type SeasonKind = 'quarter' | 'year' | 'premeeting' | 'endofmonth';
 type SeasonTouch = 'window' | 'day_of';
 
 function seasonEmailHtml(
@@ -265,6 +268,25 @@ function seasonEmailHtml(
   day: number,
 ): string {
   const name = escapeHtml(rawName);
+  if (kind === 'endofmonth') {
+    const heading = touch === 'day_of' ? 'Last day of the month' : 'How did the month go?';
+    const body = touch === 'day_of'
+      ? `It's the last day of the month and your check-in isn't in yet — a few minutes on what moved, what's stuck, and what you're taking on next.`
+      : `Your end-of-month check-in is open on Home. What moved on the show, what's stuck and what would unstick it, and what you're taking on before we meet again. Short answers are perfect.`;
+    return `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
+        <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🎬</span></div>
+        <h1 style="color: #6b4a8f; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
+        <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The month ends ${month} ${day}</p>
+        <p style="font-size: 15px;">Hi ${name},</p>
+        <p style="font-size: 15px;">${body}</p>
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="${APP_URL}/hive" style="background: #6b4a8f; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open HIVE and check in</a>
+        </div>
+        <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Every answer stays inside your HIVE. 🍯</p>
+      </div>
+    `;
+  }
   if (kind === 'premeeting') {
     const heading = touch === 'day_of' ? "It's today" : 'Before we meet';
     const body = touch === 'day_of'
@@ -317,10 +339,34 @@ function seasonEmailHtml(
 }
 
 function seasonSubject(kind: SeasonKind, touch: SeasonTouch, month: string, day: number): string {
+  if (kind === 'endofmonth') {
+    const heading = touch === 'day_of' ? 'Last day of the month' : 'How did the month go?';
+    const body = touch === 'day_of'
+      ? `It's the last day of the month and your check-in isn't in yet — a few minutes on what moved, what's stuck, and what you're taking on next.`
+      : `Your end-of-month check-in is open on Home. What moved on the show, what's stuck and what would unstick it, and what you're taking on before we meet again. Short answers are perfect.`;
+    return `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
+        <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🎬</span></div>
+        <h1 style="color: #6b4a8f; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
+        <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The month ends ${month} ${day}</p>
+        <p style="font-size: 15px;">Hi ${name},</p>
+        <p style="font-size: 15px;">${body}</p>
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="${APP_URL}/hive" style="background: #6b4a8f; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open HIVE and check in</a>
+        </div>
+        <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Every answer stays inside your HIVE. 🍯</p>
+      </div>
+    `;
+  }
   if (kind === 'premeeting') {
     return touch === 'day_of'
       ? `🎬 We meet today — 3 minutes before we do`
       : `🎬 Before we meet on ${month} ${day} — your check-in is open`;
+  }
+  if (kind === 'endofmonth') {
+    return touch === 'day_of'
+      ? `🎬 Last day of the month — how did it go?`
+      : `🎬 How did the month go? Your check-in is open`;
   }
   if (kind === 'quarter') {
     return touch === 'day_of'
@@ -861,7 +907,9 @@ serve(async (req) => {
             ? ('quarter' as SeasonKind)
             : PRE_MEETING_CHECK_IN_PATTERN.test(s.title || '')
               ? ('premeeting' as SeasonKind)
-              : null,
+              : SHOW_END_OF_MONTH_PATTERN.test(s.title || '')
+                ? ('endofmonth' as SeasonKind)
+                : null,
       }))
       .filter((entry): entry is { survey: Survey; kind: SeasonKind } => entry.kind !== null);
 

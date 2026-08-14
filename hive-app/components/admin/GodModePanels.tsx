@@ -18,6 +18,8 @@ import {
   getUpcomingSeasonOccurrence,
   hasSeasonCheckIns,
   hasTailoredCheckIns,
+  hasPreMeetingCheckIn,
+  hasEndOfMonthCheckIn,
   type SeasonKind,
   type SeasonOccurrence,
 } from '../../lib/checkIns';
@@ -1082,6 +1084,17 @@ export function HiveMemberPanels({
     } as any);
   }, [memberships, switchCommunity, router]);
 
+  /**
+   * For a HIVE whose check-ins are ordinary survey cards rather than the
+   * tune-up wizard, the door is Home — that is where the card sits. Switching
+   * community first for the same reason `openMemberCheckIn` does: a cream card
+   * can otherwise inherit Admin's space palette.
+   */
+  const openPlainCheckIn = useCallback(async (targetId: string) => {
+    await switchCommunity(targetId);
+    router.push('/hive');
+  }, [switchCommunity, router]);
+
   // Check-in questions live in a modal on this very screen, so there is nowhere
   // to navigate TO — routing to /admin from /admin is why both of these rows did
   // nothing at all when Nat pressed them (2026-08-04). The editor also only ever
@@ -1563,6 +1576,14 @@ export function HiveMemberPanels({
            now only ever means "no deck designed", never "built but
            resting". */
         const tailored = hasTailoredCheckIns(m.community);
+        // A HIVE can run a check-in before its meetings and at the end of its
+        // months without running OG's monthly TUNE-UP WIZARD, whose steps are
+        // OG's own rituals. Production does exactly that from 2026-08-14 — its
+        // two check-ins are plain survey cards on Home. Reading `tailored` for
+        // these rows told Nat "coming soon" about a survey she had just filled
+        // in herself.
+        const preMeeting = tailored || hasPreMeetingCheckIn(m.community);
+        const endOfMonth = tailored || hasEndOfMonthCheckIn(m.community);
         const seasonReady = hasSeasonCheckIns(m.community);
         const launchedSeason = seasonSurveysByHive[m.community_id] ?? [];
         const seasonRow = (kind: SeasonKind): CheckInScheduleRow => {
@@ -1605,21 +1626,31 @@ export function HiveMemberPanels({
           {
             key: 'monthly',
             when: 'Pre-Meeting',
-            what: tailored ? 'open the monthly tune-up' : 'coming soon',
-            live: tailored,
+            what: tailored
+              ? 'open the monthly tune-up'
+              : preMeeting ? 'how we run, and where everyone stands' : 'coming soon',
+            live: preMeeting,
             ...(tailored ? {
               actionLabel: 'Test or fill out the monthly check-in',
               onPress: () => void openMemberCheckIn(m.community_id),
+            } : preMeeting ? {
+              actionLabel: 'Read it or fill it out on Home',
+              onPress: () => void openPlainCheckIn(m.community_id),
             } : {}),
           },
           {
             key: 'halfway',
             when: 'End of Month',
-            what: tailored ? 'shout-outs for the newsletter' : 'coming soon',
-            live: tailored,
+            what: tailored
+              ? 'shout-outs for the newsletter'
+              : endOfMonth ? 'what moved, what is stuck, what is next' : 'coming soon',
+            live: endOfMonth,
             ...(tailored ? {
               actionLabel: 'Test or fill out the halfway check-in',
               onPress: () => void openMemberCheckIn(m.community_id, 'midpoint'),
+            } : endOfMonth ? {
+              actionLabel: 'Read it or fill it out on Home',
+              onPress: () => void openPlainCheckIn(m.community_id),
             } : {}),
           },
           seasonRow('quarter'),

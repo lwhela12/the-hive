@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-14-production-end-of-month',
+    date: '2026-08-14',
+    title: 'Production HIVE has an end-of-month check-in too',
+    detail: 'What moved on the show, what is stuck and what would unstick it, and what you are taking on before we meet again. It asks about the show rather than about you, because this HIVE has one shared goal.',
+    href: { pathname: '/hive' },
+    action: 'Open Home',
+  },
+  {
     id: '2026-08-14-production-pre-meeting-checkin',
     date: '2026-08-14',
     title: 'Production HIVE has a check-in before each meeting',
