@@ -6,6 +6,8 @@ import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@yourdomain.com>';
 const DEFAULT_INVITE_URL_BASE = 'https://app.the-hive.app/join';
+/** Where the real logo is served from — the same file The Buzz already uses. */
+const PUBLIC_SITE_URL = Deno.env.get('PUBLIC_SITE_URL') || 'https://the-hive.app';
 
 function getInviteUrlBase() {
   const configuredBase = Deno.env.get('INVITE_URL_BASE')?.trim();
@@ -149,17 +151,26 @@ serve(async (req) => {
   const communityName = normalizeHiveBrandName(community?.name);
 
   /**
+   * What THIS HIVE is — the paragraph that comes after the universal one.
+   *
    * Production HIVE isn't a community of individual goals like OG or Tech —
    * it's this HIVE's own singular project (Lucas, 2026-08-13, to Nat: "very
    * diff than the other HIVEs, its more of a 'project management' tool").
-   * The generic "share what you're working on, others go 'I can help with
-   * that'" paragraph describes OG/Tech's model and actively misdescribes
-   * Production's, so it gets its own paragraph instead of the shared one.
+   * The "share what you're working on, others go 'I can help with that'"
+   * paragraph describes OG/Tech's model and actively misdescribes
+   * Production's, so each gets its own.
+   *
+   * Nat, 2026-08-14, reading a real Production invite: this used to REPLACE
+   * the what-is-a-HIVE paragraph rather than follow it, so a Production
+   * invitee was told how Production differs from the rest of the HIVEs before
+   * anyone had told them what a HIVE is. Her order: what HIVE is, then what
+   * Production HIVE is, then how it's different. The universal paragraph now
+   * sits above this one and every HIVE gets both.
    */
   const isProductionHive = community?.slug === 'show';
   const whatIsThisHive = isProductionHive
     ? `<p style="font-size: 15px;">${communityName} works a little differently from the rest of the HIVEs. It isn't a group of people each working on their own thing — it's everyone rowing toward one shared goal: producing the show. Think of it as a project's home base — the to-dos, the plan, and the people making it happen, all in one place.</p>`
-    : `<p style="font-size: 15px;">The HIVE is a small group of people who help each other get things done. Everyone shares what they're working on and what they could use a hand with — and the rest of us go "oh, I can help with that."</p>`;
+    : `<p style="font-size: 15px;">In ${communityName}, everyone shares what they're working on and what they could use a hand with — and the rest of us go "oh, I can help with that."</p>`;
 
   const { data: existingProfile } = await supabaseAdmin
     .from('profiles')
@@ -313,15 +324,32 @@ serve(async (req) => {
           // HIVE meets in person.
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-              <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🐝</span></div>
+              <!-- The real logo, not the bee emoji standing in for it (Nat,
+                   2026-08-14: "I would swap out this first emoji bee to our
+                   actual logo, so it's branded"). Same file The Buzz already
+                   sends, so the two letters look like the same HIVE. It is RGB
+                   with no transparency despite its name, hence the white tile
+                   underneath; width in the tag as well as the style because
+                   Outlook ignores CSS sizing on images; alt text because a
+                   good many people read mail with images off. -->
+              <div style="text-align: center; padding: 8px 0 4px;">
+                <img src="${PUBLIC_SITE_URL}/assets/hive-logo-email.png"
+                     alt="H.I.V.E. — Human, Insight, Vision, Execution"
+                     width="96" height="96"
+                     style="width:96px;height:96px;display:inline-block;border:0;outline:none;text-decoration:none;background:#ffffff;border-radius:48px;" />
+              </div>
               <h1 style="color: ${headingColour}; font-size: 22px; text-align: center; margin: 8px 0 4px;">Welcome to the HIVE</h1>
               <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 22px;">${inviterName ? `${inviterName} invited you` : "You've been invited"} to join ${communityName}</p>
 
-              <p style="font-size: 15px;">We are so glad you're here.</p>
+              <p style="font-size: 15px;">We're so glad you're here.</p>
 
-              ${whatIsThisHive}
+              <!-- What a HIVE is, before what THIS HIVE is. Nat's own words,
+                   2026-08-14, borrowed from the newsletter's warmth. -->
+              <p style="font-size: 15px;">The HIVE is a group of people with a shared interest, getting together and collectively working toward their goals.</p>
 
               <p style="font-size: 15px;">H.I.V.E. stands for <strong>Human, Insight, Vision, Execution</strong>. There are multiple HIVEs now, each with its own people and its own rhythm — and you've been invited to <strong>${communityName}</strong>.</p>
+
+              ${whatIsThisHive}
 
               <p style="font-size: 15px;">Stuck on anything once you're in? Ask <strong>Clive</strong> — the HIVE's helper, behind the sparkles in the app. And ${inviterName || 'whoever invited you'} is a text away. 💛</p>
 
@@ -336,6 +364,15 @@ serve(async (req) => {
               <div style="text-align: center; margin: 26px 0 8px;">
                 <a href="${inviteUrl}" style="background: ${accent}; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Come on in</a>
               </div>
+
+              <!-- What happens AFTER the button, so nobody is surprised by the
+                   tour and nobody who already knows a HIVE feels trapped in it
+                   (Nat, 2026-08-14: "there's an onboarding wizard that will
+                   show you around & if you're not new to how HIVE works, you
+                   can skip it"). The tour itself shipped 2026-08-11 — five
+                   real screens, and skipping writes tour_marks so it never
+                   comes back on any device. -->
+              <p style="font-size: 15px; margin-top: 4px;">Tap <strong>Come on in</strong> and you're through the door. A short tour meets you on the other side and walks you around the place — and if you already know your way around a HIVE, skip it and dive straight in.</p>
 
               <p style="font-size: 13px; color: #9a9a9a; text-align: center; margin-top: 18px;">Your link works for the next 7 days. 🍯</p>
               <p style="font-size: 12px; color: #c0c0c0; text-align: center; word-break: break-all;">${inviteUrl}</p>

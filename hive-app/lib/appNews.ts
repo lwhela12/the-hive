@@ -28,6 +28,15 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    // Nat read a real Production invite the morning of 8/14 and found the
+    // letter explaining how Production differs from the other HIVEs before
+    // anything had said what a HIVE is.
+    id: '2026-08-14-invite-email-says-what-a-hive-is',
+    date: '2026-08-14',
+    title: 'The invite email introduces the HIVE properly now',
+    detail: 'Our real logo up top, then what a HIVE is, then what your HIVE is — in that order. It also tells you about the little tour waiting on the other side of the button, and that you can skip it if you already know your way around.',
+  },
+  {
     // The bees have matched skills to wishes for a while and nobody was ever
     // told — Nat found out 2026-08-13 ("WHAT, OMG I didnt know it did this")
     // and asked how we let people know. This is how.
