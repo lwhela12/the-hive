@@ -351,6 +351,13 @@ export interface ActionItem extends Record<string, unknown> {
   archived_at?: string | null;
   related_wish_id?: string | null;
   related_board_category_id?: string | null;
+  /**
+   * The one thread this to-do opens (migration 180). More specific than
+   * `related_board_category_id`, which lands you on a whole board — this lands
+   * you on the conversation that holds the brief and collects what you find
+   * out. Production HIVE's jobs arrive carrying one.
+   */
+  related_board_post_id?: string | null;
   related_user_id?: string | null;
   created_at: string;
   assigned_user?: Profile;

@@ -28,6 +28,18 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    // Nat's own design, 2026-08-14: "maybe there's a pre-production board and
+    // each one of these tasks is its own thread... you can click on your task
+    // and it'll bring you to that thread that has the phone number and the
+    // questions to ask, and then you can leave your notes in it."
+    id: '2026-08-14-a-todo-opens-its-thread',
+    date: '2026-08-14',
+    title: 'A to-do can take you straight to the conversation it came from',
+    detail: 'Production HIVE has a Pre-Production board with one thread per job. Take a job in the meeting and it lands on your list \u2014 tap it and you are in the thread, with the phone number and the questions waiting, and somewhere to write down what you find out.',
+    href: { pathname: '/board' },
+    action: 'Open the boards',
+  },
+  {
     // Production HIVE's meeting was designed out loud by Nat on 8/14 and runs
     // back-to-front against OG's on purpose: the research first, then every
     // other question answers itself.

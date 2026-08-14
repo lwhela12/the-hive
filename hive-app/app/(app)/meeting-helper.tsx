@@ -18,6 +18,7 @@ import { hiveAccent } from '../../lib/hiveBrand';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { CHECK_INS_COMING_SOON_MESSAGE, hasMeetingDeck } from '../../lib/checkIns';
+import { useDeepTrail } from '../../lib/hooks/usePathTrail';
 import { fetchHoneyPotLedger } from '../../lib/honeyPot';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
@@ -190,9 +191,10 @@ type DeckDefinition = {
  * any other, and the next round of work is written by the group, not by this
  * list. This is a starting grid, not a permanent fixture.
  */
-const PRODUCTION_JOBS: { key: string; title: string; why: string; asks: string[] }[] = [
+const PRODUCTION_JOBS: { key: string; title: string; why: string; asks: string[]; threadId: string }[] = [
   {
     key: 'circus-center',
+    threadId: 'ac33d3c4-7a7c-47dc-b2af-54ac37d0b93f',
     title: 'Call Las Vegas Circus Center',
     why: 'They already built a rigged circus facility in a Las Vegas warehouse, under these exact codes. One call answers what a hundred property listings could not.',
     asks: [
@@ -205,8 +207,9 @@ const PRODUCTION_JOBS: { key: string; title: string; why: string; asks: string[]
   },
   {
     key: 'broker',
+    threadId: 'fa605a5d-15ec-4e1a-a0f8-9d135d9bed79',
     title: 'Call a tenant-rep industrial broker',
-    why: 'Almost no listing states a ceiling height, and every public listing site blocks us. Only a broker can run this query.',
+    why: 'A broker can search by ceiling height, which is the one thing the public listings leave out.',
     asks: [
       'Las Vegas metro, 36 ft clear or more, under 50,000 sq ft — what exists?',
       'Can we see the broker flyers? They carry heights the web listings do not.',
@@ -215,10 +218,11 @@ const PRODUCTION_JOBS: { key: string; title: string; why: string; asks: string[]
   },
   {
     key: 'rigging',
+    threadId: 'b603855c-0376-49dc-8f2c-fcf5945a70dd',
     title: 'Get a rigging quote',
-    why: 'The single biggest blank on the research site. Nobody publishes it.',
+    why: 'A real number here changes the whole budget. It takes one call to get it.',
     asks: [
-      'What does it cost to engineer and install points for silks, lyra, straps and Cyr wheel?',
+      'What does it cost to engineer and install points for silks, lyra and straps?',
       'Do we need a Nevada-licensed structural engineer stamp, and do you provide one?',
       'Lead time from survey to certified and load-tested?',
       'How much height do your points and the lighting grid actually eat?',
@@ -226,8 +230,9 @@ const PRODUCTION_JOBS: { key: string; title: string; why: string; asks: string[]
   },
   {
     key: 'insurance',
+    threadId: 'b551b839-4455-4aca-8eaa-49469c6daa85',
     title: 'Call an entertainment insurance broker',
-    why: 'The second biggest blank. Ordinary liability does not cover performers at all, and some carriers refuse aerial outright.',
+    why: 'Performers need their own cover, separate from ordinary liability — and some carriers cap the height they will insure. Worth knowing early.',
     asks: [
       'General liability plus participant accident, for an eight-person aerial show — what does it run?',
       'Do you impose a height restriction?',
@@ -236,8 +241,9 @@ const PRODUCTION_JOBS: { key: string; title: string; why: string; asks: string[]
   },
   {
     key: 'fire',
+    threadId: 'dbb6d9ef-9f3c-4e34-ac82-c8bf4c2107ad',
     title: 'Call Clark County Fire Prevention · 702-455-7316',
-    why: 'Get the sprinkler ruling in writing BEFORE anyone signs anything. It is the largest cost on the page and it turns on one official\'s reading.',
+    why: 'The sprinkler ruling is the largest cost in a conversion, and it turns on one official\'s reading. Get it in writing before anyone signs.',
     asks: [
       'Warehouse to theatre — does the 5,000 sq ft whole-building sprinkler rule apply?',
       'Please confirm in writing.',
@@ -246,8 +252,9 @@ const PRODUCTION_JOBS: { key: string; title: string; why: string; asks: string[]
   },
   {
     key: 'notoriety',
+    threadId: '9aef35af-f028-467a-abbe-60ad9a0d93ee',
     title: 'Call Notoriety · 702-243-0654',
-    why: 'The cheapest way to open at all. The Robin Leach Lounge already has 30 ft ceilings.',
+    why: 'The cheapest way to open at all — a licensed room by the day. The Robin Leach Lounge has 30 ft ceilings.',
     asks: [
       'Spec sheet with real ceiling heights per room?',
       'What does the mandatory in-house catering cost per head?',
@@ -358,9 +365,9 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
   show: {
     slides: ['room', 'outline', 'news', 'meetups', 'treasurer', 'assignments', 'wrapup', 'thanks'],
     agenda: [
-      { key: 'news', label: 'The research' },
+      { key: 'news', label: 'News from Nat' },
       { key: 'meetups', label: 'How we run' },
-      { key: 'treasurer', label: 'Money' },
+      { key: 'treasurer', label: 'Honey Pot' },
       { key: 'assignments', label: 'Who takes what' },
       { key: 'wrapup', label: 'Wrap-Up' },
     ],
@@ -368,12 +375,12 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
     treasurer: {
       kind: 'duesConversation',
       kicker: 'Ours to decide',
-      title: 'Money',
-      lead: 'Nothing is set. This is the conversation, not the report.',
+      title: 'Honey Pot',
+      lead: 'This is the conversation. Everything here is still ours to pick.',
       questions: [
-        'Do we want a pot at all, and what is it for?',
-        'Who holds it?',
-        'Which investors do we want to go after?',
+        'Do we want a Honey Pot — money the five of us put in to get this moving?',
+        'If yes: how much each, and what does it cover?',
+        'Who wants to be treasurer?',
       ],
     },
     plan: {
@@ -396,8 +403,8 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       hasHelpFocusHeader: false,
     },
     wrapupReminders: [
-      'The research lives at show-proposal.vercel.app — open it any time',
-      'Everything we decided tonight is on your to-do list, not in someone else\'s inbox',
+      'The research lives at show-proposal.vercel.app',
+      'Everything we decided tonight is on your to-do list',
     ],
   },
 };
@@ -588,6 +595,9 @@ export default function MeetingHelperScreen() {
   // Which deck tonight is. Any HIVE without a designed deck falls to 'default'
   // here, but never reaches the slides — the hasTailoredCheckIns() gate below
   // shows those HIVEs (Production, for now) the coming-soon screen instead.
+  // The footer says where you are: HIVE › Meetings › Meeting Helper.
+  useDeepTrail([{ label: 'Meeting Helper' }]);
+
   const deckSlug: keyof typeof DECKS =
     community?.slug === 'tech' ? 'tech'
     : community?.slug === 'show' ? 'show'
@@ -1232,7 +1242,7 @@ export default function MeetingHelperScreen() {
   const [jobSaving, setJobSaving] = useState<string | null>(null);
   const [jobsAssigned, setJobsAssigned] = useState<Record<string, string>>({});
 
-  const handleAssignJob = async (job: { key: string; title: string; asks: string[] }) => {
+  const handleAssignJob = async (job: { key: string; title: string; asks: string[]; threadId: string }) => {
     const typed = (jobDrafts[job.key] ?? '').trim();
     if (!communityId || jobSaving) return;
 
@@ -1258,6 +1268,9 @@ export default function MeetingHelperScreen() {
           description,
           assigned_to: member.id,
           community_id: communityId,
+          // The to-do opens the Pre-Production thread that holds the brief and
+          // collects what they find out — Nat's design, 2026-08-14.
+          related_board_post_id: job.threadId,
         }))
       );
       if (error) throw error;
@@ -1660,8 +1673,7 @@ export default function MeetingHelperScreen() {
             </Text>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(22, 14), lineHeight: sz(34, 21), color: CHARCOAL }}>
               Tonight runs differently from a usual HIVE meeting. We walk through everything
-              found so far — what a room costs, what the ceiling has to be, who else is doing
-              this and what happened to them — and then the rest of the questions answer themselves.
+              found so far, and then the rest of the questions answer themselves.
             </Text>
             <Pressable
               onPress={() => Linking.openURL('https://show-proposal.vercel.app')}
@@ -1701,7 +1713,7 @@ export default function MeetingHelperScreen() {
           </View>
           <NoteBody
             noteKey="news"
-            emptyText="Nat hasn't dropped the news yet — drumroll, please."
+            emptyText={deckSlug === 'show' ? '' : "Nat hasn't dropped the news yet — drumroll, please."}
           />
         </View>
         {/* Production skips this card. Nat, 2026-08-14: *"news from Nat, new in
@@ -2444,6 +2456,12 @@ export default function MeetingHelperScreen() {
                 conversation, in Nat's framing: no pressure, it's a choice. */}
             {deck.plan.helpExpansion.kind === 'conversation' ? (
               <View style={{ gap: sz(8, 5) }}>
+                {/* Says which card opened this. The panels stack under the whole
+                    row, so without a name the conversation reads as belonging to
+                    whichever card it happens to sit beneath. */}
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
+                  HIVE Help
+                </Text>
                 <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(19, 13), lineHeight: sz(29, 20), color: CHARCOAL }}>
                   {deck.plan.helpExpansion.lead}
                 </Text>
@@ -3161,14 +3179,31 @@ export default function MeetingHelperScreen() {
         <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 12), letterSpacing: 2, textTransform: 'uppercase', color: MUTED }}>
           Standing reminders
         </Text>
-        {deck.wrapupReminders.map((reminder) => (
-          <View key={reminder} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(12, 8) }}>
-            <View style={{ width: sz(9, 6), height: sz(9, 6), borderRadius: 999, backgroundColor: GOLD, transform: [{ translateY: -2 }] }} />
-            <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: sz(24, 14), lineHeight: sz(34, 21), color: CHARCOAL }}>
+        {deck.wrapupReminders.map((reminder) => {
+          // A reminder that names a web address should be tappable — Nat,
+          // 2026-08-14: *"if that could be a hyperlink, that's even better."*
+          const url = reminder.match(/[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s]*)?/i)?.[0] ?? null;
+          const body = (
+            <Text style={{ flex: 1, fontFamily: 'Lato_400Regular', fontSize: sz(24, 14), lineHeight: sz(34, 21), color: url ? GOLD_DEEP : CHARCOAL, textDecorationLine: url ? 'underline' : 'none' }}>
               {reminder}
             </Text>
-          </View>
-        ))}
+          );
+          return (
+            <View key={reminder} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(12, 8) }}>
+              <View style={{ width: sz(9, 6), height: sz(9, 6), borderRadius: 999, backgroundColor: GOLD, transform: [{ translateY: -2 }] }} />
+              {url ? (
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => Linking.openURL(url.startsWith('http') ? url : `https://${url}`)}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Open ${url}`}
+                >
+                  {body}
+                </Pressable>
+              ) : body}
+            </View>
+          );
+        })}
       </View>
     </View>
   );

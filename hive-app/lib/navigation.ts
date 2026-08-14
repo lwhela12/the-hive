@@ -236,6 +236,13 @@ export function activeKeyForPath(pathname: string | null | undefined): string | 
   // the rail should light up Boards there rather than the HIVE you came from.
   // Checked before the HIVE-Wide prefix, which would otherwise swallow it.
   if (pathname.startsWith('/hive-wide-boards')) return 'boards';
+  // Screens reached from inside Meetings rather than the rail. They belong to
+  // Meetings in the footer trail — without this the strip showed only the
+  // HIVE's name and stopped, which is what Nat saw standing in the Meeting
+  // Helper on 2026-08-14: *"the footer's not keeping up with us at the bottom,
+  // it just says Production HIVE. It doesn't say Production HIVE, Meetings,
+  // Meeting Helper — and I think that it should."*
+  if (pathname.startsWith('/meeting-helper') || pathname.startsWith('/monthly-tuneup')) return 'meetings';
   if (pathname.startsWith(HIVE_WIDE_ROUTE)) return 'hive-wide';
   let best: NavDestination | null = null;
   for (const d of [...NAV_DESTINATIONS, ADMIN_DESTINATION]) {

@@ -1882,6 +1882,20 @@ export default function HiveScreen() {
       const wishId = item.related_wish_id;
       return { label: 'Go to wish', onPress: () => openWishFromActivity(wishId) };
     }
+    // A thread beats a whole board: if the to-do knows which conversation it
+    // belongs to, land on that conversation. Production's jobs arrive this way
+    // — the thread holds the phone number and the questions, and it is where
+    // whoever took the job writes down what they found out.
+    if (item.related_board_post_id) {
+      const postId = item.related_board_post_id;
+      return {
+        label: 'Open the thread',
+        onPress: () => router.push({
+          pathname: '/board',
+          params: { postId, from: 'home', open: String(Date.now()) },
+        }),
+      };
+    }
     if (item.related_board_category_id) {
       const categoryId = item.related_board_category_id;
       return {
