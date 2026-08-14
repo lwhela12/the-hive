@@ -30,6 +30,31 @@ export function hasTailoredCheckIns(
 }
 
 /**
+ * Whether this HIVE has a meeting deck of its own.
+ *
+ * This used to be the same question as `hasTailoredCheckIns()`, and the Meeting
+ * Helper gated on that one boolean. **They are two different questions**, and
+ * Production HIVE is what proved it: on 2026-08-14 Nat designed Production's
+ * meeting out loud — talk the group through the research site, then decide
+ * cadence, then HIVE Help, then treasurer, then who goes to look at venues,
+ * then hand out the jobs — while Production's monthly check-in survey is
+ * *still* undesigned and deliberately off.
+ *
+ * A HIVE can know exactly how its meeting runs and not yet know what to ask
+ * people beforehand. Tying the deck to the survey would have forced her to
+ * design a survey she doesn't want yet just to get the meeting she does.
+ */
+export function hasMeetingDeck(
+  community: Pick<Community, 'slug'> | null | undefined,
+): boolean {
+  return (
+    community?.slug === 'default'
+    || community?.slug === 'tech'
+    || community?.slug === 'show'
+  );
+}
+
+/**
  * When Home nudges a member about the halfway check-in, and what it says.
  *
  * OG's halfway feeds the newsletter, which goes out on the 1st, so OG's

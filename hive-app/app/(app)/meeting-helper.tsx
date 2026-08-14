@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Linking,
   Modal,
   Platform,
   Pressable,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -16,7 +17,7 @@ import { supabase } from '../../lib/supabase';
 import { hiveAccent } from '../../lib/hiveBrand';
 import { EventAudienceToggle, type EventAudience } from '../../components/events/EventAudienceToggle';
 import { useAuth } from '../../lib/hooks/useAuth';
-import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns } from '../../lib/checkIns';
+import { CHECK_INS_COMING_SOON_MESSAGE, hasMeetingDeck } from '../../lib/checkIns';
 import { fetchHoneyPotLedger } from '../../lib/honeyPot';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
@@ -114,6 +115,13 @@ type DeckSlideKey =
   | 'treasurer'
   | 'meetups'
   | 'hummdinger'
+  /**
+   * Production's replacement for the HummDinger slide. OG and Tech spend that
+   * stretch on one member's wish; Production has one shared goal instead, so
+   * the same stretch of the night is spent handing out the jobs that move it.
+   * Same mechanism underneath — @-mention a member and it lands on their list.
+   */
+  | 'assignments'
   | 'wrapup'
   | 'thanks';
 
@@ -168,7 +176,87 @@ type DeckDefinition = {
   wrapupReminders: string[];
 };
 
-const DECKS: Record<'default' | 'tech', DeckDefinition> = {
+/**
+ * Production HIVE's opening jobs.
+ *
+ * Every one of these turns a blank on the research site into a real number.
+ * They live here rather than in the database because the FIRST meeting needs
+ * them on screen before anyone has typed anything — and because the questions
+ * matter as much as the job does. Nat, 2026-08-14: *"it doesn't have a task
+ * attached to it... it should say who's going to call, these are the questions
+ * that you need to ask, and then who's getting assigned to that."*
+ *
+ * Once the first meeting has handed these out they are ordinary to-dos like
+ * any other, and the next round of work is written by the group, not by this
+ * list. This is a starting grid, not a permanent fixture.
+ */
+const PRODUCTION_JOBS: { key: string; title: string; why: string; asks: string[] }[] = [
+  {
+    key: 'circus-center',
+    title: 'Call Las Vegas Circus Center',
+    why: 'They already built a rigged circus facility in a Las Vegas warehouse, under these exact codes. One call answers what a hundred property listings could not.',
+    asks: [
+      'What is your ceiling height, floor to lowest obstruction?',
+      'What was the building before?',
+      'Who engineered your rigging points, and would you use them again?',
+      'Did you need a Special Use Permit, and how long did it take?',
+      'What surprised you most about the buildout?',
+    ],
+  },
+  {
+    key: 'broker',
+    title: 'Call a tenant-rep industrial broker',
+    why: 'Almost no listing states a ceiling height, and every public listing site blocks us. Only a broker can run this query.',
+    asks: [
+      'Las Vegas metro, 36 ft clear or more, under 50,000 sq ft — what exists?',
+      'Can we see the broker flyers? They carry heights the web listings do not.',
+      'Who handles aircraft hangars, soundstages, gyms and ice rinks?',
+    ],
+  },
+  {
+    key: 'rigging',
+    title: 'Get a rigging quote',
+    why: 'The single biggest blank on the research site. Nobody publishes it.',
+    asks: [
+      'What does it cost to engineer and install points for silks, lyra, straps and Cyr wheel?',
+      'Do we need a Nevada-licensed structural engineer stamp, and do you provide one?',
+      'Lead time from survey to certified and load-tested?',
+      'How much height do your points and the lighting grid actually eat?',
+    ],
+  },
+  {
+    key: 'insurance',
+    title: 'Call an entertainment insurance broker',
+    why: 'The second biggest blank. Ordinary liability does not cover performers at all, and some carriers refuse aerial outright.',
+    asks: [
+      'General liability plus participant accident, for an eight-person aerial show — what does it run?',
+      'Do you impose a height restriction?',
+      'Does the premium change if we also run daytime classes?',
+    ],
+  },
+  {
+    key: 'fire',
+    title: 'Call Clark County Fire Prevention · 702-455-7316',
+    why: 'Get the sprinkler ruling in writing BEFORE anyone signs anything. It is the largest cost on the page and it turns on one official\'s reading.',
+    asks: [
+      'Warehouse to theatre — does the 5,000 sq ft whole-building sprinkler rule apply?',
+      'Please confirm in writing.',
+      'What occupancy would you calculate for our seating plan?',
+    ],
+  },
+  {
+    key: 'notoriety',
+    title: 'Call Notoriety · 702-243-0654',
+    why: 'The cheapest way to open at all. The Robin Leach Lounge already has 30 ft ceilings.',
+    asks: [
+      'Spec sheet with real ceiling heights per room?',
+      'What does the mandatory in-house catering cost per head?',
+      'Can we rig from your ceiling, and what are the load limits?',
+    ],
+  },
+];
+
+const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
   default: {
     slides: ['room', 'outline', 'news', 'treasurer', 'meetups', 'hummdinger', 'wrapup', 'thanks'],
     agenda: [
@@ -246,6 +334,70 @@ const DECKS: Record<'default' | 'tech', DeckDefinition> = {
     wrapupReminders: [
       'Next meeting — second Thursday of the month',
       'Monthly check-in — POP + what you learned, before we meet',
+    ],
+  },
+  /**
+   * Production HIVE, designed out loud by Nat on 2026-08-14 for the first
+   * pre-production meeting.
+   *
+   * The order is hers and it is deliberately back-to-front against OG's. Her
+   * words: *"normally it goes like this, but we're going to go through this
+   * website first of my findings... and then that's going to help us answer a
+   * lot of questions."* So News from Nat carries the research site, everyone
+   * walks it together, and only THEN does the room decide cadence, whether it
+   * wants a HIVE Help, whether it wants a treasurer, who goes to look at
+   * venues, and who takes which job.
+   *
+   * Two deliberate departures from the other two decks:
+   *  - No "new in the app" block on the news slide. Nat: *"we don't need new
+   *    tech in the app"* — this room is about the show, not the software.
+   *  - The HummDinger slide becomes `assignments`. OG and Tech spend that
+   *    stretch on one person's wish; Production has one shared goal, so it
+   *    spends it handing out the work.
+   */
+  show: {
+    slides: ['room', 'outline', 'news', 'meetups', 'treasurer', 'assignments', 'wrapup', 'thanks'],
+    agenda: [
+      { key: 'news', label: 'The research' },
+      { key: 'meetups', label: 'How we run' },
+      { key: 'treasurer', label: 'Money' },
+      { key: 'assignments', label: 'Who takes what' },
+      { key: 'wrapup', label: 'Wrap-Up' },
+    ],
+    welcomeNudge: 'grab a seat — this one is different',
+    treasurer: {
+      kind: 'duesConversation',
+      kicker: 'Ours to decide',
+      title: 'Money',
+      lead: 'Nothing is set. This is the conversation, not the report.',
+      questions: [
+        'Do we want a pot at all, and what is it for?',
+        'Who holds it?',
+        'Which investors do we want to go after?',
+      ],
+    },
+    plan: {
+      kicker: 'How this HIVE runs · ours to set tonight',
+      title: 'How we run',
+      cards: [
+        { key: 'meeting', title: 'How often we meet', blurb: 'Weekly? Monthly? A group chat and meet when there is something to meet about? Pick it here and schedule the next one.' },
+        { key: 'help', title: 'HIVE Help', blurb: 'A small shared kindness some HIVEs take on each month. Do we want one?' },
+        { key: 'hang', title: 'Go see a venue', blurb: 'Notoriety, The Space, Vegas Theatre, the Henderson tent. Who is going, and when? Schedule it right here.' },
+      ],
+      hangCardExpands: false,
+      helpExpansion: {
+        kind: 'conversation',
+        lead: 'Some HIVEs pick one small act of kindness to do together each month.',
+        points: [
+          'Does Production want one? Genuinely a choice — no pressure either way.',
+          "If it's a yes, we pick the first focus together.",
+        ],
+      },
+      hasHelpFocusHeader: false,
+    },
+    wrapupReminders: [
+      'The research lives at show-proposal.vercel.app — open it any time',
+      'Everything we decided tonight is on your to-do list, not in someone else\'s inbox',
     ],
   },
 };
@@ -436,7 +588,10 @@ export default function MeetingHelperScreen() {
   // Which deck tonight is. Any HIVE without a designed deck falls to 'default'
   // here, but never reaches the slides — the hasTailoredCheckIns() gate below
   // shows those HIVEs (Production, for now) the coming-soon screen instead.
-  const deckSlug: keyof typeof DECKS = community?.slug === 'tech' ? 'tech' : 'default';
+  const deckSlug: keyof typeof DECKS =
+    community?.slug === 'tech' ? 'tech'
+    : community?.slug === 'show' ? 'show'
+    : 'default';
   const deck = DECKS[deckSlug];
 
   // The deck's palette. OG keeps its hand-tuned golds exactly; every other
@@ -1064,6 +1219,62 @@ export default function MeetingHelperScreen() {
     }
   };
 
+  // Production's job hand-out. Same mechanism as the HummDinger jots below —
+  // @-mention a member and it lands on their to-do list — but the subject is a
+  // job rather than a person's wish, so there is no `related_user_id` and no
+  // "(re: someone's HummDinger)" suffix to add.
+  //
+  // Nat, 2026-08-14, describing exactly this: *"I could at each person... I'd
+  // be like @Charlee and that would go onto her to-do list, and I could be like
+  // @Ollie and that would go onto his to-do list."*
+  const [openJobKey, setOpenJobKey] = useState<string | null>(null);
+  const [jobDrafts, setJobDrafts] = useState<Record<string, string>>({});
+  const [jobSaving, setJobSaving] = useState<string | null>(null);
+  const [jobsAssigned, setJobsAssigned] = useState<Record<string, string>>({});
+
+  const handleAssignJob = async (job: { key: string; title: string; asks: string[] }) => {
+    const typed = (jobDrafts[job.key] ?? '').trim();
+    if (!communityId || jobSaving) return;
+
+    const mentioned = hasBroadcastMention(typed)
+      ? members
+      : getMentionedMembers(typed, members, undefined, mentionReach);
+    if (mentioned.length === 0) {
+      showAlert('Who is taking it?', 'Type @ and their name — that is what puts it on their list.');
+      return;
+    }
+
+    setJobSaving(job.key);
+    try {
+      // The questions ride along in the to-do itself. A job that arrives
+      // without them is the exact thing Nat said was useless: "Notoriety spec
+      // sheet — and you're like, okay, what do I do with that?"
+      const questions = job.asks.map((ask) => `  · ${ask}`).join('\n');
+      const extra = typed.replace(/@[\w.-]+/g, '').trim();
+      const description = `${job.title}${extra ? ` — ${extra}` : ''}\n${questions}`;
+
+      const { error } = await (supabase as any).from('action_items').insert(
+        mentioned.map((member) => ({
+          description,
+          assigned_to: member.id,
+          community_id: communityId,
+        }))
+      );
+      if (error) throw error;
+
+      const names = mentioned.map((member) => getFirstName(member.name)).join(' & ');
+      setJobsAssigned((prev) => ({ ...prev, [job.key]: names }));
+      setJobDrafts((drafts) => ({ ...drafts, [job.key]: '' }));
+      setOpenJobKey(null);
+      await loadDeckData();
+    } catch (error) {
+      console.error('Could not hand out the job:', error);
+      showAlert('Hmm', 'That did not save — try again in a moment.');
+    } finally {
+      setJobSaving(null);
+    }
+  };
+
   // Live meeting notes from the HummDinger spotlight. Mentions use the same
   // rules as the boards — "@charlee" targets her list, "@all"/"@hive" fans
   // out to everyone, no @ lands on whoever's card is open.
@@ -1421,13 +1632,57 @@ export default function MeetingHelperScreen() {
     <View style={{ flex: 1 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginBottom: sz(30, 18) }}>
         <View>
-          <Kicker>Tonight · house business</Kicker>
+          <Kicker>{deckSlug === 'show' ? 'Tonight · a different shape' : 'Tonight · house business'}</Kicker>
           <SlideTitle>News from Nat</SlideTitle>
         </View>
       </View>
       {/* Home-page vibes (Lucas): tighter paper cards, quiet labels, body
           text that reads instead of shouting. */}
       <View style={{ gap: sz(14, 9), maxWidth: sz(940, 640) }}>
+        {/* Production's night starts by walking the research together, and the
+            rest of the deck answers itself afterwards. Nat, 2026-08-14:
+            *"normally it goes like this, but we're going to go through this
+            website first of my findings... and then that's going to help us
+            answer a lot of questions."* */}
+        {deckSlug === 'show' && (
+          <View
+            style={{
+              backgroundColor: '#fffdf5',
+              borderWidth: 2,
+              borderColor: GOLD,
+              borderRadius: sz(16, 12),
+              paddingHorizontal: sz(20, 13),
+              paddingVertical: sz(16, 11),
+            }}
+          >
+            <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: sz(8, 5) }}>
+              🎪 Start here — the research
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(22, 14), lineHeight: sz(34, 21), color: CHARCOAL }}>
+              Tonight runs differently from a usual HIVE meeting. We walk through everything
+              found so far — what a room costs, what the ceiling has to be, who else is doing
+              this and what happened to them — and then the rest of the questions answer themselves.
+            </Text>
+            <Pressable
+              onPress={() => Linking.openURL('https://show-proposal.vercel.app')}
+              accessibilityRole="link"
+              accessibilityLabel="Open the research site"
+              style={({ pressed }) => ({
+                alignSelf: 'flex-start',
+                marginTop: sz(14, 10),
+                backgroundColor: GOLD,
+                borderRadius: 999,
+                paddingHorizontal: sz(26, 18),
+                paddingVertical: sz(12, 9),
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(21, 14), color: '#fff' }}>
+                Open the research →
+              </Text>
+            </Pressable>
+          </View>
+        )}
         <View
           style={{
             backgroundColor: '#fffdf5',
@@ -1449,6 +1704,10 @@ export default function MeetingHelperScreen() {
             emptyText="Nat hasn't dropped the news yet — drumroll, please."
           />
         </View>
+        {/* Production skips this card. Nat, 2026-08-14: *"news from Nat, new in
+            the app — we don't need new tech in the app."* That room is about the
+            show, not the software carrying it. */}
+        {deckSlug !== 'show' && (
         <View
           style={{
             backgroundColor: '#fdf3dc',
@@ -1491,6 +1750,7 @@ export default function MeetingHelperScreen() {
             </View>
           ) : null}
         </View>
+        )}
       </View>
     </View>
   );
@@ -2936,6 +3196,141 @@ export default function MeetingHelperScreen() {
     </View>
   );
 
+  /**
+   * Production's answer to the HummDinger slide: the jobs, and who takes them.
+   *
+   * The questions are printed under each job on purpose. A to-do that says
+   * "call a rigging vendor" and nothing else is the thing Nat named as useless
+   * — the person who takes it has to already know what to ask, and now they do,
+   * because the questions travel with the to-do into their list.
+   */
+  const renderAssignments = () => (
+    <View style={{ flex: 1 }}>
+      <Kicker>Who takes what</Kicker>
+      <SlideTitle>The jobs</SlideTitle>
+      <Text
+        style={{
+          fontFamily: 'Lato_400Regular',
+          fontStyle: 'italic',
+          fontSize: sz(24, 14),
+          lineHeight: sz(36, 21),
+          color: MUTED,
+          marginBottom: sz(22, 14),
+          maxWidth: 720,
+        }}
+      >
+        Each one turns a blank on the research site into a real number. Tap a job,
+        say who is taking it, and it lands on their list with the questions already in it.
+      </Text>
+      <BounceScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: sz(40, 24), gap: sz(12, 8) }}>
+        {PRODUCTION_JOBS.map((job) => {
+          const open = openJobKey === job.key;
+          const takenBy = jobsAssigned[job.key];
+          return (
+            <View
+              key={job.key}
+              style={{
+                backgroundColor: CARD,
+                borderWidth: 1,
+                borderColor: takenBy ? GOLD : GOLD_SOFT,
+                borderRadius: sz(18, 14),
+                overflow: 'hidden',
+              }}
+            >
+              <Pressable
+                onPress={() => setOpenJobKey(open ? null : job.key)}
+                accessibilityRole="button"
+                accessibilityLabel={`${job.title}${takenBy ? `, taken by ${takenBy}` : ''}`}
+                style={{ paddingHorizontal: sz(24, 16), paddingVertical: sz(18, 13) }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
+                  <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: sz(26, 16), color: CHARCOAL }}>
+                    {job.title}
+                  </Text>
+                  {takenBy ? (
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 13), color: GOLD_DEEP }}>
+                      {takenBy} ✓
+                    </Text>
+                  ) : (
+                    <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), color: MUTED }}>
+                      {open ? 'Close' : 'Who?'}
+                    </Text>
+                  )}
+                </View>
+                {!open && (
+                  <Text
+                    numberOfLines={2}
+                    style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), lineHeight: sz(30, 19), color: MUTED, marginTop: sz(6, 4) }}
+                  >
+                    {job.why}
+                  </Text>
+                )}
+              </Pressable>
+
+              {open && (
+                <View style={{ paddingHorizontal: sz(24, 16), paddingBottom: sz(20, 14) }}>
+                  <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(21, 13), lineHeight: sz(32, 20), color: MUTED, marginBottom: sz(14, 10) }}>
+                    {job.why}
+                  </Text>
+                  <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(18, 12), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP, marginBottom: sz(8, 6) }}>
+                    What to ask
+                  </Text>
+                  {job.asks.map((ask) => (
+                    <Text
+                      key={ask}
+                      style={{ fontFamily: 'Lato_400Regular', fontSize: sz(21, 13), lineHeight: sz(32, 20), color: CHARCOAL, marginBottom: sz(4, 3) }}
+                    >
+                      · {ask}
+                    </Text>
+                  ))}
+                  <TextInput
+                    value={jobDrafts[job.key] ?? ''}
+                    onChangeText={(text) => setJobDrafts((drafts) => ({ ...drafts, [job.key]: text }))}
+                    placeholder="@name — and anything else worth remembering"
+                    placeholderTextColor={MUTED}
+                    multiline
+                    style={{
+                      marginTop: sz(16, 12),
+                      minHeight: sz(70, 52),
+                      borderWidth: 1,
+                      borderColor: GOLD_SOFT,
+                      borderRadius: sz(14, 11),
+                      paddingHorizontal: sz(16, 12),
+                      paddingVertical: sz(12, 9),
+                      fontFamily: 'Lato_400Regular',
+                      fontSize: sz(22, 14),
+                      color: CHARCOAL,
+                      backgroundColor: '#fff',
+                    }}
+                  />
+                  <Pressable
+                    onPress={() => handleAssignJob(job)}
+                    disabled={jobSaving === job.key}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Put ${job.title} on their list`}
+                    style={({ pressed }) => ({
+                      alignSelf: 'flex-start',
+                      marginTop: sz(12, 9),
+                      backgroundColor: GOLD,
+                      borderRadius: 999,
+                      paddingHorizontal: sz(26, 18),
+                      paddingVertical: sz(12, 9),
+                      opacity: pressed || jobSaving === job.key ? 0.7 : 1,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(21, 14), color: '#fff' }}>
+                      {jobSaving === job.key ? 'Adding…' : 'Put it on their list'}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </BounceScrollView>
+    </View>
+  );
+
   // The show, in the order this HIVE's deck declares it. Every renderer knows
   // how to wear any deck's content, so a new HIVE's deck is a new list in
   // DECKS — the renderers stay shared.
@@ -2946,6 +3341,7 @@ export default function MeetingHelperScreen() {
     treasurer: renderTreasurer,
     meetups: renderMeetups,
     hummdinger: renderHummdinger,
+    assignments: renderAssignments,
     wrapup: renderWrapup,
     thanks: renderThanks,
   };
@@ -3187,7 +3583,7 @@ export default function MeetingHelperScreen() {
   // Same route boundary as monthly-tuneup.tsx, so a bookmarked or typed
   // /meeting-helper URL cannot open a deck while somebody is standing in a
   // HIVE that doesn't have one yet.
-  if (!hasTailoredCheckIns(community)) {
+  if (!hasMeetingDeck(community)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: PAPER }} edges={['top']}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>

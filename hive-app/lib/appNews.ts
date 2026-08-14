@@ -28,6 +28,17 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    // Production HIVE's meeting was designed out loud by Nat on 8/14 and runs
+    // back-to-front against OG's on purpose: the research first, then every
+    // other question answers itself.
+    id: '2026-08-14-production-meeting-helper',
+    date: '2026-08-14',
+    title: 'Production HIVE has its own meeting night now',
+    detail: 'It runs differently to the others on purpose \u2014 we walk through the research together first, then decide how often we meet, whether we want a HIVE Help, what happens with money, who goes to look at venues, and who takes which job. Say @someone and the job lands on their to-do list with the questions already in it.',
+    href: { pathname: '/meeting-helper' },
+    action: 'Open the deck',
+  },
+  {
     // Nat read a real Production invite the morning of 8/14 and found the
     // letter explaining how Production differs from the other HIVEs before
     // anything had said what a HIVE is.
