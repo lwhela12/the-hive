@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-14-production-pre-meeting-checkin',
+    date: '2026-08-14',
+    title: 'Production HIVE has a check-in before each meeting',
+    detail: 'Three minutes on Home: how often you want to meet, what day works, how you feel about a Honey Pot, which room you would go and look at, and what your biggest question is. Answering beforehand means the meeting gets to decide instead of ask.',
+    href: { pathname: '/hive' },
+    action: 'Open Home',
+  },
+  {
     // Nat's own design, 2026-08-14: "maybe there's a pre-production board and
     // each one of these tasks is its own thread... you can click on your task
     // and it'll bring you to that thread that has the phone number and the

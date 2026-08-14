@@ -10,6 +10,7 @@ import {
   type SurveyAnswers,
   type SurveyResponse,
 } from './useSurveys';
+import { isPreMeetingCheckInSurvey } from '../checkIns';
 
 const POLL_INTERVAL_MS = 20 * 1000;
 
@@ -157,8 +158,16 @@ export function useArrivalBoard(options: { pollingEnabled?: boolean } = {}) {
           .limit(1),
       ]);
 
+      // The room lights up from whichever check-in this HIVE runs before a
+      // meeting. OG and Tech have a monthly one; Production has a pre-meeting
+      // one with a title of its own, and without this fallback its deck would
+      // have opened on Tuesday showing an empty room while every member had
+      // in fact checked in.
+      const activeSurveys = (surveysRes.data ?? []) as Survey[];
       const activeCheckIn =
-        ((surveysRes.data ?? []) as Survey[]).find(isMonthlyCheckInSurvey) ?? null;
+        activeSurveys.find(isMonthlyCheckInSurvey)
+        ?? activeSurveys.find((survey) => isPreMeetingCheckInSurvey(survey))
+        ?? null;
       const period = activeCheckIn ? getSurveyResponsePeriod(activeCheckIn) : null;
 
       const memberRows = ((membersRes.data ?? []) as unknown as { profiles: ArrivalBoardMember | ArrivalBoardMember[] | null }[])

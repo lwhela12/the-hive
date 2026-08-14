@@ -437,6 +437,169 @@ export function buildSeasonCheckIn(
   };
 }
 
+/* ------------------------------------------------------------------------- *
+ * The pre-meeting check-in — questions answered BEFORE a meeting so the
+ * meeting itself can decide.
+ *
+ * Nat, 2026-08-14, walking Production's new meeting deck: "Let's do the
+ * monthly, the pre-meeting check-in for sure. It's always good to know
+ * people's energy and how much they have on their plate before going to a
+ * meeting." And then the reason it matters more than mood: "We can put the
+ * 'how often do you want to meet' and the HIVE Help questions in the
+ * pre-production meeting survey… Should we have a Honey Pot? Do you want to
+ * have dues? How much? Do you want to be treasurer? That information can kind
+ * of precede the meeting helper, and then we can decide things."
+ *
+ * So this deck carries two jobs at once: the arrival questions (name, energy,
+ * plate) that set the room, and the standing decisions (cadence, Honey Pot,
+ * treasurer, HIVE Help, venues) that the meeting would otherwise spend its
+ * hour collecting out loud.
+ *
+ * It is an ORDINARY survey row, deliberately. Production's Home card, the
+ * answer sheet and the response history all already work for those; the
+ * `monthly-tuneup` wizard is OG HIVE's own ritual (wishes → hangs → calendar
+ * → helpers) and `hasTailoredCheckIns()` keeps Production out of it on
+ * purpose. **The title must stay clear of the words this app uses to spot the
+ * rhythm check-ins** — `isMonthlyCheckInSurvey()` in `lib/hooks/useSurveys.ts`
+ * matches "monthly check-in" in the title OR the description, and a match
+ * would send the Home card into that wizard and land Production members on
+ * "coming soon".
+ *
+ * A fourth HIVE is a fourth entry here, the same as every other deck above.
+ * ------------------------------------------------------------------------- */
+
+/** The ids this deck writes, named once so the meeting deck reads answers by
+ *  the same key the survey stores them under. */
+export const PRE_MEETING_QUESTION_IDS = {
+  nameToday: 'q_name_today',
+  attendance: 'q_attendance',
+  energyLevel: 'q_energy_level',
+  plate: 'q_plate',
+  cadence: 'q_cadence',
+  when: 'q_when',
+  honeyPot: 'q_honey_pot',
+  honeyPotAmount: 'q_honey_pot_amount',
+  treasurer: 'q_treasurer',
+  hiveHelp: 'q_hive_help',
+  venueVisit: 'q_venue_visit',
+  biggestQuestion: 'q_biggest_question',
+  walkAway: 'q_walk_away',
+} as const;
+
+export type PreMeetingQuestionId =
+  (typeof PRE_MEETING_QUESTION_IDS)[keyof typeof PRE_MEETING_QUESTION_IDS];
+
+export type PreMeetingCheckIn = {
+  title: string;
+  description: string;
+  questions: SurveyQuestion[];
+};
+
+const choice = (id: string, text: string, options: string[]): SurveyQuestion => ({
+  id,
+  text,
+  type: 'choice',
+  options,
+  required: false,
+});
+
+const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
+  // Production HIVE keeps the database slug `show`. Written for the first
+  // meeting — Tuesday 18 August 2026, 4pm — where the group decides how it
+  // wants to run.
+  show: {
+    title: 'Before our first meeting',
+    description:
+      'Tuesday at 4 is our first meeting. Answering these beforehand means we can spend the hour deciding together. Short answers are perfect.',
+    questions: [
+      q('q_name_today', 'Arrival: what do you want to be called on Tuesday?', 'short'),
+      choice('q_attendance', 'Will we see you Tuesday?', [
+        "🐝 I'll be there in person",
+        '💻 Joining remotely',
+        "😢 Missing this one, I'm afraid",
+      ]),
+      q('q_energy_level', 'Energy: what is your energy level right now?', 'scale'),
+      choice('q_plate', "How much is on your plate at the moment?", [
+        '🍽️ Plenty of room — hand me something',
+        "🥄 A bit on there, and I've got room for this",
+        "🍲 Pretty full — I'll take one small thing",
+        '🫙 Full to the brim — I want to listen this time',
+      ]),
+      choice('q_cadence', 'How often should Production HIVE meet?', [
+        'Weekly',
+        'Every two weeks',
+        'Once a month',
+        "A group chat, and we meet when there's something to meet about",
+      ]),
+      q('q_when', 'What day and time actually works for you?', 'short'),
+      // "Honey Pot" is the app's own name for a HIVE's shared money, so the
+      // question says what it is in the same breath — Production is new and
+      // half the room has never seen the screen it lives on.
+      choice('q_honey_pot', 'Should we have a Honey Pot — money we each put in to get this moving?', [
+        "💛 Yes, I'm in",
+        "🤔 Let's talk about it Tuesday",
+        "⏳ I'd rather give time than money",
+      ]),
+      q('q_honey_pot_amount', 'If we do, what feels right for you to put in?', 'short'),
+      choice('q_treasurer', 'Would you want to be treasurer — the one who keeps track of the money?', [
+        "🙋 Yes, I'd like that",
+        "🤝 I'd happily help whoever does it",
+        '🤔 Ask me again Tuesday',
+        "💛 I'm happiest leaving this one to someone else",
+      ]),
+      choice('q_hive_help', 'Do we want a HIVE Help — one small shared kindness each month?', [
+        '💛 Yes, I love that',
+        '🤔 Tell me more Tuesday',
+        "⏳ Let's start it once the show is rolling",
+      ]),
+      choice('q_venue_visit', 'Which room would you go and look at?', [
+        'Notoriety, downtown',
+        'The Space',
+        'Vegas Theatre Company',
+        'The Henderson tent',
+        'Happy to go to any of them',
+      ]),
+      // The two heavy ones, last and framed as care. A first meeting is where
+      // the quiet worries either get said or get carried around for months,
+      // and a survey box is easier to say them into than a room.
+      q('q_biggest_question', "What's your biggest question about making this show real? Ask it here and we'll answer it together on Tuesday."),
+      q('q_walk_away', 'Everyone has a line. What would make you walk away from this? Telling us now, while it costs nothing, is how we build something you stay in.'),
+    ],
+  },
+};
+
+/** Whether this HIVE has a pre-meeting deck written for it. */
+export function hasPreMeetingCheckIn(
+  community: Pick<Community, 'slug'> | null | undefined,
+): boolean {
+  return (community?.slug ?? '') in PRE_MEETING_BY_SLUG;
+}
+
+/** The deck itself — title, description and questions — ready to become a
+ *  `surveys` row, or to be read back for its ids. */
+export function getPreMeetingCheckIn(
+  community: Pick<Community, 'slug'> | null | undefined,
+): PreMeetingCheckIn | null {
+  return PRE_MEETING_BY_SLUG[community?.slug ?? ''] ?? null;
+}
+
+/**
+ * Whether a survey row is that HIVE's pre-meeting check-in, going by its
+ * title — the same way every other check-in is recognised. Pass the community
+ * when you have it; without one, any HIVE's pre-meeting title counts.
+ */
+export function isPreMeetingCheckInSurvey(
+  survey: { title?: string | null } | null | undefined,
+  community?: Pick<Community, 'slug'> | null,
+): boolean {
+  const title = (survey?.title ?? '').trim().toLowerCase();
+  if (!title) return false;
+  const decks = community
+    ? [PRE_MEETING_BY_SLUG[community.slug ?? '']].filter(Boolean) as PreMeetingCheckIn[]
+    : Object.values(PRE_MEETING_BY_SLUG);
+  return decks.some((deck) => deck.title.toLowerCase() === title);
+}
+
 /**
  * Whether a survey's card belongs on Home today.
  *

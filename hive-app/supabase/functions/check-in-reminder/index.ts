@@ -19,6 +19,12 @@ const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
 // change both.
 const QUARTERLY_CHECK_IN_PATTERN = /quarterly\s+check-?in/i;
 const END_OF_YEAR_CHECK_IN_PATTERN = /end[-\s]of[-\s]year\s+check-?in/i;
+// A HIVE that runs a check-in before each meeting rather than on the calendar
+// month. Production HIVE's is the first (2026-08-14) and its title is declared
+// in lib/checkIns.ts's PRE_MEETING_BY_SLUG — change one, change both, the same
+// rule the patterns above already carry. Nat's shape for it: the survey goes
+// out three days before the meeting, which is what REMINDER_WINDOW_DAYS is.
+const PRE_MEETING_CHECK_IN_PATTERN = /before our first meeting/i;
 const REMINDER_WINDOW_DAYS = 3;
 
 const MONTH_NAMES = [
@@ -248,7 +254,7 @@ function checkInEmailHtml(rawName: string, month: string, day: number, kind: Rem
  * the monthly ones, different words. A quarter is a look back; a year is a
  * small celebration. Both land on Home, where the check-in card lives.
  */
-type SeasonKind = 'quarter' | 'year';
+type SeasonKind = 'quarter' | 'year' | 'premeeting';
 type SeasonTouch = 'window' | 'day_of';
 
 function seasonEmailHtml(
@@ -259,6 +265,25 @@ function seasonEmailHtml(
   day: number,
 ): string {
   const name = escapeHtml(rawName);
+  if (kind === 'premeeting') {
+    const heading = touch === 'day_of' ? "It's today" : 'Before we meet';
+    const body = touch === 'day_of'
+      ? `We meet today and your answers aren't in yet — it takes about <strong>3 minutes</strong>, and it means we can spend the hour deciding together instead of asking each other questions.`
+      : `Our check-in is open on Home — about <strong>3 minutes</strong>. How often you want to meet, what day works, how you feel about a Honey Pot, and which room you'd go and look at. Answering beforehand means the meeting gets to decide. Short answers are perfect.`;
+    return `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
+        <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🎬</span></div>
+        <h1 style="color: #6b4a8f; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
+        <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">We meet ${month} ${day}</p>
+        <p style="font-size: 15px;">Hi ${name},</p>
+        <p style="font-size: 15px;">${body}</p>
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="${APP_URL}/hive" style="background: #6b4a8f; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open HIVE and check in</a>
+        </div>
+        <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Every answer stays inside your HIVE. 🍯</p>
+      </div>
+    `;
+  }
   const heading = kind === 'quarter'
     ? (touch === 'day_of' ? 'Last day of the quarter' : "The quarter's wrapping up")
     : (touch === 'day_of' ? 'Last day of the year!' : 'One more look at the year');
@@ -292,6 +317,11 @@ function seasonEmailHtml(
 }
 
 function seasonSubject(kind: SeasonKind, touch: SeasonTouch, month: string, day: number): string {
+  if (kind === 'premeeting') {
+    return touch === 'day_of'
+      ? `🎬 We meet today — 3 minutes before we do`
+      : `🎬 Before we meet on ${month} ${day} — your check-in is open`;
+  }
   if (kind === 'quarter') {
     return touch === 'day_of'
       ? `🧭 Last day of the quarter — quick check-in if you haven't`
@@ -829,7 +859,9 @@ serve(async (req) => {
           ? ('year' as SeasonKind)
           : QUARTERLY_CHECK_IN_PATTERN.test(s.title || '')
             ? ('quarter' as SeasonKind)
-            : null,
+            : PRE_MEETING_CHECK_IN_PATTERN.test(s.title || '')
+              ? ('premeeting' as SeasonKind)
+              : null,
       }))
       .filter((entry): entry is { survey: Survey; kind: SeasonKind } => entry.kind !== null);
 
