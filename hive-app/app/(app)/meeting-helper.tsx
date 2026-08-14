@@ -174,6 +174,17 @@ type DeckDefinition = {
      */
     voicesUnderCards?: { answerKey: string; heading: string; empty: string };
   };
+  /**
+   * Answers from the pre-meeting check-in, printed on the slide that decides
+   * the thing they answer.
+   *
+   * Nat, 2026-08-14, on Production's night: *"we can put the how often do you
+   * want to meet and the HIVE Help questions in the pre-production meeting
+   * survey... that information can kind of precede the meeting helper, and
+   * then we can decide things."* So the room walks in already knowing where
+   * everybody stands, and spends the meeting deciding rather than surveying.
+   */
+  checkInSays?: { slide: DeckSlideKey; heading: string; keys: { key: string; label: string }[] }[];
   wrapupReminders: string[];
 };
 
@@ -402,6 +413,27 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       },
       hasHelpFocusHeader: false,
     },
+    checkInSays: [
+      {
+        slide: 'meetups',
+        heading: 'What everyone said before tonight',
+        keys: [
+          { key: 'q_cadence', label: 'How often we should meet' },
+          { key: 'q_when', label: 'What day and time works' },
+          { key: 'q_hive_help', label: 'HIVE Help' },
+          { key: 'q_venue_visit', label: 'Which room they would go and see' },
+        ],
+      },
+      {
+        slide: 'treasurer',
+        heading: 'What everyone said before tonight',
+        keys: [
+          { key: 'q_honey_pot', label: 'Should we have a Honey Pot' },
+          { key: 'q_honey_pot_amount', label: 'What feels right to put in' },
+          { key: 'q_treasurer', label: 'Who would be treasurer' },
+        ],
+      },
+    ],
     wrapupReminders: [
       'The research lives at show-proposal.vercel.app',
       'Everything we decided tonight is on your to-do list',
@@ -1767,6 +1799,84 @@ export default function MeetingHelperScreen() {
     </View>
   );
 
+  /**
+   * "What everyone said before tonight" — the pre-meeting check-in, printed on
+   * the slide that decides the thing it asked about.
+   *
+   * Choice answers are tallied, because four people picking "monthly" is a
+   * decision that has already made itself and the room only has to notice.
+   * Written answers are quoted with a name on them, because a day-and-time
+   * answer is only useful if you know whose it is.
+   */
+  const renderCheckInSays = (slide: DeckSlideKey) => {
+    const blocks = (deck.checkInSays ?? []).filter((entry) => entry.slide === slide);
+    if (blocks.length === 0) return null;
+
+    const answersFor = (key: string) =>
+      members
+        .map((member) => ({
+          name: getFirstName(member.name),
+          text: getTextAnswer(responsesByUser.get(member.id)?.answers ?? {}, key).trim(),
+        }))
+        .filter((row) => !!row.text);
+
+    return (
+      <>
+        {blocks.map((entry) => {
+          const rows = entry.keys
+            .map((q) => ({ ...q, answers: answersFor(q.key) }))
+            .filter((q) => q.answers.length > 0);
+          if (rows.length === 0) return null;
+          return (
+            <View
+              key={entry.slide + entry.heading}
+              style={{
+                marginTop: sz(18, 12),
+                backgroundColor: CARD,
+                borderWidth: 1,
+                borderColor: GOLD_SOFT,
+                borderRadius: sz(18, 14),
+                paddingHorizontal: sz(22, 14),
+                paddingVertical: sz(16, 11),
+                gap: sz(12, 8),
+              }}
+            >
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(15, 11), letterSpacing: 2, textTransform: 'uppercase', color: GOLD_DEEP }}>
+                {entry.heading}
+              </Text>
+              {rows.map((q) => {
+                // Tally identical answers; anything unique keeps its name.
+                const counts = new Map<string, string[]>();
+                q.answers.forEach((row) => {
+                  counts.set(row.text, [...(counts.get(row.text) ?? []), row.name]);
+                });
+                const tallied = Array.from(counts.entries()).sort((a, b) => b[1].length - a[1].length);
+                return (
+                  <View key={q.key} style={{ gap: sz(4, 3) }}>
+                    <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(19, 13), color: MUTED }}>
+                      {q.label}
+                    </Text>
+                    {tallied.map(([answer, who]) => (
+                      <Text
+                        key={answer}
+                        style={{ fontFamily: 'Lato_400Regular', fontSize: sz(22, 14), lineHeight: sz(32, 20), color: CHARCOAL }}
+                      >
+                        {answer}
+                        <Text style={{ color: MUTED }}>
+                          {'  '}{who.length > 1 ? `${who.length} — ${who.join(', ')}` : who[0]}
+                        </Text>
+                      </Text>
+                    ))}
+                  </View>
+                );
+              })}
+            </View>
+          );
+        })}
+      </>
+    );
+  };
+
   const renderTreasurer = () => (
     <View style={{ flex: 1 }}>
       <Kicker>{deck.treasurer.kicker}</Kicker>
@@ -1815,7 +1925,10 @@ export default function MeetingHelperScreen() {
            no Honey Pot yet. Nat: "leave the treasurer slide in there, because
            we'll want to talk about if we want to have dues, what they are for,
            who's in charge, & having that screen will do that." */
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: sz(40, 20) }}>
+        <BounceScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: sz(60, 40) }}
+        >
           <Text
             style={{
               fontFamily: 'Lato_400Regular',
@@ -1842,7 +1955,7 @@ export default function MeetingHelperScreen() {
           >
             {deck.treasurer.questions.map((question, index) => (
               <View key={question} style={{ flexDirection: 'row', alignItems: 'baseline', gap: sz(16, 10) }}>
-                <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(26, 15), color: GOLD }}>
+                <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(20, 12), color: GOLD, transform: [{ translateY: -2 }] }}>
                   {index + 1}
                 </Text>
                 <Text style={{ fontFamily: 'LibreBaskerville_700Bold', fontSize: sz(30, 17), lineHeight: sz(42, 25), color: CHARCOAL }}>
@@ -1863,6 +1976,7 @@ export default function MeetingHelperScreen() {
               </Text>
               <EditPill noteKey="treasurer" />
             </View>
+            {renderCheckInSays('treasurer')}
             {notes.treasurer?.trim() ? (
               <View
                 style={{
@@ -1879,7 +1993,7 @@ export default function MeetingHelperScreen() {
               </View>
             ) : null}
           </View>
-        </View>
+        </BounceScrollView>
       )}
     </View>
   );
@@ -2602,6 +2716,11 @@ export default function MeetingHelperScreen() {
         {/* Everything lives in the cards above now — recaps, polls, ideas,
             and plans all expand from Meeting/Hang/Help. */}
 
+        {/* What the room already said about cadence, HIVE Help and which room
+            they would go and look at. Answered before the meeting so tonight
+            can decide instead of ask. */}
+        {renderCheckInSays('meetups')}
+
         {/* Breathing room so the last row scrolls clear of the footer. The
             page's own bottom padding already clears most of it — this was
             90/64 on top of that, which is exactly the "scroll the tiniest
@@ -3257,7 +3376,7 @@ export default function MeetingHelperScreen() {
         Each one turns a blank on the research site into a real number. Tap a job,
         say who is taking it, and it lands on their list with the questions already in it.
       </Text>
-      <BounceScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: sz(40, 24), gap: sz(12, 8) }}>
+      <BounceScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: sz(220, 160), gap: sz(12, 8) }}>
         {PRODUCTION_JOBS.map((job) => {
           const open = openJobKey === job.key;
           const takenBy = jobsAssigned[job.key];
