@@ -3577,12 +3577,16 @@ export default function MeetingHelperScreen() {
   // still on its way in.
   if (!profile) return null;
 
-  // Only HIVEs with a designed deck in DECKS get past this door — OG and, as
-  // of 2026-08-11, Tech. Production waits here on the coming-soon screen
-  // until Nat designs its rhythm, and then joins as a third entry in DECKS.
-  // Same route boundary as monthly-tuneup.tsx, so a bookmarked or typed
+  // Only HIVEs with a designed deck in DECKS get past this door — OG, Tech
+  // since 2026-08-11, and Production since 2026-08-14. A bookmarked or typed
   // /meeting-helper URL cannot open a deck while somebody is standing in a
   // HIVE that doesn't have one yet.
+  //
+  // **This gate has a sibling one floor up**, on the Meeting Helper tile in
+  // `meetings.tsx`. On 2026-08-14 Production's deck shipped, this door opened,
+  // and the button in front of it still read "coming soon" — because only one
+  // of the two had been changed. If you ever add a fourth HIVE's deck, change
+  // both, and check the tile before calling it done.
   if (!hasMeetingDeck(community)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: PAPER }} edges={['top']}>

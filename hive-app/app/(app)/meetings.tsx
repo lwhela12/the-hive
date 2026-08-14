@@ -20,7 +20,7 @@ import { EventDatePicker } from '../../components/ui/DatePicker';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
 import { confirmAction, showAlert } from '../../lib/showAlert';
-import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns, getSeasonCheckInKind, isSurveyOnHomeToday, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
+import { CHECK_INS_COMING_SOON_MESSAGE, hasTailoredCheckIns, hasMeetingDeck, getSeasonCheckInKind, isSurveyOnHomeToday, SEASON_CHECK_IN_EMOJI } from '../../lib/checkIns';
 import { useSurveys } from '../../lib/hooks/useSurveys';
 import { SurveyModal } from '../../components/surveys/SurveyModal';
 import { getStoredItem, removeStoredItem, setStoredItem } from '../../lib/webStorage';
@@ -187,6 +187,20 @@ export default function MeetingsScreen() {
   // (Nat, 2026-08-11: "I dont want these blindly brought over from OG hive").
   // Same rule, same shared string, applied to every door on this screen.
   const tailoredCheckIns = hasTailoredCheckIns(community);
+  /**
+   * Whether the Meeting Helper tile opens.
+   *
+   * This used to be `tailoredCheckIns`, which is why Production HIVE's deck
+   * shipped on 2026-08-14 and the button in front of it still read "coming
+   * soon" — the screen's own gate had been opened and this one, a floor above
+   * it, had not. Two guards on one feature, and fixing the inner one changed
+   * nothing a member could see.
+   *
+   * They are genuinely different questions: the deck is how a meeting is RUN,
+   * the check-ins are what members fill in BEFORE one. Production has the
+   * first and not yet the second.
+   */
+  const meetingDeck = hasMeetingDeck(community);
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -1199,13 +1213,13 @@ export default function MeetingsScreen() {
                 night (News from Nat, Treasurer, HummDinger), not a template. */}
             <Pressable
               onPress={() => {
-                if (!tailoredCheckIns) return;
+                if (!meetingDeck) return;
                 router.push({ pathname: '/meeting-helper', params: { from: 'meetings' } });
               }}
               onLongPress={() => {
-                if (tailoredCheckIns && isAdmin) setShowDeckActions(true);
+                if (meetingDeck && isAdmin) setShowDeckActions(true);
               }}
-              disabled={!tailoredCheckIns}
+              disabled={!meetingDeck}
               style={({ pressed }) => ({
                 flex: useCompactActions ? undefined : 1,
                 width: useCompactActions ? '48%' : undefined,
@@ -1217,11 +1231,11 @@ export default function MeetingsScreen() {
               })}
             >
               <Text style={{ fontSize: 22, marginBottom: 4 }}>🎞️</Text>
-              <Text style={{ fontFamily: 'Lato_700Bold', color: tailoredCheckIns ? '#fff' : 'rgba(255,255,255,0.35)', fontSize: 13 }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', color: meetingDeck ? '#fff' : 'rgba(255,255,255,0.35)', fontSize: 13 }}>
                 Meeting Helper
               </Text>
               <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 2 }}>
-                {tailoredCheckIns ? 'follow the deck live' : 'coming soon'}
+                {meetingDeck ? 'follow the deck live' : 'coming soon'}
               </Text>
             </Pressable>
 
