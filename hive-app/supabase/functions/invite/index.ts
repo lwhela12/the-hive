@@ -136,6 +136,19 @@ serve(async (req) => {
   const headingColour = accent;
 
   /**
+   * The HIVE's display name is read HERE, above everything that says it out
+   * loud, because Production's paragraph below needs it.
+   *
+   * It used to be declared further down, next to the invite link. That was
+   * survivable while every HIVE shared one paragraph, and it broke the moment
+   * Production got its own: a `const` cannot be read above the line that
+   * creates it, so every Production invite threw before it reached the
+   * database. Tech's and OG's kept working, because their paragraph never
+   * mentions the name. Nat found it the same day, sending to a second address.
+   */
+  const communityName = normalizeHiveBrandName(community?.name);
+
+  /**
    * Production HIVE isn't a community of individual goals like OG or Tech —
    * it's this HIVE's own singular project (Lucas, 2026-08-13, to Nat: "very
    * diff than the other HIVEs, its more of a 'project management' tool").
@@ -224,7 +237,6 @@ serve(async (req) => {
   }
 
   const inviteUrl = `${getInviteUrlBase()}?token=${encodeURIComponent(token_invite)}`;
-  const communityName = normalizeHiveBrandName(community?.name);
 
   // "Nat invited you" lands better than "you have been invited" — an invitation
   // from a person, not from software.
