@@ -431,6 +431,19 @@ const TECH_EXPANSION_START = new Date(2026, 7, 13); // August 13, 2026
 // meaningful day instead, this is the only line to move.
 const PRODUCTION_EPOCH = new Date(2026, 7, 13);
 
+// Production's deck grew by 56 on 2026-08-15 — a whole block about RUNNING a
+// company rather than performing in one. Nat, having read the original 365:
+// *"those are good questions about being a performer ... but I'm thinking more
+// about how to run the cast and crew, to help inform Charlee."*
+//
+// The new block sits at the end of the file (saved answers store
+// question_index, so nothing is ever reordered) and is reached FIRST from
+// 16 August, the same move OG made on 2 July and Tech on 13 August. Waiting a
+// year for them would be absurd: Production is designing the company this
+// month, and these are the questions that design it.
+const PRODUCTION_LEGACY_COUNT = 365;
+const PRODUCTION_EXPANSION_START = new Date(2026, 7, 16); // August 16, 2026
+
 /** Days-since-epoch walk around a deck, safe on dates before the epoch. */
 function walkFromEpoch(questionDate: Date, epoch: Date, length: number) {
   const days = Math.floor((questionDate.getTime() - epoch.getTime()) / 86_400_000);
@@ -449,7 +462,15 @@ function getQuestionIndexForDate(questionDate: Date, deck: DailyQuestion[] = DAI
   }
 
   if (deck === PRODUCTION_DAILY_QUESTIONS) {
-    return walkFromEpoch(questionDate, PRODUCTION_EPOCH, deck.length);
+    const expansionStart = new Date(PRODUCTION_EXPANSION_START);
+    expansionStart.setHours(0, 0, 0, 0);
+    if (questionDate >= expansionStart) {
+      const daysSinceExpansion = Math.floor((questionDate.getTime() - expansionStart.getTime()) / 86_400_000);
+      return (PRODUCTION_LEGACY_COUNT + daysSinceExpansion) % deck.length;
+    }
+    // The three days Production actually walked (13–15 August) keep the exact
+    // questions its members were asked.
+    return walkFromEpoch(questionDate, PRODUCTION_EPOCH, PRODUCTION_LEGACY_COUNT);
   }
 
   const expansionStart = new Date(DAILY_QUESTION_EXPANSION_START);

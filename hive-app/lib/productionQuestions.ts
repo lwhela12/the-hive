@@ -392,4 +392,100 @@ export const PRODUCTION_DAILY_QUESTIONS: DailyQuestion[] = [
   { text: 'What is a dish from a tour stop you still crave?', category: 'tour cravings', emoji: '🍜', themes: ['food', 'place'] },
   { text: 'Who fed you when you were a broke young performer?', category: 'who fed you', emoji: '🍞', themes: ['food', 'generosity'] },
   { text: 'What would you serve at intermission if you ran the concession stand?', category: 'concessions', emoji: '🍿', themes: ['food', 'play'] },
+
+  // ── RUNNING THE COMPANY ─────────────────────────────────────────────────
+  //
+  // Nat, 2026-08-15, having read the whole deck: *"I think those are good
+  // questions about being a performer, which might be relevant, but I'm
+  // thinking more about ... how to run the cast and crew I think? To help
+  // inform Charlee. What should the relationship between producer and cast
+  // look and feel like? For rehearsals, do you like to get notes after the run
+  // so it can marinate, or before the next run so it's fresh? How do you like
+  // feedback — direct? Compliment sandwich? How do you want to handle
+  // discipline: case by case, or a strict 'here's what happens when you
+  // violate our policies'? What things are important in a contract? How often
+  // should we do performance reviews, and who should do them?"*
+  //
+  // Production HIVE is not a group of performers comparing notes on nerves —
+  // it is five people about to become somebody's employer. Every question here
+  // is asked in the first person, about what YOU want done to you, because
+  // that is how you find out what a company should be before it exists: you
+  // ask the people who have been on the receiving end of a badly run one.
+  //
+  // Charlee reads these as the person who will be setting the rules. Everyone
+  // else answers them as the people who will live under them.
+  //
+  // These come FIRST in the walk from 16 August 2026 (see
+  // PRODUCTION_EXPANSION_START in dailyQuestions.ts) rather than in a year's
+  // time, because the company is being designed now.
+
+  // The producer, the owner, and the people they hire
+  { text: 'What should the relationship between a producer and a cast actually feel like?', category: 'producer and cast', emoji: '\u{1F3AC}', themes: ['work', 'connection', 'values'] },
+  { text: 'Should the person who owns the show be close to the cast, or a step back from them?', category: 'owner and cast', emoji: '\u{1F3DB}\u{FE0F}', themes: ['work', 'boundaries', 'values'] },
+  { text: 'Name a director or producer who ran a room well. What did they actually do?', category: 'ran it well', emoji: '\u{1F31F}', themes: ['memory', 'work', 'learning'] },
+  { text: 'What is something a producer did to you once that you would never do to anyone?', category: 'never do that', emoji: '\u{1F6AB}', themes: ['memory', 'values', 'boundaries'] },
+  { text: 'Do you want the person in charge to be your friend, or just fair?', category: 'friend or fair', emoji: '\u{2696}\u{FE0F}', themes: ['work', 'boundaries', 'connection'] },
+  { text: 'Who should a performer go to when something is wrong — and does that person need to not be the boss?', category: 'who you go to', emoji: '\u{1F6AA}', themes: ['work', 'conflict', 'community'] },
+  { text: 'What does a producer owe a cast that nobody ever writes down?', category: 'the unwritten owed', emoji: '\u{1F91D}', themes: ['values', 'work', 'generosity'] },
+  { text: 'How much should a cast know about the money?', category: 'money transparency', emoji: '\u{1F4B0}', themes: ['work', 'values', 'boundaries'] },
+
+  // Notes and feedback
+  { text: 'When do you want notes — right after the run so they marinate, or before the next one so they are fresh?', category: 'when notes land', emoji: '\u{1F4DD}', themes: ['craft', 'learning', 'work'] },
+  { text: 'How do you like feedback: straight and direct, or wrapped in something softer?', category: 'how you take it', emoji: '\u{1F5E3}\u{FE0F}', themes: ['learning', 'identity', 'connection'] },
+  { text: 'Notes in front of the company, or notes in private?', category: 'public or private notes', emoji: '\u{1F92B}', themes: ['boundaries', 'learning', 'work'] },
+  { text: 'Written notes you can reread, or spoken ones you can argue with?', category: 'written or spoken', emoji: '\u{270D}\u{FE0F}', themes: ['learning', 'craft', 'work'] },
+  { text: 'What is the most useful note you have ever been given?', category: 'the best note', emoji: '\u{1F3AF}', themes: ['memory', 'craft', 'growth'] },
+  { text: 'What is the difference between a hard note and an unkind one?', category: 'hard or unkind', emoji: '\u{1FA9A}', themes: ['values', 'conflict', 'learning'] },
+  { text: 'Do you want to be told when you are doing well, or do you assume no news is good news?', category: 'praise', emoji: '\u{1F44F}', themes: ['identity', 'connection', 'work'] },
+  { text: 'How long after a bad show do you want to be left alone?', category: 'after a bad one', emoji: '\u{1F30A}', themes: ['rest', 'comfort', 'boundaries'] },
+  { text: 'Should notes ever be given in a group chat?', category: 'notes by text', emoji: '\u{1F4F1}', themes: ['work', 'boundaries', 'connection'] },
+
+  // The rehearsal room
+  { text: 'What makes a rehearsal room feel safe enough to be bad in?', category: 'safe to be bad', emoji: '\u{1F6E1}\u{FE0F}', themes: ['courage', 'craft', 'community'] },
+  { text: 'Should rehearsals start on time to the minute, or start when everyone has arrived?', category: 'on the minute', emoji: '\u{23F1}\u{FE0F}', themes: ['work', 'boundaries', 'values'] },
+  { text: 'How long can you work before you stop getting better?', category: 'the useful hours', emoji: '\u{1F50B}', themes: ['rest', 'craft', 'work'] },
+  { text: 'Who should be allowed to watch a rehearsal?', category: 'who watches', emoji: '\u{1F441}\u{FE0F}', themes: ['boundaries', 'craft', 'community'] },
+  { text: 'What is a rule you would put on the wall of every rehearsal room?', category: 'the wall rule', emoji: '\u{1F4CC}', themes: ['values', 'community', 'craft'] },
+  { text: 'Should phones be out of the room, or is that treating adults like kids?', category: 'phones in the room', emoji: '\u{1F4F5}', themes: ['boundaries', 'work', 'humour'] },
+  { text: 'What does a good stage manager do that nobody notices?', category: 'the invisible job', emoji: '\u{1F4CB}', themes: ['craft', 'generosity', 'work'] },
+
+  // Agreements, discipline and what happens when it goes wrong
+  { text: 'Discipline: case by case, or the same written consequence every time?', category: 'how rules work', emoji: '\u{2696}\u{FE0F}', themes: ['values', 'conflict', 'work'] },
+  { text: 'Should a company keep a record of who broke what, or start every week clean?', category: 'keeping track', emoji: '\u{1F5C3}\u{FE0F}', themes: ['work', 'conflict', 'values'] },
+  { text: 'What is a fireable offence in a show?', category: 'the hard line', emoji: '\u{1F6D1}', themes: ['values', 'boundaries', 'conflict'] },
+  { text: 'Someone is late again. What actually happens the third time?', category: 'the third time', emoji: '\u{1F553}', themes: ['conflict', 'work', 'boundaries'] },
+  { text: 'Someone is brilliant on stage and awful to work with. What do you do?', category: 'brilliant and awful', emoji: '\u{1F3AD}', themes: ['conflict', 'values', 'work'] },
+  { text: 'Should a cast get a say in who gets hired after them?', category: 'who gets a say', emoji: '\u{1F5F3}\u{FE0F}', themes: ['community', 'work', 'values'] },
+  { text: 'What is the fairest way you have seen a conflict between two performers handled?', category: 'handled well', emoji: '\u{1F54A}\u{FE0F}', themes: ['conflict', 'memory', 'community'] },
+  { text: 'How do you want to be told that something is not working out?', category: 'being let go', emoji: '\u{1F4EA}', themes: ['boundaries', 'values', 'courage'] },
+
+  // Contracts and being paid
+  { text: 'What is the one thing a contract must say that most of them leave out?', category: 'the missing clause', emoji: '\u{1F4C4}', themes: ['work', 'boundaries', 'values'] },
+  { text: 'Have you ever signed something you regretted? What was in it?', category: 'the bad contract', emoji: '\u{270F}\u{FE0F}', themes: ['memory', 'work', 'learning'] },
+  { text: 'Paid per show, paid per week, or paid a share of what the show makes?', category: 'how you want paying', emoji: '\u{1F4B5}', themes: ['work', 'values', 'ambition'] },
+  { text: 'How much notice should a company give before it changes your schedule?', category: 'notice', emoji: '\u{1F4C5}', themes: ['boundaries', 'work', 'rest'] },
+  { text: 'What should happen to your pay if you are injured doing the show?', category: 'injured', emoji: '\u{1FA79}', themes: ['work', 'values', 'comfort'] },
+  { text: 'Who owns an act you made for a show — you, or the show?', category: 'who owns the act', emoji: '\u{1F3AA}', themes: ['craft', 'work', 'identity'] },
+  { text: 'Should everyone in a cast be paid the same?', category: 'same for everyone', emoji: '\u{2696}\u{FE0F}', themes: ['values', 'work', 'community'] },
+  { text: 'What would make you take less money to do a show?', category: 'worth less money', emoji: '\u{1F49B}', themes: ['values', 'connection', 'craft'] },
+
+  // Reviews and getting better
+  { text: 'How often should a performer get a proper sit-down about how they are doing?', category: 'how often reviews', emoji: '\u{1F5D3}\u{FE0F}', themes: ['growth', 'work', 'learning'] },
+  { text: 'Who should give you that review — the producer, the director, or someone who does your job?', category: 'who reviews you', emoji: '\u{1F464}', themes: ['work', 'learning', 'values'] },
+  { text: 'Should a review be about the work only, or about how you are to be around too?', category: 'what gets reviewed', emoji: '\u{1F50D}', themes: ['work', 'values', 'connection'] },
+  { text: 'Would you want to review the people running the show, honestly?', category: 'reviewing upward', emoji: '\u{1F503}', themes: ['courage', 'work', 'community'] },
+  { text: 'What is a goal a company could set with you that you would actually care about?', category: 'a goal worth it', emoji: '\u{1F3AF}', themes: ['ambition', 'growth', 'work'] },
+  { text: 'Who taught you the most, and were they even trying to?', category: 'who taught you', emoji: '\u{1F393}', themes: ['memory', 'learning', 'generosity'] },
+  { text: 'What would you want a company to pay for you to go and learn?', category: 'paid to learn', emoji: '\u{1F4DA}', themes: ['growth', 'craft', 'ambition'] },
+
+  // Building it, and keeping people
+  { text: 'What makes you stay with a company longer than the money says you should?', category: 'why you stay', emoji: '\u{1F3E0}', themes: ['values', 'connection', 'work'] },
+  { text: 'What made you leave one?', category: 'why you left', emoji: '\u{1F6AA}', themes: ['memory', 'boundaries', 'values'] },
+  { text: 'Would you rather join a show that is already good, or help build one that is not yet?', category: 'built or building', emoji: '\u{1F528}', themes: ['ambition', 'courage', 'craft'] },
+  { text: 'What is the first thing a new person should be told on their first day?', category: 'day one', emoji: '\u{1F44B}', themes: ['community', 'generosity', 'work'] },
+  { text: 'How do you audition someone for how they will be in a room, not just on stage?', category: 'casting for character', emoji: '\u{1F50E}', themes: ['craft', 'community', 'values'] },
+  { text: 'Should a company hire the best act, or the person the cast will be glad to see?', category: 'best or gladdest', emoji: '\u{1F31E}', themes: ['values', 'community', 'craft'] },
+  { text: 'What tradition would you start in a brand new company?', category: 'a new tradition', emoji: '\u{1F389}', themes: ['ritual', 'community', 'play'] },
+  { text: 'What is the sign, early on, that a company is going to be a bad one to work for?', category: 'the early sign', emoji: '\u{1F6A9}', themes: ['learning', 'values', 'work'] },
+  { text: 'What would make you proud to tell people where you work?', category: 'proud to say', emoji: '\u{1F4E3}', themes: ['identity', 'values', 'ambition'] },
 ];
