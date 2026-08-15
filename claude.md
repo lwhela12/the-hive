@@ -211,8 +211,11 @@ zero importers) was deleted too.
 - **TanStack Query** for server state (`lib/queryClient.ts`, `lib/hooks/use*Query.ts`).
 - **Claude API** for Clive and for meeting/newsletter generation, called only
   from edge functions.
-- **AssemblyAI** for meeting transcription with speaker labels.
-- **Google Calendar / Meet** for scheduling meetings.
+- **Daily.co** for the video call, which happens inside the Meeting Helper.
+- **AssemblyAI** for importing recorded audio after the fact. Live meeting
+  transcription comes from Daily instead (see below).
+- **Google Calendar** for scheduling. **Not Google Meet** — since 2026-08-15 a
+  new meeting gets no Meet link, and the invite points at the deck.
 - **Resend** for email.
 - **Hosting**: Vercel for web (`app.the-hive.app`), Expo EAS for iOS builds.
 
@@ -245,7 +248,7 @@ the-HIVE/
     ├── types/index.ts       TypeScript types mirroring the database
     └── supabase/
         ├── migrations/      147 files, numbered 001–146
-        └── functions/       22 edge functions
+        └── functions/       24 edge functions
 ```
 
 ### The screens
@@ -486,6 +489,43 @@ eas build --platform ios   # iOS build via EAS
 
 ---
 
+## The meeting happens in the app (2026-08-15)
+
+Nat: *"it'd be fucking dope if all the hive stuff just lived in the hive. That's
+one stop shop."* So it does. Three pieces, all in `meeting-helper.tsx`:
+
+**The deck is shared.** One row per HIVE in `deck_sessions` (migration 182) says
+who is driving and which slide the room is on. `lib/hooks/useDeckSession.ts` is
+both sides of it: the presenter writes on every move, everyone else reads over
+Realtime. It carries the slide **key**, never its number — `deck.slides` is a
+static list per HIVE, so a key still means the right slide to a follower on a
+different-length deck or an older bundle. Following is a soft leash: navigate
+and you go where you wanted, with a pill offering you back.
+
+**The video is Daily.** `components/meetings/DeckVideo.web.tsx` (web only; the
+native file is a signpost, because WebRTC on iOS needs a fresh native build and
+every invite points at the browser). The `daily-room` edge function is the ONLY
+place `DAILY_API_KEY` is read; it checks membership as the caller, opens
+`hive-<slug>` and returns a short-lived token carrying that person's name.
+Rooms are prefixed because the Daily account is shared with Jasmine's Jammin
+Sprouts. Daily's theme takes **plain hex only** — the deck's non-OG palette is
+`rgb()`/`rgba()`, which is what "unsupported theme configuration" means.
+
+**Transcripts are per HIVE.** `communities.transcripts_enabled` (migration 183),
+thrown from a switch on the video panel by an admin, on for Tech and off for OG
+and Production. The reason is not preference: **a transcript is labelled by
+microphone, not by voice.** Everyone on their own device gets their own name on
+every line; a room sharing one laptop is one microphone and therefore one name
+for the whole table. That is why Google Meet always said "Lucas Whelan" for
+Nat's dining room, and why no service can fix it. `save-transcript` files the
+lines on that day's `meetings` row — the same row `seal-meeting` looks for, and
+it prefers a row that already has a `transcript_raw`, so the notes and the words
+land together whichever happens first.
+
+**There is one door.** Google Meet is gone: no Join tile, no per-event Join,
+and `schedule-meeting` no longer asks Google for a conference link. Do not add
+a second way in.
+
 ## Gotchas — each of these has cost a real session
 
 - **`Alert.alert` does nothing on web.** react-native-web's implementation is,
@@ -495,6 +535,20 @@ eas build --platform ios   # iOS build via EAS
   fails, the code politely explains why, and the explanation is thrown away.
   Use `lib/showAlert.ts` for a statement and `ConfirmDialog` for a question.
   (`board.tsx` still calls raw `Alert.alert` in 23 of its 26 error paths.)
+
+- **A button inside a `pointerEvents="none"` strip draws perfectly and cannot
+  be pressed.** The deck's footer was decoration — tagline and slide counter —
+  and deaf to touch on purpose, so it never stole a tap from the slide. The
+  first "Present to the room" button went in there and Nat could not click it
+  anywhere. `box-none` is the fix: the container stays untouchable, its children
+  decide for themselves.
+
+- **A button that only appears once its own output exists is invisible when you
+  need it.** The Wrap-Up "Seal tonight's notes" button lived inside the
+  "Tonight in the app" card, which only draws when something already happened
+  that day — so on a quiet day the button that MAKES the meeting record was
+  hidden because there was no meeting record. Check what a control is nested
+  inside, not just whether it renders.
 
 - **The `attachments` bucket is private.** It was created public, and a public
   bucket opens the **listing**, not just the files — an audit with no
