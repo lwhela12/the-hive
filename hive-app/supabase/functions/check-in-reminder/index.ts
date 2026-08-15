@@ -2,35 +2,25 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifySupabaseJwt, isAuthError, isOwner } from '../_shared/auth.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import {
+  MONTHLY_CHECK_IN_PATTERN,
+  QUARTERLY_CHECK_IN_PATTERN,
+  END_OF_YEAR_CHECK_IN_PATTERN,
+  PRE_MEETING_CHECK_IN_PATTERN,
+  END_OF_MONTH_CHECK_IN_PATTERN,
+} from '../_shared/checkInPatterns.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'H.I.V.E. <hive@yourdomain.com>';
 const APP_URL = Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app';
 
-const MONTHLY_CHECK_IN_PATTERN = /monthly\s+check-?in/i;
-// The two slower check-ins (2026-08-12). Each occurrence is its own survey
-// row that an admin launches from the Admin screen — "Quarterly Check-in ·
-// Q3 2026", "End-of-Year Check-in · 2026" — with due_date set to the
-// quarter/year's last day. This cron nudges three days before that day and
-// gives a last call on the day itself, WHICH MEANS: a HIVE that holds no
-// such active survey hears nothing at all. That is the property that made
-// this cron safe to leave running (verified 2026-08-11) and it must stay.
-// lib/checkIns.ts keeps the app-side copies of these patterns — change one,
-// change both.
-const QUARTERLY_CHECK_IN_PATTERN = /quarterly\s+check-?in/i;
-const END_OF_YEAR_CHECK_IN_PATTERN = /end[-\s]of[-\s]year\s+check-?in/i;
-// A HIVE that runs a check-in before each meeting rather than on the calendar
-// month. Production HIVE's is the first (2026-08-14) and its title is declared
-// in lib/checkIns.ts's PRE_MEETING_BY_SLUG — change one, change both, the same
-// rule the patterns above already carry. Nat's shape for it: the survey goes
-// out three days before the meeting, which is what REMINDER_WINDOW_DAYS is.
-const PRE_MEETING_CHECK_IN_PATTERN = /before (our first meeting|we meet)/i;
-// Production's end-of-month check-in. Declared in lib/checkIns.ts's
-// END_OF_MONTH_BY_SLUG — change one, change both.
-// Renamed to "Pro HIVE POP" on 2026-08-15 (Nat: "that could be Pro HIVE POP,
-// cos that's what it is"). The old title stays in the pattern so a survey row
-// created before the rename is still recognised.
-const SHOW_END_OF_MONTH_PATTERN = /(where the show got to this month|pro hive pop)/i;
+// How a check-in is recognised now lives in ONE file, read by this function and
+// by the app (see _shared/checkInPatterns.ts). It used to be written out here
+// and again in lib/checkIns.ts with "change one, change both" on both copies.
+//
+// A HIVE that holds no matching active survey hears nothing at all from this
+// cron. That is the property that made it safe to leave running (verified
+// 2026-08-11) and it must stay.
 const REMINDER_WINDOW_DAYS = 3;
 
 const MONTH_NAMES = [
@@ -542,7 +532,7 @@ serve(async (req) => {
       const seasonKind = requestedTestKind as SeasonKind;
       const pattern = seasonKind === 'premeeting'
         ? PRE_MEETING_CHECK_IN_PATTERN
-        : SHOW_END_OF_MONTH_PATTERN;
+        : END_OF_MONTH_CHECK_IN_PATTERN;
       const { data: candidates } = await supabaseAdmin
         .from('surveys')
         .select('id, title, due_date, community_id')
@@ -1014,7 +1004,7 @@ serve(async (req) => {
             ? ('quarter' as SeasonKind)
             : PRE_MEETING_CHECK_IN_PATTERN.test(s.title || '')
               ? ('premeeting' as SeasonKind)
-              : SHOW_END_OF_MONTH_PATTERN.test(s.title || '')
+              : END_OF_MONTH_CHECK_IN_PATTERN.test(s.title || '')
                 ? ('endofmonth' as SeasonKind)
                 : null,
       }))

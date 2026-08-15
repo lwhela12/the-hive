@@ -170,11 +170,23 @@ export type SeasonKind = 'quarter' | 'year';
 /** Days before the quarter/year end that the check-in opens and the cron nudges. */
 export const SEASON_CHECK_IN_LEAD_DAYS = 3;
 
-/** How the two season check-ins are recognised, wherever they travel.
- *  `supabase/functions/check-in-reminder` keeps its own copy of these (Deno
- *  can't import app code) — change one, change both. */
-export const QUARTERLY_CHECK_IN_PATTERN = /quarterly\s+check-?in/i;
-export const END_OF_YEAR_CHECK_IN_PATTERN = /end[-\s]of[-\s]year\s+check-?in/i;
+/**
+ * How the two season check-ins are recognised, wherever they travel.
+ *
+ * This used to be a second copy of the regexes in the email function, with
+ * "change one, change both" written on both of them. There is one copy now, in
+ * `supabase/functions/_shared/checkInPatterns.ts` — a folder every edge
+ * function deploy uploads, and one the app reaches perfectly well from here.
+ * Re-exported so nothing that already imports them from this file has to move.
+ */
+export {
+  QUARTERLY_CHECK_IN_PATTERN,
+  END_OF_YEAR_CHECK_IN_PATTERN,
+} from '../supabase/functions/_shared/checkInPatterns';
+import {
+  QUARTERLY_CHECK_IN_PATTERN,
+  END_OF_YEAR_CHECK_IN_PATTERN,
+} from '../supabase/functions/_shared/checkInPatterns';
 
 /** One mark per rhythm on Home: the monthly wears 📋, these wear their own. */
 export const SEASON_CHECK_IN_EMOJI: Record<SeasonKind, string> = {
