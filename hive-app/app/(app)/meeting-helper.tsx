@@ -29,6 +29,7 @@ import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { parseFocusAnswer, focusAnswerDidIt, focusAnswerScore } from '../../components/surveys/SurveyQuestionField';
 import { Avatar } from '../../components/ui/Avatar';
 import { ArrivalMemberCard } from '../../components/meetings/ArrivalMemberCard';
+import { DeckVideo } from '../../components/meetings/DeckVideo';
 import { ScheduleMeetingModal } from '../../components/meetings/ScheduleMeetingModal';
 import { ComposerBar } from '../../components/ui/ComposerBar';
 import { FIELD_LOOK } from '../../components/ui/Input';
@@ -3853,6 +3854,22 @@ export default function MeetingHelperScreen() {
           paddingBottom: sz(20, 12),
         }}
       >
+        {/* The room's faces, above the clock — Nat, 2026-08-15: "it has the
+            meeting helper inside the same screen side by side." One HIVE, one
+            room; whoever is remote joins it and everyone in the dining room
+            watches them here while the deck runs beside it. */}
+        <View style={{ marginBottom: sz(18, 12) }}>
+          <DeckVideo
+            communityId={communityId}
+            accent={GOLD}
+            accentDeep={GOLD_DEEP}
+            cardColor={CARD}
+            softBorder={GOLD_SOFT}
+            height={sz(196, 148)}
+            fontSize={sz(16, 12)}
+          />
+        </View>
+
         <Pressable
           onPress={() => {
             setHardOutDraft('');

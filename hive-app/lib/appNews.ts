@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-15-video-lives-in-the-deck',
+    date: '2026-08-15',
+    title: 'The video call happens in the app now, beside the deck',
+    detail: 'Every HIVE has its own room, at the top of the agenda rail. Anyone who is not in the dining room joins from there and shows up on everyone else\'s screen next to the slide — no second laptop under the TV, no separate meeting link to find.',
+    href: { pathname: '/meeting-helper' },
+    action: 'Open the deck',
+  },
+  {
     id: '2026-08-15-the-deck-moves-for-everyone',
     date: '2026-08-15',
     title: 'One person drives the deck and everybody follows',
