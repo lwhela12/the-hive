@@ -472,6 +472,14 @@ serve(async (req) => {
 
     // Season previews: test_kind 'quarter' or 'year' sends that sample,
     // dated to the upcoming quarter/year end so it reads like the real one.
+    //
+    // 'premeeting' and 'endofmonth' preview differently, and had no preview at
+    // all until 2026-08-15 — which is how a HIVE's own check-in email could go
+    // out with nothing on it saying which HIVE it came from without anybody
+    // seeing it first. These two belong to a REAL survey in a REAL HIVE, so
+    // rather than inventing a date and calling the sender "Your HIVE", the
+    // preview finds that survey and borrows both. What lands in the inbox is
+    // then the same email the members will get, down to the name on the button.
     if (requestedTestKind === 'quarter' || requestedTestKind === 'year') {
       const seasonKind = requestedTestKind as SeasonKind;
       const previewToday = toPacificDateOnly(new Date()) ?? new Date().toISOString().slice(0, 10);
@@ -492,6 +500,57 @@ serve(async (req) => {
       });
       if (!res.ok) return errorResponse(`Preview email failed: ${await res.text()}`, 502);
       return jsonResponse({ preview_sent_to: testEmail, kind: seasonKind, ends: `${seasonMonth} ${seasonDay}` });
+    }
+
+    if (requestedTestKind === 'premeeting' || requestedTestKind === 'endofmonth') {
+      const seasonKind = requestedTestKind as SeasonKind;
+      const pattern = seasonKind === 'premeeting'
+        ? PRE_MEETING_CHECK_IN_PATTERN
+        : SHOW_END_OF_MONTH_PATTERN;
+      const { data: candidates } = await supabaseAdmin
+        .from('surveys')
+        .select('title, due_date, community_id')
+        .eq('is_active', true);
+      const match = (candidates ?? []).find(
+        (s: { title?: string; due_date?: string }) => pattern.test(s.title || '') && s.due_date
+      ) as { title: string; due_date: string; community_id: string } | undefined;
+      if (!match) {
+        return errorResponse(`No active ${seasonKind} check-in to preview.`, 404);
+      }
+      const dateOnly = toPacificDateOnly(new Date(match.due_date));
+      if (!dateOnly) return errorResponse('That check-in has an unreadable due date.', 500);
+      const { month: kMonth, day: kDay } = formatMeetingDate(dateOnly);
+      const { data: hive } = await supabaseAdmin
+        .from('communities')
+        .select('name')
+        .eq('id', match.community_id)
+        .maybeSingle();
+      const hiveName = (hive as { name?: string } | null)?.name || 'Your HIVE';
+      // 'day_of' is the last-call version; 'window' is the one that goes out
+      // three days ahead. Default to the one members actually saw first.
+      const touch: SeasonTouch = body.test_touch === 'day_of' ? 'day_of' : 'window';
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: FROM_EMAIL,
+          to: testEmail,
+          subject: `[Preview] ${seasonSubject(seasonKind, touch, kMonth, kDay, hiveName)}`,
+          html: seasonEmailHtml(
+            typeof body.test_name === 'string' ? body.test_name : 'there',
+            seasonKind, touch, kMonth, kDay, hiveName,
+          ),
+        }),
+      });
+      if (!res.ok) return errorResponse(`Preview email failed: ${await res.text()}`, 502);
+      return jsonResponse({
+        preview_sent_to: testEmail,
+        kind: seasonKind,
+        touch,
+        hive: hiveName,
+        survey: match.title,
+        dated: `${kMonth} ${kDay}`,
+      });
     }
 
     const testKind: ReminderKind = requestedTestKind === 'midpoint' || requestedTestKind === 'day_of'
