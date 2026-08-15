@@ -19,6 +19,7 @@ import { EventAudienceToggle, type EventAudience } from '../../components/events
 import { useAuth } from '../../lib/hooks/useAuth';
 import { CHECK_INS_COMING_SOON_MESSAGE, hasMeetingDeck } from '../../lib/checkIns';
 import { useDeepTrail } from '../../lib/hooks/usePathTrail';
+import { useDeckSession } from '../../lib/hooks/useDeckSession';
 import { fetchHoneyPotLedger } from '../../lib/honeyPot';
 import { getCycleStart } from '../../lib/meetingCycle';
 import { EditButton } from '../../components/ui/EditButton';
@@ -3650,13 +3651,142 @@ export default function MeetingHelperScreen() {
   const clampedIndex = Math.min(slideIndex, slideCount - 1);
   const activeSlide = slides[clampedIndex];
 
+  // One deck, many seats. Nat, 2026-08-15: *"when I click next, it goes next
+  // for everyone ... if we're like at a restaurant or something, you can follow
+  // along on your phone because it'll click along as I click along."*
+  //
+  // `deck.slides` comes from the module-level DECKS, so it is the same list in
+  // the same order for everyone standing in this HIVE — which is what makes a
+  // slide KEY safe to send across the room (migration 182 explains why we never
+  // send the number).
+  const onRoomMoved = useCallback(
+    (slideKey: string) => {
+      const position = deck.slides.indexOf(slideKey as DeckSlideKey);
+      if (position >= 0) setSlideIndex(position);
+    },
+    [deck]
+  );
+  const {
+    session: deckSession,
+    isPresenting,
+    isFollowing,
+    hasWanderedOff,
+    startPresenting,
+    stopPresenting,
+    publishSlide,
+    lookAround,
+    catchUp,
+  } = useDeckSession(communityId, profile?.id ?? null, onRoomMoved);
+
+  /**
+   * Every way this deck moves under your own hand — arrows, the agenda rail,
+   * the keyboard — goes through here, so there is exactly one place that knows
+   * what your move means to the rest of the room:
+   *
+   * - presenting → the room comes with you
+   * - following → you have stepped off on your own, and a pill offers you back
+   * - neither → it is just your deck, as it always was
+   */
+  const goToSlide = useCallback(
+    (next: number) => {
+      const bounded = Math.max(0, Math.min(next, deck.slides.length - 1));
+      setSlideIndex(bounded);
+      if (isPresenting) publishSlide(deck.slides[bounded]);
+      else if (isFollowing) lookAround();
+    },
+    [deck, isPresenting, isFollowing, publishSlide, lookAround]
+  );
+
+  /**
+   * The one control the shared deck needs, in the footer's empty left corner.
+   *
+   * It is deliberately four words and a dot rather than a panel: during a
+   * meeting the room is looking at the slide, and this is a thing you glance
+   * at to know whether your screen is yours or the room's.
+   */
+  const renderDeckSessionPill = () => {
+    const pillStyle = (tone: 'quiet' | 'live') => ({
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: sz(8, 6),
+      alignSelf: 'flex-start' as const,
+      borderRadius: 999,
+      paddingHorizontal: sz(16, 11),
+      paddingVertical: sz(8, 6),
+      borderWidth: 1,
+      borderColor: tone === 'live' ? GOLD : accentWash(0.28),
+      backgroundColor: tone === 'live' ? tintWash(0.55) : 'transparent',
+    });
+    const labelStyle = (tone: 'quiet' | 'live') => ({
+      fontFamily: tone === 'live' ? ('Lato_700Bold' as const) : ('Lato_400Regular' as const),
+      fontSize: sz(16, 10),
+      color: tone === 'live' ? GOLD_DEEP : 'rgba(154,128,96,0.9)',
+    });
+
+    // You have the deck. Tapping puts it down — everybody keeps the slide they
+    // are on rather than being dumped back to the start.
+    if (isPresenting) {
+      return (
+        <Pressable
+          onPress={stopPresenting}
+          accessibilityRole="button"
+          accessibilityLabel="Stop presenting to the room"
+          style={({ pressed }) => ({ ...pillStyle('live'), opacity: pressed ? 0.7 : 1 })}
+        >
+          <View style={{ width: sz(9, 7), height: sz(9, 7), borderRadius: 999, backgroundColor: GOLD }} />
+          <Text style={labelStyle('live')}>Presenting · tap to stop</Text>
+        </Pressable>
+      );
+    }
+
+    // Somebody else is driving and you stepped off their slide. The way back is
+    // always one tap, and it is the only thing this pill says.
+    if (hasWanderedOff && deckSession) {
+      return (
+        <Pressable
+          onPress={catchUp}
+          accessibilityRole="button"
+          accessibilityLabel={`Back to ${deckSession.presenterName}'s slide`}
+          style={({ pressed }) => ({ ...pillStyle('quiet'), opacity: pressed ? 0.7 : 1 })}
+        >
+          <Ionicons name="arrow-undo-outline" size={sz(17, 12)} color={GOLD_DEEP} />
+          <Text style={labelStyle('quiet')}>Back to {deckSession.presenterName}</Text>
+        </Pressable>
+      );
+    }
+
+    // Your deck is moving with theirs. Nothing to press — this is a label.
+    if (isFollowing && deckSession) {
+      return (
+        <View style={pillStyle('live')} accessibilityRole="text">
+          <View style={{ width: sz(9, 7), height: sz(9, 7), borderRadius: 999, backgroundColor: GOLD }} />
+          <Text style={labelStyle('live')}>Following {deckSession.presenterName}</Text>
+        </View>
+      );
+    }
+
+    // Nobody has the deck. Any member can pick it up — Nat runs OG's night,
+    // Lucas runs Tech's, and Production hands its jobs out live.
+    return (
+      <Pressable
+        onPress={() => startPresenting(deck.slides[clampedIndex])}
+        accessibilityRole="button"
+        accessibilityLabel="Present this deck to the room"
+        style={({ pressed }) => ({ ...pillStyle('quiet'), opacity: pressed ? 0.7 : 1 })}
+      >
+        <Ionicons name="play-outline" size={sz(17, 12)} color={GOLD_DEEP} />
+        <Text style={labelStyle('quiet')}>Present to the room</Text>
+      </Pressable>
+    );
+  };
+
   const goNext = useCallback(() => {
-    setSlideIndex((index) => Math.min(index + 1, slideCount - 1));
-  }, [slideCount]);
+    goToSlide(slideIndex + 1);
+  }, [goToSlide, slideIndex]);
 
   const goPrev = useCallback(() => {
-    setSlideIndex((index) => Math.max(index - 1, 0));
-  }, []);
+    goToSlide(slideIndex - 1);
+  }, [goToSlide, slideIndex]);
 
   // Keyboard navigation on web: ← → and Space (the TV/laptop use case).
   useEffect(() => {
@@ -3803,7 +3933,7 @@ export default function MeetingHelperScreen() {
             return (
               <View key={item.key}>
                 <Pressable
-                  onPress={() => setSlideIndex(slidePosition)}
+                  onPress={() => goToSlide(slidePosition)}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'baseline',
@@ -4073,7 +4203,8 @@ export default function MeetingHelperScreen() {
             paddingBottom: sz(24, 14),
           }}
         >
-          <View style={{ flex: 1 }} />
+          {/* Whose deck this screen is right now — see renderDeckSessionPill. */}
+          <View style={{ flex: 1 }}>{renderDeckSessionPill()}</View>
           <Text
             style={{
               fontFamily: 'Lato_700Bold',

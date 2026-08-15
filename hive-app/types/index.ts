@@ -184,6 +184,22 @@ export interface AppFeedback extends Record<string, unknown> {
   created_at: string;
 }
 
+/**
+ * One HIVE's live Meeting Helper session — the row that makes every seat's deck
+ * the same deck (migration 182).
+ *
+ * `slide_key` is a DeckSlideKey from meeting-helper.tsx, never a slide number:
+ * a key still means the right thing to a follower whose deck is a different
+ * length, and to one running a slightly older bundle.
+ */
+export interface DeckSessionRow extends Record<string, unknown> {
+  community_id: string;
+  presenter_id: string;
+  slide_key: string;
+  started_at: string;
+  updated_at: string;
+}
+
 export interface Profile extends Record<string, unknown> {
   id: string;
   name: string;
@@ -1038,6 +1054,15 @@ export interface Database {
         Row: AppFeedback;
         Insert: never;
         Update: Partial<Pick<AppFeedback, 'status'>>;
+        Relationships: [];
+      };
+      // The live Meeting Helper session for one HIVE — who is driving the deck
+      // and which slide the room is on (migration 182). One row per HIVE, and
+      // it is deleted when they stop presenting.
+      deck_sessions: {
+        Row: DeckSessionRow;
+        Insert: Omit<DeckSessionRow, 'started_at' | 'updated_at'> & { updated_at?: string };
+        Update: Partial<Omit<DeckSessionRow, 'community_id' | 'started_at'>>;
         Relationships: [];
       };
     };

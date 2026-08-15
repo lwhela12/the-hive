@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-15-the-deck-moves-for-everyone',
+    date: '2026-08-15',
+    title: 'One person drives the deck and everybody follows',
+    detail: 'Whoever is running the meeting taps "Present to the room", and from then on every open deck turns to the same slide they do — on the TV, on a laptop, on a phone at a restaurant table. Step off to look at something and a tap puts you back where the room is.',
+    href: { pathname: '/meeting-helper' },
+    action: 'Open the deck',
+  },
+  {
     id: '2026-08-14-production-boards-slimmed',
     date: '2026-08-14',
     title: 'Production HIVE has fewer boards and more useful ones',
