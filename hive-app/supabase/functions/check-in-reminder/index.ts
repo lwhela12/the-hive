@@ -263,6 +263,22 @@ function seasonEmailHtml(
   /** The check-in this email is about, so its button can open it directly. */
   surveyId?: string,
   communityId?: string,
+  /**
+   * A line at the very bottom that is different every time this email goes out.
+   *
+   * Nat, 2026-08-15, on the fourth preview: *"look, no button?"* The button was
+   * there — checked the sent message itself, not the code that writes it — and
+   * Gmail had folded it behind a "..." because four emails in one thread ended
+   * with identical content, which is exactly what Gmail treats as quoted text
+   * and hides.
+   *
+   * A member gets one of these, so they would have seen it. But "Before we
+   * meet" arrives every month with the same closing lines, and the one thing
+   * that must never be hidden is the way in. Giving the tail something that
+   * changes keeps the button clear of Gmail's trimming, and tells the reader
+   * something worth knowing while it is at it.
+   */
+  footerNote?: string,
 ): string {
   const name = escapeHtml(rawName);
   // Whose HIVE this is, said in the email itself and on the button. Nat,
@@ -298,6 +314,7 @@ function seasonEmailHtml(
           ${openButton}
         </div>
         <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Every answer stays inside your HIVE. 🍯</p>
+        ${footerNote ? `<p style="font-size: 12px; color: #b6b6b6; text-align: center; margin-top: 2px;">${footerNote}</p>` : ''}
       </div>
     `;
   }
@@ -318,6 +335,7 @@ function seasonEmailHtml(
           ${openButton}
         </div>
         <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Every answer stays inside your HIVE. 🍯</p>
+        ${footerNote ? `<p style="font-size: 12px; color: #b6b6b6; text-align: center; margin-top: 2px;">${footerNote}</p>` : ''}
       </div>
     `;
   }
@@ -350,6 +368,7 @@ function seasonEmailHtml(
         <a href="${openHref}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">${button}</a>
       </div>
       <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Every answer stays inside your HIVE. 🍯</p>
+        ${footerNote ? `<p style="font-size: 12px; color: #b6b6b6; text-align: center; margin-top: 2px;">${footerNote}</p>` : ''}
     </div>
   `;
 }
@@ -521,6 +540,8 @@ serve(async (req) => {
           html: seasonEmailHtml(
             typeof body.test_name === 'string' ? body.test_name : 'there',
             seasonKind, 'window', seasonMonth, seasonDay, 'Your HIVE',
+            undefined, undefined,
+            `preview sent ${new Date().toLocaleTimeString('en-US', { timeZone: PACIFIC_TZ, hour: 'numeric', minute: '2-digit' })}`,
           ),
         }),
       });
@@ -565,6 +586,7 @@ serve(async (req) => {
           html: seasonEmailHtml(
             typeof body.test_name === 'string' ? body.test_name : 'there',
             seasonKind, touch, kMonth, kDay, hiveName, match.id, match.community_id,
+            `${hiveName} · closes ${kMonth} ${kDay} · preview sent ${new Date().toLocaleTimeString('en-US', { timeZone: PACIFIC_TZ, hour: 'numeric', minute: '2-digit' })}`,
           ),
         }),
       });
@@ -1133,7 +1155,11 @@ serve(async (req) => {
                     from: FROM_EMAIL,
                     to: member.email,
                     subject: emailSubject,
-                    html: seasonEmailHtml(member.name ?? 'there', kind, touch, month, day, hiveName, survey.id, survey.community_id),
+                    html: seasonEmailHtml(
+                      member.name ?? 'there', kind, touch, month, day, hiveName,
+                      survey.id, survey.community_id,
+                      `${hiveName} · closes ${month} ${day}`,
+                    ),
                   }),
                 });
                 if (res.ok) {
