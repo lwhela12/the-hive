@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-14-production-boards-slimmed',
+    date: '2026-08-14',
+    title: 'Production HIVE has fewer boards and more useful ones',
+    detail: 'Six research boards that nobody could act on are archived. What is left is Pre-Production — ten threads, six calls to make and four rooms to go and stand in, each with the questions and what to look for already in it — plus the general discussion and The Other 20 Hours.',
+    href: { pathname: '/board' },
+    action: 'Open the boards',
+  },
+  {
     id: '2026-08-14-deck-fits-your-screen',
     date: '2026-08-14',
     title: 'The meeting deck fits whatever screen it is on',

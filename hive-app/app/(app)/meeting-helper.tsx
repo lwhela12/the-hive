@@ -272,6 +272,55 @@ const PRODUCTION_JOBS: { key: string; title: string; why: string; asks: string[]
       'Can we rig from your ceiling, and what are the load limits?',
     ],
   },
+  /* Nat, 2026-08-14: "the Pre-Production board is seeded with the calls that
+     need to be made, but it doesn't have the venues that we need to visit and
+     who's in charge of that — Sara and Charlee probably need to go do that
+     together." Standing in a room answers things a phone call cannot. */
+  {
+    key: 'see-notoriety',
+    threadId: '5e1b16d9-94d4-4301-83a4-be5bb00bf6fc',
+    title: 'Go and see Notoriety',
+    why: 'Downtown, rents by the day, and the Robin Leach Lounge has 30 ft ceilings.',
+    asks: [
+      'Does 26 ft of clear air feel real in there?',
+      'Where would the rigging points go?',
+      'Where do performers change, and where do they warm up?',
+      'What does the room feel like with 100 people in it?',
+    ],
+  },
+  {
+    key: 'see-space',
+    threadId: '33b1a4f9-6a94-4433-8d18-b17f6e15a167',
+    title: 'Go and see The Space',
+    why: '$5,000 a day, 220 seats, and a working box office we would not have to build.',
+    asks: [
+      'Ceiling height, floor to the lowest thing hanging down?',
+      'Can we rig from it, and what are the load limits?',
+      'How does their box office work, and what do they take?',
+    ],
+  },
+  {
+    key: 'see-vtc',
+    threadId: '3cf03adc-02dc-44ba-be1f-7e979aa7fc81',
+    title: 'Go and see Vegas Theatre Company',
+    why: '$1,000 for four hours, 60 to 95 seats, with lights, sound and bar service in it.',
+    asks: [
+      'Ceiling height and rigging — what is possible?',
+      'What does a recurring weekly booking cost against one-offs?',
+      'Who runs the bar, and who keeps that money?',
+    ],
+  },
+  {
+    key: 'see-tent',
+    threadId: '32959bc9-96d0-43dd-afa6-28f75c387bd6',
+    title: 'Go and see the Henderson tent',
+    why: 'Circus Freaks and Jailbirds both play here, and the park is city-owned so the rate may be public record.',
+    asks: [
+      'What does the tent rent for, and who do we ask?',
+      'What is the height inside, and what can we hang from?',
+      'Power, air conditioning, and what happens at 110 degrees?',
+    ],
+  },
 ];
 
 const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
