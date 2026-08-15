@@ -4189,9 +4189,13 @@ export default function MeetingHelperScreen() {
           )}
         </Pressable>
 
-        {/* Footer: tagline + slide counter */}
+        {/* Footer: whose deck this is + tagline + slide counter.
+            `box-none` rather than `none`: the strip itself must stay
+            untouchable so it never eats a tap meant for the slide behind it,
+            but the deck-session pill in its left corner is a real button and
+            has to be pressable. `none` on the container swallowed it. */}
         <View
-          pointerEvents="none"
+          pointerEvents="box-none"
           style={{
             position: 'absolute',
             left: 0,
@@ -4203,8 +4207,12 @@ export default function MeetingHelperScreen() {
             paddingBottom: sz(24, 14),
           }}
         >
-          {/* Whose deck this screen is right now — see renderDeckSessionPill. */}
-          <View style={{ flex: 1 }}>{renderDeckSessionPill()}</View>
+          {/* Whose deck this screen is right now — see renderDeckSessionPill.
+              `box-none` again so only the pill takes a tap, and the rest of
+              this corner stays a hole the slide can be reached through. */}
+          <View pointerEvents="box-none" style={{ flex: 1 }}>
+            {renderDeckSessionPill()}
+          </View>
           <Text
             style={{
               fontFamily: 'Lato_700Bold',
@@ -4216,7 +4224,9 @@ export default function MeetingHelperScreen() {
           >
             {TAGLINE}
           </Text>
-          <View style={{ flex: 1, alignItems: 'flex-end' }}>
+          {/* Still deaf to touch, as the whole footer used to be — the slide's
+              bottom-right corner and the next-slide strip stay reachable. */}
+          <View pointerEvents="none" style={{ flex: 1, alignItems: 'flex-end' }}>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(17, 11), color: 'rgba(154,128,96,0.7)' }}>
               {clampedIndex + 1} / {slideCount}
             </Text>
