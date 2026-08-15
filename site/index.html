@@ -1041,7 +1041,29 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
     return isNaN(d) ? '' : MON[d.getMonth()] + ' ' + d.getFullYear();
   }
 
-  fetch('/api/newsletters', { headers: { Accept: 'application/json' } })
+  /* Every HIVE, by slug, straight from the app's own records. A newsletter's
+     [[BUTTON:x]] marker resolves against this — so a HIVE created tomorrow
+     gets a working button with its own name and colour, and nobody edits this
+     file. `og` is accepted as an alias because the newsletters wrote it that
+     way long before anyone knew OG's real slug is `default`. */
+  var HIVES = {};
+  function hiveButton(token) {
+    var hive = HIVES[token] || (token === 'og' ? HIVES['default'] : null);
+    if (!hive) return null;
+    return {
+      hive: hive.slug,
+      colour: hive.colour,
+      label: "I'm interested in " + hive.name
+    };
+  }
+
+  fetch('/api/hives', { headers: { Accept: 'application/json' } })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      ((j && j.hives) || []).forEach(function (h) { HIVES[h.slug] = h; });
+    })
+    .catch(function () { /* a marker renders as nothing rather than as a broken button */ })
+    .then(function () { return fetch('/api/newsletters', { headers: { Accept: 'application/json' } }); })
     .then(function (r) { return r.json(); })
     .then(function (j) {
       var list = (j && j.newsletters) || [];
@@ -1086,13 +1108,17 @@ footer .copy{margin-top:16px;font-size:.76rem;color:var(--softink)}
         /* A line reading [[BUTTON:tech]] is a join button, not prose — the
            same marker the email and the app render. Text stays textContent
            (never innerHTML); only the known markers become anchors. */
-        var BUZZ_BUTTONS = {
-          tech: { label: "I'm interested in Tech HIVE", colour: '#2f4a63', hive: 'tech' },
-          og: { label: 'Add me to the OG HIVE waitlist', colour: '#bd9348', hive: 'default' }
-        };
-        (n.content || '').split(/\n(\[\[BUTTON:[a-z]+\]\])\n/).forEach(function (piece) {
-          var m = /^\[\[BUTTON:([a-z]+)\]\]$/.exec(piece.trim());
-          var btn = m && BUZZ_BUTTONS[m[1]];
+        /* Which HIVEs exist is a question for the database, never a list in
+           this file. Nat, 2026-08-14: "don't reword it for three, just reword
+           it for multiple, that way we don't have to keep going and adding it
+           every time we make a change." HIVES is filled by /api/hives on load;
+           until it answers, a marker simply renders as nothing rather than as
+           a broken button. The marker may name a HIVE by slug — [[BUTTON:show]]
+           — or say [[BUTTON:og]], which is what the newsletters already wrote
+           before OG's real slug (`default`) was ever public. */
+        (n.content || '').split(/\n(\[\[BUTTON:[a-z0-9-]+\]\])\n/).forEach(function (piece) {
+          var m = /^\[\[BUTTON:([a-z0-9-]+)\]\]$/.exec(piece.trim());
+          var btn = m && hiveButton(m[1]);
           if (btn) {
             var wrap = document.createElement('span');
             wrap.style.cssText = 'display:block;text-align:center;padding:14px 0 6px;';

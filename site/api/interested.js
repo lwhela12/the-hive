@@ -44,6 +44,38 @@ const PAGE = (title, body) => `<!doctype html>
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+/**
+ * What this HIVE is actually called.
+ *
+ * This used to be `hive === 'tech' ? 'Tech HIVE' : 'HIVE'` — a ternary that
+ * knew exactly one HIVE by name and called every other one "HIVE". Nat, on
+ * rewriting the public site, 2026-08-14: *"don't reword it for three, just
+ * reword it for multiple, that way we don't have to keep going and adding it
+ * every time we make a change."*
+ *
+ * So it asks the database, which already knows every HIVE's display name and
+ * colour. A HIVE created tomorrow works here the moment it exists, with
+ * nobody editing this file. Falls back to plain "HIVE" if the lookup fails,
+ * because a slow database should never stop somebody putting their hand up.
+ */
+async function hiveLook(url, key, slug) {
+  const plain = { label: 'HIVE', colour: '#bd9348' };
+  if (!slug || !url || !key) return plain;
+  try {
+    const r = await fetch(
+      `${url.replace(/\/$/, '')}/rest/v1/public_hives?slug=eq.${encodeURIComponent(slug)}&select=name,accent_color`,
+      { headers: { apikey: key, Authorization: `Bearer ${key}` } }
+    );
+    if (!r.ok) return plain;
+    const rows = await r.json();
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row?.name) return plain;
+    return { label: String(row.name), colour: String(row.accent_color || plain.colour) };
+  } catch {
+    return plain;
+  }
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -69,7 +101,7 @@ export default async function handler(req, res) {
       res.setHeader('Content-Type', 'application/json');
       return res.status(200).json({ ok: false });
     }
-    const hiveLabelAsk = hive === 'tech' ? 'Tech HIVE' : 'HIVE';
+    const hiveLabelAsk = (await hiveLook(url, key, hive)).label;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(200).send(PAGE(hiveLabelAsk, `
       <h1>Want in on ${escapeHtml(hiveLabelAsk)}?</h1>
@@ -119,7 +151,7 @@ export default async function handler(req, res) {
 
   // The ask.
   const safeEmail = escapeHtml(email);
-  const hiveLabel = hive === 'tech' ? 'Tech HIVE' : 'HIVE';
+  const hiveLabel = (await hiveLook(url, key, hive)).label;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.status(200).send(PAGE(hiveLabel, `
     <h1>Want in on ${escapeHtml(hiveLabel)}?</h1>
