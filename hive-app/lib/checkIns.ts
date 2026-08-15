@@ -636,7 +636,10 @@ const PRE_MEETING_RECURRING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         "\u{1F622} Missing this one, I'm afraid",
       ]),
       { id: 'q_energy_level', text: 'Energy: what is your energy level right now?', type: 'scale', required: false },
-      q('q_show_progress', 'What did you get done since we last met? Even a phone call counts.', 'long'),
+      // Arrives pre-filled with the to-dos this person ticked off since the
+      // last meeting (SurveyModal). The wording says so, because text you did
+      // not type appearing in a box is alarming unless something explains it.
+      q('q_show_progress', 'What did you get done since we last met? Anything you ticked off is already here — add whatever else you did.', 'long'),
       q('q_show_obstacles', "What's stuck, and what would unstick it?", 'long'),
       choice('q_plate', 'How much can you take on this time?', [
         '\u{1F37D}\u{FE0F} Plenty of room — hand me something',

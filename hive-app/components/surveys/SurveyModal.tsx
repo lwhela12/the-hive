@@ -16,8 +16,9 @@ import {
 } from '../../lib/carryForward';
 import type { Survey, SurveyAnswers, SurveyQuestion } from '../../lib/hooks/useSurveys';
 import { SurveyQuestionField } from './SurveyQuestionField';
-import { getSeasonCheckInKind } from '../../lib/checkIns';
+import { getSeasonCheckInKind, isPreMeetingCheckInSurvey } from '../../lib/checkIns';
 import { supabase } from '../../lib/supabase';
+import { parseActionItemDescription } from '../../lib/actionItemDisplay';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Avatar } from '../ui/Avatar';
 
@@ -276,6 +277,76 @@ export function SurveyModal({
       active = false;
     };
   }, [survey.id]);
+
+  /**
+   * "What did you get done?" answers itself.
+   *
+   * Nat, 2026-08-15: *"instead of having things on your to-do list, and then
+   * you check them off, and then you have to remember what you did and say
+   * that — there should be automation there. Things should be seeded and
+   * pre-seeding. And then you can add in anything else you did, like maybe on
+   * your list was 'call Circus Center', but then maybe you also called four
+   * other gyms."*
+   *
+   * So the field arrives already holding the to-dos this person ticked off
+   * since the last meeting, as plain editable text. They add whatever else they
+   * did and send it. Nobody is asked to remember what the app already knows.
+   *
+   * It only ever fills a field the person has not touched — a saved answer or a
+   * draft in progress always wins, so re-opening the check-in never overwrites
+   * anything they wrote.
+   */
+  useEffect(() => {
+    if (!draftLoaded) return;
+    if (!isPreMeetingCheckInSurvey(survey)) return;
+    if (!viewerProfile?.id) return;
+    const target = survey.questions.find((q) => q.id === 'q_show_progress');
+    if (!target) return;
+    if (String(answers.q_show_progress ?? '').trim()) return;
+
+    let active = true;
+    (async () => {
+      // Since the meeting before this one — or a month, when there was no
+      // previous meeting to measure from.
+      const due = new Date(survey.due_date ?? Date.now());
+      const { data: previous } = await supabase
+        .from('events')
+        .select('event_date')
+        .eq('community_id', survey.community_id)
+        .eq('event_type', 'meeting')
+        .lt('event_date', due.toISOString().slice(0, 10))
+        .order('event_date', { ascending: false })
+        .limit(1);
+      const since = previous?.[0]?.event_date
+        ? new Date(previous[0].event_date)
+        : new Date(due.getTime() - 31 * 86_400_000);
+
+      const { data: done } = await supabase
+        .from('action_items')
+        .select('description, completed_at')
+        .eq('community_id', survey.community_id)
+        .eq('assigned_to', viewerProfile.id)
+        .eq('completed', true)
+        .gte('completed_at', since.toISOString())
+        .order('completed_at', { ascending: true })
+        .limit(20);
+
+      if (!active || !done?.length) return;
+      const lines = done
+        .map((item) => parseActionItemDescription(String(item.description ?? '')).text.trim())
+        .filter(Boolean)
+        .map((text) => `\u2022 ${text}`);
+      if (!lines.length) return;
+      setAnswers((prev) => (
+        String(prev.q_show_progress ?? '').trim()
+          ? prev
+          : { ...prev, q_show_progress: lines.join('\n') }
+      ));
+    })();
+
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftLoaded, survey.id, viewerProfile?.id]);
 
   const setAnswer = useCallback((questionId: string, value: any) => {
     setAnswers(prev => {
