@@ -284,8 +284,8 @@ function seasonEmailHtml(
   if (kind === 'endofmonth') {
     const heading = touch === 'day_of' ? 'Last day of the month' : 'How did the month go?';
     const body = touch === 'day_of'
-      ? `It's the last day of the month and your check-in isn't in yet — a few minutes on what moved, what's stuck, and what you're taking on next.`
-      : `Your end-of-month check-in is open on Home. What moved on the show, what's stuck and what would unstick it, and what you're taking on before we meet again. Short answers are perfect.`;
+      ? `It's the last day of the month and your POP isn't in yet — three questions: what got done, what we still need to figure out, and what you're taking on next.`
+      : `Your POP is open — three questions. What got done on the show, what we still need to figure out, and what you're taking on before we meet again. Short answers are perfect.`;
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
         <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🎬</span></div>
@@ -305,7 +305,7 @@ function seasonEmailHtml(
     const heading = touch === 'day_of' ? "It's today" : 'Before we meet';
     const body = touch === 'day_of'
       ? `We meet today and your answers aren't in yet — it takes about <strong>3 minutes</strong>, and it means we can spend the hour deciding together instead of asking each other questions.`
-      : `Our check-in is open on Home — about <strong>3 minutes</strong>. How often you want to meet, what day works, how you feel about a Honey Pot, and which room you'd go and look at. Answering beforehand means the meeting gets to decide. Short answers are perfect.`;
+      : `Our check-in is open — about <strong>3 minutes</strong>. How often you want to meet, what day works, how you feel about a Honey Pot, and who is allowed to know you are part of this. Answering beforehand means the meeting gets to decide. Short answers are perfect.`;
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
         <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🎬</span></div>

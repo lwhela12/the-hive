@@ -815,6 +815,16 @@ export default function HiveScreen() {
   const { profile, communityId, communityRole, session, refreshProfile, community, memberships, openHivePicker, wholeHive, switchCommunity } = useAuth();
   const router = useRouter();
 
+  const { openWishId, openSurveyId, hive: linkedHiveId, catchup, from } = useLocalSearchParams<{
+    openWishId?: string;
+    /** A check-in to open on arrival — the check-in email's button (2026-08-15). */
+    openSurveyId?: string;
+    /** Which HIVE that check-in belongs to, so the link works from anywhere. */
+    hive?: string;
+    catchup?: string;
+    from?: string;
+  }>();
+
   // A HIVE's home cannot be drawn while the app thinks you are standing above
   // the HIVEs, and until now nothing stopped it.
   //
@@ -831,9 +841,17 @@ export default function HiveScreen() {
   // HIVE-Wide mode, and `initialRouteName` falls back to the `hive` tab when
   // there is no remembered one — which there never is on a first sign-in. So the
   // very first screen a new member ever saw was the broken combination.
+  //
+  // **Unless a link asked for a specific HIVE's check-in.** Nat, 2026-08-15,
+  // after the second preview: *"both times I clicked on the check-in button,
+  // they just brought me to HIVE-Wide instead of bringing me into the survey."*
+  // Everybody's app remembers HIVE-Wide, so this redirect fired the instant the
+  // email's link landed and the check-in never got a chance. A link that names
+  // a HIVE and a check-in is a request to be IN that HIVE; the handler below
+  // takes you down out of Whole HIVE and opens it.
   useEffect(() => {
-    if (wholeHive) router.replace('/hive-wide' as never);
-  }, [wholeHive, router]);
+    if (wholeHive && !openSurveyId) router.replace('/hive-wide' as never);
+  }, [wholeHive, router, openSurveyId]);
   const { width } = useWindowDimensions();
   const useMobileLayout = width < 768;
   const homeScrollRef = useRef<ScrollView>(null);
@@ -1821,15 +1839,6 @@ export default function HiveScreen() {
 
   // Deep link: /hive?openWishId=... opens that wish's detail sheet (used by the
   // profile App Feedback shortcut; works for any screen that wants to point at a wish).
-  const { openWishId, openSurveyId, hive: linkedHiveId, catchup, from } = useLocalSearchParams<{
-    openWishId?: string;
-    /** A check-in to open on arrival — the check-in email's button (2026-08-15). */
-    openSurveyId?: string;
-    /** Which HIVE that check-in belongs to, so the link works from anywhere. */
-    hive?: string;
-    catchup?: string;
-    from?: string;
-  }>();
 
   // Swarm Report theme pills (and anything else) can deep-link straight into
   // the daily-question Catch-up modal. `from` says where to put you back when
@@ -2191,11 +2200,13 @@ export default function HiveScreen() {
   useEffect(() => {
     if (!openSurveyId || handledSurveyIdRef.current === openSurveyId) return;
     const wantedHive = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
-    if (wantedHive && wantedHive !== communityId) {
+    // Standing above the HIVEs counts as being in the wrong one: picking a HIVE
+    // by name is how you come down out of Whole HIVE (see switchCommunity).
+    if (wantedHive && (wantedHive !== communityId || wholeHive)) {
       void switchCommunity(wantedHive);
       return;
     }
-    if (!communityId) return;
+    if (!communityId || wholeHive) return;
     // Surveys arrive a moment after the screen does; wait for the real row
     // rather than giving up and leaving them on Home wondering.
     const match = availableSurveys.find((s) => s.id === openSurveyId);
@@ -2203,7 +2214,7 @@ export default function HiveScreen() {
     handledSurveyIdRef.current = openSurveyId;
     openSurvey(match);
     router.setParams({ openSurveyId: undefined, hive: undefined } as any);
-  }, [openSurveyId, linkedHiveId, communityId, availableSurveys, openSurvey, switchCommunity, router]);
+  }, [openSurveyId, linkedHiveId, communityId, wholeHive, availableSurveys, openSurvey, switchCommunity, router]);
 
   const closeSurvey = useCallback(() => {
     setActiveSurvey(null);
