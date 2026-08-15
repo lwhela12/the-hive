@@ -31,7 +31,7 @@ export const APP_NEWS: AppNewsEntry[] = [
     id: '2026-08-15-video-lives-in-the-deck',
     date: '2026-08-15',
     title: 'The video call happens in the app now, beside the deck',
-    detail: 'Every HIVE has its own room, at the top of the agenda rail. Anyone who is not in the dining room joins from there and shows up on everyone else\'s screen next to the slide — no second laptop under the TV, no separate meeting link to find.',
+    detail: 'Every HIVE has its own room, down the left of the deck: faces, then the slide, then tonight\'s outline. Anyone who is not in the room joins from there and shows up next to the slide — no second laptop under the TV, no separate meeting link to find. Turn a phone sideways and the faces move to the top instead.',
     href: { pathname: '/meeting-helper' },
     action: 'Open the deck',
   },

@@ -22,16 +22,21 @@ export type DeckVideoProps = {
   accentDeep: string;
   cardColor: string;
   softBorder: string;
-  height: number;
   /** Scaled type, handed down so the panel matches the slide beside it. */
   fontSize: number;
+  /**
+   * Told when the call starts and ends, so the deck can give the panel real
+   * room while people are on it and take that room back when they are not —
+   * an empty video box should not push the slide around all evening.
+   */
+  onLiveChange?: (live: boolean) => void;
 };
 
-export function DeckVideo({ accentDeep, cardColor, softBorder, height, fontSize }: DeckVideoProps) {
+export function DeckVideo({ accentDeep, cardColor, softBorder, fontSize }: DeckVideoProps) {
   return (
     <View
       style={{
-        height,
+        flex: 1,
         borderRadius: 14,
         borderWidth: 1,
         borderColor: softBorder,

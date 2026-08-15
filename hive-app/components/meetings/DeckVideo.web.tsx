@@ -25,19 +25,78 @@ import type { DeckVideoProps } from './DeckVideo';
 
 type State = 'idle' | 'opening' | 'live' | 'error';
 
+/**
+ * Daily's theme will only take plain hex. The deck's palette is not all hex —
+ * every HIVE except OG derives its deep ink as `rgb(...)` and its soft border
+ * as `rgba(...)` from that HIVE's accent — and handing those over got Nat
+ * *"property 'theme': unsupported theme configuration"* instead of a call.
+ *
+ * Alpha is flattened onto the paper the panel sits on rather than dropped, so a
+ * half-strength gold border still reads as the soft line it is.
+ */
+function toHex(color: string, over = '#fffdf5'): string | null {
+  const value = color.trim();
+  if (/^#[0-9a-f]{6}$/i.test(value)) return value.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(value)) {
+    const [r, g, b] = value.slice(1).split('');
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+  const match = value.match(/^rgba?\(([^)]+)\)$/i);
+  if (!match) return null;
+  const parts = match[1].split(',').map((part) => Number(part.trim()));
+  if (parts.length < 3 || parts.slice(0, 3).some((part) => !Number.isFinite(part))) return null;
+  const alpha = parts.length > 3 && Number.isFinite(parts[3]) ? Math.min(1, Math.max(0, parts[3])) : 1;
+  const base = alpha === 1 ? null : toHex(over);
+  const ground = base
+    ? [1, 3, 5].map((start) => parseInt(base.slice(start, start + 2), 16))
+    : [255, 255, 255];
+  const channels = parts.slice(0, 3).map((part, index) => {
+    const flattened = Math.round(part * alpha + ground[index] * (1 - alpha));
+    return Math.min(255, Math.max(0, flattened)).toString(16).padStart(2, '0');
+  });
+  return `#${channels.join('')}`;
+}
+
+/** Every colour or none — a half-applied theme is worse than Daily's own. */
+function deckTheme(accent: string, accentDeep: string, cardColor: string, softBorder: string) {
+  const colors = {
+    accent: toHex(accent),
+    accentText: '#ffffff',
+    background: toHex(cardColor),
+    backgroundAccent: toHex(cardColor),
+    baseText: toHex(accentDeep, cardColor),
+    border: toHex(softBorder, cardColor),
+    mainAreaBg: '#1c1a17',
+    mainAreaBgAccent: toHex(accent),
+    mainAreaText: '#ffffff',
+    supportiveText: toHex(accentDeep, cardColor),
+  };
+  return Object.values(colors).every(Boolean)
+    ? { colors: colors as Record<string, string> }
+    : undefined;
+}
+
 export function DeckVideo({
   communityId,
   accent,
   accentDeep,
   cardColor,
   softBorder,
-  height,
   fontSize,
+  onLiveChange,
 }: DeckVideoProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<DailyCall | null>(null);
   const [state, setState] = useState<State>('idle');
   const [problem, setProblem] = useState<string | null>(null);
+
+  // The deck decides how much room to give this panel, so it has to be told
+  // when there is actually a call in it.
+  const liveRef = useRef(onLiveChange);
+  liveRef.current = onLiveChange;
+  useEffect(() => {
+    liveRef.current?.(state === 'live');
+  }, [state]);
 
   // Leaving the deck mid-call should hang up rather than leave a ghost of you
   // in the room with everybody looking at it.
@@ -71,6 +130,15 @@ export function DeckVideo({
       // time, because building a second one in the same parent throws.
       let frame = frameRef.current;
       if (!frame) {
+        // Daily allows exactly one call instance per page. A first attempt that
+        // threw part-way — an unsupported theme, say — can leave one behind
+        // that we never got a handle on, and every retry after it would fail
+        // with "duplicate DailyIframe instances" instead of the real reason.
+        const theme = deckTheme(accent, accentDeep, cardColor, softBorder);
+        const stray = DailyIframe.getCallInstance?.();
+        if (stray) await stray.destroy().catch(() => {});
+        parent.replaceChildren?.();
+
         frame = DailyIframe.createFrame(parent, {
           showLeaveButton: true,
           showFullscreenButton: true,
@@ -80,20 +148,9 @@ export function DeckVideo({
             border: '0',
             borderRadius: '14px',
           },
-          theme: {
-            colors: {
-              accent,
-              accentText: '#ffffff',
-              background: cardColor,
-              backgroundAccent: cardColor,
-              baseText: accentDeep,
-              border: softBorder,
-              mainAreaBg: '#1c1a17',
-              mainAreaBgAccent: accent,
-              mainAreaText: '#ffffff',
-              supportiveText: accentDeep,
-            },
-          },
+          // Spread rather than `theme: undefined` — Daily reads the key being
+          // present as a theme it then has to make sense of.
+          ...(theme ? { theme } : {}),
         });
         frameRef.current = frame;
         // The leave button is Daily's own, so the panel has to hear about it
@@ -119,7 +176,8 @@ export function DeckVideo({
   return (
     <div
       style={{
-        height,
+        flex: 1,
+        minHeight: 0,
         borderRadius: 14,
         border: `1px solid ${softBorder}`,
         backgroundColor: cardColor,

@@ -754,6 +754,10 @@ export default function MeetingHelperScreen() {
 
   const [slideIndex, setSlideIndex] = useState(0);
 
+  // Is there actually a call on? DeckVideo tells us, and the layout gives the
+  // panel real room only once there is somebody in it.
+  const [videoLive, setVideoLive] = useState(false);
+
   // Slide 1 (Welcome) and slide 2 (Who's in the room) act as the pre-meeting
   // screen, so the arrival data keeps polling while either is showing.
   const {
@@ -3818,6 +3822,13 @@ export default function MeetingHelperScreen() {
   // roster showing who's been through, who's up, and who's still to go.
   const showRail = isTV || width >= 1000;
 
+  // Three columns need real width to each be worth reading. Below that the
+  // video goes across the top instead of down the side — which is what makes a
+  // phone turned sideways, or an iPad, a seat you can actually take. Nat,
+  // 2026-08-15: "we need to make sure that no matter which device you're on you
+  // can still join."
+  const stackVideo = width < 900;
+
   const renderRail = () => {
     const [hour, minute] = hardOutTime.split(':').map(Number);
     const hardOutDate = new Date(clockNow);
@@ -3854,22 +3865,6 @@ export default function MeetingHelperScreen() {
           paddingBottom: sz(20, 12),
         }}
       >
-        {/* The room's faces, above the clock — Nat, 2026-08-15: "it has the
-            meeting helper inside the same screen side by side." One HIVE, one
-            room; whoever is remote joins it and everyone in the dining room
-            watches them here while the deck runs beside it. */}
-        <View style={{ marginBottom: sz(18, 12) }}>
-          <DeckVideo
-            communityId={communityId}
-            accent={GOLD}
-            accentDeep={GOLD_DEEP}
-            cardColor={CARD}
-            softBorder={GOLD_SOFT}
-            height={sz(196, 148)}
-            fontSize={sz(16, 12)}
-          />
-        </View>
-
         <Pressable
           onPress={() => {
             setHardOutDraft('');
@@ -4087,7 +4082,37 @@ export default function MeetingHelperScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: PAPER }} edges={['top']}>
-      <View style={{ flex: 1, flexDirection: 'row' }}>
+      <View style={{ flex: 1, flexDirection: stackVideo ? 'column' : 'row' }}>
+      {/* Faces first, then the slide, then the outline — the shape Nat drew
+          from Jasmine's classroom on 2026-08-15: "the open the classroom,
+          that's where anyone who's doing remotely's face pops up, and then the
+          arrivals and hellos, that's where our meeting helper is, and then on
+          the right hand side is our outline ... I love continuity."
+
+          It is a column on a phone held upright, where three side-by-side
+          things would each be too thin to read, and a row everywhere else —
+          which is a `flexDirection` change on this one View, so turning a
+          phone sideways rearranges the deck without dropping the call.
+
+          The panel is small until somebody is actually on it: an empty video
+          box has no business taking a third of the deck all evening. */}
+      <View
+        style={
+          stackVideo
+            ? { height: videoLive ? Math.round(height * 0.32) : sz(74, 62), padding: sz(12, 9), paddingBottom: 0 }
+            : { width: videoLive ? sz(360, 280) : sz(212, 178), padding: sz(16, 11), paddingRight: 0 }
+        }
+      >
+        <DeckVideo
+          communityId={communityId}
+          accent={GOLD}
+          accentDeep={GOLD_DEEP}
+          cardColor={CARD}
+          softBorder={GOLD_SOFT}
+          fontSize={sz(16, 12)}
+          onLiveChange={setVideoLive}
+        />
+      </View>
       <View
         style={{ flex: 1 }}
         onLayout={(event) => {
