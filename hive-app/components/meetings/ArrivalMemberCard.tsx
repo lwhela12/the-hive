@@ -58,15 +58,21 @@ export function ArrivalMemberCard({
       }}
     >
       <Avatar name={member.name} url={member.avatar_url} size={(isTV ? 88 : 56) * scale} />
+      {/* One line, shrinking to fit rather than breaking. "Charlee" came out
+          as "Charl / ee" on Nat's screen (2026-08-14) — a name split across
+          two lines mid-word reads as a bug, and it was: the card is a fixed
+          width and the type was not allowed to give. */}
       <Text
-        numberOfLines={2}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.6}
         style={{
           fontFamily: 'LibreBaskerville_700Bold',
-          fontSize: (isTV ? 34 : 22) * scale,
-          lineHeight: (isTV ? 42 : 28) * scale,
+          fontSize: (isTV ? 30 : 21) * scale,
+          lineHeight: (isTV ? 38 : 27) * scale,
           color: '#2d2d2d',
           textAlign: 'center',
-          marginTop: (isTV ? 14 : 10) * scale,
+          marginTop: (isTV ? 12 : 9) * scale,
         }}
       >
         {nameToday}

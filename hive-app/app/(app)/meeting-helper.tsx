@@ -621,7 +621,39 @@ export default function MeetingHelperScreen() {
   };
   const { communityId, communityRole, profile, session, community } = useAuth();
   const { width, height } = useWindowDimensions();
-  const isTV = width >= 1400;
+
+  /**
+   * The deck sizes itself to the space it actually has, not to the window.
+   *
+   * This used to be `const isTV = width >= 1400` feeding a `sz(tv, small)` that
+   * picked one of two numbers. Two things were wrong with it, and Nat hit both
+   * on 2026-08-14: *"the site isn't adjusting very well depending on the size
+   * of my screen and if I have sidebars extended or not."*
+   *
+   *  - It measured the WINDOW. The deck sits inside the app's rail and, on a
+   *    wide screen, beside the agenda panel — so a 1900px window can leave the
+   *    slide about 1100px, while `isTV` cheerfully reported a television.
+   *    Open a browser sidebar too and it got worse.
+   *  - It was a CLIFF. At 1399px every word was small; at 1401px every word
+   *    jumped to full size. Nothing in between, so nothing ever quite fitted.
+   *
+   * Now the stage reports its own box, and `sz()` walks smoothly between the
+   * two numbers instead of choosing one. Height counts as well as width — a
+   * short window condenses the deck rather than pushing the last card under
+   * the footer.
+   */
+  const [stage, setStage] = useState({ w: 0, h: 0 });
+  const stageW = stage.w || width;
+  const stageH = stage.h || height;
+  const spanScale = (value: number, from: number, to: number) =>
+    Math.min(1, Math.max(0, (value - from) / (to - from)));
+  // Full size wants a genuinely big stage. Nat, same session: "your font
+  // choices are a little large" — so the top of the range sits further out
+  // than the old 1400px cliff did, and ordinary laptop widths land below it.
+  const deckScale = Math.min(spanScale(stageW, 660, 1600), spanScale(stageH, 560, 940));
+  // Kept for the handful of DISCRETE choices — column counts, how many lines a
+  // label may wrap to — where there is no in-between value to interpolate.
+  const isTV = stageW >= 1180;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
 
   // Which deck tonight is. Any HIVE without a designed deck falls to 'default'
@@ -1436,7 +1468,10 @@ export default function MeetingHelperScreen() {
   }, [communityId, editDraft, editKey, notes, savingNote]);
 
   // ---- Sizing helpers ----
-  const sz = useCallback((tv: number, small: number) => (isTV ? tv : small), [isTV]);
+  const sz = useCallback(
+    (tv: number, small: number) => Math.round((small + (tv - small) * deckScale) * 100) / 100,
+    [deckScale],
+  );
   const contentPadH = sz(150, 44);
   // Trimmed 2026-08-11 (were 72/36 and 96/72): Nat — "I have to scroll just
   // the tiniest bit and that drives me nuts." The footer overlay is ~48px
@@ -1444,7 +1479,16 @@ export default function MeetingHelperScreen() {
   // pure air. Checked against ~1440x900 (the TV branch starts at 1400) and
   // ~1280x800 laptop viewports.
   const contentPadTop = sz(44, 26);
-  const contentPadBottom = sz(56, 44);
+  /**
+   * The footer (tagline + slide counter) floats over the slide, so the slide
+   * has to end above it. Nat, 2026-08-14: *"I don't like that the footer is
+   * overlapping text, it feels sloppy."*
+   *
+   * Measured rather than guessed: its own bottom padding, plus a line of the
+   * tagline at whatever size the tagline currently is, plus a little air.
+   */
+  const footerClearance = sz(24, 14) + sz(15, 9) * 1.7 + sz(18, 12);
+  const contentPadBottom = sz(40, 28) + footerClearance;
 
   const monthName = getMonthNameFromPeriod(responsePeriod);
   const periodMatch = (responsePeriod ?? '').match(/^(\d{4})-(\d{2})$/);
@@ -1543,7 +1587,7 @@ export default function MeetingHelperScreen() {
   // ---- Slides ----
   // Welcome + Room merged (Lucas: this is the slide up as people arrive, and
   // the date/time header doubles as the "oops, wrong day!" check).
-  const roomColumns = isTV ? 5 : width >= 1024 ? 4 : width >= 760 ? 3 : width >= 480 ? 2 : 1;
+  const roomColumns = stageW >= 1400 ? 5 : stageW >= 1024 ? 4 : stageW >= 760 ? 3 : stageW >= 480 ? 2 : 1;
   const renderRoom = () => (
     <View style={{ flex: 1 }}>
       <View style={{ alignItems: 'center', marginBottom: sz(24, 14) }}>
@@ -1658,7 +1702,7 @@ export default function MeetingHelperScreen() {
       </View>
       {/* The full HIVE crest gets its giant moment here (square frame — the
           arrivals slide squished it into a rectangle). */}
-      {width >= 900 ? (
+      {stageW >= 900 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <Image
             source={hiveLogo}
@@ -2739,7 +2783,7 @@ export default function MeetingHelperScreen() {
   // into these bubbles — early on most people haven't filled out the check-in,
   // and an empty personal slide makes them feel singled out. As the check-in
   // data richens, per-member slides can be reintroduced from git history.
-  const bubbleColumns = isTV ? 5 : width >= 1024 ? 4 : width >= 760 ? 3 : width >= 480 ? 2 : 1;
+  const bubbleColumns = stageW >= 1400 ? 5 : stageW >= 1024 ? 4 : stageW >= 760 ? 3 : stageW >= 480 ? 2 : 1;
 
   const HUMMDINGER_DETAIL_SECTIONS = [
     { key: 'q_pop_progress', label: 'Progress' },
@@ -2885,7 +2929,7 @@ export default function MeetingHelperScreen() {
                 </Text>
                 {priorities ? (
                   <Text
-                    numberOfLines={2}
+                    numberOfLines={1}
                     style={{
                       fontFamily: 'Lato_400Regular',
                       fontSize: sz(15, 10),
@@ -3366,17 +3410,15 @@ export default function MeetingHelperScreen() {
         style={{
           fontFamily: 'Lato_400Regular',
           fontStyle: 'italic',
-          fontSize: sz(24, 14),
-          lineHeight: sz(36, 21),
+          fontSize: sz(19, 13),
+          lineHeight: sz(28, 19),
           color: MUTED,
-          marginBottom: sz(22, 14),
-          maxWidth: 720,
+          marginBottom: sz(12, 9),
         }}
       >
-        Each one turns a blank on the research site into a real number. Tap a job,
-        say who is taking it, and it lands on their list with the questions already in it.
+        Tap one, say who is taking it.
       </Text>
-      <BounceScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: sz(220, 160), gap: sz(12, 8) }}>
+      <BounceScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: sz(180, 130), gap: sz(8, 6) }}>
         {PRODUCTION_JOBS.map((job) => {
           const open = openJobKey === job.key;
           const takenBy = jobsAssigned[job.key];
@@ -3387,7 +3429,7 @@ export default function MeetingHelperScreen() {
                 backgroundColor: CARD,
                 borderWidth: 1,
                 borderColor: takenBy ? GOLD : GOLD_SOFT,
-                borderRadius: sz(18, 14),
+                borderRadius: sz(16, 13),
                 overflow: 'hidden',
               }}
             >
@@ -3395,10 +3437,10 @@ export default function MeetingHelperScreen() {
                 onPress={() => setOpenJobKey(open ? null : job.key)}
                 accessibilityRole="button"
                 accessibilityLabel={`${job.title}${takenBy ? `, taken by ${takenBy}` : ''}`}
-                style={{ paddingHorizontal: sz(24, 16), paddingVertical: sz(18, 13) }}
+                style={{ paddingHorizontal: sz(20, 14), paddingVertical: sz(13, 10) }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(12, 8) }}>
-                  <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: sz(26, 16), color: CHARCOAL }}>
+                  <Text style={{ flex: 1, fontFamily: 'Lato_700Bold', fontSize: sz(21, 15), color: CHARCOAL }}>
                     {job.title}
                   </Text>
                   {takenBy ? (
@@ -3413,8 +3455,8 @@ export default function MeetingHelperScreen() {
                 </View>
                 {!open && (
                   <Text
-                    numberOfLines={2}
-                    style={{ fontFamily: 'Lato_400Regular', fontSize: sz(20, 13), lineHeight: sz(30, 19), color: MUTED, marginTop: sz(6, 4) }}
+                    numberOfLines={1}
+                    style={{ fontFamily: 'Lato_400Regular', fontSize: sz(16, 12), lineHeight: sz(23, 17), color: MUTED, marginTop: sz(4, 3) }}
                   >
                     {job.why}
                   </Text>
@@ -3796,7 +3838,17 @@ export default function MeetingHelperScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: PAPER }} edges={['top']}>
       <View style={{ flex: 1, flexDirection: 'row' }}>
-      <View style={{ flex: 1 }}>
+      <View
+        style={{ flex: 1 }}
+        onLayout={(event) => {
+          // What the slide ACTUALLY has, after the rail and the agenda panel
+          // have taken theirs. Everything the deck draws is sized from this.
+          const { width: w, height: h } = event.nativeEvent.layout;
+          setStage((current) =>
+            Math.abs(current.w - w) < 2 && Math.abs(current.h - h) < 2 ? current : { w, h }
+          );
+        }}
+      >
         {/* Corner watermark on every slide */}
         <Image
           source={hiveBee}
@@ -3824,7 +3876,7 @@ export default function MeetingHelperScreen() {
             paddingHorizontal: contentPadH,
             paddingTop: contentPadTop,
             paddingBottom: contentPadBottom,
-            minHeight: height - 120,
+            minHeight: Math.max(0, stageH - contentPadTop - contentPadBottom),
           }}
         >
           {activeSlide.render()}

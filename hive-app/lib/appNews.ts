@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-14-deck-fits-your-screen',
+    date: '2026-08-14',
+    title: 'The meeting deck fits whatever screen it is on',
+    detail: 'It measures the space it actually has now — so opening a sidebar, shrinking the window or casting to a TV all resize the slide smoothly instead of jumping between two fixed sizes. The footer stays out from under the text, and a long name stays on one line.',
+    href: { pathname: '/meeting-helper' },
+    action: 'Open the deck',
+  },
+  {
     id: '2026-08-14-production-end-of-month',
     date: '2026-08-14',
     title: 'Production HIVE has an end-of-month check-in too',
