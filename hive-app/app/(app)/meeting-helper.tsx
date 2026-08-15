@@ -3437,38 +3437,50 @@ export default function MeetingHelperScreen() {
               📌 New threads: {tonightRecap.threads.join(' · ')}
             </Text>
           ) : null}
-          <Pressable
-            onPress={handleSealMeeting}
-            disabled={sealState === 'saving' || sealState === 'done'}
-            style={{
-              alignSelf: 'flex-start',
-              marginTop: sz(10, 6),
-              backgroundColor: sealState === 'done' ? accentWash(0.16) : GOLD,
-              borderWidth: sealState === 'done' ? 1 : 0,
-              borderColor: GOLD_SOFT,
-              borderRadius: 999,
-              paddingHorizontal: sz(22, 14),
-              paddingVertical: sz(11, 8),
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: 'Lato_700Bold',
-                fontSize: sz(17, 12),
-                color: sealState === 'done' ? GOLD_DEEP : '#ffffff',
-              }}
-            >
-              {sealState === 'saving'
-                ? 'Sealing…'
-                : sealState === 'done'
-                  ? '✓ Sealed — it’s in Meeting Summaries'
-                  : sealState === 'error'
-                    ? 'Hmm, try sealing again'
-                    : '🍯 Seal tonight’s notes → Meeting Summaries'}
-            </Text>
-          </Pressable>
         </View>
       ) : null}
+
+      {/* Seal, always.
+          It used to live INSIDE the "Tonight in the app" card, so it only
+          existed on a night when something had already happened — an event
+          penciled in, a to-do jotted, a wish commented on. Nat opened Wrap-Up
+          on a quiet Saturday looking for it, 2026-08-15: *"there's nothing to
+          click to like import notes or anything like that. So I think one of us
+          is missing a step."* Nobody was; the button was hiding.
+
+          A quiet meeting is still a meeting, and since the same day it may have
+          a transcript waiting to be joined to a record. The button that makes
+          the record cannot be the one thing that needs the record to exist. */}
+      <Pressable
+        onPress={handleSealMeeting}
+        disabled={sealState === 'saving' || sealState === 'done'}
+        style={{
+          alignSelf: 'flex-start',
+          marginTop: sz(18, 11),
+          backgroundColor: sealState === 'done' ? accentWash(0.16) : GOLD,
+          borderWidth: sealState === 'done' ? 1 : 0,
+          borderColor: GOLD_SOFT,
+          borderRadius: 999,
+          paddingHorizontal: sz(22, 14),
+          paddingVertical: sz(11, 8),
+        }}
+      >
+        <Text
+          style={{
+            fontFamily: 'Lato_700Bold',
+            fontSize: sz(17, 12),
+            color: sealState === 'done' ? GOLD_DEEP : '#ffffff',
+          }}
+        >
+          {sealState === 'saving'
+            ? 'Sealing…'
+            : sealState === 'done'
+              ? '✓ Sealed — it’s in Meeting Summaries'
+              : sealState === 'error'
+                ? 'Hmm, try sealing again'
+                : '🍯 Seal tonight’s notes → Meeting Summaries'}
+        </Text>
+      </Pressable>
       <View
         style={{
           // Was 40/22 of top margin — the reminders card is what nudged this

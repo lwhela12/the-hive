@@ -178,9 +178,19 @@ export default function MeetingsScreen() {
   // shows a check-in nobody can act on yet.
   const { availableSurveys, myResponses, submitResponse: submitSeasonSurvey } = useSurveys(communityId ?? undefined, profile?.id);
   const [activeSeasonSurvey, setActiveSeasonSurvey] = useState<any | null>(null);
-  const openSeasonSurveys = availableSurveys.filter(
-    (s) => getSeasonCheckInKind(s) && isSurveyOnHomeToday(s, new Date())
-  );
+  /**
+   * Every check-in this HIVE has open today — the same rule Home uses, so the
+   * two screens can never disagree about whether there is one.
+   *
+   * It used to ask only for the season check-ins (quarterly, end-of-year), and
+   * Production HIVE is what proved that wrong: it has had both its own
+   * check-ins since 2026-08-14 — "Before our first meeting", closing the
+   * afternoon of the 18th, and "Where the show got to this month" — and this
+   * screen still showed it "coming soon" while the email in its members'
+   * inboxes said the check-in was open. Nat, 2026-08-15: *"we made those
+   * already, so that needs to be fixed."*
+   */
+  const openCheckIns = availableSurveys.filter((s) => isSurveyOnHomeToday(s, new Date()));
   // The 2026-08-07 decision gated the check-ins in Admin and on the direct
   // tune-up route, but this screen kept offering OG's tune-up pills and the
   // Meeting Helper deck inside Tech and Production as if they were theirs
@@ -549,16 +559,10 @@ export default function MeetingsScreen() {
 
     showAlert(
       'Meeting Scheduled',
-      'Your meeting has been created with a Google Meet link. All HIVE members can see it.'
+      'Everyone in this HIVE can see it, and the calendar invite points at the Meeting Helper.'
     );
 
     await fetchMeetings();
-  };
-
-  const handleJoinMeeting = (meetLink: string) => {
-    Linking.openURL(meetLink).catch(() => {
-      showAlert('Error', 'Could not open the meeting link');
-    });
   };
 
   const handleDeleteMeeting = (eventId: string, title: string) => {
@@ -1184,24 +1188,13 @@ export default function MeetingsScreen() {
 
           {/* Action tiles */}
           <View style={{ flexDirection: 'row', flexWrap: useCompactActions ? 'wrap' : 'nowrap', gap: 10 }}>
-            {/* Join */}
-            <Pressable
-              onPress={() => nextMeeting?.meet_link ? handleJoinMeeting(nextMeeting.meet_link) : null}
-              style={({ pressed }) => ({
-                flex: useCompactActions ? undefined : 1,
-                width: useCompactActions ? '48%' : undefined,
-                backgroundColor: nextMeeting?.meet_link ? '#bd9348' : 'rgba(255,255,255,0.08)',
-                borderRadius: 14,
-                paddingVertical: 16,
-                alignItems: 'center',
-                opacity: pressed ? 0.75 : 1,
-              })}
-            >
-              <Text style={{ fontSize: 22, marginBottom: 4 }}>📹</Text>
-              <Text style={{ fontFamily: 'Lato_700Bold', color: nextMeeting?.meet_link ? '#fff' : 'rgba(255,255,255,0.35)', fontSize: 13 }}>
-                Join
-              </Text>
-            </Pressable>
+            {/* The Join tile is gone. It opened Google Meet, and since
+                2026-08-15 the meeting happens inside HIVE — the faces and the
+                deck on one screen. Nat: "the join should bring you inside of
+                the meeting helper. Or you just get rid of that join button ...
+                we need to make sure that all paths lead to the same campfire."
+                Two doors to one room is how somebody ends up sitting alone in
+                the empty one. */}
 
             {/* Meeting Helper — the live deck. Cast it to the TV or follow
                 along from any seat (replaced the legacy Canva Slide Deck tile;
@@ -1223,7 +1216,8 @@ export default function MeetingsScreen() {
               style={({ pressed }) => ({
                 flex: useCompactActions ? undefined : 1,
                 width: useCompactActions ? '48%' : undefined,
-                backgroundColor: 'rgba(255,255,255,0.08)',
+                // Gold now that it is the way IN, not one tool among several.
+                backgroundColor: meetingDeck ? '#bd9348' : 'rgba(255,255,255,0.08)',
                 borderRadius: 14,
                 paddingVertical: 16,
                 alignItems: 'center',
@@ -1234,8 +1228,15 @@ export default function MeetingsScreen() {
               <Text style={{ fontFamily: 'Lato_700Bold', color: meetingDeck ? '#fff' : 'rgba(255,255,255,0.35)', fontSize: 13 }}>
                 Meeting Helper
               </Text>
-              <Text style={{ fontFamily: 'Lato_400Regular', color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 2 }}>
-                {meetingDeck ? 'follow the deck live' : 'coming soon'}
+              <Text
+                style={{
+                  fontFamily: 'Lato_400Regular',
+                  color: meetingDeck ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.3)',
+                  fontSize: 10,
+                  marginTop: 2,
+                }}
+              >
+                {meetingDeck ? 'the faces and the deck' : 'coming soon'}
               </Text>
             </Pressable>
 
@@ -1294,7 +1295,7 @@ export default function MeetingsScreen() {
                 gap: 8,
               }}
             >
-              {tailoredCheckIns ? (
+              {tailoredCheckIns || openCheckIns.length > 0 ? (
                 <>
                   <Text
                     style={{
@@ -1305,10 +1306,12 @@ export default function MeetingsScreen() {
                   >
                     Fill these in before the meeting
                   </Text>
-                  {([
+                  {/* OG's and Tech's monthly pair. A HIVE without a designed
+                      monthly rhythm still gets its own open check-ins below. */}
+                  {(tailoredCheckIns ? [
                     { label: 'Monthly Tune-up', params: {} },
                     { label: 'Halfway Check-in', params: { mode: 'midpoint' } },
-                  ] as const).map((tool) => (
+                  ] as const : []).map((tool) => (
                     <Pressable
                       key={tool.label}
                       onPress={() => router.push({
@@ -1328,8 +1331,10 @@ export default function MeetingsScreen() {
                       </Text>
                     </Pressable>
                   ))}
-                  {openSeasonSurveys.map((survey) => {
-                    const kind = getSeasonCheckInKind(survey)!;
+                  {openCheckIns.map((survey) => {
+                    // Season check-ins wear their emoji; a HIVE's own check-in
+                    // just says its name, which is already written to be read.
+                    const kind = getSeasonCheckInKind(survey);
                     return (
                       <Pressable
                         key={survey.id}
@@ -1343,7 +1348,7 @@ export default function MeetingsScreen() {
                         })}
                       >
                         <Text style={{ fontFamily: 'Lato_700Bold', color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
-                          {SEASON_CHECK_IN_EMOJI[kind]} {survey.title}
+                          {kind ? `${SEASON_CHECK_IN_EMOJI[kind]} ` : ''}{survey.title}
                         </Text>
                       </Pressable>
                     );
@@ -1410,14 +1415,10 @@ export default function MeetingsScreen() {
                     )}
                   </View>
                   <View className="flex-row items-center gap-2">
-                    {event.meet_link && (
-                      <Pressable
-                        onPress={() => handleJoinMeeting(event.meet_link!)}
-                        className="bg-honey-500 px-4 py-2 rounded-lg active:bg-honey-600"
-                      >
-                        <Text className="text-white font-semibold">Join</Text>
-                      </Pressable>
-                    )}
+                    {/* Meetings scheduled before 2026-08-15 still carry a
+                        Google Meet link in the database. It is not offered as a
+                        way in any more — the meeting is in the Meeting Helper,
+                        and a second door leads to an empty room. */}
                     <Pressable
                       onPress={() => handleEditEvent(event)}
                       className="bg-gray-200 px-3 py-2 rounded-lg active:bg-gray-300"
@@ -1453,7 +1454,7 @@ export default function MeetingsScreen() {
             <Text className="text-4xl mb-4">📝</Text>
             <Text className="text-gray-600 text-center">
               No meeting summaries yet.{'\n'}
-              Import Gemini notes after your next HIVE gathering.
+              The deck's Wrap-Up slide seals the night's notes here when you meet.
             </Text>
           </View>
         ) : (
@@ -1631,13 +1632,12 @@ export default function MeetingsScreen() {
               />
             </View>
 
-            {editingEvent?.meet_link && (
-              <View className="bg-gray-50 rounded-lg p-4 mt-4">
-                <Text className="text-sm text-gray-600">
-                  📹 This meeting has a Google Meet link attached
-                </Text>
-              </View>
-            )}
+            <View className="bg-gray-50 rounded-lg p-4 mt-4">
+              <Text className="text-sm text-gray-600">
+                🎞️ This meeting happens in the Meeting Helper — the faces and the
+                deck on one screen. The calendar invite points there.
+              </Text>
+            </View>
           </BounceScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>

@@ -107,17 +107,16 @@ async function createCalendarEvent(
 ): Promise<GoogleCalendarEvent> {
   const { title, description, startDateTime, endDateTime, timeZone, attendees, location } = params;
 
+  // No Google Meet link. Nat, 2026-08-15: *"we need to make sure that the
+  // Google Meet buttons are gone off of everywhere ... all paths lead to the
+  // same campfire."* The meeting happens inside HIVE now — faces and the deck
+  // on one screen — so a second front door leads to an empty room with nobody
+  // in it. The calendar invite says where to actually go instead.
   const requestBody: Record<string, unknown> = {
     summary: title,
-    description,
+    description: [description, '', `Join in HIVE: ${MEETING_HOME}`].filter(Boolean).join('\n'),
     start: { dateTime: startDateTime, timeZone },
     end: { dateTime: endDateTime, timeZone },
-    conferenceData: {
-      createRequest: {
-        requestId: `hive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        conferenceSolutionKey: { type: 'hangoutsMeet' },
-      },
-    },
   };
 
   // Add location if provided (for in-person meetings)
@@ -133,7 +132,6 @@ async function createCalendarEvent(
   }
 
   const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
-  url.searchParams.set('conferenceDataVersion', '1');
   url.searchParams.set('sendUpdates', 'all'); // Ensure invites are sent
 
   const response = await fetch(url.toString(), {
@@ -154,14 +152,10 @@ async function createCalendarEvent(
 }
 
 /**
- * Extract Meet link from calendar event
+ * Where a HIVE meeting actually happens, for the calendar invite to point at.
+ * The deck is the room: it carries the video panel and the slides together.
  */
-function extractMeetLink(event: GoogleCalendarEvent): string | null {
-  const meetEntry = event.conferenceData?.entryPoints?.find(
-    (ep) => ep.entryPointType === 'video'
-  );
-  return meetEntry?.uri ?? null;
-}
+const MEETING_HOME = `${Deno.env.get('EXPO_PUBLIC_APP_URL') || 'https://app.the-hive.app'}/meeting-helper`;
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -365,7 +359,10 @@ Deno.serve(async (req) => {
       location,
     });
 
-    const meetLink = extractMeetLink(calendarEvent);
+    // Nothing to extract any more — the meeting has one door and it is in the
+    // app. Kept as an explicit null so the column reads as "deliberately none"
+    // rather than "we forgot".
+    const meetLink: string | null = null;
 
     // Create authenticated Supabase client
     const supabase = createClient(

@@ -266,8 +266,15 @@ function seasonEmailHtml(
   touch: SeasonTouch,
   month: string,
   day: number,
+  rawHiveName: string,
 ): string {
   const name = escapeHtml(rawName);
+  // Whose HIVE this is, said in the email itself and on the button. Nat,
+  // 2026-08-15: *"I think it should have either the hive honeybee or a pro
+  // hive before we meet ... I think it's just open pro hive."*
+  const hive = escapeHtml(rawHiveName);
+  const kicker = `<p style="text-align: center; color: #6b4a8f; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${hive}</p>`;
+  const openButton = `<a href="${APP_URL}/hive" style="background: #6b4a8f; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open ${hive}</a>`;
   if (kind === 'endofmonth') {
     const heading = touch === 'day_of' ? 'Last day of the month' : 'How did the month go?';
     const body = touch === 'day_of'
@@ -276,12 +283,13 @@ function seasonEmailHtml(
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
         <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🎬</span></div>
+        ${kicker}
         <h1 style="color: #6b4a8f; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
         <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The month ends ${month} ${day}</p>
         <p style="font-size: 15px;">Hi ${name},</p>
         <p style="font-size: 15px;">${body}</p>
         <div style="text-align: center; margin: 28px 0;">
-          <a href="${APP_URL}/hive" style="background: #6b4a8f; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open HIVE and check in</a>
+          ${openButton}
         </div>
         <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Every answer stays inside your HIVE. 🍯</p>
       </div>
@@ -295,12 +303,13 @@ function seasonEmailHtml(
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
         <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🎬</span></div>
+        ${kicker}
         <h1 style="color: #6b4a8f; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
-        <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">We meet ${month} ${day}</p>
+        <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${month} ${day}</p>
         <p style="font-size: 15px;">Hi ${name},</p>
         <p style="font-size: 15px;">${body}</p>
         <div style="text-align: center; margin: 28px 0;">
-          <a href="${APP_URL}/hive" style="background: #6b4a8f; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open HIVE and check in</a>
+          ${openButton}
         </div>
         <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Every answer stays inside your HIVE. 🍯</p>
       </div>
@@ -320,12 +329,13 @@ function seasonEmailHtml(
     : (touch === 'day_of'
         ? `It's the very last day of the year and your check-in isn't in yet — five minutes, one look back, and you get to walk into the new year with the whole story written down.`
         : `The year is wrapping up. Your <strong>end-of-year check-in</strong> is open on Home — look back with us, celebrate a little, and point at what comes next. Short answers are perfect.`);
-  const button = kind === 'quarter' ? 'Open HIVE and look back' : 'Open HIVE and wrap the year';
+  const button = kind === 'quarter' ? `Open ${hive} and look back` : `Open ${hive} and wrap the year`;
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
       <div style="text-align: center; padding: 8px 0 4px;">
         <span style="font-size: 40px;">${emoji}</span>
       </div>
+      <p style="text-align: center; color: #bd9348; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${hive}</p>
       <h1 style="color: #bd9348; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
       <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">${sub}</p>
       <p style="font-size: 15px;">Hi ${name},</p>
@@ -338,44 +348,46 @@ function seasonEmailHtml(
   `;
 }
 
-function seasonSubject(kind: SeasonKind, touch: SeasonTouch, month: string, day: number): string {
-  if (kind === 'endofmonth') {
-    const heading = touch === 'day_of' ? 'Last day of the month' : 'How did the month go?';
-    const body = touch === 'day_of'
-      ? `It's the last day of the month and your check-in isn't in yet — a few minutes on what moved, what's stuck, and what you're taking on next.`
-      : `Your end-of-month check-in is open on Home. What moved on the show, what's stuck and what would unstick it, and what you're taking on before we meet again. Short answers are perfect.`;
-    return `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
-        <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🎬</span></div>
-        <h1 style="color: #6b4a8f; font-size: 22px; text-align: center; margin: 8px 0 4px;">${heading}</h1>
-        <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 20px;">The month ends ${month} ${day}</p>
-        <p style="font-size: 15px;">Hi ${name},</p>
-        <p style="font-size: 15px;">${body}</p>
-        <div style="text-align: center; margin: 28px 0;">
-          <a href="${APP_URL}/hive" style="background: #6b4a8f; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open HIVE and check in</a>
-        </div>
-        <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Every answer stays inside your HIVE. 🍯</p>
-      </div>
-    `;
-  }
+/**
+ * Every subject line says which HIVE it is from, first.
+ *
+ * Nat, 2026-08-15, opening one on her phone: *"there's nothing branded here
+ * that lets you know that it's for the hive right off the bat ... I think it
+ * needs to stay like, hive or pro hive, your check-in is open."* A person in
+ * three HIVEs gets these from all three, and an inbox shows the subject and
+ * nothing else.
+ *
+ * The `endofmonth` branch of this function used to be a copy of the email's
+ * HTML — a whole document returned as a subject line, referring to a `name`
+ * variable this function has never had. It would have thrown on 28 August, the
+ * first time Production's end-of-month check-in came due.
+ */
+function seasonSubject(
+  kind: SeasonKind,
+  touch: SeasonTouch,
+  month: string,
+  day: number,
+  hiveName: string,
+): string {
+  const from = `${hiveName} · `;
   if (kind === 'premeeting') {
     return touch === 'day_of'
-      ? `🎬 We meet today — 3 minutes before we do`
-      : `🎬 Before we meet on ${month} ${day} — your check-in is open`;
+      ? `🎬 ${from}We meet today — 3 minutes before we do`
+      : `🎬 ${from}Before we meet on ${month} ${day} — your check-in is open`;
   }
   if (kind === 'endofmonth') {
     return touch === 'day_of'
-      ? `🎬 Last day of the month — how did it go?`
-      : `🎬 How did the month go? Your check-in is open`;
+      ? `🎬 ${from}Last day of the month — how did it go?`
+      : `🎬 ${from}How did the month go? Your check-in is open`;
   }
   if (kind === 'quarter') {
     return touch === 'day_of'
-      ? `🧭 Last day of the quarter — quick check-in if you haven't`
-      : `🧭 The quarter wraps up ${month} ${day} — your check-in is open`;
+      ? `🧭 ${from}Last day of the quarter — quick check-in if you haven't`
+      : `🧭 ${from}The quarter wraps up ${month} ${day} — your check-in is open`;
   }
   return touch === 'day_of'
-    ? `🎉 Last day of the year — one look back before it goes`
-    : `🎉 One more look at the year — your end-of-year check-in is open`;
+    ? `🎉 ${from}Last day of the year — one look back before it goes`
+    : `🎉 ${from}One more look at the year — your end-of-year check-in is open`;
 }
 
 serve(async (req) => {
@@ -471,10 +483,10 @@ serve(async (req) => {
         body: JSON.stringify({
           from: FROM_EMAIL,
           to: testEmail,
-          subject: `[Preview] ${seasonSubject(seasonKind, 'window', seasonMonth, seasonDay)}`,
+          subject: `[Preview] ${seasonSubject(seasonKind, 'window', seasonMonth, seasonDay, 'Your HIVE')}`,
           html: seasonEmailHtml(
             typeof body.test_name === 'string' ? body.test_name : 'there',
-            seasonKind, 'window', seasonMonth, seasonDay,
+            seasonKind, 'window', seasonMonth, seasonDay, 'Your HIVE',
           ),
         }),
       });
@@ -1000,7 +1012,16 @@ serve(async (req) => {
           : (touch === 'day_of'
               ? `The year ends today and your check-in isn't in yet — five minutes on Home and you walk into the new year with the story written down.`
               : `The year wraps up ${month} ${day}. Look back with us on Home — celebrate a little, and point at what comes next.`);
-        const emailSubject = seasonSubject(kind, touch, month, day);
+        // Whose HIVE the members are about to hear from. Every check-in email
+        // says it in the subject line, because an inbox shows the subject and
+        // nothing else, and a person can be in three HIVEs at once.
+        const { data: seasonHive } = await supabaseAdmin
+          .from('communities')
+          .select('name')
+          .eq('id', survey.community_id)
+          .maybeSingle();
+        const hiveName = (seasonHive as { name?: string } | null)?.name || 'Your HIVE';
+        const emailSubject = seasonSubject(kind, touch, month, day, hiveName);
 
         surveysFired++;
 
@@ -1027,7 +1048,7 @@ serve(async (req) => {
                     from: FROM_EMAIL,
                     to: member.email,
                     subject: emailSubject,
-                    html: seasonEmailHtml(member.name ?? 'there', kind, touch, month, day),
+                    html: seasonEmailHtml(member.name ?? 'there', kind, touch, month, day, hiveName),
                   }),
                 });
                 if (res.ok) {

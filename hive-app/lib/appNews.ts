@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-15-one-door-to-the-meeting',
+    date: '2026-08-15',
+    title: 'One door to the meeting, and it is the Meeting Helper',
+    detail: 'The Join button that opened Google Meet is gone, and new meetings no longer get a Meet link — the calendar invite points at the deck instead, where the faces and the slides are together. Your HIVE\'s own check-ins now show on Meetings too, instead of a "coming soon" line for HIVEs that already have them.',
+    href: { pathname: '/meetings' },
+    action: 'Open Meetings',
+  },
+  {
     id: '2026-08-15-read-what-was-said',
     date: '2026-08-15',
     title: 'You can read what was said at a meeting',
