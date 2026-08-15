@@ -472,12 +472,15 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
           { key: 'q_cadence', label: 'How often we should meet' },
           { key: 'q_when', label: 'What day and time works' },
           { key: 'q_hive_help', label: 'HIVE Help' },
-          { key: 'q_venue_visit', label: 'Which room they would go and see' },
           // Who is allowed to know. This sits on "How we run" because it IS a
           // rule about how this HIVE runs, and it has to be read out before
           // anybody starts calling venues and saying who they are.
           { key: 'q_who_can_know', label: 'Who can know they are part of this' },
           { key: 'q_who_must_not_hear', label: 'Who should not hear it from us' },
+          // The line each person drew before the room existed. Read it here,
+          // where the group is agreeing how it runs, not at the end as a
+          // footnote — it is the most useful thing anybody said.
+          { key: 'q_walk_away', label: 'What would make them walk away' },
         ],
       },
       {
@@ -487,6 +490,32 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
           { key: 'q_honey_pot', label: 'Should we have a Honey Pot' },
           { key: 'q_honey_pot_amount', label: 'What feels right to put in' },
           { key: 'q_treasurer', label: 'Who would be treasurer' },
+        ],
+      },
+      // The month's POP, read back on the slides that use it. Nat's rule,
+      // 2026-08-15: *"make sure all the answers go somewhere useful, that we're
+      // never asking someone something for the sake of asking them."* Progress
+      // belongs with the news; what is stuck and what people are taking on
+      // belong on the slide that hands the next month's jobs out.
+      {
+        slide: 'news',
+        heading: 'What got done since we last met',
+        keys: [
+          { key: 'q_show_progress', label: 'What moved' },
+          // Asked in the check-in so the presentation can answer them out
+          // loud instead of the room guessing what people are wondering.
+          { key: 'q_biggest_question', label: 'Their biggest question' },
+        ],
+      },
+      {
+        slide: 'assignments',
+        heading: 'From the end-of-month POP',
+        keys: [
+          { key: 'q_show_obstacles', label: 'Still to figure out' },
+          { key: 'q_show_priorities', label: 'What they are taking on' },
+          // How much room they have. This is the slide where jobs get handed
+          // out, so it is the one place knowing somebody is full matters.
+          { key: 'q_plate', label: "What's on their plate" },
         ],
       },
     ],

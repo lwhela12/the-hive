@@ -481,7 +481,8 @@ export const PRE_MEETING_QUESTION_IDS = {
   honeyPotAmount: 'q_honey_pot_amount',
   treasurer: 'q_treasurer',
   hiveHelp: 'q_hive_help',
-  venueVisit: 'q_venue_visit',
+  // venueVisit removed 2026-08-15 — the venues get assigned live in the
+  // meeting, after the presentation that explains why any of them matter.
   whoCanKnow: 'q_who_can_know',
   whoMustNotHear: 'q_who_must_not_hear',
   biggestQuestion: 'q_biggest_question',
@@ -554,13 +555,14 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         '🤔 Tell me more Tuesday',
         "⏳ Let's start it once the show is rolling",
       ]),
-      choice('q_venue_visit', 'Which room would you go and look at?', [
-        'Notoriety, downtown',
-        'The Space',
-        'Vegas Theatre Company',
-        'The Henderson tent',
-        'Happy to go to any of them',
-      ]),
+      // "Which room would you go and look at?" was here and is gone.
+      // Nat, 2026-08-15: *"we don't need to ask 'what room would you go look
+      // at' before the meeting, because they don't know what that means. First
+      // I need to do my presentation, then we'll live-assign people in the
+      // meeting helper."* Asking somebody to pick between four Las Vegas
+      // venues they have never heard of, before the presentation that explains
+      // why any of them matter, gets you a guess — and a guess printed on a
+      // slide looks exactly like an opinion.
       // WHO IS ALLOWED TO KNOW. Nat, 2026-08-15: *"Charlee said she doesn't
       // want anyone to know that she's the producer of that show — but what
       // does she mean by 'no one'? Does she mean her cast? Society? What about
@@ -643,6 +645,44 @@ export function isSurveyOnHomeToday(
   survey: { title?: string | null; due_date?: string | null },
   today: Date,
 ): boolean {
+  /**
+   * A HIVE's OWN check-ins keep to their own dates too.
+   *
+   * Nat, 2026-08-15, looking at her to-do list three days before the first
+   * Production meeting: *"the only survey in the to do right now should be
+   * this 'pre meeting' one we're working on."* Instead it held "Where the show
+   * got to this month", which is not due until the 31st.
+   *
+   * Both were launched the same afternoon, and nothing was telling them apart
+   * — only the quarterly and the end-of-year had a season, so everything else
+   * showed from the moment it existed. A check-in that sits in your to-do for
+   * a fortnight before it means anything teaches you to ignore your to-do.
+   *
+   * Same three-day lead the email uses, so what lands in the inbox and what
+   * appears on Home happen on the same morning. The pre-meeting one goes when
+   * the meeting does; the end-of-month one lingers a week, because the month
+   * ending is not the same as everyone having answered.
+   */
+  const ownKind = isPreMeetingCheckInSurvey(survey)
+    ? 'premeeting'
+    : isEndOfMonthCheckInSurvey(survey)
+      ? 'endofmonth'
+      : null;
+  if (ownKind) {
+    if (!survey.due_date) return true;
+    const due = new Date(survey.due_date);
+    if (Number.isNaN(due.getTime())) return true;
+    const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+    const opens = new Date(dueDay.getFullYear(), dueDay.getMonth(), dueDay.getDate() - SEASON_CHECK_IN_LEAD_DAYS);
+    const lingersUntil = new Date(
+      dueDay.getFullYear(),
+      dueDay.getMonth(),
+      dueDay.getDate() + (ownKind === 'endofmonth' ? 7 : 0),
+    );
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return startOfToday >= opens && startOfToday <= lingersUntil;
+  }
+
   if (!getSeasonCheckInKind(survey)) return true;
   if (!survey.due_date) return true;
 
@@ -687,22 +727,34 @@ export type EndOfMonthCheckIn = {
 };
 
 const END_OF_MONTH_BY_SLUG: Record<string, EndOfMonthCheckIn> = {
+  /**
+   * Production's end-of-month IS a POP.
+   *
+   * Nat, 2026-08-15: *"'where the show got to this month' — that could be Pro
+   * HIVE POP, cos that's what it is? What did you get done? What do we still
+   * need to figure out? Who's doing what this week?"* She is right, and the
+   * name was long enough to be absurd sitting in a to-do list.
+   *
+   * Progress · Obstacles · Priorities is her own formula and it is already the
+   * shape of every HIVE meeting document. Production has one shared goal, so
+   * the POP is about the SHOW, never about the person.
+   *
+   * Three questions, and **every one of them prints on a slide** — progress on
+   * News, obstacles and priorities on "Who takes what", which is the slide that
+   * hands the next month's jobs out. The six-question version this replaces
+   * asked about confidence, learnings and shout-outs, and not one of those
+   * answers was read anywhere in the app. Nat: *"make sure all the answers go
+   * somewhere useful, that we're never asking someone something for the sake
+   * of asking them."*
+   */
   show: {
-    title: 'Where the show got to this month',
+    title: 'Pro HIVE POP',
     description:
-      'A few minutes at the end of the month, so we can all see the shape of it. Answer what you have an answer for and skip the rest.',
+      'Progress, Obstacles, Priorities — the same three questions we run everything on. Three minutes, and it sets up the next meeting.',
     questions: [
-      q('q_show_moved', 'What moved on the show this month? Anything at all — a call made, a number found, a room seen.', 'long'),
-      q('q_show_blocked', "What's stuck, and what would unstick it?", 'long'),
-      choice('q_show_confidence', 'How do you feel about where we are?', [
-        '🚀 Better than last month',
-        '😌 About the same, and that is fine',
-        '😐 About the same, and it is bugging me',
-        '😟 Wobblier than last month',
-      ]),
-      q('q_show_next', "What are you taking on before we meet again?", 'long'),
-      q('q_show_learned', 'Anything you found out that the rest of us should know?', 'long'),
-      q('q_show_shoutout', 'Anyone deserve a shout-out this month?', 'long'),
+      q('q_show_progress', 'What got done on the show this month? Anything at all — a call made, a number found, a room seen.', 'long'),
+      q('q_show_obstacles', 'What do we still need to figure out?', 'long'),
+      q('q_show_priorities', 'What are you taking on before we meet again?', 'long'),
     ],
   },
 };

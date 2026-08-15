@@ -812,7 +812,7 @@ function SectionMoveButton({ direction, disabled, onPress }: {
 }
 
 export default function HiveScreen() {
-  const { profile, communityId, communityRole, session, refreshProfile, community, memberships, openHivePicker, wholeHive } = useAuth();
+  const { profile, communityId, communityRole, session, refreshProfile, community, memberships, openHivePicker, wholeHive, switchCommunity } = useAuth();
   const router = useRouter();
 
   // A HIVE's home cannot be drawn while the app thinks you are standing above
@@ -1821,7 +1821,15 @@ export default function HiveScreen() {
 
   // Deep link: /hive?openWishId=... opens that wish's detail sheet (used by the
   // profile App Feedback shortcut; works for any screen that wants to point at a wish).
-  const { openWishId, catchup, from } = useLocalSearchParams<{ openWishId?: string; catchup?: string; from?: string }>();
+  const { openWishId, openSurveyId, hive: linkedHiveId, catchup, from } = useLocalSearchParams<{
+    openWishId?: string;
+    /** A check-in to open on arrival — the check-in email's button (2026-08-15). */
+    openSurveyId?: string;
+    /** Which HIVE that check-in belongs to, so the link works from anywhere. */
+    hive?: string;
+    catchup?: string;
+    from?: string;
+  }>();
 
   // Swarm Report theme pills (and anything else) can deep-link straight into
   // the daily-question Catch-up modal. `from` says where to put you back when
@@ -2164,6 +2172,38 @@ export default function HiveScreen() {
       setStoredItem(activeSurveyStorageKey, survey.id);
     }
   }, [activeSurveyStorageKey]);
+
+  /**
+   * The check-in email's button lands ON the check-in.
+   *
+   * Nat, 2026-08-15: *"when I clicked on the survey button in the mail, it just
+   * brought me into HIVE, it didn't bring me directly into the survey, and we
+   * always want that. If you leave instructions 'it's in home' and then the
+   * link drops them HIVE-Wide and then they have to navigate to the correct
+   * spot on the correct page in the correct HIVE? We might lose them."*
+   *
+   * The link carries both the survey and its HIVE, so it works from wherever
+   * the reader happens to be standing — including HIVE-Wide, and including a
+   * member of three HIVEs whose last one was a different one. If they are in
+   * the wrong HIVE we move them first and this effect runs again on arrival.
+   */
+  const handledSurveyIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openSurveyId || handledSurveyIdRef.current === openSurveyId) return;
+    const wantedHive = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
+    if (wantedHive && wantedHive !== communityId) {
+      void switchCommunity(wantedHive);
+      return;
+    }
+    if (!communityId) return;
+    // Surveys arrive a moment after the screen does; wait for the real row
+    // rather than giving up and leaving them on Home wondering.
+    const match = availableSurveys.find((s) => s.id === openSurveyId);
+    if (!match) return;
+    handledSurveyIdRef.current = openSurveyId;
+    openSurvey(match);
+    router.setParams({ openSurveyId: undefined, hive: undefined } as any);
+  }, [openSurveyId, linkedHiveId, communityId, availableSurveys, openSurvey, switchCommunity, router]);
 
   const closeSurvey = useCallback(() => {
     setActiveSurvey(null);

@@ -27,7 +27,10 @@ const END_OF_YEAR_CHECK_IN_PATTERN = /end[-\s]of[-\s]year\s+check-?in/i;
 const PRE_MEETING_CHECK_IN_PATTERN = /before (our first meeting|we meet)/i;
 // Production's end-of-month check-in. Declared in lib/checkIns.ts's
 // END_OF_MONTH_BY_SLUG — change one, change both.
-const SHOW_END_OF_MONTH_PATTERN = /where the show got to this month/i;
+// Renamed to "Pro HIVE POP" on 2026-08-15 (Nat: "that could be Pro HIVE POP,
+// cos that's what it is"). The old title stays in the pattern so a survey row
+// created before the rename is still recognised.
+const SHOW_END_OF_MONTH_PATTERN = /(where the show got to this month|pro hive pop)/i;
 const REMINDER_WINDOW_DAYS = 3;
 
 const MONTH_NAMES = [
@@ -267,6 +270,9 @@ function seasonEmailHtml(
   month: string,
   day: number,
   rawHiveName: string,
+  /** The check-in this email is about, so its button can open it directly. */
+  surveyId?: string,
+  communityId?: string,
 ): string {
   const name = escapeHtml(rawName);
   // Whose HIVE this is, said in the email itself and on the button. Nat,
@@ -274,7 +280,17 @@ function seasonEmailHtml(
   // hive before we meet ... I think it's just open pro hive."*
   const hive = escapeHtml(rawHiveName);
   const kicker = `<p style="text-align: center; color: #6b4a8f; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 0 0 2px;">${hive}</p>`;
-  const openButton = `<a href="${APP_URL}/hive" style="background: #6b4a8f; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open ${hive}</a>`;
+  // The button lands ON the check-in, not near it. Nat, 2026-08-15: *"when I
+  // clicked on the survey button in the mail, it just brought me into HIVE, it
+  // didn't bring me directly into the survey ... if you leave instructions
+  // 'it's in home' and then the link drops them HIVE-Wide and then they have to
+  // navigate to the correct spot on the correct page in the correct HIVE? We
+  // might lose them."* The HIVE id rides along so the link works from anywhere,
+  // including HIVE-Wide and including somebody who is in three HIVEs.
+  const openHref = surveyId && communityId
+    ? `${APP_URL}/hive?openSurveyId=${encodeURIComponent(surveyId)}&hive=${encodeURIComponent(communityId)}`
+    : `${APP_URL}/hive`;
+  const openButton = `<a href="${openHref}" style="background: #6b4a8f; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open the check-in</a>`;
   if (kind === 'endofmonth') {
     const heading = touch === 'day_of' ? 'Last day of the month' : 'How did the month go?';
     const body = touch === 'day_of'
@@ -341,7 +357,7 @@ function seasonEmailHtml(
       <p style="font-size: 15px;">Hi ${name},</p>
       <p style="font-size: 15px;">${body}</p>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${APP_URL}/hive" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">${button}</a>
+        <a href="${openHref}" style="background: #bd9348; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">${button}</a>
       </div>
       <p style="font-size: 13px; color: #9a9a9a; text-align: center;">Every answer stays inside your HIVE. 🍯</p>
     </div>
@@ -362,14 +378,34 @@ function seasonEmailHtml(
  * variable this function has never had. It would have thrown on 28 August, the
  * first time Production's end-of-month check-in came due.
  */
+/**
+ * Subject lines get the SHORT name and the short month. Nat, 2026-08-15:
+ * *"I like that title, I think shorten it to Pro HIVE otherwise it's super
+ * long ... and maybe Aug 18."* A phone shows perhaps forty characters of a
+ * subject, and "Production HIVE · Before we meet on August 18 — your check-in
+ * is open" spends a quarter of them before it says anything.
+ *
+ * The email itself keeps the full name; only the subject is squeezed.
+ */
+function shortHiveName(hiveName: string): string {
+  return hiveName.replace(/^Production HIVE$/i, 'Pro HIVE');
+}
+
+const SHORT_MONTHS: Record<string, string> = {
+  January: 'Jan', February: 'Feb', March: 'Mar', April: 'Apr',
+  May: 'May', June: 'Jun', July: 'Jul', August: 'Aug',
+  September: 'Sept', October: 'Oct', November: 'Nov', December: 'Dec',
+};
+
 function seasonSubject(
   kind: SeasonKind,
   touch: SeasonTouch,
-  month: string,
+  fullMonth: string,
   day: number,
   hiveName: string,
 ): string {
-  const from = `${hiveName} · `;
+  const from = `${shortHiveName(hiveName)} · `;
+  const month = SHORT_MONTHS[fullMonth] ?? fullMonth;
   if (kind === 'premeeting') {
     return touch === 'day_of'
       ? `🎬 ${from}We meet today — 3 minutes before we do`
@@ -509,11 +545,11 @@ serve(async (req) => {
         : SHOW_END_OF_MONTH_PATTERN;
       const { data: candidates } = await supabaseAdmin
         .from('surveys')
-        .select('title, due_date, community_id')
+        .select('id, title, due_date, community_id')
         .eq('is_active', true);
       const match = (candidates ?? []).find(
         (s: { title?: string; due_date?: string }) => pattern.test(s.title || '') && s.due_date
-      ) as { title: string; due_date: string; community_id: string } | undefined;
+      ) as { id: string; title: string; due_date: string; community_id: string } | undefined;
       if (!match) {
         return errorResponse(`No active ${seasonKind} check-in to preview.`, 404);
       }
@@ -538,7 +574,7 @@ serve(async (req) => {
           subject: `[Preview] ${seasonSubject(seasonKind, touch, kMonth, kDay, hiveName)}`,
           html: seasonEmailHtml(
             typeof body.test_name === 'string' ? body.test_name : 'there',
-            seasonKind, touch, kMonth, kDay, hiveName,
+            seasonKind, touch, kMonth, kDay, hiveName, match.id, match.community_id,
           ),
         }),
       });
@@ -1107,7 +1143,7 @@ serve(async (req) => {
                     from: FROM_EMAIL,
                     to: member.email,
                     subject: emailSubject,
-                    html: seasonEmailHtml(member.name ?? 'there', kind, touch, month, day, hiveName),
+                    html: seasonEmailHtml(member.name ?? 'there', kind, touch, month, day, hiveName, survey.id, survey.community_id),
                   }),
                 });
                 if (res.ok) {
