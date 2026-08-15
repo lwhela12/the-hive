@@ -139,6 +139,17 @@ verify_jwt = false
 [functions.seal-meeting]
 verify_jwt = false
 
+# Open (or make) this HIVE's video room and hand back a way in with the
+# caller's own name on it. The only place DAILY_API_KEY is ever read.
+# Membership is checked as the caller, so RLS decides who gets a room.
+[functions.daily-room]
+verify_jwt = false
+
+# File a meeting's transcript onto that day's meeting row, so Wrap-Up's seal
+# and the transcript land on the same record whichever happens first.
+[functions.save-transcript]
+verify_jwt = false
+
 # Harvest the cycle (newsletter thread, compliments, helper log, grants,
 # check-ins) into the same sections[] shape the meeting summary uses.
 # Auth (member JWT or service key) is handled in function code.

@@ -84,11 +84,47 @@ export function DeckVideo({
   softBorder,
   fontSize,
   onLiveChange,
+  transcriptsOn,
+  canToggleTranscripts,
+  onToggleTranscripts,
 }: DeckVideoProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<DailyCall | null>(null);
   const [state, setState] = useState<State>('idle');
   const [problem, setProblem] = useState<string | null>(null);
+
+  /**
+   * What has been said, in order, with the name of the microphone it came from.
+   *
+   * Daily transcribes each participant's OWN audio track, which is the whole
+   * reason this is worth having for Tech HIVE and not for OG's dining room:
+   * everyone on their own device gets their own name on every line, and a room
+   * sharing one laptop is one microphone and therefore one name for the table.
+   */
+  const linesRef = useRef<string[]>([]);
+  const transcribingRef = useRef(false);
+  const isOwnerRef = useRef(false);
+  const communityRef = useRef(communityId);
+  communityRef.current = communityId;
+  const wantsTranscriptRef = useRef(transcriptsOn);
+  wantsTranscriptRef.current = transcriptsOn;
+  const [transcriptNote, setTranscriptNote] = useState<string | null>(null);
+
+  /** Hand the evening over to `save-transcript`, then start a clean page. */
+  const keepTranscript = useCallback(async () => {
+    const lines = linesRef.current;
+    linesRef.current = [];
+    transcribingRef.current = false;
+    if (!lines.length || !communityRef.current) return;
+    try {
+      await supabase.functions.invoke('save-transcript', {
+        body: { community_id: communityRef.current, transcript: lines.join('\n') },
+      });
+      setTranscriptNote('Transcript saved to this meeting.');
+    } catch {
+      setTranscriptNote('The transcript could not be saved.');
+    }
+  }, []);
 
   // The deck decides how much room to give this panel, so it has to be told
   // when there is actually a call in it.
@@ -99,17 +135,41 @@ export function DeckVideo({
   }, [state]);
 
   // Leaving the deck mid-call should hang up rather than leave a ghost of you
-  // in the room with everybody looking at it.
+  // in the room with everybody looking at it — and whatever was said before you
+  // went is kept rather than thrown away.
   useEffect(() => {
     return () => {
       const frame = frameRef.current;
       frameRef.current = null;
+      void keepTranscript();
       if (frame) {
         frame.leave().catch(() => {});
         frame.destroy().catch(() => {});
       }
     };
-  }, []);
+  }, [keepTranscript]);
+
+  // Throwing the switch during a call takes effect during that call: turning it
+  // on starts writing from here, turning it off stops and keeps what there is
+  // so far. Nobody has to leave and come back for the setting to mean anything.
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (state !== 'live' || !frame || !isOwnerRef.current) return;
+    if (transcriptsOn && !transcribingRef.current) {
+      try {
+        frame.startTranscription();
+      } catch {
+        setTranscriptNote('Daily would not start transcribing — the rest of the call is fine.');
+      }
+    } else if (!transcriptsOn && transcribingRef.current) {
+      try {
+        frame.stopTranscription();
+      } catch {
+        /* the stop event will not arrive; the leave path still keeps the lines */
+      }
+      void keepTranscript();
+    }
+  }, [transcriptsOn, state, keepTranscript]);
 
   const join = useCallback(async () => {
     if (!communityId || state === 'opening' || state === 'live') return;
@@ -120,8 +180,13 @@ export function DeckVideo({
         body: { community_id: communityId },
       });
       if (error) throw new Error(error.message);
-      const { url, token } = (data ?? {}) as { url?: string; token?: string };
+      const { url, token, isOwner } = (data ?? {}) as {
+        url?: string;
+        token?: string;
+        isOwner?: boolean;
+      };
       if (!url) throw new Error('No room came back.');
+      isOwnerRef.current = !!isOwner;
 
       const parent = mountRef.current;
       if (!parent) throw new Error('Nowhere to put the video.');
@@ -155,15 +220,54 @@ export function DeckVideo({
         frameRef.current = frame;
         // The leave button is Daily's own, so the panel has to hear about it
         // from the frame rather than from a button of ours.
-        frame.on('left-meeting', () => setState('idle'));
+        frame.on('left-meeting', () => {
+          setState('idle');
+          void keepTranscript();
+        });
         frame.on('error', (event) => {
           setProblem(event?.errorMsg ?? 'The video dropped.');
           setState('error');
+          void keepTranscript();
+        });
+
+        // Every finished line, with the speaker's own name in front of it.
+        // `participants()` is asked at the moment the line lands rather than
+        // cached, so somebody who joins mid-meeting is still named.
+        frame.on('transcription-message', (event) => {
+          if (!event?.text?.trim()) return;
+          const who = frame!.participants?.() ?? {};
+          const speaker = Object.values(who).find(
+            (participant: any) => participant?.session_id === event.participantId
+          ) as { user_name?: string } | undefined;
+          const name = speaker?.user_name?.trim() || 'Someone';
+          linesRef.current.push(`${name}: ${event.text.trim()}`);
+        });
+        frame.on('transcription-started', () => {
+          transcribingRef.current = true;
+          setTranscriptNote(null);
+        });
+        frame.on('transcription-stopped', () => {
+          transcribingRef.current = false;
+        });
+        frame.on('transcription-error', () => {
+          transcribingRef.current = false;
+          setTranscriptNote('Daily would not start transcribing — the rest of the call is fine.');
         });
       }
 
       await frame.join({ url, token });
       setState('live');
+
+      // Only an owner may start it, and only if this HIVE has said yes. A
+      // member joining a HIVE that transcribes does not start a second one —
+      // Daily runs one transcription per room and ignores the rest.
+      if (wantsTranscriptRef.current && isOwnerRef.current) {
+        try {
+          frame.startTranscription();
+        } catch {
+          setTranscriptNote('Daily would not start transcribing — the rest of the call is fine.');
+        }
+      }
     } catch (err) {
       setProblem(err instanceof Error ? err.message : 'Could not open the video room.');
       setState('error');
@@ -173,21 +277,104 @@ export function DeckVideo({
   const label =
     state === 'opening' ? 'Opening the room…' : state === 'error' ? 'Try again' : 'Join the video';
 
-  return (
-    <div
+  /**
+   * The transcript switch, sitting on top of the video panel.
+   *
+   * Nat asked for it here and nowhere else, 2026-08-15: *"as long as there's a
+   * big, obvious toggle in the meeting helper, where the people join with the
+   * video, that would be freaking awesome."* It says which way it is set even
+   * to people who cannot change it, because everyone in the call deserves to
+   * know whether the room is being written down.
+   */
+  const transcriptSwitch = (
+    <button
+      type="button"
+      onClick={canToggleTranscripts ? () => onToggleTranscripts(!transcriptsOn) : undefined}
+      disabled={!canToggleTranscripts}
+      aria-pressed={transcriptsOn}
+      title={
+        canToggleTranscripts
+          ? 'Whether this HIVE writes its meetings down'
+          : 'Only a HIVE admin can change this'
+      }
       style={{
-        flex: 1,
-        minHeight: 0,
-        borderRadius: 14,
-        border: `1px solid ${softBorder}`,
-        backgroundColor: cardColor,
-        overflow: 'hidden',
-        position: 'relative',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
+        gap: 8,
+        width: '100%',
+        fontFamily: 'Lato_700Bold, Lato, sans-serif',
+        fontSize: fontSize * 0.9,
+        color: transcriptsOn ? '#ffffff' : accentDeep,
+        backgroundColor: transcriptsOn ? accent : 'transparent',
+        border: `1px solid ${transcriptsOn ? accent : softBorder}`,
+        borderRadius: 999,
+        padding: '7px 14px',
+        marginBottom: 8,
+        cursor: canToggleTranscripts ? 'pointer' : 'default',
+        textAlign: 'left',
       }}
     >
+      <span
+        aria-hidden
+        style={{
+          width: 30,
+          height: 16,
+          flex: '0 0 auto',
+          borderRadius: 999,
+          backgroundColor: transcriptsOn ? '#ffffff' : softBorder,
+          position: 'relative',
+          display: 'inline-block',
+        }}
+      >
+        <span
+          style={{
+            position: 'absolute',
+            top: 2,
+            left: transcriptsOn ? 16 : 2,
+            width: 12,
+            height: 12,
+            borderRadius: 999,
+            backgroundColor: transcriptsOn ? accent : '#ffffff',
+            transition: 'left 120ms ease',
+          }}
+        />
+      </span>
+      {transcriptsOn ? 'Writing this meeting down' : 'Transcript off'}
+    </button>
+  );
+
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      {transcriptSwitch}
+
+      {transcriptNote && (
+        <div
+          style={{
+            fontFamily: 'Lato_400Regular, Lato, sans-serif',
+            fontSize: fontSize * 0.8,
+            lineHeight: 1.35,
+            color: accentDeep,
+            marginBottom: 8,
+          }}
+        >
+          {transcriptNote}
+        </div>
+      )}
+
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          borderRadius: 14,
+          border: `1px solid ${softBorder}`,
+          backgroundColor: cardColor,
+          overflow: 'hidden',
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
       {/* The frame's home. It is always in the tree, so the call survives every
           re-render of the deck around it, and it only shows once we are live. */}
       <div
@@ -235,6 +422,7 @@ export function DeckVideo({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

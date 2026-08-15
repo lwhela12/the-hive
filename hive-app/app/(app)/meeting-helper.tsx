@@ -758,6 +758,40 @@ export default function MeetingHelperScreen() {
   // panel real room only once there is somebody in it.
   const [videoLive, setVideoLive] = useState(false);
 
+  /**
+   * Does this HIVE write its meetings down? It lives on the HIVE
+   * (migration 183), so the switch is one setting the whole HIVE shares rather
+   * than a thing each person turns on for themselves — and it is shown here
+   * even to people who cannot change it, because everyone in the call deserves
+   * to know whether the room is being written down.
+   *
+   * Seeded from the community row and then kept locally so the switch answers
+   * the moment it is pressed instead of after a round trip.
+   */
+  const [transcriptsOn, setTranscriptsOn] = useState<boolean>(
+    () => !!community?.transcripts_enabled
+  );
+  useEffect(() => {
+    setTranscriptsOn(!!community?.transcripts_enabled);
+  }, [community]);
+
+  const setTranscriptsFor = useCallback(
+    (next: boolean) => {
+      if (!communityId) return;
+      setTranscriptsOn(next);
+      void supabase
+        .from('communities')
+        .update({ transcripts_enabled: next })
+        .eq('id', communityId)
+        .then(({ error }) => {
+          // Only an admin may write this; if the row refuses, put the switch
+          // back rather than leaving it saying something untrue.
+          if (error) setTranscriptsOn(!next);
+        });
+    },
+    [communityId]
+  );
+
   // Slide 1 (Welcome) and slide 2 (Who's in the room) act as the pre-meeting
   // screen, so the arrival data keeps polling while either is showing.
   const {
@@ -4111,6 +4145,9 @@ export default function MeetingHelperScreen() {
           softBorder={GOLD_SOFT}
           fontSize={sz(16, 12)}
           onLiveChange={setVideoLive}
+          transcriptsOn={transcriptsOn}
+          canToggleTranscripts={isAdmin}
+          onToggleTranscripts={setTranscriptsFor}
         />
       </View>
       <View

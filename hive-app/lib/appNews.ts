@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-15-each-hive-decides-about-transcripts',
+    date: '2026-08-15',
+    title: 'Each HIVE decides whether its meetings get written down',
+    detail: 'A switch on the video panel, on for Tech HIVE and off for the others. When it is on, what everyone says is kept against that night\'s meeting with their name on it. Everyone in the call can see which way it is set, whether or not they can change it.',
+    href: { pathname: '/meeting-helper' },
+    action: 'Open the deck',
+  },
+  {
     id: '2026-08-15-video-lives-in-the-deck',
     date: '2026-08-15',
     title: 'The video call happens in the app now, beside the deck',

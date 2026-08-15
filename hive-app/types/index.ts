@@ -49,6 +49,15 @@ export interface Community extends Record<string, unknown> {
    * reads as neglect, and Tech and Production never chose to have one.
    */
   honey_pot_enabled?: boolean;
+  /**
+   * Does this HIVE write its meetings down? (migration 183.)
+   *
+   * Per-HIVE because a transcript is labelled by microphone: Tech HIVE is all
+   * remote on their own devices, so every line comes back with the right name
+   * on it; a dining room sharing one laptop is one microphone and therefore one
+   * name for the whole table. Thrown from the deck's video panel by an admin.
+   */
+  transcripts_enabled?: boolean;
   slide_deck_url?: string;
   /** Admin-editable Meeting Helper slide notes (migration 106). */
   meeting_helper_notes?: {

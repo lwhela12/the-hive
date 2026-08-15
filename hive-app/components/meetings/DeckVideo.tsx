@@ -30,9 +30,25 @@ export type DeckVideoProps = {
    * an empty video box should not push the slide around all evening.
    */
   onLiveChange?: (live: boolean) => void;
+  /**
+   * Does this HIVE write its meetings down? Per-HIVE (migration 183), because
+   * a transcript is labelled by microphone: everyone on their own device gets
+   * their own name on every line, a room sharing one laptop gets one name for
+   * the whole table.
+   */
+  transcriptsOn: boolean;
+  /** Admins throw the switch; everyone else can see where it is set. */
+  canToggleTranscripts: boolean;
+  onToggleTranscripts: (next: boolean) => void;
 };
 
-export function DeckVideo({ accentDeep, cardColor, softBorder, fontSize }: DeckVideoProps) {
+export function DeckVideo({
+  accentDeep,
+  cardColor,
+  softBorder,
+  fontSize,
+  transcriptsOn,
+}: DeckVideoProps) {
   return (
     <View
       style={{
@@ -58,6 +74,7 @@ export function DeckVideo({ accentDeep, cardColor, softBorder, fontSize }: DeckV
         Video runs in the browser.
         {'\n'}
         Open the deck at app.the-hive.app to join the room.
+        {transcriptsOn ? '\nThis HIVE writes its meetings down.' : ''}
       </Text>
     </View>
   );
