@@ -484,7 +484,7 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       },
     ],
     wrapupReminders: [
-      'The research lives at show-proposal.vercel.app',
+      'The Research lives at show-proposal.vercel.app',
       'Everything we decided tonight is on your to-do list',
     ],
   },
@@ -586,6 +586,18 @@ type MeetingHelperNotes = {
   // in there, I think its at the top of the month? where i could just put
   // the help in."*
   help?: string;
+  /**
+   * The four questions everything else hangs off, answered on the night.
+   *
+   * Nat, 2026-08-14, working out where they belong: *"I'm not even sure where
+   * those questions go — the pre-meeting survey, the research doc I'm
+   * presenting from, or the meeting helper after that... filling it in in the
+   * meeting helper is good, because then that keeps it somewhere, and then we
+   * have meeting summaries, and then Clive knows stuff."*
+   *
+   * She is right. The Research asks them; this is where the answers stay.
+   */
+  fourquestions?: string;
 };
 
 type EditableNoteKey = keyof MeetingHelperNotes;
@@ -641,6 +653,10 @@ const EDIT_SLIDE_META: Record<EditableNoteKey, { title: string; placeholder: str
   wrapup: {
     title: 'Wrap-Up',
     placeholder: 'Final notes, decisions made tonight, things to remember…',
+  },
+  fourquestions: {
+    title: 'The four questions',
+    placeholder: '1 The one-sentence promise…\n2 The first audience…\n3 The smallest real version…\n4 Vegas: requirement, or first experience?',
   },
   treasurer: {
     title: 'Treasurer',
@@ -1794,7 +1810,7 @@ export default function MeetingHelperScreen() {
             }}
           >
             <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e7a5e', marginBottom: sz(8, 5) }}>
-              🎪 Start here — the research
+              🎪 Start here — The Research
             </Text>
             <Text style={{ fontFamily: 'Lato_400Regular', fontSize: sz(22, 14), lineHeight: sz(34, 21), color: CHARCOAL }}>
               Tonight runs differently from a usual HIVE meeting. We walk through everything
@@ -1803,7 +1819,7 @@ export default function MeetingHelperScreen() {
             <Pressable
               onPress={() => Linking.openURL('https://show-proposal.vercel.app')}
               accessibilityRole="link"
-              accessibilityLabel="Open the research site"
+              accessibilityLabel="Open The Research"
               style={({ pressed }) => ({
                 alignSelf: 'flex-start',
                 marginTop: sz(14, 10),
@@ -1815,9 +1831,47 @@ export default function MeetingHelperScreen() {
               })}
             >
               <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(21, 14), color: '#fff' }}>
-                Open the research →
+                Open The Research →
               </Text>
             </Pressable>
+          </View>
+        )}
+        {/* The four questions, and somewhere for the answers to stay. Nat's own
+            reasoning for putting them here rather than in the survey or on The
+            Research: "then that keeps it somewhere, and then we have meeting
+            summaries, and then Clive knows stuff." */}
+        {deckSlug === 'show' && (
+          <View
+            style={{
+              backgroundColor: '#fffdf5',
+              borderWidth: 1,
+              borderColor: GOLD_SOFT,
+              borderRadius: sz(16, 12),
+              paddingHorizontal: sz(20, 13),
+              paddingVertical: sz(15, 10),
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: sz(8, 5) }}>
+              <Text style={{ fontFamily: 'Lato_700Bold', fontSize: sz(13, 10), letterSpacing: 1.4, textTransform: 'uppercase', color: '#8e7a5e' }}>
+                ❓ The four questions
+              </Text>
+              <EditPill noteKey="fourquestions" />
+            </View>
+            {[
+              'What is the one-sentence promise?',
+              'Who is the first audience?',
+              'What is the smallest real version?',
+              'Is Vegas the requirement, or the first experience?',
+            ].map((question, index) => (
+              <Text
+                key={question}
+                style={{ fontFamily: 'Lato_400Regular', fontSize: sz(19, 13), lineHeight: sz(28, 19), color: CHARCOAL }}
+              >
+                <Text style={{ color: GOLD_DEEP, fontFamily: 'Lato_700Bold' }}>{index + 1}  </Text>
+                {question}
+              </Text>
+            ))}
+            <NoteBody noteKey="fourquestions" emptyText="" />
           </View>
         )}
         <View
