@@ -482,6 +482,8 @@ export const PRE_MEETING_QUESTION_IDS = {
   treasurer: 'q_treasurer',
   hiveHelp: 'q_hive_help',
   venueVisit: 'q_venue_visit',
+  whoCanKnow: 'q_who_can_know',
+  whoMustNotHear: 'q_who_must_not_hear',
   biggestQuestion: 'q_biggest_question',
   walkAway: 'q_walk_away',
 } as const;
@@ -559,6 +561,25 @@ const PRE_MEETING_BY_SLUG: Record<string, PreMeetingCheckIn> = {
         'The Henderson tent',
         'Happy to go to any of them',
       ]),
+      // WHO IS ALLOWED TO KNOW. Nat, 2026-08-15: *"Charlee said she doesn't
+      // want anyone to know that she's the producer of that show — but what
+      // does she mean by 'no one'? Does she mean her cast? Society? What about
+      // friends, OG HIVE, other HIVEs? Her mom?"*
+      //
+      // "Don't tell anyone" is not a rule anybody can follow, because everyone
+      // draws the circle somewhere different and nobody says where. Five people
+      // about to start making calls to venues WILL say who they are, so the
+      // circle has to be drawn before the first call, not after somebody
+      // crosses a line they were never shown. It is asked of each person about
+      // themselves — Charlee's answer is hers to give, not the group's to guess.
+      choice('q_who_can_know', 'Who can know you are part of this?', [
+        '📣 Anyone — post about it, tag me',
+        "🌍 Public is fine, I'd just like to tell my own people first",
+        '🐝 The HIVEs — OG, Tech and here — nothing public yet',
+        '🤝 Only the people in this room, for now',
+        "🤔 I'm not sure — let's talk about it Tuesday",
+      ]),
+      q('q_who_must_not_hear', 'Anyone in particular who should not hear about this from us — a cast, a company, an employer, family? Name them so nobody trips over it by accident.'),
       // The two heavy ones, last and framed as care. A first meeting is where
       // the quiet worries either get said or get carried around for months,
       // and a survey box is easier to say them into than a room.

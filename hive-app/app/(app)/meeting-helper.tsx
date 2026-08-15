@@ -473,6 +473,11 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
           { key: 'q_when', label: 'What day and time works' },
           { key: 'q_hive_help', label: 'HIVE Help' },
           { key: 'q_venue_visit', label: 'Which room they would go and see' },
+          // Who is allowed to know. This sits on "How we run" because it IS a
+          // rule about how this HIVE runs, and it has to be read out before
+          // anybody starts calling venues and saying who they are.
+          { key: 'q_who_can_know', label: 'Who can know they are part of this' },
+          { key: 'q_who_must_not_hear', label: 'Who should not hear it from us' },
         ],
       },
       {
