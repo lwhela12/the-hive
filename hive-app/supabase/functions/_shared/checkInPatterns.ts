@@ -38,8 +38,9 @@ export const END_OF_YEAR_CHECK_IN_PATTERN = /end[-\s]of[-\s]year\s+check-?in/i;
 export const PRE_MEETING_CHECK_IN_PATTERN = /before (our first meeting|we meet)/i;
 
 /**
- * Production's end-of-month check-in. Renamed to "Pro HIVE POP" on 2026-08-15
- * (Nat: *"that could be Pro HIVE POP, cos that's what it is?"*); the original
- * title stays so a row created before the rename is still recognised.
+ * Production's end-of-month check-in. It is a "Halfway check-in" as of
+ * 2026-08-15 — a gentle nudge and a newsletter ask, after the POP questions
+ * moved to the pre-meeting deck where a meeting can actually use them. Both
+ * earlier titles stay so rows created before either rename still answer.
  */
-export const END_OF_MONTH_CHECK_IN_PATTERN = /(where the show got to this month|pro hive pop)/i;
+export const END_OF_MONTH_CHECK_IN_PATTERN = /(where the show got to this month|pro hive pop|halfway check-?in)/i;

@@ -497,22 +497,26 @@ const DECKS: Record<'default' | 'tech' | 'show', DeckDefinition> = {
       // never asking someone something for the sake of asking them."* Progress
       // belongs with the news; what is stuck and what people are taking on
       // belong on the slide that hands the next month's jobs out.
+      // The pre-meeting POP, read back on the slides that use it. What people
+      // got done opens the night; what is stuck and how full they are decide
+      // who takes what. Nat, 2026-08-15: *"that way at the Pro HIVE meeting,
+      // okay, Charlee called Circus Center and that is loaded here."*
       {
         slide: 'news',
-        heading: 'What got done since we last met',
+        heading: 'What everyone got done since we last met',
         keys: [
-          { key: 'q_show_progress', label: 'What moved' },
+          { key: 'q_show_progress', label: 'What they got done' },
           // Asked in the check-in so the presentation can answer them out
           // loud instead of the room guessing what people are wondering.
           { key: 'q_biggest_question', label: 'Their biggest question' },
+          { key: 'q_show_raise', label: 'What they want to talk about' },
         ],
       },
       {
         slide: 'assignments',
-        heading: 'From the end-of-month POP',
+        heading: 'Before anyone takes anything on',
         keys: [
-          { key: 'q_show_obstacles', label: 'Still to figure out' },
-          { key: 'q_show_priorities', label: 'What they are taking on' },
+          { key: 'q_show_obstacles', label: "What's stuck" },
           // How much room they have. This is the slide where jobs get handed
           // out, so it is the one place knowing somebody is full matters.
           { key: 'q_plate', label: "What's on their plate" },

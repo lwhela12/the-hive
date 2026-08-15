@@ -298,10 +298,10 @@ function seasonEmailHtml(
     : `${APP_URL}/hive`;
   const openButton = `<a href="${openHref}" style="background: #6b4a8f; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-size: 15px; font-weight: 600; display: inline-block;">Open the check-in</a>`;
   if (kind === 'endofmonth') {
-    const heading = touch === 'day_of' ? 'Last day of the month' : 'How did the month go?';
+    const heading = touch === 'day_of' ? 'Last day of the month' : 'Halfway there';
     const body = touch === 'day_of'
-      ? `It's the last day of the month and your POP isn't in yet — three questions: what got done, what we still need to figure out, and what you're taking on next.`
-      : `Your POP is open — three questions. What got done on the show, what we still need to figure out, and what you're taking on before we meet again. Short answers are perfect.`;
+      ? `It's the last day of the month. Nothing owed — just a quick one if you want a hand with anything, or you have something for the newsletter.`
+      : `A gentle one, halfway through. How is it going, is there anything you want a hand with, and have you got anything for the newsletter — a shout-out, a compliment, something you're teaching. Blanks are completely fine, and whatever is still on your list is on your to-do list in the app.`;
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #2b2b2b; line-height: 1.5;">
         <div style="text-align: center; padding: 8px 0 4px;"><span style="font-size: 40px;">🎬</span></div>
@@ -422,8 +422,8 @@ function seasonSubject(
   }
   if (kind === 'endofmonth') {
     return touch === 'day_of'
-      ? `🎬 ${from}Last day of the month — how did it go?`
-      : `🎬 ${from}How did the month go? Your check-in is open`;
+      ? `🎬 ${from}Last day of the month — anything for the newsletter?`
+      : `🎬 ${from}Halfway check-in — no obligations`;
   }
   if (kind === 'quarter') {
     return touch === 'day_of'
