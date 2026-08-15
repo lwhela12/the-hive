@@ -162,6 +162,9 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection>(EMPTY_PREVIEW_SELECTION);
   const [previewSelectionSource, setPreviewSelectionSource] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The transcript starts folded away: the summary is what a person came for,
+  // and the exact words are for the night you need them.
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   useEffect(() => { setMeeting(initialMeeting); }, [initialMeeting]);
 
@@ -339,12 +342,21 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
     }
   };
 
+  // What the room actually said, if this HIVE writes its meetings down
+  // (migration 183). Every line already carries the name of the person who said
+  // it, so it is shown as it was kept rather than re-attributed here.
+  const transcriptLines = (meeting.transcript_raw ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
   const hasAnything = Boolean(
     parsedSummary.sections?.length
     || parsedSummary.summary
     || parsedSummary.decisions?.length
     || parsedSummary.details?.length
     || actionItems.length
+    || transcriptLines.length
     || cameFromNotes
   );
 
@@ -581,6 +593,38 @@ export function MeetingSummary({ meeting: initialMeeting, onBack, onMeetingUpdat
                 </Pressable>
               ))}
             </View>
+          </View>
+        )}
+
+        {/* What was said, kept only for HIVEs that have their transcript
+            switch on. It is collapsed to start with because the summary above
+            is what a person actually wants; this is here for the night you
+            need the exact words. */}
+        {transcriptLines.length > 0 && (
+          <View className="mb-6">
+            <Pressable
+              onPress={() => setTranscriptOpen((open) => !open)}
+              accessibilityRole="button"
+              accessibilityLabel={transcriptOpen ? 'Hide what was said' : 'Read what was said'}
+              className="flex-row items-center justify-between"
+            >
+              <Text className="text-lg font-semibold text-gray-700 mb-2">What was said</Text>
+              <Text className="text-label mb-2">{transcriptOpen ? 'Hide' : 'Read it'}</Text>
+            </Pressable>
+            {transcriptOpen ? (
+              <View className="bg-gray-50 rounded-xl p-4">
+                {transcriptLines.map((line, index) => (
+                  <Text key={index} className={`text-gray-700 ${index > 0 ? 'mt-2' : ''}`}>
+                    {line}
+                  </Text>
+                ))}
+              </View>
+            ) : (
+              <Text className="text-label">
+                {transcriptLines.length} {transcriptLines.length === 1 ? 'line' : 'lines'}, with
+                everyone's name on what they said.
+              </Text>
+            )}
           </View>
         )}
 

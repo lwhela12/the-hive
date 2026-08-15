@@ -28,6 +28,14 @@ export type AppNewsEntry = {
 
 export const APP_NEWS: AppNewsEntry[] = [
   {
+    id: '2026-08-15-read-what-was-said',
+    date: '2026-08-15',
+    title: 'You can read what was said at a meeting',
+    detail: 'Open the meeting on the Meetings tab and there is a "What was said" section under the summary, folded away until you want it. Every line has the name of whoever said it. Only appears for HIVEs whose transcript switch is on.',
+    href: { pathname: '/meetings' },
+    action: 'Open Meetings',
+  },
+  {
     id: '2026-08-15-each-hive-decides-about-transcripts',
     date: '2026-08-15',
     title: 'Each HIVE decides whether its meetings get written down',
