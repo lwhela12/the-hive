@@ -729,7 +729,23 @@ export default function MonthlyTuneupScreen() {
    * hold the door shut until the switch lands so nobody reads a "coming soon"
    * that is about to stop being true.
    */
-  const requestedHiveId = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
+  /**
+   * And the same rescue for a link that names NO HIVE.
+   *
+   * Every check-in email sent before 2026-08-16 says only `/monthly-tuneup`,
+   * and those are sitting in eleven OG inboxes right now — fixing the sender
+   * does nothing for mail that has already left. Anyone who opens one while
+   * their app is at HIVE-Wide gets "coming soon" for a check-in that is open.
+   *
+   * Standing above the HIVEs does not erase which HIVE you were last in
+   * (`enterWholeHive` leaves `communityId` alone), so there is an obvious
+   * answer to "whose tune-up did you mean" — and asking for the tune-up at all
+   * is asking to be in a HIVE. Somebody whose HIVE has no tune-up designed yet
+   * still gets the honest "coming soon", because `hasTailoredCheckIns` runs
+   * after the switch either way.
+   */
+  const namedHiveId = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
+  const requestedHiveId = namedHiveId || (wholeHive ? communityId : null);
   const isMemberOfRequested = !!requestedHiveId
     && memberships.some((membership) => membership.community_id === requestedHiveId);
   const switchPending = isMemberOfRequested && (wholeHive || communityId !== requestedHiveId);

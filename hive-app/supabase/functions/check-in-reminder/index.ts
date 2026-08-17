@@ -910,6 +910,24 @@ serve(async (req) => {
     }
   }
 
+  /**
+   * Resend mode: POST { "resend_survey_id": "<id>" } queues ONE check-in's
+   * opening invitation again, ignoring both the date gate and the dedup.
+   *
+   * Owners only, and it goes to the hold like everything else — so it is
+   * "send that one again, but let me read it first", never a blast. It exists
+   * because a link can be wrong in mail that has already left: Production's
+   * pre-meeting email went out on 2026-08-15 at 9am and the fix to its button
+   * landed that afternoon, and a member who joined after the send is not owed
+   * silence just because the cron already ran.
+   *
+   * The period carries today's date, so the resend is its own send and the
+   * original one is still recorded as having happened.
+   */
+  const resendSurveyId = typeof body.resend_survey_id === 'string'
+    ? body.resend_survey_id.trim()
+    : '';
+
   /** True when this run may put email in front of members at all. */
   const mayReachMembers = forceSend || !!approving;
 
@@ -988,6 +1006,7 @@ serve(async (req) => {
         // Approving is about ONE held touch. Every other survey is left exactly
         // where it was rather than being re-examined on an unrelated request.
         if (approving && (approving.family !== 'monthly' || approving.survey_id !== survey.id)) continue;
+        if (resendSurveyId && resendSurveyId !== survey.id) continue;
         if (!survey.due_date) continue;
 
         // Render the stored timestamptz as its Pacific calendar date — this is
@@ -1003,7 +1022,7 @@ serve(async (req) => {
         const midpointDate = newsletterCheckInDate(todayStr);
         const kind: ReminderKind | null = approving
           ? (approving.kind as ReminderKind)
-          : forceSend || todayStr === windowOpen
+          : resendSurveyId || forceSend || todayStr === windowOpen
             ? 'window'
             : todayStr === dueDateOnly
               ? 'day_of'
@@ -1017,7 +1036,9 @@ serve(async (req) => {
         // Forced sends dedup per due date so a reschedule can send once more;
         // day-of and midpoint touches dedup under their own keys.
         const basePeriod = getSurveyResponsePeriod(dueDateOnly);
-        const period = approving?.period ?? (forceSend
+        const period = approving?.period ?? (resendSurveyId
+          ? `${basePeriod}:resend-${todayStr}`
+          : forceSend
           ? `${basePeriod}:${dueDateOnly}`
           : kind === 'window'
             ? basePeriod
@@ -1373,6 +1394,7 @@ serve(async (req) => {
       try {
         // Approving is about ONE held touch — see the monthly loop above.
         if (approving && (approving.family !== 'season' || approving.survey_id !== survey.id)) continue;
+        if (resendSurveyId && resendSurveyId !== survey.id) continue;
         if (!survey.due_date) continue;
         const dueDateOnly = approving?.dueDateOnly ?? toPacificDateOnly(new Date(survey.due_date));
         if (!dueDateOnly) continue;
@@ -1380,7 +1402,7 @@ serve(async (req) => {
         const windowOpen = getWindowOpenDate(dueDateOnly);
         const touch: SeasonTouch | null = approving
           ? ((approving.touch ?? 'window') as SeasonTouch)
-          : todayStr === windowOpen
+          : resendSurveyId || todayStr === windowOpen
             ? 'window'
             : todayStr === dueDateOnly
               ? 'day_of'
@@ -1390,7 +1412,10 @@ serve(async (req) => {
         // One notification row is the send receipt, exactly like the monthly.
         // The period carries the end date, so relaunching next quarter under
         // the same survey title can never be swallowed by last quarter's send.
-        const period = approving?.period ?? `${dueDateOnly}:season-${touch}`;
+        const period = approving?.period
+          ?? (resendSurveyId
+            ? `${dueDateOnly}:season-window:resend-${todayStr}`
+            : `${dueDateOnly}:season-${touch}`);
         const { data: existingReminders, error: dedupError } = await supabaseAdmin
           .from('notifications')
           .select('id')
