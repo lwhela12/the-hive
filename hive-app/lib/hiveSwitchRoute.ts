@@ -68,8 +68,9 @@ export function routeAfterHiveSwitch(
   const wideOnly: Record<string, string> = {
     '/hive-wide': '/hive',
     '/hive-wide-boards': '/board',
-    // The Buzz is one newsletter for everybody and doesn't exist inside a HIVE.
-    '/buzz': '/hive',
+    // The Buzz used to be listed here, sent home because it "doesn't exist
+    // inside a HIVE". It does now, and it is the same page — so changing HIVE
+    // while reading it keeps you reading it (Nat, 2026-08-17).
   };
   if (wideOnly[path]) return wideOnly[path];
 

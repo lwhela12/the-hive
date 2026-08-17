@@ -71,8 +71,9 @@ export type NavDestination = {
    *            Hiding a row costs nothing as long as something on the page
    *            says where it went.
    * 'only'   — the reverse: it lives at HIVE-Wide and nowhere else, so it is
-   *            absent from every HIVE's page list. The Buzz is the one, and it
-   *            always was one newsletter across all of them.
+   *            absent from every HIVE's page list. Nothing uses it today — The
+   *            Buzz did until 2026-08-17, when Nat asked for it in every HIVE's
+   *            rail showing the identical page.
    */
   atWholeHive?: 'same' | 'wide' | 'hidden' | 'only';
   /** Where 'wide' items go when you are at Whole HIVE, if not `route`. */
@@ -141,10 +142,21 @@ export const NAV_DESTINATIONS: NavDestination[] = [
   { key: 'meetings', label: 'Meetings', emoji: '🗓️', route: '/meetings', gate: 'everyone', atWholeHive: 'hidden' },
   // Real money, belonging to one HIVE. It is already switched off for Tech.
   { key: 'honey-pot', label: 'Honey Pot', emoji: '🍯', route: '/honey-pot', gate: 'everyone', atWholeHive: 'hidden' },
-  // The Buzz lives at HIVE-Wide and nowhere else now (Nat 2026-08-03). It was
-  // always one newsletter across all the HIVEs, so a copy of it inside OG was
-  // OG appearing to own the thing everybody shares.
-  { key: 'buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone', atWholeHive: 'only' },
+  /**
+   * The Buzz is in every HIVE's rail, and it is the SAME page in all of them.
+   *
+   * It was HIVE-Wide-only from 2026-08-03, on the reasoning that a copy inside
+   * OG would be OG appearing to own the thing everybody shares. True of a copy.
+   * This is not a copy: `buzz.tsx` asks for every newsletter post there is and
+   * lets row-level security decide what comes back, so it draws the identical
+   * list wherever you are standing.
+   *
+   * Nat, 2026-08-17: *"We can put a shortcut here, in the left hand side nav,
+   * but that 'The Buzz' should just show you the exact same thing as HIVE
+   * Wide."* Which is what it does — the newsletter lives in exactly two places,
+   * here and the public site, and this is a door to the first one.
+   */
+  { key: 'buzz', label: 'The Buzz', emoji: '📰', route: '/buzz', gate: 'everyone', atWholeHive: 'same' },
   // Out of HIVE-Wide for now, at Nat's call (2026-08-03). Your profile is the
   // same page wherever you stand, so having it up there too was a second door
   // to one room while the HIVE-Wide idea is still settling.

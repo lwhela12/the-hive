@@ -1286,14 +1286,24 @@ export default function MonthlyTuneupScreen() {
     return { error: null, boardName: board.name };
   }, [communityId, findBoardTarget, profile]);
 
-  // The midpoint cron already opens "{Month} Newsletter" and "{Month}
-  // Compliment Corner" on Announcements. Find whichever exists; only create one
-  // if a member gets here first (or the cron didn't run).
-  const findOrCreateNewsletterThread = useCallback(async (
-    kind: 'newsletter' | 'compliments',
+  /**
+   * NEWSLETTER ITEMS DO NOT GO ON A BOARD. Compliments still do.
+   *
+   * Nat, 2026-08-17, four times over: *"NO NEWSLETTER BOARDS ANYWHERE FOR ANY
+   * HIVE"* — the newsletter lives in exactly two places, The Buzz and the
+   * public site, and it is written from the halfway check-in's answers in
+   * Admin. This function used to open a "{Month} Newsletter 📰" thread when it
+   * could not find one, so killing the cron's copy on the same day was only
+   * half of it: the first member through the check-in would have made another.
+   *
+   * `kind: 'newsletter'` is gone from here. What is left is Compliment Corner,
+   * which is a standing place to say something nice to somebody and has never
+   * been a newsletter collection bin.
+   */
+  const findOrCreateComplimentThread = useCallback(async (
   ): Promise<HelperThread | null> => {
     if (!profile || !communityId) return null;
-    const board = await findBoardTarget(kind === 'compliments' ? 'compliments' : 'newsletter');
+    const board = await findBoardTarget('compliments');
     if (!board) return null;
 
     const { data: existing } = await supabase
@@ -1301,7 +1311,7 @@ export default function MonthlyTuneupScreen() {
       .select('id, title, created_at')
       .eq('community_id', communityId)
       .eq('category_id', board.id)
-      .ilike('title', kind === 'newsletter' ? '%newsletter%' : '%compliment%')
+      .ilike('title', '%compliment%')
       .is('archived_at', null)
       .order('created_at', { ascending: false })
       .limit(1);
@@ -1311,12 +1321,8 @@ export default function MonthlyTuneupScreen() {
     }
 
     const month = new Date().toLocaleString('en-US', { month: 'long' });
-    const title = kind === 'newsletter'
-      ? `${month} Newsletter 📰`
-      : `${month} Compliment Corner 💐`;
-    const content = kind === 'newsletter'
-      ? "The newsletter's brewing! 🗞️ Want a shout-out, a plug, or a reminder in it — \"come to my lemonade stand Tuesday!\"-style? Drop it in this thread and it goes straight into the newsletter."
-      : 'Want to compliment anyone this month? 💐 Drop it here — big, small, silly, sincere. @ them and they get a little love note the moment you post it. Compliments also get read out in the newsletter and at the meeting. No compliment too small.';
+    const title = `${month} Compliment Corner 💐`;
+    const content = 'Want to compliment anyone this month? 💐 Drop it here — big, small, silly, sincere. @ them and they get a little love note the moment you post it. Compliments also get read out in the newsletter and at the meeting. No compliment too small.';
 
     const { data: created, error } = await (supabase as any)
       .from('board_posts')
@@ -1338,24 +1344,55 @@ export default function MonthlyTuneupScreen() {
     setNewsletterPosting(true);
     setNewsletterError(null);
     try {
-      const thread = await findOrCreateNewsletterThread(
-        newsletterKind === 'compliment' ? 'compliments' : 'newsletter'
-      );
-      if (!thread?.postId) {
-        setNewsletterError('Could not find the newsletter thread. You can post it from the Boards tab instead.');
+      /**
+       * A compliment is a thing you say TO somebody, so it still goes on the
+       * board where they will see it and get their love note.
+       *
+       * Anything else — a shout-out, a plug, "come to my lemonade stand
+       * Tuesday" — is material for the letter, and material for the letter
+       * lands on this member's check-in answer, which is what Admin's
+       * Newsletter box reads. No thread, no board, nothing to go looking for
+       * (Nat, 2026-08-17).
+       */
+      if (newsletterKind === 'compliment') {
+        const thread = await findOrCreateComplimentThread();
+        if (!thread?.postId) {
+          setNewsletterError('Could not find Compliment Corner. You can post it from the Boards tab instead.');
+          return;
+        }
+        const { error } = await (supabase as any).from('board_replies').insert({
+          community_id: communityId,
+          post_id: thread.postId,
+          author_id: profile.id,
+          content,
+        });
+        if (error) {
+          setNewsletterError(`Could not post that: ${error.message}`);
+          return;
+        }
+        setNewsletterPosted((current) => [...current, { content, thread: thread.postTitle ?? 'Compliment Corner' }]);
+        setNewsletterText('');
+        resetNewsletterMentionSelection();
         return;
       }
-      const { error } = await (supabase as any).from('board_replies').insert({
-        community_id: communityId,
-        post_id: thread.postId,
-        author_id: profile.id,
-        content,
+
+      if (!monthlyCheckInSurvey) {
+        setNewsletterError('Your HIVE has no check-in open right now, so there is nowhere to file this yet.');
+        return;
+      }
+      // Merged, never replaced: `submitResponse` writes the whole answers
+      // object, and this member may already have a check-in filled in.
+      const existingAnswers = (myResponses.get(monthlyCheckInSurvey.id)?.answers ?? {}) as SurveyAnswers;
+      const already = String((existingAnswers as Record<string, unknown>).q_newsletter ?? '').trim();
+      const { error } = await submitResponse(monthlyCheckInSurvey.id, {
+        ...existingAnswers,
+        q_newsletter: already ? `${already}\n\n${content}` : content,
       });
       if (error) {
-        setNewsletterError(`Could not post that: ${error.message}`);
+        setNewsletterError(`Could not save that: ${error}`);
         return;
       }
-      setNewsletterPosted((current) => [...current, { content, thread: thread.postTitle ?? 'the newsletter thread' }]);
+      setNewsletterPosted((current) => [...current, { content, thread: 'the newsletter' }]);
       setNewsletterText('');
       resetNewsletterMentionSelection();
     } finally {
