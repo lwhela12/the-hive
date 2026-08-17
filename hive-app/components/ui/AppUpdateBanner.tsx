@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppUpdate } from '../../lib/hooks/useAppUpdate';
 
 /**
@@ -9,6 +10,20 @@ import { useAppUpdate } from '../../lib/hooks/useAppUpdate';
  */
 export function AppUpdateBanner() {
   const { updateAvailable, applyUpdate } = useAppUpdate();
+  /**
+   * This bar sits at the very top of the shell, above the rail and above every
+   * screen — and it was the one thing up there that never asked where the top
+   * actually is. The app is installed to the home screen and `public/index.html`
+   * asks iOS for `viewport-fit=cover`, so the page really does start at the top
+   * of the glass. It drew under the clock and the battery, and Nat could not
+   * tap it: *"i cant even get to the 'fresh honey avail' bar there at the top"*
+   * (2026-08-17).
+   *
+   * Exactly the bug the rail had on 2026-08-06, one component over. Every
+   * SCREEN handles this with `edges={['top']}` and the rail reads the insets
+   * itself; this now does too, so nothing at the top of the shell is left.
+   */
+  const insets = useSafeAreaInsets();
   const [dismissed, setDismissed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -28,6 +43,10 @@ export function AppUpdateBanner() {
         backgroundColor: '#fdf3dc',
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(222,193,129,0.7)',
+        paddingTop: insets.top,
+        // The notch is a corner on a phone held sideways, not a strip at the top.
+        paddingLeft: insets.left,
+        paddingRight: insets.right,
       }}
     >
       <Pressable

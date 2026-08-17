@@ -149,6 +149,23 @@
         color-scheme: dark;
       }
 
+      /* And a fourth, for once you are actually inside.
+         The gold above is an ARRIVAL colour — HIVE's front door, chosen because
+         it turns into cream. It never turned: `app/_layout.tsx` cleared the
+         attribute when it worked out you were in a HIVE, which dropped it back
+         to the gold default and left it there for the rest of the session. On a
+         desktop nothing shows through and nobody noticed. On a phone the page
+         stops above the home indicator and the gold paints the strip underneath
+         — Nat, 2026-08-17: *"i dont think we need that amber footer below the
+         nav footer, right? that might give us more room."*
+         Right. It is the same colour as PathFooter's bar, so the trail along the
+         bottom now runs to the edge of the glass instead of stopping short of an
+         amber band. */
+      html[data-hive-boot='inside'] {
+        --hive-boot-bg: #f4f0e6;
+        color-scheme: light;
+      }
+
       html,
       body {
         background-color: var(--hive-boot-bg);

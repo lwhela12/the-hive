@@ -413,8 +413,10 @@ function RootLayoutInner() {
     if (loading) return;
     const standing: Arriving = atTheDoor ? 'door' : wholeHive ? 'space' : 'hive';
     const root = document.documentElement;
-    if (standing === 'hive') root.removeAttribute('data-hive-boot');
-    else root.setAttribute('data-hive-boot', standing);
+    // 'inside' rather than clearing it: clearing dropped back to the GOLD
+    // default, which is the arrival colour and not a colour any signed-in page
+    // is. See the `data-hive-boot='inside'` rule in public/index.html.
+    root.setAttribute('data-hive-boot', standing === 'hive' ? 'inside' : standing);
     const themeColor = document.querySelector('meta[name="theme-color"]');
     if (themeColor) {
       themeColor.setAttribute(
