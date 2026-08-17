@@ -279,6 +279,13 @@ export function DeckVideo({
     state === 'opening' ? 'Opening the room…' : state === 'error' ? 'Try again' : 'Join the video';
 
   /**
+   * Compact and nobody on the call yet. Declared up here because the switch
+   * below is sized from it, and it was being sized from `compact` alone —
+   * which is true on a phone whether or not anybody is on the call.
+   */
+  const idleCompact = compact && state !== 'live';
+
+  /**
    * The transcript switch, sitting on top of the video panel.
    *
    * Nat asked for it here and nowhere else, 2026-08-15: *"as long as there's a
@@ -302,17 +309,25 @@ export function DeckVideo({
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        width: compact ? 'auto' : '100%',
-        flex: compact ? '1 1 auto' : undefined,
+        // Only the idle ROW shares its main axis with anything. Once the call
+        // is live the panel is a column again — and `flex: 1 1 auto` on a
+        // column grows DOWNWARD, which turned this into a switch the height of
+        // a playing card sitting on top of the video (Nat, 2026-08-17:
+        // "it still looks sensationally bad in these 2 views on my phone").
+        // Keyed on idleCompact now, never on `compact` alone.
+        width: idleCompact ? 'auto' : '100%',
+        flex: idleCompact ? '1 1 auto' : '0 0 auto',
+        alignSelf: idleCompact ? undefined : 'stretch',
         minWidth: 0,
         fontFamily: 'Lato_700Bold, Lato, sans-serif',
-        fontSize: fontSize * 0.9,
+        // A phone spends this space on the faces, not on a label.
+        fontSize: fontSize * (compact ? 0.8 : 0.9),
         color: transcriptsOn ? '#ffffff' : accentDeep,
         backgroundColor: transcriptsOn ? accent : 'transparent',
         border: `1px solid ${transcriptsOn ? accent : softBorder}`,
         borderRadius: 999,
-        padding: '7px 14px',
-        marginBottom: compact ? 0 : 8,
+        padding: compact ? '4px 11px' : '7px 14px',
+        marginBottom: idleCompact ? 0 : compact ? 5 : 8,
         cursor: canToggleTranscripts ? 'pointer' : 'default',
         textAlign: 'left',
       }}
@@ -357,7 +372,6 @@ export function DeckVideo({
    * doesnt work"*). The mount point has to be in the DOM BEFORE anyone presses
    * join, because that is when Daily is handed it. One tree, one mount, always.
    */
-  const idleCompact = compact && state !== 'live';
 
   /**
    * Whatever went wrong, said where it happened.

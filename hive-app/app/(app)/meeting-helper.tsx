@@ -772,8 +772,18 @@ export default function MeetingHelperScreen() {
    *
    * There is not, here. Below this width the footer becomes one honest row and
    * the clock comes off the slide and joins it.
+   *
+   * **Short counts as narrow.** A phone turned sideways is 852 wide and 393
+   * tall — wide enough to pass a width test, and then the whole deck has about
+   * 270px of height to put a title, a date, a subtitle and the arrival board
+   * in. Nat, 2026-08-17, sending portrait and landscape together: *"it still
+   * looks sensationally bad in these 2 views on my phone."* Landscape was the
+   * one still wearing the full chrome — the tagline printed through "August
+   * 2026 Meeting", the clock card sat on the slide, and "Present to the room"
+   * lay across the title. The floating chrome needs room in BOTH directions,
+   * so it stands down when either one runs out.
    */
-  const deckIsNarrow = stageW < 560;
+  const deckIsNarrow = stageW < 560 || stageH < 480;
   const isAdmin = communityRole === 'admin' || profile?.role === 'admin';
 
   // Which deck tonight is. Any HIVE without a designed deck falls to 'default'
