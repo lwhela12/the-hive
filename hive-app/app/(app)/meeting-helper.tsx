@@ -4252,11 +4252,11 @@ export default function MeetingHelperScreen() {
           stackVideo
             // Idle on a phone the panel is one compact row, so it asks for a
             // row's worth of height instead of a card's (Nat, 2026-08-17).
-            ? {
-                height: videoLive ? Math.round(height * 0.32) : sz(74, 44),
-                padding: sz(12, 9),
-                paddingBottom: 0,
-              }
+            // `minHeight` and not `height` while idle, so a line explaining a
+            // failed join has somewhere to go instead of being clipped.
+            ? videoLive
+              ? { height: Math.round(height * 0.32), padding: sz(12, 9), paddingBottom: 0 }
+              : { minHeight: sz(74, 44), padding: sz(12, 9), paddingBottom: 0 }
             : { width: videoLive ? sz(360, 280) : sz(212, 178), padding: sz(16, 11), paddingRight: 0 }
         }
       >

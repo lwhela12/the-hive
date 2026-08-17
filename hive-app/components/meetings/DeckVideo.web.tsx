@@ -347,65 +347,109 @@ export function DeckVideo({
   );
 
   /**
-   * Compact and nobody on the call yet: one row, no empty card.
+   * Compact and nobody on the call yet: the switch and the way in share a row,
+   * and the card below collapses to nothing instead of sitting there empty.
    *
-   * The frame's mount point is deliberately NOT in this branch — the moment
-   * somebody joins, `state` becomes 'live' and the full panel below renders
-   * with the mount in it, which is the only place the call has ever lived.
+   * **It collapses. It is never removed.** An earlier version of this returned
+   * a different tree entirely and left `mountRef` unrendered — so `join()` hit
+   * *"Nowhere to put the video"* and the button turned to "Try again" with no
+   * reason given (Nat, 2026-08-17, on her phone: *"this 'join video' button
+   * doesnt work"*). The mount point has to be in the DOM BEFORE anyone presses
+   * join, because that is when Daily is handed it. One tree, one mount, always.
    */
-  if (compact && state !== 'live') {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-        {transcriptSwitch}
-        <button
-          type="button"
-          onClick={join}
-          disabled={state === 'opening' || !communityId}
-          style={{
-            flex: '0 0 auto',
-            fontFamily: 'Lato_700Bold, Lato, sans-serif',
-            fontSize: fontSize * 0.9,
-            color: '#fff',
-            backgroundColor: accent,
-            border: 'none',
-            borderRadius: 999,
-            padding: '8px 16px',
-            whiteSpace: 'nowrap',
-            cursor: state === 'opening' ? 'default' : 'pointer',
-            opacity: state === 'opening' ? 0.7 : 1,
-          }}
-        >
-          {state === 'opening' ? 'Opening…' : state === 'error' ? 'Try again' : 'Join video'}
-        </button>
-      </div>
-    );
-  }
+  const idleCompact = compact && state !== 'live';
+
+  /**
+   * Whatever went wrong, said where it happened.
+   *
+   * The compact row had no room for this and so said nothing at all: a button
+   * reading "Try again" and not one word about what to try again FROM. A dead
+   * end with no reason is worse than a dead end.
+   */
+  const problemLine = problem ? (
+    <div
+      style={{
+        marginTop: 6,
+        fontFamily: 'Lato_400Regular, Lato, sans-serif',
+        fontSize: fontSize * 0.8,
+        lineHeight: 1.3,
+        color: accentDeep,
+      }}
+    >
+      {problem}
+    </div>
+  ) : null;
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      {transcriptSwitch}
-
-      {transcriptNote && (
-        <div
-          style={{
-            fontFamily: 'Lato_400Regular, Lato, sans-serif',
-            fontSize: fontSize * 0.8,
-            lineHeight: 1.35,
-            color: accentDeep,
-            marginBottom: 8,
-          }}
-        >
-          {transcriptNote}
-        </div>
+      {idleCompact ? (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            {transcriptSwitch}
+            <button
+              type="button"
+              onClick={join}
+              disabled={state === 'opening' || !communityId}
+              style={{
+                flex: '0 0 auto',
+                fontFamily: 'Lato_700Bold, Lato, sans-serif',
+                fontSize: fontSize * 0.9,
+                color: '#fff',
+                backgroundColor: accent,
+                border: 'none',
+                borderRadius: 999,
+                padding: '8px 16px',
+                whiteSpace: 'nowrap',
+                cursor: state === 'opening' ? 'default' : 'pointer',
+                opacity: state === 'opening' ? 0.7 : 1,
+              }}
+            >
+              {state === 'opening' ? 'Opening…' : state === 'error' ? 'Try again' : 'Join video'}
+            </button>
+          </div>
+          {problemLine}
+          {transcriptNote ? (
+            <div
+              style={{
+                marginTop: 6,
+                fontFamily: 'Lato_400Regular, Lato, sans-serif',
+                fontSize: fontSize * 0.8,
+                lineHeight: 1.3,
+                color: accentDeep,
+              }}
+            >
+              {transcriptNote}
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <>
+          {transcriptSwitch}
+          {transcriptNote && (
+            <div
+              style={{
+                fontFamily: 'Lato_400Regular, Lato, sans-serif',
+                fontSize: fontSize * 0.8,
+                lineHeight: 1.35,
+                color: accentDeep,
+                marginBottom: 8,
+              }}
+            >
+              {transcriptNote}
+            </div>
+          )}
+        </>
       )}
 
       <div
         style={{
-          flex: 1,
+          // Collapsed rather than gone — see the note above the return.
+          flex: idleCompact ? '0 0 0px' : 1,
+          width: idleCompact ? 0 : undefined,
           minHeight: 0,
           borderRadius: 14,
-          border: `1px solid ${softBorder}`,
-          backgroundColor: cardColor,
+          border: idleCompact ? 'none' : `1px solid ${softBorder}`,
+          backgroundColor: idleCompact ? 'transparent' : cardColor,
           overflow: 'hidden',
           position: 'relative',
           display: 'flex',
@@ -425,7 +469,7 @@ export function DeckVideo({
         }}
       />
 
-      {state !== 'live' && (
+      {state !== 'live' && !idleCompact && (
         <div style={{ textAlign: 'center', padding: '0 14px', zIndex: 1 }}>
           <button
             type="button"
