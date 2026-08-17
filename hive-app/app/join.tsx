@@ -12,6 +12,12 @@ import { ComposerBar } from '../components/ui/ComposerBar';
 // The joining itself lives with the in-app invitation card, and both doors —
 // this email-link screen and the card on HIVE-Wide — call the same function.
 import { acceptCommunityInvite } from '../components/ui/PendingInviteDoor';
+import {
+  CREED_AGREE_LABEL,
+  CREED_BOARD_NAME,
+  CREED_FALLBACK,
+  CREED_POST_TITLE,
+} from '../lib/creed';
 import { startHiveTour } from '../lib/hooks/useTourMarks';
 import { confirmAction, showAlert } from '../lib/showAlert';
 import { ThinkingBee } from '../components/ui/ThinkingBee';
@@ -49,6 +55,17 @@ export default function JoinScreen() {
   const [loading, setLoading] = useState(true);
   const [invite, setInvite] = useState<InviteWithDetails | null>(null);
   const [inviteBlock, setInviteBlock] = useState<InviteBlock | null>(null);
+  /**
+   * The creed, and whether this person has said yes to it.
+   *
+   * Nat, 2026-08-17: *"you have to click that you agree to the terms in order
+   * to accept the invitation to HIVE."* So Accept & Join stays asleep until the
+   * box is ticked. The words are fetched from the HIVE-Wide creed board, which
+   * is where they live and where she edits them — see lib/creed.ts.
+   */
+  const [creed, setCreed] = useState<string | null>(null);
+  const [agreedToCreed, setAgreedToCreed] = useState(false);
+  const [creedOpen, setCreedOpen] = useState(false);
   const [waitlistName, setWaitlistName] = useState('');
   const [waitlistMessage, setWaitlistMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -416,6 +433,29 @@ export default function JoinScreen() {
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: boards } = await supabase
+        .from('board_categories')
+        .select('id')
+        .eq('name', CREED_BOARD_NAME)
+        .limit(1);
+      const boardId = ((boards ?? []) as { id: string }[])[0]?.id;
+      if (!boardId) return;
+      const { data: page } = await supabase
+        .from('board_posts')
+        .select('content')
+        .eq('category_id', boardId)
+        .eq('title', CREED_POST_TITLE)
+        .is('archived_at', null)
+        .limit(1);
+      const text = ((page ?? []) as { content: string }[])[0]?.content;
+      if (!cancelled && text) setCreed(text);
+    })().catch(() => { /* the fallback below covers it */ });
+    return () => { cancelled = true; };
+  }, []);
+
   const handleAcceptInvite = async () => {
     if (!invite) {
       showAlert('No invite found', 'Refresh the page and try again.');
@@ -599,14 +639,75 @@ export default function JoinScreen() {
             </View>
           </View>
 
+          {/* The creed, and the tick that turns the button on. Nat, 2026-08-17:
+              "you have to click that you agree to the terms in order to accept
+              the invitation to HIVE." It is open on the page rather than behind
+              a link — somebody about to agree to something should be able to
+              read it without leaving. */}
+          <View className="bg-white rounded-2xl p-5 shadow-sm mb-4">
+            <Text style={{ fontFamily: 'LibreBaskerville_700Bold', color: inviteAccent }} className="text-lg mb-1">
+              The HIVE Creed
+            </Text>
+            <Text style={{ fontFamily: 'Lato_400Regular' }} className="text-charcoal/60 text-sm mb-3">
+              Every HIVE runs on the same handful of promises. Have a read.
+            </Text>
+
+            <ScrollView
+              style={{ maxHeight: creedOpen ? undefined : 190 }}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+            >
+              <Text
+                style={{ fontFamily: 'Lato_400Regular', lineHeight: 22 }}
+                className="text-charcoal text-[15px]"
+              >
+                {(creed ?? CREED_FALLBACK).replace(/\*\*/g, '').replace(/\*/g, '')}
+              </Text>
+            </ScrollView>
+
+            {!creedOpen && (
+              <Pressable onPress={() => setCreedOpen(true)} className="pt-2">
+                <Text style={{ fontFamily: 'Lato_700Bold', color: inviteAccent }} className="text-sm">
+                  Read all of it
+                </Text>
+              </Pressable>
+            )}
+
+            <Pressable
+              onPress={() => setAgreedToCreed((yes) => !yes)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: agreedToCreed }}
+              className="flex-row items-center mt-4 pt-4 border-t border-cream active:opacity-70"
+            >
+              <View
+                style={{
+                  width: 24, height: 24, borderRadius: 7, borderWidth: 2,
+                  borderColor: inviteAccent,
+                  backgroundColor: agreedToCreed ? inviteAccent : 'transparent',
+                  alignItems: 'center', justifyContent: 'center', marginRight: 12,
+                }}
+              >
+                {agreedToCreed && (
+                  <Text style={{ color: 'white', fontFamily: 'Lato_700Bold', fontSize: 15 }}>✓</Text>
+                )}
+              </View>
+              <Text style={{ fontFamily: 'Lato_700Bold', flex: 1 }} className="text-charcoal text-[15px]">
+                {CREED_AGREE_LABEL}
+              </Text>
+            </Pressable>
+          </View>
+
           <Pressable
             onPress={handleAcceptInvite}
-            disabled={submitting}
-            style={{ backgroundColor: inviteAccent, opacity: submitting ? 0.5 : 1 }}
+            disabled={submitting || !agreedToCreed}
+            style={{
+              backgroundColor: inviteAccent,
+              opacity: submitting ? 0.5 : agreedToCreed ? 1 : 0.35,
+            }}
             className="py-4 rounded-xl items-center mb-3 active:opacity-80"
           >
             <Text style={{ fontFamily: 'Lato_700Bold' }} className="text-white text-lg">
-              {submitting ? 'Joining...' : 'Accept & Join'}
+              {submitting ? 'Joining...' : agreedToCreed ? 'Accept & Join' : 'Agree to the creed first'}
             </Text>
           </Pressable>
 
