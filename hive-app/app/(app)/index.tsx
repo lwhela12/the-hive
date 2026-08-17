@@ -8,6 +8,7 @@ import { ConversationSidebar } from '../../components/chat/ConversationSidebar';
 import { AppHeader } from '../../components/navigation';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { useConversations } from '../../lib/hooks/useConversations';
+import { ThinkingBee } from '../../components/ui/ThinkingBee';
 import type { Conversation } from '../../types';
 
 /**
@@ -32,8 +33,38 @@ import type { Conversation } from '../../types';
 const conversationThisVisit = new Map<string, string>();
 
 export default function ChatScreen() {
-  const { refineWish, prefill } = useLocalSearchParams<{ refineWish?: string; prefill?: string }>();
-  const { profile, communityId } = useAuth();
+  const { refineWish, prefill, hive: linkedHiveId } = useLocalSearchParams<{
+    refineWish?: string;
+    prefill?: string;
+    /** Which HIVE this conversation is about (2026-08-17). */
+    hive?: string;
+  }>();
+  const { profile, communityId, memberships, switchCommunity, wholeHive } = useAuth();
+
+  /**
+   * Clive is always speaking inside exactly one HIVE, and a link that arrives
+   * with something to post has to land him in the right one.
+   *
+   * Without this, "you said something good in Tech HIVE — refine it with Clive"
+   * opens whichever HIVE the reader happened to be standing in, and then his
+   * post_to_board tool can only see that HIVE's boards. The idea would go to
+   * the wrong place, or nowhere.
+   *
+   * Same shape as the check-in link's fix earlier today: arrive where the link
+   * said, hold the screen until you are there.
+   */
+  const requestedHiveId = Array.isArray(linkedHiveId) ? linkedHiveId[0] : linkedHiveId;
+  const isMemberOfRequested = !!requestedHiveId
+    && memberships.some((m) => m.community_id === requestedHiveId);
+  const switchPending = isMemberOfRequested && (wholeHive || communityId !== requestedHiveId);
+  const switchedForLinkRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!requestedHiveId || !isMemberOfRequested) return;
+    if (switchedForLinkRef.current === requestedHiveId) return;
+    if (!wholeHive && communityId === requestedHiveId) return;
+    switchedForLinkRef.current = requestedHiveId;
+    void switchCommunity(requestedHiveId);
+  }, [requestedHiveId, isMemberOfRequested, wholeHive, communityId, switchCommunity]);
 
   const {
     conversations,
@@ -165,6 +196,18 @@ export default function ChatScreen() {
   const { width } = useWindowDimensions();
   // Use mobile layout for narrow screens (< 768px) regardless of platform
   const useMobileLayout = width < 768;
+
+  // Arriving in the HIVE the link named. Holding here keeps Clive from opening
+  // a conversation in the wrong one and then having it change underneath him.
+  if (switchPending) {
+    return (
+      <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <ThinkingBee label="Getting Clive…" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>

@@ -1,4 +1,4 @@
-import { Redirect } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../lib/hooks/useAuth';
 import { ArrivalScreen } from '../components/ui/ThinkingBee';
 import { HIVE_GOLD } from '../lib/hiveBrand';
@@ -6,6 +6,21 @@ import { SPACE_SKIN } from '../lib/pageSkin';
 
 export default function Index() {
   const { session, communityId, loading, wholeHive } = useAuth();
+  /**
+   * A link that came to talk to Clive gets to talk to Clive.
+   *
+   * Clive lives at `/` inside the `(app)` group, and so does this waiting room
+   * — and on a COLD load, which is what a link out of an email always is, this
+   * file wins and the redirect below sends the whole thing to HIVE-Wide.
+   * In-app navigation never hit it, so nothing caught it until Nat pressed a
+   * button in a real email: *"refine with clive only brought me here, to HIVE
+   * wide."*
+   *
+   * Her rule, and it is the same one the check-in link broke this morning:
+   * *"we never want to leave people with homework, we always need to make sure
+   * that the buttons bring them all the way to where they need to be."*
+   */
+  const clive = useLocalSearchParams<{ prefill?: string; refineWish?: string; hive?: string }>();
 
   // This is the waiting room, not a page. Nobody is meant to read it — it holds
   // for the length of one auth check and then sends you on — so it draws the
@@ -29,6 +44,11 @@ export default function Index() {
   // Logged in but no community -> go to join screen
   if (!communityId) {
     return <Redirect href="/join" />;
+  }
+
+  // Anything carrying an opening line for Clive goes to Clive, HIVE and all.
+  if (clive.prefill || clive.refineWish) {
+    return <Redirect href={{ pathname: '/(app)', params: clive } as never} />;
   }
 
   // Fresh app entry starts above the HIVEs rather than inside one — the same

@@ -103,26 +103,57 @@ function emailHtml(opts: {
   meeting: string;
   board?: string;
   topic?: string;
+  topicExists: boolean;
   inTechHive: boolean;
   clive: string;
   join: string;
 }): string {
-  const { name, insight, meeting, board, topic, inTechHive, clive, join } = opts;
+  const { name, insight, meeting, board, topic, topicExists, inTechHive, clive, join } = opts;
+
+  /**
+   * Where it would go, said honestly.
+   *
+   * The first version of this email promised Clive would post it to a page that
+   * did not exist yet — Nat went looking for the thread and found nothing
+   * there. A page that has to be started is a fine thing to say out loud; a
+   * page that is claimed and missing is the thing that costs trust.
+   */
   const where = topic
-    ? `<strong>${escapeHtml(topic)}</strong> on the <strong>${escapeHtml(board ?? 'Tech HIVE')}</strong> board`
+    ? (topicExists
+        ? `the <strong>${escapeHtml(topic)}</strong> page on <strong>${escapeHtml(board ?? 'Tech HIVE')}</strong>`
+        : `a new page, <strong>${escapeHtml(topic)}</strong>, on <strong>${escapeHtml(board ?? 'Tech HIVE')}</strong>`)
     : board
       ? `the <strong>${escapeHtml(board)}</strong> board`
       : 'a board in <strong>Tech HIVE</strong>';
 
-  const doors = inTechHive
-    ? `
-      <p style="font-size: 15px; margin: 0 0 6px;">Two minutes with Clive and it is up there:</p>
-      ${button(clive, 'Refine it with Clive →')}
-      <p style="font-size: 13px; color: #8a8a8a; margin: 2px 0 0;">He already has it. Tell him what you meant, and he posts it to ${where} when you say so.</p>`
-    : `
-      <p style="font-size: 15px; margin: 0 0 6px;">Tech HIVE is where this kind of thing gets kept — a small group sharing what they are learning about AI, coding and building.</p>
-      ${button(join, 'Ask to join Tech HIVE →')}
-      <p style="font-size: 13px; color: #8a8a8a; margin: 2px 0 0;">Nat reads every ask herself. If she says yes, you get a welcome and this goes straight onto ${where}.</p>`;
+  /**
+   * All three doors, every time, each one saying who it is for.
+   *
+   * Showing only the door that applied left everybody else reading an email
+   * with an unexplained button in it. Nat: *"otherwise people will be like
+   * 'whhhat?!'"* So the layers are spelled out — in Tech HIVE, want to be, and
+   * happy where you are — and a reader places themselves in one line.
+   */
+  const doorOne = `
+    <div style="border: 1px solid ${inTechHive ? '#2f6f6b' : '#e8e4d8'}; background: ${inTechHive ? '#f2f7f6' : '#ffffff'}; border-radius: 14px; padding: 16px 18px; margin: 0 0 12px;">
+      <p style="margin: 0 0 4px; font-size: 13px; font-weight: 700; color: #2f6f6b;">Already in Tech HIVE${inTechHive ? ' — that is you' : ''}</p>
+      <p style="margin: 0 0 12px; font-size: 14px;">Clive already has this. Tell him what you actually meant, and when you are happy say <em>&ldquo;post it&rdquo;</em> — he writes it up on ${where} himself.</p>
+      ${button(clive, 'Refine it with Clive →', inTechHive)}
+    </div>`;
+
+  const doorTwo = `
+    <div style="border: 1px solid ${inTechHive ? '#e8e4d8' : '#2f6f6b'}; background: ${inTechHive ? '#ffffff' : '#f2f7f6'}; border-radius: 14px; padding: 16px 18px; margin: 0 0 12px;">
+      <p style="margin: 0 0 4px; font-size: 13px; font-weight: 700; color: #2f6f6b;">Want to be in Tech HIVE?</p>
+      <p style="margin: 0 0 12px; font-size: 14px;">It is a small group swapping what they are learning about AI, coding and building things. Ask for a seat and Nat reads it herself — if she says yes, you get a welcome and this idea has somewhere to live.</p>
+      ${button(join, 'Get on the list →', !inTechHive)}
+    </div>`;
+
+  const doorThree = `
+    <div style="border: 1px solid #e8e4d8; border-radius: 14px; padding: 16px 18px;">
+      <p style="margin: 0 0 4px; font-size: 13px; font-weight: 700; color: #2f6f6b;">Happy where you are?</p>
+      <p style="margin: 0 0 10px; font-size: 14px;">Completely fine. The idea is yours either way — here is a prompt for whichever AI you already use.</p>
+      <pre style="white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; background: #faf8f1; border: 1px solid #e8e4d8; border-radius: 10px; padding: 13px 15px; color: #4a4438; margin: 0;">${escapeHtml(ownPrompt(insight, meeting))}</pre>
+    </div>`;
 
   return `
   <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #2b2b2b; line-height: 1.55;">
@@ -132,21 +163,25 @@ function emailHtml(opts: {
     <p style="text-align: center; color: #6b6b6b; font-size: 14px; margin: 0 0 22px;">In ${escapeHtml(meeting)}</p>
 
     <p style="font-size: 15px;">Hi ${escapeHtml(name)},</p>
-    <p style="font-size: 15px;">This came up and it is written down nowhere:</p>
 
-    <blockquote style="margin: 16px 0; padding: 14px 18px; background: #f2f7f6; border-left: 3px solid #2f6f6b; border-radius: 0 12px 12px 0; font-size: 15px; color: #24413f;">
+    <!-- What this even is. Nat: "maybe even say something like you're getting
+         this email because Tech HIVE is trying something new; trying to make
+         sure we preserve the genius." -->
+    <p style="font-size: 14px; color: #5c5c5c; background: #faf8f1; border-radius: 12px; padding: 13px 16px; margin: 0 0 20px;">
+      Tech HIVE is trying something new. Good ideas get said out loud in meetings all the time and then evaporate, so we have something reading along and catching the ones worth keeping. When it catches one of yours, you get an email like this. Nobody else has seen it — what happens next is yours to pick.
+    </p>
+
+    <p style="font-size: 15px;">Here is the bit it caught:</p>
+
+    <blockquote style="margin: 16px 0 20px; padding: 14px 18px; background: #f2f7f6; border-left: 3px solid #2f6f6b; border-radius: 0 12px 12px 0; font-size: 15px; color: #24413f;">
       ${escapeHtml(insight)}
     </blockquote>
 
-    <p style="font-size: 15px;">It is yours — do whatever you like with it. If you want it somewhere other people can find it, it belongs on ${where}.</p>
+    <p style="font-size: 15px; margin: 0 0 14px;">Three ways to take it from here. Pick the one that is you:</p>
 
-    <div style="margin: 24px 0 8px;">${doors}</div>
-
-    <hr style="border: none; border-top: 1px solid #e8e4d8; margin: 26px 0 18px;" />
-
-    <p style="font-size: 14px; font-weight: 600; margin: 0 0 6px;">Or take it away and work on it yourself</p>
-    <p style="font-size: 13px; color: #8a8a8a; margin: 0 0 8px;">Paste this into whichever AI you use:</p>
-    <pre style="white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; background: #faf8f1; border: 1px solid #e8e4d8; border-radius: 12px; padding: 14px 16px; color: #4a4438; margin: 0;">${escapeHtml(ownPrompt(insight, meeting))}</pre>
+    ${doorOne}
+    ${doorTwo}
+    ${doorThree}
 
     <p style="font-size: 12px; color: #a8a8a8; text-align: center; margin-top: 26px;">You are getting this because you were on the call and you said the thing.</p>
   </div>`;
@@ -199,20 +234,19 @@ serve(async (req) => {
 
   // Which doors to show. Membership decides it, so nobody is offered a room
   // they are already standing in.
+  const { data: tech } = await admin
+    .from('communities').select('id').eq('slug', TECH_SLUG).maybeSingle();
+  const techId = (tech as { id: string } | null)?.id ?? null;
+
   let inTechHive = false;
-  if (speaker?.id) {
-    const { data: tech } = await admin
-      .from('communities').select('id').eq('slug', TECH_SLUG).maybeSingle();
-    const techId = (tech as { id: string } | null)?.id;
-    if (techId) {
-      const { data: membership } = await admin
-        .from('community_memberships')
-        .select('user_id')
-        .eq('community_id', techId)
-        .eq('user_id', speaker.id)
-        .maybeSingle();
-      inTechHive = !!membership;
-    }
+  if (speaker?.id && techId) {
+    const { data: membership } = await admin
+      .from('community_memberships')
+      .select('user_id')
+      .eq('community_id', techId)
+      .eq('user_id', speaker.id)
+      .maybeSingle();
+    inTechHive = !!membership;
   }
 
   /**
@@ -225,6 +259,32 @@ serve(async (req) => {
    */
   const board = (body.board ?? '').trim();
   const topic = (body.topic ?? '').trim();
+
+  /**
+   * Does that page actually exist?
+   *
+   * The email said Clive would post to a named thread and Nat went looking for
+   * it: *"when I went to look for this thread on this board... it didn't
+   * exist."* Promising a page that has to be started is fine; claiming one that
+   * is missing is what costs trust. So it is checked, and the email says which
+   * of the two it is.
+   */
+  let topicExists = false;
+  if (topic && board && techId) {
+    const { data: cats } = await admin
+      .from('board_categories').select('id, name').eq('community_id', techId);
+    const cat = ((cats ?? []) as { id: string; name: string }[])
+      .find((c) => c.name.toLowerCase() === board.toLowerCase())
+      ?? ((cats ?? []) as { id: string; name: string }[])
+        .find((c) => c.name.toLowerCase().includes(board.toLowerCase()));
+    if (cat) {
+      const { data: existing } = await admin
+        .from('board_posts').select('id')
+        .eq('category_id', cat.id).ilike('title', topic)
+        .is('archived_at', null).limit(1);
+      topicExists = !!((existing ?? []) as unknown[]).length;
+    }
+  }
   const prefill = [
     `I said this in ${meeting}:`,
     '',
@@ -234,14 +294,17 @@ serve(async (req) => {
       ? `Help me sharpen it, then post it to the ${board} board${topic ? ` under "${topic}"` : ''} in Tech HIVE.`
       : 'Help me sharpen it, then post it to the right board in Tech HIVE.',
   ].join('\n');
-  const clive = `${APP_URL}/?prefill=${encodeURIComponent(prefill)}`;
+  // `hive` rides along so Clive comes down into Tech HIVE on arrival — his
+  // board tools only ever see the HIVE he is standing in.
+  const clive = `${APP_URL}/?prefill=${encodeURIComponent(prefill)}`
+    + (techId ? `&hive=${encodeURIComponent(techId)}` : '');
   const join = `${APP_URL}/join`;
 
-  const html = emailHtml({ name, insight, meeting, board, topic, inTechHive, clive, join });
+  const html = emailHtml({ name, insight, meeting, board, topic, topicExists, inTechHive, clive, join });
   const subject = `🐝 You said something good in ${meeting}`;
 
   if (body.preview) {
-    return jsonResponse({ to, in_tech_hive: inTechHive, subject, html });
+    return jsonResponse({ to, in_tech_hive: inTechHive, topic_exists: topicExists, subject, html });
   }
   if (!RESEND_API_KEY) return errorResponse('RESEND_API_KEY not configured', 500);
 
@@ -252,5 +315,8 @@ serve(async (req) => {
   });
   if (!res.ok) return errorResponse(`Email failed: ${await res.text()}`, 502);
 
-  return jsonResponse({ sent_to: to, in_tech_hive: inTechHive, meeting, board: board || null });
+  return jsonResponse({
+    sent_to: to, in_tech_hive: inTechHive, topic_exists: topicExists,
+    meeting, board: board || null, clive,
+  });
 });
